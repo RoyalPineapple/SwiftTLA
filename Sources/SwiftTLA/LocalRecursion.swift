@@ -4,34 +4,34 @@
 public struct LocalRecursion<Input: TLAValueType, Output: TLAValueType>: Sendable {
     fileprivate let name: String
 
-    public func callAsFunction(_ input: some StateExprConvertible) -> Expr<Output> {
+    public func callAsFunction(_ input: some TypedExpression<Input>) -> Expr<Output> {
         Expr(.recursiveCall(name, [input.stateExpr]))
     }
 }
 
-/// Builds a typed TLA+ `LET name(input) == definition IN body` expression.
+/// Defines a bounded recursive function and returns the typed result of `body`.
 public func LetRec<
     Input: TLAValueType,
     Output: TLAValueType,
-    Definition: StateExprConvertible,
-    Result: StateExprConvertible
+    Definition: TypedExpression,
+    Result: TypedExpression
 >(
     _ name: String,
-    over domain: Expr<SetExpr<Input>>,
+    over domain: some TypedExpression<SetExpr<Input>>,
     taking _: Input.Type,
     _ definition: (LocalRecursion<Input, Output>, WithValue<Input>) -> Definition,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
     in body: (LocalRecursion<Input, Output>) -> Result
-) -> Expr<Output> {
+) -> Expr<Result.ExpressionValue> where Definition.ExpressionValue == Output {
     let inputName = generatedBinderName(file: file, line: line, column: column)
     let recursion = LocalRecursion<Input, Output>(name: name)
     return Expr(.letIn(
         [LocalOperator(
             name,
             parameters: [inputName],
-            domain: domain.raw,
+            domain: domain.stateExpr,
             body: definition(recursion, WithValue(expression: .variable(inputName))).stateExpr
         )],
         body(recursion).stateExpr

@@ -1,13 +1,8 @@
 
-package enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStringConvertible {
+public enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStringConvertible {
     case invalidKey(path: String)
     case invalidConstant(path: String)
-    case missingValue(path: String)
     case invalidValue(path: String)
-    /// A generated typed state field was absent.
-    case missingRequiredValue(path: String, expected: String)
-    /// A generated typed state field had a formal value of the wrong kind.
-    case typeMismatch(path: String, expected: String, actual: TLAValue)
 
     public var description: String {
         switch self {
@@ -15,20 +10,14 @@ package enum TLAStateProjectionDiagnostic: Error, Sendable, Equatable, CustomStr
             return "Invalid TLA state key at \(path)"
         case .invalidConstant(let path):
             return "Invalid TLA constant at \(path)"
-        case .missingValue(let path):
-            return "Missing TLA state value at \(path)"
         case .invalidValue(let path):
             return "Invalid TLA state value at \(path)"
-        case .missingRequiredValue(let path, let expected):
-            return "Cannot decode \(path): expected \(expected), but the formal state has no value. Supply \(expected) for \(path) before retrying."
-        case .typeMismatch(let path, let expected, let actual):
-            return "Cannot decode \(path): expected \(expected), found formal \(actual). Correct \(path) or its formal declaration before retrying."
         }
     }
 }
 
-/// An opaque, safe view of formal-engine state for application-facing APIs.
-package struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible {
+/// Validated state at the explicit native-to-TLA serialization boundary.
+public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
     /// A validated identifier for a value in a formal state projection.
     public struct Token: Sendable, Hashable, CustomStringConvertible {
         fileprivate let identifier: String
@@ -48,7 +37,7 @@ package struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible 
     }
 
     /// One validated value in a state projection.
-    public struct Entry: Sendable, Equatable {
+    public struct Entry: Sendable, Hashable {
         public let token: Token
         public let value: TLAValue
 
@@ -73,12 +62,6 @@ package struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible 
 
     public func value(for token: Token) -> TLAValue? {
         storedEntries.first { $0.token == token }?.value
-    }
-
-    public func replacing(_ value: TLAValue, for token: Token) throws -> TLAStateProjection {
-        var entries = entries.filter { $0.token != token }
-        entries.append(.init(token: token, value: value))
-        return try .init(validating: entries)
     }
 
     public var entries: [Entry] {
@@ -106,8 +89,9 @@ package struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible 
                 try validate(value, at: "\(path)[\(index)]")
             }
         case .record(let fields):
+            var names: Set<String> = []
             for field in fields.fields {
-                guard Token(validating: field.name) != nil else {
+                guard Token(validating: field.name) != nil, names.insert(field.name).inserted else {
                     throw TLAStateProjectionDiagnostic.invalidKey(path: "\(path).\(field.name)")
                 }
                 try validate(field.value, at: "\(path).\(field.name)")
@@ -118,15 +102,5 @@ package struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible 
                 try validate(value, at: "\(path).value")
             }
         }
-    }
-}
-
-struct CompiledActionRequest: Sendable {
-    let action: ActionID
-    let arguments: [CompiledValue]
-
-    init(action: ActionID, arguments: [CompiledValue]) {
-        self.action = action
-        self.arguments = arguments
     }
 }

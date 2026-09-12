@@ -142,7 +142,7 @@ struct UpstreamParityTests {
 
     @Test("HourClock TLA+ module is TLC-shaped")
     func hourClockTLA() throws {
-        let tla = try Example.hourClock.spec.compile().renderedTLAModuleBundle().tla
+        let tla = try Example.hourClock.spec.compile().render().tlaBundle.tla
         #expect(tla.contains("MODULE HourClock"))
         #expect(tla.contains("hr \\in"))
         #expect(tla.contains("HCnxt"))
@@ -151,24 +151,155 @@ struct UpstreamParityTests {
 
     @Test("DieHard actions match upstream names")
     func dieHardNames() throws {
-        let tla = try Example.dieHardTypeOK.spec.compile().renderedTLAModuleBundle().tla
+        let tla = try Example.dieHardTypeOK.spec.compile().render().tlaBundle.tla
         for name in ["FillSmallJug", "FillBigJug", "EmptySmallJug", "EmptyBigJug", "SmallToBig", "BigToSmall", "TypeOK"] {
             #expect(tla.contains(name), "missing \(name)")
         }
     }
 
-    @Test("Channel typed record model matches its validated state count")
-    func channelTypedRecordParity() throws {
-        let exploration = try explore(ChannelModel.spec, maximumStateLimit: 50_000)
-        #expect(exploration.graph.states.count == Example.channel.expectedDistinct)
+    @Test("Channel preserves its initial handshake and parameterized native/formal graph")
+    func channelGraphParity() throws {
+        struct Edge: Hashable {
+            let source: ChannelModel.State
+            let action: String
+            let target: ChannelModel.State
+        }
+        let exploration = try explore(ChannelModel.spec, maximumStateLimit: 100)
+        try #require(exploration.isComplete)
         #expect(isSuccessful(exploration))
+        let token = try #require(TLAStateProjection.Token(validating: "chan"))
+        let formalStates = try exploration.graph.states.mapValues { projection in
+            let record = try #require(projection.value(for: token).flatMap(Record<ChannelModel.ChannelSchema>.init(formalValue:)))
+            return try ChannelModel.State(chan: .init(
+                ack: #require(record.value(for: ChannelModel.ChannelSchema.acknowledgement)),
+                rdy: #require(record.value(for: ChannelModel.ChannelSchema.ready)),
+                val: #require(record.value(for: ChannelModel.ChannelSchema.value))))
+        }
+        let formalInitial = try Set(exploration.initialStateIDs.map { try #require(formalStates[$0]) })
+        #expect(formalInitial.count == 6)
+        #expect(formalInitial.allSatisfy { $0.chan.ack == $0.chan.rdy })
+        var formalEdges: Set<Edge> = []
+        for (source, transitions) in exploration.graph.transitions {
+            for transition in transitions {
+                formalEdges.insert(try Edge(source: #require(formalStates[source]),
+                    action: transition.label.description, target: #require(formalStates[transition.target])))
+            }
+        }
+        var pending = try ChannelModel.initialMachines()
+        #expect(Set(pending.map(\.state)) == formalInitial)
+        #expect(throws: GeneratedMachineError.ambiguousInitialState) { try ChannelModel.makeMachine() }
+        #expect(throws: GeneratedMachineError.invalidInitialState) {
+            try ChannelModel.makeMachine(.init(chan: .init(ack: 1, rdy: 0, val: .d1)))
+        }
+        let actions: [(ChannelModel.Action, String)] = ChannelModel.Data.allCases.map {
+            (.Send(d: $0), FormalActionCall(name: "Send", arguments: [$0.tlaValue]).description)
+        } + [(.Rcv, "Rcv")]
+        var nativeStates: Set<ChannelModel.State> = []
+        var nativeEdges: Set<Edge> = []
+        while let machine = pending.popLast() {
+            guard nativeStates.insert(machine.state).inserted else { continue }
+            try #require(nativeStates.count <= 12)
+            #expect(try machine.violatedInvariants().isEmpty)
+            let enabled = try Set(machine.enabledActions())
+            for (action, label) in actions {
+                let successors = try machine.successors(for: action)
+                #expect(try machine.isEnabled(action) == !successors.isEmpty)
+                #expect(enabled.contains(action) == !successors.isEmpty)
+                var next = machine
+                guard let successor = successors.first else {
+                    #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try next.send(action) }
+                    #expect(next.state == machine.state)
+                    continue
+                }
+                try #require(successors.count == 1)
+                let transition = try next.send(action)
+                #expect(transition.before == machine.state)
+                #expect(transition.after == successor.state)
+                #expect(next.state == successor.state)
+                nativeEdges.insert(Edge(source: machine.state, action: label, target: next.state))
+                pending.append(next)
+            }
+        }
+        #expect(nativeStates == Set(formalStates.values))
+        #expect(nativeEdges == formalEdges)
+        #expect(nativeStates.count == 12)
+        #expect(nativeEdges.count == 24)
     }
 
-    @Test("AsynchInterface typed record model matches its validated state count")
-    func asynchInterfaceTypedRecordParity() throws {
-        let exploration = try explore(AsynchInterfaceModel.spec, maximumStateLimit: 50_000)
-        #expect(exploration.graph.states.count == Example.asynchInterface.expectedDistinct)
+    @Test("AsynchInterface preserves its initial handshake and complete native/formal graph")
+    func asynchInterfaceGraphParity() throws {
+        struct Edge: Hashable {
+            let source: AsynchInterfaceModel.State
+            let action: String
+            let target: AsynchInterfaceModel.State
+        }
+        let exploration = try explore(AsynchInterfaceModel.spec, maximumStateLimit: 100)
+        try #require(exploration.isComplete)
         #expect(isSuccessful(exploration))
+        let val = try #require(TLAStateProjection.Token(validating: "val"))
+        let rdy = try #require(TLAStateProjection.Token(validating: "rdy"))
+        let ack = try #require(TLAStateProjection.Token(validating: "ack"))
+        let formalStates = try exploration.graph.states.mapValues { projection in
+            try AsynchInterfaceModel.State(
+                val: #require(projection.value(for: val).flatMap(AsynchInterfaceModel.Data.init(formalValue:))),
+                rdy: #require(projection.value(for: rdy).flatMap(Int.init(formalValue:))),
+                ack: #require(projection.value(for: ack).flatMap(Int.init(formalValue:))))
+        }
+        let formalInitial = try Set(exploration.initialStateIDs.map { try #require(formalStates[$0]) })
+        // Upstream Init requires ack = rdy, not merely that both are bits.
+        #expect(formalInitial.count == 6)
+        #expect(formalInitial.allSatisfy { $0.ack == $0.rdy })
+        var formalEdges: Set<Edge> = []
+        for (source, transitions) in exploration.graph.transitions {
+            for transition in transitions {
+                formalEdges.insert(try Edge(source: #require(formalStates[source]),
+                    action: transition.label.action, target: #require(formalStates[transition.target])))
+            }
+        }
+        var pending = try AsynchInterfaceModel.initialMachines()
+        #expect(Set(pending.map(\.state)) == formalInitial)
+        #expect(throws: GeneratedMachineError.ambiguousInitialState) {
+            try AsynchInterfaceModel.makeMachine()
+        }
+        #expect(throws: GeneratedMachineError.invalidInitialState) {
+            try AsynchInterfaceModel.makeMachine(.init(val: .d1, rdy: 0, ack: 1))
+        }
+        var nativeStates: Set<AsynchInterfaceModel.State> = []
+        var nativeEdges: Set<Edge> = []
+        let actions: [AsynchInterfaceModel.Action] = [.Send, .Rcv]
+        while let machine = pending.popLast() {
+            guard nativeStates.insert(machine.state).inserted else { continue }
+            try #require(nativeStates.count <= 12)
+            #expect(try machine.violatedInvariants().isEmpty)
+            let enabled = try Set(machine.enabledActions())
+            for action in actions {
+                let candidates = try machine.successors(for: action)
+                #expect(try machine.isEnabled(action) == !candidates.isEmpty)
+                #expect(enabled.contains(action) == !candidates.isEmpty)
+                var sent = machine
+                switch candidates.count {
+                case 0:
+                    #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try sent.send(action) }
+                    #expect(sent.state == machine.state)
+                case 1:
+                    let transition = try sent.send(action)
+                    #expect(transition.before == machine.state)
+                    #expect(transition.after == candidates[0].state)
+                    #expect(sent.state == candidates[0].state)
+                default:
+                    #expect(throws: GeneratedMachineError.ambiguousAction) { try sent.send(action) }
+                    #expect(sent.state == machine.state)
+                }
+                for candidate in candidates {
+                    nativeEdges.insert(Edge(source: machine.state, action: String(describing: action), target: candidate.state))
+                }
+                pending.append(contentsOf: candidates)
+            }
+        }
+        #expect(nativeStates == Set(formalStates.values))
+        #expect(nativeEdges == formalEdges)
+        #expect(nativeStates.count == Example.asynchInterface.expectedDistinct)
+        #expect(nativeEdges.count == 24)
     }
 
     @Test("TeachingConcurrency Simple models use typed phase state")
@@ -201,7 +332,7 @@ struct UpstreamParityTests {
     func binarySearchParity() throws {
         let exploration = try explore(BinarySearchModel.spec, maximumStateLimit: 100_000)
         #expect(exploration.graph.states.count == Example.binarySearch.expectedDistinct)
-        let tla = try BinarySearchModel.spec.compile().renderedTLAModuleBundle().tla
+        let tla = try BinarySearchModel.spec.compile().render().tlaBundle.tla
         #expect(tla.contains("WF_<<pc, seq, val, low, high, result>>(Next)"))
     }
 

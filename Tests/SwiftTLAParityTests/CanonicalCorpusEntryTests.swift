@@ -8,7 +8,7 @@ struct CanonicalCorpusEntryTests {
             CanonicalCorpus.entries.first { $0.id == "voteproof-upstream-port" }
         )
         let compilation = try voteProof.specification().compile()
-        #expect(compilation.renderedTLAModuleBundle().imports.map(\.name) == ["Consensus"])
+        #expect(try compilation.render().tlaBundle.imports.map(\.name) == ["Consensus"])
         #expect(voteProof.swiftConfiguration.tlaText.contains("INVARIANTS TypeOK VInv1 VInv2 VInv3 VInv4"))
         #expect(voteProof.plusCalConfiguration.tlaText.contains("PROPERTIES Refines"))
         try voteProof.validateConfigurationReferences(in: compilation)

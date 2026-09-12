@@ -206,7 +206,7 @@ internal struct AlgorithmPlusCalRenderer {
         }
     }
 
-    private func expression(_ value: CompiledStateExpr) throws -> String {
+    private func expression(_ value: CompiledExpression) throws -> String {
         try formalRenderer.state(value)
     }
 

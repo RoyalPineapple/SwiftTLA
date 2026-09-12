@@ -118,10 +118,10 @@ package struct BoulangerModel: Sendable {
                     Invariant("LocalTypeOK") { max >= 0 && previous >= -1 }
                 })
 
-                StateConstraint(All(Process.all) { process in num[process] < 3 })
+                StateConstraint(ForAll(Process.all) { process in num[process] < 3 })
                 Invariant("MutualExclusion") {
-                    All(Process.all) { first in
-                        All(Process.all) { second in
+                    ForAll(Process.all) { first in
+                        ForAll(Process.all) { second in
                             first == second || !(At(Label.cs, first) && At(Label.cs, second))
                         }
                     }

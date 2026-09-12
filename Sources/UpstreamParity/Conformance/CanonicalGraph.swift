@@ -139,6 +139,12 @@ package struct CanonicalState: Hashable, Sendable {
         self.bindings = bindings
     }
 
+    package init(_ projection: TLAStateProjection) throws {
+        bindings = try Dictionary(uniqueKeysWithValues: projection.entries.map {
+            ($0.token.description, try CanonicalValue($0.value))
+        })
+    }
+
     package var key: CanonicalStateKey {
         let fields = bindings.sorted { canonicalBytes($0.key, $1.key) }
             .map { "\(encodedBytes($0.key))=\($0.value.canonicalEncoding)" }
@@ -167,6 +173,7 @@ package struct CanonicalEdge: Hashable, Sendable, Comparable {
 }
 
 package enum CanonicalGraphError: Error, Equatable, Sendable {
+    case missingNativeSnapshot
     case duplicateState(CanonicalStateKey)
     case inconsistentStateBindings(expected: Set<String>, actual: Set<String>)
     case initialStateMissing(CanonicalStateKey)
@@ -223,6 +230,31 @@ package struct CanonicalGraph: Equatable, Sendable {
         self.initialStateKeys = initialKeys
         self.states = stateTable
         self.edgeOccurrences = occurrences
+    }
+
+    /// Export native topology only; this does not issue a property-checking verdict.
+    package init<Machine: StateMachine>(_ native: ReachabilityGraph<Machine>, using machine: Machine) throws {
+        let states = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
+            ($0, try CanonicalState(machine.formalProjection(of: $0)))
+        })
+        func state(_ snapshot: Machine.Snapshot) throws -> CanonicalState {
+            guard let result = states[snapshot] else { throw CanonicalGraphError.missingNativeSnapshot }
+            return result
+        }
+        var actionNames: [Machine.Action: String] = [:]
+        func actionName(_ action: Machine.Action) throws -> String {
+            if let name = actionNames[action] { return name }
+            let name = try machine.formalCall(for: action).description
+            actionNames[action] = name
+            return name
+        }
+        let edges = try native.transitions.flatMap { source, successors in
+            try successors.map { successor in
+                CanonicalEdge(source: try state(source).key, action: try actionName(successor.action),
+                              target: try state(successor.target).key)
+            }
+        }
+        try self.init(initialStates: native.initialStates.map(state), states: Array(states.values), edges: edges)
     }
 
     package var variableNames: Set<String> {

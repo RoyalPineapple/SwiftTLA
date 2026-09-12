@@ -38,7 +38,7 @@ private struct GeneratedFormalUnionAlgorithm {
                     )
 
                     Do(Label.inspect) {
-                        let member = temporary.expr.assumingFirst(Node.self)
+                        let member = temporary.expr.assuming(Node.self)
                         Assert(member == Node.first)
                     }
                     Do(Label.collect) {
@@ -50,7 +50,7 @@ private struct GeneratedFormalUnionAlgorithm {
                         )
                     }
                     Do(Label.finish) {
-                        let remaining = temporary.expr.assumingSecond(SetExpr<Node>.self)
+                        let remaining = temporary.expr.assuming(SetExpr<Node>.self)
                         When(!remaining.isEmpty)
                     }
                 })

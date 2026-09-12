@@ -1,4 +1,4 @@
-package enum RefinementFailureEvidence: Sendable, Equatable {
+package enum RefinementFailure: Sendable, Equatable {
     case initialState(
         mapped: TLAStateProjection,
         abstractInitialStates: [TLAStateProjection]
@@ -18,7 +18,7 @@ struct RefinementChecker {
 
     func check(_ exploration: FiniteExploration) throws -> ModelCheckOutcome? {
         guard !compilation.refinements.isEmpty else { return nil }
-        try exploration.requireValidEvidence(in: compilation)
+        try exploration.validate(for: compilation)
         guard exploration.isComplete else {
             guard case .depthExceeded = exploration.outcome else { return nil }
             return compilation.refinements.first.map {
@@ -68,7 +68,7 @@ struct RefinementChecker {
             guard abstractInitialStates.contains(mapped) else {
                 return .refinementViolated(
                     refinement: refinement.name,
-                    evidence: .initialState(
+                    failure: .initialState(
                         mapped: try mapped.projection(using: refinement.abstract.layout),
                         abstractInitialStates: try abstractInitialStates.map { try $0.projection(using: refinement.abstract.layout) }
                     )
@@ -85,7 +85,7 @@ struct RefinementChecker {
                 guard mappedTarget == mappedSource || abstractSuccessors.contains(mappedTarget) else {
                     return .refinementViolated(
                         refinement: refinement.name,
-                        evidence: .transition(
+                        failure: .transition(
                             action: transition.label.description,
                             source: try source.projection(using: compilation.layout),
                             target: try target.projection(using: compilation.layout),
@@ -117,7 +117,7 @@ struct RefinementChecker {
     private func mappedState(_ refinement: CompiledRefinement, source: CompiledState) throws -> CompiledState {
         try CompiledState(
             values: CompiledRuntime(compilation: compilation).evaluate(refinement.variableMappings, in: source),
-            compilation: refinement.abstract
+            layout: refinement.abstract.layout, identity: refinement.abstract.identity
         )
     }
 }
@@ -125,14 +125,10 @@ struct RefinementChecker {
 extension TLASpec {
     func specializing(parameters: [String: StateExpr]) -> TLASpec {
         func state(_ expression: StateExpr) -> StateExpr {
-            parameters.reduce(expression) { substitutedExpression, binding in
-                StateExpr.substituteVariable(binding.key, with: binding.value, in: substitutedExpression)
-            }
+            StateExpr.substituteVariables(parameters, in: expression)
         }
         func action(_ expression: ActionExpr) -> ActionExpr {
-            parameters.reduce(expression) { substitutedExpression, binding in
-                substitutedExpression.substitutingVariable(binding.key, with: binding.value)
-            }
+            expression.substitutingVariables(parameters)
         }
         func initialization(_ value: VariableInitialization) -> VariableInitialization {
             switch value {
@@ -144,14 +140,14 @@ extension TLASpec {
         var specialized = TLASpec(
             name: name,
             variables: variables.map { .init(name: $0.name, initialization: initialization($0.initialization), collectionType: $0.collectionType, generatedSwiftType: $0.generatedSwiftType, origin: $0.origin) },
-            actions: actions.map { .init(name: $0.name, body: action($0.body), bindings: $0.bindings, controlOwner: $0.controlOwner) },
+            actions: actions.map { .init(name: $0.name, body: action($0.body), bindings: $0.bindings, isTermination: $0.isTermination) },
             invariants: invariants.map { .init(name: $0.name, body: state($0.body)) }, temporalProperties: temporalProperties,
             fairness: fairness, assume: assume.map(state), checkDeadlock: checkDeadlock,
             extendsModules: extendsModules, constraint: constraint.map(state),
-            recursiveFuncs: recursiveFuncs.map { .init(name: $0.name, params: $0.params, body: state($0.body)) },
-            formalOperatorDefinitions: formalOperatorDefinitions.map { .init(name: $0.name, parameters: $0.parameters, body: state($0.body), plusCalPhase: $0.plusCalPhase, plusCalDependencies: $0.plusCalDependencies) },
+            recursiveFuncs: recursiveFuncs.map { $0.substitutingVariables(parameters) },
+            formalOperatorDefinitions: formalOperatorDefinitions.map { $0.substitutingVariables(parameters) },
             imports: imports, importConfigurations: importConfigurations, moduleInstances: moduleInstances, refinements: [],
-            symmetrySets: symmetrySets, symmetricCollections: symmetricCollections,
+            symmetrySets: symmetrySets, collections: collections,
             sourceAlgorithms: sourceAlgorithms
         )
         specialized.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan

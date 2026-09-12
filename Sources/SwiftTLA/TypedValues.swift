@@ -3,6 +3,9 @@ public protocol FiniteTLAValueDomain: TLAValueType, Hashable, Sendable {
 }
 
 extension FiniteTLAValueDomain {
+  public static var formalValueShape: FormalValueShape {
+    .finite(typeName: String(describing: Self.self), values: tlaValues)
+  }
   static var sourceIssue: SourceModelIssue? {
     let values = finiteValues
     let tlaValues = values.map(\.tlaValue)
@@ -28,16 +31,21 @@ public protocol TLARecordSchema: Sendable {
 
 public struct TLARecordFieldDeclaration<Schema: TLARecordSchema>: Sendable {
   fileprivate let name: String
-  fileprivate let defaultValue: TLAValue
-  fileprivate let accepts: @Sendable (TLAValue) -> Bool
+  fileprivate let defaultValue: any TLAValueType
+  fileprivate let shape: FormalValueShape
+  fileprivate let decode: @Sendable (TLAValue) -> (any TLAValueType)?
 
   public init<Value: TLAValueType>(
     _ field: TLAField<Schema, Value>,
     default defaultValue: Value
   ) {
     name = field.name
-    self.defaultValue = defaultValue.tlaValue
-    accepts = { Value(formalValue: $0) != nil }
+    shape = Value.formalValueShape
+    self.defaultValue = defaultValue
+    decode = { rawValue in
+      guard let value = Value(formalValue: rawValue), value.sourceIssue == nil else { return nil }
+      return value
+    }
   }
 }
 
@@ -86,59 +94,62 @@ public struct TLARecordEntry<Schema: TLARecordSchema>: Sendable {
 
   public init<Value>(_ field: TLAField<Schema, Value>, _ value: Value) {
     self.name = field.name
-    self.value = field.value(value.sourceIssue.map(StateExpr.sourceIssue) ?? .value(value.tlaValue))
+    self.value = field.value(value.stateExpr)
   }
 
-  public init<Value>(_ field: TLAField<Schema, Value>, _ value: Expr<Value>) {
-    self.name = field.name
-    self.value = field.value(value.raw)
-  }
-
-  public init<Value>(_ field: TLAField<Schema, Value>, _ value: ProcessIdentifier<Value>)
-  where Value: FiniteTLAValueDomain {
+  public init<Value>(_ field: TLAField<Schema, Value>, _ value: some TypedExpression<Value>) {
     self.name = field.name
     self.value = field.value(value.stateExpr)
   }
 
-  public init<Value>(_ field: TLAField<Schema, Value>, _ value: WithValue<Value>)
-  where Value: TLAValueType {
-    self.name = field.name
-    self.value = field.value(value.stateExpr)
-  }
 }
 
 public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable {
-  private let values: TLARecord
+  public static var formalValueShape: FormalValueShape { .record(Schema.fields.sorted { $0.name < $1.name }.map { .init(name: $0.name, shape: $0.shape) }) }
+  private let values: [(name: String, value: any TLAValueType)]
+  public let sourceIssue: SourceModelIssue?
 
   public init() {
-    values = TLARecord(Schema.fields.map { .init($0.name, $0.defaultValue) })
+    let declarations = Schema.fields
+    values = declarations.map { ($0.name, $0.defaultValue) }
+    sourceIssue = Self.schemaProblem(declarations.map(\.name)).map {
+      .invalidRecordSchema(schema: String(reflecting: Schema.self), problem: $0)
+    } ?? declarations.lazy.compactMap { $0.defaultValue.sourceIssue }.first
   }
 
   public init?(formalValue: TLAValue) {
     let declarations = Schema.fields
     let declaredNames = declarations.map(\.name)
     guard Self.schemaProblem(declaredNames) == nil,
-          case .record(let values) = formalValue,
-          values.fields.count == declarations.count,
-          Set(values.fields.map(\.name)).count == values.fields.count,
-          Set(values.fields.map(\.name)) == Set(declaredNames),
-          declarations.allSatisfy({ declaration in
-            values.value(named: declaration.name).map(declaration.accepts) == true
-          })
+          case .record(let record) = formalValue,
+          record.fields.count == declarations.count,
+          Set(record.fields.map(\.name)) == Set(declaredNames)
     else { return nil }
+    var values: [(name: String, value: any TLAValueType)] = []
+    for declaration in declarations {
+      guard let rawValue = record.value(named: declaration.name),
+            let value = declaration.decode(rawValue)
+      else { return nil }
+      values.append((declaration.name, value))
+    }
     self.values = values
+    sourceIssue = nil
   }
 
-  public var tlaValue: TLAValue { .record(values) }
-  public var sourceIssue: SourceModelIssue? {
-    Self.schemaProblem(Schema.fields.map(\.name)).map {
-      .invalidRecordSchema(schema: String(reflecting: Schema.self), problem: $0)
-    }
+  public var tlaValue: TLAValue {
+    .record(TLARecord(values.map { .init($0.name, $0.value.tlaValue) }))
   }
   public static var defaultValue: Self { Self() }
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.sourceIssue == rhs.sourceIssue && lhs.tlaValue == rhs.tlaValue
+  }
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(sourceIssue)
+    hasher.combine(tlaValue)
+  }
 
   public func value<Value: TLAValueType>(for field: TLAField<Schema, Value>) -> Value? {
-    values.value(named: field.name).flatMap(Value.init(formalValue:))
+    values.first { $0.name == field.name }?.value as? Value
   }
 
   public static func literal(_ fields: TLARecordEntry<Schema>...) -> Expr<Self> {
@@ -172,43 +183,56 @@ public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable 
 }
 
 public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAValueType, Hashable, Sendable {
-  private let values: [TLAValue: TLAValue]
+  public static var formalValueShape: FormalValueShape { .unsupported("total Function view") }
+  private let values: [Domain: Range]
+  public let sourceIssue: SourceModelIssue?
 
   public init() {
-    var values: [TLAValue: TLAValue] = [:]
-    for key in Domain.tlaValues {
-      values[key] = Range.defaultValue.tlaValue
-    }
-    self.values = values
+    let value = Range.defaultValue
+    sourceIssue = Domain.sourceIssue ?? value.sourceIssue
+    values = Domain.finiteValues.reduce(into: [:]) { $0[$1] = value }
   }
 
   public init?(formalValue: TLAValue) {
     guard Domain.sourceIssue == nil,
-          case .function(let values) = formalValue,
-          Set(values.keys) == Set(Domain.tlaValues),
-          values.values.allSatisfy({ Range(formalValue: $0) != nil })
+          case .function(let entries) = formalValue,
+          Set(entries.keys) == Set(Domain.tlaValues)
     else { return nil }
+    var values: [Domain: Range] = [:]
+    for (rawKey, rawValue) in entries {
+      guard let key = Domain(formalValue: rawKey), key.sourceIssue == nil,
+            let value = Range(formalValue: rawValue), value.sourceIssue == nil,
+            values.updateValue(value, forKey: key) == nil
+      else { return nil }
+    }
     self.values = values
+    sourceIssue = nil
   }
 
-  public var tlaValue: TLAValue { .function(values) }
-  public var sourceIssue: SourceModelIssue? { Domain.sourceIssue }
+  public var tlaValue: TLAValue {
+    .function(values.reduce(into: [:]) { $0[$1.key.tlaValue] = $1.value.tlaValue })
+  }
   public static var defaultValue: Self { Self() }
-
-  public subscript(_ key: Domain) -> Range? {
-    values[key.tlaValue].flatMap(Range.init(formalValue:))
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.sourceIssue == rhs.sourceIssue && lhs.tlaValue == rhs.tlaValue
+  }
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(sourceIssue)
+    hasher.combine(tlaValue)
   }
 
-  public static func literal(_ entries: (Domain, Expr<Range>)...) -> Expr<Self> {
+  public subscript(_ key: Domain) -> Range? { values[key] }
+
+  public static func literal(_ entries: (Domain, any TypedExpression<Range>)...) -> Expr<Self> {
     literal(entries)
   }
 
   /// Constructs a total finite function from concrete Swift values.
   public static func literal(_ entries: (Domain, Range)...) -> Expr<Self> {
-    literal(entries.map { ($0.0, Expr<Range>(.value($0.1.tlaValue))) })
+    literal(entries.map { ($0.0, $0.1.expr) })
   }
 
-  private static func literal(_ entries: [(Domain, Expr<Range>)]) -> Expr<Self> {
+  private static func literal(_ entries: [(Domain, any TypedExpression<Range>)]) -> Expr<Self> {
     if let issue = Domain.sourceIssue {
       return Expr(.sourceIssue(issue))
     }
@@ -228,7 +252,7 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
 
     let binding = "_typedFunctionEntry"
     let pairs = entries.flatMap { entry in
-      [StateExpr.equal(.variable(binding), .value(entry.0.tlaValue)), entry.1.raw]
+      [StateExpr.equal(.variable(binding), entry.0.stateExpr), entry.1.stateExpr]
     }
     return Expr(
       .functionLiteral(.setLiteral(domain.map(StateExpr.value)), binding, .caseExpr(pairs, nil)))
@@ -237,39 +261,55 @@ public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAVa
 }
 
 public struct PartialFunction<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAValueType, Hashable, Sendable {
-  private let values: [TLAValue: TLAValue]
+  public static var formalValueShape: FormalValueShape { .function(key: Domain.formalValueShape, value: Range.formalValueShape) }
+  private let values: [Domain: Range]
+  public let sourceIssue: SourceModelIssue?
 
   public init() {
     values = [:]
+    sourceIssue = Domain.sourceIssue
   }
 
   public init?(formalValue: TLAValue) {
     guard Domain.sourceIssue == nil,
-          case .function(let values) = formalValue,
-          Set(values.keys).isSubset(of: Set(Domain.tlaValues)),
-          values.values.allSatisfy({ Range(formalValue: $0) == nil ? false : true })
+          case .function(let entries) = formalValue,
+          Set(entries.keys).isSubset(of: Set(Domain.tlaValues))
     else { return nil }
+    var values: [Domain: Range] = [:]
+    for (rawKey, rawValue) in entries {
+      guard let key = Domain(formalValue: rawKey), key.sourceIssue == nil,
+            let value = Range(formalValue: rawValue), value.sourceIssue == nil,
+            values.updateValue(value, forKey: key) == nil
+      else { return nil }
+    }
     self.values = values
+    sourceIssue = nil
   }
 
-  public var tlaValue: TLAValue { .function(values) }
-  public var sourceIssue: SourceModelIssue? { Domain.sourceIssue }
+  public var tlaValue: TLAValue {
+    .function(values.reduce(into: [:]) { $0[$1.key.tlaValue] = $1.value.tlaValue })
+  }
   public static var defaultValue: Self { Self() }
-  public static var empty: Expr<Self> { Expr(.value(.function([:]))) }
-
-  public subscript(_ key: Domain) -> Range? {
-    values[key.tlaValue].flatMap(Range.init(formalValue:))
+  public static var empty: Expr<Self> { Self().expr }
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.sourceIssue == rhs.sourceIssue && lhs.tlaValue == rhs.tlaValue
+  }
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(sourceIssue)
+    hasher.combine(tlaValue)
   }
 
-  public static func literal(_ entries: (Domain, Expr<Range>)...) -> Expr<Self> {
+  public subscript(_ key: Domain) -> Range? { values[key] }
+
+  public static func literal(_ entries: (Domain, any TypedExpression<Range>)...) -> Expr<Self> {
     literal(entries)
   }
 
   public static func literal(_ entries: (Domain, Range)...) -> Expr<Self> {
-    literal(entries.map { ($0.0, Expr<Range>(.value($0.1.tlaValue))) })
+    literal(entries.map { ($0.0, $0.1.expr) })
   }
 
-  private static func literal(_ entries: [(Domain, Expr<Range>)]) -> Expr<Self> {
+  private static func literal(_ entries: [(Domain, any TypedExpression<Range>)]) -> Expr<Self> {
     if let issue = Domain.sourceIssue {
       return Expr(.sourceIssue(issue))
     }
@@ -289,7 +329,7 @@ public struct PartialFunction<Domain: FiniteTLAValueDomain, Range: TLAValueType>
     }
     let binding = "_typedPartialFunctionEntry"
     let pairs = entries.flatMap { entry in
-      [StateExpr.equal(.variable(binding), .value(entry.0.tlaValue)), entry.1.raw]
+      [StateExpr.equal(.variable(binding), entry.0.stateExpr), entry.1.stateExpr]
     }
     return Expr(.functionLiteral(.setLiteral(keys.map(StateExpr.value)), binding, .caseExpr(pairs, nil)))
   }
@@ -298,7 +338,7 @@ public struct PartialFunction<Domain: FiniteTLAValueDomain, Range: TLAValueType>
 /// The formal range of a finite function, using the upstream `Functions.Range`
 /// operator when that module is imported by the surrounding specification.
 public func Range<Domain: FiniteTLAValueDomain, Value: TLAValueType>(
-  _ function: Expr<Function<Domain, Value>>
+  _ function: some TypedExpression<Function<Domain, Value>>
 ) -> Expr<SetExpr<Value>> {
   FormalCall("Range", function)
 }
@@ -309,10 +349,10 @@ public func Range<Domain: FiniteTLAValueDomain, Value: TLAValueType>(
 /// IsInjective(f)` expression. The choice remains symbolic in the formal
 /// specification and is evaluated by the compiled runtime.
 public func InjectiveSequence<Element: TLAValueType>(
-  from values: Expr<SetExpr<Element>>
+  from values: some TypedExpression<SetExpr<Element>>
 ) -> Expr<TupleExpr<Element>> {
   Expr(.choose(
-    .functionSet(.integerRange(.int(1), .cardinality(values.raw)), values.raw),
+    .functionSet(.integerRange(.int(1), .cardinality(values.stateExpr)), values.stateExpr),
     "f",
     .operatorApplication(.reference("IsInjective", arity: 1), [.value(.variable("f"))])
   ))
@@ -322,16 +362,16 @@ public func InjectiveSequence<Element: TLAValueType>(
 /// values.
 public func Functions<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
   from domain: FiniteDomain<Domain>,
-  to values: Expr<SetExpr<Range>>
+  to values: some TypedExpression<SetExpr<Range>>
 ) -> Expr<SetExpr<Function<Domain, Range>>> {
-  Expr(.functionSet(.setLiteral(domain.members.map { .value($0.tlaValue) }), values.raw))
+  Expr(.functionSet(.setLiteral(domain.members.map(\.stateExpr)), values.stateExpr))
 }
 
 /// All subsets of a finite formal set.
 public func Subsets<Element: TLAValueType>(
-  of values: Expr<SetExpr<Element>>
+  of values: some TypedExpression<SetExpr<Element>>
 ) -> Expr<SetExpr<SetExpr<Element>>> {
-  Expr(.powerSet(values.raw))
+  Expr(.powerSet(values.stateExpr))
 }
 
 // swiftlint:disable identifier_name
@@ -340,108 +380,116 @@ public func Subsets<Element: TLAValueType>(
 /// The choice domain used by a PlusCal `with` statement such as
 /// `rk \in SUBSET Key \ { { } }`.
 public func NonEmptySubsets<Element: TLAValueType>(
-  of values: Expr<SetExpr<Element>>
+  of values: some TypedExpression<SetExpr<Element>>
 ) -> Expr<SetExpr<SetExpr<Element>>> {
   let emptySet = StateExpr.setLiteral([])
-  return Expr(.setDifference(.powerSet(values.raw), .setLiteral([emptySet])))
+  return Expr(.setDifference(.powerSet(values.stateExpr), .setLiteral([emptySet])))
 }
 // swiftlint:enable identifier_name
 
 /// Narrows a finite formal set with a typed TLA+ predicate.
-public func Where<Value: TLAValueType>(
-  _ candidates: Expr<SetExpr<Value>>,
-  matching predicate: (WithValue<Value>) -> StateExpr
+public func Where<Value: TLAValueType, Predicate: TypedExpression<Bool>>(
+  _ candidates: some TypedExpression<SetExpr<Value>>,
+  file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+  matching predicate: (WithValue<Value>) -> Predicate
 ) -> Expr<SetExpr<Value>> {
-  let binding = "__pcal_filtered_value"
+  let binding = generatedBinderName(file: file, line: line, column: column)
   return Expr(.setFilter(
-    candidates.raw,
+    candidates.stateExpr,
     binding,
-    predicate(WithValue<Value>(expression: .variable(binding)))
+    predicate(WithValue<Value>(expression: .variable(binding))).stateExpr
   ))
 }
 
 /// Selects one value from a finite formal domain.
 ///
-/// The source builder evaluates the closed choice through compiled execution
-/// and records the selected formal value.
-public func Select<Value: TLAValueType>(
-  from candidates: Expr<SetExpr<Value>>,
-  matching predicate: (WithValue<Value>) -> StateExpr
+/// The choice remains symbolic and is evaluated against the current model state.
+public func Select<Value: TLAValueType, Predicate: TypedExpression<Bool>>(
+  from candidates: some TypedExpression<SetExpr<Value>>,
+  file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+  matching predicate: (WithValue<Value>) -> Predicate
 ) -> Expr<Value> {
-  let binding = "__tla_static_choice"
-  let choice = StateExpr.choose(
-    candidates.raw,
+  let binding = generatedBinderName(file: file, line: line, column: column)
+  return Expr(.choose(
+    candidates.stateExpr,
     binding,
-    predicate(WithValue<Value>(expression: .variable(binding)))
-  )
-  do {
-    return Expr(.value(try evaluateClosed(choice)))
-  } catch let error as EvalError {
-    return Expr(.sourceIssue(.staticSelection(error.description)))
-  } catch let error as CompilationDiagnostic {
-    return Expr(.sourceIssue(.staticSelection(error.description)))
-  } catch let error as CompiledEvaluationError {
-    return Expr(.sourceIssue(.staticSelection(error.description)))
-  } catch {
-    return Expr(.sourceIssue(.staticSelection("The selection reached an unclassified compiler failure")))
-  }
+    predicate(WithValue<Value>(expression: .variable(binding))).stateExpr
+  ))
 }
 
 public struct SetExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
-  private let values: Set<TLAValue>
+  public static var formalValueShape: FormalValueShape { .set(Element.formalValueShape) }
+  /// The typed members of this finite formal set. Their order is unspecified.
+  public let elements: [Element]
+  public let sourceIssue: SourceModelIssue?
 
   public init() {
-    values = []
+    elements = []
+    sourceIssue = nil
   }
 
-  /// A closed, typed finite set value. Use this at a value boundary such as
-  /// `Constant("Value", SetExpr<Value>(.one, .two))`.
+  /// A closed, typed finite set value.
   public init(_ elements: Element...) {
-    values = Set(elements.map(\.tlaValue))
+    sourceIssue = elements.lazy.compactMap(\.sourceIssue).first
+    guard sourceIssue == nil else {
+      self.elements = elements
+      return
+    }
+    var members: Set<TLAValue> = []
+    self.elements = elements.filter { members.insert($0.tlaValue).inserted }
   }
 
   public init?(formalValue: TLAValue) {
-    guard case .set(let values) = formalValue,
-          values.allSatisfy({ Element(formalValue: $0) != nil })
-    else { return nil }
-    self.values = values
+    guard case .set(let values) = formalValue else { return nil }
+    var elements: [Element] = []
+    for value in values {
+      guard let element = Element(formalValue: value), element.sourceIssue == nil else { return nil }
+      elements.append(element)
+    }
+    self.elements = elements
+    sourceIssue = nil
   }
 
-  public var tlaValue: TLAValue { .set(values) }
+  public var tlaValue: TLAValue { .set(Set(elements.map(\.tlaValue))) }
   public static var defaultValue: Self { Self() }
 
-  /// The typed members of this finite formal set. Their order is unspecified.
-  public var elements: [Element] { values.compactMap(Element.init(formalValue:)) }
-
-  public static func literal(_ elements: Element...) -> Expr<Self> {
-    Expr(.setLiteral(elements.map { .value($0.tlaValue) }))
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.sourceIssue == rhs.sourceIssue && lhs.tlaValue == rhs.tlaValue
+  }
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(sourceIssue)
+    hasher.combine(tlaValue)
   }
 
-  public static func literal(_ elements: Expr<Element>...) -> Expr<Self> {
-    Expr(.setLiteral(elements.map(\.raw)))
+  public static func literal(_ elements: Element...) -> Expr<Self> {
+    Expr(.setLiteral(elements.map(\.stateExpr)))
+  }
+
+  public static func literal(_ elements: any TypedExpression<Element>...) -> Expr<Self> {
+    Expr(.setLiteral(elements.map(\.stateExpr)))
   }
 }
 
 public protocol FormalSetValue: TLAValueType {}
 extension SetExpr: FormalSetValue {}
 
-extension Expr where T: FormalSetValue {
+extension TypedExpression where ExpressionValue: FormalSetValue {
   public func intersection<Element: TLAValueType>(
-    _ other: some StateExprConvertible
-  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
-    Expr(.intersection(raw, other.stateExpr))
+    _ other: some TypedExpression<ExpressionValue>
+  ) -> Expr<SetExpr<Element>> where ExpressionValue == SetExpr<Element> {
+    Expr(.intersection(stateExpr, other.stateExpr))
   }
 
-  public var isEmpty: StateExpr {
-    .equal(.cardinality(raw), .value(.int(0)))
+  public var isEmpty: Expr<Bool> {
+    Expr(.equal(.cardinality(stateExpr), .value(.int(0))))
   }
 
   public var cardinality: Expr<Int> {
-    Expr<Int>(.cardinality(raw))
+    Expr<Int>(.cardinality(stateExpr))
   }
 
-  public func isSubset(of other: some StateExprConvertible) -> StateExpr {
-    raw.isSubset(of: other)
+  public func isSubset(of other: some TypedExpression<ExpressionValue>) -> Expr<Bool> {
+    Expr(stateExpr.isSubset(of: other))
   }
 }
 
@@ -449,31 +497,36 @@ extension Expr where T: FormalSetValue {
 ///
 /// Use this typed formal sequence for ordered state.
 public struct TupleExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
-  private let values: [TLAValue]
+  public static var formalValueShape: FormalValueShape { .sequence(Element.formalValueShape) }
+  /// The typed tuple elements, in their formal order.
+  public let elements: [Element]
 
   public init() {
-    values = []
+    elements = []
   }
 
   public init?(formalValue: TLAValue) {
-    guard case .tuple(let values) = formalValue,
-          values.allSatisfy({ Element(formalValue: $0) != nil })
-    else { return nil }
-    self.values = values
+    guard case .tuple(let values) = formalValue else { return nil }
+    var elements: [Element] = []
+    for value in values {
+      guard let element = Element(formalValue: value), element.sourceIssue == nil else { return nil }
+      elements.append(element)
+    }
+    self.elements = elements
   }
 
-  public var tlaValue: TLAValue { .tuple(values) }
+  public var tlaValue: TLAValue { .tuple(elements.map(\.tlaValue)) }
   public static var defaultValue: Self { Self() }
 
-  /// The typed tuple elements, in their formal order.
-  public var elements: [Element] { values.compactMap(Element.init(formalValue:)) }
+  public static func == (lhs: Self, rhs: Self) -> Bool { lhs.tlaValue == rhs.tlaValue }
+  public func hash(into hasher: inout Hasher) { hasher.combine(tlaValue) }
 
   public static func literal(_ elements: Element...) -> Expr<Self> {
-    Expr(.tupleLiteral(elements.map { .value($0.tlaValue) }))
+    Expr(.tupleLiteral(elements.map(\.stateExpr)))
   }
 
-  public static func literal(_ elements: Expr<Element>...) -> Expr<Self> {
-    Expr(.tupleLiteral(elements.map(\.raw)))
+  public static func literal(_ elements: any TypedExpression<Element>...) -> Expr<Self> {
+    Expr(.tupleLiteral(elements.map(\.stateExpr)))
   }
 }
 
@@ -486,6 +539,7 @@ extension TupleExpr: FormalTupleValue {}
 /// stored in formal state, used as a set member, and selected by a PlusCal
 /// `with` binding.
 public struct Pair<First: TLAValueType, Second: TLAValueType>: TLAValueType, Hashable, Sendable {
+  public static var formalValueShape: FormalValueShape { .tuple([First.formalValueShape, Second.formalValueShape]) }
   public let first: First
   public let second: Second
 
@@ -498,29 +552,32 @@ public struct Pair<First: TLAValueType, Second: TLAValueType>: TLAValueType, Has
     guard case .tuple(let values) = formalValue,
           values.count == 2,
           let first = First(formalValue: values[0]),
-          let second = Second(formalValue: values[1])
+          let second = Second(formalValue: values[1]),
+          first.sourceIssue == nil, second.sourceIssue == nil
     else { return nil }
     self.first = first
     self.second = second
   }
 
+  public var sourceIssue: SourceModelIssue? { first.sourceIssue ?? second.sourceIssue }
   public var tlaValue: TLAValue { .tuple([first.tlaValue, second.tlaValue]) }
   public static var defaultValue: Self { Self() }
 
   public static func == (lhs: Self, rhs: Self) -> Bool {
-    lhs.tlaValue == rhs.tlaValue
+    lhs.sourceIssue == rhs.sourceIssue && lhs.tlaValue == rhs.tlaValue
   }
 
   public func hash(into hasher: inout Hasher) {
+    hasher.combine(sourceIssue)
     hasher.combine(tlaValue)
   }
 
   public static func literal(_ first: First, _ second: Second) -> Expr<Self> {
-    Expr(.tupleLiteral([.value(first.tlaValue), .value(second.tlaValue)]))
+    Expr(.tupleLiteral([first.stateExpr, second.stateExpr]))
   }
 
-  public static func literal(_ first: Expr<First>, _ second: Expr<Second>) -> Expr<Self> {
-    Expr(.tupleLiteral([first.raw, second.raw]))
+  public static func literal(_ first: some TypedExpression<First>, _ second: some TypedExpression<Second>) -> Expr<Self> {
+    Expr(.tupleLiteral([first.stateExpr, second.stateExpr]))
   }
 }
 
@@ -531,32 +588,35 @@ extension Pair: FormalTupleValue {}
 /// TLA+ represents this value as a function with domain `0..<(count)` for
 /// source algorithms that use `ZSequences`.
 public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
-  private let values: [TLAValue: TLAValue]
+  private let elements: [Element]
 
   public init() {
-    values = [:]
+    elements = []
   }
 
   public init?(formalValue: TLAValue) {
     guard case .function(let values) = formalValue else { return nil }
-    let indexes = values.keys.compactMap { value -> Int? in
-      guard case .int(let index) = value else { return nil }
-      return index
+    var elements: [Element] = []
+    for index in 0..<values.count {
+      guard let value = values[.int(index)],
+            let element = Element(formalValue: value), element.sourceIssue == nil
+      else { return nil }
+      elements.append(element)
     }
-    guard indexes.count == values.count,
-          indexes.allSatisfy({ $0 >= 0 }),
-          Set(indexes) == Set(0..<indexes.count),
-          values.values.allSatisfy({ Element(formalValue: $0) != nil })
-    else { return nil }
-    self.values = values
+    self.elements = elements
   }
 
-  public var tlaValue: TLAValue { .function(values) }
+  public var tlaValue: TLAValue {
+    .function(Dictionary(uniqueKeysWithValues: elements.enumerated().map {
+      (.int($0.offset), $0.element.tlaValue)
+    }))
+  }
   public static var defaultValue: Self { Self() }
+  public static func == (lhs: Self, rhs: Self) -> Bool { lhs.tlaValue == rhs.tlaValue }
+  public func hash(into hasher: inout Hasher) { hasher.combine(tlaValue) }
 
   public func element(at index: Int) -> Element? {
-    guard index >= 0, let value = values[.int(index)] else { return nil }
-    return Element(formalValue: value)
+    elements.indices.contains(index) ? elements[index] : nil
   }
 
   /// Creates a zero-based formal sequence from values in formal order.
@@ -565,11 +625,11 @@ public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, 
   }
 
   public static func literal(_ elements: Element...) -> Expr<Self> {
-    literal(elements.map { .value($0.tlaValue) })
+    literal(elements.map(\.stateExpr))
   }
 
-  public static func literal(_ elements: Expr<Element>...) -> Expr<Self> {
-    literal(elements.map(\.raw))
+  public static func literal(_ elements: any TypedExpression<Element>...) -> Expr<Self> {
+    literal(elements.map(\.stateExpr))
   }
 
   /// Creates a zero-based formal sequence with the supplied formal length.
@@ -577,32 +637,23 @@ public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, 
   /// The length and value may depend on earlier formal state. No application
   /// code executes when the sequence is built.
   public static func filled(
-    length: Expr<Int>,
-    with value: Expr<Element>
+    length: some TypedExpression<Int>,
+    with value: some TypedExpression<Element>
   ) -> Expr<Self> {
     let index = "__zeroBasedSequenceIndex"
     return Expr(.functionLiteral(
-      .integerRange(.int(0), .subtract(length.raw, .int(1))),
+      .integerRange(.int(0), .subtract(length.stateExpr, .int(1))),
       index,
-      value.raw
+      value.stateExpr
     ))
   }
 
-  public static func filled(length: Expr<Int>, with value: Element) -> Expr<Self> {
-    filled(length: length, with: Expr(.value(value.tlaValue)))
+  public static func filled(length: some TypedExpression<Int>, with value: Element) -> Expr<Self> {
+    filled(length: length, with: value.expr)
   }
 
   private static func literal(_ elements: [StateExpr]) -> Expr<Self> {
-    guard elements.isEmpty == false else { return literal() }
-    let index = "__zeroBasedSequenceIndex"
-    let pairs = elements.enumerated().flatMap { offset, element in
-      [StateExpr.equal(.variable(index), .int(offset)), element]
-    }
-    return Expr(.functionLiteral(
-      .setLiteral(elements.indices.map { .int($0) }),
-      index,
-      .caseExpr(pairs, .value(Element.defaultValue.tlaValue))
-    ))
+    Expr(formalZeroBasedSequence(elements))
   }
 }
 
@@ -616,10 +667,10 @@ extension ZeroBasedSequence: FormalZeroBasedSequenceValue {}
 /// remains finite and can be explored by the checker and TLC.
 // swiftlint:disable:next identifier_name
 public func Sequences<Element: TLAValueType>(
-  of elements: Expr<SetExpr<Element>>,
+  of elements: some TypedExpression<SetExpr<Element>>,
   lengths: ClosedRange<Int>
 ) -> Expr<SetExpr<TupleExpr<Element>>> {
-  guard case .setLiteral(let members) = elements.raw else {
+  guard case .setLiteral(let members) = elements.stateExpr else {
     return Expr(.sourceIssue(.sequenceElementDomain(operation: "Sequences")))
   }
   guard lengths.lowerBound >= 0 else {
@@ -635,10 +686,10 @@ public func Sequences<Element: TLAValueType>(
 /// This is the bounded form of a `ZSeq(S)` input domain. The returned values
 /// have function domains `0..<(length)`, so indexing at zero stays formal.
 public func ZeroBasedSequences<Element: TLAValueType>(
-  of elements: Expr<SetExpr<Element>>,
+  of elements: some TypedExpression<SetExpr<Element>>,
   lengths: ClosedRange<Int>
 ) -> Expr<SetExpr<ZeroBasedSequence<Element>>> {
-  guard case .setLiteral(let members) = elements.raw else {
+  guard case .setLiteral(let members) = elements.stateExpr else {
     return Expr(.sourceIssue(.sequenceElementDomain(operation: "ZeroBasedSequences")))
   }
   guard lengths.lowerBound >= 0 else {
@@ -653,10 +704,10 @@ public func ZeroBasedSequences<Element: TLAValueType>(
 /// Use it when sortedness is a declared input assumption, as in binary search.
 // swiftlint:disable:next identifier_name
 public func SortedSequences(
-  of elements: Expr<SetExpr<Int>>,
+  of elements: some TypedExpression<SetExpr<Int>>,
   lengths: ClosedRange<Int>
 ) -> Expr<SetExpr<TupleExpr<Int>>> {
-  guard case .setLiteral(let members) = elements.raw else {
+  guard case .setLiteral(let members) = elements.stateExpr else {
     return Expr(.sourceIssue(.sequenceElementDomain(operation: "SortedSequences")))
   }
   guard lengths.lowerBound >= 0 else {
@@ -669,7 +720,7 @@ public func SortedSequences(
 
 /// The finite sequence-domain expansion shared by the builder and source
 /// parser.
-func formalSequenceExpressions(
+package func formalSequenceExpressions(
   members: [StateExpr],
   lengths: ClosedRange<Int>
 ) -> [StateExpr] {
@@ -688,27 +739,29 @@ func formalSequenceExpressions(
   return sequences
 }
 
-func formalZeroBasedSequenceExpressions(
+package func formalZeroBasedSequenceExpressions(
   members: [StateExpr],
   lengths: ClosedRange<Int>
 ) -> [StateExpr] {
   guard lengths.lowerBound >= 0 else { return [] }
   return formalSequenceExpressions(members: members, lengths: lengths).map { tuple in
     guard case .tupleLiteral(let elements) = tuple else { return tuple }
-    guard elements.isEmpty == false else { return .value(.function([:])) }
-    let index = "__zeroBasedSequenceIndex"
-    let pairs = elements.enumerated().flatMap { offset, element in
-      [StateExpr.equal(.variable(index), .int(offset)), element]
-    }
-    return .functionLiteral(
-      .setLiteral(elements.indices.map { .int($0) }),
-      index,
-      .caseExpr(pairs, .value(.int(0)))
-    )
+    return formalZeroBasedSequence(elements)
   }
 }
 
-func formalIntegerSequenceIsSorted(_ expression: StateExpr) -> Bool {
+/// The index domain guarantees that exactly one CASE branch matches.
+package func formalZeroBasedSequence(_ elements: [StateExpr]) -> StateExpr {
+  guard !elements.isEmpty else { return .value(.function([:])) }
+  let index = "__zeroBasedSequenceIndex"
+  let branches = elements.enumerated().flatMap { offset, element in
+    [StateExpr.equal(.variable(index), .int(offset)), element]
+  }
+  return .functionLiteral(
+    .setLiteral(elements.indices.map { .int($0) }), index, .caseExpr(branches, nil))
+}
+
+package func formalIntegerSequenceIsSorted(_ expression: StateExpr) -> Bool {
   guard case .tupleLiteral(let values) = expression else { return false }
   let integers = values.compactMap { value -> Int? in
     guard case .value(.int(let integer)) = value else { return nil }
@@ -718,90 +771,53 @@ func formalIntegerSequenceIsSorted(_ expression: StateExpr) -> Bool {
     && zip(integers, integers.dropFirst()).allSatisfy { $0 <= $1 }
 }
 
-extension Expr {
+extension TypedExpression {
   /// Returns the formal union of two typed sets.
   public func union<Element: TLAValueType>(
-    _ other: Expr<SetExpr<Element>>
-  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
-    Expr<SetExpr<Element>>(.union(raw, other.raw))
+    _ other: some TypedExpression<SetExpr<Element>>
+  ) -> Expr<SetExpr<Element>> where ExpressionValue == SetExpr<Element> {
+    Expr<SetExpr<Element>>(.union(stateExpr, other.stateExpr))
   }
 
   public func subtracting<Element: TLAValueType>(
-    _ other: Expr<SetExpr<Element>>
-  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
-    Expr(.setDifference(raw, other.raw))
+    _ other: some TypedExpression<SetExpr<Element>>
+  ) -> Expr<SetExpr<Element>> where ExpressionValue == SetExpr<Element> {
+    Expr(.setDifference(stateExpr, other.stateExpr))
   }
 
-  public func inserting<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
-  where T == SetExpr<Element> {
-    Expr<SetExpr<Element>>(.union(raw, .setLiteral([element.raw])))
+  public func inserting<Element: TypedExpression>(_ element: Element) -> Expr<SetExpr<Element.ExpressionValue>>
+  where ExpressionValue == SetExpr<Element.ExpressionValue> {
+    Expr<SetExpr<Element.ExpressionValue>>(.union(stateExpr, .setLiteral([element.stateExpr])))
   }
 
   public func inserting<Element: TLAValueType>(_ element: Element) -> Expr<SetExpr<Element>>
-  where T == SetExpr<Element> {
-    Expr<SetExpr<Element>>(.union(raw, .setLiteral([.value(element.tlaValue)])))
+  where ExpressionValue == SetExpr<Element> {
+    inserting(element.expr)
   }
 
-  public func inserting<Element: FiniteTLAValueDomain>(
-    _ element: ProcessIdentifier<Element>
-  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
-    Expr<SetExpr<Element>>(.union(raw, .setLiteral([element.stateExpr])))
+  public func removing<Element: TLAValueType>(_ element: some TypedExpression<Element>) -> Expr<SetExpr<Element>>
+  where ExpressionValue == SetExpr<Element> {
+    Expr<SetExpr<Element>>(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
   }
 
-  public func inserting<Element: TLAValueType>(
-    _ element: WithValue<Element>
-  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
-    Expr<SetExpr<Element>>(.union(raw, .setLiteral([element.stateExpr])))
+  public func contains<Element: TypedExpression>(_ element: Element) -> Expr<Bool>
+  where ExpressionValue == SetExpr<Element.ExpressionValue> {
+    Expr(.in(element.stateExpr, stateExpr))
   }
 
-  public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<SetExpr<Element>>
-  where T == SetExpr<Element> {
-    Expr<SetExpr<Element>>(.setDifference(raw, .setLiteral([element.raw])))
+  public func contains<Element: TLAValueType>(_ element: Element) -> Expr<Bool>
+  where ExpressionValue == SetExpr<Element> {
+    contains(element.expr)
   }
 
-  public func removing<Element: TLAValueType>(_ element: WithValue<Element>) -> Expr<SetExpr<Element>>
-  where T == SetExpr<Element> {
-    Expr<SetExpr<Element>>(.setDifference(raw, .setLiteral([element.stateExpr])))
-  }
-
-  public func removing<Element: FiniteTLAValueDomain>(_ element: ProcessIdentifier<Element>) -> Expr<SetExpr<Element>>
-  where T == SetExpr<Element> {
-    Expr<SetExpr<Element>>(.setDifference(raw, .setLiteral([element.stateExpr])))
-  }
-
-  public func contains<Element: TLAValueType>(_ element: Element) -> StateExpr
-  where T == SetExpr<Element> {
-    .in(.value(element.tlaValue), raw)
-  }
-
-  public func contains<Element: TLAValueType>(_ element: Expr<Element>) -> StateExpr
-  where T == SetExpr<Element> {
-    .in(element.raw, raw)
-  }
-
-  /// Tests membership of the current PlusCal process identifier.
-  public func contains<Element: FiniteTLAValueDomain>(_ element: ProcessIdentifier<Element>) -> StateExpr
-  where T == SetExpr<Element> {
-    .in(element.stateExpr, raw)
-  }
-
-  /// Tests membership of a value selected by a bounded `With` statement.
-  ///
-  /// The selected value remains formal data. This avoids leaking the
-  /// underlying expression representation into algorithm source.
-  public func contains<Element: TLAValueType>(_ element: WithValue<Element>) -> StateExpr
-  where T == SetExpr<Element> {
-    .in(element.stateExpr, raw)
+  public func appending<Element: TypedExpression>(_ element: Element) -> Expr<TupleExpr<Element.ExpressionValue>>
+  where ExpressionValue == TupleExpr<Element.ExpressionValue> {
+    Expr<TupleExpr<Element.ExpressionValue>>(.tupleAppend(stateExpr, element.stateExpr))
   }
 
   public func appending<Element: TLAValueType>(_ element: Element) -> Expr<TupleExpr<Element>>
-  where T == TupleExpr<Element> {
-    Expr<TupleExpr<Element>>(.tupleAppend(raw, .value(element.tlaValue)))
-  }
-
-  public func appending<Element: TLAValueType>(_ element: Expr<Element>) -> Expr<TupleExpr<Element>>
-  where T == TupleExpr<Element> {
-    Expr<TupleExpr<Element>>(.tupleAppend(raw, element.raw))
+  where ExpressionValue == TupleExpr<Element> {
+    appending(element.expr)
   }
 
   /// Concatenates two formal one-based sequences.
@@ -809,220 +825,209 @@ extension Expr {
   /// The right side may be a finite function selected by `CHOOSE`; TLA+
   /// defines that function as a sequence when its domain is `1..n`.
   public func concatenating<Element: TLAValueType>(
-    _ other: Expr<TupleExpr<Element>>
-  ) -> Expr<TupleExpr<Element>> where T == TupleExpr<Element> {
-    Expr<TupleExpr<Element>>(.tupleConcatenate(raw, other.raw))
+    _ other: some TypedExpression<TupleExpr<Element>>
+  ) -> Expr<TupleExpr<Element>> where ExpressionValue == TupleExpr<Element> {
+    Expr<TupleExpr<Element>>(.tupleConcatenate(stateExpr, other.stateExpr))
   }
 
-  public func removing<Element: TLAValueType>(at index: Expr<Int>) -> Expr<TupleExpr<Element>>
-  where T == TupleExpr<Element> {
-    Expr(.tupleRemoving(raw, index.raw))
+  public func removing<Element: TLAValueType>(at index: some TypedExpression<Int>) -> Expr<TupleExpr<Element>>
+  where ExpressionValue == TupleExpr<Element> {
+    Expr(.tupleRemoving(stateExpr, index.stateExpr))
   }
 
-  public func removing<Element: TLAValueType>(at index: Int) -> Expr<TupleExpr<Element>>
-  where T == TupleExpr<Element> {
-    Expr(.tupleRemoving(raw, .int(index)))
-  }
-
-  public func at<Element: TLAValueType>(_ index: Int) -> Expr<Element> where T == TupleExpr<Element> {
-    Expr<Element>(.tupleAccess(raw, index))
+  public func at<Element: TLAValueType>(_ index: Int) -> Expr<Element> where ExpressionValue == TupleExpr<Element> {
+    Expr<Element>(.tupleAccess(stateExpr, index))
   }
 
   public func first<First: TLAValueType, Second: TLAValueType>() -> Expr<First>
-  where T == Pair<First, Second> {
-    Expr<First>(.tupleAccess(raw, 1))
+  where ExpressionValue == Pair<First, Second> {
+    Expr<First>(.tupleAccess(stateExpr, 1))
   }
 
   public func second<First: TLAValueType, Second: TLAValueType>() -> Expr<Second>
-  where T == Pair<First, Second> {
-    Expr<Second>(.tupleAccess(raw, 2))
+  where ExpressionValue == Pair<First, Second> {
+    Expr<Second>(.tupleAccess(stateExpr, 2))
   }
 
   /// Reads a formal sequence at a one-based formal index.
-  public subscript<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
-  where T == TupleExpr<Element> {
-    Expr<Element>(.tupleDynamicAccess(raw, index.raw))
+  public subscript<Element: TLAValueType>(_ index: some TypedExpression<Int>) -> Expr<Element>
+  where ExpressionValue == TupleExpr<Element> {
+    Expr<Element>(.tupleDynamicAccess(stateExpr, index.stateExpr))
   }
 
-  public subscript<Schema: TLARecordSchema, Value>(_ field: TLAField<Schema, Value>) -> Expr<Value>
-  where T == Record<Schema> {
-    Expr<Value>(field.recordAccess(raw))
-  }
-
-  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> Expr<
-    Range
-  > where T == Function<Domain, Range> {
-    Expr<Range>(.functionApply(raw, finiteDomainIndex(index)))
-  }
-
-  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Expr<Domain>) -> Expr<
-    Range
-  > where T == Function<Domain, Range> {
-    Expr<Range>(.functionApply(raw, index.raw))
+  public subscript<Schema: TLARecordSchema, FieldValue>(_ field: TLAField<Schema, FieldValue>) -> Expr<FieldValue>
+  where ExpressionValue == Record<Schema> {
+    Expr<FieldValue>(field.recordAccess(stateExpr))
   }
 
   public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> Expr<
     Range
-  > where T == PartialFunction<Domain, Range> {
-    Expr<Range>(.functionApply(raw, finiteDomainIndex(index)))
+  > where ExpressionValue == Function<Domain, Range> {
+    Expr<Range>(.functionApply(stateExpr, finiteDomainIndex(index)))
   }
 
-  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Expr<Domain>) -> Expr<
+  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: some TypedExpression<Domain>) -> Expr<
     Range
-  > where T == PartialFunction<Domain, Range> {
-    Expr<Range>(.functionApply(raw, index.raw))
+  > where ExpressionValue == Function<Domain, Range> {
+    Expr<Range>(.functionApply(stateExpr, index.stateExpr))
   }
 
-  /// Reads a finite function at the current member of a PlusCal process family.
-  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: ProcessIdentifier<Domain>) -> Expr<
+  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> Expr<
     Range
-  > where T == Function<Domain, Range> {
-    Expr<Range>(.functionApply(raw, index.stateExpr))
+  > where ExpressionValue == PartialFunction<Domain, Range> {
+    Expr<Range>(.functionApply(stateExpr, finiteDomainIndex(index)))
   }
 
-  public func updating<Schema: TLARecordSchema, Value>(
-    _ field: TLAField<Schema, Value>, to value: Value
-  ) -> Expr<Record<Schema>> where T == Record<Schema> {
-    Expr<Record<Schema>>(.except(raw, field.recordSelector, field.value(.value(value.tlaValue))))
+  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: some TypedExpression<Domain>) -> Expr<
+    Range
+  > where ExpressionValue == PartialFunction<Domain, Range> {
+    Expr<Range>(.functionApply(stateExpr, index.stateExpr))
   }
 
-  public func updating<Schema: TLARecordSchema, Value>(
-    _ field: TLAField<Schema, Value>, to value: Expr<Value>
-  ) -> Expr<Record<Schema>> where T == Record<Schema> {
-    Expr<Record<Schema>>(.except(raw, field.recordSelector, field.value(value.raw)))
+  public func updating<Schema: TLARecordSchema, FieldValue>(
+    _ field: TLAField<Schema, FieldValue>, to value: FieldValue
+  ) -> Expr<Record<Schema>> where ExpressionValue == Record<Schema> {
+    Expr<Record<Schema>>(.except(stateExpr, field.recordSelector, field.value(value.stateExpr)))
   }
 
-  public func updating<Schema: TLARecordSchema, Value>(
-    _ field: TLAField<Schema, Value>, to value: WithValue<Value>
-  ) -> Expr<Record<Schema>> where T == Record<Schema> {
-    Expr<Record<Schema>>(.except(raw, field.recordSelector, field.value(value.stateExpr)))
+  public func updating<Schema: TLARecordSchema, FieldValue>(
+    _ field: TLAField<Schema, FieldValue>, to value: some TypedExpression<FieldValue>
+  ) -> Expr<Record<Schema>> where ExpressionValue == Record<Schema> {
+    Expr<Record<Schema>>(.except(stateExpr, field.recordSelector, field.value(value.stateExpr)))
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Domain, to value: Expr<Range>
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    Expr<Function<Domain, Range>>(.except(raw, finiteDomainIndex(index), value.raw))
+    _ index: Domain, to value: some TypedExpression<Range>
+  ) -> Expr<Function<Domain, Range>> where ExpressionValue == Function<Domain, Range> {
+    Expr<Function<Domain, Range>>(.except(stateExpr, finiteDomainIndex(index), value.stateExpr))
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
     _ index: Domain, to value: Range
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    updating(index, to: Expr<Range>(.value(value.tlaValue)))
+  ) -> Expr<Function<Domain, Range>> where ExpressionValue == Function<Domain, Range> {
+    updating(index, to: value.expr)
   }
 
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Domain, _ update: (Expr<Range>) -> Expr<Range>
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType, Update: TypedExpression<Range>>(
+    _ index: Domain, _ update: (Expr<Range>) -> Update
+  ) -> Expr<Function<Domain, Range>> where ExpressionValue == Function<Domain, Range> {
     let selected = self[index]
     return Expr<Function<Domain, Range>>(
-      .except(raw, finiteDomainIndex(index), update(selected).raw))
+      .except(stateExpr, finiteDomainIndex(index), update(selected).stateExpr))
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Expr<Domain>, to value: Expr<Range>
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    Expr<Function<Domain, Range>>(.except(raw, index.raw, value.raw))
+    _ index: some TypedExpression<Domain>, to value: some TypedExpression<Range>
+  ) -> Expr<Function<Domain, Range>> where ExpressionValue == Function<Domain, Range> {
+    Expr<Function<Domain, Range>>(.except(stateExpr, index.stateExpr, value.stateExpr))
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Expr<Domain>, to value: Range
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    updating(index, to: Expr<Range>(.value(value.tlaValue)))
+    _ index: some TypedExpression<Domain>, to value: Range
+  ) -> Expr<Function<Domain, Range>> where ExpressionValue == Function<Domain, Range> {
+    updating(index, to: value.expr)
   }
 
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Expr<Domain>, _ update: (Expr<Range>) -> Expr<Range>
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
+  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType, Update: TypedExpression<Range>>(
+    _ index: some TypedExpression<Domain>, _ update: (Expr<Range>) -> Update
+  ) -> Expr<Function<Domain, Range>> where ExpressionValue == Function<Domain, Range> {
     Expr<Function<Domain, Range>>(
-      .except(raw, index.raw, update(Expr<Range>(.functionApply(raw, index.raw))).raw))
+      .except(stateExpr, index.stateExpr, update(Expr<Range>(.functionApply(stateExpr, index.stateExpr))).stateExpr))
   }
 
   public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Domain, with value: Expr<Range>
-  ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
-    Expr(.partialFunctionOverriding(raw, key: finiteDomainIndex(index), value: value.raw))
+    _ index: Domain, with value: some TypedExpression<Range>
+  ) -> Expr<PartialFunction<Domain, Range>> where ExpressionValue == PartialFunction<Domain, Range> {
+    Expr(.partialFunctionOverriding(stateExpr, key: finiteDomainIndex(index), value: value.stateExpr))
   }
 
   public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
     _ index: Domain, with value: Range
-  ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
-    overriding(index, with: Expr<Range>(.value(value.tlaValue)))
+  ) -> Expr<PartialFunction<Domain, Range>> where ExpressionValue == PartialFunction<Domain, Range> {
+    overriding(index, with: value.expr)
   }
 
   public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Expr<Domain>, with value: Expr<Range>
-  ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
-    Expr(.partialFunctionOverriding(raw, key: index.raw, value: value.raw))
+    _ index: some TypedExpression<Domain>, with value: some TypedExpression<Range>
+  ) -> Expr<PartialFunction<Domain, Range>> where ExpressionValue == PartialFunction<Domain, Range> {
+    Expr(.partialFunctionOverriding(stateExpr, key: index.stateExpr, value: value.stateExpr))
   }
 
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: ProcessIdentifier<Domain>, to value: Expr<Range>
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    Expr<Function<Domain, Range>>(.except(raw, index.stateExpr, value.raw))
+  public func removing<Element: TLAValueType>(_ element: Element) -> Expr<SetExpr<Element>>
+  where ExpressionValue == SetExpr<Element> {
+    Expr(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
   }
 
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: ProcessIdentifier<Domain>, to value: Range
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    updating(index, to: Expr<Range>(.value(value.tlaValue)))
-  }
-
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: WithValue<Domain>, _ update: (Expr<Range>) -> Expr<Range>
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    Expr<Function<Domain, Range>>(
-      .except(raw, index.stateExpr, update(Expr<Range>(.functionApply(raw, index.stateExpr))).raw))
+  public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+    _ index: some TypedExpression<Domain>, with value: Range
+  ) -> Expr<PartialFunction<Domain, Range>> where ExpressionValue == PartialFunction<Domain, Range> {
+    overriding(index, with: value.expr)
   }
 }
 
 /// A bounded, inclusive TLA+ integer set whose endpoints can depend on state.
 public func IntRange(
-  _ lower: some StateExprConvertible,
-  through upper: some StateExprConvertible
+  _ lower: some TypedExpression<Int>,
+  through upper: some TypedExpression<Int>
 ) -> Expr<SetExpr<Int>> {
   Expr<SetExpr<Int>>(.integerRange(lower.stateExpr, upper.stateExpr))
 }
 
-extension Expr {
+public func IntRange(_ lower: Int, through upper: some TypedExpression<Int>) -> Expr<SetExpr<Int>> {
+  IntRange(Expr(lower), through: upper)
+}
+
+public func IntRange(_ lower: some TypedExpression<Int>, through upper: Int) -> Expr<SetExpr<Int>> {
+  IntRange(lower, through: Expr(upper))
+}
+
+public func IntRange(_ lower: Int, through upper: Int) -> Expr<SetExpr<Int>> {
+  IntRange(Expr(lower), through: Expr(upper))
+}
+
+extension TypedExpression {
   /// Selects formal set members that satisfy `predicate`.
-  public func filtering<Element: TLAValueType>(
-    _ predicate: (WithValue<Element>) -> StateExpr
-  ) -> Expr<SetExpr<Element>> where T == SetExpr<Element> {
-    let binding = generatedBinderName()
+  public func filtering<Element: TLAValueType, Predicate: TypedExpression<Bool>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    _ predicate: (WithValue<Element>) -> Predicate
+  ) -> Expr<SetExpr<Element>> where ExpressionValue == SetExpr<Element> {
+    let binding = generatedBinderName(file: file, line: line, column: column)
     let element = WithValue<Element>(expression: .variable(binding))
-    return Expr<SetExpr<Element>>(.setFilter(raw, binding, predicate(element)))
+    return Expr<SetExpr<Element>>(.setFilter(stateExpr, binding, predicate(element).stateExpr))
   }
 
   /// Maps every formal set member through a typed formal expression.
-  public func mapping<Element: TLAValueType, Result: TLAValueType>(
-    _ transform: (WithValue<Element>) -> Expr<Result>
-  ) -> Expr<SetExpr<Result>> where T == SetExpr<Element> {
-    let binding = generatedBinderName()
+  public func mapping<Element: TLAValueType, Result: TypedExpression>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    _ transform: (WithValue<Element>) -> Result
+  ) -> Expr<SetExpr<Result.ExpressionValue>> where ExpressionValue == SetExpr<Element> {
+    let binding = generatedBinderName(file: file, line: line, column: column)
     let element = WithValue<Element>(expression: .variable(binding))
-    return Expr<SetExpr<Result>>(.setMap(transform(element).raw, binding, raw))
+    return Expr<SetExpr<Result.ExpressionValue>>(.setMap(transform(element).stateExpr, binding, stateExpr))
   }
 }
 
-extension Expr where T: FormalTupleValue {
+extension TypedExpression where ExpressionValue: FormalTupleValue {
   public var count: Expr<Int> {
-    Expr<Int>(.tupleLength(raw))
+    Expr<Int>(.tupleLength(stateExpr))
   }
 }
 
-extension Expr {
-  public func head<Element: TLAValueType>() -> Expr<Element> where T == TupleExpr<Element> {
-    Expr<Element>(.tupleHead(raw))
+extension TypedExpression {
+  public func head<Element: TLAValueType>() -> Expr<Element> where ExpressionValue == TupleExpr<Element> {
+    Expr<Element>(.tupleHead(stateExpr))
   }
 }
 
-extension Expr {
+extension TypedExpression {
   /// Selects formal sequence members that satisfy `predicate`.
-  public func selecting<Element: TLAValueType>(
-    where predicate: (WithValue<Element>) -> StateExpr
-  ) -> Expr<TupleExpr<Element>> where T == TupleExpr<Element> {
-    let binding = generatedBinderName()
+  public func selecting<Element: TLAValueType, Predicate: TypedExpression<Bool>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    where predicate: (WithValue<Element>) -> Predicate
+  ) -> Expr<TupleExpr<Element>> where ExpressionValue == TupleExpr<Element> {
+    let binding = generatedBinderName(file: file, line: line, column: column)
     let element = WithValue<Element>(expression: .variable(binding))
-    return Expr<TupleExpr<Element>>(.sequenceSelect(raw, binding, predicate(element)))
+    return Expr<TupleExpr<Element>>(.sequenceSelect(stateExpr, binding, predicate(element).stateExpr))
   }
 }
 
@@ -1032,211 +1037,94 @@ extension Expr {
 /// selects a function-domain member with `CHOOSE`, so the operation must be
 /// independent of that selection order. Import `FunctionsModule.module`
 /// into the surrounding specification so TLC receives the upstream operator.
-public func Fold<Element: TLAValueType, Result: TLAValueType>(
-  _ sequence: Expr<TupleExpr<Element>>,
-  startingWith initial: Expr<Result>,
-  _ combine: (Expr<Element>, Expr<Result>) -> Expr<Result>
+public func Fold<Element: TLAValueType, Result: TLAValueType, Combined: TypedExpression<Result>>(
+  _ sequence: some TypedExpression<TupleExpr<Element>>,
+  startingWith initial: some TypedExpression<Result>,
+  file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+  _ combine: (Expr<Element>, Expr<Result>) -> Combined
 ) -> Expr<Result> {
-  let elementName = generatedBinderName()
-  let resultName = generatedBinderName()
+  let elementName = generatedBinderName(file: file, line: line, column: column &* 2)
+  let resultName = generatedBinderName(file: file, line: line, column: (column &* 2) &+ 1)
   let element = Expr<Element>(.variable(elementName))
   let accumulated = Expr<Result>(.variable(resultName))
   return Expr<Result>(
     .foldFunction(
       FormalLambda(
         parameters: [elementName, resultName],
-        body: combine(element, accumulated).raw
+        body: combine(element, accumulated).stateExpr
       ),
-      initial: initial.raw,
-      sequence: sequence.raw
+      initial: initial.stateExpr,
+      sequence: sequence.stateExpr
     )
   )
 }
 
 /// Starts a formal fold from a concrete formal value.
-public func Fold<Element: TLAValueType, Result: TLAValueType>(
-  _ sequence: Expr<TupleExpr<Element>>,
+public func Fold<Element: TLAValueType, Result: TLAValueType, Combined: TypedExpression<Result>>(
+  _ sequence: some TypedExpression<TupleExpr<Element>>,
   startingWith initial: Result,
-  _ combine: (Expr<Element>, Expr<Result>) -> Expr<Result>
+  file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+  _ combine: (Expr<Element>, Expr<Result>) -> Combined
 ) -> Expr<Result> {
-  Fold(sequence, startingWith: Expr<Result>(.value(initial.tlaValue)), combine)
+  Fold(sequence, startingWith: initial.expr, file: file, line: line, column: column, combine)
 }
 
-extension Expr where T: FormalZeroBasedSequenceValue {
+extension TypedExpression where ExpressionValue: FormalZeroBasedSequenceValue {
   /// The formal number of elements in a zero-based sequence.
   public var count: Expr<Int> {
-    Expr<Int>(.cardinality(.domain(raw)))
+    Expr<Int>(.cardinality(.domain(stateExpr)))
   }
 }
 
-extension Expr where T == Int {
+extension TypedExpression where ExpressionValue == Int {
   /// Divides formal integers with TLA+ integer-division semantics.
   public func integerDivided(by divisor: Int) -> Expr<Int> {
-    Expr(.integerDivide(raw, .int(divisor)))
+    Expr(.integerDivide(stateExpr, .int(divisor)))
   }
 }
 
-extension Expr {
+extension TypedExpression {
   /// Reads a formal sequence at a one-based formal index.
-  public func at<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
-  where T == TupleExpr<Element> {
-    Expr<Element>(.tupleDynamicAccess(raw, index.raw))
+  public func at<Element: TLAValueType>(_ index: some TypedExpression<Int>) -> Expr<Element>
+  where ExpressionValue == TupleExpr<Element> {
+    Expr<Element>(.tupleDynamicAccess(stateExpr, index.stateExpr))
   }
 
   /// Reads a zero-based formal sequence at a formal index.
-  public subscript<Element: TLAValueType>(_ index: Expr<Int>) -> Expr<Element>
-  where T == ZeroBasedSequence<Element> {
-    Expr<Element>(.functionApply(raw, index.raw))
-  }
-
-  public subscript<Element: TLAValueType>(_ index: Int) -> Expr<Element>
-  where T == ZeroBasedSequence<Element> {
-    Expr<Element>(.functionApply(raw, .int(index)))
+  public subscript<Element: TLAValueType>(_ index: some TypedExpression<Int>) -> Expr<Element>
+  where ExpressionValue == ZeroBasedSequence<Element> {
+    Expr<Element>(.functionApply(stateExpr, index.stateExpr))
   }
 
   /// Replaces one value in a zero-based formal sequence.
   public func updating<Element: TLAValueType>(
-    _ index: Expr<Int>,
-    to value: Expr<Element>
-  ) -> Expr<ZeroBasedSequence<Element>> where T == ZeroBasedSequence<Element> {
-    Expr(.except(raw, index.raw, value.raw))
+    _ index: some TypedExpression<Int>,
+    to value: some TypedExpression<Element>
+  ) -> Expr<ZeroBasedSequence<Element>> where ExpressionValue == ZeroBasedSequence<Element> {
+    Expr(.except(stateExpr, index.stateExpr, value.stateExpr))
   }
 
-  public func updating<Element: TLAValueType>(
-    _ index: Int,
-    to value: Expr<Element>
-  ) -> Expr<ZeroBasedSequence<Element>> where T == ZeroBasedSequence<Element> {
-    Expr(.except(raw, .int(index), value.raw))
-  }
 }
 
 extension Var {
-  public subscript<Schema: TLARecordSchema, Value>(_ field: TLAField<Schema, Value>) -> Expr<Value>
-  where T == Record<Schema> {
-    Expr<Value>(field.recordAccess(stateExpr))
-  }
-
-  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> Expr<
-    Range
-  > where T == Function<Domain, Range> {
-    Expr<Range>(.functionApply(stateExpr, finiteDomainIndex(index)))
-  }
-
-  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Expr<Domain>) -> Expr<
-    Range
-  > where T == Function<Domain, Range> {
-    Expr<Range>(.functionApply(stateExpr, index.raw))
-  }
-
-  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> Expr<
-    Range
-  > where T == PartialFunction<Domain, Range> {
-    Expr<Range>(.functionApply(stateExpr, finiteDomainIndex(index)))
-  }
-
-  public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Expr<Domain>) -> Expr<
-    Range
-  > where T == PartialFunction<Domain, Range> {
-    Expr<Range>(.functionApply(stateExpr, index.raw))
-  }
-
-  public func updating<Schema: TLARecordSchema, Value>(
-    _ field: TLAField<Schema, Value>, to value: Value
-  ) -> Expr<Record<Schema>> where T == Record<Schema> {
-    Expr<Record<Schema>>(.except(stateExpr, field.recordSelector, field.value(.value(value.tlaValue))))
-  }
-
-  public func updating<Schema: TLARecordSchema, Value>(
-    _ field: TLAField<Schema, Value>, to value: Expr<Value>
-  ) -> Expr<Record<Schema>> where T == Record<Schema> {
-    Expr<Record<Schema>>(.except(stateExpr, field.recordSelector, field.value(value.raw)))
-  }
-
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Domain, to value: Expr<Range>
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    Expr<Function<Domain, Range>>(.except(stateExpr, finiteDomainIndex(index), value.raw))
-  }
-
-  public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Domain, with value: Expr<Range>
-  ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
-    Expr(.partialFunctionOverriding(stateExpr, key: finiteDomainIndex(index), value: value.raw))
-  }
-
-  public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Domain, with value: Range
-  ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
-    overriding(index, with: Expr<Range>(.value(value.tlaValue)))
-  }
-
-  public func overriding<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Expr<Domain>, with value: Expr<Range>
-  ) -> Expr<PartialFunction<Domain, Range>> where T == PartialFunction<Domain, Range> {
-    Expr(.partialFunctionOverriding(stateExpr, key: index.raw, value: value.raw))
-  }
-
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Domain, to value: Range
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    updating(index, to: Expr(.value(value.tlaValue)))
-  }
-
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Domain, _ update: (Expr<Range>) -> Expr<Range>
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    let selected = self[index]
-    return Expr<Function<Domain, Range>>(
-      .except(stateExpr, finiteDomainIndex(index), update(selected).raw))
-  }
-
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Expr<Domain>, to value: Expr<Range>
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    Expr<Function<Domain, Range>>(.except(stateExpr, index.raw, value.raw))
-  }
-
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Expr<Domain>, to value: Range
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    updating(index, to: Expr(.value(value.tlaValue)))
-  }
-
-  public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
-    _ index: Expr<Domain>, _ update: (Expr<Range>) -> Expr<Range>
-  ) -> Expr<Function<Domain, Range>> where T == Function<Domain, Range> {
-    Expr<Function<Domain, Range>>(
-      .except(stateExpr, index.raw, update(Expr<Range>(.functionApply(stateExpr, index.raw))).raw))
-  }
-
   public func inserting<Element: TLAValueType>(_ element: Element) -> ActionExpr
   where T == SetExpr<Element> {
-    .assign(.named(name), .union(stateExpr, .setLiteral([.value(element.tlaValue)])))
+    inserting(element.expr)
   }
 
-  public func inserting<Element: TLAValueType>(_ element: Expr<Element>) -> ActionExpr
+  public func inserting<Element: TLAValueType>(_ element: some TypedExpression<Element>) -> ActionExpr
   where T == SetExpr<Element> {
-    .assign(.named(name), .union(stateExpr, .setLiteral([element.raw])))
+    .assign(.named(name), .union(stateExpr, .setLiteral([element.stateExpr])))
   }
 
   public func removing<Element: TLAValueType>(_ element: Element) -> ActionExpr
   where T == SetExpr<Element> {
-    .assign(.named(name), .setDifference(stateExpr, .setLiteral([.value(element.tlaValue)])))
+    .assign(.named(name), .setDifference(stateExpr, .setLiteral([element.stateExpr])))
   }
 
-  public func removing<Element: TLAValueType>(_ element: Expr<Element>) -> ActionExpr
+  public func removing<Element: TLAValueType>(_ element: some TypedExpression<Element>) -> ActionExpr
   where T == SetExpr<Element> {
-    .assign(.named(name), .setDifference(stateExpr, .setLiteral([element.raw])))
-  }
-
-  public func contains<Element: TLAValueType>(_ element: Element) -> StateExpr
-  where T == SetExpr<Element> {
-    .in(.value(element.tlaValue), stateExpr)
-  }
-
-  public func contains<Element: TLAValueType>(_ element: Expr<Element>) -> StateExpr
-  where T == SetExpr<Element> {
-    .in(element.raw, stateExpr)
+    .assign(.named(name), .setDifference(stateExpr, .setLiteral([element.stateExpr])))
   }
 }
 

@@ -33,7 +33,7 @@ package struct FindHighestModel: Sendable {
                     h >= -1
                 }
                 Invariant("InductiveInvariant") {
-                    All(in: IntRange(1, through: i - 1)) { index in
+                    ForAll(in: IntRange(1, through: i - 1)) { index in
                         f[index.expr] <= h
                     }
                 }
@@ -41,7 +41,7 @@ package struct FindHighestModel: Sendable {
                     (!Finished()) || i == f.count + 1
                 }
                 Invariant("Correctness") {
-                    (!Finished()) || All(in: IntRange(1, through: f.count)) { index in
+                    (!Finished()) || ForAll(in: IntRange(1, through: f.count)) { index in
                         f[index.expr] <= h
                     }
                 }

@@ -24,7 +24,7 @@ jobs:
         run: bash Tests/Fixtures/LocalValidation/assert_lock.sh
 
       - name: Run complete Swift test suite
-        run: swift test -j 1 --no-parallel
+        run: swift test -Xswiftc -warnings-as-errors -j 1 --no-parallel
 
   apple-platform-examples:
     runs-on: macos-15
@@ -47,13 +47,13 @@ jobs:
         working-directory: Examples/ApplePlatformExamples
         run: |
           set -o pipefail
-          xcodebuild -scheme av-pipeline-example -destination 'platform=macOS' -jobs 1 build | tee .build/adoption-evidence/camera-executable-build.log
+          xcodebuild SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO -scheme av-pipeline-example -destination 'platform=macOS' -jobs 1 build | tee .build/adoption-evidence/camera-executable-build.log
 
       - name: Run camera adoption contracts
         working-directory: Examples/ApplePlatformExamples
         run: |
           set -o pipefail
-          xcodebuild test -scheme ApplePlatformExamples-Package -destination 'platform=macOS,arch=arm64' -only-testing:ApplePlatformExamplesTests/GeneratedAppleModelTests -only-testing:ApplePlatformExamplesTests/CameraAdoptionProofTests -parallel-testing-enabled NO -parallel-testing-worker-count 1 -jobs 1 -resultBundlePath .build/adoption-evidence/camera-adoption-contracts.xcresult | tee .build/adoption-evidence/camera-adoption-contracts.log
+          xcodebuild test SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO -scheme ApplePlatformExamples-Package -destination 'platform=macOS,arch=arm64' -only-testing:ApplePlatformExamplesTests/GeneratedAppleModelTests -only-testing:ApplePlatformExamplesTests/CameraAdoptionProofTests -parallel-testing-enabled NO -parallel-testing-worker-count 1 -jobs 1 -resultBundlePath .build/adoption-evidence/camera-adoption-contracts.xcresult | tee .build/adoption-evidence/camera-adoption-contracts.log
 
       - name: Verify complete Apple-platform adoption evidence
         working-directory: Examples/ApplePlatformExamples
@@ -86,7 +86,7 @@ jobs:
 
       - name: Build SwiftUI demo app
         working-directory: Examples/SwiftTLADemoApp
-        run: xcodebuild build -scheme SwiftTLADemoApp -destination 'platform=macOS,arch=arm64' -jobs 1
+        run: xcodebuild build SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO -scheme SwiftTLADemoApp -destination 'platform=macOS,arch=arm64' -jobs 1
 
   canonical-corpus-export:
     runs-on: macos-15
@@ -100,7 +100,7 @@ jobs:
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Build canonical corpus exporter
-        run: swift build --product canonical-corpus-export -j 1
+        run: swift build -Xswiftc -warnings-as-errors --product canonical-corpus-export -j 1
 
       - name: Export canonical upstream corpus
         run: |

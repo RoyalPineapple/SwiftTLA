@@ -111,7 +111,7 @@ package struct FiniteExplorationConfiguration: Sendable, Equatable, Codable {
 
     func validatePropertySupport(in compilation: CompiledSpecification) throws {
         if case .enabled = symmetryReduction,
-           !compilation.semantics.temporalProperties.isEmpty || !compilation.refinements.isEmpty {
+           !compilation.semantics.behavior.temporalProperties.isEmpty || !compilation.refinements.isEmpty {
             throw FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly
         }
     }
@@ -144,10 +144,10 @@ package struct ModelChecker {
     func checkLiveness() throws -> ModelCheckOutcome {
         let exploration = try explore()
         guard case .ok = exploration.outcome else { return exploration.outcome }
-        guard compilation.semantics.temporalProperties.isEmpty == false else { return exploration.outcome }
+        guard compilation.semantics.behavior.temporalProperties.isEmpty == false else { return exploration.outcome }
 
         let analyses = try exploration.analyzeTemporalProperties(in: compilation)
-        for (property, analysis) in zip(compilation.semantics.temporalProperties, analyses) {
+        for (property, analysis) in zip(compilation.semantics.behavior.temporalProperties, analyses) {
             switch analysis.status {
             case .satisfied:
                 continue
@@ -198,7 +198,7 @@ package struct ModelChecker {
             runtime: runtime,
             seeds: initialStates,
             layout: compilation.layout,
-            checkDeadlock: compilation.semantics.checkDeadlock,
+            checkDeadlock: compilation.semantics.behavior.checkDeadlock,
             specificationName: compilation.description.name,
             configuration: configuration,
             symmetry: symmetry
@@ -276,7 +276,7 @@ private func compiledBFS(
                 statesCount: stateToID.count,
                 limit: configuration.maximumStateLimit
             ),
-            compilationIdentity: runtime.compilation.identity,
+            compilationIdentity: runtime.identity,
             configuration: configuration,
             compiledStates: idToState
         )
@@ -346,7 +346,7 @@ private func compiledBFS(
         let key = try representative(current)
         guard let currentID = stateToID[key] else { continue }
 
-        for invariant in runtime.compilation.semantics.invariants {
+        for invariant in runtime.behavior.invariants {
             guard try runtime.invariantHolds(invariant, in: current) else {
                 let counterexample = try trace(to: current)
                 guard try !runtime.invariantHolds(invariant, in: counterexample.state) else {
@@ -360,7 +360,7 @@ private func compiledBFS(
                         state: try counterexample.state.projection(using: layout),
                         trace: counterexample.steps
                     ),
-                    compilationIdentity: runtime.compilation.identity,
+                    compilationIdentity: runtime.identity,
                     configuration: configuration,
                     compiledStates: idToState
                 )
@@ -373,7 +373,7 @@ private func compiledBFS(
                 graph: try graph(),
                 initialStateIDs: initialStateIDs,
                 outcome: .deadlocked(state: try current.projection(using: layout)),
-                compilationIdentity: runtime.compilation.identity,
+                compilationIdentity: runtime.identity,
                 configuration: configuration,
                 compiledStates: idToState
             )
@@ -418,7 +418,7 @@ private func compiledBFS(
         graph: try graph(),
         initialStateIDs: initialStateIDs,
         outcome: .ok(statesCount: stateToID.count),
-        compilationIdentity: runtime.compilation.identity,
+        compilationIdentity: runtime.identity,
         configuration: configuration,
         compiledStates: idToState
     )
@@ -437,29 +437,14 @@ package enum ModelCheckingFailureKind: String, Sendable, Equatable {
     case initialState
 }
 
-/// One safely projected state in a counterexample trace.
-package struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
-    public let action: String
-    public let state: TLAStateProjection
-
-    package init(action: String, state: TLAStateProjection) {
-        self.action = action
-        self.state = state
-    }
-
-    public var description: String {
-        "[\(action)] \(state)"
-    }
-}
-
-/// Inspection-ready evidence for a model-checking failure.
+/// A model-checking failure with its state and counterexample trace.
 package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvertible {
     public let kind: ModelCheckingFailureKind
     public let subject: String?
     public let expected: String
     public let actual: String
     public let state: TLAStateProjection?
-    public let trace: [ModelTraceEvidence]
+    public let trace: [TraceStep]
     public let nextSafeAction: String
 
     public init(
@@ -468,7 +453,7 @@ package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvert
         expected: String,
         actual: String,
         state: TLAStateProjection? = nil,
-        trace: [ModelTraceEvidence] = [],
+        trace: [TraceStep] = [],
         nextSafeAction: String
     ) {
         self.kind = kind
@@ -506,11 +491,11 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
         witness: FairLassoWitness
     )
     case livenessUnavailable(property: String, reason: TemporalDiagnosticReason)
-    case refinementViolated(refinement: String, evidence: RefinementFailureEvidence)
+    case refinementViolated(refinement: String, failure: RefinementFailure)
     case refinementUnproven(refinement: String, exploration: ModelCheckOutcome)
 
     /// The typed explanation of a failed check, including projected state and
-    /// counterexample evidence.
+    /// counterexample trace.
     public var diagnostic: ModelCheckingDiagnostic? {
         switch self {
         case .ok:
@@ -522,7 +507,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
                 expected: "the invariant to evaluate to true",
                 actual: "false",
                 state: state,
-                trace: trace.map { .init(action: $0.action, state: $0.state) },
+                trace: trace,
                 nextSafeAction: "Inspect the final trace transition and revise the action guard, update, or invariant."
             )
         case .depthExceeded(let count, let limit):
@@ -566,12 +551,12 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
             return .init(
                 kind: .liveness,
                 subject: property,
-                expected: "complete typed liveness evidence",
+                expected: "complete temporal analysis",
                 actual: reason.rawValue,
                 nextSafeAction: "Complete the declared exploration inputs before checking the temporal property."
             )
-        case .refinementViolated(let refinement, let evidence):
-            switch evidence {
+        case .refinementViolated(let refinement, let failure):
+            switch failure {
             case .initialState(let mapped, let abstractInitialStates):
                 return .init(
                     kind: .refinement,
@@ -588,7 +573,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
                     expected: "an abstract successor or stuttering step for action \(action)",
                     actual: "\(source) to \(target) maps to \(mappedSource) to \(mappedTarget); abstract successors \(abstractSuccessors)",
                     state: source,
-                    trace: [.init(action: action, state: target)],
+                    trace: [.init(state: target, action: action)],
                     nextSafeAction: "Inspect the refinement mapping and the named action update."
                 )
             }
@@ -619,7 +604,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
     }
 }
 
-package struct TraceStep: Sendable, CustomStringConvertible {
+package struct TraceStep: Sendable, Equatable, CustomStringConvertible {
     public let state: TLAStateProjection
     public let action: String
     public var description: String { "[" + action + "] " + state.description }

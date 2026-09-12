@@ -1,9 +1,9 @@
-internal struct AlgorithmModel: Sendable {
-    let name: String
-    let sequentialFairness: SequentialAlgorithmFairness
-    let components: [AlgorithmComponentModel]
+package struct AlgorithmModel: Sendable {
+    package let name: String
+    package let sequentialFairness: SequentialAlgorithmFairness
+    package let components: [AlgorithmComponentModel]
 
-    init(
+    package init(
         name: String,
         sequentialFairness: SequentialAlgorithmFairness = .none,
         components: [AlgorithmComponentModel]
@@ -137,8 +137,7 @@ internal struct AlgorithmModel: Sendable {
             .init(
                 root: value.root,
                 initialization: initialization(value.initialization),
-                swiftTypeName: value.swiftTypeName,
-                isTuple: value.isTuple
+                swiftTypeName: value.swiftTypeName
             )
         }
 
@@ -414,31 +413,14 @@ internal struct CompiledAuthoredPlusCalAlgorithmPlan: Sendable {
     let procedures: [CompiledAuthoredPlusCalProcedure]
     let processes: [CompiledAuthoredPlusCalProcess]
     let sequentialSteps: [CompiledAuthoredPlusCalStep]
-    let properties: [CompiledAuthoredPlusCalProperty]
+    let properties: [CompiledPropertyLayout]
     let translatorOwnedPropertyNames: Set<String>
-}
-
-internal enum CompiledAuthoredPlusCalProperty: Sendable {
-    case invariant(id: PropertyID, name: String)
-    case temporal(id: PropertyID, name: String)
-
-    var id: PropertyID {
-        switch self {
-        case .invariant(let id, _), .temporal(let id, _): id
-        }
-    }
-
-    var name: String {
-        switch self {
-        case .invariant(_, let name), .temporal(_, let name): name
-        }
-    }
 }
 
 internal struct CompiledAuthoredPlusCalState: Sendable {
     enum Initialization: Sendable {
-        case expression(CompiledStateExpr)
-        case memberOf(CompiledStateExpr)
+        case expression(CompiledExpression)
+        case memberOf(CompiledExpression)
     }
 
     let variable: VariableID
@@ -463,35 +445,35 @@ internal struct CompiledAuthoredPlusCalProcess: Sendable {
 internal struct CompiledAuthoredPlusCalStep: Sendable {
     let label: ControlLocationID
     let statements: [CompiledAuthoredPlusCalStatement]
-    let loopCondition: CompiledStateExpr?
+    let loopCondition: CompiledExpression?
 }
 
 internal struct CompiledAuthoredPlusCalAssignment: Sendable {
     let target: CompiledAuthoredPlusCalLValue
-    let value: CompiledStateExpr
+    let value: CompiledExpression
 }
 
 internal enum CompiledAuthoredPlusCalLValue: Sendable {
     case root(VariableID)
-    case function(root: VariableID, key: CompiledStateExpr)
+    case function(root: VariableID, key: CompiledExpression)
 }
 
 internal indirect enum CompiledAuthoredPlusCalStatement: Sendable {
-    case await(CompiledStateExpr)
-    case assert(CompiledStateExpr)
-    case set(target: CompiledAuthoredPlusCalLValue, value: CompiledStateExpr)
+    case await(CompiledExpression)
+    case assert(CompiledExpression)
+    case set(target: CompiledAuthoredPlusCalLValue, value: CompiledExpression)
     case parallel([CompiledAuthoredPlusCalAssignment])
-    case letBinding(variable: BinderID, value: CompiledStateExpr, [CompiledAuthoredPlusCalStatement])
-    case with(variable: BinderID, source: CompiledStateExpr, [CompiledAuthoredPlusCalStatement])
-    case ifElse(CompiledStateExpr, [CompiledAuthoredPlusCalStatement], [CompiledAuthoredPlusCalStatement])
+    case letBinding(variable: BinderID, value: CompiledExpression, [CompiledAuthoredPlusCalStatement])
+    case with(variable: BinderID, source: CompiledExpression, [CompiledAuthoredPlusCalStatement])
+    case ifElse(CompiledExpression, [CompiledAuthoredPlusCalStatement], [CompiledAuthoredPlusCalStatement])
     case either([CompiledAuthoredPlusCalStatement], [CompiledAuthoredPlusCalStatement])
     case goto(ControlLocationID)
-    case call(target: ProcedureID, arguments: [CompiledStateExpr])
+    case call(target: ProcedureID, arguments: [CompiledExpression])
     case `return`
     case skip
 }
 
-internal indirect enum AlgorithmComponentModel: Sendable {
+package indirect enum AlgorithmComponentModel: Sendable {
     case shared(AlgorithmStateModel)
     case process(AlgorithmProcessModel)
     case procedure(AlgorithmProcedureModel)
@@ -505,11 +487,11 @@ internal indirect enum AlgorithmComponentModel: Sendable {
     case step(AlgorithmStepModel)
 }
 
-internal enum InvalidAlgorithmComponent: String, Sendable {
+package enum InvalidAlgorithmComponent: String, Sendable {
     case genericFairness
     case assumption
 
-    var expectedPlacement: String {
+    package var expectedPlacement: String {
         switch self {
         case .genericFairness:
             "Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness"
@@ -518,14 +500,14 @@ internal enum InvalidAlgorithmComponent: String, Sendable {
         }
     }
 
-    var actualPlacement: String {
+    package var actualPlacement: String {
         switch self {
         case .genericFairness: "generic fairness declaration inside Algorithm"
         case .assumption: "Assume declaration inside Algorithm"
         }
     }
 
-    var nextSafeAction: String {
+    package var nextSafeAction: String {
         switch self {
         case .genericFairness: "Move the fairness requirement to Algorithm or Each."
         case .assumption: "Move the assumption outside Algorithm."
@@ -534,26 +516,26 @@ internal enum InvalidAlgorithmComponent: String, Sendable {
 }
 
 /// One formal PlusCal procedure.
-internal struct AlgorithmProcedureModel: Sendable {
-    let name: String
-    let parameters: [AlgorithmProcedureParameterModel]
-    let components: [AlgorithmComponentModel]
+package struct AlgorithmProcedureModel: Sendable {
+    package let name: String
+    package let parameters: [AlgorithmProcedureParameterModel]
+    package let components: [AlgorithmComponentModel]
 
-    var locals: [AlgorithmStateModel] {
+    package var locals: [AlgorithmStateModel] {
         components.compactMap {
             guard case .local(let state) = $0 else { return nil }
             return state
         }
     }
 
-    var steps: [AlgorithmStepModel] {
+    package var steps: [AlgorithmStepModel] {
         components.compactMap {
             guard case .step(let step) = $0 else { return nil }
             return step
         }
     }
 
-    init(
+    package init(
         name: String,
         parameters: [AlgorithmProcedureParameterModel],
         components: [AlgorithmComponentModel]
@@ -564,74 +546,88 @@ internal struct AlgorithmProcedureModel: Sendable {
     }
 }
 
-internal struct AlgorithmProcedureParameterModel: Sendable {
-    let root: String
-    let initial: StateExpr
-    let swiftTypeName: String?
+package struct AlgorithmProcedureParameterModel: Sendable {
+    package let root: String
+    package let initial: StateExpr
+    package let swiftTypeName: String?
+
+    package init(root: String, initial: StateExpr, swiftTypeName: String?) {
+        self.root = root
+        self.initial = initial
+        self.swiftTypeName = swiftTypeName
+    }
 }
 
-internal struct AlgorithmProcessModel: Sendable {
-    let typeName: String
-    let domain: [TLAValue]
-    let fairness: AlgorithmFairness
-    let components: [AlgorithmComponentModel]
+package struct AlgorithmProcessModel: Sendable {
+    package let typeName: String
+    package let domain: [TLAValue]
+    package let fairness: AlgorithmFairness
+    package let components: [AlgorithmComponentModel]
 
-    var steps: [AlgorithmStepModel] {
+    package var steps: [AlgorithmStepModel] {
         components.compactMap {
             guard case .step(let step) = $0 else { return nil }
             return step
         }
     }
+
+    package init(typeName: String, domain: [TLAValue], fairness: AlgorithmFairness, components: [AlgorithmComponentModel]) {
+        self.typeName = typeName
+        self.domain = domain
+        self.fairness = fairness
+        self.components = components
+    }
 }
 
-internal enum AlgorithmFairness: Sendable {
+package enum AlgorithmFairness: Sendable {
     case none
     case weak
     case strong
 }
 
-internal struct AlgorithmStateModel: Sendable {
-    let root: String
-    let initialization: VariableInitialization
-    let swiftTypeName: String?
-    let isTuple: Bool
+package struct AlgorithmStateModel: Sendable {
+    package let root: String
+    package let initialization: VariableInitialization
+    package let swiftTypeName: String?
 
-    init(
+    package init(
         root: String,
         initialization: VariableInitialization,
-        swiftTypeName: String? = nil,
-        isTuple: Bool = false
+        swiftTypeName: String? = nil
     ) {
         self.root = root
         self.initialization = initialization.normalized
         self.swiftTypeName = swiftTypeName
-        self.isTuple = isTuple
     }
 }
 
-internal struct AlgorithmStepModel: Sendable {
-    let label: AlgorithmLabelModel
-    let statements: [AlgorithmStatementModel]
+package struct AlgorithmStepModel: Sendable {
+    package let label: AlgorithmLabelModel
+    package let statements: [AlgorithmStatementModel]
     /// A labeled PlusCal `while` loop. A true condition returns to `label`; a
     /// false condition advances to the following step.
-    let loopCondition: StateExpr?
+    package let loopCondition: StateExpr?
 
-    init(label: AlgorithmLabelModel, statements: [AlgorithmStatementModel], loopCondition: StateExpr? = nil) {
+    package init(label: AlgorithmLabelModel, statements: [AlgorithmStatementModel], loopCondition: StateExpr? = nil) {
         self.label = label
         self.statements = statements
         self.loopCondition = loopCondition
     }
 }
 
-internal struct AlgorithmLabelModel: Sendable, Hashable {
-    let name: String
+package struct AlgorithmLabelModel: Sendable, Hashable {
+    package let name: String
+
+    package init(name: String) {
+        self.name = name
+    }
 }
 
-internal enum AlgorithmLValueModel: Sendable, Equatable {
+package enum AlgorithmLValueModel: Sendable, Equatable {
     case root(String)
     case function(root: String, key: StateExpr)
 
-    var root: String {
+    package var root: String {
         switch self {
         case .root(let root), .function(let root, _):
             return root
@@ -639,12 +635,17 @@ internal enum AlgorithmLValueModel: Sendable, Equatable {
     }
 }
 
-internal struct AlgorithmAssignmentModel: Sendable, Equatable {
-    let target: AlgorithmLValueModel
-    let value: StateExpr
+package struct AlgorithmAssignmentModel: Sendable, Equatable {
+    package let target: AlgorithmLValueModel
+    package let value: StateExpr
+
+    package init(target: AlgorithmLValueModel, value: StateExpr) {
+        self.target = target
+        self.value = value
+    }
 }
 
-internal indirect enum AlgorithmStatementModel: Sendable, Equatable {
+package indirect enum AlgorithmStatementModel: Sendable, Equatable {
     case rejected(AlgorithmDiagnosticCode)
     case await(StateExpr)
     case assert(StateExpr)

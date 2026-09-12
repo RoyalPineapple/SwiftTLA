@@ -340,27 +340,20 @@ package struct FormalModuleClosure: Sendable {
         case .namedInstance(let namespace, let arguments):
           let imported = recursiveFunctions(named: edge.toModule, replacements: [])
           let localNames = Set(imported.map(\.name))
+          let values = Dictionary(uniqueKeysWithValues: arguments.map { ($0.parameter, $0.value) })
           functions += imported.map { function in
-            let body = arguments.reduce(function.body) {
-              StateExpr.substituteVariable($1.parameter, with: $1.value, in: $0)
-            }
+            let scoped = function.substitutingVariables(values)
             return RecursiveFunc(
-              name: "\(namespace)!\(function.name)", params: function.params,
-              body: StateExpr.renamingRecursiveCalls(in: body) {
+              name: "\(namespace)!\(function.name)", params: scoped.params,
+              body: StateExpr.renamingRecursiveCalls(in: scoped.body) {
                 localNames.contains($0) ? "\(namespace)!\($0)" : $0
               }
             )
           }
         }
       }
-      functions += module.recursiveFuncs.map { function in
-        RecursiveFunc(
-          name: function.name, params: function.params,
-          body: replacements.reduce(function.body) {
-            StateExpr.substituteVariable($1.operatorName, with: $1.expression, in: $0)
-          }
-        )
-      }
+      let values = Dictionary(uniqueKeysWithValues: replacements.map { ($0.operatorName, $0.expression) })
+      functions += module.recursiveFuncs.map { $0.substitutingVariables(values) }
       return functions
     }
 
@@ -380,28 +373,20 @@ package struct FormalModuleClosure: Sendable {
         case .namedInstance(let namespace, let arguments):
           let imported = formalOperatorDefinitions(edge.toModule, replacements: [])
           let localNames = Set(imported.map(\.name))
+          let values = Dictionary(uniqueKeysWithValues: arguments.map { ($0.parameter, $0.value) })
           definitions += imported.map { definition in
-            let body = arguments.reduce(definition.body) {
-              StateExpr.substituteVariable($1.parameter, with: $1.value, in: $0)
-            }
+            let scoped = definition.substitutingVariables(values)
             return FormalOperatorDefinition(
-              name: "\(namespace)!\(definition.name)", parameters: definition.parameters,
-              body: StateExpr.renamingRecursiveCalls(in: body) {
+              name: "\(namespace)!\(definition.name)", parameters: scoped.parameters,
+              body: StateExpr.renamingRecursiveCalls(in: scoped.body) {
                 localNames.contains($0) ? "\(namespace)!\($0)" : $0
               }
             )
           }
         }
       }
-      definitions += module.formalOperatorDefinitions.map { definition in
-        FormalOperatorDefinition(
-          name: definition.name,
-          parameters: definition.parameters,
-          body: replacements.reduce(definition.body) {
-            StateExpr.substituteVariable($1.operatorName, with: $1.expression, in: $0)
-          }
-        )
-      }
+      let values = Dictionary(uniqueKeysWithValues: replacements.map { ($0.operatorName, $0.expression) })
+      definitions += module.formalOperatorDefinitions.map { $0.substitutingVariables(values) }
       return definitions
     }
 

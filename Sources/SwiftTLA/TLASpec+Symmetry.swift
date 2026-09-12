@@ -1,13 +1,39 @@
-public struct SymmetrySetDecl: SpecComponent {
+public struct SymmetrySetDecl: SpecComponent, Sendable {
+  enum Domain: Sendable {
+    case values(Set<TLAValue>)
+    case collection
+  }
+
   public let variableName: String
-  public let values: Set<TLAValue>
-  init(_ variableName: String, _ values: Set<TLAValue>) {
+  let domain: Domain
+
+  package init(_ variableName: String, _ values: Set<TLAValue>) {
     self.variableName = variableName
-    self.values = values
+    domain = .values(values)
+  }
+
+  package init(collectionName: String) {
+    variableName = collectionName
+    domain = .collection
+  }
+
+  package func resolved(in collections: [ModelCollectionDecl]) -> SymmetrySet {
+    let values: Set<TLAValue>
+    switch domain {
+    case .values(let members): values = members
+    case .collection:
+      values = Set(collections.first { $0.name == variableName }?.metadata.members ?? [])
+    }
+    return SymmetrySet(variableName: variableName, values: values)
   }
 }
-public func Symmetry(_ variableName: String, _ values: Set<some TLAValueConvertible>)
-  -> SymmetrySetDecl {
+
+/// Declares that consistently renaming these members preserves the model and its checked properties.
+public func Symmetry<Element, Value>(_ collection: CollectionVar<Element, Value>) -> SymmetrySetDecl {
+  SymmetrySetDecl(collectionName: collection.name)
+}
+
+public func Symmetry(_ variableName: String, _ values: Set<some TLAValueConvertible>) -> SymmetrySetDecl {
   SymmetrySetDecl(variableName, Set(values.map(\.tlaValue)))
 }
 
@@ -29,12 +55,10 @@ extension TLASpec {
 
   func validateSymmetryDeclarations() throws {
     var renderedSymbols = renderedDeclarationNames()
-    renderedSymbols.formUnion(symmetricCollections.flatMap(\.metadata.generatedSymbols))
+    renderedSymbols.formUnion(collections.flatMap(\.metadata.generatedSymbols))
 
     var names = Set<String>()
-    var domainOwner = Dictionary(uniqueKeysWithValues: symmetricCollections.flatMap { collection in
-      collection.metadata.members.map { ($0, "symmetric collection '\(collection.name)'") }
-    })
+    var domainOwner: [TLAValue: String] = [:]
 
     for (index, symmetry) in symmetrySets.enumerated() {
       let path = "symmetrySets[\(index)]"
@@ -110,5 +134,84 @@ extension TLASpec {
       actual: actual,
       nextSafeAction: "Correct the direct symmetry declaration, then compile again."
     )
+  }
+}
+
+struct SymmetryPlan: Sendable {
+  private let compilationIdentity: CompilationIdentity
+  private let groups: [[[CompiledValue: CompiledValue]]]
+
+  init(
+    compilation: CompiledSpecification,
+    reduction: SymmetryReduction
+  ) throws {
+    compilationIdentity = compilation.identity
+    guard case .enabled(let limit) = reduction else {
+      groups = []
+      return
+    }
+
+    let domains = compilation.semantics.symmetrySets.map { $0.values.sorted() }
+    guard domains.isEmpty == false else {
+      throw FiniteExplorationConfigurationError.symmetryReductionWithoutDeclarations
+    }
+
+    var permutationCount = 1
+    var groups: [[[CompiledValue: CompiledValue]]] = []
+    for members in domains {
+      let permutations = try Self.permutations(
+        of: members,
+        maximumCount: limit / permutationCount,
+        precedingCount: permutationCount,
+        limit: limit
+      )
+      permutationCount *= permutations.count
+      groups.append(permutations.map { permutation in
+        Dictionary(uniqueKeysWithValues: zip(members, permutation))
+      })
+    }
+    self.groups = groups
+  }
+
+  func canonicalState(_ state: CompiledState) throws -> CompiledState {
+    try state.requireIdentity(compilationIdentity)
+    let candidates = groups.reduce([state]) { candidates, group in
+      candidates.flatMap { candidate in
+        group.map { mapping in
+          candidate.applying(mapping)
+        }
+      }
+    }
+    return candidates.min() ?? state
+  }
+
+  private static func permutations(
+    of values: [CompiledValue],
+    maximumCount: Int,
+    precedingCount: Int,
+    limit: Int
+  ) throws -> [[CompiledValue]] {
+    var permutations: [[CompiledValue]] = [[]]
+    for value in values {
+      var next: [[CompiledValue]] = []
+      for permutation in permutations {
+        for index in 0...permutation.count {
+          guard next.count < maximumCount else {
+            let (required, overflow) = precedingCount.multipliedReportingOverflow(
+              by: next.count + 1
+            )
+            throw FiniteExplorationConfigurationError.permutationLimitExceeded(
+              required: overflow ? .max : required,
+              limit: limit
+            )
+          }
+          var candidate = permutation
+          candidate.insert(value, at: index)
+          next.append(candidate)
+        }
+      }
+      permutations = next
+    }
+    return permutations
   }
 }

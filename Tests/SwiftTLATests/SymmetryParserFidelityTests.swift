@@ -1,3 +1,4 @@
+@testable import SwiftTLAPlugin
 import Testing
 import SwiftParser
 import SwiftSyntax
@@ -14,15 +15,15 @@ struct SymmetryParserFidelityTests {
         }
         """).statements.first?.item.as(ClosureExprSyntax.self))
 
-        let parsed = SpecParser.parseSpecClosure(
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed",
             closure,
-            enumDefinitions: [
+            sourceTypes: .init(enums: [
                 .init(
                     typeName: "Transaction",
-                    cases: .init([]),
+                    cases: [],
                     finiteValues: [.string("t1"), .string("t2")]
                 )
-            ]
+            ])
         )
 
         #expect(parsed.diagnostics.isEmpty)

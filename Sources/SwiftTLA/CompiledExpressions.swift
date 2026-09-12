@@ -1,98 +1,17 @@
-struct CompiledRecordExpression: Sendable {
-    struct Field: Sendable {
-        let id: FieldID
-        let key: CompiledValue
-        let value: CompiledStateExpr
-    }
-
-    let fields: [Field]
-
-    init(_ fields: [Field]) {
-        self.fields = fields
-    }
+package struct CompiledRecordEntry: Hashable, Sendable {
+    package let name: String
+    package let value: CompiledExpression
 }
 
-struct CompiledCaseBranch: Sendable {
-    let condition: CompiledStateExpr
-    let value: CompiledStateExpr
+package struct CompiledCaseBranch: Hashable, Sendable {
+    package let condition: CompiledExpression
+    package let value: CompiledExpression
 }
 
-indirect enum CompiledStateExpr: Sendable {
-    case value(CompiledValue)
-    case stateVariable(VariableID)
-    case boundValue(BinderID)
-    case controlLocation(ControlLocationID)
-    case operatorReference(OperatorID)
-
-    case add(CompiledStateExpr, CompiledStateExpr)
-    case subtract(CompiledStateExpr, CompiledStateExpr)
-    case multiply(CompiledStateExpr, CompiledStateExpr)
-    case divide(CompiledStateExpr, CompiledStateExpr)
-    case modulo(CompiledStateExpr, CompiledStateExpr)
-    case negate(CompiledStateExpr)
-    case integerDivide(CompiledStateExpr, CompiledStateExpr)
-    case equal(CompiledStateExpr, CompiledStateExpr)
-    case notEqual(CompiledStateExpr, CompiledStateExpr)
-    case lessThan(CompiledStateExpr, CompiledStateExpr)
-    case lessOrEqual(CompiledStateExpr, CompiledStateExpr)
-    case greaterThan(CompiledStateExpr, CompiledStateExpr)
-    case greaterOrEqual(CompiledStateExpr, CompiledStateExpr)
-    case and(CompiledStateExpr, CompiledStateExpr)
-    case or(CompiledStateExpr, CompiledStateExpr)
-    case not(CompiledStateExpr)
-    case ifThenElse(CompiledStateExpr, CompiledStateExpr, CompiledStateExpr)
-
-    case setLiteral([CompiledStateExpr])
-    case `in`(CompiledStateExpr, CompiledStateExpr)
-    case subset(CompiledStateExpr, CompiledStateExpr)
-    case union(CompiledStateExpr, CompiledStateExpr)
-    case intersection(CompiledStateExpr, CompiledStateExpr)
-    case setDifference(CompiledStateExpr, CompiledStateExpr)
-    case cardinality(CompiledStateExpr)
-    case setFilter(CompiledStateExpr, BinderID, CompiledStateExpr)
-    case setMap(CompiledStateExpr, BinderID, CompiledStateExpr)
-    case powerSet(CompiledStateExpr)
-    case unionAll(CompiledStateExpr)
-    case integerRange(CompiledStateExpr, CompiledStateExpr)
-
-    case tupleLiteral([CompiledStateExpr])
-    case tupleAccess(CompiledStateExpr, Int)
-    case tupleDynamicAccess(CompiledStateExpr, CompiledStateExpr)
-    case tupleLength(CompiledStateExpr)
-    case tupleAppend(CompiledStateExpr, CompiledStateExpr)
-    case tupleHead(CompiledStateExpr)
-    case tupleTail(CompiledStateExpr)
-    case tupleConcatenate(CompiledStateExpr, CompiledStateExpr)
-    case tupleRemoving(CompiledStateExpr, CompiledStateExpr)
-    case sequenceSelect(CompiledStateExpr, BinderID, CompiledStateExpr)
-
-    case recordLiteral(CompiledRecordExpression)
-    case recordAccess(CompiledStateExpr, FieldID, CompiledValue)
-    case domain(CompiledStateExpr)
-    case functionLiteral(CompiledStateExpr, BinderID, CompiledStateExpr)
-    case functionApply(CompiledStateExpr, CompiledStateExpr)
-    case except(CompiledStateExpr, CompiledStateExpr, CompiledStateExpr)
-    case caseExpr(CompiledCaseBranch, [CompiledCaseBranch], otherwise: CompiledStateExpr?)
-
-    case forAll(CompiledStateExpr, BinderID, CompiledStateExpr)
-    case exists(CompiledStateExpr, BinderID, CompiledStateExpr)
-    case choose(CompiledStateExpr, BinderID, CompiledStateExpr)
-    case enabledAction(ActionID)
-    case sequenceFromSet(CompiledStateExpr)
-    case setSum(CompiledStateExpr, CompiledStateExpr)
-    case functionSet(CompiledStateExpr, CompiledStateExpr)
-    case foldFunction(CompiledFormalLambda, initial: CompiledStateExpr, sequence: CompiledStateExpr)
-    case lambdaApplication(CompiledFormalLambda, [CompiledStateExpr])
-    case operatorApplication(OperatorID, [CompiledFormalCallArgument])
-    case recursiveCall(OperatorID, [CompiledStateExpr])
-    case letValue(BinderID, CompiledStateExpr, CompiledStateExpr)
-    case letIn([CompiledLocalOperator], CompiledStateExpr)
-}
 
 private struct CompiledDependencyScope {
-    var localOperators: [OperatorID: CompiledLocalOperator] = [:]
     var operatorBindings: [OperatorID: CompiledDependencyBinding<CompiledFormalOperator>] = [:]
-    var valueBindings: [BinderID: CompiledDependencyBinding<CompiledStateExpr>] = [:]
+    var valueBindings: [BinderID: CompiledDependencyBinding<CompiledExpression>] = [:]
 }
 
 private final class CompiledDependencyBinding<Value> {
@@ -124,56 +43,30 @@ private struct CompiledOperatorDemandKey: Hashable {
     let parameter: OperatorID
 }
 
-extension CompiledStateExpr {
-    func stateRequirements(
-        formalOperators: [CompiledFormalOperatorDefinition],
-        recursiveFunctions: [CompiledRecursiveFunction]
-    ) -> (variables: Set<VariableID>, requiresCompleteState: Bool) {
-        let formalOperators = Dictionary(uniqueKeysWithValues: formalOperators.map { ($0.id, $0) })
-        let recursiveFunctions = Dictionary(uniqueKeysWithValues: recursiveFunctions.map { ($0.id, $0) })
+struct CompiledStateRequirements: Sendable {
+    var variables: Set<VariableID> = []
+    var enabledActions: Set<ActionID> = []
+    var requiresCompleteState: Bool { !enabledActions.isEmpty }
+}
+
+extension CompiledExpression {
+    /// Diagnostic-only reflection of the outer case, without rendering its payload.
+    package var diagnosticName: String {
+        operation.diagnosticName
+    }
+
+    func stateRequirements(operators: CompiledOperators) -> CompiledStateRequirements {
         var variables: Set<VariableID> = []
-        var requiresCompleteState = false
+        var enabledActions: Set<ActionID> = []
         var activeOperators: Set<OperatorID> = []
         var activeValues: Set<BinderID> = []
-        var parametersByOperator: [OperatorID: [CompiledFormalParameter]] = [:]
-        var valueParameterOwners: [BinderID: OperatorID] = [:]
-        var operatorParameterOwners: [OperatorID: OperatorID] = [:]
         var demandedValues: [OperatorID: Set<BinderID>] = [:]
         var operatorDemands: [OperatorID: [CompiledOperatorParameterDemand]] = [:]
         var pendingCalls: [OperatorID: [CompiledPendingDependencyCall]] = [:]
         var operatorsApplyingDemands: Set<OperatorID> = []
         var operatorDemandKeys: Set<CompiledOperatorDemandKey> = []
         var nextOperatorDemandIdentity = 0
-
-        func register(_ parameters: [CompiledFormalParameter], for operation: OperatorID) {
-            parametersByOperator[operation] = parameters
-            for parameter in parameters {
-                switch parameter {
-                case .value(let binder): valueParameterOwners[binder] = operation
-                case .operator(let id, _): operatorParameterOwners[id] = operation
-                }
-            }
-        }
-
-        formalOperators.values.forEach { register($0.parameters, for: $0.id) }
-        recursiveFunctions.values.forEach {
-            register($0.parameters.map(CompiledFormalParameter.value), for: $0.id)
-        }
-
-        func bind(
-            _ parameters: [BinderID],
-            to arguments: [CompiledFormalCallArgument],
-            in scope: CompiledDependencyScope,
-            from argumentScope: CompiledDependencyScope
-        ) -> CompiledDependencyScope {
-            var nested = scope
-            for (parameter, argument) in zip(parameters, arguments) {
-                if case .value(let expression) = argument {
-                    nested.valueBindings[parameter] = .init(expression, scope: argumentScope)
-                }
-            }
-            return nested
-        }
+        var work: [() -> Void] = []
 
         func bind(
             _ parameters: [CompiledFormalParameter],
@@ -184,7 +77,7 @@ extension CompiledStateExpr {
             var nested = scope
             for (parameter, argument) in zip(parameters, arguments) {
                 switch (parameter, argument) {
-                case (.value(let binder), .value(let expression)):
+                case (.value(let binder, _), .value(let expression)):
                     nested.valueBindings[binder] = .init(expression, scope: argumentScope)
                 case (.operator(let id, _), .operator(let supplied)):
                     nested.operatorBindings[id] = .init(supplied, scope: argumentScope)
@@ -208,15 +101,24 @@ extension CompiledStateExpr {
             arguments: [CompiledFormalCallArgument],
             argumentScope: CompiledDependencyScope
         ) {
+            work.append { processCall(operation, arguments: arguments, argumentScope: argumentScope) }
+        }
+
+        func processCall(
+            _ operation: CompiledDependencyBinding<CompiledFormalOperator>,
+            arguments: [CompiledFormalCallArgument],
+            argumentScope: CompiledDependencyScope
+        ) {
             switch operation.value {
-            case .lambda(let lambda):
+            case .lambda(let id, _):
+                guard let lambda = operators[id] else { return }
                 visit(
                     lambda.body,
                     scope: bind(lambda.parameters, to: arguments, in: operation.scope, from: argumentScope)
                 )
             case .reference(let id, _):
                 if let supplied = operation.scope.operatorBindings[id] {
-                    if let owner = operatorParameterOwners[id], operatorsApplyingDemands.contains(owner) == false {
+                    if let owner = operators.operatorParameterOwners[id], operatorsApplyingDemands.contains(owner) == false {
                         let identity = nextOperatorDemandIdentity
                         nextOperatorDemandIdentity += 1
                         operatorDemandKeys.insert(.init(identity: identity, parameter: id))
@@ -237,44 +139,32 @@ extension CompiledStateExpr {
                 demandedValues[id] = []
                 operatorDemands[id] = []
                 pendingCalls[id] = []
-                defer {
+                work.append {
                     activeOperators.remove(id)
                     demandedValues.removeValue(forKey: id)
                     operatorDemands.removeValue(forKey: id)
                     pendingCalls.removeValue(forKey: id)
                 }
-                if let local = operation.scope.localOperators[id] {
-                    let nested = bind(local.parameters, to: arguments, in: operation.scope, from: argumentScope)
-                    if let domain = local.domain {
-                        if let parameter = local.parameters.first {
+                work.append { visitPendingCalls(for: id) }
+                if let declaration = operators[id] {
+                    let nested = bind(declaration.parameters, to: arguments, in: operation.scope, from: argumentScope)
+                    visit(declaration.body, scope: nested)
+                    if let domain = declaration.domain {
+                        visit(domain, scope: nested)
+                        if case .value(let parameter, _) = declaration.parameters.first {
                             demandedValues[id, default: []].insert(parameter)
                         }
                         if case .value(let argument) = arguments.first {
                             visit(argument, scope: argumentScope)
                         }
-                        visit(domain, scope: nested)
                     }
-                    visit(local.body, scope: nested)
-                    visitPendingCalls(for: id)
                     return
                 }
-                if let function = recursiveFunctions[id] {
-                    visit(
-                        function.body,
-                        scope: bind(function.parameters, to: arguments, in: operation.scope, from: argumentScope)
-                    )
-                    visitPendingCalls(for: id)
-                    return
-                }
-                guard let definition = formalOperators[id] else { return }
-                let nested = bind(definition.parameters, to: arguments, in: operation.scope, from: argumentScope)
-                visit(definition.body, scope: nested)
-                visitPendingCalls(for: id)
             }
         }
 
         func visitPendingCalls(for operation: OperatorID) {
-            guard let parameters = parametersByOperator[operation] else { return }
+            guard let parameters = operators[operation]?.parameters else { return }
 
             func resolve(
                 _ operation: CompiledFormalOperator,
@@ -290,301 +180,289 @@ extension CompiledStateExpr {
                 return resolved
             }
 
-            while true {
-                var calls = pendingCalls[operation, default: []]
-                var valueWork: [(CompiledStateExpr, CompiledDependencyScope)] = []
-                var operatorWork: [(CompiledDependencyBinding<CompiledFormalOperator>, [CompiledFormalCallArgument], CompiledDependencyScope)] = []
-                for index in calls.indices {
+            var calls = pendingCalls[operation, default: []]
+            var valueWork: [(CompiledExpression, CompiledDependencyScope)] = []
+            var operatorWork: [(CompiledDependencyBinding<CompiledFormalOperator>, [CompiledFormalCallArgument], CompiledDependencyScope)] = []
+            for index in calls.indices {
+                for (parameter, argument) in zip(parameters, calls[index].arguments) {
+                    switch (parameter, argument) {
+                    case (.value(let binder, _), .value(let expression))
+                        where demandedValues[operation, default: []].contains(binder)
+                            && calls[index].processedValues.insert(binder).inserted:
+                        valueWork.append((expression, calls[index].scope))
+                    default:
+                        break
+                    }
+                }
+                let demands = operatorDemands[operation, default: []]
+                while calls[index].processedOperatorDemands < demands.count {
+                    let demand = demands[calls[index].processedOperatorDemands]
+                    calls[index].processedOperatorDemands += 1
+                    var supplied: CompiledFormalOperator?
                     for (parameter, argument) in zip(parameters, calls[index].arguments) {
-                        switch (parameter, argument) {
-                        case (.value(let binder), .value(let expression))
-                            where demandedValues[operation, default: []].contains(binder)
-                                && calls[index].processedValues.insert(binder).inserted:
-                            valueWork.append((expression, calls[index].scope))
-                        default:
-                            break
-                        }
-                    }
-                    let demands = operatorDemands[operation, default: []]
-                    while calls[index].processedOperatorDemands < demands.count {
-                        let demand = demands[calls[index].processedOperatorDemands]
-                        calls[index].processedOperatorDemands += 1
-                        var supplied: CompiledFormalOperator?
-                        for (parameter, argument) in zip(parameters, calls[index].arguments) {
-                            guard case .operator(let id, _) = parameter,
-                                  id == demand.parameter,
-                                  case .operator(let argument) = argument
-                            else { continue }
-                            supplied = argument
-                            break
-                        }
-                        guard let supplied else { continue }
-                        if case .reference(let parameter, _) = supplied,
-                           operatorParameterOwners[parameter] == operation,
-                           operatorDemandKeys.insert(.init(
-                               identity: demand.identity,
-                               parameter: parameter
-                           )).inserted {
-                            operatorDemands[operation, default: []].append(.init(
-                                identity: demand.identity,
-                                parameter: parameter,
-                                arguments: demand.arguments,
-                                scope: demand.scope
-                            ))
-                        }
-                        guard let supplied = resolve(supplied, in: calls[index].scope)
+                        guard case .operator(let id, _) = parameter,
+                              id == demand.parameter,
+                              case .operator(let argument) = argument
                         else { continue }
-                        let argumentScope = bind(
-                            parameters,
-                            to: calls[index].arguments,
-                            in: demand.scope,
-                            from: calls[index].scope
-                        )
-                        operatorWork.append((supplied, demand.arguments, argumentScope))
+                        supplied = argument
+                        break
                     }
-                }
-                pendingCalls[operation] = calls
-                guard valueWork.isEmpty == false || operatorWork.isEmpty == false else {
-                    pendingCalls.removeValue(forKey: operation)
-                    return
-                }
-                valueWork.forEach { visit($0.0, scope: $0.1) }
-                for work in operatorWork {
-                    operatorsApplyingDemands.insert(operation)
-                    visitCall(work.0, arguments: work.1, argumentScope: work.2)
-                    operatorsApplyingDemands.remove(operation)
+                    guard let supplied else { continue }
+                    if case .reference(let parameter, _) = supplied,
+                       operators.operatorParameterOwners[parameter] == operation,
+                       operatorDemandKeys.insert(.init(
+                           identity: demand.identity,
+                           parameter: parameter
+                       )).inserted {
+                        operatorDemands[operation, default: []].append(.init(
+                            identity: demand.identity,
+                            parameter: parameter,
+                            arguments: demand.arguments,
+                            scope: demand.scope
+                        ))
+                    }
+                    guard let supplied = resolve(supplied, in: calls[index].scope)
+                    else { continue }
+                    let argumentScope = bind(
+                        parameters,
+                        to: calls[index].arguments,
+                        in: demand.scope,
+                        from: calls[index].scope
+                    )
+                    operatorWork.append((supplied, demand.arguments, argumentScope))
                 }
             }
+            pendingCalls[operation] = calls
+            guard valueWork.isEmpty == false || operatorWork.isEmpty == false else {
+                pendingCalls.removeValue(forKey: operation)
+                return
+            }
+            work.append { visitPendingCalls(for: operation) }
+            for call in operatorWork.reversed() {
+                work.append { operatorsApplyingDemands.remove(operation) }
+                visitCall(call.0, arguments: call.1, argumentScope: call.2)
+                work.append { operatorsApplyingDemands.insert(operation) }
+            }
+            valueWork.reversed().forEach { visit($0.0, scope: $0.1) }
         }
 
-        func visit(_ expression: CompiledStateExpr, scope: CompiledDependencyScope) {
-            switch expression {
+        func visit(_ expression: CompiledExpression, scope: CompiledDependencyScope) {
+            work.append { process(expression, scope: scope) }
+        }
+
+        func process(_ expression: CompiledExpression, scope: CompiledDependencyScope) {
+            switch expression.operation {
             case .value, .controlLocation:
                 return
             case .boundValue(let binder):
-                if let owner = valueParameterOwners[binder], operatorsApplyingDemands.contains(owner) == false {
+                if let owner = operators.valueParameterOwners[binder], operatorsApplyingDemands.contains(owner) == false {
                     demandedValues[owner, default: []].insert(binder)
                 }
                 guard let binding = scope.valueBindings[binder], activeValues.insert(binder).inserted
                 else { return }
-                defer { activeValues.remove(binder) }
+                work.append { activeValues.remove(binder) }
                 visit(binding.value, scope: binding.scope)
-            case .enabledAction:
-                requiresCompleteState = true
+            case .enabledAction(let action):
+                enabledActions.insert(action)
             case .stateVariable(let variable):
                 variables.insert(variable)
             case .operatorReference(let id):
                 visitCall(.reference(id, arity: 0), arguments: [], scope: scope)
-            case .negate(let value), .not(let value), .cardinality(let value),
-                 .powerSet(let value), .unionAll(let value), .tupleAccess(let value, _),
-                 .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
-                 .recordAccess(let value, _, _), .domain(let value), .sequenceFromSet(let value):
-                visit(value, scope: scope)
-            case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
-                 .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
-                 .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
-                 .lessOrEqual(let lhs, let rhs), .greaterThan(let lhs, let rhs), .greaterOrEqual(let lhs, let rhs),
-                 .and(let lhs, let rhs), .or(let lhs, let rhs), .in(let lhs, let rhs), .subset(let lhs, let rhs),
-                 .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
-                 .integerRange(let lhs, let rhs), .tupleDynamicAccess(let lhs, let rhs),
-                 .tupleAppend(let lhs, let rhs), .tupleConcatenate(let lhs, let rhs),
-                 .tupleRemoving(let lhs, let rhs),
-                 .setSum(let lhs, let rhs), .functionSet(let lhs, let rhs):
-                visit(lhs, scope: scope)
-                visit(rhs, scope: scope)
-            case .functionApply(.operatorReference(let id), let argument):
+            case .functionApply where expression.children[0].referencedOperator != nil:
+                let id = expression.children[0].referencedOperator!
+                let argument = expression.children[1]
                 visitCall(.reference(id, arity: 1), arguments: [.value(argument)], scope: scope)
-            case .functionApply(let function, let argument):
-                visit(function, scope: scope)
-                visit(argument, scope: scope)
-            case .ifThenElse(let condition, let then, let otherwise):
-                visit(condition, scope: scope)
-                visit(then, scope: scope)
-                visit(otherwise, scope: scope)
-            case .setLiteral(let values), .tupleLiteral(let values):
-                values.forEach { visit($0, scope: scope) }
-            case .setFilter(let set, _, let predicate), .functionLiteral(let set, _, let predicate),
-                 .forAll(let set, _, let predicate), .exists(let set, _, let predicate),
-                 .choose(let set, _, let predicate):
-                visit(set, scope: scope)
-                visit(predicate, scope: scope)
-            case .setMap(let value, _, let set):
-                visit(value, scope: scope)
-                visit(set, scope: scope)
-            case .sequenceSelect(let sequence, _, let predicate):
-                visit(sequence, scope: scope)
-                visit(predicate, scope: scope)
-            case .recordLiteral(let fields):
-                fields.fields.forEach { visit($0.value, scope: scope) }
-            case .except(let function, let key, let value):
-                visit(function, scope: scope)
-                visit(key, scope: scope)
-                visit(value, scope: scope)
-            case .caseExpr(let first, let remaining, let otherwise):
-                visit(first.condition, scope: scope)
-                visit(first.value, scope: scope)
-                for branch in remaining {
-                    visit(branch.condition, scope: scope)
-                    visit(branch.value, scope: scope)
-                }
-                if let otherwise { visit(otherwise, scope: scope) }
-            case .foldFunction(let operation, let initial, let sequence):
-                visit(operation.body, scope: scope)
-                visit(initial, scope: scope)
-                visit(sequence, scope: scope)
-            case .lambdaApplication(let operation, let arguments):
-                visitCall(.lambda(operation), arguments: arguments.map(CompiledFormalCallArgument.value), scope: scope)
             case .operatorApplication(let operation, let arguments):
-                visitCall(.reference(operation, arity: arguments.count), arguments: arguments, scope: scope)
-            case .recursiveCall(let id, let arguments):
-                visitCall(
-                    .reference(id, arity: arguments.count),
-                    arguments: arguments.map(CompiledFormalCallArgument.value),
-                    scope: scope
-                )
-            case .letValue(let binder, let value, let body):
+                visitCall(operation, arguments: arguments, scope: scope)
+            case .letValue(let binder):
+                let value = expression.children[0]
+                let body = expression.children[1]
+
                 var nested = scope
                 nested.valueBindings[binder] = .init(value, scope: scope)
                 visit(body, scope: nested)
-            case .letIn(let operations, let body):
-                var nested = scope
-                operations.forEach {
-                    nested.localOperators[$0.id] = $0
-                    register($0.parameters.map(CompiledFormalParameter.value), for: $0.id)
-                }
-                visit(body, scope: nested)
+
+            default:
+                expression.children.forEach { visit($0, scope: scope) }
             }
         }
 
         visit(self, scope: .init())
-        return (variables, requiresCompleteState)
+        while let next = work.popLast() { next() }
+        return .init(variables: variables, enabledActions: enabledActions)
     }
 }
 
-struct CompiledFormalLambda: Sendable {
-    let parameters: [BinderID]
-    let body: CompiledStateExpr
-}
-
-enum CompiledFormalOperator: Sendable {
-    case lambda(CompiledFormalLambda)
+/// An operator reference; bodies and captures belong to the declaration table.
+package enum CompiledFormalOperator: Hashable, Sendable {
+    case lambda(OperatorID, arity: Int)
     case reference(OperatorID, arity: Int)
 
-    var arity: Int {
+    package var declarationID: OperatorID {
         switch self {
-        case .lambda(let lambda): return lambda.parameters.count
-        case .reference(_, let arity): return arity
+        case .lambda(let id, _), .reference(let id, _): id
+        }
+    }
+
+    package var arity: Int {
+        switch self {
+        case .lambda(_, let arity), .reference(_, let arity): return arity
         }
     }
 }
 
-indirect enum CompiledFormalCallArgument: Sendable {
-    case value(CompiledStateExpr)
+package enum CompiledFormalCallArgument: Hashable, Sendable {
+    case value(CompiledExpression)
     case `operator`(CompiledFormalOperator)
 }
 
-struct CompiledLocalOperator: Sendable {
-    let id: OperatorID
-    let parameters: [BinderID]
-    let domain: CompiledStateExpr?
-    let body: CompiledStateExpr
-    let isRecursive: Bool
+/// A named or anonymous operator with one owned body and capture declaration.
+package struct CompiledOperatorDefinition: Sendable {
+    package let id: OperatorID
+    package let parameters: [CompiledFormalParameter]
+    package let domain: CompiledExpression?
+    package let body: CompiledExpression
+    package let isRecursive: Bool
+    /// Lexically enclosing values read by this declaration, including nested bodies.
+    package let capturedBindings: Set<BinderID>
+    /// Calls can also depend on the captures of other local declarations.
+    package let referencedOperators: Set<OperatorID>
 }
 
-indirect enum CompiledActionExpr: Sendable {
-    case assign(VariableID, CompiledStateExpr)
+/// The shared transition structure over compiled expressions.
+package indirect enum CompiledActionExpr: Sendable {
+    case assign(VariableID, CompiledExpression)
     case unchanged(VariableID)
-    case guard_(CompiledStateExpr)
-    case existsAction(BinderID, CompiledStateExpr, CompiledActionExpr)
-    case ifElse(CompiledStateExpr, CompiledActionExpr, CompiledActionExpr)
-    case define(BinderID, CompiledStateExpr, CompiledActionExpr)
-    case and(CompiledActionExpr, CompiledActionExpr)
-    case or(CompiledActionExpr, CompiledActionExpr)
+    case guard_(CompiledExpression)
+    case existsAction(BinderID, CompiledExpression, Self)
+    case ifElse(CompiledExpression, Self, Self)
+    case define(BinderID, CompiledExpression, Self)
+    case and(Self, Self)
+    case or(Self, Self)
+
+    package func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> CompiledActionExpr {
+        switch self {
+        case .assign(let id, let value): return .assign(id, try transform(value))
+        case .unchanged(let id): return .unchanged(id)
+        case .guard_(let predicate): return .guard_(try transform(predicate))
+        case .existsAction(let id, let domain, let body):
+            return .existsAction(id, try transform(domain), try body.map(transform))
+        case .define(let id, let value, let body):
+            return .define(id, try transform(value), try body.map(transform))
+        case .ifElse(let condition, let yes, let no):
+            return .ifElse(try transform(condition), try yes.map(transform), try no.map(transform))
+        case .and(let lhs, let rhs): return .and(try lhs.map(transform), try rhs.map(transform))
+        case .or(let lhs, let rhs): return .or(try lhs.map(transform), try rhs.map(transform))
+        }
+    }
 }
 
-struct CompiledAction: Sendable {
-    let id: ActionID
-    let bindings: [CompiledActionBinding]
-    let body: CompiledActionExpr
-    let collection: VariableID?
+package struct CompiledAction: Sendable {
+    package let id: ActionID
+    package let bindings: [CompiledActionBinding]
+    package let body: CompiledActionExpr
+    package let collection: VariableID?
+
+    package func map(
+        _ transform: (CompiledExpression) throws -> CompiledExpression
+    ) rethrows -> CompiledAction {
+        .init(id: id, bindings: bindings, body: try body.map(transform), collection: collection)
+    }
 }
 
-struct CompiledActionBinding: Sendable {
-    let binder: BinderID
-    let sourceName: String
-    let values: [CompiledValue]
-    let generatedSwiftType: String?
+package struct CompiledActionBinding: Sendable {
+    package let binder: BinderID
+    package let sourceName: String
+    package let values: [CompiledValue]
+    package let generatedSwiftType: String?
 }
 
-struct CompiledInvariant: Sendable {
-    let id: PropertyID
-    let name: String
-    let body: CompiledStateExpr
+/// A state expression and the action enabledness it requires, analyzed once.
+package struct CompiledStateQuery: Sendable {
+    package let expression: CompiledExpression
+    package let enabledActions: Set<ActionID>
+
+    package func map(
+        _ transform: (CompiledExpression) throws -> CompiledExpression
+    ) rethrows -> CompiledStateQuery {
+        .init(expression: try transform(expression), enabledActions: enabledActions)
+    }
 }
 
-indirect enum CompiledTemporalExpr: Sendable {
-    case always(CompiledStateExpr)
-    case eventually(CompiledStateExpr)
-    case alwaysEventually(CompiledStateExpr)
-    case eventuallyAlways(CompiledStateExpr)
-    case leadsTo(CompiledStateExpr, CompiledStateExpr)
+package struct CompiledInvariant: Sendable {
+    package let id: PropertyID
+    package let name: String
+    package let predicate: CompiledStateQuery
+
+    package func map(
+        _ transform: (CompiledExpression) throws -> CompiledExpression
+    ) rethrows -> CompiledInvariant {
+        .init(id: id, name: name, predicate: try predicate.map(transform))
+    }
 }
 
-struct CompiledTemporal: Sendable {
-    let id: PropertyID
-    let name: String
-    let expression: CompiledTemporalExpr
+package struct CompiledTemporal<Expression: Sendable>: Sendable {
+    package let id: PropertyID
+    package let name: String
+    package let expression: TemporalCondition<Expression>
+
+    package func map<Result: Sendable>(
+        _ transform: (Expression) throws -> Result
+    ) rethrows -> CompiledTemporal<Result> {
+        .init(id: id, name: name, expression: try expression.map(transform))
+    }
 }
 
-struct CompiledActionCall: Hashable, Sendable {
-    let action: ActionID
-    let arguments: [CompiledValue]
+package struct CompiledActionCall: Hashable, Sendable {
+    package let action: ActionID
+    package let arguments: [CompiledValue]
 }
 
-struct CompiledFairnessCondition: Sendable {
-    enum Scope: Hashable, Sendable {
+package struct CompiledFairnessCondition: Sendable {
+    package enum Scope: Hashable, Sendable {
         case next
         case action(ActionID)
         case actionCall(CompiledActionCall)
     }
 
-    let scope: Scope
-    let isStrong: Bool
+    package let scope: Scope
+    package let isStrong: Bool
 }
 
-struct CompiledFormalOperatorDefinition: Sendable {
-    let id: OperatorID
-    let parameters: [CompiledFormalParameter]
-    let body: CompiledStateExpr
-}
-
-enum CompiledFormalParameter: Sendable {
-    case value(BinderID)
+package enum CompiledFormalParameter: Hashable, Sendable {
+    case value(BinderID, typeName: String? = nil)
     case `operator`(OperatorID, arity: Int)
+
+    var valueBinder: BinderID? {
+        if case .value(let binder, _) = self { return binder }
+        return nil
+    }
 }
 
-struct CompiledRecursiveFunction: Sendable {
-    let id: OperatorID
-    let parameters: [BinderID]
-    let body: CompiledStateExpr
-}
+package enum CompiledVariableInitialization: Sendable {
+    case value(CompiledExpression)
+    case memberOf(CompiledExpression)
 
-enum CompiledVariableInitialization: Sendable {
-    case value(CompiledValue)
-    case expression(CompiledStateExpr)
-    case memberOf(CompiledStateExpr)
+    package func map(
+        _ transform: (CompiledExpression) throws -> CompiledExpression
+    ) rethrows -> CompiledVariableInitialization {
+        switch self {
+        case .value(let expression): .value(try transform(expression))
+        case .memberOf(let expression): .memberOf(try transform(expression))
+        }
+    }
 }
 
 struct CompiledFormalModuleReplacement: Sendable {
     let moduleName: String
     let operatorName: String
     let definitionName: String
-    let expression: CompiledStateExpr
+    let expression: CompiledExpression
 }
 
 struct CompiledModuleArgument: Sendable {
     let parameter: String
-    let value: CompiledStateExpr
+    let value: CompiledExpression
 }
 
 struct CompiledModuleInstance: Sendable {
@@ -596,26 +474,67 @@ struct CompiledSymmetrySet: Sendable {
     let values: Set<CompiledValue>
 }
 
-struct CompiledSymmetricCollection: Sendable {
-    let variable: VariableID
-    let members: [CompiledValue]
-    let domainSymbol: String
-    let initial: CompiledValue
+/// Transitive lexical requirements, independent of a particular checking scope.
+struct CompiledOperatorDependencies: Equatable, Sendable {
+    let bindings: Set<BinderID>
+    let operators: Set<OperatorID>
 }
 
-struct CompiledSemantics: Sendable {
-    let checkDeadlock: Bool
-    let variableInitializations: [(variable: VariableID, initialization: CompiledVariableInitialization)]
-    let actions: [CompiledAction]
-    let invariants: [CompiledInvariant]
-    let temporalProperties: [CompiledTemporal]
-    let fairness: [CompiledFairnessCondition]
-    let constraint: CompiledStateExpr?
-    let assume: CompiledStateExpr?
-    let formalOperatorDefinitions: [CompiledFormalOperatorDefinition]
-    let recursiveFunctions: [CompiledRecursiveFunction]
+/// Declaration order and parameter ownership recorded during lowering.
+package struct CompiledOperators: Sendable {
+    private(set) var definitions: [OperatorID: CompiledOperatorDefinition] = [:]
+    private(set) var dependencies: [OperatorID: CompiledOperatorDependencies] = [:]
+
+    subscript(id: OperatorID) -> CompiledOperatorDefinition? { definitions[id] }
+
+    package var formalDefinitionIDs: [OperatorID] = []
+    package var recursiveFunctionIDs: [OperatorID] = []
+    private(set) var valueParameterOwners: [BinderID: OperatorID] = [:]
+    private(set) var operatorParameterOwners: [OperatorID: OperatorID] = [:]
+
+    mutating func register(_ definition: CompiledOperatorDefinition) {
+        definitions[definition.id] = definition
+        for parameter in definition.parameters {
+            switch parameter {
+            case .value(let binder, _): valueParameterOwners[binder] = definition.id
+            case .operator(let id, _): operatorParameterOwners[id] = definition.id
+            }
+        }
+    }
+
+    /// Run after all module, algorithm, and refinement declarations have been lowered.
+    mutating func resolveDependencies() {
+        var dependencies = definitions.mapValues {
+            CompiledOperatorDependencies(bindings: $0.capturedBindings, operators: $0.referencedOperators)
+        }
+        var callers: [OperatorID: Set<OperatorID>] = [:]
+        for declaration in definitions.values {
+            for dependency in declaration.referencedOperators where definitions[dependency] != nil {
+                callers[dependency, default: []].insert(declaration.id)
+            }
+        }
+        var pending = Set(definitions.keys)
+        while let dependency = pending.popFirst() {
+            guard let required = dependencies[dependency] else { continue }
+            for caller in callers[dependency, default: []] {
+                guard let previous = dependencies[caller] else { continue }
+                let combined = CompiledOperatorDependencies(
+                    bindings: previous.bindings.union(required.bindings),
+                    operators: previous.operators.union(required.operators))
+                if combined != previous {
+                    dependencies[caller] = combined
+                    pending.insert(caller)
+                }
+            }
+        }
+        self.dependencies = dependencies
+    }
+}
+
+package struct CompiledSemantics: Sendable {
+    package let behavior: CompiledBehavior
+    package var operators: CompiledOperators
     let formalModuleReplacements: [CompiledFormalModuleReplacement]
     let moduleInstances: [CompiledModuleInstance]
     let symmetrySets: [CompiledSymmetrySet]
-    let symmetricCollections: [CompiledSymmetricCollection]
 }

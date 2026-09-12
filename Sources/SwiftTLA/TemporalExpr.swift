@@ -16,8 +16,8 @@ public enum TemporalExpr: Hashable, Sendable, CustomStringConvertible {
     }
 }
 
-extension StateExprConvertible {
-    public func leadsTo(_ q: some StateExprConvertible) -> TemporalExpr {
+extension TypedExpression where ExpressionValue == Bool {
+    public func leadsTo(_ q: some TypedExpression<Bool>) -> TemporalExpr {
         .leadsTo(self.stateExpr, q.stateExpr)
     }
 }

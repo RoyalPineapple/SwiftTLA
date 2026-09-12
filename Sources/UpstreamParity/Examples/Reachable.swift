@@ -32,7 +32,7 @@ package struct ReachableModel: Sendable {
                 let nodes = SetExpr<Node>.literal(.one, .two, .three, .four)
                 let successors = Select(
                     from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { graph in
-                        All(Node.all) { node in
+                        ForAll(Node.all) { node in
                             graph[node].cardinality == 2
                         }
                     },

@@ -11,7 +11,7 @@ struct LivenessCheckerTests {
   func singleCycleSCC() throws {
     let compilation = try Example.hourClock.spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
+    let lc = compilation.livenessChecker(graph: exploration.graph)
     let sccs = lc.computeSCCs()
     #expect(sccs.count == 1)
     #expect(sccs[0].count == 12)
@@ -21,7 +21,7 @@ struct LivenessCheckerTests {
   func terminalSCC() throws {
     let compilation = try Example.hourClock.spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
+    let lc = compilation.livenessChecker(graph: exploration.graph)
     let sccs = lc.computeSCCs()
     let terminals = lc.terminalSCCs(from: sccs)
     #expect(terminals.count == 1)
@@ -42,8 +42,7 @@ struct LivenessCheckerTests {
     }
     let compilation = try spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let results = try LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
-      .analyze(initialStateIDs: exploration.initialStateIDs)
+    let results = try exploration.analyzeTemporalProperties(in: compilation)
     #expect(results.map(\.status) == [.satisfied])
   }
 
@@ -60,8 +59,7 @@ struct LivenessCheckerTests {
     }
     let compilation = try spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let results = try LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
-      .analyze(initialStateIDs: exploration.initialStateIDs)
+    let results = try exploration.analyzeTemporalProperties(in: compilation)
     #expect(results.map(\.status) == [.violated])
   }
 
@@ -88,10 +86,8 @@ struct LivenessCheckerTests {
     }
     let weakCompilation = try weakSpec.compile()
     let exploration = try ModelChecker(compilation: weakCompilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
-    let initialStateIDs = exploration.initialStateIDs
     let weak = try #require(
-      LivenessChecker(compilation: weakCompilation, graph: exploration.graph, states: exploration.compiledStates)
-        .analyze(initialStateIDs: initialStateIDs).first
+      exploration.analyzeTemporalProperties(in: weakCompilation).first
     )
     let strongCompilation = try strongSpec.compile()
     let strongExploration = try ModelChecker(
@@ -99,11 +95,7 @@ struct LivenessCheckerTests {
       configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
     ).explore()
     let strong = try #require(
-      LivenessChecker(
-        compilation: strongCompilation,
-        graph: strongExploration.graph,
-        states: strongExploration.compiledStates
-      ).analyze(initialStateIDs: strongExploration.initialStateIDs).first
+      strongExploration.analyzeTemporalProperties(in: strongCompilation).first
     )
     let xToken = try #require(TLAStateProjection.Token(validating: "x"))
     let cycle = Set(exploration.graph.states.compactMap { id, projection in

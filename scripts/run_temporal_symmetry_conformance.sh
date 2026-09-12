@@ -33,5 +33,5 @@ unset FINITE_GRAPH_GITHUB_TOKEN
 
 (
     cd "$PROJECT_ROOT"
-    swift run tlc-validate temporal-symmetry run --output "$OUTPUT"
+    swift run -Xswiftc -warnings-as-errors tlc-validate temporal-symmetry run --output "$OUTPUT"
 )

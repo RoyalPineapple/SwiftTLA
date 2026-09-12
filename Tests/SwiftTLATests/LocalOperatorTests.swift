@@ -1,3 +1,4 @@
+@testable import SwiftTLAPlugin
 import Testing
 import SwiftParser
 import SwiftSyntax
@@ -19,17 +20,17 @@ private func renderedLocalOperatorExpression(_ body: StateExpr) throws -> String
     actions: [],
     invariants: [],
     formalOperatorDefinitions: [.init(name: "Rendered", parameters: [], body: body)]
-  ).compile().renderedTLAModuleBundle().tla
+  ).compile().render().tlaBundle.tla
 }
 
-private func compiledLocalOperatorExpression(_ body: StateExpr) throws -> CompiledStateExpr {
-  try #require(TLASpec(
+private func compiledLocalOperatorSpecification(_ body: StateExpr) throws -> CompiledSpecification {
+  try TLASpec(
     name: "LocalOperatorCompilation",
     variables: [],
     actions: [],
     invariants: [],
     formalOperatorDefinitions: [.init(name: "Compiled", parameters: [], body: body)]
-  ).compile().semantics.formalOperatorDefinitions.first?.body)
+  ).compile()
 }
 
 private func renderedLocalOperatorDefinitions(_ definitions: [FormalOperatorDefinition]) throws -> String {
@@ -39,7 +40,7 @@ private func renderedLocalOperatorDefinitions(_ definitions: [FormalOperatorDefi
     actions: [],
     invariants: [],
     formalOperatorDefinitions: definitions
-  ).compile().renderedTLAModuleBundle().tla
+  ).compile().render().tlaBundle.tla
 }
 
 @TLAModel
@@ -110,6 +111,43 @@ private struct GeneratedTopLevelTypedFormalDefinitionModel {
 
 @Suite("Local TLA+ operators")
 struct LocalOperatorTests {
+  @Test("LET result types follow the body independently of recursive output")
+  func localRecursionPreservesBodyResultType() throws {
+    let predicate: Expr<Bool> = LetRec("Constant", over: IntRange(0, through: 1), taking: Int.self,
+      { (_: LocalRecursion<Int, Int>, _: WithValue<Int>) in 7 },
+      in: { recursion in recursion(0) == 7 })
+    #expect(try compiledValue(predicate.stateExpr) == .bool(true))
+
+    let message: Expr<String> = LetRec("Constant", over: IntRange(0, through: 1), taking: Int.self,
+      { (_: LocalRecursion<Int, Int>, _: WithValue<Int>) in 7 },
+      in: { _ in "finished" })
+    #expect(try compiledValue(message.stateExpr) == .string("finished"))
+  }
+
+  @Test("local operator parsing rejects undecodable declarations", arguments: [
+    "parameters: externalParameters, body: 7",
+    "parameters: [], domain: makeDomain(), body: 7"
+  ])
+  func rejectsUndecodableLocalDeclarations(_ declaration: String) throws {
+    let expression = try parseExpression("""
+      StateExpr.letIn([
+        LocalOperator("Bounded", \(declaration))
+      ], StateExpr.operatorApplication(.reference("Bounded", arity: 0), []))
+      """)
+    #expect(SpecParser.decodeStateExpr(expression) == nil)
+  }
+
+  @Test("an explicitly absent local operator domain remains unbounded")
+  func explicitAbsentLocalDomain() throws {
+    let expression = try parseExpression("""
+      StateExpr.letIn([
+        LocalOperator("Constant", parameters: [], domain: nil, body: 7)
+      ], StateExpr.operatorApplication(.reference("Constant", arity: 0), []))
+      """)
+    let decoded = try #require(SpecParser.decodeStateExpr(expression))
+    #expect(try compiledValue(decoded) == .int(7))
+  }
+
   @Test("bounded local calls compile identically from parser and builder syntax")
   func boundedLocalCallsHaveOneCompiledForm() throws {
     let parsed = try #require(SpecParser.decodeStateExpr(try parseExpression("""
@@ -139,17 +177,33 @@ struct LocalOperatorTests {
       )
     ], .recursiveCall("Count", [.int(4)]))
 
-    let parsedCompilation = try compiledLocalOperatorExpression(parsed)
-    let builtCompilation = try compiledLocalOperatorExpression(built)
+    let parsedCompilation = try compiledLocalOperatorSpecification(parsed)
+    let builtCompilation = try compiledLocalOperatorSpecification(built)
     let parsedRendering = try renderedLocalOperatorExpression(parsed)
     let builtRendering = try renderedLocalOperatorExpression(built)
     #expect(parsedRendering == builtRendering)
-    guard case .letIn(let parsedOperators, .functionApply(.operatorReference(let parsedCall), .value(.integer(4)))) = parsedCompilation,
-          case .letIn(let builtOperators, .functionApply(.operatorReference(let builtCall), .value(.integer(4)))) = builtCompilation,
-          let parsedOperator = parsedOperators.first,
-          let builtOperator = builtOperators.first,
-          case .ifThenElse(_, _, .functionApply(.operatorReference(let parsedRecursion), _)) = parsedOperator.body,
-          case .ifThenElse(_, _, .functionApply(.operatorReference(let builtRecursion), _)) = builtOperator.body else {
+    let parsedDefinitionID = try #require(parsedCompilation.semantics.operators.formalDefinitionIDs.first)
+    let parsedDefinition = try #require(parsedCompilation.semantics.operators[parsedDefinitionID])
+    let builtDefinitionID = try #require(builtCompilation.semantics.operators.formalDefinitionIDs.first)
+    let builtDefinition = try #require(builtCompilation.semantics.operators[builtDefinitionID])
+    guard case .letIn(let parsedOperators) = parsedDefinition.body.operation,
+              case .functionApply = parsedDefinition.body.children[0].operation,
+              case .operatorReference(let parsedCall) = parsedDefinition.body.children[0].children[0].operation,
+              case .value(.integer(4)) = parsedDefinition.body.children[0].children[1].operation,
+          case .letIn(let builtOperators) = builtDefinition.body.operation,
+              case .functionApply = builtDefinition.body.children[0].operation,
+              case .operatorReference(let builtCall) = builtDefinition.body.children[0].children[0].operation,
+              case .value(.integer(4)) = builtDefinition.body.children[0].children[1].operation,
+          let parsedID = parsedOperators.first,
+          let parsedOperator = parsedCompilation.semantics.operators[parsedID],
+          let builtID = builtOperators.first,
+          let builtOperator = builtCompilation.semantics.operators[builtID],
+          case .ifThenElse = parsedOperator.body.operation,
+              case .functionApply = parsedOperator.body.children[2].operation,
+              case .operatorReference(let parsedRecursion) = parsedOperator.body.children[2].children[0].operation,
+          case .ifThenElse = builtOperator.body.operation,
+              case .functionApply = builtOperator.body.children[2].operation,
+              case .operatorReference(let builtRecursion) = builtOperator.body.children[2].children[0].operation else {
       Issue.record("Expected one bounded compiled call")
       return
     }
@@ -177,19 +231,31 @@ struct LocalOperatorTests {
     )
     let built = StateExpr.letIn([operation], .recursiveCall("AddOne", [.int(41)]))
 
-    let parsedCompilation = try compiledLocalOperatorExpression(parsed)
-    let builtCompilation = try compiledLocalOperatorExpression(built)
+    let parsedCompilation = try compiledLocalOperatorSpecification(parsed)
+    let builtCompilation = try compiledLocalOperatorSpecification(built)
     let parsedRendering = try renderedLocalOperatorExpression(parsed)
     let builtRendering = try renderedLocalOperatorExpression(built)
     #expect(parsedRendering == builtRendering)
-    guard case .letIn(let parsedOperators, .recursiveCall(let parsedCall, let parsedArguments)) = parsedCompilation,
-          case .letIn(let builtOperators, .recursiveCall(let builtCall, let builtArguments)) = builtCompilation,
-          let parsedOperator = parsedOperators.first,
-          let builtOperator = builtOperators.first,
+    let parsedDefinitionID = try #require(parsedCompilation.semantics.operators.formalDefinitionIDs.first)
+    let parsedDefinition = try #require(parsedCompilation.semantics.operators[parsedDefinitionID])
+    let builtDefinitionID = try #require(builtCompilation.semantics.operators.formalDefinitionIDs.first)
+    let builtDefinition = try #require(builtCompilation.semantics.operators[builtDefinitionID])
+    guard case .letIn(let parsedOperators) = parsedDefinition.body.operation,
+              case .operatorApplication(.reference(let parsedCall, _), let parsedArguments) = parsedDefinition.body.children[0].operation,
+          case .letIn(let builtOperators) = builtDefinition.body.operation,
+              case .operatorApplication(.reference(let builtCall, _), let builtArguments) = builtDefinition.body.children[0].operation,
+          let parsedID = parsedOperators.first,
+          let parsedOperator = parsedCompilation.semantics.operators[parsedID],
+          let builtID = builtOperators.first,
+          let builtOperator = builtCompilation.semantics.operators[builtID],
           parsedArguments.count == 1,
           builtArguments.count == 1,
-          case .some(.value(.integer(41))) = parsedArguments.first,
-          case .some(.value(.integer(41))) = builtArguments.first else {
+          case .some(let expression25) = parsedArguments.first,
+              case .value(let expression26) = expression25,
+              case .value(.integer(41)) = expression26.operation,
+          case .some(let expression27) = builtArguments.first,
+              case .value(let expression28) = expression27,
+              case .value(.integer(41)) = expression28.operation else {
       Issue.record("Expected one operator-style compiled call")
       return
     }
@@ -223,13 +289,17 @@ struct LocalOperatorTests {
     #expect(operators.first?.domain == .integerRange(.int(0), .int(4)))
     #expect(call == .recursiveCall("Count", [.int(4)]))
     let compilation = try GeneratedTypedLocalRecursionModel.spec.compile()
-    let compiledDefinition = try #require(compilation.semantics.formalOperatorDefinitions.first)
-    guard case .letIn(let compiledOperators, .functionApply(.operatorReference(let callID), .value(.integer(4)))) = compiledDefinition.body else {
+    let compiledDefinitionID = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
+    let compiledDefinition = try #require(compilation.semantics.operators[compiledDefinitionID])
+    guard case .letIn(let compiledOperators) = compiledDefinition.body.operation,
+              case .functionApply = compiledDefinition.body.children[0].operation,
+              case .operatorReference(let callID) = compiledDefinition.body.children[0].children[0].operation,
+              case .value(.integer(4)) = compiledDefinition.body.children[0].children[1].operation else {
       Issue.record("Expected a bound local operator application")
       return
     }
-    #expect(callID == compiledOperators.first?.id)
-    let rendered = compilation.renderedTLAModuleBundle().tla
+    #expect(callID == compiledOperators.first)
+    let rendered = try compilation.render().tlaBundle.tla
     #expect(rendered.contains("LET Count["))
     #expect(!rendered.contains("LET RECURSIVE Count"))
 
@@ -242,14 +312,17 @@ struct LocalOperatorTests {
     let definition = try #require(
       GeneratedTypedFormalDefinitionAlgorithm.spec.formalOperatorDefinitions.first
     )
-    #expect(definition.parameters == [.value("value0"), .value("value1")])
+    #expect(definition.parameters == [.value("value0", typeName: "Int"), .value("value1", typeName: "Int")])
     let compilation = try GeneratedTypedFormalDefinitionAlgorithm.spec.compile()
-    let compiledDefinition = try #require(compilation.semantics.formalOperatorDefinitions.first)
-    guard case .letIn(let operators, _) = compiledDefinition.body else {
+    let compiledDefinitionID = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
+    let compiledDefinition = try #require(compilation.semantics.operators[compiledDefinitionID])
+    guard case .letIn(let operators) = compiledDefinition.body.operation else {
       Issue.record("Expected a compiled local operator")
       return
     }
-    #expect(operators.first?.isRecursive == true)
+    let id = try #require(operators.first)
+    let operation = try #require(compilation.semantics.operators[id])
+    #expect(operation.isRecursive)
 
     var machine = try GeneratedTypedFormalDefinitionAlgorithm.makeMachine()
     #expect(try machine.send(.advance).after.counter == 1)
@@ -260,8 +333,8 @@ struct LocalOperatorTests {
     let definition = try #require(
       GeneratedTopLevelTypedFormalDefinitionModel.spec.formalOperatorDefinitions.first
     )
-    #expect(definition.parameters == [.value("value0")])
-    let rendered = try GeneratedTopLevelTypedFormalDefinitionModel.spec.compile().renderedTLAModuleBundle().tla
+    #expect(definition.parameters == [.value("value0", typeName: "Int")])
+    let rendered = try GeneratedTopLevelTypedFormalDefinitionModel.spec.compile().render().tlaBundle.tla
     #expect(rendered.contains("0..bound"))
     #expect(rendered.contains("SA[value0]"))
 
@@ -285,7 +358,7 @@ struct LocalOperatorTests {
     }
     """
     let closure = try parseClosure(source)
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
     #expect(parsed.formalOperatorDefinitions.count == 1)
@@ -307,13 +380,17 @@ struct LocalOperatorTests {
       invariants: [],
       formalOperatorDefinitions: parsed.formalOperatorDefinitions
     ).compile()
-    let compiledDefinition = try #require(compilation.semantics.formalOperatorDefinitions.first)
-    guard case .letIn(let compiledOperators, .functionApply(.operatorReference(let callID), .boundValue)) = compiledDefinition.body else {
+    let compiledDefinitionID = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
+    let compiledDefinition = try #require(compilation.semantics.operators[compiledDefinitionID])
+    guard case .letIn(let compiledOperators) = compiledDefinition.body.operation,
+              case .functionApply = compiledDefinition.body.children[0].operation,
+              case .operatorReference(let callID) = compiledDefinition.body.children[0].children[0].operation,
+              case .boundValue = compiledDefinition.body.children[0].children[1].operation else {
       Issue.record("Expected a bound local operator application")
       return
     }
-    #expect(callID == compiledOperators.first?.id)
-    let rendered = compilation.renderedTLAModuleBundle().tla
+    #expect(callID == compiledOperators.first)
+    let rendered = try compilation.render().tlaBundle.tla
     #expect(rendered.contains("\\E"))
     #expect(rendered.contains("\\A"))
     #expect(rendered.contains("AtMost[value0]"))
@@ -335,13 +412,36 @@ struct LocalOperatorTests {
     }
     """
     let closure = try parseClosure(source)
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
     let definition = try #require(parsed.formalOperatorDefinitions.first)
     let rendered = try renderedLocalOperatorDefinitions([definition])
     #expect(rendered.contains("SA[value0]"))
     #expect(rendered.contains("<<"))
+  }
+
+  @Test("bounded calls evaluate the domain before the argument and validate membership before the body")
+  func boundedCallFailureOrder() {
+    let division = StateExpr.divide(.int(1), .int(0))
+    let choice = StateExpr.choose(.setLiteral([]), "item", .value(.bool(true)))
+    func call(domain: StateExpr, argument: StateExpr) -> StateExpr {
+      .letIn([
+        LocalOperator("Bounded", parameters: ["value"], domain: domain, body: division)
+      ], .recursiveCall("Bounded", [argument]))
+    }
+    #expect(throws: EvalError.divisionByZero) {
+      try compiledValue(call(domain: division, argument: choice))
+    }
+    #expect(throws: EvalError.divisionByZero) {
+      try compiledValue(call(domain: .int(0), argument: division))
+    }
+    #expect(throws: EvalError.expected(.set, actual: [.integer(0)])) {
+      try compiledValue(call(domain: .int(0), argument: .int(1)))
+    }
+    #expect(throws: EvalError.recursiveArgumentOutsideDomain) {
+      try compiledValue(call(domain: .setLiteral([]), argument: .int(1)))
+    }
   }
 
   @Test("bounded LET rejects arguments outside its declared domain")
@@ -410,7 +510,7 @@ struct LocalOperatorTests {
     }
     """
     let closure = try parseClosure(source)
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.contains { $0.message.contains("FormalDefinition requires") })
   }
@@ -460,11 +560,11 @@ struct LocalOperatorTests {
       FormalDefinition("Answer", parameters: [], body: .letIn([local], .recursiveCall("AddOne", [.int(41)])))
     }
 
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains(
+    #expect(try spec.compile().render().tlaBundle.tla.contains(
       "Answer == LET AddOne(number) == (number + 1)"
     ))
-    #expect(!(try spec.compile().renderedTLAModuleBundle().tla.contains("RECURSIVE AddOne")))
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("IN AddOne(41)"))
+    #expect(!(try spec.compile().render().tlaBundle.tla.contains("RECURSIVE AddOne")))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("IN AddOne(41)"))
   }
 
   @Test("compiled rendering declares recursive LET operators")
@@ -483,14 +583,17 @@ struct LocalOperatorTests {
     }
 
     let compilation = try spec.compile()
-    #expect(compilation.renderedTLAModuleBundle().tla.contains("LET RECURSIVE SumTo(_)"))
+    #expect(try compilation.render().tlaBundle.tla.contains("LET RECURSIVE SumTo(_)"))
 
-    let definition = try #require(compilation.semantics.formalOperatorDefinitions.first)
-    guard case .letIn(let operators, _) = definition.body else {
+    let definitionID = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
+    let definition = try #require(compilation.semantics.operators[definitionID])
+    guard case .letIn(let operators) = definition.body.operation else {
       Issue.record("Expected a compiled local operator")
       return
     }
-    #expect(try #require(operators.first).isRecursive)
+    let id = try #require(operators.first)
+    let operation = try #require(compilation.semantics.operators[id])
+    #expect(operation.isRecursive)
   }
 
   @Test("the macro parser retains LET operator definitions")

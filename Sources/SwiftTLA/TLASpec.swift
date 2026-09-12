@@ -5,7 +5,7 @@ public enum CollectionVarType: Sendable, Equatable {
   case dictionary(Int)
 }
 
-enum VariableOrigin: Sendable, Equatable {
+package enum VariableOrigin: Sendable, Equatable {
   case source
   case compiler
   case programCounter
@@ -27,8 +27,8 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   public let name: String
   public let initialization: VariableInitialization
   public let collectionType: CollectionVarType
-  let generatedSwiftType: String?
-  let origin: VariableOrigin
+  package let generatedSwiftType: String?
+  package let origin: VariableOrigin
 
   public init(
     name: String, initial: TLAValue, collectionType: CollectionVarType = .scalar
@@ -42,7 +42,7 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
     )
   }
 
-  init(
+  package init(
     name: String, initialization: VariableInitialization,
     collectionType: CollectionVarType = .scalar,
     generatedSwiftType: String? = nil,
@@ -65,13 +65,13 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
 public struct ActionBinding: Sendable, Hashable {
   public let name: String
   public let values: [TLAValue]
-  let generatedSwiftType: String?
+  package let generatedSwiftType: String?
 
   public init(name: String, values: [TLAValue]) {
     self.init(name: name, values: values, generatedSwiftType: nil)
   }
 
-  init(name: String, values: [TLAValue], generatedSwiftType: String?) {
+  package init(name: String, values: [TLAValue], generatedSwiftType: String?) {
     self.name = name
     self.values = values
     self.generatedSwiftType = generatedSwiftType
@@ -90,7 +90,7 @@ public protocol ActionParameterDescriptor: Sendable {
   var actionBinding: ActionBinding { get }
   var generatedSwiftType: String { get }
 }
-public struct ActionParameter<Domain: TLAValueType & Sendable>: Sendable {
+public struct ActionParameter<Domain: TLAValueType>: Sendable {
   public let name: String
   public let values: [Domain]
   public init(_ name: String, values: [Domain]) {
@@ -106,7 +106,10 @@ public struct ActionParameter<Domain: TLAValueType & Sendable>: Sendable {
   }
   public var generatedSwiftType: String { swiftSurfaceTypeName(for: Domain.self) }
 }
-extension ActionParameter: ActionParameterDescriptor {}
+extension ActionParameter: ActionParameterDescriptor, TypedExpression {
+  public var expr: Expr<Domain> { Expr(.variable(name)) }
+  public var stateExpr: StateExpr { expr.stateExpr }
+}
 func formalActionCall(named name: String, arguments: [TLAValue]) -> String {
   arguments.isEmpty ? name : "\(name)(\(arguments.map(\.description).joined(separator: ", ")))"
 }
@@ -128,23 +131,23 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
   public let body: ActionExpr
   public let bindings: [ActionBinding]
   let sourceIssue: SourceModelIssue?
-  let controlOwner: ControlOwner?
+  let isTermination: Bool
 
   public init(name: String, body: ActionExpr, bindings: [ActionBinding] = []) {
-    self.init(name: name, body: body, bindings: bindings, controlOwner: nil)
+    self.init(name: name, body: body, bindings: bindings, isTermination: false)
   }
 
-  init(
+  package init(
     name: String,
     body: ActionExpr,
     bindings: [ActionBinding] = [],
-    controlOwner: ControlOwner?
+    isTermination: Bool
   ) {
     self.name = name
     self.body = body
     self.bindings = bindings
     self.sourceIssue = Self.bindingIssue(action: name, bindings: bindings)
-    self.controlOwner = controlOwner
+    self.isTermination = isTermination
   }
 
   private static func bindingIssue(action: String, bindings: [ActionBinding]) -> SourceModelIssue? {
@@ -208,23 +211,12 @@ public struct NamedInvariant: Sendable, CustomStringConvertible, Equatable {
 }
 
 extension Array where Element == ConstantDecl {
-  func value(named name: String) -> TLAValue? {
+  package func value(named name: String) -> TLAValue? {
     first { $0.name == name }?.value
   }
 
   func replacing(with replacements: [ConstantDecl]) -> [ConstantDecl] {
     filter { current in !replacements.contains { $0.name == current.name } } + replacements
-  }
-}
-struct RenderedModuleDefinition: Sendable, Equatable {
-  let name: String?
-  let text: String
-  let dependencies: [String]
-
-  init(name: String? = nil, text: String, dependencies: [String] = []) {
-    self.name = name
-    self.text = text
-    self.dependencies = dependencies
   }
 }
 public enum StandardModule: String, Sendable, Hashable, CaseIterable {
@@ -235,46 +227,48 @@ public enum StandardModule: String, Sendable, Hashable, CaseIterable {
   case tlc = "TLC"
 }
 
-func canonicalStandardModules(_ modules: [StandardModule]) -> [StandardModule] {
+package func canonicalStandardModules(_ modules: [StandardModule]) -> [StandardModule] {
   modules.reduce(into: []) { orderedModules, module in
     if orderedModules.contains(module) == false { orderedModules.append(module) }
   }
 }
 
 public struct TLASpec: Sendable {
-  enum AlgorithmPhase: Sendable, Equatable {
+  package enum AlgorithmPhase: Sendable, Equatable {
     case source
     case lowered
   }
-  package let name: String
-  package let variables: [NamedVar]
-  package let constants: [ConstantDecl]
+  package var name: String
+  package var variables: [NamedVar]
+  package var constants: [ConstantDecl]
   /// Parameters supplied by a named TLA+ `INSTANCE … WITH` declaration.
-  package let formalParameters: [FormalModuleParameter]
-  package let actions: [NamedAction]
-  package let invariants: [NamedInvariant]
-  package let temporalProperties: [NamedTemporal]
-  package let fairness: [FairnessCondition]
-  package let assume: StateExpr?
-  package let checkDeadlock: Bool
-  package let extendsModules: [StandardModule]
-  package let constraint: StateExpr?
-  package let recursiveFuncs: [RecursiveFunc]
+  package var formalParameters: [FormalModuleParameter]
+  package var actions: [NamedAction]
+  package var invariants: [NamedInvariant]
+  package var temporalProperties: [NamedTemporal]
+  package var fairness: [FairnessCondition]
+  package var assume: StateExpr?
+  package var checkDeadlock: Bool
+  package var extendsModules: [StandardModule]
+  package var constraint: StateExpr?
+  package var recursiveFuncs: [RecursiveFunc]
   /// Executable, higher-order operator definitions retained as formal AST data.
-  package let formalOperatorDefinitions: [FormalOperatorDefinition]
+  package var formalOperatorDefinitions: [FormalOperatorDefinition]
   /// Imported modules remain separate source files; compilation links their operators.
-  package let imports: [TLASpec]
+  package var imports: [TLASpec]
   /// Model-scoped replacement bindings for imported module operators.
-  package let importConfigurations: [FormalModuleConfiguration]
+  package var importConfigurations: [FormalModuleConfiguration]
   /// Named source-level TLA+ `INSTANCE` declarations.
-  package let moduleInstances: [FormalModuleInstance]
-  package let refinements: [RefinementDecl]
-  package let symmetrySets: [SymmetrySet]
-  package let symmetricCollections: [SymmetricCollectionDecl]
+  package var moduleInstances: [FormalModuleInstance]
+  package var refinements: [RefinementDecl]
+  package var symmetrySets: [SymmetrySet]
+  package var collections: [ModelCollectionDecl]
   /// The authored Algorithm declaration that supplies the compiled PlusCal plan.
-  let sourceAlgorithms: [Algorithm]
+  package var sourceAlgorithms: [Algorithm]
   var authoredPlusCalAlgorithmPlan: AuthoredPlusCalAlgorithmPlan?
-  var algorithmPhase: AlgorithmPhase
+  package var algorithmPhase: AlgorithmPhase
+  package var diagnostics: [SourceParseDiagnostic] = []
+
   package init(
     name: String, variables: [NamedVar], constants: [ConstantDecl] = [],
     formalParameters: [FormalModuleParameter] = [],
@@ -286,7 +280,7 @@ public struct TLASpec: Sendable {
     formalOperatorDefinitions: [FormalOperatorDefinition] = [], imports: [TLASpec] = [],
     importConfigurations: [FormalModuleConfiguration] = [],
     moduleInstances: [FormalModuleInstance] = [], refinements: [RefinementDecl] = [], symmetrySets: [SymmetrySet] = [],
-    symmetricCollections: [SymmetricCollectionDecl] = [],
+    collections: [ModelCollectionDecl] = [],
     sourceAlgorithms: [Algorithm] = []
   ) {
     self.name = name
@@ -308,7 +302,7 @@ public struct TLASpec: Sendable {
     self.moduleInstances = moduleInstances
     self.refinements = refinements
     self.symmetrySets = symmetrySets
-    self.symmetricCollections = symmetricCollections
+    self.collections = collections
     self.sourceAlgorithms = sourceAlgorithms
     self.authoredPlusCalAlgorithmPlan = nil
     self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
@@ -341,54 +335,19 @@ public enum AuthoredPlusCalDeclarationPhase: Sendable, Hashable {
   case postTranslation
 }
 
-/// Structural placement and dependency metadata retained for authored PlusCal.
-struct AuthoredPlusCalDeclaration: Sendable, Equatable {
-  let name: String?
-  let text: String
-  let phase: AuthoredPlusCalDeclarationPhase
-  let dependencies: [String]
-
-  init(name: String? = nil, text: String, phase: AuthoredPlusCalDeclarationPhase = .prelude, dependencies: [String] = []) {
-    self.name = name
-    self.text = text
-    self.phase = phase
-    self.dependencies = dependencies
-  }
-}
 public struct VarDecl: SpecComponent, Sendable {
   public let name: String
   public let initialization: VariableInitialization
   public let collectionType: CollectionVarType
-  let generatedSwiftType: String?
-  init(
+  package let generatedSwiftType: String?
+  package init(
     _ name: String,
-    _ initial: TLAValue,
+    initialization: VariableInitialization,
     collectionType: CollectionVarType = .scalar,
     generatedSwiftType: String? = nil
   ) {
     self.name = name
-    self.initialization = .value(initial)
-    self.collectionType = collectionType
-    self.generatedSwiftType = generatedSwiftType
-  }
-  init(
-    _ name: String, memberOf set: StateExpr,
-    collectionType: CollectionVarType = .scalar,
-    generatedSwiftType: String? = nil
-  ) {
-    self.name = name
-    self.initialization = .memberOf(set)
-    self.collectionType = collectionType
-    self.generatedSwiftType = generatedSwiftType
-  }
-  init(
-    _ name: String,
-    expression: StateExpr,
-    collectionType: CollectionVarType = .scalar,
-    generatedSwiftType: String? = nil
-  ) {
-    self.name = name
-    self.initialization = VariableInitialization.expression(expression).normalized
+    self.initialization = initialization.normalized
     self.collectionType = collectionType
     self.generatedSwiftType = generatedSwiftType
   }
@@ -397,7 +356,7 @@ public struct ActionDecl: SpecComponent, Sendable {
   public let name: String
   public let body: ActionExpr
   public let bindings: [ActionBinding]
-  init(
+  package init(
     _ name: String,
     _ body: ActionExpr,
     bindings: [ActionBinding] = []
@@ -410,7 +369,7 @@ public struct ActionDecl: SpecComponent, Sendable {
 public struct InvDecl: SpecComponent {
   public let name: String
   public let body: StateExpr
-  init(_ name: String, _ body: StateExpr) {
+  package init(_ name: String, _ body: StateExpr) {
     self.name = name
     self.body = body
   }
@@ -418,21 +377,28 @@ public struct InvDecl: SpecComponent {
 public struct TemporalDecl: SpecComponent {
   public let name: String
   public let expr: TemporalExpr
-  init(_ name: String, _ expr: TemporalExpr) {
+  package init(_ name: String, _ expr: TemporalExpr) {
     self.name = name
     self.expr = expr
   }
 }
 public struct FairnessDecl: SpecComponent {
   public let condition: FairnessCondition
-  init(_ condition: FairnessCondition) { self.condition = condition }
+  package init(_ condition: FairnessCondition) { self.condition = condition }
 }
 public struct ConstantDecl: SpecComponent, Sendable, Equatable {
   public let name: String
   public let value: TLAValue
+  let sourceIssue: SourceModelIssue?
+
   public init(_ name: String, _ value: TLAValue) {
+    self.init(name, source: value)
+  }
+
+  init(_ name: String, source: some TLAValueConvertible) {
     self.name = name
-    self.value = value
+    self.value = source.tlaValue
+    self.sourceIssue = source.sourceIssue
   }
 }
 public enum FormalModuleParameterKind: String, Sendable, Equatable {
@@ -495,7 +461,7 @@ public func FormalDefinition<Input: TLAValueType>(
   let parameter = "value0"
   return FormalOperatorDecl(FormalOperatorDefinition(
     name: name,
-    parameters: [.value(parameter)],
+    parameters: [.value(parameter, typeName: swiftSurfaceTypeName(for: Input.self))],
     body: body(Expr<Input>(.variable(parameter))).stateExpr,
     plusCalPhase: plusCalPhase,
     plusCalDependencies: dependsOn
@@ -515,7 +481,8 @@ public func FormalDefinition<First: TLAValueType, Second: TLAValueType>(
   let second = "value1"
   return FormalOperatorDecl(FormalOperatorDefinition(
     name: name,
-    parameters: [.value(first), .value(second)],
+    parameters: [.value(first, typeName: swiftSurfaceTypeName(for: First.self)),
+                 .value(second, typeName: swiftSurfaceTypeName(for: Second.self))],
     body: body(Expr<First>(.variable(first)), Expr<Second>(.variable(second))).stateExpr,
     plusCalPhase: plusCalPhase,
     plusCalDependencies: dependsOn
@@ -528,7 +495,7 @@ public struct RefinementDecl: SpecComponent, Sendable, Equatable {
     case liveSpec
     case liveSpecEquals
 
-    init?(sourceName: String) {
+    package init?(sourceName: String) {
       switch sourceName {
       case "spec": self = .spec
       case "liveSpec": self = .liveSpec
@@ -543,7 +510,7 @@ public struct RefinementDecl: SpecComponent, Sendable, Equatable {
   public let `operator`: Operator
   public let mappings: [RefinementMapping]
 
-  init(
+  package init(
     name: String,
     instance: FormalModuleInstanceReference,
     operator: Operator,
@@ -571,7 +538,7 @@ public struct RefinementMapping: Sendable, Equatable {
     self.source = source.stateExpr
   }
 
-  init(target: String, source: StateExpr) {
+  package init(target: String, source: StateExpr) {
     self.target = target
     self.source = source
   }
@@ -601,15 +568,15 @@ extension TLASpec {
 }
 public struct AssumeDecl: SpecComponent, Equatable {
   public let expr: StateExpr
-  init(_ expr: StateExpr) { self.expr = expr }
+  package init(_ expr: StateExpr) { self.expr = expr }
 }
 public struct ExtendsDecl: SpecComponent, Equatable {
   public let modules: [StandardModule]
-  init(_ modules: [StandardModule]) { self.modules = modules }
+  package init(_ modules: [StandardModule]) { self.modules = modules }
 }
 public struct ConstraintDecl: SpecComponent, Equatable {
   public let body: StateExpr
-  init(_ body: StateExpr) { self.body = body }
+  package init(_ body: StateExpr) { self.body = body }
 }
 public struct RecursiveFunc: Sendable, Equatable {
   public let name: String
@@ -623,7 +590,7 @@ public struct RecursiveFunc: Sendable, Equatable {
 }
 public struct RecursiveFuncDecl: SpecComponent, Equatable {
   public let funcDef: RecursiveFunc
-  init(_ funcDef: RecursiveFunc) { self.funcDef = funcDef }
+  package init(_ funcDef: RecursiveFunc) { self.funcDef = funcDef }
 }
 @resultBuilder
 public enum SpecBuilder {
@@ -655,25 +622,25 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: SymmetricCollectionDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: ModelCollectionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: Algorithm) -> [SpecComponent] { [expr] }
   public static func buildExpression<T: TLAValueType>(_ expr: Var<T>) -> [SpecComponent] {
     if let issue = expr.sourceIssue {
-      return [VarDecl(expr.name, expression: .sourceIssue(issue))]
+      return [VarDecl(expr.name, initialization: .expression(.sourceIssue(issue)))]
     }
     guard let initial = expr.initial else {
       return [VarDecl(
         expr.name,
-        expression: .sourceIssue(.missingVariableInitializer(
+        initialization: .expression(.sourceIssue(.missingVariableInitializer(
           name: expr.name,
           type: swiftSurfaceTypeName(for: T.self)
-        )),
+        ))),
         generatedSwiftType: swiftSurfaceTypeName(for: T.self)
       )]
     }
     return [VarDecl(
       expr.name,
-      initial,
+      initialization: .value(initial),
       generatedSwiftType: swiftSurfaceTypeName(for: T.self)
     )]
   }
@@ -699,7 +666,8 @@ public enum InvariantBuilder {
     return components.dropFirst().reduce(components[0]) { .and($0, $1) }
   }
   public static func buildExpression(_ expr: StateExpr) -> StateExpr { expr }
-  public static func buildExpression(_ expr: Expr<Bool>) -> StateExpr { expr.raw }
+  public static func buildExpression(_ expr: some TypedExpression<Bool>) -> StateExpr { expr.stateExpr }
+  public static func buildExpression(_ expr: Bool) -> StateExpr { .value(.bool(expr)) }
   public static func buildOptional(_ component: StateExpr?) -> StateExpr {
     component ?? .value(.bool(true))
   }
@@ -718,6 +686,8 @@ public enum ActionBuilder {
   }
   public static func buildExpression(_ expr: ActionExpr) -> ActionExpr { expr }
   public static func buildExpression(_ expr: StateExpr) -> ActionExpr { .guard_(expr) }
+  public static func buildExpression(_ expr: some TypedExpression<Bool>) -> ActionExpr { .guard_(expr.stateExpr) }
+  public static func buildExpression(_ expr: Bool) -> ActionExpr { .guard_(.value(.bool(expr))) }
   public static func buildOptional(_ component: ActionExpr?) -> ActionExpr {
     component ?? .guard_(.value(.bool(true)))
   }
@@ -727,15 +697,15 @@ public enum ActionBuilder {
 @discardableResult
 public func Variable(_ name: String, _ initial: some TLAValueConvertible) -> VarDecl {
   if let issue = initial.sourceIssue {
-    return VarDecl(name, expression: .sourceIssue(issue))
+    return VarDecl(name, initialization: .expression(.sourceIssue(issue)))
   }
-    return VarDecl(name, initial.tlaValue)
+    return VarDecl(name, initialization: .value(initial.tlaValue))
 }
 @discardableResult
 public func Variable(_ name: String, in values: some Sequence<some TLAValueConvertible>) -> VarDecl {
   let set = Set(values.map(\.tlaValue))
   let stateSet: StateExpr = .setLiteral(set.map { .value($0) })
-  return VarDecl(name, memberOf: stateSet)
+  return VarDecl(name, initialization: .memberOf(stateSet))
 }
 func swiftSurfaceTypeName<T>(for type: T.Type) -> String {
   ObjectIdentifier(type) == ObjectIdentifier(TLAValue.self)
@@ -745,32 +715,32 @@ func swiftSurfaceTypeName<T>(for type: T.Type) -> String {
 @discardableResult
 public func Variable<T>(_ ref: Var<T>) -> VarDecl {
   if let issue = ref.sourceIssue {
-    return VarDecl(ref.name, expression: .sourceIssue(issue))
+    return VarDecl(ref.name, initialization: .expression(.sourceIssue(issue)))
   }
   guard let initial = ref.initial else {
     return VarDecl(
       ref.name,
-      expression: .sourceIssue(.missingVariableInitializer(
+      initialization: .expression(.sourceIssue(.missingVariableInitializer(
         name: ref.name,
         type: swiftSurfaceTypeName(for: T.self)
-      )),
+      ))),
       generatedSwiftType: swiftSurfaceTypeName(for: T.self)
     )
   }
-  return VarDecl(ref.name, initial, generatedSwiftType: swiftSurfaceTypeName(for: T.self))
+  return VarDecl(ref.name, initialization: .value(initial), generatedSwiftType: swiftSurfaceTypeName(for: T.self))
 }
 @discardableResult
-public func Variable<T>(_ ref: Var<T>, _ initial: some TLAValueConvertible) -> VarDecl {
+public func Variable<T>(_ ref: Var<T>, _ initial: T) -> VarDecl {
   if let issue = initial.sourceIssue {
-    return VarDecl(ref.name, expression: .sourceIssue(issue))
+    return VarDecl(ref.name, initialization: .expression(.sourceIssue(issue)))
   }
-    return VarDecl(ref.name, initial.tlaValue, generatedSwiftType: swiftSurfaceTypeName(for: T.self))
+    return VarDecl(ref.name, initialization: .value(initial.tlaValue), generatedSwiftType: swiftSurfaceTypeName(for: T.self))
 }
 @discardableResult
-public func Variable<T>(_ ref: Var<T>, _ initial: Expr<T>) -> VarDecl {
+public func Variable<T>(_ ref: Var<T>, _ initial: some TypedExpression<T>) -> VarDecl {
   VarDecl(
     ref.name,
-    expression: initial.raw,
+    initialization: .expression(initial.stateExpr),
     generatedSwiftType: swiftSurfaceTypeName(for: T.self)
   )
 }
@@ -781,15 +751,15 @@ public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueCon
   let stateSet: StateExpr = .setLiteral(set.map { .value($0) })
   return VarDecl(
     ref.name,
-    memberOf: stateSet,
+    initialization: .memberOf(stateSet),
     generatedSwiftType: swiftSurfaceTypeName(for: T.self)
   )
 }
 @discardableResult
-public func Variable<T>(_ ref: Var<T>, in values: Expr<SetExpr<T>>) -> VarDecl {
+public func Variable<T>(_ ref: Var<T>, in values: some TypedExpression<SetExpr<T>>) -> VarDecl {
   return VarDecl(
     ref.name,
-    memberOf: values.raw,
+    initialization: .memberOf(values.stateExpr),
     generatedSwiftType: swiftSurfaceTypeName(for: T.self)
   )
 }
@@ -797,7 +767,7 @@ public func Variable<T>(_ ref: Var<T>, in values: Expr<SetExpr<T>>) -> VarDecl {
 /// computation.
 @discardableResult
 public func Variable(from name: String, _ range: StateExpr) -> VarDecl {
-  VarDecl(name, memberOf: range)
+  VarDecl(name, initialization: .memberOf(range))
 }
 @discardableResult
 public func Action(_ name: String, @ActionBuilder _ body: () -> ActionExpr) -> ActionDecl {
@@ -818,20 +788,20 @@ public func Action(
 public func Invariant(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
   InvDecl(name, body())
 }
-public func LeadsTo(_ name: String, _ from: StateExpr, _ to: StateExpr) -> TemporalDecl {
-  TemporalDecl(name, .leadsTo(from, to))
+public func LeadsTo(_ name: String, _ from: some TypedExpression<Bool>, _ to: some TypedExpression<Bool>) -> TemporalDecl {
+  TemporalDecl(name, .leadsTo(from.stateExpr, to.stateExpr))
 }
-public func Eventually(_ name: String, _ expr: StateExpr) -> TemporalDecl {
-  TemporalDecl(name, .eventually(expr))
+public func Eventually(_ name: String, _ expr: some TypedExpression<Bool>) -> TemporalDecl {
+  TemporalDecl(name, .eventually(expr.stateExpr))
 }
-public func Always(_ name: String, _ expr: StateExpr) -> TemporalDecl {
-  TemporalDecl(name, .always(expr))
+public func Always(_ name: String, _ expr: some TypedExpression<Bool>) -> TemporalDecl {
+  TemporalDecl(name, .always(expr.stateExpr))
 }
-public func AlwaysEventually(_ name: String, _ expr: StateExpr) -> TemporalDecl {
-  TemporalDecl(name, .alwaysEventually(expr))
+public func AlwaysEventually(_ name: String, _ expr: some TypedExpression<Bool>) -> TemporalDecl {
+  TemporalDecl(name, .alwaysEventually(expr.stateExpr))
 }
-public func EventuallyAlways(_ name: String, _ expr: StateExpr) -> TemporalDecl {
-  TemporalDecl(name, .eventuallyAlways(expr))
+public func EventuallyAlways(_ name: String, _ expr: some TypedExpression<Bool>) -> TemporalDecl {
+  TemporalDecl(name, .eventuallyAlways(expr.stateExpr))
 }
 public func WeakFairness(_ action: ActionDecl) -> FairnessDecl {
   FairnessDecl(.weakFairness(action.name))
@@ -857,7 +827,7 @@ public struct SymmetrySet: Hashable, Sendable, CustomStringConvertible {
   public var description: String { "SYMMETRY \(variableName)" }
 }
 public func Constant(_ name: String, _ value: some TLAValueConvertible) -> ConstantDecl {
-  ConstantDecl(name, value.tlaValue)
+  ConstantDecl(name, source: value)
 }
 /// Declares a module symbol that an `Instance` supplies with a `ModuleArgument`.
 public func Parameter(

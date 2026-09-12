@@ -1,12 +1,30 @@
 extension StateExpr {
-    private enum ReplacementTarget: Equatable {
+    private enum ReplacementTarget: Hashable {
         case variable(String)
         case processLocalFamily(String)
         case currentProcess
+    }
 
-        var variableName: String? {
-            guard case .variable(let name) = self else { return nil }
-            return name
+    private struct Replacements {
+        let values: [ReplacementTarget: StateExpr]
+        let freeVariables: Set<String>
+        let variableNames: Set<String>
+
+        init(_ values: [ReplacementTarget: StateExpr]) {
+            self.values = values
+            freeVariables = Set(values.values.flatMap(\.freeVariableNames))
+            variableNames = Set(values.keys.compactMap {
+                guard case .variable(let name) = $0 else { return nil }
+                return name
+            })
+        }
+
+        func excluding(_ names: Set<String>) -> Self {
+            guard !variableNames.isDisjoint(with: names) else { return self }
+            return Self(values.filter { key, _ in
+                guard case .variable(let name) = key else { return true }
+                return !names.contains(name)
+            })
         }
     }
 
@@ -14,83 +32,74 @@ extension StateExpr {
         substituteVariable(name, with: .value(value), in: expr)
     }
 
-    package static func substituteVariable(
-        _ name: String,
-        with replacement: StateExpr,
-        in expr: StateExpr
-    ) -> StateExpr {
-        replace(in: expr, target: .variable(name), with: replacement)
+    package static func substituteVariable(_ name: String, with replacement: StateExpr, in expr: StateExpr) -> StateExpr {
+        substituteVariables([name: replacement], in: expr)
+    }
+
+    /// Substitutes free references simultaneously; inserted arguments are never revisited.
+    package static func substituteVariables(_ values: [String: StateExpr], in expr: StateExpr) -> StateExpr {
+        let replacements = Dictionary(uniqueKeysWithValues: values.map { (ReplacementTarget.variable($0.key), $0.value) })
+        return replace(in: expr, using: Replacements(replacements))
     }
 
     package func replacingCurrentProcess(with replacement: StateExpr) -> StateExpr {
-        Self.replace(in: self, target: .currentProcess, with: replacement)
+        Self.replace(in: self, using: Replacements([.currentProcess: replacement]))
     }
 
     func replacingProcessLocalFamily(named name: String, with replacement: StateExpr) -> StateExpr {
-        Self.replace(in: self, target: .processLocalFamily(name), with: replacement)
+        Self.replace(in: self, using: Replacements([.processLocalFamily(name): replacement]))
     }
 
-    private static func replace(
-        in expr: StateExpr,
-        target: ReplacementTarget,
-        with replacement: StateExpr
-    ) -> StateExpr {
-        let replacementFreeVariables = replacement.freeVariableNames
+    package static func substituteVariables(
+        _ values: [String: StateExpr], binding parameters: [String], in body: StateExpr
+    ) -> (parameters: [String], body: StateExpr) {
+        let replacements = Dictionary(uniqueKeysWithValues: values.map { (ReplacementTarget.variable($0.key), $0.value) })
+        return substituteUnderParameters(parameters, body: body, using: Replacements(replacements))
+    }
 
-        func underBinder(_ binder: String, body: StateExpr) -> (name: String, body: StateExpr) {
-            guard binder != target.variableName else { return (binder, body) }
-            guard replacementFreeVariables.contains(binder) else {
-                return (binder, Self.replace(in: body, target: target, with: replacement))
-            }
+    private static func substituteUnderParameters(_ parameters: [String], body: StateExpr, using replacements: Replacements) -> (parameters: [String], body: StateExpr) {
+        // Keep malformed signatures intact for declaration validation.
+        guard Set(parameters).count == parameters.count else { return (parameters, body) }
+        let scoped = replacements.excluding(Set(parameters))
+        guard !scoped.values.isEmpty else { return (parameters, body) }
+        var renamedParameters = parameters
+        var renamedBody = body
+        for index in renamedParameters.indices where scoped.freeVariables.contains(renamedParameters[index]) {
+            let oldName = renamedParameters[index]
+            let fresh = Self.freshBoundName(oldName, avoiding: renamedBody.freeVariableNames
+                .union(scoped.freeVariables).union(renamedParameters).union(scoped.variableNames))
+            renamedBody = Self.substituteVariable(oldName, with: .variable(fresh), in: renamedBody)
+            renamedParameters[index] = fresh
+        }
+        return (renamedParameters, Self.replace(in: renamedBody, using: scoped))
+    }
 
-            let fresh = Self.freshBoundName(
-                binder,
-                avoiding: body.freeVariableNames
-                    .union(replacementFreeVariables)
-                    .union(target.variableName.map { [$0] } ?? [])
-                    .union([binder])
-            )
-            let renamed = Self.substituteVariable(binder, with: .variable(fresh), in: body)
-            return (fresh, Self.replace(in: renamed, target: target, with: replacement))
+
+    private static func replace(in expr: StateExpr, using replacements: Replacements) -> StateExpr {
+        guard !replacements.values.isEmpty else { return expr }
+
+        func underParameters(_ parameters: [String], body: StateExpr) -> (parameters: [String], body: StateExpr) {
+            Self.substituteUnderParameters(parameters, body: body, using: replacements)
         }
 
-        func underParameters(
-            _ parameters: [String],
-            body: StateExpr
-        ) -> (parameters: [String], body: StateExpr) {
-            guard target.variableName.map({ !parameters.contains($0) }) ?? true else { return (parameters, body) }
-            var renamedParameters = parameters
-            var renamedBody = body
-            for index in renamedParameters.indices where replacementFreeVariables.contains(renamedParameters[index]) {
-                let oldName = renamedParameters[index]
-                let fresh = Self.freshBoundName(
-                    oldName,
-                    avoiding: renamedBody.freeVariableNames
-                        .union(replacementFreeVariables)
-                        .union(Set(renamedParameters))
-                        .union(target.variableName.map { [$0] } ?? [])
-                )
-                renamedBody = Self.substituteVariable(oldName, with: .variable(fresh), in: renamedBody)
-                renamedParameters[index] = fresh
-            }
-            return (
-                renamedParameters,
-                Self.replace(in: renamedBody, target: target, with: replacement)
-            )
+        func underBinder(_ binder: String, body: StateExpr) -> (name: String, body: StateExpr) {
+            let scoped = underParameters([binder], body: body)
+            return (scoped.parameters[0], scoped.body)
         }
 
         switch expr {
         case .sourceIssue: return expr
-        case .variable(let name) where name == target.variableName: return replacement
-        case .processLocalFamily(let name) where target == .processLocalFamily(name): return replacement
-        case .currentProcess where target == .currentProcess: return replacement
-        case .variable, .processLocalFamily, .currentProcess, .programCounter, .procedureStack: return expr
+        case .variable(let name): return replacements.values[.variable(name)] ?? expr
+        case .processLocalFamily(let name): return replacements.values[.processLocalFamily(name)] ?? expr
+        case .currentProcess: return replacements.values[.currentProcess] ?? expr
+        case .programCounter, .procedureStack: return expr
         case .value, .controlLocation, .enabledAction: return expr
         case .add(let l, let r): return .add(sub(l), sub(r))
         case .subtract(let l, let r): return .subtract(sub(l), sub(r))
         case .multiply(let l, let r): return .multiply(sub(l), sub(r))
         case .divide(let l, let r): return .divide(sub(l), sub(r))
         case .modulo(let l, let r): return .modulo(sub(l), sub(r))
+        case .assertView(let value, let shape): return .assertView(sub(value), shape)
         case .negate(let x): return .negate(sub(x))
         case .integerDivide(let l, let r): return .integerDivide(sub(l), sub(r))
         case .equal(let l, let r): return .equal(sub(l), sub(r))
@@ -199,7 +208,7 @@ extension StateExpr {
         }
 
         func sub(_ expression: StateExpr) -> StateExpr {
-            Self.replace(in: expression, target: target, with: replacement)
+            Self.replace(in: expression, using: replacements)
         }
     }
 
@@ -239,6 +248,7 @@ extension StateExpr {
             case .multiply(let a, let b): return .multiply(visit(a), visit(b))
             case .divide(let a, let b): return .divide(visit(a), visit(b))
             case .modulo(let a, let b): return .modulo(visit(a), visit(b))
+            case .assertView(let value, let shape): return .assertView(visit(value), shape)
             case .negate(let value): return .negate(visit(value))
             case .integerDivide(let a, let b): return .integerDivide(visit(a), visit(b))
             case .equal(let a, let b): return .equal(visit(a), visit(b))
@@ -324,15 +334,16 @@ extension StateExpr {
                 }
                 if lowerAnonymousLambdaApplications,
                    case .lambda(let lambda) = renamedOperator,
+                   lambda.sourceIssue == nil,
                    lambda.parameters.count == renamedArguments.count,
                    renamedArguments.allSatisfy({
                        if case .value = $0 { return true }
                        return false
                    }) {
-                    return zip(lambda.parameters, renamedArguments).reduce(lambda.body) { body, binding in
-                        guard case .value(let argument) = binding.1 else { return body }
-                        return Self.substituteVariable(binding.0, with: argument, in: body)
+                    let arguments = zip(lambda.parameters, renamedArguments).reduce(into: [String: StateExpr]()) { values, binding in
+                        if case .value(let argument) = binding.1 { values[binding.0] = argument }
                     }
+                    return Self.substituteVariables(arguments, in: lambda.body)
                 }
                 return .operatorApplication(renamedOperator, renamedArguments)
             case .recursiveCall(let name, let arguments): return .recursiveCall(rename(name), arguments.map(visit))
@@ -368,5 +379,33 @@ extension StateExpr {
             }
         }
         return visit(expression)
+    }
+}
+
+
+extension RecursiveFunc {
+    func substitutingVariables(_ values: [String: StateExpr]) -> Self {
+        let scoped = StateExpr.substituteVariables(values, binding: params, in: body)
+        return Self(name: name, params: scoped.parameters, body: scoped.body)
+    }
+}
+
+extension FormalOperatorDefinition {
+    func substitutingVariables(_ values: [String: StateExpr]) -> Self {
+        guard sourceIssue == nil else { return self }
+        let valueIndices = parameters.indices.filter {
+            if case .value = parameters[$0] { return true }
+            return false
+        }
+        let valueParameters = valueIndices.map { parameters[$0].name }
+        let parameterNames = Set(parameters.map(\.name))
+        let scoped = StateExpr.substituteVariables(values.filter { !parameterNames.contains($0.key) },
+            binding: valueParameters, in: body)
+        var updatedParameters = parameters
+        for (index, name) in zip(valueIndices, scoped.parameters) {
+            updatedParameters[index] = .value(name)
+        }
+        return Self(name: name, parameters: updatedParameters, body: scoped.body,
+            plusCalPhase: plusCalPhase, plusCalDependencies: plusCalDependencies)
     }
 }

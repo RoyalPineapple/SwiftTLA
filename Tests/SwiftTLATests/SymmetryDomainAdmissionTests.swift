@@ -44,7 +44,7 @@ struct SymmetryDomainAdmissionTests {
         let initial = try #require(try runtime.initialStates().first)
         let canonical = try plan.canonicalState(initial)
         #expect(try plan.canonicalState(canonical) == canonical)
-        let renamed = try CompiledState(values: [.tuple([.integer(1), .string("a")])], compilation: compilation)
+        let renamed = try CompiledState(values: [.tuple([.integer(1), .string("a")])], layout: compilation.layout, identity: compilation.identity)
         #expect(try plan.canonicalState(renamed) == canonical)
     }
 

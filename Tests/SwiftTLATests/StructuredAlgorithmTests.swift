@@ -79,18 +79,12 @@ struct StructuredAlgorithmTests {
         var machine = try StructuredCarModel.makeMachine()
         let transition = try machine.send(.open(process: .north))
 
-        #expect(transition.before.cars[.north]?.tlaValue == .record([
-            "floor": .int(1),
-            "door": .string(StructuredCarModel.Door.closed.rawValue)
-        ]))
-        #expect(transition.after.cars[.north]?.tlaValue == .record([
-            "floor": .int(1),
-            "door": .string(StructuredCarModel.Door.open.rawValue)
-        ]))
-        #expect(transition.after.cars[.south]?.tlaValue == .record([
-            "floor": .int(2),
-            "door": .string(StructuredCarModel.Door.closed.rawValue)
-        ]))
+        #expect(transition.before.cars[.north]?.floor == 1)
+        #expect(transition.before.cars[.north]?.door == .closed)
+        #expect(transition.after.cars[.north]?.floor == 1)
+        #expect(transition.after.cars[.north]?.door == .open)
+        #expect(transition.after.cars[.south]?.floor == 2)
+        #expect(transition.after.cars[.south]?.door == .closed)
     }
 
     @Test("function comprehensions retain typed record values through lowering and evaluation")

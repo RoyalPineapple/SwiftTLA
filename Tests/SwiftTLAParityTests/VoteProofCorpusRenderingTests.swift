@@ -33,7 +33,7 @@ struct VoteProofCorpusRenderingTests {
         #expect(definitions["VoteProofVotesAreSafe"]?.plusCalDependencies == ["SafeAt"])
         #expect(definitions["VoteProofChosenValuesAgree"]?.plusCalDependencies == ["chosen"])
 
-        let bundle = compilation.renderedTLAModuleBundle()
+        let bundle = try compilation.render().tlaBundle
         #expect(source.constants == [
             ConstantDecl("Value", .set([.string("v1"), .string("v2")])),
             ConstantDecl("Acceptor", .set([.string("a1"), .string("a2"), .string("a3")])),
@@ -64,7 +64,7 @@ struct VoteProofCorpusRenderingTests {
         #expect(bundle.root.tla.contains("VInv4 == VoteProofChosenValuesAgree"))
         #expect(bundle.root.tla.contains("Refines == C!Spec"))
 
-        let plusCal = try compilation.renderedPlusCalBundle().root.tla
+        let plusCal = try compilation.render().plusCalBundle().root.tla
         #expect(plusCal.contains("--algorithm Voting"))
         #expect(plusCal.contains("LET RECURSIVE SA") == false)
         let algorithmRange = try #require(plusCal.range(of: "(*--algorithm Voting"))

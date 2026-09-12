@@ -135,3 +135,29 @@ print(
   varIntegerDivision,
   exprIntegerDivision
 )
+
+let nonBooleanExistential = Exists(in: SetExpr<Int>.literal(1)) { _ in Expr<Int>(1) }
+let nonBooleanUniversal = ForAll(in: SetExpr<Int>.literal(1)) { _ in Expr<Int>(1) }
+let nonBooleanAwait = Await(1)
+let nonBooleanAssertion = Assert(Expr<Int>(1))
+let nonBooleanCondition = If(Expr<Int>(1), then: 1, else: 2)
+let scalarIntersection = SetExpr<Int>.literal(1).intersection(Expr<Int>(1))
+let scalarSubset = SetExpr<Int>.literal(1).isSubset(of: Expr<Int>(1))
+let nonBooleanActionGuard = Var<Int>("guarded").becomes(1).when(Expr<Int>(1))
+let stringRangeLowerBound = IntRange("zero", through: 1)
+let booleanRangeUpperBound = IntRange(0, through: true)
+let nonIntegerRangeExpression = IntRange(Expr<String>("zero"), through: Expr<Int>(1))
+let integerMacro = Macro { (value: MacroParameter<Int>) in Assert(value > 0) }
+let wrongMacroArgument = integerMacro(Expr<Bool>(true))
+let missingMacroArgument = integerMacro()
+let pairMacro = Macro { (number: MacroParameter<Int>, flag: MacroParameter<Bool>) in Assert(flag || number > 0) }
+let swappedMacroArguments = pairMacro(Expr<Bool>(true), Expr<Int>(1))
+let nonBooleanLeadsToSource = Expr<Int>(1).leadsTo(Expr<Bool>(true))
+let nonBooleanLeadsToTarget = Expr<Bool>(true).leadsTo(Expr<Int>(1))
+
+func rejectRecursiveArguments(_ recursion: LocalRecursion<Int, Int>) {
+  _ = recursion("wrong")
+  _ = recursion(Expr<Bool>(true))
+}
+let wrongRecursiveOutput = LetRec("Output", over: IntRange(0, through: 1), taking: Int.self, { (_: LocalRecursion<Int, Int>, _: WithValue<Int>) in true }, in: { recursion in recursion(0) })
+let wrongLetResult: Expr<Int> = LetRec("Result", over: IntRange(0, through: 1), taking: Int.self, { (_: LocalRecursion<Int, Int>, _: WithValue<Int>) in 1 }, in: { _ in true })
