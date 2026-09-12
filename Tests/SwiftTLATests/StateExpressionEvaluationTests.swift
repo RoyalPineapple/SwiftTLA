@@ -2,7 +2,7 @@
 import Testing
 
 @Suite(.serialized)
-struct EvaluatorCoverage {
+struct StateExpressionEvaluationTests {
   let state: [(String, TLAValue)] = [
     ("x", .int(5)), ("y", .int(3)), ("b", .bool(true)),
     ("s", .set([.int(1), .int(2), .int(3)])),
