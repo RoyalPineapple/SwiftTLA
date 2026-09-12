@@ -239,8 +239,7 @@ enum AlgorithmLowerer {
                         name: processBinding.rawValue,
                         values: process.domain,
                         generatedSwiftType: process.typeName
-                    )],
-                    controlOwner: controlOwner
+                    )]
                 )
                 if requiresProgramCounter {
                     let actionAssertions = assertionInvariants(
@@ -292,8 +291,7 @@ enum AlgorithmLowerer {
                         name: processBinding.rawValue,
                         values: controlDomainValues(processes),
                         generatedSwiftType: procedureProcessType
-                    )],
-                    controlOwner: .procedure(algorithm: algorithm.name, name: procedure.name)
+                    )]
                 )
             }
         }
@@ -318,7 +316,7 @@ enum AlgorithmLowerer {
             let unchanged = variableNames
                 .map { .unchanged(.named($0)) }
                 .reduce(.guard_(allDone), ActionExpr.and)
-            actions.append(NamedAction(name: CompilerControlSymbol.terminatingAction.rawValue, body: unchanged))
+            actions.append(NamedAction(name: CompilerControlSymbol.terminatingAction.rawValue, body: unchanged, isTermination: true))
         }
 
         return lowered(TLASpec(
@@ -524,10 +522,7 @@ enum AlgorithmLowerer {
                 body: ActionNormalization.complete(
                     .and(.guard_(.equal(.programCounter, control.location(atomic.label.name))), body),
                     variables: variables
-                ),
-                controlOwner: owner.map {
-                    .procedure(algorithm: algorithm.name, name: $0.name)
-                } ?? .sequential(algorithm: algorithm.name)
+                )
             ))
             generatedAssertionInvariants += sequentialAssertionInvariants(
                 in: atomic.statements,
@@ -550,7 +545,7 @@ enum AlgorithmLowerer {
                 )),
                 ActionExpr.and
             )
-        actions.append(NamedAction(name: CompilerControlSymbol.terminatingAction.rawValue, body: terminate))
+        actions.append(NamedAction(name: CompilerControlSymbol.terminatingAction.rawValue, body: terminate, isTermination: true))
 
         return lowered(TLASpec(
             name: algorithm.name,

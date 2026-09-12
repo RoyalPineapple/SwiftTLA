@@ -101,7 +101,7 @@ package struct GeneratedMachineAPI: Sendable, Equatable {
             )
         }
         let executableActions = layout.actions.filter {
-            $0.declaration.name != CompilerControlSymbol.terminatingAction.rawValue
+            !$0.isTermination
         }
         let actionIdentifiers = Self.generatedIdentifiers(executableActions.map(\.declaration.name), fallback: "action")
         let compiledActions = Dictionary(uniqueKeysWithValues: actions.map { ($0.id, $0) })

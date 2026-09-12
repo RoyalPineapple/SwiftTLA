@@ -21,6 +21,16 @@ struct GeneratedAlgorithmMachineTests {
         #expect((dashed == dotted) == false)
     }
 
+    @Test("A source action named Terminating remains executable and does not signal termination")
+    func terminationNameDoesNotDefineSemantics() throws {
+        var machine = try SanitizedActionModel.makeMachine()
+        #expect(try !machine.isTerminated())
+        #expect(try machine.enabledActions().contains(.Terminating))
+        #expect(try machine.formalCall(for: .Terminating).name == "Terminating")
+        #expect(try machine.send(.Terminating).after.value == 4)
+        #expect(try !machine.isTerminated())
+    }
+
     @Test("generated actions accept a case named toInvocation")
     func permitsCurrentActionNames() {
         #expect(InvocationNamedActionModel.Action.toInvocation == .toInvocation)

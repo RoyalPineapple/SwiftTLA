@@ -131,23 +131,23 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
   public let body: ActionExpr
   public let bindings: [ActionBinding]
   let sourceIssue: SourceModelIssue?
-  let controlOwner: ControlOwner?
+  let isTermination: Bool
 
   public init(name: String, body: ActionExpr, bindings: [ActionBinding] = []) {
-    self.init(name: name, body: body, bindings: bindings, controlOwner: nil)
+    self.init(name: name, body: body, bindings: bindings, isTermination: false)
   }
 
   package init(
     name: String,
     body: ActionExpr,
     bindings: [ActionBinding] = [],
-    controlOwner: ControlOwner?
+    isTermination: Bool
   ) {
     self.name = name
     self.body = body
     self.bindings = bindings
     self.sourceIssue = Self.bindingIssue(action: name, bindings: bindings)
-    self.controlOwner = controlOwner
+    self.isTermination = isTermination
   }
 
   private static func bindingIssue(action: String, bindings: [ActionBinding]) -> SourceModelIssue? {

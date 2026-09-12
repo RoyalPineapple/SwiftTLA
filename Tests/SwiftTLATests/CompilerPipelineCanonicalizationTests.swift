@@ -463,12 +463,7 @@ struct CompilerPipelineCanonicalizationTests {
         })
 
         let source = try loweredSourceSpecification(algorithm)
-        #expect(source.actions.map(\.controlOwner) == [
-            .process(algorithm: "ControlLayout", ordinal: 0, typeName: "CompilerPipelineNode"),
-            .procedure(algorithm: "ControlLayout", name: "first"),
-            .procedure(algorithm: "ControlLayout", name: "second"),
-            nil
-        ])
+        #expect(source.actions.map(\.isTermination) == [false, false, false, true])
         let compilation = try source.compile()
         let description = compilation.description
 

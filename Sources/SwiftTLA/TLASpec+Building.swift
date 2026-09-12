@@ -31,8 +31,7 @@ extension TLASpec {
         actions.append(NamedAction(
           name: a.name,
           body: a.body,
-          bindings: a.bindings,
-          controlOwner: nil
+          bindings: a.bindings
         ))
       } else if let algorithm = comp as? Algorithm {
         sourceAlgorithms.append(algorithm)
@@ -136,7 +135,7 @@ extension TLASpec {
         name: action.name,
         body: body,
         bindings: action.bindings,
-        controlOwner: action.controlOwner
+        isTermination: action.isTermination
       )
     }
 

@@ -128,8 +128,7 @@ extension ParserSession {
                 member,
                 .domain(.variable(collection.formalName)),
                 actionBody
-            ),
-            controlOwner: nil
+            )
         ))
     }
 

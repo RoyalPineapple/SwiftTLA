@@ -140,7 +140,7 @@ extension TLASpec {
         var specialized = TLASpec(
             name: name,
             variables: variables.map { .init(name: $0.name, initialization: initialization($0.initialization), collectionType: $0.collectionType, generatedSwiftType: $0.generatedSwiftType, origin: $0.origin) },
-            actions: actions.map { .init(name: $0.name, body: action($0.body), bindings: $0.bindings, controlOwner: $0.controlOwner) },
+            actions: actions.map { .init(name: $0.name, body: action($0.body), bindings: $0.bindings, isTermination: $0.isTermination) },
             invariants: invariants.map { .init(name: $0.name, body: state($0.body)) }, temporalProperties: temporalProperties,
             fairness: fairness, assume: assume.map(state), checkDeadlock: checkDeadlock,
             extendsModules: extendsModules, constraint: constraint.map(state),

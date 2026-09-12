@@ -58,7 +58,7 @@ extension NativeSwiftEmitter {
         declarations += try updateDeclarations()
         declarations += try collectionValidationDeclarations(parameters: appendedParameters)
         declarations += try initialDeclarations(parameters: collectionParameters, arguments: collectionArguments)
-        let terminalActions = program.layout.actions.filter { $0.declaration.name == CompilerControlSymbol.terminatingAction.rawValue }
+        let terminalActions = program.layout.actions.filter { $0.isTermination }
         let emittedActionIDs = Set(api.actions.map(\.compiledAction)).union(enabledActionIDs).union(terminalActions.map(\.id))
         declarations += try program.behavior.actions.filter { emittedActionIDs.contains($0.id) }.map {
             try updateFunction($0, collectionParameters: appendedParameters)
@@ -511,7 +511,7 @@ extension NativeSwiftEmitter {
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
         declarations += try nativeDeclarations("public static var checksDeadlock: Bool { \(program.behavior.checkDeadlock) }")
-        if let terminal = program.layout.actions.first(where: { $0.declaration.name == CompilerControlSymbol.terminatingAction.rawValue }) {
+        if let terminal = program.layout.actions.first(where: { $0.isTermination }) {
             declarations += try nativeDeclarations("""
             public func isTerminated() throws -> Bool {
                 try !Self._updates\(terminal.id.ordinal)(from: _execution\(arguments), enabled: []).isEmpty

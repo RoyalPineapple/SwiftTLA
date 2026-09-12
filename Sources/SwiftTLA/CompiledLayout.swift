@@ -75,6 +75,7 @@ package struct CompiledActionLayout: Hashable, Sendable {
     package let id: ActionID
     package let declaration: CompiledDeclaration
     package let renderedName: String
+    package let isTermination: Bool
 }
 
 struct CompiledPropertyLayout: Hashable, Sendable {
@@ -278,7 +279,7 @@ package struct CompiledLayout: Hashable, Sendable {
             return "\(label.id.ordinal):\(owner.utf8.count):\(owner)\(label.sourceName.utf8.count):\(label.sourceName)\(label.renderedName.utf8.count):\(label.renderedName)"
         }.joined(separator: "|")
         let actionEncoding = actions.map { action in
-            "\(action.id.ordinal):\(action.renderedName.utf8.count):\(action.renderedName)"
+            "\(action.id.ordinal):\(action.renderedName.utf8.count):\(action.renderedName):\(action.isTermination)"
         }.joined(separator: "|")
         let procedureEncoding = procedures.map { procedure in
             "\(procedure.algorithm.utf8.count):\(procedure.algorithm)\(procedure.name.utf8.count):\(procedure.name)"
@@ -350,7 +351,7 @@ package struct CompiledLayout: Hashable, Sendable {
             }
         }
         let knownActionNames = Set(labels.flatMap { [$0.sourceName, $0.renderedName] })
-        for action in actions where action.name != CompilerControlSymbol.terminatingAction.rawValue && knownActionNames.contains(action.name) == false {
+        for action in actions where !action.isTermination && knownActionNames.contains(action.name) == false {
             labels.append(
                 .init(
                     id: .init(ordinal: labels.count),
@@ -412,7 +413,8 @@ package struct CompiledLayout: Hashable, Sendable {
             return .init(
                 id: .init(ordinal: ordinal),
                 declaration: .init(kind: .action, name: action.name, sourceOffset: nil),
-                renderedName: renderedName
+                renderedName: renderedName,
+                isTermination: action.isTermination
             )
         }
     }

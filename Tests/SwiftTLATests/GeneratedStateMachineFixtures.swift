@@ -15,6 +15,7 @@ struct SanitizedActionModel {
             SwiftTLA.Action("procedure.work.enter") { value.becomes(1) }
             SwiftTLA.Action("procedure_work_enter") { value.becomes(2) }
             SwiftTLA.Action("step-2") { value.becomes(3) }
+            SwiftTLA.Action("Terminating") { value.becomes(4) }
         }
     }
 }
