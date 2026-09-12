@@ -21,7 +21,7 @@ private struct ResolvedFunctionKey: Hashable {
 }
 
 private struct CheckedCallSite: Hashable {
-    let expression: CheckedExpression
+    let expression: CompiledExpression
     let function: ResolvedFunctionID?
 }
 
@@ -29,7 +29,7 @@ private struct CheckedCallSite: Hashable {
 private final class ProgramResolver {
     let checked: CheckedProgram
     var projectionChecks: [ResolvedProjectionPair: Bool] = [:]
-    var resolvedExpressions: [CheckedCallSite: ResolvedExpression] = [:]
+    var resolvedExpressions: [CheckedCallSite: CompiledExpression] = [:]
     var functions: [ResolvedFunction?] = []
     var functionIDs: [ResolvedFunctionKey: ResolvedFunctionID] = [:]
     var functionCallbacks: [ResolvedFunctionID: [(OperatorID, CheckedOperatorCall, ResolvedCallbackID)]] = [:]
@@ -66,15 +66,15 @@ private final class ProgramResolver {
         return value
     }
 
-    func root(_ checked: CheckedExpression) throws -> ResolvedExpression {
+    func root(_ checked: CompiledExpression) throws -> CompiledExpression {
         try expression(checked, function: nil, callbackScope: [:])
     }
 
     func expression(
-        _ checked: CheckedExpression, function: ResolvedFunctionID?,
+        _ checked: CompiledExpression, function: ResolvedFunctionID?,
         callbackScope: [CallbackUseKey: ResolvedCallbackID]
-    ) throws -> ResolvedExpression {
-        var pending: [(expression: CheckedExpression, call: ResolvedCall?, expanded: Bool)] = [
+    ) throws -> CompiledExpression {
+        var pending: [(expression: CompiledExpression, call: ResolvedCall?, expanded: Bool)] = [
             (checked, nil, false)
         ]
         while let task = pending.popLast() {
@@ -85,7 +85,7 @@ private final class ProgramResolver {
                 let children = try node.children.map {
                     try require(resolvedExpressions[.init(expression: $0, function: function)])
                 }
-                if case .letIn = node.expression {
+                if case .letIn = node.operation {
                     guard children.count == 1, let body = children.first,
                           body.resultType == node.resultType else {
                         throw CompiledValueType.diagnostic("resolution.scope", "local declarations must preserve their body's result type")
@@ -93,36 +93,26 @@ private final class ProgramResolver {
                     resolvedExpressions[site] = body
                     continue
                 }
-                let computation = ResolvedExpression(operation: try ResolvedOperation(node.expression, call: task.call),
-                    resultType: node.computationType, children: children)
-                if case .assertView = computation.operation, let source = children.first {
-                    _ = self.checked.types.canProjectRead(source.resultType, to: computation.resultType, checks: &projectionChecks)
+                let operation = task.call.map(CompiledOperation.call) ?? node.operation
+                if case .assertView = operation, let source = children.first {
+                    _ = self.checked.types.canProjectRead(source.resultType, to: node.resultType, checks: &projectionChecks)
                 }
-                let resolved: ResolvedExpression
-                if node.resultType == computation.resultType {
-                    resolved = computation
-                } else {
-                    guard self.checked.types.canProjectRead(computation.resultType, to: node.resultType, checks: &projectionChecks) else {
+                if case .convert = operation, let source = children.first {
+                    guard self.checked.types.canProjectRead(source.resultType, to: node.resultType, checks: &projectionChecks) else {
                         throw CompiledValueType.diagnostic("conversion", "the checked expression requires an unsupported conversion")
                     }
-                    resolved = .init(operation: .convert, resultType: node.resultType, children: [computation])
                 }
-                resolvedExpressions[site] = resolved
+                resolvedExpressions[site] = .init(operation: operation, resultType: node.resultType, children: children)
                 continue
             }
             for type in [node.resultType, node.computationType] where !type.resolved {
-                throw CompiledValueType.unresolvedDiagnostic(type, at: "expression.\(node.expression.diagnosticName)")
+                throw CompiledValueType.unresolvedDiagnostic(type, at: "expression.\(node.operation.diagnosticName)")
             }
             let call: ResolvedCall?
-            if let annotation = node.call {
-                let operation: OperatorID?
-                switch node.expression {
-                case .operatorApplication(.reference(let id, _), _), .functionApply(.operatorReference(let id), _): operation = id
-                default: operation = nil
-                }
+            if case .checkedCall(let annotation, let origin, let operatorParameters) = node.operation {
                 guard node.children.count == annotation.parameters.count else { return try require(nil) }
-                call = try resolveCall(annotation, operation: operation,
-                    operatorParameters: node.operatorParameters, callbackScope: callbackScope)
+                call = try resolveCall(annotation, operation: origin,
+                    operatorParameters: operatorParameters, callbackScope: callbackScope)
             } else { call = nil }
             pending.append((node, call, true))
             pending.append(contentsOf: node.children.reversed().map { ($0, nil, false) })
@@ -191,83 +181,5 @@ private final class ProgramResolver {
             resultType: call.result,
             callbacks: demands.map { $0.2 }, body: body, domainGuard: domainGuard)
         return id
-    }
-}
-
-private extension ResolvedOperation {
-    init(_ expression: CompiledStateExpr, call: ResolvedCall?) throws {
-        if let call {
-            self = .call(call)
-            return
-        }
-        switch expression {
-        case .value(let value): self = .value(value)
-        case .stateVariable(let id): self = .stateVariable(id)
-        case .boundValue(let id): self = .boundValue(id)
-        case .controlLocation(let id): self = .controlLocation(id)
-        case .operatorReference(let id): self = .operatorReference(id)
-        case .add: self = .add
-        case .subtract: self = .subtract
-        case .multiply: self = .multiply
-        case .divide: self = .divide
-        case .modulo: self = .modulo
-        case .negate: self = .negate
-        case .assertView(_, let shape): self = .assertView(shape)
-        case .integerDivide: self = .integerDivide
-        case .equal: self = .equal
-        case .notEqual: self = .notEqual
-        case .lessThan: self = .lessThan
-        case .lessOrEqual: self = .lessOrEqual
-        case .greaterThan: self = .greaterThan
-        case .greaterOrEqual: self = .greaterOrEqual
-        case .and: self = .and
-        case .or: self = .or
-        case .not: self = .not
-        case .ifThenElse: self = .ifThenElse
-        case .setLiteral: self = .setLiteral
-        case .in: self = .in
-        case .subset: self = .subset
-        case .union: self = .union
-        case .intersection: self = .intersection
-        case .setDifference: self = .setDifference
-        case .cardinality: self = .cardinality
-        case .setFilter(_, let binding, _): self = .setFilter(binding)
-        case .setMap(_, let binding, _): self = .setMap(binding)
-        case .powerSet: self = .powerSet
-        case .unionAll: self = .unionAll
-        case .integerRange: self = .integerRange
-        case .tupleLiteral: self = .tupleLiteral
-        case .tupleAccess(_, let index): self = .tupleAccess(index)
-        case .tupleDynamicAccess: self = .tupleDynamicAccess
-        case .tupleLength: self = .tupleLength
-        case .tupleAppend: self = .tupleAppend
-        case .tupleHead: self = .tupleHead
-        case .tupleTail: self = .tupleTail
-        case .tupleConcatenate: self = .tupleConcatenate
-        case .tupleRemoving: self = .tupleRemoving
-        case .sequenceSelect(_, let binding, _): self = .sequenceSelect(binding)
-        case .recordLiteral(let record): self = .recordLiteral(record.map(\.declaration))
-        case .recordAccess(_, let field): self = .recordAccess(field)
-        case .domain: self = .domain
-        case .functionLiteral(_, let binding, _): self = .functionLiteral(binding)
-        case .functionApply: self = .functionApply
-        case .except: self = .except
-        case .caseExpr(_, _, let otherwise): self = .caseExpr(hasOtherwise: otherwise != nil)
-        case .forAll(_, let binding, _): self = .forAll(binding)
-        case .exists(_, let binding, _): self = .exists(binding)
-        case .choose(_, let binding, _): self = .choose(binding)
-        case .enabledAction(let id): self = .enabledAction(id)
-        case .sequenceFromSet: self = .sequenceFromSet
-        case .setSum: self = .setSum
-        case .functionSet: self = .functionSet
-        case .foldFunction(let parameters, _, _, _): self = .foldFunction(parameters)
-        case .letValue(let binding, _, _): self = .letValue(binding)
-        case .letIn:
-            throw CompiledValueType.diagnostic("resolution.scope", "resolve local declarations to their body before constructing an operation")
-        case .operatorApplication:
-            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
-                path: "resolution.call", expected: "a resolved call target", actual: "missing call annotation",
-                nextSafeAction: "Resolve the operator application before constructing the executable program.")
-        }
     }
 }

@@ -186,14 +186,24 @@ struct LocalOperatorTests {
     let parsedDefinition = try #require(parsedCompilation.semantics.operators[parsedDefinitionID])
     let builtDefinitionID = try #require(builtCompilation.semantics.operators.formalDefinitionIDs.first)
     let builtDefinition = try #require(builtCompilation.semantics.operators[builtDefinitionID])
-    guard case .letIn(let parsedOperators, .functionApply(.operatorReference(let parsedCall), .value(.integer(4)))) = parsedDefinition.body,
-          case .letIn(let builtOperators, .functionApply(.operatorReference(let builtCall), .value(.integer(4)))) = builtDefinition.body,
+    guard case .letIn(let parsedOperators) = parsedDefinition.body.operation,
+              case .functionApply = parsedDefinition.body.children[0].operation,
+              case .operatorReference(let parsedCall) = parsedDefinition.body.children[0].children[0].operation,
+              case .value(.integer(4)) = parsedDefinition.body.children[0].children[1].operation,
+          case .letIn(let builtOperators) = builtDefinition.body.operation,
+              case .functionApply = builtDefinition.body.children[0].operation,
+              case .operatorReference(let builtCall) = builtDefinition.body.children[0].children[0].operation,
+              case .value(.integer(4)) = builtDefinition.body.children[0].children[1].operation,
           let parsedID = parsedOperators.first,
           let parsedOperator = parsedCompilation.semantics.operators[parsedID],
           let builtID = builtOperators.first,
           let builtOperator = builtCompilation.semantics.operators[builtID],
-          case .ifThenElse(_, _, .functionApply(.operatorReference(let parsedRecursion), _)) = parsedOperator.body,
-          case .ifThenElse(_, _, .functionApply(.operatorReference(let builtRecursion), _)) = builtOperator.body else {
+          case .ifThenElse = parsedOperator.body.operation,
+              case .functionApply = parsedOperator.body.children[2].operation,
+              case .operatorReference(let parsedRecursion) = parsedOperator.body.children[2].children[0].operation,
+          case .ifThenElse = builtOperator.body.operation,
+              case .functionApply = builtOperator.body.children[2].operation,
+              case .operatorReference(let builtRecursion) = builtOperator.body.children[2].children[0].operation else {
       Issue.record("Expected one bounded compiled call")
       return
     }
@@ -230,16 +240,22 @@ struct LocalOperatorTests {
     let parsedDefinition = try #require(parsedCompilation.semantics.operators[parsedDefinitionID])
     let builtDefinitionID = try #require(builtCompilation.semantics.operators.formalDefinitionIDs.first)
     let builtDefinition = try #require(builtCompilation.semantics.operators[builtDefinitionID])
-    guard case .letIn(let parsedOperators, .operatorApplication(.reference(let parsedCall, _), let parsedArguments)) = parsedDefinition.body,
-          case .letIn(let builtOperators, .operatorApplication(.reference(let builtCall, _), let builtArguments)) = builtDefinition.body,
+    guard case .letIn(let parsedOperators) = parsedDefinition.body.operation,
+              case .operatorApplication(.reference(let parsedCall, _), let parsedArguments) = parsedDefinition.body.children[0].operation,
+          case .letIn(let builtOperators) = builtDefinition.body.operation,
+              case .operatorApplication(.reference(let builtCall, _), let builtArguments) = builtDefinition.body.children[0].operation,
           let parsedID = parsedOperators.first,
           let parsedOperator = parsedCompilation.semantics.operators[parsedID],
           let builtID = builtOperators.first,
           let builtOperator = builtCompilation.semantics.operators[builtID],
           parsedArguments.count == 1,
           builtArguments.count == 1,
-          case .some(.value(.value(.integer(41)))) = parsedArguments.first,
-          case .some(.value(.value(.integer(41)))) = builtArguments.first else {
+          case .some(let expression25) = parsedArguments.first,
+              case .value(let expression26) = expression25,
+              case .value(.integer(41)) = expression26.operation,
+          case .some(let expression27) = builtArguments.first,
+              case .value(let expression28) = expression27,
+              case .value(.integer(41)) = expression28.operation else {
       Issue.record("Expected one operator-style compiled call")
       return
     }
@@ -275,7 +291,10 @@ struct LocalOperatorTests {
     let compilation = try GeneratedTypedLocalRecursionModel.spec.compile()
     let compiledDefinitionID = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
     let compiledDefinition = try #require(compilation.semantics.operators[compiledDefinitionID])
-    guard case .letIn(let compiledOperators, .functionApply(.operatorReference(let callID), .value(.integer(4)))) = compiledDefinition.body else {
+    guard case .letIn(let compiledOperators) = compiledDefinition.body.operation,
+              case .functionApply = compiledDefinition.body.children[0].operation,
+              case .operatorReference(let callID) = compiledDefinition.body.children[0].children[0].operation,
+              case .value(.integer(4)) = compiledDefinition.body.children[0].children[1].operation else {
       Issue.record("Expected a bound local operator application")
       return
     }
@@ -297,7 +316,7 @@ struct LocalOperatorTests {
     let compilation = try GeneratedTypedFormalDefinitionAlgorithm.spec.compile()
     let compiledDefinitionID = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
     let compiledDefinition = try #require(compilation.semantics.operators[compiledDefinitionID])
-    guard case .letIn(let operators, _) = compiledDefinition.body else {
+    guard case .letIn(let operators) = compiledDefinition.body.operation else {
       Issue.record("Expected a compiled local operator")
       return
     }
@@ -363,7 +382,10 @@ struct LocalOperatorTests {
     ).compile()
     let compiledDefinitionID = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
     let compiledDefinition = try #require(compilation.semantics.operators[compiledDefinitionID])
-    guard case .letIn(let compiledOperators, .functionApply(.operatorReference(let callID), .boundValue)) = compiledDefinition.body else {
+    guard case .letIn(let compiledOperators) = compiledDefinition.body.operation,
+              case .functionApply = compiledDefinition.body.children[0].operation,
+              case .operatorReference(let callID) = compiledDefinition.body.children[0].children[0].operation,
+              case .boundValue = compiledDefinition.body.children[0].children[1].operation else {
       Issue.record("Expected a bound local operator application")
       return
     }
@@ -565,7 +587,7 @@ struct LocalOperatorTests {
 
     let definitionID = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
     let definition = try #require(compilation.semantics.operators[definitionID])
-    guard case .letIn(let operators, _) = definition.body else {
+    guard case .letIn(let operators) = definition.body.operation else {
       Issue.record("Expected a compiled local operator")
       return
     }

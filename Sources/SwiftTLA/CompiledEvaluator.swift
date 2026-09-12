@@ -102,14 +102,14 @@ private enum EvaluatorBinding {
 
 private final class EvaluatorThunk {
     enum State {
-        case pending(CompiledStateExpr, EvaluatorScope)
+        case pending(CompiledExpression, EvaluatorScope)
         case evaluated(CompiledValue)
         case discarded
     }
 
     var state: State
 
-    init(expression: CompiledStateExpr, scope: EvaluatorScope) {
+    init(expression: CompiledExpression, scope: EvaluatorScope) {
         state = .pending(expression, scope)
     }
 }
@@ -125,13 +125,13 @@ private struct EvaluatorBindings {
     }
 
     func binding(
-        _ expression: CompiledStateExpr,
+        _ expression: CompiledExpression,
         from scope: EvaluatorScope,
         to binder: BinderID,
         retainingIn pendingArguments: inout [ObjectIdentifier: EvaluatorThunk]
     ) -> EvaluatorBindings {
         var bindings = self
-        if case .boundValue(let source) = expression,
+        if case .boundValue(let source) = expression.operation,
            let binding = scope.bindings.values[source] {
             bindings.values[binder] = binding
             return bindings
@@ -161,12 +161,12 @@ private struct CollectionEvaluation {
     }
 
     let binder: BinderID
-    private let operation: ResolvedOperation
+    private let operation: CompiledOperation
     private let members: [CompiledValue]
     private var index = 0
     private var accumulated: Accumulation
 
-    init(operation: ResolvedOperation, domain: CompiledValue) throws {
+    init(operation: CompiledOperation, domain: CompiledValue) throws {
         if case .sequenceSelect = operation {
             members = try sequenceElements(from: domain)
         } else {
@@ -241,28 +241,28 @@ private struct FoldEvaluation {
 }
 
 private enum EvaluatorTask {
-    case expression(CompiledStateExpr, EvaluatorScope)
-    case finish(ResolvedOperation, operandCount: Int)
+    case expression(CompiledExpression, EvaluatorScope)
+    case finish(CompiledOperation, operandCount: Int)
     case booleanResult
-    case conditional(then: CompiledStateExpr, otherwise: CompiledStateExpr, scope: EvaluatorScope)
-    case booleanRight(CompiledStateExpr, scope: EvaluatorScope, shortCircuit: Bool)
-    case collectionStart(ResolvedOperation, body: CompiledStateExpr, scope: EvaluatorScope)
-    case collectionStep(CollectionEvaluation, body: CompiledStateExpr, scope: EvaluatorScope)
-    case collectionResult(CollectionEvaluation, body: CompiledStateExpr, scope: EvaluatorScope)
-    case caseBranch([CompiledCaseBranch], index: Int, otherwise: CompiledStateExpr?, scope: EvaluatorScope)
-    case caseCondition([CompiledCaseBranch], index: Int, otherwise: CompiledStateExpr?, scope: EvaluatorScope)
-    case exceptFunction(key: CompiledStateExpr, scope: EvaluatorScope)
-    case foldSequence(parameters: [BinderID], body: CompiledStateExpr, initial: CompiledStateExpr, scope: EvaluatorScope)
-    case foldInitial(parameters: [BinderID], body: CompiledStateExpr, members: [CompiledValue], scope: EvaluatorScope)
-    case foldStep(FoldEvaluation, body: CompiledStateExpr, scope: EvaluatorScope)
-    case foldResult(FoldEvaluation, body: CompiledStateExpr, scope: EvaluatorScope)
+    case conditional(then: CompiledExpression, otherwise: CompiledExpression, scope: EvaluatorScope)
+    case booleanRight(CompiledExpression, scope: EvaluatorScope, shortCircuit: Bool)
+    case collectionStart(CompiledOperation, body: CompiledExpression, scope: EvaluatorScope)
+    case collectionStep(CollectionEvaluation, body: CompiledExpression, scope: EvaluatorScope)
+    case collectionResult(CollectionEvaluation, body: CompiledExpression, scope: EvaluatorScope)
+    case caseBranch([CompiledCaseBranch], index: Int, otherwise: CompiledExpression?, scope: EvaluatorScope)
+    case caseCondition([CompiledCaseBranch], index: Int, otherwise: CompiledExpression?, scope: EvaluatorScope)
+    case exceptFunction(key: CompiledExpression, scope: EvaluatorScope)
+    case foldSequence(parameters: [BinderID], body: CompiledExpression, initial: CompiledExpression, scope: EvaluatorScope)
+    case foldInitial(parameters: [BinderID], body: CompiledExpression, members: [CompiledValue], scope: EvaluatorScope)
+    case foldStep(FoldEvaluation, body: CompiledExpression, scope: EvaluatorScope)
+    case foldResult(FoldEvaluation, body: CompiledExpression, scope: EvaluatorScope)
     case formalCall(
         EvaluatorOperatorBinding,
         arguments: [CompiledFormalCallArgument],
         argumentScope: EvaluatorScope
     )
     case callReturn
-    case localDomain(CompiledStateExpr, scope: EvaluatorScope)
+    case localDomain(CompiledExpression, scope: EvaluatorScope)
     case store(EvaluatorThunk)
 }
 
@@ -304,8 +304,8 @@ struct CompiledEvaluator: Sendable {
         self.enabledActions = []
     }
 
-    func evaluate(_ expression: CompiledStateExpr) throws -> CompiledValue {
-        if case .value(let value) = expression { return value }
+    func evaluate(_ expression: CompiledExpression) throws -> CompiledValue {
+        if case .value(let value) = expression.operation { return value }
         var pendingArguments: [ObjectIdentifier: EvaluatorThunk] = [:]
         defer {
             // Keep every pending argument alive while breaking captured-scope
@@ -506,19 +506,19 @@ struct CompiledEvaluator: Sendable {
                 values.append(value)
 
             case .expression(let expression, let scope):
-                func schedule(_ operation: ResolvedOperation, _ operands: [CompiledStateExpr]) {
+                func schedule(_ operation: CompiledOperation, _ operands: [CompiledExpression]) {
                     tasks.append(.finish(operation, operandCount: operands.count))
                     let evaluationOrder = operation.evaluatesRightOperandFirst ? Array(operands.reversed()) : operands
                     for operand in evaluationOrder.reversed() { tasks.append(.expression(operand, scope)) }
                 }
-                func call(_ id: OperatorID, arguments: [CompiledStateExpr]) {
+                func call(_ id: OperatorID, arguments: [CompiledExpression]) {
                     tasks.append(.formalCall(
                         .init(operation: .reference(id, arity: arguments.count), scope: scope),
                         arguments: arguments.map(CompiledFormalCallArgument.value),
                         argumentScope: scope
                     ))
                 }
-                switch expression {
+                switch expression.operation {
                 case .value(let value):
                     values.append(value)
                 case .stateVariable(let variable):
@@ -546,134 +546,124 @@ struct CompiledEvaluator: Sendable {
                     values.append(.controlLocation(label))
                 case .operatorReference(let id):
                     call(id, arguments: [])
-                case .add(let lhs, let rhs): schedule(.add, [lhs, rhs])
-                case .subtract(let lhs, let rhs): schedule(.subtract, [lhs, rhs])
-                case .multiply(let lhs, let rhs): schedule(.multiply, [lhs, rhs])
-                case .divide(let lhs, let rhs): schedule(.divide, [lhs, rhs])
-                case .integerDivide(let lhs, let rhs): schedule(.integerDivide, [lhs, rhs])
-                case .modulo(let lhs, let rhs): schedule(.modulo, [lhs, rhs])
-                case .assertView(let operand, let shape):
-                    schedule(.assertView(shape), [operand])
-                case .negate(let operand): schedule(.negate, [operand])
-                case .equal(let lhs, let rhs):
-                    schedule(.equal, [lhs, rhs])
-                case .notEqual(let lhs, let rhs):
-                    schedule(.notEqual, [lhs, rhs])
-                case .lessThan(let lhs, let rhs):
-                    schedule(.lessThan, [lhs, rhs])
-                case .lessOrEqual(let lhs, let rhs):
-                    schedule(.lessOrEqual, [lhs, rhs])
-                case .greaterThan(let lhs, let rhs):
-                    schedule(.greaterThan, [lhs, rhs])
-                case .greaterOrEqual(let lhs, let rhs):
-                    schedule(.greaterOrEqual, [lhs, rhs])
-                case .and(let lhs, let rhs):
+                case .and:
+                    let lhs = expression.children[0]
+                    let rhs = expression.children[1]
+
                     tasks.append(.booleanRight(rhs, scope: scope, shortCircuit: false))
                     tasks.append(.expression(lhs, scope))
-                case .or(let lhs, let rhs):
+                case .or:
+                    let lhs = expression.children[0]
+                    let rhs = expression.children[1]
+
                     tasks.append(.booleanRight(rhs, scope: scope, shortCircuit: true))
                     tasks.append(.expression(lhs, scope))
-                case .not(let operand):
-                    schedule(.not, [operand])
-                case .ifThenElse(let condition, let then, let otherwise):
+                case .ifThenElse:
+                    let condition = expression.children[0]
+                    let then = expression.children[1]
+                    let otherwise = expression.children[2]
+
                     tasks.append(.conditional(then: then, otherwise: otherwise, scope: scope))
                     tasks.append(.expression(condition, scope))
-                case .setLiteral(let expressions): schedule(.setLiteral, expressions)
-                case .in(let member, let set):
-                    schedule(.in, [member, set])
-                case .subset(let lhs, let rhs):
-                    schedule(.subset, [lhs, rhs])
-                case .union(let lhs, let rhs):
-                    schedule(.union, [lhs, rhs])
-                case .intersection(let lhs, let rhs):
-                    schedule(.intersection, [lhs, rhs])
-                case .setDifference(let lhs, let rhs):
-                    schedule(.setDifference, [lhs, rhs])
-                case .cardinality(let set):
-                    schedule(.cardinality, [set])
-                case .setFilter(let set, let binder, let predicate):
+                case .setFilter(let binder):
+                    let set = expression.children[0]
+                    let predicate = expression.children[1]
+
                     tasks.append(.collectionStart(.setFilter(binder), body: predicate, scope: scope))
                     tasks.append(.expression(set, scope))
-                case .setMap(let body, let binder, let set):
+                case .setMap(let binder):
+                    let body = expression.children[0]
+                    let set = expression.children[1]
+
                     tasks.append(.collectionStart(.setMap(binder), body: body, scope: scope))
                     tasks.append(.expression(set, scope))
-                case .powerSet(let set):
-                    schedule(.powerSet, [set])
-                case .unionAll(let set):
-                    schedule(.unionAll, [set])
-                case .integerRange(let lower, let upper):
-                    schedule(.integerRange, [lower, upper])
-                case .tupleLiteral(let expressions): schedule(.tupleLiteral, expressions)
-                case .tupleAccess(let tuple, let index): schedule(.tupleAccess(index), [tuple])
-                case .tupleDynamicAccess(let tuple, let index):
-                    schedule(.tupleDynamicAccess, [tuple, index])
-                case .tupleLength(let tuple):
-                    schedule(.tupleLength, [tuple])
-                case .tupleAppend(let tuple, let element):
-                    schedule(.tupleAppend, [tuple, element])
-                case .tupleHead(let tuple):
-                    schedule(.tupleHead, [tuple])
-                case .tupleTail(let tuple):
-                    schedule(.tupleTail, [tuple])
-                case .tupleConcatenate(let lhs, let rhs):
-                    schedule(.tupleConcatenate, [lhs, rhs])
-                case .tupleRemoving(let tuple, let index):
-                    schedule(.tupleRemoving, [tuple, index])
-                case .recordLiteral(let fields):
-                    schedule(.recordLiteral(fields.map(\.declaration)), fields.map(\.value))
-                case .recordAccess(let record, let field): schedule(.recordAccess(field), [record])
-                case .domain(let operand):
-                    schedule(.domain, [operand])
-                case .functionLiteral(let domain, let binder, let body):
+                case .functionLiteral(let binder):
+                    let domain = expression.children[0]
+                    let body = expression.children[1]
+
                     tasks.append(.collectionStart(.functionLiteral(binder), body: body, scope: scope))
                     tasks.append(.expression(domain, scope))
-                case .functionApply(let function, let argument):
-                    if case .operatorReference(let id) = function {
+                case .functionApply:
+                    let function = expression.children[0]
+                    let argument = expression.children[1]
+
+                    if case .operatorReference(let id) = function.operation {
                         call(id, arguments: [argument])
                     } else {
                         schedule(.functionApply, [function, argument])
                     }
-                case .except(let function, let key, let replacement):
+                case .except:
+                    let function = expression.children[0]
+                    let key = expression.children[1]
+                    let replacement = expression.children[2]
+
                     tasks.append(.exceptFunction(key: key, scope: scope))
                     tasks.append(.expression(function, scope))
                     tasks.append(.expression(replacement, scope))
-                case .caseExpr(let first, let remaining, let otherwise):
+                case .caseExpr(let hasOtherwise):
+                    let branches = stride(from: 0, to: expression.children.count - (hasOtherwise ? 1 : 0), by: 2).map { CompiledCaseBranch(condition: expression.children[$0], value: expression.children[$0 + 1]) }
+                    let first = branches[0]
+                    let remaining = Array(branches.dropFirst())
+                    let otherwise = hasOtherwise ? expression.children.last : nil
+
                     tasks.append(.caseBranch([first] + remaining, index: 0, otherwise: otherwise, scope: scope))
-                case .forAll(let set, let binder, let predicate):
+                case .forAll(let binder):
+                    let set = expression.children[0]
+                    let predicate = expression.children[1]
+
                     tasks.append(.collectionStart(.forAll(binder), body: predicate, scope: scope))
                     tasks.append(.expression(set, scope))
-                case .exists(let set, let binder, let predicate):
+                case .exists(let binder):
+                    let set = expression.children[0]
+                    let predicate = expression.children[1]
+
                     tasks.append(.collectionStart(.exists(binder), body: predicate, scope: scope))
                     tasks.append(.expression(set, scope))
-                case .choose(let set, let binder, let predicate):
+                case .choose(let binder):
+                    let set = expression.children[0]
+                    let predicate = expression.children[1]
+
                     tasks.append(.collectionStart(.choose(binder), body: predicate, scope: scope))
                     tasks.append(.expression(set, scope))
                 case .enabledAction(let action):
                     values.append(.boolean(enabledActions.contains(action)))
-                case .sequenceFromSet(let set):
-                    schedule(.sequenceFromSet, [set])
-                case .setSum(let function, let set):
-                    schedule(.setSum, [function, set])
-                case .functionSet(let domain, let range):
-                    schedule(.functionSet, [domain, range])
-                case .foldFunction(let parameters, let body, let initial, let sequence):
+                case .foldFunction(let parameters):
+                    let body = expression.children[0]
+                    let initial = expression.children[1]
+                    let sequence = expression.children[2]
+
                     tasks.append(.foldSequence(parameters: parameters, body: body, initial: initial, scope: scope))
                     tasks.append(.expression(sequence, scope))
-                case .sequenceSelect(let sequence, let binder, let predicate):
+                case .sequenceSelect(let binder):
+                    let sequence = expression.children[0]
+                    let predicate = expression.children[1]
+
                     tasks.append(.collectionStart(.sequenceSelect(binder), body: predicate, scope: scope))
                     tasks.append(.expression(sequence, scope))
+                case .convert:
+                    tasks.append(.expression(expression.children[0], scope))
+                case .call, .checkedCall:
+                    throw CompiledEvaluationError.unresolvedOperator
                 case .operatorApplication(let operation, let arguments):
                     tasks.append(.formalCall(
                         .init(operation: operation, scope: scope),
                         arguments: arguments,
                         argumentScope: scope
                     ))
-                case .letValue(let binder, let expression, let body):
+                case .letValue(let binder):
+                    let boundExpression = expression.children[0]
+                    let body = expression.children[1]
+
                     var bodyScope = scope
-                    bodyScope.bindings = bodyScope.bindings.binding(expression, from: scope, to: binder, retainingIn: &pendingArguments)
+                    bodyScope.bindings = bodyScope.bindings.binding(boundExpression, from: scope, to: binder, retainingIn: &pendingArguments)
                     tasks.append(.expression(body, bodyScope))
-                case .letIn(_, let body):
+                case .letIn(_):
+                    let body = expression.children[0]
+
                     tasks.append(.expression(body, scope))
+                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .setSum, .functionSet:
+                    schedule(expression.operation, expression.children)
+
                 }
             }
         }
@@ -696,7 +686,7 @@ private extension CompiledEvaluator {
 }
 
 /// Apply an eager operation to evaluated operands without syntax or scope state.
-extension ResolvedOperation {
+extension CompiledOperation {
     func apply(to values: inout [CompiledValue], operandCount: Int) throws {
         switch self {
         case .assertView(let shape):

@@ -82,7 +82,7 @@ package struct MachineSurfacePlan: Sendable, Equatable {
     package let actions: [Action]
     package let collections: [Collection]
 
-    init<Expression>(layout: CompiledLayout, actions: [CompiledAction<Expression>]) throws {
+    init(layout: CompiledLayout, actions: [CompiledAction]) throws {
         let collectionsByVariableID: [VariableID: Collection] = try Dictionary(
             uniqueKeysWithValues: layout.variables.compactMap { variable in
                 guard let declaration = variable.collection else { return nil }

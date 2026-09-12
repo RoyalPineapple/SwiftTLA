@@ -3,13 +3,13 @@ import SwiftTLA
 /// Evaluation order and recursive-call lowering over the checked function graph.
 enum NativeFunctionPlan: Sendable {
     indirect enum Body: Sendable {
-        case result(ResolvedExpression)
-        case condition(ResolvedExpression, Body, Body)
-        case binding(BinderID, ResolvedExpression, Body)
-        case call(ResolvedFunctionID, [ResolvedExpression], Body)
-        case repeatCall([ResolvedExpression])
+        case result(CompiledExpression)
+        case condition(CompiledExpression, Body, Body)
+        case binding(BinderID, CompiledExpression, Body)
+        case call(ResolvedFunctionID, [CompiledExpression], Body)
+        case repeatCall([CompiledExpression])
         /// Freeze earlier operands, then continue evaluation when this operand returns.
-        case resume(operand: ResolvedExpression, before: [ResolvedExpression], evaluate: Body, then: Body)
+        case resume(operand: CompiledExpression, before: [CompiledExpression], evaluate: Body, then: Body)
 
         var hasPendingReturns: Bool {
             var pending = [self]
@@ -88,7 +88,7 @@ enum NativeFunctionPlan: Sendable {
     }
 
     private static func entryReads(
-        _ expression: ResolvedExpression, parameters: Set<BinderID>
+        _ expression: CompiledExpression, parameters: Set<BinderID>
     ) -> (bindings: [BinderID], continues: Bool) {
         let node = expression
         switch node.operation {
@@ -123,8 +123,8 @@ enum NativeFunctionPlan: Sendable {
     }
 
     private static func lower(
-        _ expression: ResolvedExpression, returningTo function: ResolvedFunctionID,
-        visited: Set<ResolvedFunctionID>, functions: [ResolvedFunction], completed: Set<ResolvedExpression> = []
+        _ expression: CompiledExpression, returningTo function: ResolvedFunctionID,
+        visited: Set<ResolvedFunctionID>, functions: [ResolvedFunction], completed: Set<CompiledExpression> = []
     ) -> Body? {
         guard !completed.contains(expression) else { return nil }
         let node = expression

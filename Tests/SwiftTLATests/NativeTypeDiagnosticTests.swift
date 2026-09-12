@@ -338,7 +338,7 @@ import Testing
         let declaration = try #require(compilation.semantics.behavior.temporalProperties.first)
         let propertyDeclaration = try #require(program.behavior.temporalProperties.first { $0.id == declaration.id })
         let resolved = propertyDeclaration.expression
-        var predicates: [ResolvedExpression] = []
+        var predicates: [CompiledExpression] = []
         _ = resolved.map { predicates.append($0.expression) }
         #expect(!predicates.isEmpty)
         for predicate in predicates {
@@ -614,15 +614,15 @@ import Testing
     func nestedSetPredicates() throws {
         let specification = TLASpec(name: "SetPredicates", variables: [], actions: [], invariants: [])
         let checker = try CompiledTypeChecker(inputs: SourceTypeResolver().resolve(in: specification.compile()))
-        let domain = CompiledStateExpr.setLiteral([.value(.integer(1))])
-        var layers: [CompiledStateExpr] = [.value(.boolean(true))]
+        let domain = CompiledExpression.setLiteral([.value(.integer(1))])
+        var layers: [CompiledExpression] = [.value(.boolean(true))]
         defer { while layers.popLast() != nil {} }
         for index in 0..<1_000 {
             let predicate = try #require(layers.last)
             let binder = BinderID(ordinal: index)
-            let nested: CompiledStateExpr = index.isMultiple(of: 2)
-                ? .equal(.choose(domain, binder, predicate), .value(.integer(1)))
-                : .equal(.setFilter(domain, binder, predicate), domain)
+            let nested: CompiledExpression = index.isMultiple(of: 2)
+                ? .init(operation: .equal, children: [.choose(domain, binder, predicate), .value(.integer(1))])
+                : .init(operation: .equal, children: [.setFilter(domain, binder, predicate), domain])
             layers.append(nested)
         }
         let checked = try checker.resolutionScope(try #require(layers.last), expected: .bool)
@@ -639,12 +639,12 @@ import Testing
     func nestedSetOperations(hasExpectedType: Bool) throws {
         let specification = TLASpec(name: "SetOperations", variables: [], actions: [], invariants: [])
         let checker = try CompiledTypeChecker(inputs: SourceTypeResolver().resolve(in: specification.compile()))
-        let domain = CompiledStateExpr.setLiteral([.value(.integer(1))])
+        let domain = CompiledExpression.setLiteral([.value(.integer(1))])
         let expression = (0..<128).reduce(domain) { nested, index in
             switch index % 3 {
-            case 0: .union(nested, domain)
-            case 1: .intersection(nested, domain)
-            default: .setDifference(nested, domain)
+            case 0: .init(operation: .union, children: [nested, domain])
+            case 1: .init(operation: .intersection, children: [nested, domain])
+            default: .init(operation: .setDifference, children: [nested, domain])
             }
         }
         let checked = try checker.resolutionScope(expression, expected: hasExpectedType ? .set(.int) : nil)
@@ -662,11 +662,11 @@ import Testing
     func longBooleanChains() throws {
         let specification = TLASpec(name: "BooleanChains", variables: [], actions: [], invariants: [])
         let checker = try CompiledTypeChecker(inputs: SourceTypeResolver().resolve(in: specification.compile()))
-        let expression = (0..<1_000).reduce(CompiledStateExpr.value(.boolean(true))) { nested, index in
+        let expression = (0..<1_000).reduce(CompiledExpression.value(.boolean(true))) { nested, index in
             switch index % 3 {
-            case 0: .not(nested)
-            case 1: .and(nested, .value(.boolean(true)))
-            default: .or(.value(.boolean(false)), nested)
+            case 0: .init(operation: .not, children: [nested])
+            case 1: .init(operation: .and, children: [nested, .value(.boolean(true))])
+            default: .init(operation: .or, children: [.value(.boolean(false)), nested])
             }
         }
         #expect(try checker.resolutionScope(expression, expected: .bool).resultType == .bool)
@@ -676,7 +676,7 @@ import Testing
     func deepConditionals() throws {
         let specification = TLASpec(name: "ConditionalChains", variables: [], actions: [], invariants: [])
         let checker = try CompiledTypeChecker(inputs: SourceTypeResolver().resolve(in: specification.compile()))
-        let expression = (0..<1_000).reduce(CompiledStateExpr.value(.integer(1))) { nested, index in
+        let expression = (0..<1_000).reduce(CompiledExpression.value(.integer(1))) { nested, index in
             if index.isMultiple(of: 2) {
                 .ifThenElse(.value(.boolean(true)), nested, .value(.integer(0)))
             } else {
@@ -684,7 +684,7 @@ import Testing
             }
         }
         #expect(try checker.resolutionScope(expression, expected: .int).resultType == .int)
-        let invalid = CompiledStateExpr.ifThenElse(.value(.boolean(true)),
+        let invalid = CompiledExpression.ifThenElse(.value(.boolean(true)),
             .ifThenElse(.value(.integer(1)), .value(.integer(0)), .value(.integer(2))),
             .value(.string("later")))
         do {
@@ -699,9 +699,9 @@ import Testing
     func mixedExpressionNesting() throws {
         let specification = TLASpec(name: "MixedNesting", variables: [], actions: [], invariants: [])
         let checker = try CompiledTypeChecker(inputs: SourceTypeResolver().resolve(in: specification.compile()))
-        let expression = (0..<1_000).reduce(CompiledStateExpr.value(.boolean(true))) { nested, index in
+        let expression = (0..<1_000).reduce(CompiledExpression.value(.boolean(true))) { nested, index in
             switch index % 3 {
-            case 0: .not(nested)
+            case 0: .init(operation: .not, children: [nested])
             case 1: .ifThenElse(.value(.boolean(true)), nested, .value(.boolean(false)))
             default: .letValue(.init(ordinal: index), .value(.integer(index)), nested)
             }
@@ -713,13 +713,13 @@ import Testing
     func nestedQuantifierDomains() throws {
         let specification = TLASpec(name: "QuantifierNesting", variables: [], actions: [], invariants: [])
         let checker = try CompiledTypeChecker(inputs: SourceTypeResolver().resolve(in: specification.compile()))
-        let domain = CompiledStateExpr.setLiteral([.value(.integer(1))])
-        let predicate = (0..<1_000).reduce(CompiledStateExpr.value(.boolean(true))) { nested, index in
+        let domain = CompiledExpression.setLiteral([.value(.integer(1))])
+        let predicate = (0..<1_000).reduce(CompiledExpression.value(.boolean(true))) { nested, index in
             let binder = BinderID(ordinal: index)
             return index.isMultiple(of: 2) ? .forAll(domain, binder, nested) : .exists(domain, binder, nested)
         }
         let binder = BinderID(ordinal: 1_000)
-        let cases: [(CompiledStateExpr, CompiledValueType)] = [
+        let cases: [(CompiledExpression, CompiledValueType)] = [
             (predicate, .bool),
             (.setMap(predicate, binder, domain), .set(.bool)),
             (.functionLiteral(domain, binder, predicate), .dictionary(.int, .bool))
@@ -727,8 +727,8 @@ import Testing
         for (expression, expected) in cases {
             let checked = try checker.resolutionScope(expression, expected: expected)
             #expect(checked.resultType == expected)
-            var quantifier: CheckedExpression
-            switch expression {
+            var quantifier: CompiledExpression
+            switch expression.operation {
             case .setMap: quantifier = checked.children[0]
             case .functionLiteral: quantifier = checked.children[1]
             default: quantifier = checked
@@ -744,16 +744,16 @@ import Testing
     func deepArithmeticAndComparisons() throws {
         let specification = TLASpec(name: "ScalarNesting", variables: [], actions: [], invariants: [])
         let checker = try CompiledTypeChecker(inputs: SourceTypeResolver().resolve(in: specification.compile()))
-        let arithmetic = (0..<1_000).reduce(CompiledStateExpr.value(.integer(1))) { nested, index in
-            index.isMultiple(of: 2) ? .add(nested, .value(.integer(0))) : .negate(nested)
+        let arithmetic = (0..<1_000).reduce(CompiledExpression.value(.integer(1))) { nested, index in
+            index.isMultiple(of: 2) ? .init(operation: .add, children: [nested, .value(.integer(0))]) : .init(operation: .negate, children: [nested])
         }
-        let comparison = (0..<1_000).reduce(CompiledStateExpr.value(.boolean(true))) { nested, _ in
-            .equal(nested, .value(.boolean(true)))
+        let comparison = (0..<1_000).reduce(CompiledExpression.value(.boolean(true))) { nested, _ in
+            .init(operation: .equal, children: [nested, .value(.boolean(true))])
         }
         #expect(try checker.resolutionScope(arithmetic, expected: .int).resultType == .int)
         #expect(try checker.resolutionScope(comparison, expected: .bool).resultType == .bool)
         #expect(throws: CompilationDiagnostic.self) {
-            try checker.type(of: .subset(.value(.integer(1)), .value(.integer(2))), expected: .bool)
+            try checker.type(of: .init(operation: .subset, children: [.value(.integer(1)), .value(.integer(2))]), expected: .bool)
         }
     }
 
@@ -761,8 +761,8 @@ import Testing
     func booleanBranchDiagnostics() throws {
         let specification = TLASpec(name: "BooleanBranches", variables: [], actions: [], invariants: [])
         let checker = try CompiledTypeChecker(inputs: SourceTypeResolver().resolve(in: specification.compile()))
-        let first = CompiledStateExpr.and(.not(.value(.integer(1))), .value(.string("later")))
-        let second = CompiledStateExpr.and(.or(.value(.boolean(true)), .value(.boolean(false))), .not(.value(.integer(1))))
+        let first = CompiledExpression.init(operation: .and, children: [.init(operation: .not, children: [.value(.integer(1))]), .value(.string("later"))])
+        let second = CompiledExpression.init(operation: .and, children: [.init(operation: .or, children: [.value(.boolean(true)), .value(.boolean(false))]), .init(operation: .not, children: [.value(.integer(1))])])
         for expression in [first, second] {
             do {
                 _ = try checker.resolutionScope(expression, expected: .bool)
@@ -797,14 +797,14 @@ import Testing
         ], actions: [], invariants: [])
         let inference = try CompiledTypeChecker(inputs: SourceTypeResolver().resolve(in: specification.compile()))
         let payload = String(repeating: "private-expression-payload", count: 1_000)
-        let expression = CompiledStateExpr.add(.value(.string(payload)), .value(.integer(1)))
+        let expression = CompiledExpression.init(operation: .add, children: [.value(.string(payload)), .value(.integer(1))])
         do {
             _ = try inference.resolutionScope(expression, expected: .int)
             Issue.record("String operands must not be accepted as integers")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.path.hasSuffix(" <- value <- add"))
             #expect(!diagnostic.description.contains(payload))
-            #expect(!diagnostic.description.contains("CompiledStateExpr"))
+            #expect(!diagnostic.description.contains("CompiledExpression"))
         }
     }
 

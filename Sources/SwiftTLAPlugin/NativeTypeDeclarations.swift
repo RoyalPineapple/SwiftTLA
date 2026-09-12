@@ -33,8 +33,8 @@ struct NativeTypeDeclarations: Sendable {
             case .and(let lhs, let rhs), .or(let lhs, let rhs): actions.append(contentsOf: [lhs, rhs])
             }
         }
-        var expressions: Set<ResolvedExpression> = []
-        var executionExpressions: [ResolvedExpression] = []
+        var expressions: Set<CompiledExpression> = []
+        var executionExpressions: [CompiledExpression] = []
         var functions: Set<ResolvedFunctionID> = []
         while let expression = pending.popLast() {
             guard expressions.insert(expression).inserted else { continue }

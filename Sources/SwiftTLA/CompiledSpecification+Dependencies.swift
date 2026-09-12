@@ -1,8 +1,8 @@
-extension CompiledActionExpr where Expression == CompiledStateExpr {
+extension CompiledActionExpr {
     func enabledActionDependencies(
         operators: CompiledOperators
     ) -> Set<ActionID> {
-        func expression(_ value: CompiledStateExpr) -> Set<ActionID> {
+        func expression(_ value: CompiledExpression) -> Set<ActionID> {
             value.stateRequirements(operators: operators).enabledActions
         }
         var dependencies: Set<ActionID> = []
@@ -25,7 +25,7 @@ extension CompiledActionExpr where Expression == CompiledStateExpr {
 
 }
 
-extension CompiledStateExpr {
+extension CompiledExpression {
     package func enabledActionDependencies(
         operators: CompiledOperators, actionDependencies: [ActionID: Set<ActionID>]
     ) -> Set<ActionID> {
@@ -36,8 +36,8 @@ extension CompiledStateExpr {
     }
 }
 
-extension CompiledStateQuery where Expression == CompiledStateExpr {
-    init(expression: CompiledStateExpr, operators: CompiledOperators,
+extension CompiledStateQuery {
+    init(expression: CompiledExpression, operators: CompiledOperators,
          actionDependencies: [ActionID: Set<ActionID>]) {
         self.init(expression: expression, enabledActions: expression.enabledActionDependencies(
             operators: operators, actionDependencies: actionDependencies))

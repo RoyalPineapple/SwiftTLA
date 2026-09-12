@@ -32,7 +32,7 @@ import Testing
         for (dividend, divisor, expected) in cases {
             #expect(try compiledValue(.divide(.int(dividend), .int(divisor))) == .int(expected))
             #expect(try compiledValue(.integerDivide(.int(dividend), .int(divisor))) == .int(expected))
-            for operation in [ResolvedOperation.divide, .integerDivide] {
+            for operation in [CompiledOperation.divide, .integerDivide] {
                 var stack: [CompiledValue] = [.boolean(true), .integer(divisor), .integer(dividend)]
                 try operation.apply(to: &stack, operandCount: 2)
                 #expect(stack == [.boolean(true), .integer(expected)])
@@ -49,7 +49,7 @@ import Testing
         for (dividend, divisor, expected) in cases {
             #expect(try compiledValue(.modulo(.int(dividend), .int(divisor))) == .int(expected))
             var stack: [CompiledValue] = [.boolean(true), .integer(divisor), .integer(dividend)]
-            try ResolvedOperation.modulo.apply(to: &stack, operandCount: 2)
+            try CompiledOperation.modulo.apply(to: &stack, operandCount: 2)
             #expect(stack == [.boolean(true), .integer(expected)])
         }
     }

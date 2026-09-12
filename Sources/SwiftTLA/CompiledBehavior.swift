@@ -1,21 +1,21 @@
 /// The transition relation and its properties, shared by compiler stages and backends.
-package struct CompiledBehavior<Expression: Sendable>: Sendable {
+package struct CompiledBehavior: Sendable {
     package let checkDeadlock: Bool
-    package let initializations: [(variable: VariableID, initialization: CompiledVariableInitialization<Expression>)]
-    package let actions: [CompiledAction<Expression>]
+    package let initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)]
+    package let actions: [CompiledAction]
     /// Indices into actions, with ENABLED dependencies before their users.
     package let enabledActionIndices: [Int]
     /// Transitive ENABLED dependencies, excluding the action itself.
     package let enabledActionDependencies: [ActionID: Set<ActionID>]
-    package let invariants: [CompiledInvariant<Expression>]
-    package let temporalProperties: [CompiledTemporal<CompiledStateQuery<Expression>>]
+    package let invariants: [CompiledInvariant]
+    package let temporalProperties: [CompiledTemporal<CompiledStateQuery>]
     package let fairness: [CompiledFairnessCondition]
-    package let constraint: CompiledStateQuery<Expression>?
-    package let assume: CompiledStateQuery<Expression>?
+    package let constraint: CompiledStateQuery?
+    package let assume: CompiledStateQuery?
 
-    package func map<Result: Sendable>(
-        _ transform: (Expression) throws -> Result
-    ) rethrows -> CompiledBehavior<Result> {
+    package func map(
+        _ transform: (CompiledExpression) throws -> CompiledExpression
+    ) rethrows -> CompiledBehavior {
         try .init(
             checkDeadlock: checkDeadlock,
             initializations: initializations.map {

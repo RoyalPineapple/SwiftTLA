@@ -148,19 +148,11 @@ struct NativeCodeGenerationTests {
         let runtime = CompiledRuntime(compilation: compilation)
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(program.behavior.actions.first)
-        func evaluate(_ expression: ResolvedExpression, _ bindings: CompiledBindings) throws -> CompiledValue {
-            switch expression.operation {
-            case .value(let value): return value
-            case .stateVariable(let variable): return try initial.value(for: variable)
-            case .boundValue(let binder): return try bindings.value(for: binder)
-            case .not:
-                let value = try evaluate(expression.children[0], bindings)
-                guard case .boolean(let boolean) = value else { throw EvalError.expected(.boolean, actual: [value]) }
-                return .boolean(!boolean)
-            default: throw CompiledValueType.diagnostic("test", "Unexpected evaluation of \(expression.operation)")
-            }
+        func evaluate(_ expression: CompiledExpression, _ bindings: CompiledBindings) throws -> CompiledValue {
+            try CompiledEvaluator(state: initial, semantics: compilation.semantics,
+                layout: compilation.layout, bindings: bindings).evaluate(expression)
         }
-        let enumerator = CompiledActionEnumerator<ResolvedExpression>(state: initial, evaluate: evaluate)
+        let enumerator = CompiledActionEnumerator(state: initial, evaluate: evaluate)
         let resolved = try enumerator.enumerateSuccessors(action)
         let formal = try runtime.successors(from: initial)
         #expect(resolved.count == 2)
@@ -305,11 +297,11 @@ struct NativeCodeGenerationTests {
     @Test("Shared predicates emit one local function per checked expression")
     func sharedPredicateDeclarations() throws {
         let compilation = try TLASpec(name: "SharedPredicates", variables: [], actions: [], invariants: []).compile()
-        let leaf = ResolvedExpression(operation: .value(.boolean(true)),
+        let leaf = CompiledExpression(operation: .value(.boolean(true)),
             resultType: .bool, children: [])
-        let root = ResolvedExpression(operation: .and,
+        let root = CompiledExpression(operation: .and,
             resultType: .bool, children: [leaf, leaf])
-        let behavior = CompiledBehavior<ResolvedExpression>(
+        let behavior = CompiledBehavior(
             checkDeadlock: compilation.semantics.behavior.checkDeadlock,
             initializations: [], actions: [], enabledActionIndices: [], enabledActionDependencies: [:],
             invariants: [], temporalProperties: [], fairness: compilation.semantics.behavior.fairness,
@@ -341,7 +333,7 @@ struct NativeCodeGenerationTests {
             }
         }
         let program = try ResolvedProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
-        var calls: [ResolvedExpression] = []
+        var calls: [CompiledExpression] = []
         for action in program.behavior.actions {
             _ = action.map { expression in
                 if case .call = expression.operation { calls.append(expression) }

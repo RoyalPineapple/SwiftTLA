@@ -6,88 +6,18 @@ package struct CompiledRecordField: Hashable, Sendable {
 
 package struct CompiledRecordEntry: Hashable, Sendable {
     package let declaration: CompiledRecordField
-    package let value: CompiledStateExpr
+    package let value: CompiledExpression
 }
 
 package struct CompiledCaseBranch: Hashable, Sendable {
-    package let condition: CompiledStateExpr
-    package let value: CompiledStateExpr
+    package let condition: CompiledExpression
+    package let value: CompiledExpression
 }
 
-package indirect enum CompiledStateExpr: Hashable, Sendable {
-    case value(CompiledValue)
-    case stateVariable(VariableID)
-    case boundValue(BinderID)
-    case controlLocation(ControlLocationID)
-    case operatorReference(OperatorID)
-
-    case add(CompiledStateExpr, CompiledStateExpr)
-    case subtract(CompiledStateExpr, CompiledStateExpr)
-    case multiply(CompiledStateExpr, CompiledStateExpr)
-    case divide(CompiledStateExpr, CompiledStateExpr)
-    case modulo(CompiledStateExpr, CompiledStateExpr)
-    case negate(CompiledStateExpr)
-    case assertView(CompiledStateExpr, FormalValueShape)
-    case integerDivide(CompiledStateExpr, CompiledStateExpr)
-    case equal(CompiledStateExpr, CompiledStateExpr)
-    case notEqual(CompiledStateExpr, CompiledStateExpr)
-    case lessThan(CompiledStateExpr, CompiledStateExpr)
-    case lessOrEqual(CompiledStateExpr, CompiledStateExpr)
-    case greaterThan(CompiledStateExpr, CompiledStateExpr)
-    case greaterOrEqual(CompiledStateExpr, CompiledStateExpr)
-    case and(CompiledStateExpr, CompiledStateExpr)
-    case or(CompiledStateExpr, CompiledStateExpr)
-    case not(CompiledStateExpr)
-    case ifThenElse(CompiledStateExpr, CompiledStateExpr, CompiledStateExpr)
-
-    case setLiteral([CompiledStateExpr])
-    case `in`(CompiledStateExpr, CompiledStateExpr)
-    case subset(CompiledStateExpr, CompiledStateExpr)
-    case union(CompiledStateExpr, CompiledStateExpr)
-    case intersection(CompiledStateExpr, CompiledStateExpr)
-    case setDifference(CompiledStateExpr, CompiledStateExpr)
-    case cardinality(CompiledStateExpr)
-    case setFilter(CompiledStateExpr, BinderID, CompiledStateExpr)
-    case setMap(CompiledStateExpr, BinderID, CompiledStateExpr)
-    case powerSet(CompiledStateExpr)
-    case unionAll(CompiledStateExpr)
-    case integerRange(CompiledStateExpr, CompiledStateExpr)
-
-    case tupleLiteral([CompiledStateExpr])
-    case tupleAccess(CompiledStateExpr, Int)
-    case tupleDynamicAccess(CompiledStateExpr, CompiledStateExpr)
-    case tupleLength(CompiledStateExpr)
-    case tupleAppend(CompiledStateExpr, CompiledStateExpr)
-    case tupleHead(CompiledStateExpr)
-    case tupleTail(CompiledStateExpr)
-    case tupleConcatenate(CompiledStateExpr, CompiledStateExpr)
-    case tupleRemoving(CompiledStateExpr, CompiledStateExpr)
-    case sequenceSelect(CompiledStateExpr, BinderID, CompiledStateExpr)
-
-    case recordLiteral([CompiledRecordEntry])
-    case recordAccess(CompiledStateExpr, CompiledRecordField)
-    case domain(CompiledStateExpr)
-    case functionLiteral(CompiledStateExpr, BinderID, CompiledStateExpr)
-    case functionApply(CompiledStateExpr, CompiledStateExpr)
-    case except(CompiledStateExpr, CompiledStateExpr, CompiledStateExpr)
-    case caseExpr(CompiledCaseBranch, [CompiledCaseBranch], otherwise: CompiledStateExpr?)
-
-    case forAll(CompiledStateExpr, BinderID, CompiledStateExpr)
-    case exists(CompiledStateExpr, BinderID, CompiledStateExpr)
-    case choose(CompiledStateExpr, BinderID, CompiledStateExpr)
-    case enabledAction(ActionID)
-    case sequenceFromSet(CompiledStateExpr)
-    case setSum(CompiledStateExpr, CompiledStateExpr)
-    case functionSet(CompiledStateExpr, CompiledStateExpr)
-    case foldFunction(parameters: [BinderID], body: CompiledStateExpr, initial: CompiledStateExpr, sequence: CompiledStateExpr)
-    case operatorApplication(CompiledFormalOperator, [CompiledFormalCallArgument])
-    case letValue(BinderID, CompiledStateExpr, CompiledStateExpr)
-    case letIn([OperatorID], CompiledStateExpr)
-}
 
 private struct CompiledDependencyScope {
     var operatorBindings: [OperatorID: CompiledDependencyBinding<CompiledFormalOperator>] = [:]
-    var valueBindings: [BinderID: CompiledDependencyBinding<CompiledStateExpr>] = [:]
+    var valueBindings: [BinderID: CompiledDependencyBinding<CompiledExpression>] = [:]
 }
 
 private final class CompiledDependencyBinding<Value> {
@@ -125,10 +55,10 @@ struct CompiledStateRequirements: Sendable {
     var requiresCompleteState: Bool { !enabledActions.isEmpty }
 }
 
-extension CompiledStateExpr {
+extension CompiledExpression {
     /// Diagnostic-only reflection of the outer case, without rendering its payload.
     package var diagnosticName: String {
-        Mirror(reflecting: self).children.first?.label ?? "expression"
+        operation.diagnosticName
     }
 
     func stateRequirements(operators: CompiledOperators) -> CompiledStateRequirements {
@@ -257,7 +187,7 @@ extension CompiledStateExpr {
             }
 
             var calls = pendingCalls[operation, default: []]
-            var valueWork: [(CompiledStateExpr, CompiledDependencyScope)] = []
+            var valueWork: [(CompiledExpression, CompiledDependencyScope)] = []
             var operatorWork: [(CompiledDependencyBinding<CompiledFormalOperator>, [CompiledFormalCallArgument], CompiledDependencyScope)] = []
             for index in calls.indices {
                 for (parameter, argument) in zip(parameters, calls[index].arguments) {
@@ -322,12 +252,12 @@ extension CompiledStateExpr {
             valueWork.reversed().forEach { visit($0.0, scope: $0.1) }
         }
 
-        func visit(_ expression: CompiledStateExpr, scope: CompiledDependencyScope) {
+        func visit(_ expression: CompiledExpression, scope: CompiledDependencyScope) {
             work.append { process(expression, scope: scope) }
         }
 
-        func process(_ expression: CompiledStateExpr, scope: CompiledDependencyScope) {
-            switch expression {
+        func process(_ expression: CompiledExpression, scope: CompiledDependencyScope) {
+            switch expression.operation {
             case .value, .controlLocation:
                 return
             case .boundValue(let binder):
@@ -344,71 +274,22 @@ extension CompiledStateExpr {
                 variables.insert(variable)
             case .operatorReference(let id):
                 visitCall(.reference(id, arity: 0), arguments: [], scope: scope)
-            case .assertView(let value, _), .negate(let value), .not(let value), .cardinality(let value),
-                 .powerSet(let value), .unionAll(let value), .tupleAccess(let value, _),
-                 .tupleLength(let value), .tupleHead(let value), .tupleTail(let value),
-                 .recordAccess(let value, _), .domain(let value), .sequenceFromSet(let value):
-                visit(value, scope: scope)
-            case .add(let lhs, let rhs), .subtract(let lhs, let rhs), .multiply(let lhs, let rhs),
-                 .divide(let lhs, let rhs), .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
-                 .equal(let lhs, let rhs), .notEqual(let lhs, let rhs), .lessThan(let lhs, let rhs),
-                 .lessOrEqual(let lhs, let rhs), .greaterThan(let lhs, let rhs), .greaterOrEqual(let lhs, let rhs),
-                 .and(let lhs, let rhs), .or(let lhs, let rhs), .in(let lhs, let rhs), .subset(let lhs, let rhs),
-                 .union(let lhs, let rhs), .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
-                 .integerRange(let lhs, let rhs), .tupleDynamicAccess(let lhs, let rhs),
-                 .tupleAppend(let lhs, let rhs), .tupleConcatenate(let lhs, let rhs),
-                 .tupleRemoving(let lhs, let rhs),
-                 .setSum(let lhs, let rhs), .functionSet(let lhs, let rhs):
-                visit(lhs, scope: scope)
-                visit(rhs, scope: scope)
-            case .functionApply(.operatorReference(let id), let argument):
+            case .functionApply where expression.children[0].referencedOperator != nil:
+                let id = expression.children[0].referencedOperator!
+                let argument = expression.children[1]
                 visitCall(.reference(id, arity: 1), arguments: [.value(argument)], scope: scope)
-            case .functionApply(let function, let argument):
-                visit(function, scope: scope)
-                visit(argument, scope: scope)
-            case .ifThenElse(let condition, let then, let otherwise):
-                visit(condition, scope: scope)
-                visit(then, scope: scope)
-                visit(otherwise, scope: scope)
-            case .setLiteral(let values), .tupleLiteral(let values):
-                values.forEach { visit($0, scope: scope) }
-            case .setFilter(let set, _, let predicate), .functionLiteral(let set, _, let predicate),
-                 .forAll(let set, _, let predicate), .exists(let set, _, let predicate),
-                 .choose(let set, _, let predicate):
-                visit(set, scope: scope)
-                visit(predicate, scope: scope)
-            case .setMap(let value, _, let set):
-                visit(value, scope: scope)
-                visit(set, scope: scope)
-            case .sequenceSelect(let sequence, _, let predicate):
-                visit(sequence, scope: scope)
-                visit(predicate, scope: scope)
-            case .recordLiteral(let fields):
-                fields.forEach { visit($0.value, scope: scope) }
-            case .except(let function, let key, let value):
-                visit(function, scope: scope)
-                visit(key, scope: scope)
-                visit(value, scope: scope)
-            case .caseExpr(let first, let remaining, let otherwise):
-                visit(first.condition, scope: scope)
-                visit(first.value, scope: scope)
-                for branch in remaining {
-                    visit(branch.condition, scope: scope)
-                    visit(branch.value, scope: scope)
-                }
-                if let otherwise { visit(otherwise, scope: scope) }
-            case .foldFunction(_, let body, let initial, let sequence):
-                visit(body, scope: scope)
-                visit(initial, scope: scope)
-                visit(sequence, scope: scope)
             case .operatorApplication(let operation, let arguments):
                 visitCall(operation, arguments: arguments, scope: scope)
-            case .letValue(let binder, let value, let body):
+            case .letValue(let binder):
+                let value = expression.children[0]
+                let body = expression.children[1]
+
                 var nested = scope
                 nested.valueBindings[binder] = .init(value, scope: scope)
                 visit(body, scope: nested)
-            case .letIn(_, let body):
-                visit(body, scope: scope)
+
+            default:
+                expression.children.forEach { visit($0, scope: scope) }
             }
         }
 
@@ -437,7 +318,7 @@ package enum CompiledFormalOperator: Hashable, Sendable {
 }
 
 package enum CompiledFormalCallArgument: Hashable, Sendable {
-    case value(CompiledStateExpr)
+    case value(CompiledExpression)
     case `operator`(CompiledFormalOperator)
 }
 
@@ -445,8 +326,8 @@ package enum CompiledFormalCallArgument: Hashable, Sendable {
 package struct CompiledOperatorDefinition: Sendable {
     package let id: OperatorID
     package let parameters: [CompiledFormalParameter]
-    package let domain: CompiledStateExpr?
-    package let body: CompiledStateExpr
+    package let domain: CompiledExpression?
+    package let body: CompiledExpression
     package let isRecursive: Bool
     /// Lexically enclosing values read by this declaration, including nested bodies.
     package let capturedBindings: Set<BinderID>
@@ -454,18 +335,18 @@ package struct CompiledOperatorDefinition: Sendable {
     package let referencedOperators: Set<OperatorID>
 }
 
-/// Shared action structure; each consumer supplies its state-expression representation.
-package indirect enum CompiledActionExpr<Expression: Sendable>: Sendable {
-    case assign(VariableID, Expression)
+/// The shared transition structure over compiled expressions.
+package indirect enum CompiledActionExpr: Sendable {
+    case assign(VariableID, CompiledExpression)
     case unchanged(VariableID)
-    case guard_(Expression)
-    case existsAction(BinderID, Expression, Self)
-    case ifElse(Expression, Self, Self)
-    case define(BinderID, Expression, Self)
+    case guard_(CompiledExpression)
+    case existsAction(BinderID, CompiledExpression, Self)
+    case ifElse(CompiledExpression, Self, Self)
+    case define(BinderID, CompiledExpression, Self)
     case and(Self, Self)
     case or(Self, Self)
 
-    package func map<Result: Sendable>(_ transform: (Expression) throws -> Result) rethrows -> CompiledActionExpr<Result> {
+    package func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> CompiledActionExpr {
         switch self {
         case .assign(let id, let value): return .assign(id, try transform(value))
         case .unchanged(let id): return .unchanged(id)
@@ -482,15 +363,15 @@ package indirect enum CompiledActionExpr<Expression: Sendable>: Sendable {
     }
 }
 
-package struct CompiledAction<Expression: Sendable>: Sendable {
+package struct CompiledAction: Sendable {
     package let id: ActionID
     package let bindings: [CompiledActionBinding]
-    package let body: CompiledActionExpr<Expression>
+    package let body: CompiledActionExpr
     package let collection: VariableID?
 
-    package func map<Result: Sendable>(
-        _ transform: (Expression) throws -> Result
-    ) rethrows -> CompiledAction<Result> {
+    package func map(
+        _ transform: (CompiledExpression) throws -> CompiledExpression
+    ) rethrows -> CompiledAction {
         .init(id: id, bindings: bindings, body: try body.map(transform), collection: collection)
     }
 }
@@ -503,25 +384,25 @@ package struct CompiledActionBinding: Sendable {
 }
 
 /// A state expression and the action enabledness it requires, analyzed once.
-package struct CompiledStateQuery<Expression: Sendable>: Sendable {
-    package let expression: Expression
+package struct CompiledStateQuery: Sendable {
+    package let expression: CompiledExpression
     package let enabledActions: Set<ActionID>
 
-    package func map<Result: Sendable>(
-        _ transform: (Expression) throws -> Result
-    ) rethrows -> CompiledStateQuery<Result> {
+    package func map(
+        _ transform: (CompiledExpression) throws -> CompiledExpression
+    ) rethrows -> CompiledStateQuery {
         .init(expression: try transform(expression), enabledActions: enabledActions)
     }
 }
 
-package struct CompiledInvariant<Expression: Sendable>: Sendable {
+package struct CompiledInvariant: Sendable {
     package let id: PropertyID
     package let name: String
-    package let predicate: CompiledStateQuery<Expression>
+    package let predicate: CompiledStateQuery
 
-    package func map<Result: Sendable>(
-        _ transform: (Expression) throws -> Result
-    ) rethrows -> CompiledInvariant<Result> {
+    package func map(
+        _ transform: (CompiledExpression) throws -> CompiledExpression
+    ) rethrows -> CompiledInvariant {
         .init(id: id, name: name, predicate: try predicate.map(transform))
     }
 }
@@ -584,13 +465,13 @@ package enum CompiledFormalParameter: Hashable, Sendable {
     }
 }
 
-package enum CompiledVariableInitialization<Expression: Sendable>: Sendable {
-    case value(Expression)
-    case memberOf(Expression)
+package enum CompiledVariableInitialization: Sendable {
+    case value(CompiledExpression)
+    case memberOf(CompiledExpression)
 
-    package func map<Result: Sendable>(
-        _ transform: (Expression) throws -> Result
-    ) rethrows -> CompiledVariableInitialization<Result> {
+    package func map(
+        _ transform: (CompiledExpression) throws -> CompiledExpression
+    ) rethrows -> CompiledVariableInitialization {
         switch self {
         case .value(let expression): .value(try transform(expression))
         case .memberOf(let expression): .memberOf(try transform(expression))
@@ -602,12 +483,12 @@ struct CompiledFormalModuleReplacement: Sendable {
     let moduleName: String
     let operatorName: String
     let definitionName: String
-    let expression: CompiledStateExpr
+    let expression: CompiledExpression
 }
 
 struct CompiledModuleArgument: Sendable {
     let parameter: String
-    let value: CompiledStateExpr
+    let value: CompiledExpression
 }
 
 struct CompiledModuleInstance: Sendable {
@@ -677,7 +558,7 @@ package struct CompiledOperators: Sendable {
 }
 
 package struct CompiledSemantics: Sendable {
-    package let behavior: CompiledBehavior<CompiledStateExpr>
+    package let behavior: CompiledBehavior
     package var operators: CompiledOperators
     let formalModuleReplacements: [CompiledFormalModuleReplacement]
     let moduleInstances: [CompiledModuleInstance]

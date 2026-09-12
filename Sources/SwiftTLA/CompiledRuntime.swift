@@ -82,17 +82,17 @@ struct CompiledRuntime {
         return try boolean(assume, in: state)
     }
 
-    func invariantHolds(_ invariant: CompiledInvariant<CompiledStateExpr>, in state: CompiledState) throws -> Bool {
+    func invariantHolds(_ invariant: CompiledInvariant, in state: CompiledState) throws -> Bool {
         try state.requireIdentity(compilation.identity)
         return try boolean(invariant.predicate, in: state)
     }
 
-    func predicateHolds(_ predicate: CompiledStateQuery<CompiledStateExpr>, in state: CompiledState) throws -> Bool {
+    func predicateHolds(_ predicate: CompiledStateQuery, in state: CompiledState) throws -> Bool {
         try state.requireIdentity(compilation.identity)
         return try boolean(predicate, in: state)
     }
 
-    func evaluate(_ queries: [CompiledStateQuery<CompiledStateExpr>], in state: CompiledState) throws -> [CompiledValue] {
+    func evaluate(_ queries: [CompiledStateQuery], in state: CompiledState) throws -> [CompiledValue] {
         try state.requireIdentity(compilation.identity)
         let evaluator = CompiledEvaluator(
             state: state,
@@ -124,7 +124,7 @@ struct CompiledRuntime {
 
     private func actionEnumerator(
         in state: CompiledState, enabledActions: Set<ActionID>
-    ) -> CompiledActionEnumerator<CompiledStateExpr> {
+    ) -> CompiledActionEnumerator {
         .init(state: state) { expression, bindings in
             try CompiledEvaluator(state: state, semantics: semantics, layout: layout,
                 bindings: bindings, enabledActions: enabledActions).evaluate(expression)
@@ -132,7 +132,7 @@ struct CompiledRuntime {
     }
 
     private func boolean(
-        _ predicate: CompiledStateQuery<CompiledStateExpr>,
+        _ predicate: CompiledStateQuery,
         in state: CompiledState
     ) throws -> Bool {
         let value = try CompiledEvaluator(

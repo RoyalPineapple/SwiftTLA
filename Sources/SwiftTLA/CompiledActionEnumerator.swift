@@ -1,12 +1,12 @@
-struct CompiledActionEnumerator<Expression: Sendable> {
+struct CompiledActionEnumerator {
     let state: CompiledState
-    let evaluate: (Expression, CompiledBindings) throws -> CompiledValue
+    let evaluate: (CompiledExpression, CompiledBindings) throws -> CompiledValue
 
-    func enumerate(_ action: CompiledAction<Expression>) throws -> [CompiledState] {
+    func enumerate(_ action: CompiledAction) throws -> [CompiledState] {
         try enumerateSuccessors(action).map(\.state)
     }
 
-    func enumerateSuccessors(_ action: CompiledAction<Expression>) throws -> [CompiledSuccessor] {
+    func enumerateSuccessors(_ action: CompiledAction) throws -> [CompiledSuccessor] {
         try actionBindings(action.bindings).flatMap { binding in
             try execute(action.body, bindings: binding.values).map { delta in
                 CompiledSuccessor(
@@ -19,7 +19,7 @@ struct CompiledActionEnumerator<Expression: Sendable> {
     }
 
     private func execute(
-        _ action: CompiledActionExpr<Expression>,
+        _ action: CompiledActionExpr,
         bindings: CompiledBindings
     ) throws -> [CompiledActionDelta] {
         switch action {

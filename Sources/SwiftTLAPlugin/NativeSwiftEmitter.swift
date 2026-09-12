@@ -13,8 +13,8 @@ struct NativeSwiftEmitter {
     let stateMemberNames: [VariableID: String]
     let enabledActionIDs: Set<ActionID>
     private let variableNames: [VariableID: String]
-    private var expressionValues: [ResolvedExpression: String] = [:]
-    private var expressionOrdinals: [ResolvedExpression: Int] = [:]
+    private var expressionValues: [CompiledExpression: String] = [:]
+    private var expressionOrdinals: [CompiledExpression: Int] = [:]
     private var hasDepthScope = false
     private var callbackFunctions: [ResolvedCallbackID: String] = [:]
 
@@ -52,7 +52,7 @@ struct NativeSwiftEmitter {
         return plan
     }
 
-    mutating func ordinal(for expression: ResolvedExpression) -> Int {
+    mutating func ordinal(for expression: CompiledExpression) -> Int {
         if let ordinal = expressionOrdinals[expression] { return ordinal }
         let ordinal = expressionOrdinals.count
         expressionOrdinals[expression] = ordinal
@@ -302,7 +302,7 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func resolvedCall(
-        _ call: ResolvedCall, argumentRoots: [ResolvedExpression], state: String, substitutions: [BinderID: String],
+        _ call: ResolvedCall, argumentRoots: [CompiledExpression], state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         let ownsDepth = !hasDepthScope
@@ -567,7 +567,7 @@ struct NativeSwiftEmitter {
     }
 
     mutating func expression(
-        _ id: ResolvedExpression, state: String = "state.", substitutions: [BinderID: String] = [:],
+        _ id: CompiledExpression, state: String = "state.", substitutions: [BinderID: String] = [:],
         activeFunctions: Set<ResolvedFunctionID> = []
     ) throws -> String {
         if let value = expressionValues[id] { return value }
@@ -575,7 +575,7 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func expressionBody(
-        _ id: ResolvedExpression, state: String, substitutions: [BinderID: String],
+        _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         switch id.operation {
@@ -600,17 +600,17 @@ struct NativeSwiftEmitter {
             return try aggregateExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .caseExpr, .letValue, .call:
             return try controlExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .operatorReference: throw unsupported("operator reference without an application")
+        case .operatorReference, .operatorApplication, .letIn, .checkedCall: throw unsupported("operator call must be resolved before native emission")
         }
     }
 
     /// Keep checked arithmetic in evaluation order without nesting Swift calls
     /// according to the depth of the formal expression tree.
     private mutating func arithmeticExpression(
-        _ root: ResolvedExpression, state: String, substitutions: [BinderID: String],
+        _ root: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
-        var pending: [(id: ResolvedExpression, expanded: Bool)] = [(root, false)]
+        var pending: [(id: CompiledExpression, expanded: Bool)] = [(root, false)]
         var values: [String] = []
         var statements: [String] = []
         while let (id, expanded) = pending.popLast() {
@@ -657,7 +657,7 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func scalarExpression(
-        _ id: ResolvedExpression, state: String, substitutions: [BinderID: String],
+        _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         let node = id
@@ -697,7 +697,7 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func collectionExpression(
-        _ id: ResolvedExpression, state: String, substitutions: [BinderID: String],
+        _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         let node = id
@@ -765,7 +765,7 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func sequenceExpression(
-        _ id: ResolvedExpression, state: String, substitutions: [BinderID: String],
+        _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         let node = id
@@ -862,7 +862,7 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func functionExpression(
-        _ id: ResolvedExpression, state: String, substitutions: [BinderID: String],
+        _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         let node = id
@@ -932,7 +932,7 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func aggregateExpression(
-        _ id: ResolvedExpression, state: String, substitutions: [BinderID: String],
+        _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         let node = id
@@ -1013,7 +1013,7 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func controlExpression(
-        _ id: ResolvedExpression, state: String, substitutions: [BinderID: String],
+        _ id: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         let node = id

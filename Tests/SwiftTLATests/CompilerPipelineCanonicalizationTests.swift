@@ -235,7 +235,8 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
         let invariant = try #require(compilation.semantics.behavior.invariants.first)
-        guard case .forAll(_, let first, .forAll(_, let second, _)) = invariant.predicate.expression else {
+        guard case .forAll(let first) = invariant.predicate.expression.operation,
+              case .forAll(let second) = invariant.predicate.expression.children[1].operation else {
             Issue.record("Expected nested compiled quantifiers")
             return
         }
@@ -311,7 +312,10 @@ struct CompilerPipelineCanonicalizationTests {
         }.compile()
         let definitionID = try #require(compilation.semantics.operators.formalDefinitionIDs.first)
     let definition = try #require(compilation.semantics.operators[definitionID])
-        guard case .letValue(let outer, _, .letValue(let inner, .boundValue(let outerReference), .boundValue(let innerReference))) = definition.body else {
+        guard case .letValue(let outer) = definition.body.operation,
+              case .letValue(let inner) = definition.body.children[1].operation,
+              case .boundValue(let outerReference) = definition.body.children[1].children[0].operation,
+              case .boundValue(let innerReference) = definition.body.children[1].children[1].operation else {
             Issue.record("Expected nested compiled value binders")
             return
         }
@@ -592,7 +596,9 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        guard case .existsAction(let binder, _, .assign(let variable, .boundValue(let value))) = compilation.semantics.behavior.actions[0].body else {
+        guard case .existsAction(let binder, _, let expression3) = compilation.semantics.behavior.actions[0].body,
+              case .assign(let variable, let expression4) = expression3,
+              case .boundValue(let value) = expression4.operation else {
             Issue.record("Expected a compiled binder assignment")
             return
         }
@@ -615,7 +621,9 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
 
         guard case .eventually(let predicate) = compilation.semantics.behavior.temporalProperties[0].expression,
-              case .equal(.stateVariable(let variable), .value(.integer(0))) = predicate.expression else {
+              case .equal = predicate.expression.operation,
+              case .stateVariable(let variable) = predicate.expression.children[0].operation,
+              case .value(.integer(0)) = predicate.expression.children[1].operation else {
             Issue.record("Expected a compiled temporal predicate")
             return
         }
@@ -726,7 +734,8 @@ struct CompilerPipelineCanonicalizationTests {
             .successors(for: action.id, from: state)
             .map(\.state)
 
-        guard case .assign(_, .operatorApplication(.reference(let id, _), _)) = compilation.semantics.behavior.actions[0].body else {
+        guard case .assign(_, let expression5) = compilation.semantics.behavior.actions[0].body,
+              case .operatorApplication(.reference(let id, _), _) = expression5.operation else {
             Issue.record("Expected an operator identity")
             return
         }
@@ -833,13 +842,17 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        guard case .and(.guard_(.operatorApplication(.lambda(let id, let arity), _)), .unchanged) = compilation.semantics.behavior.actions[0].body else {
+        guard case .and(let expression6, let expression8) = compilation.semantics.behavior.actions[0].body,
+              case .guard_(let expression7) = expression6,
+              case .operatorApplication(.lambda(let id, let arity), _) = expression7.operation,
+              case .unchanged = expression8 else {
             Issue.record("Expected a compiled higher-order call")
             return
         }
         let lambda = try #require(compilation.semantics.operators[id])
         #expect(arity == lambda.parameters.count)
-        guard case .equal(.boundValue(let value), _) = lambda.body else {
+        guard case .equal = lambda.body.operation,
+              case .boundValue(let value) = lambda.body.children[0].operation else {
             Issue.record("Expected a compiled lambda binder")
             return
         }
@@ -857,10 +870,12 @@ struct CompilerPipelineCanonicalizationTests {
 
         let compilation = try spec.compile()
 
-        guard case .and(
-            .guard_(.in(_, .integerRange(.stateVariable(let value), _))),
-            .unchanged
-        ) = compilation.semantics.behavior.actions[0].body else {
+        guard case .and(let expression9, let expression11) = compilation.semantics.behavior.actions[0].body,
+              case .guard_(let expression10) = expression9,
+              case .in = expression10.operation,
+              case .integerRange = expression10.children[1].operation,
+              case .stateVariable(let value) = expression10.children[1].children[0].operation,
+              case .unchanged = expression11 else {
             Issue.record("Expected a compiled integer range")
             return
         }
@@ -935,11 +950,10 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
         let state = try CompiledState(values: [.integer(1)], compilation: compilation)
 
-        guard case .existsAction(
-            let binder,
-            _,
-            .and(.guard_(let expression), .unchanged)
-        ) = compilation.semantics.behavior.actions[0].body else {
+        guard case .existsAction(let binder, _, let expression12) = compilation.semantics.behavior.actions[0].body,
+              case .and(let expression13, let expression14) = expression12,
+              case .guard_(let expression) = expression13,
+              case .unchanged = expression14 else {
             Issue.record("Expected a compiled action binder")
             return
         }
@@ -986,11 +1000,13 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         ).compile()
 
-        guard case .and(
-            .guard_(.equal(.recordLiteral(let record), _)),
-            .unchanged
-        ) = compilation.semantics.behavior.actions[0].body,
-              case .stateVariable(let variable) = record[0].value else {
+        guard case .and(let expression15, let expression18) = compilation.semantics.behavior.actions[0].body,
+              case .guard_(let expression16) = expression15,
+              case .equal = expression16.operation,
+              case .recordLiteral(let expression17) = expression16.children[0].operation,
+              case let record = zip(expression17, expression16.children[0].children).map({ CompiledRecordEntry(declaration: $0, value: $1) }),
+              case .unchanged = expression18,
+              case .stateVariable(let variable) = record[0].value.operation else {
             Issue.record("Expected a compiled record with a bound variable value")
             return
         }
@@ -1092,10 +1108,11 @@ struct CompilerPipelineCanonicalizationTests {
         }
         let compilation = try spec.compile()
 
-        guard case .and(
-            .guard_(.equal(.recordAccess(_, let field), _)),
-            .unchanged
-        ) = compilation.semantics.behavior.actions[0].body else {
+        guard case .and(let expression19, let expression21) = compilation.semantics.behavior.actions[0].body,
+              case .guard_(let expression20) = expression19,
+              case .equal = expression20.operation,
+              case .recordAccess(let field) = expression20.children[0].operation,
+              case .unchanged = expression21 else {
             Issue.record("Expected a compiled record access")
             return
         }
@@ -1225,10 +1242,13 @@ struct CompilerPipelineCanonicalizationTests {
 
         #expect(compilation.layout.testVariableID(named: "counter") == .init(ordinal: 0))
         let action = try #require(compilation.semantics.behavior.actions.first)
-        guard case .and(
-            .guard_(.forAll(_, let outer, .exists(_, let inner, .equal(.boundValue(let reference), _)))),
-            .unchanged(let variable)
-        ) = action.body else {
+        guard case .and(let expression22, let expression24) = action.body,
+              case .guard_(let expression23) = expression22,
+              case .forAll(let outer) = expression23.operation,
+              case .exists(let inner) = expression23.children[1].operation,
+              case .equal = expression23.children[1].children[1].operation,
+              case .boundValue(let reference) = expression23.children[1].children[1].children[0].operation,
+              case .unchanged(let variable) = expression24 else {
             Issue.record("Expected compiled quantified action")
             return
         }

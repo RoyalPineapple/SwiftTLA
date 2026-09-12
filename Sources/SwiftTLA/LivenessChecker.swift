@@ -118,15 +118,15 @@ package struct LivenessChecker {
     }
 
     private func analyze(
-        _ property: CompiledTemporalExpr<CompiledStateQuery<CompiledStateExpr>>,
+        _ property: CompiledTemporalExpr<CompiledStateQuery>,
         fairness: [CompiledFairnessCondition],
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool,
         compilation: CompiledSpecification
     ) throws -> TemporalAnalysis {
         let form: TemporalForm
-        let predicate: CompiledStateQuery<CompiledStateExpr>
-        let trigger: CompiledStateQuery<CompiledStateExpr>?
+        let predicate: CompiledStateQuery
+        let trigger: CompiledStateQuery?
         switch property {
         case .always(let value): form = .always; predicate = value; trigger = nil
         case .eventually(let value): form = .eventually; predicate = value; trigger = nil
@@ -289,7 +289,7 @@ package struct LivenessChecker {
     }
 
     private func predicateHolds(
-        _ predicate: CompiledStateQuery<CompiledStateExpr>,
+        _ predicate: CompiledStateQuery,
         in state: CompiledState,
         compilation: CompiledSpecification
     ) throws -> Bool {

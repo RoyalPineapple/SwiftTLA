@@ -257,12 +257,12 @@ extension NativeSwiftEmitter {
         """)
     }
 
-    mutating func actionFunctions(_ root: CompiledActionExpr<ResolvedExpression>) throws -> String {
-        var pending: [(node: CompiledActionExpr<ResolvedExpression>, id: Int, bindings: [BinderID])] = [(root, 0, [])]
+    mutating func actionFunctions(_ root: CompiledActionExpr) throws -> String {
+        var pending: [(node: CompiledActionExpr, id: Int, bindings: [BinderID])] = [(root, 0, [])]
         var nextID = 1
         var declarations: [String] = []
         while let (node, id, bindings) = pending.popLast() {
-            func childCall(_ child: CompiledActionExpr<ResolvedExpression>, binding: BinderID? = nil) -> String {
+            func childCall(_ child: CompiledActionExpr, binding: BinderID? = nil) -> String {
                 let childBindings = bindings + (binding.map { [$0] } ?? [])
                 let childID = nextID
                 nextID += 1
@@ -315,7 +315,7 @@ extension NativeSwiftEmitter {
         return declarations.joined(separator: "\n") + "\nreturn try _actionPart0()"
     }
 
-    mutating func updateFunction(_ action: CompiledAction<ResolvedExpression>, collectionParameters: String) throws -> DeclSyntax {
+    mutating func updateFunction(_ action: CompiledAction, collectionParameters: String) throws -> DeclSyntax {
         let parameters = try action.bindings.map {
             "\(binder($0.binder)): \(try swiftType(program.bindingTypes[$0.binder]!))"
         }.joined(separator: ", ")
@@ -357,7 +357,7 @@ extension NativeSwiftEmitter {
         """)
     }
 
-    func successorFunction(_ action: CompiledAction<ResolvedExpression>, surface: MachineSurfacePlan.Action, collectionParameters: String, collectionArguments: String) throws -> DeclSyntax {
+    func successorFunction(_ action: CompiledAction, surface: MachineSurfacePlan.Action, collectionParameters: String, collectionArguments: String) throws -> DeclSyntax {
         let parameters = try action.bindings.map { binding in
             "\(binder(binding.binder)): \(try swiftType(program.bindingTypes[binding.binder]!))"
         }.joined(separator: ", ")

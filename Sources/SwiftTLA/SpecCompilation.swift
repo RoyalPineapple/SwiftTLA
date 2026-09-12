@@ -141,7 +141,7 @@ struct CompiledRefinement: Sendable {
     let instance: ModuleInstanceID
     let `operator`: RefinementDecl.Operator
     let abstract: CompiledSpecification
-    let variableMappings: [CompiledStateQuery<CompiledStateExpr>]
+    let variableMappings: [CompiledStateQuery]
 }
 
 /// Source metadata needed by renderers after executable declarations are lowered.
@@ -872,7 +872,7 @@ public extension TLASpec {
 }
 
 private func directActionCalls(
-    _ actions: [CompiledAction<CompiledStateExpr>],
+    _ actions: [CompiledAction],
     emittedActionNames: [ActionID: String]
 ) throws -> [(call: CompiledActionCall, renderedName: String)] {
     var calls: [(call: CompiledActionCall, renderedName: String)] = []
@@ -1136,7 +1136,7 @@ private extension CompiledModuleMetadata {
         let definitions = try semantics.operators.formalDefinitionIDs.prefix(formalDefinitionCount).map(renderer.formalDefinition)
         let instances = try semantics.moduleInstances.map(renderer.moduleInstance)
         let invariants = try semantics.behavior.invariants.map { ($0.id, "\($0.name) == \(try renderer.state($0.predicate.expression))") }
-        let temporalProperties = try semantics.behavior.temporalProperties.map { ($0.id, "\($0.name) == \(try renderer.temporal($0.expression, renderExpression: renderer.state))") }
+        let temporalProperties = try semantics.behavior.temporalProperties.map { ($0.id, "\($0.name) == \(try renderer.temporal($0.expression))") }
         let constraint = try semantics.behavior.constraint.map { "StateConstraint == \(try renderer.state($0.expression))" }
         let renderedRefinements = try refinements.map(renderer.refinement)
         let renderedFormalModuleReplacements = try semantics.formalModuleReplacements.map(renderer.formalModuleReplacement)
@@ -1167,7 +1167,7 @@ private extension CompiledModuleMetadata {
                 sourceName: declaration.declaration.name,
                 renderedName: renderedName,
                 renderedParameters: try compiled.bindings.map { try renderer.binderName($0.binder) },
-                renderedBody: try renderer.action(compiled.body, renderExpression: renderer.state),
+                renderedBody: try renderer.action(compiled.body),
                 calls: try callsByAction[compiled.id, default: []].map { emitted in
                     RenderedAction(
                         sourceName: declaration.declaration.name,

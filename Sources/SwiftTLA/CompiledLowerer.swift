@@ -8,12 +8,12 @@ private enum StateLoweringTask {
 }
 
 private struct LoweredStateExpression {
-    let expression: CompiledStateExpr
+    let expression: CompiledExpression
     let operatorReferences: Set<OperatorID>
     let bindingReferences: Set<BinderID>
     let declarations: [CompiledOperatorDefinition]
 
-    init(expression: CompiledStateExpr, operatorReferences: Set<OperatorID>, bindingReferences: Set<BinderID> = [], declarations: [CompiledOperatorDefinition] = []) {
+    init(expression: CompiledExpression, operatorReferences: Set<OperatorID>, bindingReferences: Set<BinderID> = [], declarations: [CompiledOperatorDefinition] = []) {
         self.expression = expression
         self.operatorReferences = operatorReferences
         self.bindingReferences = bindingReferences
@@ -26,7 +26,7 @@ private enum ActionLoweringTask {
     case build(
         childCount: Int,
         path: String,
-        ([CompiledActionExpr<CompiledStateExpr>]) throws -> CompiledActionExpr<CompiledStateExpr>
+        ([CompiledActionExpr]) throws -> CompiledActionExpr
     )
 }
 
@@ -135,7 +135,7 @@ struct CompiledLowerer {
                 nextSafeAction: "Compile the model again from its current source."
             )
         }
-        var initializations: [VariableID: CompiledVariableInitialization<CompiledStateExpr>] = [:]
+        var initializations: [VariableID: CompiledVariableInitialization] = [:]
         for (declaration, variableLayout) in zip(spec.variables, layout.variables) {
             let path = "variables.\(declaration.name)"
             if case .value(let value) = declaration.initialization,
@@ -148,7 +148,7 @@ struct CompiledLowerer {
                 scope: rootScope
             )
         }
-        let actions: [CompiledAction<CompiledStateExpr>] = try zip(spec.actions, layout.actions).map {
+        let actions: [CompiledAction] = try zip(spec.actions, layout.actions).map {
             try lower($0.0, id: $0.1.id)
         }
         let actionsByID = Dictionary(uniqueKeysWithValues: actions.map { ($0.id, $0) })
@@ -160,7 +160,7 @@ struct CompiledLowerer {
             )
         }
         let temporalBodies = try zip(spec.temporalProperties, layout.temporalProperties).map {
-            CompiledTemporal<CompiledStateExpr>(
+            CompiledTemporal<CompiledExpression>(
                 id: $0.1.id,
                 name: $0.0.name,
                 expression: try lower(
@@ -291,7 +291,7 @@ struct CompiledLowerer {
             operators: operators
         )
         let enabledActions = try orderedEnabledActions(actions, operators: operators)
-        func predicate(_ expression: CompiledStateExpr) -> CompiledStateQuery<CompiledStateExpr> {
+        func predicate(_ expression: CompiledExpression) -> CompiledStateQuery {
             .init(expression: expression, operators: operators,
                 actionDependencies: enabledActions.dependencies)
         }
@@ -322,7 +322,7 @@ struct CompiledLowerer {
         )
     }
 
-    mutating func refinementExpression(_ expression: StateExpr, at path: String) throws -> CompiledStateExpr {
+    mutating func refinementExpression(_ expression: StateExpr, at path: String) throws -> CompiledExpression {
         try lower(expression, at: path, scope: rootScope)
     }
 
@@ -643,7 +643,7 @@ struct CompiledLowerer {
     }
 
     private func orderedEnabledActions(
-        _ actions: [CompiledAction<CompiledStateExpr>],
+        _ actions: [CompiledAction],
         operators: CompiledOperators
     ) throws -> (indices: [Int], dependencies: [ActionID: Set<ActionID>]) {
         let dependencies = actions.map {
@@ -677,9 +677,9 @@ struct CompiledLowerer {
     }
 
     private func orderedInitializations(
-        _ initializations: [VariableID: CompiledVariableInitialization<CompiledStateExpr>],
+        _ initializations: [VariableID: CompiledVariableInitialization],
         operators: CompiledOperators
-    ) throws -> [(variable: VariableID, initialization: CompiledVariableInitialization<CompiledStateExpr>)] {
+    ) throws -> [(variable: VariableID, initialization: CompiledVariableInitialization)] {
         let declarationOrder = layout.variables.map(\.id)
         let declared = Set(declarationOrder)
         var dependencies: [VariableID: Set<VariableID>] = [:]
@@ -712,7 +712,7 @@ struct CompiledLowerer {
             }
             dependencies[variable] = analysis.variables.intersection(declared)
         }
-        var ordered: [(variable: VariableID, initialization: CompiledVariableInitialization<CompiledStateExpr>)] = []
+        var ordered: [(variable: VariableID, initialization: CompiledVariableInitialization)] = []
         var remaining = Set(declarationOrder)
         while remaining.isEmpty == false {
             guard let next = declarationOrder.first(where: {
@@ -765,7 +765,7 @@ struct CompiledLowerer {
 
     private func lower(
         _ condition: FairnessCondition,
-        actions: [ActionID: CompiledAction<CompiledStateExpr>],
+        actions: [ActionID: CompiledAction],
         at path: String
     ) throws -> CompiledFairnessCondition {
         let action: ActionID
@@ -811,7 +811,7 @@ struct CompiledLowerer {
         return .init(scope: scope, isStrong: condition.isStrong)
     }
 
-    private mutating func lower(_ action: NamedAction, id: ActionID) throws -> CompiledAction<CompiledStateExpr> {
+    private mutating func lower(_ action: NamedAction, id: ActionID) throws -> CompiledAction {
         if let issue = action.sourceIssue {
             throw issue.compilationDiagnostic(stage: .binding, path: "actions.\(action.name).bindings")
         }
@@ -836,10 +836,12 @@ struct CompiledLowerer {
         let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope)
         if bindings.isEmpty,
            case .existsAction(let sourceMember, _, _) = action.body,
-           case .existsAction(let member, .domain(.stateVariable(let variable)), let memberBody) = body,
+           case .existsAction(let member, let domain, let memberBody) = body,
+           case .domain = domain.operation,
+           case .stateVariable(let variable) = domain.children[0].operation,
            layout.variables.indices.contains(variable.ordinal),
            let collection = layout.variables[variable.ordinal].collection {
-            return CompiledAction<CompiledStateExpr>(
+            return CompiledAction(
                 id: id,
                 bindings: [CompiledActionBinding(
                     binder: member,
@@ -851,7 +853,7 @@ struct CompiledLowerer {
                 collection: variable
             )
         }
-        return CompiledAction<CompiledStateExpr>(
+        return CompiledAction(
             id: id,
             bindings: bindings,
             body: body,
@@ -859,7 +861,7 @@ struct CompiledLowerer {
         )
     }
 
-    private func accepts(_ arguments: [CompiledValue], for action: CompiledAction<CompiledStateExpr>) -> Bool {
+    private func accepts(_ arguments: [CompiledValue], for action: CompiledAction) -> Bool {
         arguments.count == action.bindings.count
             && zip(arguments, action.bindings).allSatisfy { argument, binding in
                 binding.values.contains(argument)
@@ -870,7 +872,7 @@ struct CompiledLowerer {
         _ expression: StateExpr?,
         at path: String,
         scope: BindingScope
-    ) throws -> CompiledStateExpr? {
+    ) throws -> CompiledExpression? {
         guard let expression else { return nil }
         return try lower(expression, at: path, scope: scope)
     }
@@ -879,7 +881,7 @@ struct CompiledLowerer {
         _ expression: StateExpr,
         at path: String,
         scope: BindingScope
-    ) throws -> CompiledStateExpr {
+    ) throws -> CompiledExpression {
         try lowerWithReferences(expression, at: path, scope: scope).expression
     }
 
@@ -887,7 +889,7 @@ struct CompiledLowerer {
         _ expression: StateExpr,
         at path: String,
         scope: BindingScope
-    ) throws -> (expression: CompiledStateExpr, operatorReferences: Set<OperatorID>) {
+    ) throws -> (expression: CompiledExpression, operatorReferences: Set<OperatorID>) {
         var tasks = [StateLoweringTask.expression(expression, path: path, scope: scope)]
         var lowered: [LoweredStateExpression] = []
         while let task = tasks.popLast() {
@@ -925,10 +927,10 @@ struct CompiledLowerer {
                 case .variable(let name):
                     let expression = try value(named: name, scope: scope, at: path)
                     let references: Set<OperatorID>
-                    if case .operatorReference(let operation) = expression { references = [operation] }
+                    if case .operatorReference(let operation) = expression.operation { references = [operation] }
                     else { references = [] }
                     let bindings: Set<BinderID>
-                    if case .boundValue(let binder) = expression { bindings = [binder] }
+                    if case .boundValue(let binder) = expression.operation { bindings = [binder] }
                     else { bindings = [] }
                     lowered.append(.init(expression: expression, operatorReferences: references, bindingReferences: bindings))
                 case .controlLocation(let reference):
@@ -962,43 +964,43 @@ struct CompiledLowerer {
                         )
                     }
                     requiredStandardModules.formUnion(shape.requiredStandardModules)
-                    scheduleUnary(value, at: path, scope: scope, build: { .assertView($0, shape) }, on: &tasks)
-                case .negate(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.negate, on: &tasks)
-                case .not(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.not, on: &tasks)
-                case .cardinality(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.cardinality, on: &tasks)
-                case .powerSet(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.powerSet, on: &tasks)
-                case .unionAll(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.unionAll, on: &tasks)
-                case .tupleLength(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.tupleLength, on: &tasks)
-                case .tupleHead(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.tupleHead, on: &tasks)
-                case .tupleTail(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.tupleTail, on: &tasks)
-                case .domain(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.domain, on: &tasks)
-                case .sequenceFromSet(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.sequenceFromSet, on: &tasks)
-                case .add(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.add, on: &tasks)
-                case .subtract(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.subtract, on: &tasks)
-                case .multiply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.multiply, on: &tasks)
-                case .divide(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.divide, on: &tasks)
-                case .modulo(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.modulo, on: &tasks)
-                case .integerDivide(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.integerDivide, on: &tasks)
-                case .equal(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.equal, on: &tasks)
-                case .notEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.notEqual, on: &tasks)
-                case .lessThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.lessThan, on: &tasks)
-                case .lessOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.lessOrEqual, on: &tasks)
-                case .greaterThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.greaterThan, on: &tasks)
-                case .greaterOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.greaterOrEqual, on: &tasks)
-                case .and(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.and, on: &tasks)
-                case .or(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.or, on: &tasks)
-                case .in(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.in, on: &tasks)
-                case .subset(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.subset, on: &tasks)
-                case .union(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.union, on: &tasks)
-                case .intersection(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.intersection, on: &tasks)
-                case .setDifference(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.setDifference, on: &tasks)
-                case .tupleDynamicAccess(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.tupleDynamicAccess, on: &tasks)
-                case .tupleAppend(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.tupleAppend, on: &tasks)
-                case .tupleConcatenate(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.tupleConcatenate, on: &tasks)
-                case .tupleRemoving(let tuple, let index): scheduleBinary(tuple, index, at: path, scope: scope, build: CompiledStateExpr.tupleRemoving, on: &tasks)
+                    scheduleUnary(value, at: path, scope: scope, operation: .assertView(shape), on: &tasks)
+                case .negate(let value): scheduleUnary(value, at: path, scope: scope, operation: .negate, on: &tasks)
+                case .not(let value): scheduleUnary(value, at: path, scope: scope, operation: .not, on: &tasks)
+                case .cardinality(let value): scheduleUnary(value, at: path, scope: scope, operation: .cardinality, on: &tasks)
+                case .powerSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .powerSet, on: &tasks)
+                case .unionAll(let value): scheduleUnary(value, at: path, scope: scope, operation: .unionAll, on: &tasks)
+                case .tupleLength(let value): scheduleUnary(value, at: path, scope: scope, operation: .tupleLength, on: &tasks)
+                case .tupleHead(let value): scheduleUnary(value, at: path, scope: scope, operation: .tupleHead, on: &tasks)
+                case .tupleTail(let value): scheduleUnary(value, at: path, scope: scope, operation: .tupleTail, on: &tasks)
+                case .domain(let value): scheduleUnary(value, at: path, scope: scope, operation: .domain, on: &tasks)
+                case .sequenceFromSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .sequenceFromSet, on: &tasks)
+                case .add(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .add, on: &tasks)
+                case .subtract(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .subtract, on: &tasks)
+                case .multiply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .multiply, on: &tasks)
+                case .divide(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .divide, on: &tasks)
+                case .modulo(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .modulo, on: &tasks)
+                case .integerDivide(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .integerDivide, on: &tasks)
+                case .equal(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .equal, on: &tasks)
+                case .notEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .notEqual, on: &tasks)
+                case .lessThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .lessThan, on: &tasks)
+                case .lessOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .lessOrEqual, on: &tasks)
+                case .greaterThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .greaterThan, on: &tasks)
+                case .greaterOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .greaterOrEqual, on: &tasks)
+                case .and(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .and, on: &tasks)
+                case .or(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .or, on: &tasks)
+                case .in(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .in, on: &tasks)
+                case .subset(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .subset, on: &tasks)
+                case .union(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .union, on: &tasks)
+                case .intersection(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .intersection, on: &tasks)
+                case .setDifference(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .setDifference, on: &tasks)
+                case .tupleDynamicAccess(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleDynamicAccess, on: &tasks)
+                case .tupleAppend(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleAppend, on: &tasks)
+                case .tupleConcatenate(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleConcatenate, on: &tasks)
+                case .tupleRemoving(let tuple, let index): scheduleBinary(tuple, index, at: path, scope: scope, operation: .tupleRemoving, on: &tasks)
                 case .sequenceSelect(let sequence, let name, let predicate):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
-                    scheduleBinding(sequence, predicate, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledStateExpr.sequenceSelect, on: &tasks)
+                    scheduleBinding(sequence, predicate, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.sequenceSelect, on: &tasks)
                 case .functionApply(.variable(let name), let argument)
                     where scope.values[name] == nil && scope.operators.keys.contains(name):
                     let operation = try operatorID(named: name, arity: 1, scope: scope, at: path)
@@ -1010,14 +1012,14 @@ struct CompiledLowerer {
                         operatorReferences: [operation],
                         build: {
                             isBounded
-                                ? .functionApply(.operatorReference(operation), $0[0].expression)
+                                ? .init(operation: .functionApply, children: [.operatorReference(operation), $0[0].expression])
                                 : .operatorApplication(.reference(operation, arity: 1), [.value($0[0].expression)])
                         },
                         on: &tasks
                     )
-                case .functionApply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.functionApply, on: &tasks)
-                case .functionSet(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.functionSet, on: &tasks)
-                case .setSum(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.setSum, on: &tasks)
+                case .functionApply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .functionApply, on: &tasks)
+                case .functionSet(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .functionSet, on: &tasks)
+                case .setSum(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .setSum, on: &tasks)
                 case .integerRange(let lower, let upper):
                     schedule([(lower, "\(path).lower"), (upper, "\(path).upper")], at: path, scope: scope, build: { .integerRange($0[0].expression, $0[1].expression) }, on: &tasks)
                 case .ifThenElse(let condition, let then, let otherwise):
@@ -1093,7 +1095,7 @@ struct CompiledLowerer {
                         at: path,
                         scope: scope,
                         bodyScope: nested,
-                        build: CompiledStateExpr.setFilter,
+                        build: CompiledExpression.setFilter,
                         on: &tasks
                     )
                 case .setMap(let body, let name, let domain):
@@ -1109,16 +1111,16 @@ struct CompiledLowerer {
                     )
                 case .functionLiteral(let domain, let name, let body):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
-                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledStateExpr.functionLiteral, on: &tasks)
+                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.functionLiteral, on: &tasks)
                 case .forAll(let domain, let name, let body):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
-                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledStateExpr.forAll, on: &tasks)
+                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.forAll, on: &tasks)
                 case .exists(let domain, let name, let body):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
-                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledStateExpr.exists, on: &tasks)
+                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.exists, on: &tasks)
                 case .choose(let domain, let name, let body):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
-                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledStateExpr.choose, on: &tasks)
+                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.choose, on: &tasks)
                 case .foldFunction(let lambda, let initial, let sequence):
                     if let issue = lambda.sourceIssue {
                         throw issue.compilationDiagnostic(stage: .binding, path: "\(path).operator")
@@ -1212,7 +1214,7 @@ struct CompiledLowerer {
                         operatorReferences: [id],
                         build: {
                             if isBounded, let argument = $0.first {
-                                return .functionApply(.operatorReference(id), argument.expression)
+                                return .init(operation: .functionApply, children: [.operatorReference(id), argument.expression])
                             }
                             return .operatorApplication(.reference(id, arity: $0.count), $0.map { .value($0.expression) })
                         },
@@ -1275,8 +1277,8 @@ struct CompiledLowerer {
                         var declarations: [(
                             id: OperatorID,
                             parameters: [BinderID],
-                            domain: CompiledStateExpr?,
-                            body: CompiledStateExpr,
+                            domain: CompiledExpression?,
+                            body: CompiledExpression,
                             references: Set<OperatorID>,
                             captures: Set<BinderID>
                         )] = []
@@ -1364,7 +1366,7 @@ struct CompiledLowerer {
         scope: BindingScope,
         childScopes: [BindingScope]? = nil,
         operatorReferences: Set<OperatorID> = [],
-        build: @escaping ([LoweredStateExpression]) throws -> CompiledStateExpr,
+        build: @escaping ([LoweredStateExpression]) throws -> CompiledExpression,
         on tasks: inout [StateLoweringTask]
     ) {
         tasks.append(.build(childCount: children.count, path: path) { children in
@@ -1393,10 +1395,10 @@ struct CompiledLowerer {
         _ value: StateExpr,
         at path: String,
         scope: BindingScope,
-        build: @escaping (CompiledStateExpr) -> CompiledStateExpr,
+        operation: CompiledOperation,
         on tasks: inout [StateLoweringTask]
     ) {
-        schedule([(value, path)], at: path, scope: scope, build: { build($0[0].expression) }, on: &tasks)
+        schedule([(value, path)], at: path, scope: scope, build: { .init(operation: operation, children: $0.map(\.expression)) }, on: &tasks)
     }
 
     private func scheduleBinary(
@@ -1404,14 +1406,14 @@ struct CompiledLowerer {
         _ rhs: StateExpr,
         at path: String,
         scope: BindingScope,
-        build: @escaping (CompiledStateExpr, CompiledStateExpr) -> CompiledStateExpr,
+        operation: CompiledOperation,
         on tasks: inout [StateLoweringTask]
     ) {
         schedule(
             [(lhs, "\(path).left"), (rhs, "\(path).right")],
             at: path,
             scope: scope,
-            build: { build($0[0].expression, $0[1].expression) },
+            build: { .init(operation: operation, children: $0.map(\.expression)) },
             on: &tasks
         )
     }
@@ -1423,7 +1425,7 @@ struct CompiledLowerer {
         at path: String,
         scope: BindingScope,
         bodyScope: BindingScope,
-        build: @escaping (CompiledStateExpr, BinderID, CompiledStateExpr) -> CompiledStateExpr,
+        build: @escaping (CompiledExpression, BinderID, CompiledExpression) -> CompiledExpression,
         on tasks: inout [StateLoweringTask]
     ) {
         schedule(
@@ -1573,7 +1575,7 @@ struct CompiledLowerer {
         _ expression: TemporalExpr,
         at path: String,
         scope: BindingScope
-    ) throws -> CompiledTemporalExpr<CompiledStateExpr> {
+    ) throws -> CompiledTemporalExpr<CompiledExpression> {
         switch expression {
         case .always(let predicate):
             return .always(try lower(predicate, at: "\(path).body", scope: scope))
@@ -1595,9 +1597,9 @@ struct CompiledLowerer {
         _ action: ActionExpr,
         at path: String,
         scope: BindingScope
-    ) throws -> CompiledActionExpr<CompiledStateExpr> {
+    ) throws -> CompiledActionExpr {
         var tasks = [ActionLoweringTask.expression(action, path: path, scope: scope)]
-        var lowered: [CompiledActionExpr<CompiledStateExpr>] = []
+        var lowered: [CompiledActionExpr] = []
         while let task = tasks.popLast() {
             switch task {
             case .build(let childCount, let taskPath, let build):
@@ -1677,7 +1679,7 @@ struct CompiledLowerer {
         _ children: [(expression: ActionExpr, path: String)],
         at path: String,
         scope: BindingScope,
-        build: @escaping ([CompiledActionExpr<CompiledStateExpr>]) throws -> CompiledActionExpr<CompiledStateExpr>,
+        build: @escaping ([CompiledActionExpr]) throws -> CompiledActionExpr,
         on tasks: inout [ActionLoweringTask]
     ) {
         tasks.append(.build(childCount: children.count, path: path, build))
@@ -1690,7 +1692,7 @@ struct CompiledLowerer {
         _ initialization: VariableInitialization,
         at path: String,
         scope: BindingScope
-    ) throws -> CompiledVariableInitialization<CompiledStateExpr> {
+    ) throws -> CompiledVariableInitialization {
         switch initialization {
         case .value(let value): return .value(.value(.init(formal: value)))
         case .expression(let expression): return .value(try lower(expression, at: path, scope: scope))
@@ -1702,7 +1704,7 @@ struct CompiledLowerer {
         named name: String,
         scope: BindingScope,
         at path: String
-    ) throws -> CompiledStateExpr {
+    ) throws -> CompiledExpression {
         if let binder = scope.values[name] { return .boundValue(binder) }
         if let variable = layout.variables.first(where: { $0.declaration.name == name })?.id {
             return .stateVariable(variable)

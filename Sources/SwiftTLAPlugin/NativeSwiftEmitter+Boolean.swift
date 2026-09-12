@@ -3,12 +3,12 @@ import SwiftTLA
 extension NativeSwiftEmitter {
     /// Keep predicate trees shallow in generated Swift while preserving lazy operands.
     mutating func booleanExpression(
-        _ root: ResolvedExpression, state: String, substitutions: [BinderID: String],
+        _ root: CompiledExpression, state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         var pending = [root]
         var declarations: [String] = []
-        var emitted: Set<ResolvedExpression> = []
+        var emitted: Set<CompiledExpression> = []
         while let id = pending.popLast() {
             guard emitted.insert(id).inserted else { continue }
             let node = id

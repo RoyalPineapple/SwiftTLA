@@ -419,8 +419,8 @@ internal struct CompiledAuthoredPlusCalAlgorithmPlan: Sendable {
 
 internal struct CompiledAuthoredPlusCalState: Sendable {
     enum Initialization: Sendable {
-        case expression(CompiledStateExpr)
-        case memberOf(CompiledStateExpr)
+        case expression(CompiledExpression)
+        case memberOf(CompiledExpression)
     }
 
     let variable: VariableID
@@ -445,30 +445,30 @@ internal struct CompiledAuthoredPlusCalProcess: Sendable {
 internal struct CompiledAuthoredPlusCalStep: Sendable {
     let label: ControlLocationID
     let statements: [CompiledAuthoredPlusCalStatement]
-    let loopCondition: CompiledStateExpr?
+    let loopCondition: CompiledExpression?
 }
 
 internal struct CompiledAuthoredPlusCalAssignment: Sendable {
     let target: CompiledAuthoredPlusCalLValue
-    let value: CompiledStateExpr
+    let value: CompiledExpression
 }
 
 internal enum CompiledAuthoredPlusCalLValue: Sendable {
     case root(VariableID)
-    case function(root: VariableID, key: CompiledStateExpr)
+    case function(root: VariableID, key: CompiledExpression)
 }
 
 internal indirect enum CompiledAuthoredPlusCalStatement: Sendable {
-    case await(CompiledStateExpr)
-    case assert(CompiledStateExpr)
-    case set(target: CompiledAuthoredPlusCalLValue, value: CompiledStateExpr)
+    case await(CompiledExpression)
+    case assert(CompiledExpression)
+    case set(target: CompiledAuthoredPlusCalLValue, value: CompiledExpression)
     case parallel([CompiledAuthoredPlusCalAssignment])
-    case letBinding(variable: BinderID, value: CompiledStateExpr, [CompiledAuthoredPlusCalStatement])
-    case with(variable: BinderID, source: CompiledStateExpr, [CompiledAuthoredPlusCalStatement])
-    case ifElse(CompiledStateExpr, [CompiledAuthoredPlusCalStatement], [CompiledAuthoredPlusCalStatement])
+    case letBinding(variable: BinderID, value: CompiledExpression, [CompiledAuthoredPlusCalStatement])
+    case with(variable: BinderID, source: CompiledExpression, [CompiledAuthoredPlusCalStatement])
+    case ifElse(CompiledExpression, [CompiledAuthoredPlusCalStatement], [CompiledAuthoredPlusCalStatement])
     case either([CompiledAuthoredPlusCalStatement], [CompiledAuthoredPlusCalStatement])
     case goto(ControlLocationID)
-    case call(target: ProcedureID, arguments: [CompiledStateExpr])
+    case call(target: ProcedureID, arguments: [CompiledExpression])
     case `return`
     case skip
 }

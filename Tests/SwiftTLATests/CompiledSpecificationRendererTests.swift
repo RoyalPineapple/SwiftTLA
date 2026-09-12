@@ -6,7 +6,7 @@ struct CompiledSpecificationRendererTests {
     @Test("Structured operation syntax uses resolved operand positions and binding identities")
     func structuredOperationSyntax() throws {
         let binder = BinderID(ordinal: 0)
-        let cases: [(ResolvedOperation, [String], String)] = [
+        let cases: [(CompiledOperation, [String], String)] = [
             (.setMap(binder), ["item + 1", "Items"], "{item + 1 : item \\in Items}"),
             (.forAll(binder), ["Items", "item > 0"], "\\A item \\in Items : item > 0"),
             (.functionLiteral(binder), ["Items", "item + 1"], "[item \\in Items |-> item + 1]"),
@@ -27,7 +27,7 @@ struct CompiledSpecificationRendererTests {
             #expect(rendered == expected)
         }
         #expect(throws: CompilationDiagnostic.self) {
-            try ResolvedOperation.caseExpr(hasOtherwise: false).tlaSyntax(
+            try CompiledOperation.caseExpr(hasOtherwise: false).tlaSyntax(
                 operandCount: 3, binderName: { _ in "item" }, fieldName: { _ in "field" })
         }
     }
@@ -43,34 +43,28 @@ struct CompiledSpecificationRendererTests {
         let renderer = CompiledTLARenderer(layout: compilation.layout,
             bindings: .init(binders: [selected: "selected", saved: "saved"]),
             operators: compilation.semantics.operators)
-        func literal(_ value: CompiledValue, type: CompiledValueType) -> ResolvedExpression {
+        func literal(_ value: CompiledValue, type: CompiledValueType) -> CompiledExpression {
             .init(operation: .value(value), resultType: type, children: [])
         }
         let one = literal(.integer(1), type: .int)
         let yes = literal(.boolean(true), type: .bool)
         let no = literal(.boolean(false), type: .bool)
         let domain = literal(.set([.integer(1)]), type: .set(.int))
-        let action: CompiledActionExpr<ResolvedExpression> = .existsAction(selected, domain,
+        let action: CompiledActionExpr = .existsAction(selected, domain,
             .define(saved, one, .ifElse(yes,
                 .and(.assign(variable, one), .unchanged(variable)),
                 .or(.guard_(no), .assign(variable, one)))))
-        func render(_ expression: ResolvedExpression) throws -> String {
-            guard case .value(let value) = expression.operation else {
-                throw CompiledEvaluationError.unresolvedOperator
-            }
-            return try value.rendered(using: compilation.layout).description
-        }
-        #expect(try renderer.action(action, renderExpression: render)
+        #expect(try renderer.action(action)
             == #"\E selected \in {1}: LET saved == 1 IN IF TRUE THEN ((count' = 1 /\ UNCHANGED count)) ELSE ((FALSE \/ count' = 1))"#)
         let trueQuery = CompiledStateQuery(expression: yes, enabledActions: [])
         let falseQuery = CompiledStateQuery(expression: no, enabledActions: [])
-        let properties: [(CompiledTemporalExpr<CompiledStateQuery<ResolvedExpression>>, String)] = [
+        let properties: [(CompiledTemporalExpr<CompiledStateQuery>, String)] = [
             (.always(trueQuery), "[]TRUE"), (.eventually(trueQuery), "<>TRUE"),
             (.alwaysEventually(trueQuery), "[]<>TRUE"), (.eventuallyAlways(trueQuery), "<>[]TRUE"),
             (.leadsTo(trueQuery, falseQuery), "(TRUE ~> FALSE)")
         ]
         for (property, expected) in properties {
-            #expect(try renderer.temporal(property, renderExpression: render) == expected)
+            #expect(try renderer.temporal(property) == expected)
         }
     }
 
@@ -82,10 +76,10 @@ struct CompiledSpecificationRendererTests {
         let variable = try #require(compilation.layout.variables.first?.id)
         let renderer = CompiledTLARenderer(layout: compilation.layout,
             bindings: .init(), operators: compilation.semantics.operators)
-        let source = CompiledStateExpr.stateVariable(variable)
+        let source = CompiledExpression.stateVariable(variable)
         #expect(try renderer.state(.assertView(source, .integer))
             == "(LET _checkedValue_ == _checkedValue IN CASE _checkedValue_ \\in Int -> _checkedValue_)")
-        var nested = CompiledStateExpr.value(.integer(123456789))
+        var nested = CompiledExpression.value(.integer(123456789))
         for _ in 0..<64 { nested = .assertView(nested, .integer) }
         let rendered = try renderer.state(nested)
         #expect(rendered.components(separatedBy: "123456789").count == 2)
