@@ -5,17 +5,6 @@ import Testing
 struct ChangRobertsCorpusContractTests {
     private typealias Node = ChangRobertsModel.Node
 
-    private struct Position: Hashable {
-        let state: ChangRobertsModel.State
-        let unstarted: Set<Node>
-    }
-
-    private struct Edge: Hashable {
-        let source: Position
-        let action: ChangRobertsModel.Action
-        let target: Position
-    }
-
     @Test("Chang–Roberts native execution preserves the complete N=3 graph and its properties")
     func nativeGraphMatchesFormalGraph() throws {
         let compilation = try ChangRobertsModel.spec.compile()
@@ -27,81 +16,16 @@ struct ChangRobertsCorpusContractTests {
         #expect(compilation.description.invariants == ["Correctness"])
         #expect(compilation.description.temporalProperties == ["Liveness"])
         #expect(try exploration.analyzeTemporalProperties(in: compilation).map(\.status) == [.satisfied])
-        let formalPositions = try exploration.graph.states.mapValues { projection in
-            let locations: [Node: String] = try table("pc", in: projection)
-            try #require(locations.values.allSatisfy { $0 == "n0" || $0 == "n1" })
-            let messages: [Node: SetExpr<Node>] = try table("messages", in: projection)
-            return try Position(
-                state: .init(
-                    initiator: table("initiator", in: projection),
-                    processState: table("processState", in: projection),
-                    successor: table("successor", in: projection),
-                    messages: messages.mapValues { Set($0.elements) }
-                ),
-                unstarted: Set(locations.filter { $0.value == "n0" }.keys)
-            )
-        }
-        var formalEdges: Set<Edge> = []
-        for (source, transitions) in exploration.graph.transitions {
-            for transition in transitions {
-                let arguments = try transition.label.formalArguments(using: compilation.layout)
-                try #require(arguments.count == 1)
-                let node = try #require(Node(formalValue: arguments[0]))
-                let action: ChangRobertsModel.Action
-                switch transition.label.action {
-                case "n0": action = .n0(process: node)
-                case "n1": action = .n1(process: node)
-                default:
-                    Issue.record("Unexpected Chang–Roberts action: \(transition.label.action)")
-                    continue
-                }
-                formalEdges.insert(try Edge(
-                    source: #require(formalPositions[source]), action: action,
-                    target: #require(formalPositions[transition.target])
-                ))
-            }
-        }
-        var pending = try ChangRobertsModel.initialMachines()
-        #expect(pending.count == 8)
+        let initial = try ChangRobertsModel.initialMachines()
+        #expect(initial.count == 8)
         #expect(throws: GeneratedMachineError.ambiguousInitialState) { try ChangRobertsModel.makeMachine() }
-        let initial = try Set(pending.map(position))
-        #expect(initial == Set(try exploration.initialStateIDs.map { try #require(formalPositions[$0]) }))
-        let actions: [ChangRobertsModel.Action] = Node.allCases.flatMap { [.n0(process: $0), .n1(process: $0)] }
-        var nativePositions: Set<Position> = []
-        var nativeEdges: Set<Edge> = []
-        while let machine = pending.popLast() {
-            let source = try position(machine)
-            guard nativePositions.insert(source).inserted else { continue }
-            try #require(nativePositions.count <= 500)
-            #expect(try machine.violatedInvariants().isEmpty)
-            let enabled = try machine.enabledActions()
-            #expect(Set(enabled) == Set(formalEdges.filter { $0.source == source }.map(\.action)))
-            for action in actions {
-                let successors = try machine.successors(for: action)
-                #expect(try machine.isEnabled(action) == !successors.isEmpty)
-                #expect(enabled.contains(action) == !successors.isEmpty)
-                var next = machine
-                if successors.isEmpty {
-                    #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try next.send(action) }
-                    #expect(try position(next) == source)
-                } else if successors.count == 1 {
-                    let transition = try next.send(action)
-                    #expect(transition.before == machine.state)
-                    #expect(transition.after == successors[0].state)
-                    #expect(try position(next) == position(successors[0]))
-                } else {
-                    #expect(throws: GeneratedMachineError.ambiguousAction) { try next.send(action) }
-                    #expect(try position(next) == source)
-                }
-                for successor in successors {
-                    nativeEdges.insert(try Edge(source: source, action: action, target: position(successor)))
-                    pending.append(successor)
-                }
-            }
-        }
-        #expect(nativePositions.count == Example.changRobertsN3.expectedDistinct)
-        #expect(nativePositions == Set(formalPositions.values))
-        #expect(nativeEdges == formalEdges)
+        let machine = try #require(initial.first)
+        let native = try ReachabilityGraph(initialMachines: initial, maximumStates: 500)
+        #expect(native.safetyViolations.isEmpty)
+        let exported = try CanonicalGraph(native, using: machine)
+        let formal = try SwiftGraphExporter().export(exploration)
+        #expect(exported == formal.graph)
+        #expect(exported.states.count == Example.changRobertsN3.expectedDistinct)
     }
 
     @Test("Chang–Roberts requires the smallest initiator to win and every peer to lose")
@@ -129,16 +53,4 @@ struct ChangRobertsCorpusContractTests {
         }
     }
 
-    private func position(_ machine: ChangRobertsModel) throws -> Position {
-        // n0 is enabled exactly until that node has sent its initial message.
-        // This distinguishes control states even when sending changes no public value.
-        let unstarted = try Node.allCases.filter { try machine.isEnabled(.n0(process: $0)) }
-        return Position(state: machine.state, unstarted: Set(unstarted))
-    }
-
-    private func table<Value: TLAValueType>(_ name: String, in projection: TLAStateProjection) throws -> [Node: Value] {
-        let token = try #require(TLAStateProjection.Token(validating: name))
-        let value = try #require(projection.value(for: token).flatMap(Function<Node, Value>.init(formalValue:)))
-        return try Dictionary(uniqueKeysWithValues: Node.allCases.map { node in (node, try #require(value[node])) })
-    }
 }
