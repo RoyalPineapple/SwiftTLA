@@ -619,6 +619,11 @@ private enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
     #expect(diagnostic.actual == "false")
     #expect(diagnostic.state?.value(for: xToken) == .int(1))
     #expect(diagnostic.trace.map(\.action) == ["init", "increment"])
+    guard case .invariantViolated(_, _, let trace) = checkOutcome else {
+      Issue.record("Expected an invariant counterexample")
+      return
+    }
+    #expect(diagnostic.trace == trace)
     #expect(diagnostic.nextSafeAction.contains("final trace transition"))
   }
 

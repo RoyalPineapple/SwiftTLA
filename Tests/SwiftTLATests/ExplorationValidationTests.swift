@@ -1,15 +1,15 @@
 import Testing
 @testable import SwiftTLA
 
-@Suite("compiled exploration evidence")
-struct ExplorationEvidenceTests {
-    @Test("property checks reject missing, inconsistent, and foreign state evidence")
-    func rejectsInvalidEvidence() throws {
+@Suite("exploration input validation")
+struct ExplorationValidationTests {
+    @Test("property checks reject missing, inconsistent, and foreign exploration states")
+    func rejectsInvalidExploration() throws {
         let abstractValue = Var<Int>("abstractValue", 0)
-        let abstract = TLASpec("AbstractEvidence") { Variable(abstractValue) }
+        let abstract = TLASpec("AbstractModel") { Variable(abstractValue) }
         let instance = Instance("C", of: abstract)
         let concreteValue = Var<Int>("concreteValue", 0)
-        let concrete = TLASpec("ConcreteEvidence") {
+        let concrete = TLASpec("ConcreteModel") {
             Variable(concreteValue)
             Action("stay") { concreteValue.stays }
             Always("stable", concreteValue == 0)
@@ -37,13 +37,13 @@ struct ExplorationEvidenceTests {
             )
             do {
                 _ = try RefinementChecker(compilation: compilation).check(invalid)
-                Issue.record("Expected invalid refinement evidence to be rejected.")
+                Issue.record("Expected invalid refinement inputs to be rejected.")
             } catch is CompilationDiagnostic {
             } catch is CompiledEvaluationError {
             }
             do {
                 _ = try invalid.analyzeTemporalProperties(in: compilation)
-                Issue.record("Expected invalid temporal evidence to be rejected.")
+                Issue.record("Expected invalid temporal inputs to be rejected.")
             } catch is CompilationDiagnostic {
             } catch is CompiledEvaluationError {
             }

@@ -437,29 +437,14 @@ package enum ModelCheckingFailureKind: String, Sendable, Equatable {
     case initialState
 }
 
-/// One safely projected state in a counterexample trace.
-package struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
-    public let action: String
-    public let state: TLAStateProjection
-
-    package init(action: String, state: TLAStateProjection) {
-        self.action = action
-        self.state = state
-    }
-
-    public var description: String {
-        "[\(action)] \(state)"
-    }
-}
-
-/// Inspection-ready evidence for a model-checking failure.
+/// A model-checking failure with its state and counterexample trace.
 package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvertible {
     public let kind: ModelCheckingFailureKind
     public let subject: String?
     public let expected: String
     public let actual: String
     public let state: TLAStateProjection?
-    public let trace: [ModelTraceEvidence]
+    public let trace: [TraceStep]
     public let nextSafeAction: String
 
     public init(
@@ -468,7 +453,7 @@ package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvert
         expected: String,
         actual: String,
         state: TLAStateProjection? = nil,
-        trace: [ModelTraceEvidence] = [],
+        trace: [TraceStep] = [],
         nextSafeAction: String
     ) {
         self.kind = kind
@@ -506,11 +491,11 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
         witness: FairLassoWitness
     )
     case livenessUnavailable(property: String, reason: TemporalDiagnosticReason)
-    case refinementViolated(refinement: String, evidence: RefinementFailureEvidence)
+    case refinementViolated(refinement: String, failure: RefinementFailure)
     case refinementUnproven(refinement: String, exploration: ModelCheckOutcome)
 
     /// The typed explanation of a failed check, including projected state and
-    /// counterexample evidence.
+    /// counterexample trace.
     public var diagnostic: ModelCheckingDiagnostic? {
         switch self {
         case .ok:
@@ -522,7 +507,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
                 expected: "the invariant to evaluate to true",
                 actual: "false",
                 state: state,
-                trace: trace.map { .init(action: $0.action, state: $0.state) },
+                trace: trace,
                 nextSafeAction: "Inspect the final trace transition and revise the action guard, update, or invariant."
             )
         case .depthExceeded(let count, let limit):
@@ -566,12 +551,12 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
             return .init(
                 kind: .liveness,
                 subject: property,
-                expected: "complete typed liveness evidence",
+                expected: "complete temporal analysis",
                 actual: reason.rawValue,
                 nextSafeAction: "Complete the declared exploration inputs before checking the temporal property."
             )
-        case .refinementViolated(let refinement, let evidence):
-            switch evidence {
+        case .refinementViolated(let refinement, let failure):
+            switch failure {
             case .initialState(let mapped, let abstractInitialStates):
                 return .init(
                     kind: .refinement,
@@ -588,7 +573,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
                     expected: "an abstract successor or stuttering step for action \(action)",
                     actual: "\(source) to \(target) maps to \(mappedSource) to \(mappedTarget); abstract successors \(abstractSuccessors)",
                     state: source,
-                    trace: [.init(action: action, state: target)],
+                    trace: [.init(state: target, action: action)],
                     nextSafeAction: "Inspect the refinement mapping and the named action update."
                 )
             }
@@ -619,7 +604,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
     }
 }
 
-package struct TraceStep: Sendable, CustomStringConvertible {
+package struct TraceStep: Sendable, Equatable, CustomStringConvertible {
     public let state: TLAStateProjection
     public let action: String
     public var description: String { "[" + action + "] " + state.description }

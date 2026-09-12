@@ -1,4 +1,4 @@
-package enum RefinementFailureEvidence: Sendable, Equatable {
+package enum RefinementFailure: Sendable, Equatable {
     case initialState(
         mapped: TLAStateProjection,
         abstractInitialStates: [TLAStateProjection]
@@ -68,7 +68,7 @@ struct RefinementChecker {
             guard abstractInitialStates.contains(mapped) else {
                 return .refinementViolated(
                     refinement: refinement.name,
-                    evidence: .initialState(
+                    failure: .initialState(
                         mapped: try mapped.projection(using: refinement.abstract.layout),
                         abstractInitialStates: try abstractInitialStates.map { try $0.projection(using: refinement.abstract.layout) }
                     )
@@ -85,7 +85,7 @@ struct RefinementChecker {
                 guard mappedTarget == mappedSource || abstractSuccessors.contains(mappedTarget) else {
                     return .refinementViolated(
                         refinement: refinement.name,
-                        evidence: .transition(
+                        failure: .transition(
                             action: transition.label.description,
                             source: try source.projection(using: compilation.layout),
                             target: try target.projection(using: compilation.layout),
