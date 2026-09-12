@@ -146,6 +146,12 @@ private struct EvaluatorBindings {
 private struct EvaluatorScope {
     var bindings: EvaluatorBindings
     var operatorBindings: [OperatorID: EvaluatorOperatorBinding]
+    var callbacks: [ResolvedCallbackID: EvaluatorFunctionBinding] = [:]
+}
+
+private struct EvaluatorFunctionBinding {
+    let function: ResolvedFunctionID
+    let scope: EvaluatorScope
 }
 
 private struct EvaluatorOperatorBinding {
@@ -268,29 +274,29 @@ private enum EvaluatorTask {
 
 struct CompiledEvaluator: Sendable {
     let variableValue: @Sendable (VariableID) throws -> CompiledValue
-    let semantics: CompiledSemantics
-    let layout: CompiledLayout
+    let operators: CompiledOperators
+    let functions: [ResolvedFunction]
     let bindings: CompiledBindings
     let enabledActions: Set<ActionID>
 
     init(
         state: CompiledState,
-        semantics: CompiledSemantics,
-        layout: CompiledLayout,
+        operators: CompiledOperators,
+        functions: [ResolvedFunction] = [],
         bindings: CompiledBindings = .init(),
         enabledActions: Set<ActionID> = []
     ) {
         self.variableValue = { try state.value(for: $0) }
-        self.semantics = semantics
-        self.layout = layout
+        self.operators = operators
+        self.functions = functions
         self.bindings = bindings
         self.enabledActions = enabledActions
     }
 
     init(
         variableValues: [VariableID: CompiledValue],
-        semantics: CompiledSemantics,
-        layout: CompiledLayout
+        operators: CompiledOperators,
+        functions: [ResolvedFunction] = []
     ) {
         self.variableValue = { variable in
             guard let value = variableValues[variable] else {
@@ -298,8 +304,8 @@ struct CompiledEvaluator: Sendable {
             }
             return value
         }
-        self.semantics = semantics
-        self.layout = layout
+        self.operators = operators
+        self.functions = functions
         self.bindings = .init()
         self.enabledActions = []
     }
@@ -426,7 +432,7 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.formalCall(supplied, arguments: arguments, argumentScope: argumentScope))
                     continue
                 }
-                guard let definition = semantics.operators[operation.declarationID] else {
+                guard let definition = operators[operation.declarationID] else {
                     throw CompiledEvaluationError.unresolvedOperator
                 }
                 let parameters = definition.parameters
@@ -642,7 +648,48 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.expression(sequence, scope))
                 case .convert:
                     tasks.append(.expression(expression.children[0], scope))
-                case .call, .checkedCall:
+                case .call(let call):
+                    let target: EvaluatorFunctionBinding
+                    switch call.target {
+                    case .function(let id): target = .init(function: id, scope: scope)
+                    case .callback(let id):
+                        guard let callback = scope.callbacks[id] else {
+                            throw CompiledEvaluationError.unresolvedOperator
+                        }
+                        target = callback
+                    }
+                    guard functions.indices.contains(target.function.ordinal) else {
+                        throw CompiledEvaluationError.unresolvedOperator
+                    }
+                    let function = functions[target.function.ordinal]
+                    guard function.parameters.count == expression.children.count else {
+                        throw EvalError.invalidArity(.formalOperator,
+                            expected: function.parameters.count, actual: expression.children.count)
+                    }
+                    try beginCall(tasks: &tasks, depth: &recursiveDepth)
+                    var callScope = target.scope
+                    for (parameter, argument) in zip(function.parameters, expression.children) {
+                        callScope.bindings = callScope.bindings.binding(argument, from: scope,
+                            to: parameter.binder, retainingIn: &pendingArguments)
+                    }
+                    for (parameter, actual) in call.callbacks {
+                        switch actual {
+                        case .function(let id):
+                            callScope.callbacks[parameter] = .init(function: id, scope: scope)
+                        case .callback(let id):
+                            guard let callback = scope.callbacks[id] else {
+                                throw CompiledEvaluationError.unresolvedOperator
+                            }
+                            callScope.callbacks[parameter] = callback
+                        }
+                    }
+                    if let domain = function.domainGuard {
+                        tasks.append(.localDomain(function.body, scope: callScope))
+                        tasks.append(.expression(domain, callScope))
+                    } else {
+                        tasks.append(.expression(function.body, callScope))
+                    }
+                case .checkedCall:
                     throw CompiledEvaluationError.unresolvedOperator
                 case .operatorApplication(let operation, let arguments):
                     tasks.append(.formalCall(
@@ -1024,7 +1071,7 @@ package func evaluateClosed(_ expression: StateExpr) throws -> TLAValue {
         actions: [],
         invariants: [.init(name: "value", body: expression)]
     ).compile()
-    let state = try CompiledState(values: [CompiledValue](), compilation: compilation)
+    let state = try CompiledState(values: [CompiledValue](), layout: compilation.layout, identity: compilation.identity)
     guard let invariant = compilation.semantics.behavior.invariants.first else {
         throw CompiledEvaluationError.unresolvedOperator
     }

@@ -1,6 +1,7 @@
 import Testing
 @testable import SwiftTLA
 import SwiftTLAMacros
+@testable import SwiftTLAPlugin
 
 // Explicit formal fixtures test call-by-name at the native compiler boundary.
 @TLAModel
@@ -278,7 +279,7 @@ private struct FunctionArgumentOrder {
     @Test("function application evaluates a failing key before its function")
     func functionKeyFailsFirst() throws {
         let compilation = try FunctionArgumentOrder.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "read"))
         #expect(throws: EvalError.integerOverflow(.addition, operands: [Int.max, 1])) {
@@ -295,7 +296,7 @@ private struct FunctionArgumentOrder {
     @Test("division evaluates the denominator argument before a failing numerator")
     func denominatorArgumentFailsFirst() throws {
         let compilation = try DivisionArgumentOrder.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "divide"))
         #expect(throws: EvalError.divisionByZero) {
@@ -312,7 +313,7 @@ private struct FunctionArgumentOrder {
     @Test("an empty mapping domain leaves its body argument unevaluated")
     func emptyMappingDoesNotForceBodyArguments() throws {
         let compilation = try UnusedOperatorArguments.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "emptyMapping"))
         let result = try #require(compilation.layout.testVariableID(named: "result"))
@@ -325,7 +326,7 @@ private struct FunctionArgumentOrder {
     @Test("an empty quantifier domain leaves its body argument unevaluated")
     func emptyDomainDoesNotForceBodyArguments() throws {
         let compilation = try UnusedOperatorArguments.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "emptyDomain"))
         let result = try #require(compilation.layout.testVariableID(named: "result"))
@@ -338,7 +339,7 @@ private struct FunctionArgumentOrder {
     @Test("formal and local operators do not evaluate unused invalid arguments")
     func unusedArgumentsRemainLazy() throws {
         let compilation = try UnusedOperatorArguments.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let result = try #require(compilation.layout.testVariableID(named: "result"))
         var formalMachine = try UnusedOperatorArguments.makeMachine()
@@ -356,7 +357,7 @@ private struct FunctionArgumentOrder {
     @Test("native recursion stops at the shared formal limit without committing state")
     func recursionLimitIsTransactional() throws {
         let compilation = try ExhaustedOperatorDepth.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "loop"))
         let limit = _NativeMachineOperations.maximumRecursiveDepth
@@ -374,7 +375,7 @@ private struct FunctionArgumentOrder {
     @Test("Lambda applications consume the same recursion budget as named calls")
     func lambdaFramesCountTowardLimit() throws {
         let compilation = try NestedLambdaCallDepth.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "countDown"))
         let limit = _NativeMachineOperations.maximumRecursiveDepth
@@ -394,7 +395,7 @@ private struct FunctionArgumentOrder {
     @Test("deep calls through lambdas return the same value as formal execution")
     func deepLambdaCallsComplete() throws {
         let compilation = try NestedLambdaCallDepth.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "complete"))
         let result = try #require(compilation.layout.testVariableID(named: "result"))
@@ -407,7 +408,7 @@ private struct FunctionArgumentOrder {
     @Test("the call budget is checked before evaluating a deferred tail argument")
     func tailArgumentsPreserveFailureOrder() throws {
         let compilation = try TailArgumentFailureOrder.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let atLimit = try #require(compilation.layout.testActionID(named: "atLimit"))
         let belowLimit = try #require(compilation.layout.testActionID(named: "belowLimit"))
@@ -432,7 +433,7 @@ private struct FunctionArgumentOrder {
     @Test("an evaluated tail argument is reused after entering a deeper call")
     func evaluatedTailArgumentsAreReused() throws {
         let compilation = try EvaluatedArgumentReuse.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "finish"))
         let result = try #require(compilation.layout.testVariableID(named: "result"))
@@ -445,7 +446,7 @@ private struct FunctionArgumentOrder {
     @Test("ordinary calls reuse an evaluated argument in a deeper callee")
     func ordinaryCallsReuseEvaluatedArguments() throws {
         let compilation = try EvaluatedArgumentReuse.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "reuseOrdinary"))
         let result = try #require(compilation.layout.testVariableID(named: "result"))
@@ -458,7 +459,7 @@ private struct FunctionArgumentOrder {
     @Test("LET values reuse their evaluated result inside a deeper callee")
     func letValuesReuseEvaluatedResults() throws {
         let compilation = try EvaluatedArgumentReuse.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "reuseLet"))
         let result = try #require(compilation.layout.testVariableID(named: "result"))
@@ -471,7 +472,7 @@ private struct FunctionArgumentOrder {
     @Test("an earlier body failure does not force a later argument")
     func bodyFailurePrecedesArgumentFailure() throws {
         let compilation = try TailArgumentFailureOrder.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "earlyFailure"))
         #expect(throws: EvalError.divisionByZero) {
@@ -488,7 +489,7 @@ private struct FunctionArgumentOrder {
     @Test("arguments are evaluated in first-read order rather than declaration order")
     func firstReadDeterminesArgumentFailure() throws {
         let compilation = try TailArgumentFailureOrder.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let action = try #require(compilation.layout.testActionID(named: "reverseFailure"))
         #expect(throws: EvalError.divisionByZero) {
@@ -504,7 +505,7 @@ private struct FunctionArgumentOrder {
     @Test("bounded calls preserve domain, argument, and body failure order in both engines")
     func boundedCallsPreserveFailureOrder() throws {
         let compilation = try BoundedOperatorExecution.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
+        let runtime = CompiledRuntime(program: try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation)))
         let initial = try #require(try runtime.initialStates().first)
         let result = try #require(compilation.layout.testVariableID(named: "result"))
         let accepted = try #require(compilation.layout.testActionID(named: "accepted"))

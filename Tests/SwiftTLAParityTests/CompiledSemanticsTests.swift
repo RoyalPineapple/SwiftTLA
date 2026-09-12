@@ -21,7 +21,7 @@ private func compiledSuccessors(
   let compiledValues = try variables.map { variable in
     CompiledValue(formal: try #require(values.first { $0.0 == variable }?.1))
   }
-  let state = try CompiledState(values: compiledValues, compilation: compilation)
+  let state = try CompiledState(values: compiledValues, layout: compilation.layout, identity: compilation.identity)
   let action = try #require(compilation.semantics.behavior.actions.first)
   return try CompiledRuntime(compilation: compilation)
     .successors(for: action.id, from: state)

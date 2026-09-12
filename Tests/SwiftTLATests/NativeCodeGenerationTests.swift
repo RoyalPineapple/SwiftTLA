@@ -124,6 +124,48 @@ struct NativeCodeGenerationTests {
         #expect(program.functions.count == 1)
         let function = try #require(program.functions.first)
         #expect(function.body.operation == .value(.boolean(true)))
+        let runtime = CompiledRuntime(program: program)
+        let initial = try #require(try runtime.initialStates().first)
+        #expect(try runtime.invariantHolds(try #require(program.behavior.invariants.first), in: initial))
+    }
+
+    @Test("Resolved calls execute during initialization")
+    func initializesThroughResolvedCalls() throws {
+        let source = TLASpec(name: "InitialCall", variables: [
+            .init(name: "value", initialization: .expression(.letIn([
+                LocalOperator("Seed", body: .int(3))
+            ], .recursiveCall("Seed", []))), origin: .source)
+        ], actions: [], invariants: [])
+        let compilation = try source.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let states = try CompiledRuntime(program: program).initialStates()
+        #expect(try states == CompiledRuntime(compilation: compilation).initialStates())
+        #expect(try #require(states.first).value(for: .init(ordinal: 0)) == .integer(3))
+    }
+
+    @Test("Forwarded callbacks retain captured values across resolved calls")
+    func forwardsResolvedCallbacks() throws {
+        let callback = FormalOperator.lambda(.init(parameters: ["item"],
+            body: .add(.variable("item"), .variable("offset"))))
+        let source = TLASpec(name: "ForwardedCallback", variables: [], actions: [], invariants: [
+            .init(name: "Result", body: .letValue("offset", .int(7), .equal(
+                .operatorApplication(.reference("Forward", arity: 2), [
+                    .operator(callback), .value(.int(2))
+                ]), .int(9))))
+        ], formalOperatorDefinitions: [
+            .init(name: "Apply", parameters: [.operator("operation", arity: 1), .value("value")],
+                body: .operatorApplication(.reference("operation", arity: 1), [.value(.variable("value"))])),
+            .init(name: "Forward", parameters: [.operator("operation", arity: 1), .value("value")],
+                body: .operatorApplication(.reference("Apply", arity: 2), [
+                    .operator(.reference("operation", arity: 1)), .value(.variable("value"))
+                ]))
+        ])
+        let compilation = try source.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        #expect(!program.callbacks.isEmpty)
+        let runtime = CompiledRuntime(program: program)
+        let initial = try #require(try runtime.initialStates().first)
+        #expect(try runtime.invariantHolds(try #require(program.behavior.invariants.first), in: initial))
     }
 
     @Test("Resolved actions share choice, binding, and simultaneous-update enumeration")
@@ -145,13 +187,7 @@ struct NativeCodeGenerationTests {
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         let runtime = CompiledRuntime(compilation: compilation)
         let initial = try #require(try runtime.initialStates().first)
-        let action = try #require(program.behavior.actions.first)
-        func evaluate(_ expression: CompiledExpression, _ bindings: CompiledBindings) throws -> CompiledValue {
-            try CompiledEvaluator(state: initial, semantics: compilation.semantics,
-                layout: compilation.layout, bindings: bindings).evaluate(expression)
-        }
-        let enumerator = CompiledActionEnumerator(state: initial, evaluate: evaluate)
-        let resolved = try enumerator.enumerateSuccessors(action)
+        let resolved = try CompiledRuntime(program: program).successors(from: initial)
         let formal = try runtime.successors(from: initial)
         #expect(resolved.count == 2)
         #expect(resolved.map(\.state) == formal.map(\.state))

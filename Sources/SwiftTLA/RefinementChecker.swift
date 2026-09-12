@@ -117,7 +117,7 @@ struct RefinementChecker {
     private func mappedState(_ refinement: CompiledRefinement, source: CompiledState) throws -> CompiledState {
         try CompiledState(
             values: CompiledRuntime(compilation: compilation).evaluate(refinement.variableMappings, in: source),
-            compilation: refinement.abstract
+            layout: refinement.abstract.layout, identity: refinement.abstract.identity
         )
     }
 }

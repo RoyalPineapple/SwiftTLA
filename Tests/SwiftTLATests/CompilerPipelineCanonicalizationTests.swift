@@ -667,7 +667,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(values: [.integer(0), .integer(0)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(0), .integer(0)], layout: compilation.layout, identity: compilation.identity)
         let action = try #require(compilation.semantics.behavior.actions.first)
         let nextStates = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
@@ -695,7 +695,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(values: [.integer(0)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(0)], layout: compilation.layout, identity: compilation.identity)
         let action = try #require(compilation.semantics.behavior.actions.first)
         let next = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
@@ -728,7 +728,7 @@ struct CompilerPipelineCanonicalizationTests {
             formalOperatorDefinitions: [double]
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(values: [.integer(0)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(0)], layout: compilation.layout, identity: compilation.identity)
         let action = try #require(compilation.semantics.behavior.actions.first)
         let next = try CompiledRuntime(compilation: compilation)
             .successors(for: action.id, from: state)
@@ -780,9 +780,10 @@ struct CompilerPipelineCanonicalizationTests {
             formalOperatorDefinitions: [applyTwice]
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(values: [.integer(0)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(0)], layout: compilation.layout, identity: compilation.identity)
         let action = try #require(compilation.semantics.behavior.actions.first)
-        let next = try CompiledRuntime(compilation: compilation)
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let next = try CompiledRuntime(program: program)
             .successors(for: action.id, from: state)
             .map(\.state)
         let counter = try #require(next.first).value(for: .init(ordinal: 0))
@@ -896,7 +897,7 @@ struct CompilerPipelineCanonicalizationTests {
         let compilation = try spec.compile()
         let first = compilation.layout.variables[0].id
         let second = compilation.layout.variables[1].id
-        let state = try CompiledState(values: [.integer(1), .integer(2)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(1), .integer(2)], layout: compilation.layout, identity: compilation.identity)
         let updated = try state.updating(second, to: .integer(3))
         let stateFirst = try state.value(for: first)
         let stateSecond = try state.value(for: second)
@@ -924,7 +925,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         ).compile()
 
-        let foreignState = try CompiledState(values: [.integer(0)], compilation: first)
+        let foreignState = try CompiledState(values: [.integer(0)], layout: first.layout, identity: first.identity)
         #expect(throws: CompiledEvaluationError.self) {
             try CompiledRuntime(compilation: second).successors(from: foreignState)
         }
@@ -948,7 +949,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(values: [.integer(1)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(1)], layout: compilation.layout, identity: compilation.identity)
 
         guard case .existsAction(let binder, _, let expression12) = compilation.semantics.behavior.actions[0].body,
               case .and(let expression13, let expression14) = expression12,
@@ -959,8 +960,7 @@ struct CompilerPipelineCanonicalizationTests {
         }
         let value = try CompiledEvaluator(
             state: state,
-            semantics: compilation.semantics,
-            layout: compilation.layout,
+            operators: compilation.semantics.operators,
             bindings: .init().binding(.integer(1), to: binder)
         ).evaluate(expression)
 
@@ -1066,7 +1066,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(values: [], compilation: compilation)
+        let state = try CompiledState(values: [], layout: compilation.layout, identity: compilation.identity)
 
         guard case .guard_(let compiled) = compilation.semantics.behavior.actions[0].body else {
             Issue.record("Expected a compiled guard")
@@ -1074,8 +1074,7 @@ struct CompilerPipelineCanonicalizationTests {
         }
         let value = try CompiledEvaluator(
             state: state,
-            semantics: compilation.semantics,
-            layout: compilation.layout
+            operators: compilation.semantics.operators
         ).evaluate(compiled)
         #expect(value == .boolean(true))
     }
@@ -1089,7 +1088,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let compilation = try spec.compile()
-        let state = try CompiledState(values: [.integer(1)], compilation: compilation)
+        let state = try CompiledState(values: [.integer(1)], layout: compilation.layout, identity: compilation.identity)
 
         let action = compilation.semantics.behavior.actions[0]
         let successors = try CompiledRuntime(compilation: compilation)

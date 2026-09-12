@@ -1,20 +1,36 @@
 struct CompiledRuntime {
-    let compilation: CompiledSpecification
+    let identity: CompilationIdentity
+    let layout: CompiledLayout
+    let behavior: CompiledBehavior
+    private let operators: CompiledOperators
+    private let functions: [ResolvedFunction]
 
-    private var layout: CompiledLayout { compilation.layout }
-    private var semantics: CompiledSemantics { compilation.semantics }
+    init(compilation: CompiledSpecification) {
+        identity = compilation.identity
+        layout = compilation.layout
+        behavior = compilation.semantics.behavior
+        operators = compilation.semantics.operators
+        functions = []
+    }
+
+    init(program: CompiledProgram) {
+        identity = program.identity
+        layout = program.layout
+        behavior = program.behavior
+        operators = .init()
+        functions = program.functions
+    }
 
     func initialStates() throws -> [CompiledState] {
         var assignments: [[VariableID: CompiledValue]] = [[:]]
-        for (variable, initialization) in semantics.behavior.initializations {
+        for (variable, initialization) in behavior.initializations {
             switch initialization {
             case .value(let expression):
                 assignments = try assignments.map { values in
                     var values = values
                     values[variable] = try CompiledEvaluator(
                         variableValues: values,
-                        semantics: semantics,
-                        layout: layout
+                        operators: operators, functions: functions
                     ).evaluate(expression)
                     return values
                 }
@@ -22,8 +38,7 @@ struct CompiledRuntime {
                 assignments = try assignments.flatMap { values in
                     let value = try CompiledEvaluator(
                         variableValues: values,
-                        semantics: semantics,
-                        layout: layout
+                        operators: operators, functions: functions
                     ).evaluate(set)
                     guard case .set(let members) = value else {
                         throw EvalError.expected(.set, actual: [value])
@@ -42,25 +57,25 @@ struct CompiledRuntime {
                     throw CompiledEvaluationError.uninitializedVariable(variable.id)
                 }
                 return value
-            }, compilation: compilation)
+            }, layout: layout, identity: identity)
         }
     }
 
     func successors(from state: CompiledState) throws -> [CompiledSuccessor] {
-        try state.requireIdentity(compilation.identity)
+        try state.requireIdentity(identity)
         let enabledActions = try enabledActions(in: state)
-        return try semantics.behavior.actions.flatMap { action in
+        return try behavior.actions.flatMap { action in
             try successors(for: action.id, from: state, enabledActions: enabledActions)
         }
     }
 
     func successors(for actionID: ActionID, from state: CompiledState) throws -> [CompiledSuccessor] {
-        try state.requireIdentity(compilation.identity)
-        guard let action = semantics.behavior.actions.first(where: { $0.id == actionID }) else {
+        try state.requireIdentity(identity)
+        guard let action = behavior.actions.first(where: { $0.id == actionID }) else {
             throw CompiledEvaluationError.unresolvedOperator
         }
         return try successors(for: actionID, from: state,
-            enabledActions: enabledActions(in: state, required: semantics.behavior.enabledActionDependencies[action.id] ?? []))
+            enabledActions: enabledActions(in: state, required: behavior.enabledActionDependencies[action.id] ?? []))
     }
 
     private func successors(
@@ -68,7 +83,7 @@ struct CompiledRuntime {
         from state: CompiledState,
         enabledActions: Set<ActionID>
     ) throws -> [CompiledSuccessor] {
-        guard let action = semantics.behavior.actions.first(where: { $0.id == actionID }) else {
+        guard let action = behavior.actions.first(where: { $0.id == actionID }) else {
             throw CompiledEvaluationError.unresolvedOperator
         }
         return try actionEnumerator(in: state, enabledActions: enabledActions)
@@ -77,27 +92,26 @@ struct CompiledRuntime {
     }
 
     func assumeHolds(in state: CompiledState) throws -> Bool {
-        try state.requireIdentity(compilation.identity)
-        guard let assume = semantics.behavior.assume else { return true }
+        try state.requireIdentity(identity)
+        guard let assume = behavior.assume else { return true }
         return try boolean(assume, in: state)
     }
 
     func invariantHolds(_ invariant: CompiledInvariant, in state: CompiledState) throws -> Bool {
-        try state.requireIdentity(compilation.identity)
+        try state.requireIdentity(identity)
         return try boolean(invariant.predicate, in: state)
     }
 
     func predicateHolds(_ predicate: CompiledStateQuery, in state: CompiledState) throws -> Bool {
-        try state.requireIdentity(compilation.identity)
+        try state.requireIdentity(identity)
         return try boolean(predicate, in: state)
     }
 
     func evaluate(_ queries: [CompiledStateQuery], in state: CompiledState) throws -> [CompiledValue] {
-        try state.requireIdentity(compilation.identity)
+        try state.requireIdentity(identity)
         let evaluator = CompiledEvaluator(
             state: state,
-            semantics: semantics,
-            layout: layout,
+            operators: operators, functions: functions,
             enabledActions: try enabledActions(in: state, required: queries.reduce(into: Set<ActionID>()) {
                 $0.formUnion($1.enabledActions)
             })
@@ -106,14 +120,14 @@ struct CompiledRuntime {
     }
 
     private func constraintHolds(in state: CompiledState) throws -> Bool {
-        guard let constraint = semantics.behavior.constraint else { return true }
+        guard let constraint = behavior.constraint else { return true }
         return try boolean(constraint, in: state)
     }
 
     private func enabledActions(in state: CompiledState, required: Set<ActionID>? = nil) throws -> Set<ActionID> {
         var enabled = Set<ActionID>()
-        for index in semantics.behavior.enabledActionIndices {
-            let action = semantics.behavior.actions[index]
+        for index in behavior.enabledActionIndices {
+            let action = behavior.actions[index]
             if let required, !required.contains(action.id) { continue }
             if try actionEnumerator(in: state, enabledActions: enabled).enumerate(action).isEmpty == false {
                 enabled.insert(action.id)
@@ -126,7 +140,7 @@ struct CompiledRuntime {
         in state: CompiledState, enabledActions: Set<ActionID>
     ) -> CompiledActionEnumerator {
         .init(state: state) { expression, bindings in
-            try CompiledEvaluator(state: state, semantics: semantics, layout: layout,
+            try CompiledEvaluator(state: state, operators: operators, functions: functions,
                 bindings: bindings, enabledActions: enabledActions).evaluate(expression)
         }
     }
@@ -137,8 +151,7 @@ struct CompiledRuntime {
     ) throws -> Bool {
         let value = try CompiledEvaluator(
             state: state,
-            semantics: semantics,
-            layout: layout,
+            operators: operators, functions: functions,
             enabledActions: try enabledActions(in: state, required: predicate.enabledActions)
         ).evaluate(predicate.expression)
         guard case .boolean(let boolean) = value else {

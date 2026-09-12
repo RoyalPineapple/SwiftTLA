@@ -40,7 +40,7 @@ struct LivenessConformanceTests {
             guard case .int(let value) = projection.value(for: x) else {
                 throw TLAStateProjectionDiagnostic.invalidValue(path: "x")
             }
-            return try CompiledState(values: [.integer(value)], compilation: compilation)
+            return try CompiledState(values: [.integer(value)], layout: compilation.layout, identity: compilation.identity)
         }
     }
 

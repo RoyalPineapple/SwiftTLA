@@ -159,8 +159,8 @@ struct CanonicalGraphTests {
             compilationIdentity: compilation.identity,
             configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled),
             compiledStates: [
-                first: try CompiledState(values: [.init(formal: firstCars)], compilation: compilation),
-                second: try CompiledState(values: [.init(formal: secondCars)], compilation: compilation)
+                first: try CompiledState(values: [.init(formal: firstCars)], layout: compilation.layout, identity: compilation.identity),
+                second: try CompiledState(values: [.init(formal: secondCars)], layout: compilation.layout, identity: compilation.identity)
             ]
         )
         let finiteGraphCase = try FiniteGraphCase(

@@ -136,7 +136,7 @@ struct ModelCollectionGeneratedMachineTests {
     in compilation: CompiledSpecification,
     from values: [CompiledValue]
   ) throws -> [CompiledState] {
-    let state = try CompiledState(values: values, compilation: compilation)
+    let state = try CompiledState(values: values, layout: compilation.layout, identity: compilation.identity)
     return try CompiledRuntime(compilation: compilation)
       .successors(from: state)
       .map(\.state)

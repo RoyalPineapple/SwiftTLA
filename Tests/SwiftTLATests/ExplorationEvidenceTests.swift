@@ -27,8 +27,8 @@ struct ExplorationEvidenceTests {
             ([], compilation.identity, explored.compiledStates),
             ([missing], compilation.identity, explored.compiledStates),
             ([initial], foreign.identity, explored.compiledStates),
-            ([initial], compilation.identity, [initial: try CompiledState(values: [.integer(1)], compilation: compilation)]),
-            ([initial], compilation.identity, [initial: try CompiledState(values: [.integer(0)], compilation: foreign)])
+            ([initial], compilation.identity, [initial: try CompiledState(values: [.integer(1)], layout: compilation.layout, identity: compilation.identity)]),
+            ([initial], compilation.identity, [initial: try CompiledState(values: [.integer(0)], layout: foreign.layout, identity: foreign.identity)])
         ]
         for (initials, identity, states) in cases {
             let invalid = FiniteExploration(

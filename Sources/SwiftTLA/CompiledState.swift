@@ -2,14 +2,14 @@ struct CompiledState: Hashable, Sendable, Comparable {
     private let compilationIdentity: CompilationIdentity
     private let values: [CompiledValue]
 
-    init(values: [CompiledValue], compilation: CompiledSpecification) throws {
-        guard values.count == compilation.layout.variables.count else {
+    init(values: [CompiledValue], layout: CompiledLayout, identity: CompilationIdentity) throws {
+        guard values.count == layout.variables.count else {
             throw CompiledEvaluationError.invalidStateLayout(
-                expected: compilation.layout.variables.count,
+                expected: layout.variables.count,
                 actual: values.count
             )
         }
-        self.init(validatedValues: values, compilationIdentity: compilation.identity)
+        self.init(validatedValues: values, compilationIdentity: identity)
     }
 
     func value(for variable: VariableID) throws -> CompiledValue {

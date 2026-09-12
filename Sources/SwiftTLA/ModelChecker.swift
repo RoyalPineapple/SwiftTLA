@@ -276,7 +276,7 @@ private func compiledBFS(
                 statesCount: stateToID.count,
                 limit: configuration.maximumStateLimit
             ),
-            compilationIdentity: runtime.compilation.identity,
+            compilationIdentity: runtime.identity,
             configuration: configuration,
             compiledStates: idToState
         )
@@ -346,7 +346,7 @@ private func compiledBFS(
         let key = try representative(current)
         guard let currentID = stateToID[key] else { continue }
 
-        for invariant in runtime.compilation.semantics.behavior.invariants {
+        for invariant in runtime.behavior.invariants {
             guard try runtime.invariantHolds(invariant, in: current) else {
                 let counterexample = try trace(to: current)
                 guard try !runtime.invariantHolds(invariant, in: counterexample.state) else {
@@ -360,7 +360,7 @@ private func compiledBFS(
                         state: try counterexample.state.projection(using: layout),
                         trace: counterexample.steps
                     ),
-                    compilationIdentity: runtime.compilation.identity,
+                    compilationIdentity: runtime.identity,
                     configuration: configuration,
                     compiledStates: idToState
                 )
@@ -373,7 +373,7 @@ private func compiledBFS(
                 graph: try graph(),
                 initialStateIDs: initialStateIDs,
                 outcome: .deadlocked(state: try current.projection(using: layout)),
-                compilationIdentity: runtime.compilation.identity,
+                compilationIdentity: runtime.identity,
                 configuration: configuration,
                 compiledStates: idToState
             )
@@ -418,7 +418,7 @@ private func compiledBFS(
         graph: try graph(),
         initialStateIDs: initialStateIDs,
         outcome: .ok(statesCount: stateToID.count),
-        compilationIdentity: runtime.compilation.identity,
+        compilationIdentity: runtime.identity,
         configuration: configuration,
         compiledStates: idToState
     )
