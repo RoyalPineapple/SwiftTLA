@@ -100,12 +100,9 @@ package struct GeneratedMachineAPI: Sendable, Equatable {
                 collection: collection
             )
         }
-        let executableActions = layout.actions.filter {
-            !$0.isTermination
-        }
-        let actionIdentifiers = Self.generatedIdentifiers(executableActions.map(\.declaration.name), fallback: "action")
+        let actionIdentifiers = Self.generatedIdentifiers(layout.actions.map(\.declaration.name), fallback: "action")
         let compiledActions = Dictionary(uniqueKeysWithValues: actions.map { ($0.id, $0) })
-        let actions = try zip(executableActions, actionIdentifiers).map { layoutAction, identifier in
+        let actions = try zip(layout.actions, actionIdentifiers).map { layoutAction, identifier in
             guard let action = compiledActions[layoutAction.id] else {
                 throw Self.missingDeclaration("action", named: layoutAction.declaration.name)
             }

@@ -3,11 +3,6 @@ import Testing
 @testable import UpstreamParity
 
 struct NQueensCorpusStateGraphTests {
-    private struct Edge: Hashable {
-        let source: TLAStateProjection
-        let target: TLAStateProjection
-    }
-
     @Test("FourQueens native choices preserve the complete formal graph and invariants")
     func nativeGraphMatchesFormalGraph() throws {
         let compilation = try NQueensModel.spec.compile()
@@ -19,41 +14,20 @@ struct NQueensCorpusStateGraphTests {
         #expect(compilation.semantics.behavior.temporalProperties.map(\.name) == ["Termination"])
         let temporal = try exploration.analyzeTemporalProperties(in: compilation)
         #expect(temporal.map(\.status) == [.satisfied])
-        let formalPositions = exploration.graph.states
-        var formalEdges: Set<Edge> = []
-        var terminalStutters = 0
-        for (sourceID, transitions) in exploration.graph.transitions {
-            let source = try #require(formalPositions[sourceID])
-            for transition in transitions {
-                let target = try #require(formalPositions[transition.target])
-                if transition.label.action == "Terminating" {
-                    #expect(source == target)
-                    terminalStutters += 1
-                } else {
-                    #expect(transition.label.action == "nxtQ")
-                    formalEdges.insert(Edge(source: source, target: target))
-                }
-            }
-        }
         let native = try ReachabilityGraph(initialMachines: NQueensModel.initialMachines(), maximumStates: 5_000)
         #expect(native.safetyViolations.isEmpty)
         let machine = try NQueensModel.makeMachine()
-        let nativePositions = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
-            ($0, try machine.formalProjection(of: $0))
-        })
-        let nativeInitials = try Set(native.initialStates.map { try #require(nativePositions[$0]) })
-        let formalInitials = try Set(exploration.initialStateIDs.map { try #require(formalPositions[$0]) })
-        #expect(nativeInitials == formalInitials)
-        let nativeEdges = try Set(native.transitions.flatMap { source, transitions in
-            try transitions.map {
-                Edge(source: try #require(nativePositions[source]), target: try #require(nativePositions[$0.target]))
-            }
-        })
-        #expect(terminalStutters == 1)
-        #expect(nativePositions.count == 786)
-        #expect(Set(nativePositions.values) == Set(formalPositions.values))
-        #expect(nativeEdges == formalEdges)
-        let terminal = try #require(native.transitions.first { $0.value.isEmpty }?.key)
+        let exported = try CanonicalGraph(native, using: machine)
+        let formal = try SwiftGraphExporter().export(exploration)
+        #expect(exported == formal.graph)
+        #expect(exported.states.count == 786)
+        let terminalEdges = native.transitions.flatMap { source, transitions in
+            transitions.filter { $0.action == .Terminating }.map { (source: source, target: $0.target) }
+        }
+        #expect(terminalEdges.count == 1)
+        let edge = try #require(terminalEdges.first)
+        #expect(edge.source == edge.target)
+        let terminal = edge.source
         #expect(terminal.state.todo.isEmpty)
         #expect(terminal.state.sols == [[2, 4, 1, 3], [3, 1, 4, 2]])
     }

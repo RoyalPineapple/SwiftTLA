@@ -58,8 +58,7 @@ extension NativeSwiftEmitter {
         declarations += try updateDeclarations()
         declarations += try collectionValidationDeclarations(parameters: appendedParameters)
         declarations += try initialDeclarations(parameters: collectionParameters, arguments: collectionArguments)
-        let terminalActions = program.layout.actions.filter { $0.isTermination }
-        let emittedActionIDs = Set(api.actions.map(\.compiledAction)).union(enabledActionIDs).union(terminalActions.map(\.id))
+        let emittedActionIDs = Set(api.actions.map(\.compiledAction)).union(enabledActionIDs)
         declarations += try program.behavior.actions.filter { emittedActionIDs.contains($0.id) }.map {
             try updateFunction($0, collectionParameters: appendedParameters)
         }

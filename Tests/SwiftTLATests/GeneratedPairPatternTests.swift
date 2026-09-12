@@ -21,7 +21,12 @@ struct GeneratedPairPatternTests {
         let successors = try machine.successors(for: .choose)
         #expect(Set(successors.map { $0.state.selected }) == [1, 2])
         for successor in successors {
-            #expect(try successor.enabledActions().isEmpty)
+            #expect(try successor.isTerminated())
+            #expect(try successor.enabledActions() == [.Terminating])
+            var terminal = successor
+            let transition = try terminal.send(.Terminating)
+            #expect(transition.before == transition.after)
+            #expect(terminal.snapshot == successor.snapshot)
             #expect(try successor.successors(for: .choose).isEmpty)
         }
         #expect(try machine.isEnabled(.choose))
