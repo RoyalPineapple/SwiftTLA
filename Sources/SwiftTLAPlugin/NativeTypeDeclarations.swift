@@ -40,14 +40,10 @@ struct NativeTypeDeclarations: Sendable {
             guard expressions.insert(expression).inserted else { continue }
             executionExpressions.append(expression)
             pending.append(contentsOf: expression.children)
-            if case .call(let call) = expression.operation {
-                let callbackTargets = call.callbacks.sorted { $0.key.ordinal < $1.key.ordinal }.map(\.value)
-                for target in [call.target] + callbackTargets {
-                    guard case .function(let id) = target, functions.insert(id).inserted else { continue }
-                    let function = program[id]
-                    pending.append(function.body)
-                    if let guardExpression = function.domainGuard { pending.append(guardExpression) }
-                }
+            if case .call(let id) = expression.operation, functions.insert(id).inserted {
+                let function = program[id]
+                pending.append(function.body)
+                if let guardExpression = function.domainGuard { pending.append(guardExpression) }
             }
         }
         let executionFunctions = program.functions.enumerated().filter {

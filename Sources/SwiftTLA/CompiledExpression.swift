@@ -64,7 +64,7 @@ package enum CompiledOperation: Hashable, Sendable {
     case functionSet
     case foldFunction([BinderID])
     case letValue(BinderID)
-    case call(ResolvedCall)
+    case call(ResolvedFunctionID)
     case checkedCall(CheckedOperatorCall, origin: OperatorID?, operatorParameters: Set<OperatorID>)
     case operatorApplication(CompiledFormalOperator, [CompiledFormalCallArgument])
     case letIn([OperatorID])

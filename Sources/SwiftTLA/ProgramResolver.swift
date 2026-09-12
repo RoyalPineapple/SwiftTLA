@@ -1,24 +1,22 @@
 extension CompiledProgram {
     package init(inputs: CompiledTypeInputs) throws {
         var checker = try CompiledTypeChecker(inputs: inputs)
-        self = try ProgramResolver(checked: checker.checkProgram(), types: inputs.types).resolve()
+        self = try ProgramResolver(checked: checker.checkProgram(), types: inputs.types,
+            nextBinder: (inputs.bindings.binders.keys.map(\.ordinal).max() ?? -1) + 1).resolve()
     }
 }
 
-private struct CallbackUseKey: Hashable {
-    let operation: OperatorID
-    let parameters: [CompiledValueType]
-    let result: CompiledValueType
-    init(_ operation: OperatorID, _ call: CheckedOperatorCall) {
-        self.operation = operation
-        parameters = call.parameters.map(\.type)
-        result = call.result
-    }
+/// A capture path distinguishes a callback's closed-over value from a same-named
+/// parameter in the function forwarding that callback.
+private struct CaptureKey: Hashable {
+    var callbacks: [OperatorID]
+    let binder: BinderID
 }
 
-private struct ResolvedFunctionKey: Hashable {
-    let specialization: CheckedOperatorSpecialization
-    let capturedCallbacks: [CallbackUseKey: ResolvedCallbackID]
+private struct CaptureParameter {
+    let key: CaptureKey
+    let binder: BinderID
+    let type: CompiledValueType
 }
 
 private struct CheckedCallSite: Hashable {
@@ -33,11 +31,12 @@ private final class ProgramResolver {
     var projectionChecks: [ResolvedProjectionPair: Bool] = [:]
     var resolvedExpressions: [CheckedCallSite: CompiledExpression] = [:]
     var functions: [ResolvedFunction?] = []
-    var functionIDs: [ResolvedFunctionKey: ResolvedFunctionID] = [:]
-    var functionCallbacks: [ResolvedFunctionID: [(OperatorID, CheckedOperatorCall, ResolvedCallbackID)]] = [:]
-    var callbacks: [ResolvedCallback] = []
+    var functionIDs: [CheckedOperatorSpecialization: ResolvedFunctionID] = [:]
+    var functionCaptures: [[CaptureParameter]] = []
+    var nextBinder: Int
 
-    init(checked: CompiledProgram, types: CompiledTypeContext) {
+    init(checked: CompiledProgram, types: CompiledTypeContext, nextBinder: Int) {
+        self.nextBinder = nextBinder
         self.checked = checked
         self.types = types
     }
@@ -57,7 +56,7 @@ private final class ProgramResolver {
         return .init(identity: checked.identity, layout: checked.layout,
             behavior: behavior, enums: checked.enums,
             projections: projections, variableTypes: checked.variableTypes, bindingTypes: checked.bindingTypes,
-            functions: resolvedFunctions, callbacks: callbacks)
+            functions: resolvedFunctions)
     }
 
     func require<Value>(_ value: Value?) throws -> Value {
@@ -70,14 +69,14 @@ private final class ProgramResolver {
     }
 
     func root(_ checked: CompiledExpression) throws -> CompiledExpression {
-        try expression(checked, function: nil, callbackScope: [:])
+        try expression(checked, function: nil, captures: [:])
     }
 
     func expression(
         _ checked: CompiledExpression, function: ResolvedFunctionID?,
-        callbackScope: [CallbackUseKey: ResolvedCallbackID]
+        captures: [CaptureKey: BinderID]
     ) throws -> CompiledExpression {
-        var pending: [(expression: CompiledExpression, call: ResolvedCall?, expanded: Bool)] = [
+        var pending: [(expression: CompiledExpression, call: ResolvedFunctionID?, expanded: Bool)] = [
             (checked, nil, false)
         ]
         while let task = pending.popLast() {
@@ -85,7 +84,7 @@ private final class ProgramResolver {
             let site = CheckedCallSite(expression: node, function: function)
             if resolvedExpressions[site] != nil { continue }
             if task.expanded {
-                let children = try node.children.map {
+                var children = try node.children.map {
                     try require(resolvedExpressions[.init(expression: $0, function: function)])
                 }
                 if case .letIn = node.operation {
@@ -96,7 +95,16 @@ private final class ProgramResolver {
                     resolvedExpressions[site] = body
                     continue
                 }
-                let operation = task.call.map(CompiledOperation.call) ?? node.operation
+                var operation = task.call.map(CompiledOperation.call) ?? node.operation
+                if let target = task.call,
+                   case .checkedCall(let call, let origin, let operatorParameters) = node.operation {
+                    children += try captureArguments(for: target, call: call, origin: origin,
+                        operatorParameters: operatorParameters, captures: captures)
+                }
+                if case .boundValue(let binder) = operation,
+                   let parameter = captures[.init(callbacks: [], binder: binder)] {
+                    operation = .boundValue(parameter)
+                }
                 if case .assertView = operation, let source = children.first {
                     _ = types.canProjectRead(source.resultType, to: node.resultType, checks: &projectionChecks)
                 }
@@ -111,11 +119,13 @@ private final class ProgramResolver {
             for type in [node.resultType, node.computationType] where !type.resolved {
                 throw CompiledValueType.unresolvedDiagnostic(type, at: "expression.\(node.operation.diagnosticName)")
             }
-            let call: ResolvedCall?
+            let call: ResolvedFunctionID?
             if case .checkedCall(let annotation, let origin, let operatorParameters) = node.operation {
                 guard node.children.count == annotation.parameters.count else { return try require(nil) }
-                call = try resolveCall(annotation, operation: origin,
-                    operatorParameters: operatorParameters, callbackScope: callbackScope)
+                if let origin, operatorParameters.contains(origin), !annotation.callbackArguments.isEmpty {
+                    throw CompiledValueType.diagnostic("callback", "operator-valued callback parameters are unsupported")
+                }
+                call = try self.function(annotation)
             } else { call = nil }
             pending.append((node, call, true))
             pending.append(contentsOf: node.children.reversed().map { ($0, nil, false) })
@@ -123,66 +133,62 @@ private final class ProgramResolver {
         return try require(resolvedExpressions[.init(expression: checked, function: function)])
     }
 
-    func resolveCall(
-        _ call: CheckedOperatorCall, operation: OperatorID?,
-        operatorParameters: Set<OperatorID>, callbackScope: [CallbackUseKey: ResolvedCallbackID]
-    ) throws -> ResolvedCall {
-        if let operation, operatorParameters.contains(operation) {
-            guard call.callbackArguments.isEmpty else {
-                throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
-                    path: "native.callback", expected: "a callback with value parameters",
-                    actual: "operator-valued callback parameter", nextSafeAction: "Pass operator arguments to a named formal operator specialization.")
+    private func captureArguments(
+        for target: ResolvedFunctionID, call: CheckedOperatorCall, origin: OperatorID?,
+        operatorParameters: Set<OperatorID>, captures: [CaptureKey: BinderID]
+    ) throws -> [CompiledExpression] {
+        try functionCaptures[target.ordinal].map { capture in
+            var key = capture.key
+            if let origin, operatorParameters.contains(origin) {
+                key.callbacks.insert(origin, at: 0)
+            } else if let parameter = key.callbacks.first, let actual = call.callbackArguments[parameter] {
+                key.callbacks.removeFirst()
+                if case .reference(let origin, _) = actual, operatorParameters.contains(origin) {
+                    key.callbacks.insert(origin, at: 0)
+                }
             }
-            return .init(target: .callback(try require(callbackScope[.init(operation, call)])), callbacks: [:])
+            let binder = try captures[key] ?? require(key.callbacks.isEmpty ? key.binder : nil)
+            return .init(operation: .boundValue(binder), resultType: capture.type, children: [])
         }
-        let id = try function(call, callbackScope: callbackScope)
-        var actuals: [ResolvedCallbackID: ResolvedCallTarget] = [:]
-        for (operation, use, parameter) in functionCallbacks[id] ?? [] {
-            let actual = try require(call.callbackArguments[operation])
-            let target: ResolvedCallTarget
-            if case .reference(let origin, _) = actual, operatorParameters.contains(origin) {
-                target = .callback(try require(callbackScope[.init(origin, use)]))
-            } else {
-                target = .function(try function(use, callbackScope: callbackScope))
-            }
-            actuals[parameter] = target
-        }
-        return .init(target: .function(id), callbacks: actuals)
     }
 
-    func function(_ call: CheckedOperatorCall, callbackScope: [CallbackUseKey: ResolvedCallbackID]) throws -> ResolvedFunctionID {
-        var captures: [CallbackUseKey: ResolvedCallbackID] = [:]
-        for (operation, uses) in call.callbackUses where call.callbackArguments[operation] == nil {
-            for use in uses {
-                let key = CallbackUseKey(operation, use)
-                captures[key] = try require(callbackScope[key])
+    private func captureParameters(_ call: CheckedOperatorCall) -> [CaptureParameter] {
+        var captures = call.specialization.captures.sorted { $0.key.ordinal < $1.key.ordinal }.map {
+            (CaptureKey(callbacks: [], binder: $0.key), $0.value)
+        }
+        var pending = call.specialization.callbacks.sorted { $0.key.ordinal > $1.key.ordinal }.map {
+            ([$0.key], $0.value)
+        }
+        while let (path, callback) = pending.popLast() {
+            captures += callback.captures.sorted { $0.key.ordinal < $1.key.ordinal }.map {
+                (CaptureKey(callbacks: path, binder: $0.key), $0.value)
+            }
+            pending += callback.callbacks.sorted { $0.key.ordinal > $1.key.ordinal }.map {
+                (path + [$0.key], $0.value)
             }
         }
-        let key = ResolvedFunctionKey(specialization: call.specialization, capturedCallbacks: captures)
+        return captures.map { key, type in
+            defer { nextBinder += 1 }
+            return .init(key: key, binder: .init(ordinal: nextBinder), type: type)
+        }
+    }
+
+    func function(_ call: CheckedOperatorCall) throws -> ResolvedFunctionID {
+        let key = call.specialization
         if let id = functionIDs[key] { return id }
         let id = ResolvedFunctionID(ordinal: functions.count)
         functionIDs[key] = id
         functions.append(nil)
-        var nested = callbackScope
-        var demands: [(OperatorID, CheckedOperatorCall, ResolvedCallbackID)] = []
-        for operation in call.callbackUses.keys.sorted(by: { $0.ordinal < $1.ordinal }) {
-            guard call.callbackArguments[operation] != nil else { continue }
-            for use in call.callbackUses[operation] ?? [] {
-                let callback = ResolvedCallbackID(ordinal: callbacks.count)
-                callbacks.append(.init(parameters: use.parameters.map(\.type), result: use.result))
-                nested[.init(operation, use)] = callback
-                demands.append((operation, use, callback))
-            }
-        }
-        functionCallbacks[id] = demands
+        let parameters = captureParameters(call)
+        functionCaptures.append(parameters)
+        let captures = Dictionary(uniqueKeysWithValues: parameters.map { ($0.key, $0.binder) })
         guard case .checked(let checkedBody, let checkedGuard) = call.implementation else {
             return try require(nil)
         }
-        let body = try expression(checkedBody, function: id, callbackScope: nested)
-        let domainGuard = try checkedGuard.map { try expression($0, function: id, callbackScope: nested) }
-        functions[id.ordinal] = .init(parameters: call.parameters,
-            resultType: call.result,
-            callbacks: demands.map { $0.2 }, body: body, domainGuard: domainGuard)
+        let body = try expression(checkedBody, function: id, captures: captures)
+        let domainGuard = try checkedGuard.map { try expression($0, function: id, captures: captures) }
+        functions[id.ordinal] = .init(parameters: call.parameters + parameters.map { ($0.binder, $0.type) },
+            resultType: call.result, body: body, domainGuard: domainGuard)
         return id
     }
 }

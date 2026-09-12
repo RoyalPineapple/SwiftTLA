@@ -36,7 +36,7 @@ enum NativeFunctionPlan: Sendable {
 
     init(function: ResolvedFunctionID, functions: [ResolvedFunction]) {
         let resolved = functions[function.ordinal]
-        guard resolved.callbacks.isEmpty, resolved.domainGuard == nil else {
+        guard resolved.domainGuard == nil else {
             self = .ordinary(parameterOrder: [])
             return
         }
@@ -75,7 +75,7 @@ enum NativeFunctionPlan: Sendable {
                 var pending = [argument]
                 while let id = pending.popLast() {
                     let node = id
-                    // Calls can capture bindings not present in their argument list.
+                    // A callee determines which deferred arguments it demands.
                     if case .call = node.operation { return false }
                     if case .boundValue(let binding) = node.operation, deferred.contains(binding),
                        !isDeferred || binding != parameter { return false }
@@ -129,10 +129,10 @@ enum NativeFunctionPlan: Sendable {
         guard !completed.contains(expression) else { return nil }
         let node = expression
         guard node.resultType == functions[function.ordinal].resultType else { return nil }
-        if case .call(let call) = node.operation, call.callbacks.isEmpty, case .function(let target) = call.target {
+        if case .call(let target) = node.operation {
             if target == function { return .repeatCall(node.children) }
             let callee = functions[target.ordinal]
-            guard callee.callbacks.isEmpty, callee.domainGuard == nil, !visited.contains(target),
+            guard callee.domainGuard == nil, !visited.contains(target),
                   let body = lower(callee.body, returningTo: function, visited: visited.union([target]), functions: functions)
             else { return nil }
             return .call(target, node.children, body)

@@ -71,13 +71,11 @@ package final class CheckedOperatorCall: Hashable, Sendable {
     package let parameters: [(binder: BinderID, type: CompiledValueType)]
     package let implementation: CheckedOperatorImplementation
     package let result: CompiledValueType
-    package let callbackUses: [OperatorID: [CheckedOperatorCall]]
     package let callbackArguments: [OperatorID: CompiledFormalOperator]
 
     fileprivate init(specialization: CheckedOperatorSpecialization,
          parameters: [(binder: BinderID, type: CompiledValueType)],
          implementation: CheckedOperatorImplementation, result: CompiledValueType,
-         callbackUses: [OperatorID: [CheckedOperatorCall]],
          callbackArguments: [OperatorID: CompiledFormalOperator]) {
         self.parameters = parameters
         self.specialization = .init(operation: specialization.operation,
@@ -85,7 +83,6 @@ package final class CheckedOperatorCall: Hashable, Sendable {
             captures: specialization.captures, callbacks: specialization.callbacks)
         self.implementation = implementation
         self.result = result
-        self.callbackUses = callbackUses
         self.callbackArguments = callbackArguments
     }
 }
@@ -105,7 +102,6 @@ private struct CheckedCallResult: Sendable {
         call = .init(specialization: specialization,
             parameters: parameters.map { (binder: $0, type: bindings[$0] ?? .unknown) },
             implementation: implementation, result: result,
-            callbackUses: callbackUses.mapValues { $0.map(\.call) },
             callbackArguments: callbackArguments)
         refinedBindings = bindings
         self.boundOperators = boundOperators
@@ -395,7 +391,7 @@ package struct CompiledTypeChecker: Sendable {
             assume: assume)
         return CompiledProgram(identity: inputs.identity, layout: inputs.layout, behavior: behavior,
             enums: inputs.types.enums, projections: [], variableTypes: variables, bindingTypes: bindingTypes,
-            functions: [], callbacks: [])
+            functions: [])
     }
 
     private mutating func checkUnionConstructor(_ expression: CompiledExpression, expected: CompiledValueType) throws -> CheckedType? {

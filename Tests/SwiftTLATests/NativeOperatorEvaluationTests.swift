@@ -5,6 +5,28 @@ import SwiftTLAMacros
 
 // Explicit formal fixtures test call-by-name at the native compiler boundary.
 @TLAModel
+private struct RecursiveCallbackCapture {
+    static var spec: TLASpec {
+        TLASpec("RecursiveCallbackCapture") {
+            let result = Var<Int>("result")
+            Variable(result, 0)
+            FormalDefinition("Walk", parameters: [.operator("operation", arity: 1), .value("remaining")],
+                body: StateExpr.if(StateExpr.variable("remaining") == 0,
+                    then: StateExpr.operatorApplication(.reference("operation", arity: 1), [.value(0)]),
+                    else: StateExpr.operatorApplication(.reference("Walk", arity: 2), [
+                        .operator(.lambda(FormalLambda(parameters: ["ignored"], body: StateExpr.variable("remaining")))),
+                        .value(StateExpr.variable("remaining") - 1)
+                    ])))
+            SwiftTLA.Action("walk") {
+                result.becomes(Expr<Int>(StateExpr.operatorApplication(.reference("Walk", arity: 2), [
+                    .operator(.lambda(FormalLambda(parameters: ["ignored"], body: 99))), .value(2)
+                ])))
+            }
+        }
+    }
+}
+
+@TLAModel
 private struct BoundedOperatorExecution {
     static var spec: TLASpec {
         TLASpec("BoundedOperatorExecution") {
@@ -276,6 +298,21 @@ private struct FunctionArgumentOrder {
 }
 
 @Suite struct NativeOperatorEvaluationTests {
+    @Test("Recursive callbacks retain the previous call's parameter value")
+    func recursiveCallbackKeepsLexicalCapture() throws {
+        let compilation = try RecursiveCallbackCapture.spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let action = try #require(compilation.layout.testActionID(named: "walk"))
+        let result = try #require(compilation.layout.testVariableID(named: "result"))
+        for runtime in [CompiledRuntime(compilation: compilation), CompiledRuntime(program: program)] {
+            let initial = try #require(try runtime.initialStates().first)
+            let successor = try #require(try runtime.successors(for: action, from: initial).first)
+            #expect(try successor.state.value(for: result) == .integer(1))
+        }
+        var machine = try RecursiveCallbackCapture.makeMachine()
+        #expect(try machine.send(.walk).after.result == 1)
+    }
+
     @Test("function application evaluates a failing key before its function")
     func functionKeyFailsFirst() throws {
         let compilation = try FunctionArgumentOrder.spec.compile()

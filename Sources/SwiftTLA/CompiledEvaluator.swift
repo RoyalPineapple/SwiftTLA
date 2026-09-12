@@ -146,12 +146,6 @@ private struct EvaluatorBindings {
 private struct EvaluatorScope {
     var bindings: EvaluatorBindings
     var operatorBindings: [OperatorID: EvaluatorOperatorBinding]
-    var callbacks: [ResolvedCallbackID: EvaluatorFunctionBinding] = [:]
-}
-
-private struct EvaluatorFunctionBinding {
-    let function: ResolvedFunctionID
-    let scope: EvaluatorScope
 }
 
 private struct EvaluatorOperatorBinding {
@@ -648,40 +642,20 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.expression(sequence, scope))
                 case .convert:
                     tasks.append(.expression(expression.children[0], scope))
-                case .call(let call):
-                    let target: EvaluatorFunctionBinding
-                    switch call.target {
-                    case .function(let id): target = .init(function: id, scope: scope)
-                    case .callback(let id):
-                        guard let callback = scope.callbacks[id] else {
-                            throw CompiledEvaluationError.unresolvedOperator
-                        }
-                        target = callback
-                    }
-                    guard functions.indices.contains(target.function.ordinal) else {
+                case .call(let target):
+                    guard functions.indices.contains(target.ordinal) else {
                         throw CompiledEvaluationError.unresolvedOperator
                     }
-                    let function = functions[target.function.ordinal]
+                    let function = functions[target.ordinal]
                     guard function.parameters.count == expression.children.count else {
                         throw EvalError.invalidArity(.formalOperator,
                             expected: function.parameters.count, actual: expression.children.count)
                     }
                     try beginCall(tasks: &tasks, depth: &recursiveDepth)
-                    var callScope = target.scope
+                    var callScope = EvaluatorScope(bindings: .init(inherited: bindings), operatorBindings: [:])
                     for (parameter, argument) in zip(function.parameters, expression.children) {
                         callScope.bindings = callScope.bindings.binding(argument, from: scope,
                             to: parameter.binder, retainingIn: &pendingArguments)
-                    }
-                    for (parameter, actual) in call.callbacks {
-                        switch actual {
-                        case .function(let id):
-                            callScope.callbacks[parameter] = .init(function: id, scope: scope)
-                        case .callback(let id):
-                            guard let callback = scope.callbacks[id] else {
-                                throw CompiledEvaluationError.unresolvedOperator
-                            }
-                            callScope.callbacks[parameter] = callback
-                        }
                     }
                     if let domain = function.domainGuard {
                         tasks.append(.localDomain(function.body, scope: callScope))

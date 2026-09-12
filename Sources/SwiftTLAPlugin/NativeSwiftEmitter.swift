@@ -16,7 +16,6 @@ struct NativeSwiftEmitter {
     private var expressionValues: [CompiledExpression: String] = [:]
     private var expressionOrdinals: [CompiledExpression: Int] = [:]
     private var hasDepthScope = false
-    private var callbackFunctions: [ResolvedCallbackID: String] = [:]
 
     init(model: MacroCompilation) {
         self.model = model
@@ -302,7 +301,7 @@ struct NativeSwiftEmitter {
     }
 
     private mutating func resolvedCall(
-        _ call: ResolvedCall, argumentRoots: [CompiledExpression], state: String, substitutions: [BinderID: String],
+        _ id: ResolvedFunctionID, argumentRoots: [CompiledExpression], state: String, substitutions: [BinderID: String],
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         let ownsDepth = !hasDepthScope
@@ -311,62 +310,25 @@ struct NativeSwiftEmitter {
         let arguments = try argumentRoots.map {
             "{ \(try expression($0, state: state, substitutions: substitutions, activeFunctions: activeFunctions)) }"
         }
-        switch call.target {
-        case .callback(let id):
-            guard let function = callbackFunctions[id] else { throw unsupported("resolved callback capture") }
-            return "(try \(function)(\(arguments.joined(separator: ", "))))"
-        case .function(let id):
-            let code = try emitFunction(id, arguments: arguments, callbacks: call.callbacks,
-                state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-            return ownsDepth ? "(try { () throws -> \(try swiftType(program[id].resultType)) in var _nativeDepth = 0; return \(code) }())" : code
-        }
+        let code = try emitFunction(id, arguments: arguments,
+            state: state, activeFunctions: activeFunctions)
+        return ownsDepth ? "(try { () throws -> \(try swiftType(program[id].resultType)) in var _nativeDepth = 0; return \(code) }())" : code
     }
 
     private mutating func emitFunction(
-        _ id: ResolvedFunctionID, arguments valueArguments: [String], callbacks: [ResolvedCallbackID: ResolvedCallTarget],
-        state: String, substitutions: [BinderID: String], activeFunctions: Set<ResolvedFunctionID>
+        _ id: ResolvedFunctionID, arguments: [String],
+        state: String, activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         let resolved = program[id]
         let function = "_operator\(id.ordinal)"
-        var arguments = valueArguments
         var declarations: [String] = []
-        var nested = substitutions
-        var nestedCallbacks = callbackFunctions
+        var nested: [BinderID: String] = [:]
         for (parameter, type) in resolved.parameters {
             declarations.append("_ _input\(parameter.ordinal): @escaping () throws -> \(try swiftType(type))")
             nested[parameter] = "(try \(binder(parameter))())"
         }
-        for callback in resolved.callbacks {
-            let signature = program[callback]
-            let name = "_callback\(callback.ordinal)"
-            let argumentTypes = try signature.parameters.map { try swiftType($0) }
-            let result = try swiftType(signature.result)
-            declarations.append("_ \(name): @escaping (\(argumentTypes.map { "@escaping () throws -> \($0)" }.joined(separator: ", "))) throws -> \(result)")
-            nestedCallbacks[callback] = name
-            guard let target = callbacks[callback] else {
-                guard let captured = callbackFunctions[callback] else { throw unsupported("resolved callback argument") }
-                arguments.append(captured)
-                continue
-            }
-            switch target {
-            case .callback(let origin):
-                guard let captured = callbackFunctions[origin] else { throw unsupported("forwarded callback") }
-                arguments.append(captured)
-            case .function(let target):
-                let names = argumentTypes.indices.map { "_callbackArgument\($0)" }
-                let parameters = zip(names, argumentTypes).map { "\($0.0): @escaping () throws -> \($0.1)" }.joined(separator: ", ")
-                let code = try emitFunction(target, arguments: names, callbacks: [:], state: state,
-                    substitutions: substitutions, activeFunctions: activeFunctions.union([id]))
-                arguments.append("{ (\(parameters)) throws -> \(result) in return \(code) }")
-            }
-        }
         let call = "try \(function)(\(arguments.joined(separator: ", ")))"
         if activeFunctions.contains(id) { return "(\(call))" }
-        let outerCallbacks = callbackFunctions
-        callbackFunctions = nestedCallbacks
-        defer {
-            callbackFunctions = outerCallbacks
-        }
         let domainGuard = try resolved.domainGuard.map {
             "guard \(try expression($0, state: state, substitutions: nested, activeFunctions: activeFunctions.union([id]))) else { throw NativeMachineEvaluationError.functionArgumentOutsideDomain }"
         } ?? ""
@@ -385,7 +347,7 @@ struct NativeSwiftEmitter {
             let values = parameterOrder.map {
                 "let _tailValue\($0.ordinal) = try _tailArgument\($0.ordinal)()"
             }.joined(separator: "\n")
-            var tailBindings = substitutions
+            var tailBindings: [BinderID: String] = [:]
             let deferredParameters = resolved.parameters.map(\.binder).filter { !parameterOrder.contains($0) }
             for parameter in parameterOrder {
                 tailBindings[parameter] = "_tailValue\(parameter.ordinal)"

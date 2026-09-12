@@ -162,7 +162,6 @@ struct NativeCodeGenerationTests {
         ])
         let compilation = try source.compile()
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
-        #expect(!program.callbacks.isEmpty)
         let runtime = CompiledRuntime(program: program)
         let initial = try #require(try runtime.initialStates().first)
         #expect(try runtime.invariantHolds(try #require(program.behavior.invariants.first), in: initial))
@@ -216,8 +215,7 @@ struct NativeCodeGenerationTests {
         #expect(program.functions.count == 2)
         let property = try #require(program.behavior.temporalProperties.first)
         guard case .always(let predicate) = property.expression,
-              case .call(let call) = predicate.expression.operation,
-              case .function(let temporalFunction) = call.target else {
+              case .call(let temporalFunction) = predicate.expression.operation else {
             Issue.record("Expected a resolved temporal function call")
             return
         }
@@ -342,7 +340,7 @@ struct NativeCodeGenerationTests {
             constraint: nil, assume: nil)
         let program = CompiledProgram(identity: compilation.identity, layout: compilation.layout,
             behavior: behavior, enums: .init(), projections: [], variableTypes: [:], bindingTypes: [:],
-            functions: [], callbacks: [])
+            functions: [])
         let model = try MacroCompilation(typeName: "SharedPredicates",
             program: program)
         var emitter = NativeSwiftEmitter(model: model)
@@ -377,7 +375,7 @@ struct NativeCodeGenerationTests {
         #expect(calls.count == 2)
         #expect(Set(calls.map(\.resultType)) == [.int, .bool])
         for expression in calls {
-            guard case .call(let call) = expression.operation, case .function(let target) = call.target else {
+            guard case .call(let target) = expression.operation else {
                 Issue.record("A named operator must resolve to a function")
                 continue
             }
