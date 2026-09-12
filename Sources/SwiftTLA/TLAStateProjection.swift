@@ -89,8 +89,9 @@ package struct TLAStateProjection: Sendable, Equatable, CustomStringConvertible 
                 try validate(value, at: "\(path)[\(index)]")
             }
         case .record(let fields):
+            var names: Set<String> = []
             for field in fields.fields {
-                guard Token(validating: field.name) != nil else {
+                guard Token(validating: field.name) != nil, names.insert(field.name).inserted else {
                     throw TLAStateProjectionDiagnostic.invalidKey(path: "\(path).\(field.name)")
                 }
                 try validate(field.value, at: "\(path).\(field.name)")
