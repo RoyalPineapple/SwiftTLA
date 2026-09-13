@@ -1,7 +1,7 @@
 import Foundation
 
-package enum CompletedGraphRunRecords {
-  package static func write(_ run: CompletedGraphRun, to url: URL) throws {
+package enum GraphRunRecords {
+  package static func write(_ run: GraphRun, to url: URL) throws {
     try encoded(records(for: run)).write(to: url, options: .atomic)
   }
 
@@ -27,11 +27,11 @@ package enum CompletedGraphRunRecords {
     }
   }
 
-  private static func records(for run: CompletedGraphRun) -> [[String: Any]] {
+  private static func records(for run: GraphRun) -> [[String: Any]] {
     var records: [[String: Any]] = [[
       "type": "header",
       "schema": "swifttla.finite-graph",
-      "version": 3,
+      "version": 4,
       "observableActions": run.observableActions.sorted()
     ]]
     records += graphRecords(for: run.graph)
@@ -47,7 +47,7 @@ package enum CompletedGraphRunRecords {
     }
     records.append([
       "type": "complete",
-      "eligible": run.isPassEligible,
+      "isComplete": run.isComplete,
       "outcome": outcomeRecord(run.outcome),
       "initialStateCount": run.graph.initialStateKeys.count,
       "stateCount": run.graph.states.count,
@@ -59,8 +59,8 @@ package enum CompletedGraphRunRecords {
 
   static func outcomeRecord(_ outcome: GraphRunOutcome) -> [String: String] {
     switch outcome {
-    case .exhaustiveSuccess:
-      ["kind": "exhaustiveSuccess"]
+    case .noViolation:
+      ["kind": "noViolation"]
     case .invariantViolation(let message):
       ["kind": "invariantViolation", "message": message]
     case .temporalViolation(let property, let reason):

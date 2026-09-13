@@ -13,12 +13,12 @@ package struct TemporalComparison: Equatable, Encodable, Sendable {
   package init(
     caseID: String,
     configuration: TemporalCaseConfiguration,
-    swiftRun: CompletedGraphRun,
-    tlcRun: CompletedGraphRun,
+    swiftRun: GraphRun,
+    tlcRun: GraphRun,
     swiftResult: TemporalPropertyResult,
     tlcResult: TemporalPropertyResult
   ) throws {
-    guard swiftRun.isPassEligible, tlcRun.isPassEligible else {
+    guard swiftRun.isComparable, tlcRun.isComparable else {
       throw EvidenceFormatError.invalidField(record: caseID, field: "incomplete comparison graph")
     }
     self.schema = Self.schema

@@ -15,7 +15,8 @@ struct NativeGraphExportTests {
         let start = try #require(trace.cycleStartIndex)
         #expect(trace.steps[start].state == trace.steps.last?.state)
         #expect(trace.steps.dropFirst(start + 1).allSatisfy { $0.action == "ConcreteAdvance" })
-        #expect(!exported.isPassEligible)
+        #expect(exported.isComplete)
+        #expect(exported.isComparable)
     }
 
     @Test("native graph export preserves safety and temporal failure categories")
@@ -23,7 +24,8 @@ struct NativeGraphExportTests {
         for initial in try FailingExportModel.initialMachines() {
             let native = try ReachabilityGraph(initialMachines: [initial], maximumStates: 3)
             let exported = try SwiftGraphExporter().export(native)
-            #expect(!exported.isPassEligible)
+            #expect(exported.isComplete)
+            #expect(exported.isComparable)
             #expect(try exported.graph == CanonicalGraph(native))
             if initial.state.value == 0 {
                 #expect(exported.outcome == .temporalViolation(property: "ReachesThree", reason: .violatingFairLasso))

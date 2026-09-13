@@ -12,7 +12,7 @@ package struct SwiftGraphExporter: Sendable {
 
   package func export<Machine: StateMachine>(
     _ native: ReachabilityGraph<Machine>, for finiteGraphCase: FiniteGraphCase? = nil
-  ) throws -> CompletedGraphRun {
+  ) throws -> GraphRun {
     let renderedNames = Dictionary(uniqueKeysWithValues: (finiteGraphCase?.renderedActions ?? []).map {
       ($0.sourceInvocationName, $0.renderedName)
     })
@@ -71,16 +71,16 @@ package struct SwiftGraphExporter: Sendable {
         : .incomplete(reason: "\(failure.key): \(failure.value.reason.rawValue)")
       if let witness = failure.value.witness { trace = try lassoTrace(witness) }
     } else {
-      outcome = .exhaustiveSuccess
+      outcome = .noViolation
     }
-    return try CompletedGraphRun(graph: graph, observableActions: Set(graph.edges.map(\.action)),
+    return try GraphRun(isComplete: true, graph: graph, observableActions: Set(graph.edges.map(\.action)),
       outcome: outcome, trace: trace)
   }
 
   package func export(
     _ exploration: FiniteExploration,
     for finiteGraphCase: FiniteGraphCase
-  ) throws -> CompletedGraphRun {
+  ) throws -> GraphRun {
     let renderedActionNames = Dictionary(uniqueKeysWithValues: finiteGraphCase.renderedActions.map {
       ($0.sourceInvocationName, $0.renderedName)
     })
@@ -92,14 +92,14 @@ package struct SwiftGraphExporter: Sendable {
 
   package func export(
     _ exploration: FiniteExploration
-  ) throws -> CompletedGraphRun {
+  ) throws -> GraphRun {
     try export(exploration, renderedActionNames: [:])
   }
 
   private func export(
     _ exploration: FiniteExploration,
     renderedActionNames: [String: String]
-  ) throws -> CompletedGraphRun {
+  ) throws -> GraphRun {
     let states = try canonicalStates(exploration)
     let initialStates = try exploration.initialStateIDs.map { identifier in
       guard let state = states[identifier] else {
@@ -127,7 +127,8 @@ package struct SwiftGraphExporter: Sendable {
       states: Array(states.values),
       edges: edges
     )
-    return try CompletedGraphRun(
+    return try GraphRun(
+      isComplete: exploration.isComplete,
       graph: graph,
       observableActions: Set(edges.map(\.action)),
       outcome: try canonicalOutcome(
@@ -152,7 +153,7 @@ package struct SwiftGraphExporter: Sendable {
   ) throws -> GraphRunOutcome {
     switch outcome {
     case .ok:
-      return .exhaustiveSuccess
+      return .noViolation
     case .invariantViolated(let invariant, _, _):
       return .invariantViolation(invariant)
     case .deadlocked(let state):

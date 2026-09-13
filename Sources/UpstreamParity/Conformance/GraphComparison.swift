@@ -10,6 +10,7 @@ package enum GraphDifference: Equatable, Sendable {
     case initialStates(tlc: Set<CanonicalStateKey>, swift: Set<CanonicalStateKey>)
     case states(tlc: Set<CanonicalStateKey>, swift: Set<CanonicalStateKey>)
     case edges(tlc: Set<CanonicalEdge>, swift: Set<CanonicalEdge>)
+    case completion(tlc: Bool, swift: Bool)
     case outcome(tlc: GraphRunOutcome, swift: GraphRunOutcome)
 }
 
@@ -24,8 +25,8 @@ package struct GraphComparison: Equatable, Sendable {
 }
 
 package func compareFiniteGraphs(
-    tlc: CompletedGraphRun,
-    swift: CompletedGraphRun
+    tlc: GraphRun,
+    swift: GraphRun
 ) -> GraphComparison {
     var differences: [GraphDifference] = []
     if (tlc.graph.variableNames == swift.graph.variableNames) == false
@@ -48,9 +49,11 @@ package func compareFiniteGraphs(
     if (tlc.graph.edges == swift.graph.edges) == false {
         differences.append(.edges(tlc: tlc.graph.edges, swift: swift.graph.edges))
     }
+    if !tlc.isComplete || !swift.isComplete {
+        differences.append(.completion(tlc: tlc.isComplete, swift: swift.isComplete))
+    }
     if (tlc.outcome == swift.outcome) == false
-        || tlc.isPassEligible == false
-        || swift.isPassEligible == false {
+        || !tlc.outcome.isConclusive || !swift.outcome.isConclusive {
         differences.append(.outcome(tlc: tlc.outcome, swift: swift.outcome))
     }
     return GraphComparison(differences: differences)
@@ -94,11 +97,13 @@ func graphDifferencesJSON(_ comparison: GraphComparison) -> [[String: Any]] {
                 "tlc": tlc.subtracting(swift).sorted().prefix(1).map(\.canonicalEncoding),
                 "swift": swift.subtracting(tlc).sorted().prefix(1).map(\.canonicalEncoding)
             ]
+        case .completion(let tlc, let swift):
+            ["kind": "completion", "tlcComplete": tlc, "swiftComplete": swift]
         case .outcome(let tlc, let swift):
             [
                 "kind": "outcome",
-                "tlc": CompletedGraphRunRecords.outcomeRecord(tlc),
-                "swift": CompletedGraphRunRecords.outcomeRecord(swift)
+                "tlc": GraphRunRecords.outcomeRecord(tlc),
+                "swift": GraphRunRecords.outcomeRecord(swift)
             ]
         }
     }

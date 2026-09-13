@@ -18,6 +18,6 @@ struct MultiCarElevatorCorpusStateGraphTests {
         let exported = try CanonicalGraph(native)
         let formal = try SwiftGraphExporter().export(exploration)
         #expect(exported == formal.graph)
-        #expect(formal.outcome == .exhaustiveSuccess)
+        #expect(formal.outcome == .noViolation)
     }
 }

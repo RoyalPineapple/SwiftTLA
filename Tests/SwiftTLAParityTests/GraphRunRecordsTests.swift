@@ -3,7 +3,7 @@ import Testing
 @testable import SwiftTLA
 @testable import UpstreamParity
 
-struct CompletedGraphRunRecordsTests {
+struct GraphRunRecordsTests {
   @Test("exported failures preserve their check category in retained records")
   func preservesFailureCategories() throws {
     let value = Var<Int>("value")
@@ -34,10 +34,10 @@ struct CompletedGraphRunRecordsTests {
         configuration: exploration.configuration, compiledStates: exploration.compiledStates
       )
       let run = try SwiftGraphExporter().export(failed)
-      try CompletedGraphRunRecords.write(run, to: url)
+      try GraphRunRecords.write(run, to: url)
       let completion = try #require(records(in: Data(contentsOf: url)).last)
       #expect(completion["outcome"] as? [String: String] == expected)
-      #expect(completion["eligible"] as? Bool == false)
+      #expect(completion["isComplete"] as? Bool == false)
     }
   }
 
@@ -71,20 +71,21 @@ struct CompletedGraphRunRecordsTests {
     }
     let initial = try #require(states.first)
     let second = try #require(states.dropFirst().first)
-    let run = try CompletedGraphRun(
+    let run = try GraphRun(
+      isComplete: true,
       graph: CanonicalGraph(
         initialStates: [initial],
         states: states,
         edges: [.init(source: initial.key, action: "advance", target: second.key)]
       ),
       observableActions: ["advance"],
-      outcome: .exhaustiveSuccess
+      outcome: .noViolation
     )
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let url = root.appendingPathComponent("swift-graph.jsonl")
-    try CompletedGraphRunRecords.write(run, to: url)
+    try GraphRunRecords.write(run, to: url)
 
     let data = try Data(contentsOf: url)
     let streamRecords = try records(in: data)
@@ -92,10 +93,10 @@ struct CompletedGraphRunRecordsTests {
       "header", "initial", "state", "state", "state", "state", "edge", "complete"
     ])
     let completion = try #require(streamRecords.last)
-    #expect(streamRecords.first?["version"] as? Int == 3)
+    #expect(streamRecords.first?["version"] as? Int == 4)
     let edge = try #require(streamRecords.first { $0["type"] as? String == "edge" })
     #expect(Set(edge.keys) == ["type", "source", "action", "target"])
-    #expect(completion["eligible"] as? Bool == true)
+    #expect(completion["isComplete"] as? Bool == true)
     #expect(completion["initialStateCount"] as? Int == 1)
     #expect(completion["stateCount"] as? Int == 4)
     #expect(completion["edgeCount"] as? Int == 1)
@@ -103,15 +104,16 @@ struct CompletedGraphRunRecordsTests {
     let truncated = streamRecords.dropLast()
     #expect(truncated.last?["type"] as? String != "complete")
 
-    let incomplete = try CompletedGraphRun(
+    let incomplete = try GraphRun(
+      isComplete: false,
       graph: run.graph,
       observableActions: run.observableActions,
       outcome: .incomplete(reason: "state limit reached")
     )
     let incompleteURL = root.appendingPathComponent("incomplete-graph.jsonl")
-    try CompletedGraphRunRecords.write(incomplete, to: incompleteURL)
+    try GraphRunRecords.write(incomplete, to: incompleteURL)
     let incompleteRecords = try records(in: Data(contentsOf: incompleteURL))
-    #expect(incompleteRecords.last?["eligible"] as? Bool == false)
+    #expect(incompleteRecords.last?["isComplete"] as? Bool == false)
     #expect((incompleteRecords.last?["outcome"] as? [String: String])?["kind"] == "incomplete")
   }
 
@@ -119,7 +121,8 @@ struct CompletedGraphRunRecordsTests {
   func graphStreamRetainsTrace() throws {
     let first = state(counter: 1, values: [.integer(1)])
     let second = state(counter: 2, values: [.integer(2)])
-    let run = try CompletedGraphRun(
+    let run = try GraphRun(
+      isComplete: true,
       graph: graph(
         first,
         second,
@@ -139,14 +142,14 @@ struct CompletedGraphRunRecordsTests {
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let url = root.appendingPathComponent("graph.jsonl")
-    try CompletedGraphRunRecords.write(run, to: url)
+    try GraphRunRecords.write(run, to: url)
 
     let streamRecords = try records(in: Data(contentsOf: url))
     let trace = try #require(streamRecords.first { $0["type"] as? String == "trace" })
     #expect(trace["id"] as? String == "counterexample")
     #expect((trace["steps"] as? [[String: Any]])?.count == 2)
     #expect(streamRecords.last?["traceCount"] as? Int == 1)
-    #expect(streamRecords.last?["eligible"] as? Bool == false)
+    #expect(streamRecords.last?["isComplete"] as? Bool == true)
   }
 
   @Test("lasso records retain the cycle boundary and implicit stuttering")
@@ -161,12 +164,12 @@ struct CompletedGraphRunRecordsTests {
       .init(state: second.key, action: "advance"),
       .init(state: second.key, action: nil)
     ]
-    let run = try CompletedGraphRun(graph: graph, observableActions: ["advance"],
+    let run = try GraphRun(isComplete: true, graph: graph, observableActions: ["advance"],
       outcome: .temporalViolation(property: "Progress", reason: .violatingFairLasso),
       trace: .init(id: "lasso", steps: steps, cycleStartIndex: 1))
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: url) }
-    try CompletedGraphRunRecords.write(run, to: url)
+    try GraphRunRecords.write(run, to: url)
     let stream = try records(in: Data(contentsOf: url))
     let trace = try #require(stream.first { $0["type"] as? String == "trace" })
     #expect(trace["cycleStartIndex"] as? Int == 1)
@@ -174,10 +177,10 @@ struct CompletedGraphRunRecordsTests {
     #expect(encodedSteps[0]["action"] is NSNull)
     #expect(encodedSteps[1]["action"] as? String == "advance")
     #expect(encodedSteps[2]["action"] is NSNull)
-    #expect(stream.last?["eligible"] as? Bool == false)
+    #expect(stream.last?["isComplete"] as? Bool == true)
     for start in [-1, 0, 2, 3] {
-      #expect(throws: CompletedGraphRunError.self) {
-        try CompletedGraphRun(graph: graph, observableActions: ["advance"], outcome: run.outcome,
+      #expect(throws: GraphRunError.self) {
+        try GraphRun(isComplete: true, graph: graph, observableActions: ["advance"], outcome: run.outcome,
           trace: .init(id: "invalid-cycle", steps: steps, cycleStartIndex: start))
       }
     }
@@ -200,8 +203,8 @@ struct CompletedGraphRunRecordsTests {
       [.init(state: first.key, action: nil), .init(state: first.key, action: "advance")]
     ]
     for steps in invalid {
-      #expect(throws: CompletedGraphRunError.self) {
-        try CompletedGraphRun(graph: graph, observableActions: ["advance"],
+      #expect(throws: GraphRunError.self) {
+        try GraphRun(isComplete: true, graph: graph, observableActions: ["advance"],
           outcome: .invariantViolation("Check"), trace: .init(id: "invalid", steps: steps))
       }
     }
@@ -237,11 +240,12 @@ struct CompletedGraphRunRecordsTests {
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let url = root.appendingPathComponent("graph.jsonl")
-    try CompletedGraphRunRecords.write(
-      CompletedGraphRun(
+    try GraphRunRecords.write(
+      GraphRun(
+        isComplete: true,
         graph: graph,
         observableActions: Set(graph.edges.map(\.action)),
-        outcome: .exhaustiveSuccess
+        outcome: .noViolation
       ),
       to: url
     )

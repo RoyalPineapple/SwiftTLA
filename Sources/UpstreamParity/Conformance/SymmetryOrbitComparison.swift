@@ -108,20 +108,20 @@ package enum SymmetryOrbitComparisonResult: Equatable, Sendable {
 
 package struct SymmetryOrbitComparisonInput: Sendable {
   package let caseID: String
-  package let swiftRaw: CompletedGraphRun
-  package let swiftReduced: CompletedGraphRun
-  package let tlcRaw: CompletedGraphRun
-  package let tlcReduced: CompletedGraphRun
+  package let swiftRaw: GraphRun
+  package let swiftReduced: GraphRun
+  package let tlcRaw: GraphRun
+  package let tlcReduced: GraphRun
   package let renderedActions: [RenderedAction]
   package let permutations: [SymmetryPermutation]
   package let maximumPermutationCount: Int
 
   package init(
     caseID: String,
-    swiftRaw: CompletedGraphRun,
-    swiftReduced: CompletedGraphRun,
-    tlcRaw: CompletedGraphRun,
-    tlcReduced: CompletedGraphRun,
+    swiftRaw: GraphRun,
+    swiftReduced: GraphRun,
+    tlcRaw: GraphRun,
+    tlcReduced: GraphRun,
     renderedActions: [RenderedAction],
     permutations: [SymmetryPermutation],
     maximumPermutationCount: Int
@@ -146,7 +146,7 @@ package func compareSymmetryOrbits(
   _ input: SymmetryOrbitComparisonInput
 ) throws -> SymmetryOrbitComparisonResult {
   let runs = [input.swiftRaw, input.swiftReduced, input.tlcRaw, input.tlcReduced]
-  guard runs.allSatisfy(\.isPassEligible) else {
+  guard runs.allSatisfy({ $0.isComplete && $0.outcome == .noViolation }) else {
     return .difference([SymmetryOrbitDifference(
       kind: .incompleteRun,
       detail: "Every raw and reduced SwiftTLA and TLC exploration must complete exhaustively"
@@ -240,7 +240,7 @@ package func compareSymmetryOrbits(
 }
 
 private func reducedRepresentatives(
-  _ run: CompletedGraphRun,
+  _ run: GraphRun,
   source: SymmetryGraphSource,
   derivation: SymmetryOrbitDerivation
 ) throws -> [String: String] {
@@ -274,7 +274,7 @@ private func reducedRepresentatives(
 }
 
 private func initialRepresentatives(
-  _ run: CompletedGraphRun,
+  _ run: GraphRun,
   derivation: SymmetryOrbitDerivation
 ) throws -> Set<CanonicalStateKey> {
   try Set(run.graph.initialStateKeys.map { state in
@@ -286,7 +286,7 @@ private func initialRepresentatives(
 }
 
 private func quotientTransitions(
-  _ run: CompletedGraphRun,
+  _ run: GraphRun,
   derivation: SymmetryOrbitDerivation,
   actionPlan: SymmetryActionPlan
 ) throws -> [SymmetryQuotientTransition] {

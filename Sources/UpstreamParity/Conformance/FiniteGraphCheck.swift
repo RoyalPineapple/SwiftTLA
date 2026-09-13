@@ -39,7 +39,7 @@ package struct FiniteGraphCheck: Sendable {
   }
 
   package func run(
-    swiftRun: () throws -> CompletedGraphRun,
+    swiftRun: () throws -> GraphRun,
     tlcRequest: TLCProcessRequest,
     outputDirectory: URL
   ) -> FiniteGraphCheckOutput {
@@ -80,7 +80,7 @@ package struct FiniteGraphCheck: Sendable {
 
       phase = .swiftExport
       let swiftRun = try swiftRun()
-      try CompletedGraphRunRecords.write(
+      try GraphRunRecords.write(
         swiftRun,
         to: directory.appendingPathComponent("swift-graph.jsonl")
       )
@@ -90,7 +90,7 @@ package struct FiniteGraphCheck: Sendable {
 
       phase = .tlcParsing
       let tlcRun = tlcCapture.graph
-      try CompletedGraphRunRecords.write(
+      try GraphRunRecords.write(
         tlcRun,
         to: directory.appendingPathComponent("tlc-graph.jsonl")
       )
@@ -152,16 +152,16 @@ package struct FiniteGraphCheck: Sendable {
   private func writeComparison(
     _ comparison: GraphComparison,
     caseID: String,
-    swiftRun: CompletedGraphRun,
-    tlcRun: CompletedGraphRun,
+    swiftRun: GraphRun,
+    tlcRun: GraphRun,
     to directory: URL
   ) throws {
     try RetainedFiles.writeJSON(
       [
         "caseID": caseID,
         "result": comparison.matches ? "exact" : "difference",
-        "swiftComplete": swiftRun.isPassEligible,
-        "tlcComplete": tlcRun.isPassEligible,
+        "swiftComplete": swiftRun.isComplete,
+        "tlcComplete": tlcRun.isComplete,
         "swift": graphSummary(swiftRun.graph),
         "tlc": graphSummary(tlcRun.graph),
         "differences": graphDifferencesJSON(comparison)

@@ -275,7 +275,7 @@ package struct CanonicalGraph: Equatable, Sendable {
 }
 
 package enum GraphRunOutcome: Hashable, Sendable {
-    case exhaustiveSuccess
+    case noViolation
     case invariantViolation(String)
     case temporalViolation(property: String, reason: TemporalDiagnosticReason)
     case refinementViolation(String)
@@ -283,9 +283,12 @@ package enum GraphRunOutcome: Hashable, Sendable {
     case incomplete(reason: String)
     case executionError(String)
 
-    package var isExhaustiveSuccess: Bool {
-        if case .exhaustiveSuccess = self { return true }
-        return false
+    package var isConclusive: Bool {
+        switch self {
+        case .noViolation, .invariantViolation, .refinementViolation, .deadlock: true
+        case .temporalViolation(_, let reason): reason == .violatingFairLasso
+        case .incomplete, .executionError: false
+        }
     }
 
 }
@@ -314,7 +317,7 @@ package struct GraphTrace: Hashable, Sendable {
     }
 }
 
-package enum CompletedGraphRunError: Error, Equatable, Sendable {
+package enum GraphRunError: Error, Equatable, Sendable {
     case graphActionUndeclared(String)
     case deadlockStateMissing(CanonicalStateKey)
     case traceStateMissing(CanonicalStateKey)
@@ -327,61 +330,65 @@ package enum CompletedGraphRunError: Error, Equatable, Sendable {
     case traceEdgeMissing(CanonicalEdge)
 }
 
-package struct CompletedGraphRun: Equatable, Sendable {
+package struct GraphRun: Equatable, Sendable {
+    /// Whether the producer finished enumerating the configured state space.
+    package let isComplete: Bool
     package let graph: CanonicalGraph
     package let observableActions: Set<String>
     package let outcome: GraphRunOutcome
     package let trace: GraphTrace?
 
     package init(
+        isComplete: Bool,
         graph: CanonicalGraph,
         observableActions: Set<String>,
         outcome: GraphRunOutcome,
         trace: GraphTrace? = nil
     ) throws {
         for edge in graph.edges where !observableActions.contains(edge.action) {
-            throw CompletedGraphRunError.graphActionUndeclared(edge.action)
+            throw GraphRunError.graphActionUndeclared(edge.action)
         }
         if case .deadlock(let state) = outcome, graph.states[state] == nil {
-            throw CompletedGraphRunError.deadlockStateMissing(state)
+            throw GraphRunError.deadlockStateMissing(state)
         }
         if let trace {
-            guard let first = trace.steps.first else { throw CompletedGraphRunError.emptyTrace }
-            guard first.action == nil else { throw CompletedGraphRunError.traceInitialActionPresent }
+            guard let first = trace.steps.first else { throw GraphRunError.emptyTrace }
+            guard first.action == nil else { throw GraphRunError.traceInitialActionPresent }
             if let start = trace.cycleStartIndex {
                 guard start >= 0, start < trace.steps.count - 1 else {
-                    throw CompletedGraphRunError.invalidCycleStart(start)
+                    throw GraphRunError.invalidCycleStart(start)
                 }
                 guard trace.steps[start].state == trace.steps.last?.state else {
-                    throw CompletedGraphRunError.openCycle
+                    throw GraphRunError.openCycle
                 }
             }
             for step in trace.steps where graph.states[step.state] == nil {
-                throw CompletedGraphRunError.traceStateMissing(step.state)
+                throw GraphRunError.traceStateMissing(step.state)
             }
             guard graph.initialStateKeys.contains(first.state) else {
-                throw CompletedGraphRunError.traceInitialStateMissing(first.state)
+                throw GraphRunError.traceInitialStateMissing(first.state)
             }
             for (source, target) in zip(trace.steps, trace.steps.dropFirst()) {
                 guard let action = target.action else {
-                    guard source.state == target.state else { throw CompletedGraphRunError.stateChangingStutter }
+                    guard source.state == target.state else { throw GraphRunError.stateChangingStutter }
                     continue
                 }
                 let edge = CanonicalEdge(source: source.state, action: action, target: target.state)
                 guard graph.edges.contains(edge) else {
-                    throw CompletedGraphRunError.traceEdgeMissing(edge)
+                    throw GraphRunError.traceEdgeMissing(edge)
                 }
             }
         }
 
+        self.isComplete = isComplete
         self.graph = graph
         self.observableActions = observableActions
         self.outcome = outcome
         self.trace = trace
     }
 
-    package var isPassEligible: Bool {
-        outcome.isExhaustiveSuccess
+    package var isComparable: Bool {
+        isComplete && outcome.isConclusive
     }
 }
 

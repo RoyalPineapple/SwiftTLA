@@ -82,9 +82,15 @@ extension GraphDifference {
       )
     case .edges(let tlc, let swift):
       return edgeDifferenceReport(expected: tlc, actual: swift)
+    case .completion(let tlc, let swift):
+      return .init(
+        whatFailed: "Exploration is incomplete.", whereItFailed: "finite graph completion",
+        expected: "Complete TLC and Swift graphs.",
+        actual: "TLC complete: \(tlc); Swift complete: \(swift).",
+        nextSafeAction: "Complete both explorations before comparing their property outcomes.")
     case .outcome(let tlc, let swift):
       return .init(
-        whatFailed: "The verification outcomes differ.",
+        whatFailed: tlc == swift ? "The verification outcome is inconclusive." : "The verification outcomes differ.",
         whereItFailed: "finite conformance outcome",
         expected: "TLC outcome: \(describe(tlc))",
         actual: "SwiftTLA outcome: \(describe(swift))",
@@ -256,7 +262,7 @@ private func toolEvidence(for request: TLCProcessRequest) -> [RetainedFileLocati
 
 private func describe(_ value: GraphRunOutcome) -> String {
   switch value {
-  case .exhaustiveSuccess: "exhaustive success"
+  case .noViolation: "no violation found"
   case .invariantViolation(let message): "invariant violation: \(message)"
   case .temporalViolation(let property, let reason): "temporal violation: \(property) (\(reason.rawValue))"
   case .refinementViolation(let name): "refinement violation: \(name)"

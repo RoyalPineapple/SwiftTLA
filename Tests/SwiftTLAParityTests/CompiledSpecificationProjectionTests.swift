@@ -56,6 +56,6 @@ struct CompiledSpecificationProjectionTests {
         #expect(completedRun.graph.initialStateKeys.count == 1)
         #expect(completedRun.graph.edges.count == 2)
         #expect(completedRun.observableActions == ["Terminating", "advance"])
-        #expect(completedRun.outcome == .exhaustiveSuccess)
+        #expect(completedRun.outcome == .noViolation)
     }
 }

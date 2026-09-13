@@ -9,7 +9,7 @@ struct NativeRefinementCheckingTests {
         let graph = try ReachabilityGraph(initialMachines: NativeRefinementCounter.initialMachines(), maximumStates: 10)
         #expect(graph.transitions.count == 5)
         #expect(graph.refinementFailures.isEmpty)
-        #expect(try SwiftGraphExporter().export(graph).isPassEligible)
+        #expect(try SwiftGraphExporter().export(graph).isComparable)
         let compilation = try NativeRefinementCounter.spec.compile()
         let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
         guard case .ok = try ModelChecker(compilation: compilation, configuration: configuration).check() else {

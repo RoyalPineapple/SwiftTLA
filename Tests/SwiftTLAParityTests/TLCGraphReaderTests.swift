@@ -5,17 +5,29 @@ import SwiftTLA
 @testable import UpstreamParity
 @Suite(.serialized)
 struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonical evidence")
-  func parsesFrozenGraphIntoCompletedGraphRun() throws {
+  func parsesFrozenGraphIntoGraphRun() throws {
     let finiteGraphCase = try fixtureCase(try toolchainPin())
     let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
     let run = try completedGraph(
       try completeGraphStream(finiteGraphCase),
       with: reader,
       outcome: .completed)
-    #expect(run.isPassEligible)
+    #expect(run.isComparable)
     #expect(run.graph.initialStateKeys.count == 1)
     #expect(run.graph.edges.count == 1)
     #expect(run.observableActions == ["Next"])
+  }
+
+  @Test("closed TLC streams with early violations do not certify complete graphs")
+  func rejectsEarlyStoppedGraphsAsComplete() throws {
+    let finiteGraphCase = try fixtureCase(try testReferencePin())
+    let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
+    let stream = try reader.parse(completeGraphStream(finiteGraphCase))
+    for outcome in [TLCExecutionOutcome.safetyViolation, .livenessViolation, .deadlock] {
+      let run = try reader.makeGraphRun(stream, outcome: outcome)
+      #expect(!run.isComplete)
+      #expect(!run.isComparable)
+    }
   }
 
   @Test("TLC stages only the declared bundle, never sibling TLA files")
@@ -146,7 +158,7 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       with: TLCGraphReader(finiteGraphCase: finiteGraphCase),
       outcome: .safetyViolation
     )
-    #expect(!run.isPassEligible)
+    #expect(!run.isComparable)
     #expect(run.outcome == .invariantViolation("TLC safety property violation"))
   }
 
@@ -158,7 +170,7 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       with: TLCGraphReader(finiteGraphCase: finiteGraphCase),
       outcome: .completed
     )
-    #expect(run.outcome == .exhaustiveSuccess)
+    #expect(run.outcome == .noViolation)
   }
 
   @Test("toolchain pin rejects malformed lock fields")
@@ -624,7 +636,7 @@ extension TLCGraphReaderTests {
     )
 
     #expect(capture.run.outcome == .completed)
-    #expect(capture.graph.isPassEligible)
+    #expect(capture.graph.isComparable)
     #expect(executor.requests.count == 1)
   }
 
@@ -725,8 +737,8 @@ private func completedGraph(
   _ data: Data,
   with reader: TLCGraphReader,
   outcome: TLCExecutionOutcome
-) throws -> CompletedGraphRun {
-  try reader.makeCompletedGraphRun(reader.parse(data), outcome: outcome)
+) throws -> GraphRun {
+  try reader.makeGraphRun(reader.parse(data), outcome: outcome)
 }
 
 private func toolchainPin() throws -> TLCReferencePin {

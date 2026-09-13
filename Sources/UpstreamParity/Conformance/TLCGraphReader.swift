@@ -192,10 +192,10 @@ package struct TLCGraphReader: Sendable {
             initialStates: initialStates, transitions: transitions)
     }
 
-    package func makeCompletedGraphRun(
+    package func makeGraphRun(
         _ stream: TLCGraphEventStream,
         outcome: TLCExecutionOutcome
-    ) throws -> CompletedGraphRun {
+    ) throws -> GraphRun {
         let canonicalStatesByFingerprint = try stream.states.mapValues(canonicalState)
         func canonicalRepresentative(_ fingerprint: String) throws -> CanonicalState {
             guard let state = canonicalStatesByFingerprint[fingerprint] else {
@@ -216,7 +216,8 @@ package struct TLCGraphReader: Sendable {
             states: Array(canonicalStatesByFingerprint.values),
             edges: edges
         )
-        return try CompletedGraphRun(
+        return try GraphRun(
+            isComplete: outcome == .completed,
             graph: graph,
             observableActions: Set(stream.transitions.map(\.action)),
             outcome: graphOutcome(outcome)
@@ -226,7 +227,7 @@ package struct TLCGraphReader: Sendable {
     private func graphOutcome(_ outcome: TLCExecutionOutcome) -> GraphRunOutcome {
         switch outcome {
         case .completed:
-            return .exhaustiveSuccess
+            return .noViolation
         case .assumptionViolation:
             return .executionError("TLC assumption violation")
         case .deadlock:

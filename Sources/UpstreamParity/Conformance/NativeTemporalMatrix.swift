@@ -66,7 +66,7 @@ private struct StronglyFairTemporalMatrix {
 
 package func temporalConformanceRun(
   configuration: TemporalCaseConfiguration, maximumStates: Int
-) throws -> (graph: CompletedGraphRun, result: TemporalPropertyResult) {
+) throws -> (graph: GraphRun, result: TemporalPropertyResult) {
   switch configuration.fairness {
   case .none:
     try exportTemporalRun(UnfairTemporalMatrix.initialMachines(), configuration: configuration, maximumStates: maximumStates)
@@ -79,7 +79,7 @@ package func temporalConformanceRun(
 
 private func exportTemporalRun<Machine: StateMachine>(
   _ initialMachines: [Machine], configuration: TemporalCaseConfiguration, maximumStates: Int
-) throws -> (graph: CompletedGraphRun, result: TemporalPropertyResult) {
+) throws -> (graph: GraphRun, result: TemporalPropertyResult) {
   let native = try ReachabilityGraph(initialMachines: initialMachines, maximumStates: maximumStates)
   let property = configuration.property.renderedName
   guard native.safetyViolations.isEmpty, let analysis = native.temporalResults[property] else {
@@ -90,8 +90,8 @@ private func exportTemporalRun<Machine: StateMachine>(
   })
   let canonical = try CanonicalGraph(native, states: states)
   // This is the complete topology used by the separately reported property result.
-  let graph = try CompletedGraphRun(graph: canonical,
-    observableActions: Set(canonical.edges.map(\.action)), outcome: .exhaustiveSuccess)
+  let graph = try GraphRun(isComplete: true, graph: canonical,
+    observableActions: Set(canonical.edges.map(\.action)), outcome: .noViolation)
   let result: TemporalPropertyResult
   switch analysis.status {
   case .satisfied: result = .satisfied

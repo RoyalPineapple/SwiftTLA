@@ -10,10 +10,11 @@ struct TLCTemporalAdapterTests {
     let zero = CanonicalState(bindings: ["value": .integer(0)])
     let one = CanonicalState(bindings: ["value": .integer(1)])
     let advance = CanonicalEdge(source: zero.key, action: "Advance", target: one.key)
-    let run = try CompletedGraphRun(
+    let run = try GraphRun(
+      isComplete: true,
       graph: CanonicalGraph(initialStates: [zero], states: [zero, one], edges: [advance]),
       observableActions: ["Advance"],
-      outcome: .exhaustiveSuccess
+      outcome: .noViolation
     )
 
     #expect(run.containsTemporalTrace(states: [zero, one], edges: [advance]))
@@ -81,7 +82,8 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter rejects an incomplete Swift graph")
   func rejectsIncompleteSwiftGraph() throws {
     let fixture = try Fixture()
-    let incomplete = try CompletedGraphRun(
+    let incomplete = try GraphRun(
+      isComplete: false,
       graph: fixture.swiftRun.graph,
       observableActions: fixture.swiftRun.observableActions,
       outcome: .incomplete(reason: "test bound")
@@ -375,11 +377,12 @@ struct TLCTemporalAdapterTests {
     return nil
   }
 
-  private func completedSwiftRun(_ run: CompletedGraphRun) throws -> CompletedGraphRun {
-    try CompletedGraphRun(
+  private func completedSwiftRun(_ run: GraphRun) throws -> GraphRun {
+    try GraphRun(
+      isComplete: true,
       graph: run.graph,
       observableActions: run.observableActions,
-      outcome: .exhaustiveSuccess
+      outcome: .noViolation
     )
   }
 
@@ -459,7 +462,7 @@ struct TLCTemporalAdapterTests {
     let temporalCase: TemporalCase
     let request: TLCProcessRequest
     let completeGraphRequest: TLCProcessRequest
-    let swiftRun: CompletedGraphRun
+    let swiftRun: GraphRun
 
     init(property: TemporalPropertyKind = .alwaysEventually) throws {
       root = FileManager.default.temporaryDirectory.appendingPathComponent("TLCTemporalAdapterTests-\(UUID())")
@@ -513,7 +516,7 @@ struct TLCTemporalAdapterTests {
     }
 
     func input(
-      swiftRun: CompletedGraphRun? = nil,
+      swiftRun: GraphRun? = nil,
       swiftResult: TemporalPropertyResult? = nil,
       request: TLCProcessRequest? = nil,
       completeGraphRequest: TLCProcessRequest? = nil,
@@ -627,9 +630,9 @@ private func completedGraph(
   _ stream: Data,
   for finiteGraphCase: FiniteGraphCase,
   outcome: TLCExecutionOutcome = .completed
-) throws -> CompletedGraphRun {
+) throws -> GraphRun {
   let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
-  return try reader.makeCompletedGraphRun(reader.parse(stream), outcome: outcome)
+  return try reader.makeGraphRun(reader.parse(stream), outcome: outcome)
 }
 
 private func temporalGraphStream(case finiteGraphCase: FiniteGraphCase, runID: UUID) throws -> Data {

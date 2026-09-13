@@ -20,8 +20,8 @@ struct FiniteGraphCheckTests {
       let renderedNames = Set(finiteGraphCase.renderedActions.map(\.renderedName))
       #expect(Set(native.graph.edges.map(\.action)).isSubset(of: renderedNames))
       #expect(native.graph == formal.graph, "\(declaration.id)")
-      #expect(native.outcome == .exhaustiveSuccess, "\(declaration.id)")
-      #expect(formal.outcome == .exhaustiveSuccess, "\(declaration.id)")
+      #expect(native.outcome == .noViolation, "\(declaration.id)")
+      #expect(formal.outcome == .noViolation, "\(declaration.id)")
     }
   }
 
@@ -186,8 +186,8 @@ struct FiniteGraphCheckTests {
       at: output.appendingPathComponent("swift-graph.jsonl"))
     let tlcCompletion = try graphCompletion(
       at: output.appendingPathComponent("tlc-graph.jsonl"))
-    #expect(swiftCompletion["eligible"] as? Bool == true)
-    #expect(tlcCompletion["eligible"] as? Bool == true)
+    #expect(swiftCompletion["isComplete"] as? Bool == true)
+    #expect(tlcCompletion["isComplete"] as? Bool == true)
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
     let process = try json(at: output.appendingPathComponent("tlc-process.json"))
     #expect(process["caseID"] as? String == request.finiteGraphCase.id)
@@ -208,7 +208,7 @@ struct FiniteGraphCheckTests {
       $0.whatFailed == "The labeled transition relations differ."
     })
     #expect(report.expected.contains("TLC permits"))
-    #expect(report.actual.contains("SwiftTLA permits"))
+    #expect(report.actual.contains("SwiftTLA does not permit"))
     #expect(report.nextSafeAction.contains("guard"))
   }
 
@@ -297,7 +297,7 @@ struct FiniteGraphCheckTests {
     #expect(checkOutput.exitCode == .exact)
     #expect(try Data(contentsOf: output.appendingPathComponent("graph-events.jsonl")) == stream)
     let tlcGraph = output.appendingPathComponent("tlc-graph.jsonl")
-    #expect(try graphCompletion(at: tlcGraph)["eligible"] as? Bool == true)
+    #expect(try graphCompletion(at: tlcGraph)["isComplete"] as? Bool == true)
     let graphRecords = try graphRecords(at: tlcGraph)
     #expect(graphRecords.filter { $0["type"] as? String == "state" }.count == 2)
     #expect(graphRecords.filter { $0["type"] as? String == "edge" }.count == 1)
@@ -327,8 +327,8 @@ struct FiniteGraphCheckTests {
       at: output.appendingPathComponent("swift-graph.jsonl"))
     let tlcCompletion = try graphCompletion(
       at: output.appendingPathComponent("tlc-graph.jsonl"))
-    #expect(swiftCompletion["eligible"] as? Bool == true)
-    #expect(tlcCompletion["eligible"] as? Bool == true)
+    #expect(swiftCompletion["isComplete"] as? Bool == true)
+    #expect(tlcCompletion["isComplete"] as? Bool == true)
     #expect(try json(at: output.appendingPathComponent("comparison.json"))["result"] as? String == "exact")
   }
 }
@@ -419,13 +419,14 @@ extension FiniteGraphCheckTests {
 }
 
 extension FiniteGraphCheckTests {
-  private func fixtureRun(action: String = "SwiftNext") throws -> CompletedGraphRun {
+  private func fixtureRun(action: String = "SwiftNext") throws -> GraphRun {
     let first = CanonicalState(bindings: ["x": .integer(1)])
     let second = CanonicalState(bindings: ["x": .integer(2)])
-    return try CompletedGraphRun(
+    return try GraphRun(
+      isComplete: true,
       graph: CanonicalGraph(initialStates: [first], states: [first, second],
         edges: [CanonicalEdge(source: first.key, action: action, target: second.key)]),
-      observableActions: [action], outcome: .exhaustiveSuccess)
+      observableActions: [action], outcome: .noViolation)
   }
   private func temporaryRequest(in root: URL) throws -> TLCProcessRequest {
     let module = root.appendingPathComponent("Fixture.tla")

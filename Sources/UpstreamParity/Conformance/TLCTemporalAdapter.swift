@@ -4,7 +4,7 @@ package struct TLCTemporalCaptureInput: Sendable {
   package let temporalCase: TemporalCase
   package let request: TLCProcessRequest
   package let completeGraphRequest: TLCProcessRequest
-  package let swiftRun: CompletedGraphRun
+  package let swiftRun: GraphRun
   package let swiftResult: TemporalPropertyResult
   package let sourceInputURL: URL
   package let outputDirectory: URL
@@ -13,7 +13,7 @@ package struct TLCTemporalCaptureInput: Sendable {
     temporalCase: TemporalCase,
     request: TLCProcessRequest,
     completeGraphRequest: TLCProcessRequest,
-    swiftRun: CompletedGraphRun,
+    swiftRun: GraphRun,
     swiftResult: TemporalPropertyResult,
     sourceInputURL: URL,
     outputDirectory: URL
@@ -55,17 +55,17 @@ package struct TLCTemporalAdapter: Sendable {
     try FileManager.default.copyItem(
       at: input.sourceInputURL,
       to: input.outputDirectory.appendingPathComponent("source-input"))
-    try CompletedGraphRunRecords.write(
+    try GraphRunRecords.write(
       input.swiftRun,
       to: input.outputDirectory.appendingPathComponent("swift-graph.jsonl")
     )
     try clearTraceOutput(for: input.request)
     let capture = try processAdapter.capture(input.request, retainingIn: input.outputDirectory)
     let run = capture.run
-    let completeGraph = capture.graph.isPassEligible
+    let completeGraph = capture.graph.isComparable
       ? capture.graph
       : try captureCompleteGraph(input)
-    try CompletedGraphRunRecords.write(
+    try GraphRunRecords.write(
       completeGraph,
       to: input.outputDirectory.appendingPathComponent("tlc-graph.jsonl")
     )
@@ -90,7 +90,7 @@ package struct TLCTemporalAdapter: Sendable {
   private func validate(_ input: TLCTemporalCaptureInput) throws {
     let sourceInput = input.temporalCase.sourceInput
     try validateTraceOutputs(input)
-    guard input.swiftRun.isPassEligible else {
+    guard input.swiftRun.isComparable else {
       throw TLCTemporalAdapterError.graphEvidenceInvalid
     }
     guard input.request.caseID == input.temporalCase.id,
@@ -149,13 +149,13 @@ package struct TLCTemporalAdapter: Sendable {
 
   private func captureCompleteGraph(
     _ input: TLCTemporalCaptureInput
-  ) throws -> CompletedGraphRun {
+  ) throws -> GraphRun {
     let request = input.completeGraphRequest
     try clearTraceOutput(for: request)
     let directory = input.outputDirectory.appendingPathComponent("complete-graph-pass", isDirectory: true)
     try RetainedFiles.createDirectory(directory, beneath: input.outputDirectory)
     let capture = try processAdapter.capture(request, retainingIn: directory)
-    guard capture.run.outcome == .completed, capture.graph.isPassEligible else {
+    guard capture.run.outcome == .completed, capture.graph.isComparable else {
       throw TLCTemporalAdapterError.incompleteGraph
     }
     return capture.graph
@@ -166,7 +166,7 @@ package struct TLCTemporalAdapter: Sendable {
 extension TLCTemporalAdapter {
   private func temporalResult(
     run: TLCProcessRun,
-    graph: CompletedGraphRun,
+    graph: GraphRun,
     outputDirectory: URL,
     property: TemporalPropertyKind,
     allowsImplicitStuttering: Bool
@@ -208,7 +208,7 @@ extension TLCTemporalAdapter {
 
   private func traceIsBound(
     _ trace: TLCCounterexampleEvidence,
-    to graph: CompletedGraphRun,
+    to graph: GraphRun,
     allowsImplicitStuttering: Bool
   ) -> Bool {
     var states = trace.states

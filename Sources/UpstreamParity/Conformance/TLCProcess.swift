@@ -351,7 +351,7 @@ package struct TLCProcessRun: Equatable, Sendable {
 
 package struct TLCProcessCapture: Sendable {
   package let run: TLCProcessRun
-  package let graph: CompletedGraphRun
+  package let graph: GraphRun
 }
 
 package struct TLCProcessAdapter: Sendable {
@@ -426,7 +426,7 @@ package struct TLCProcessAdapter: Sendable {
     try retain(run, request: request, in: directory)
     return TLCProcessCapture(
       run: run,
-      graph: try reader.makeCompletedGraphRun(stream, outcome: run.outcome)
+      graph: try reader.makeGraphRun(stream, outcome: run.outcome)
     )
   }
 

@@ -230,7 +230,7 @@ package struct TemporalLassoWitness: Equatable, Codable, Sendable {
   }
 }
 
-package extension CompletedGraphRun {
+package extension GraphRun {
   func containsTemporalTrace(
     states: [CanonicalState],
     edges: [CanonicalEdge],

@@ -83,7 +83,7 @@ struct SymmetryOrbitConformanceTests {
   func incompleteExplorationIsStructured() throws {
     let states = [state("A"), state("B")]
     let input = try comparisonInput(
-      swiftRaw: run(states: states, outcome: .incomplete(reason: "state limit")),
+      swiftRaw: run(states: states, outcome: .incomplete(reason: "state limit"), isComplete: false),
       swiftReduced: run(states: [state("A")]),
       tlcRaw: run(states: states),
       tlcReduced: run(states: [state("A")])
@@ -282,12 +282,14 @@ struct SymmetryOrbitConformanceTests {
   private func run(
     states: [CanonicalState],
     edges: [CanonicalEdge]? = nil,
-    outcome: GraphRunOutcome = .exhaustiveSuccess
-  ) throws -> CompletedGraphRun {
+    outcome: GraphRunOutcome = .noViolation,
+    isComplete: Bool = true
+  ) throws -> GraphRun {
     let edges = edges ?? (states.count > 1
       ? [CanonicalEdge(source: states[0].key, action: "step", target: states[1].key)]
       : [CanonicalEdge(source: states[0].key, action: "step", target: states[0].key)])
-    return try CompletedGraphRun(
+    return try GraphRun(
+      isComplete: isComplete,
       graph: CanonicalGraph(initialStates: [states[0]], states: states, edges: edges),
       observableActions: Set(edges.map(\.action)),
       outcome: outcome
@@ -308,10 +310,10 @@ struct SymmetryOrbitConformanceTests {
   }
 
   private func comparisonInput(
-    swiftRaw: CompletedGraphRun,
-    swiftReduced: CompletedGraphRun,
-    tlcRaw: CompletedGraphRun,
-    tlcReduced: CompletedGraphRun,
+    swiftRaw: GraphRun,
+    swiftReduced: GraphRun,
+    tlcRaw: GraphRun,
+    tlcReduced: GraphRun,
     renderedActions: [RenderedAction] = [
       RenderedAction(sourceName: "step", arguments: [], renderedName: "step")
     ]

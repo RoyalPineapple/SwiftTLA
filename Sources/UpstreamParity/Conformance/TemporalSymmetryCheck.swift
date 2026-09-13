@@ -260,10 +260,10 @@ package struct TemporalSymmetryCheck: Sendable {
     let reducedSwiftURL = outputDirectory.appendingPathComponent("swift-reduced-graph.jsonl")
     let rawTLCURL = outputDirectory.appendingPathComponent("tlc-raw-graph.jsonl")
     let reducedTLCURL = outputDirectory.appendingPathComponent("tlc-reduced-graph.jsonl")
-    try CompletedGraphRunRecords.write(swiftRaw, to: rawSwiftURL)
-    try CompletedGraphRunRecords.write(swiftReduced, to: reducedSwiftURL)
-    try CompletedGraphRunRecords.write(rawTLC, to: rawTLCURL)
-    try CompletedGraphRunRecords.write(reducedTLC, to: reducedTLCURL)
+    try GraphRunRecords.write(swiftRaw, to: rawSwiftURL)
+    try GraphRunRecords.write(swiftReduced, to: reducedSwiftURL)
+    try GraphRunRecords.write(rawTLC, to: rawTLCURL)
+    try GraphRunRecords.write(reducedTLC, to: reducedTLCURL)
     let input = try SymmetryOrbitComparisonInput(
       caseID: symmetryCase.id,
       swiftRaw: swiftRaw,
