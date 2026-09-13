@@ -75,8 +75,8 @@
         "maximumStateLimit": 5000,
         "symmetryReduction": "disabled"
       },
-      "moduleSHA256": "72930a0df9675c8bc140091f67404c785d4b1db7bb61335354affe9218fd03de",
-      "cfgSHA256": "e0e287b855faadf8ae708b4740447183407b5beffa36d90742c7589a1c13c056",
+      "moduleSHA256": "289aee93c983706e825f30bdf438747cc76049a09ee6db143ea65d0ec3fa81a8",
+      "cfgSHA256": "1675b0b416a23b62fbeabf4d9afe28a9dfa25f046fbff3a89d0478d596a4e3c3",
       "timeoutSeconds": 60
     },
     {
