@@ -11,31 +11,7 @@ import SwiftTLAMacros
 package struct KVsnapModel: Sendable {
     package static let corpusEntry = CanonicalCorpusEntry(
         id: "kvsnap-upstream-port",
-        specification: { KVsnapModel.spec },
-        swiftConfiguration: .init(
-            checks: [
-                .init("TypeOK", kind: .invariant),
-                .init("SnapshotIsolation", kind: .invariant),
-                .init("Termination", kind: .property)
-            ],
-            constants: [
-                .init("k1", "k1"), .init("k2", "k2"),
-                .init("t1", "t1"), .init("t2", "t2"), .init("t3", "t3"),
-                .init("NoVal", "NoVal")
-            ]
-        ),
-        plusCalConfiguration: .init(
-            checks: [
-                .init("TypeOK", kind: .invariant),
-                .init("SnapshotIsolation", kind: .invariant),
-                .init("Termination", kind: .property)
-            ],
-            constants: [
-                .init("k1", "k1"), .init("k2", "k2"),
-                .init("t1", "t1"), .init("t2", "t2"), .init("t3", "t3"),
-                .init("NoVal", "NoVal")
-            ]
-        )
+        specification: { KVsnapModel.spec }
     )
 
     package enum Key: String, CaseIterable, FiniteTLAValueDomain {

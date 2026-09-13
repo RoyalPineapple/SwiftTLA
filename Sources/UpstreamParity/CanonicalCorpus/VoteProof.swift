@@ -6,27 +6,7 @@ import SwiftTLAMacros
 package struct VoteProofModel: Sendable {
     package static let corpusEntry = CanonicalCorpusEntry(
         id: "voteproof-upstream-port",
-        specification: { VoteProofModel.spec },
-        swiftConfiguration: configuration,
-        plusCalConfiguration: configuration
-    )
-
-    private static let configuration = CanonicalCorpusConfiguration(
-        checks: [
-            .init("TypeOK", kind: .invariant),
-            .init("VInv1", kind: .invariant),
-            .init("VInv2", kind: .invariant),
-            .init("VInv3", kind: .invariant),
-            .init("VInv4", kind: .invariant),
-            .init("Refines", kind: .property)
-        ],
-        constants: [
-            .init("Value", "{\"v1\", \"v2\"}"),
-            .init("Acceptor", "{\"a1\", \"a2\", \"a3\"}"),
-            .init("Quorum", "{{\"a1\", \"a2\"}, {\"a1\", \"a3\"}, {\"a2\", \"a3\"}, {\"a1\", \"a2\", \"a3\"}}"),
-            .init("Ballot", "{0, 1, 2}")
-        ],
-        checkDeadlock: false
+        specification: { VoteProofModel.spec }
     )
 
     package enum Value: String, CaseIterable, FiniteTLAValueDomain {

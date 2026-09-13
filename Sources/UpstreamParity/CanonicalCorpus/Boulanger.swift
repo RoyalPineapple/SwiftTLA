@@ -7,9 +7,7 @@ import SwiftTLAMacros
 package struct BoulangerModel: Sendable {
     package static let corpusEntry = CanonicalCorpusEntry(
         id: "boulanger-upstream-port",
-        specification: { BoulangerModel.spec },
-        swiftConfiguration: .init(checks: [.init("StateConstraint", kind: .constraint)]),
-        plusCalConfiguration: .init(checks: [.init("StateConstraint", kind: .constraint)])
+        specification: { BoulangerModel.spec }
     )
 
     package enum Process: Int, FiniteTLAValueDomain {
