@@ -13,7 +13,7 @@ extension FiniteExploration {
 }
 
 extension CompiledSpecification {
-    func livenessChecker(graph: StateGraph) -> LivenessChecker<CompiledActionCall, CompiledFairnessCondition.Scope> {
+    func livenessChecker(graph: StateGraph) -> LivenessChecker<StateGraph.StateID, CompiledActionCall, CompiledFairnessCondition.Scope> {
         let knownActions = Set(semantics.behavior.actions.map(\.id))
         return LivenessChecker(
             states: Set(graph.states.keys),
@@ -37,7 +37,8 @@ extension CompiledSpecification {
             actionOrder: { lhs, rhs in
                 if lhs.action != rhs.action { return lhs.action.ordinal < rhs.action.ordinal }
                 return lhs.arguments.lexicographicallyPrecedes(rhs.arguments)
-            }
+            },
+            stateOrder: { $0.id < $1.id }
         )
     }
 
@@ -76,7 +77,7 @@ extension CompiledSpecification {
             }
             return try checker.analyze(
                 expression,
-                initialStateIDs: initialStateIDs, isComplete: isComplete,
+                initialStates: initialStateIDs, isComplete: isComplete,
                 renderScope: { scope in
                     switch scope {
                     case .next: return "Next"

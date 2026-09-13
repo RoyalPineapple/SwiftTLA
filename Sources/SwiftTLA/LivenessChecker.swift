@@ -83,26 +83,29 @@ public struct TemporalAnalysis<State: Hashable & Sendable, Action: Equatable & S
 ///
 /// Every reachable state has an implicit stutter edge. Fairness uses only
 /// explicit, state-changing named-action transitions.
-package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Sendable> {
-    let states: Set<StateGraph.StateID>
-    let transitions: [StateGraph.StateID: [GraphEdge<Action>]]
+package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Sendable, Scope: Hashable & Sendable> {
+    let states: Set<State>
+    let transitions: [State: [GraphEdge<State, Action>]]
     let matches: (Action, Scope) -> Bool
     let actionOrder: (Action, Action) -> Bool
+    let stateOrder: (State, State) -> Bool
     private let fairness: [(scope: Scope, isStrong: Bool)]
-    private let enabled: [Scope: [StateGraph.StateID: Bool]]
+    private let enabled: [Scope: [State: Bool]]
 
     init(
-        states: Set<StateGraph.StateID>,
-        transitions: [StateGraph.StateID: [GraphEdge<Action>]],
+        states: Set<State>,
+        transitions: [State: [GraphEdge<State, Action>]],
         fairness: [(scope: Scope, isStrong: Bool)],
         matches: @escaping (Action, Scope) -> Bool,
-        actionOrder: @escaping (Action, Action) -> Bool
+        actionOrder: @escaping (Action, Action) -> Bool,
+        stateOrder: @escaping (State, State) -> Bool
     ) {
         self.states = states
         self.transitions = transitions
         self.fairness = fairness
         self.matches = matches
         self.actionOrder = actionOrder
+        self.stateOrder = stateOrder
         enabled = Dictionary(uniqueKeysWithValues: Set(fairness.map(\.scope)).map { scope in
             let values = Dictionary(uniqueKeysWithValues: states.map { state in
                 let isEnabled = (transitions[state] ?? []).contains { edge in
@@ -116,15 +119,15 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
     }
 
     func analyze(
-        _ property: TemporalCondition<@Sendable (StateGraph.StateID) throws -> Bool>,
-        initialStateIDs: [StateGraph.StateID],
+        _ property: TemporalCondition<@Sendable (State) throws -> Bool>,
+        initialStates: [State],
         isComplete: Bool = true,
         renderScope: (Scope) throws -> String
-    ) throws -> TemporalAnalysis<StateGraph.StateID, Action?> {
+    ) throws -> TemporalAnalysis<State, Action?> {
         guard isComplete else {
             return .init(status: .unavailable, reason: .incompleteExploration)
         }
-        guard !initialStateIDs.isEmpty, initialStateIDs.allSatisfy({ states.contains($0) }) else {
+        guard !initialStates.isEmpty, initialStates.allSatisfy({ states.contains($0) }) else {
             return .init(status: .unavailable, reason: .missingInitialStateIdentity)
         }
 
@@ -138,7 +141,7 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
             return .init(status: .unavailable, reason: .unknownAction)
         }
 
-        let predicate: @Sendable (StateGraph.StateID) throws -> Bool
+        let predicate: @Sendable (State) throws -> Bool
         switch property {
         case .always(let value), .eventually(let value), .alwaysEventually(let value), .eventuallyAlways(let value):
             predicate = value
@@ -146,7 +149,7 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
         }
         let negative = try states.filter { try !predicate($0) }
         let allStates = states
-        let search: LassoSearch
+        let search: LassoSearch<State>
 
         switch property {
         case .always:
@@ -167,7 +170,7 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
         let components = fairComponents(in: search.cycleStates, fairness: fairness, enabled: enabled)
         let witness = findWitness(
             components.fair,
-            initialStates: initialStateIDs,
+            initialStates: initialStates,
             prefixStates: search.prefixStates,
             prefixContinuationStates: search.prefixContinuationStates,
             cycleRequiredStates: search.cycleRequiredStates,
@@ -184,11 +187,11 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
         )
     }
 
-    public func computeSCCs() -> [Set<StateGraph.StateID>] {
+    public func computeSCCs() -> [Set<State>] {
         stronglyConnectedComponents(in: states)
     }
 
-    public func terminalSCCs(from sccs: [Set<StateGraph.StateID>]) -> [Set<StateGraph.StateID>] {
+    public func terminalSCCs(from sccs: [Set<State>]) -> [Set<State>] {
         let nodeToSCC = Dictionary(uniqueKeysWithValues: sccs.enumerated().flatMap { index, component in
             component.map { ($0, index) }
         })
@@ -200,10 +203,10 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
     }
 
     private func renderedEnabledness(
-        _ enabled: [Scope: [StateGraph.StateID: Bool]],
+        _ enabled: [Scope: [State: Bool]],
         renderScope: (Scope) throws -> String
-    ) throws -> [String: [StateGraph.StateID: Bool]] {
-        var rendered: [String: [StateGraph.StateID: Bool]] = [:]
+    ) throws -> [String: [State: Bool]] {
+        var rendered: [String: [State: Bool]] = [:]
         for entry in enabled {
             rendered[try renderScope(entry.key)] = entry.value
         }
@@ -214,20 +217,20 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
         transitions.values.allSatisfy { $0.allSatisfy { $0.action != nil } }
     }
 
-    private func matches(_ edge: GraphEdge<Action>, _ scope: Scope) -> Bool {
+    private func matches(_ edge: GraphEdge<State, Action>, _ scope: Scope) -> Bool {
         guard let action = edge.action else { return false }
         return matches(action, scope)
     }
 
     private func fairComponents(
-        in states: Set<StateGraph.StateID>,
+        in states: Set<State>,
         fairness: [(scope: Scope, isStrong: Bool)],
-        enabled: [Scope: [StateGraph.StateID: Bool]]
-    ) -> (fair: [Set<StateGraph.StateID>], rejected: [Set<StateGraph.StateID>]) {
-        var fair: [Set<StateGraph.StateID>] = []
-        var rejected: [Set<StateGraph.StateID>] = []
+        enabled: [Scope: [State: Bool]]
+    ) -> (fair: [Set<State>], rejected: [Set<State>]) {
+        var fair: [Set<State>] = []
+        var rejected: [Set<State>] = []
 
-        func prune(_ candidates: Set<StateGraph.StateID>) {
+        func prune(_ candidates: Set<State>) {
             for component in stronglyConnectedComponents(in: candidates) where !component.isEmpty {
                 if let action = fairness.compactMap({ condition -> Scope? in
                     guard condition.isStrong else { return nil }
@@ -252,8 +255,8 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
 
     private func isFair(
         _ condition: (scope: Scope, isStrong: Bool),
-        in component: Set<StateGraph.StateID>,
-        enabled: [Scope: [StateGraph.StateID: Bool]]
+        in component: Set<State>,
+        enabled: [Scope: [State: Bool]]
     ) -> Bool {
         let taken = component.contains { state in
             explicitEdges(from: state).contains { edge in
@@ -269,16 +272,16 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
 
 extension LivenessChecker {
     private func findWitness(
-        _ components: [Set<StateGraph.StateID>],
-        initialStates: [StateGraph.StateID],
-        prefixStates: Set<StateGraph.StateID>?,
-        prefixContinuationStates: Set<StateGraph.StateID>?,
-        cycleRequiredStates: Set<StateGraph.StateID>?,
+        _ components: [Set<State>],
+        initialStates: [State],
+        prefixStates: Set<State>?,
+        prefixContinuationStates: Set<State>?,
+        cycleRequiredStates: Set<State>?,
         fairness: [(scope: Scope, isStrong: Bool)],
-        enabled: [Scope: [StateGraph.StateID: Bool]]
-    ) -> FairLassoWitness<StateGraph.StateID, Action?>? {
-        var bestWitness: FairLassoWitness<StateGraph.StateID, Action?>?
-        func consider(_ candidate: FairLassoWitness<StateGraph.StateID, Action?>) {
+        enabled: [Scope: [State: Bool]]
+    ) -> FairLassoWitness<State, Action?>? {
+        var bestWitness: FairLassoWitness<State, Action?>?
+        func consider(_ candidate: FairLassoWitness<State, Action?>) {
             if let bestWitness, !witnessOrder(candidate, bestWitness) { return }
             bestWitness = candidate
         }
@@ -324,25 +327,25 @@ extension LivenessChecker {
     }
 
     private func makeCycle(
-        in component: Set<StateGraph.StateID>,
-        root: StateGraph.StateID,
-        requiredStates: Set<StateGraph.StateID>,
+        in component: Set<State>,
+        root: State,
+        requiredStates: Set<State>,
         fairness: [(scope: Scope, isStrong: Bool)],
-        enabled: [Scope: [StateGraph.StateID: Bool]]
-    ) -> ([StateGraph.StateID], [GraphEdge<Action>])? {
+        enabled: [Scope: [State: Bool]]
+    ) -> ([State], [GraphEdge<State, Action>])? {
         let scopes = Set(fairness.map(\.scope))
         func advance(
-            _ configuration: CycleSearchConfiguration<Scope>,
-            state: StateGraph.StateID,
-            edge: GraphEdge<Action>?
-        ) -> CycleSearchConfiguration<Scope> {
+            _ configuration: CycleSearchConfiguration<State, Scope>,
+            state: State,
+            edge: GraphEdge<State, Action>?
+        ) -> CycleSearchConfiguration<State, Scope> {
             let taken = edge.flatMap { edge -> Set<Scope>? in
                 guard (edge.target == edge.source) == false else { return [] }
                 return Set(scopes.filter { matches(edge, $0) })
             } ?? []
             let disabled = Set(scopes.filter { (enabled[$0]?[state] == true) == false })
             let present = Set(scopes.filter { enabled[$0]?[state] == true })
-            return CycleSearchConfiguration<Scope>(
+            return CycleSearchConfiguration<State, Scope>(
                 state: state,
                 visitedRequiredState: configuration.visitedRequiredState || requiredStates.contains(state),
                 takenActions: configuration.takenActions.union(taken),
@@ -350,7 +353,7 @@ extension LivenessChecker {
                 enabledActions: configuration.enabledActions.union(present)
             )
         }
-        func isFair(_ configuration: CycleSearchConfiguration<Scope>) -> Bool {
+        func isFair(_ configuration: CycleSearchConfiguration<State, Scope>) -> Bool {
             guard requiredStates.isEmpty || configuration.visitedRequiredState else { return false }
             return fairness.allSatisfy { condition in
                 return condition.isStrong
@@ -360,18 +363,18 @@ extension LivenessChecker {
         }
 
         let initial = advance(.initial(at: root), state: root, edge: nil)
-        var frontier: [CycleSearchConfiguration<Scope>: CycleSearchPath<Action>] = [
+        var frontier: [CycleSearchConfiguration<State, Scope>: CycleSearchPath<State, Action>] = [
             initial: .init(states: [root], actions: [])
         ]
-        var seen: [CycleSearchConfiguration<Scope>: CycleSearchPath<Action>] = frontier
+        var seen: [CycleSearchConfiguration<State, Scope>: CycleSearchPath<State, Action>] = frontier
 
         while !frontier.isEmpty {
-            var next: [CycleSearchConfiguration<Scope>: CycleSearchPath<Action>] = [:]
-            var completed: [CycleSearchPath<Action>] = []
+            var next: [CycleSearchConfiguration<State, Scope>: CycleSearchPath<State, Action>] = [:]
+            var completed: [CycleSearchPath<State, Action>] = []
             for (configuration, path) in frontier {
                 for edge in edges(from: configuration.state).sorted(by: edgeOrder) where component.contains(edge.target) {
                     let nextConfiguration = advance(configuration, state: edge.target, edge: edge)
-                    let nextPath = CycleSearchPath<Action>(
+                    let nextPath = CycleSearchPath<State, Action>(
                         states: path.states + [edge.target],
                         actions: path.actions + [edge]
                     )
@@ -403,22 +406,22 @@ extension LivenessChecker {
     }
 
     private func shortestPath(
-        from source: StateGraph.StateID,
-        to destination: StateGraph.StateID,
-        in allowed: Set<StateGraph.StateID>?
-    ) -> ([StateGraph.StateID], [GraphEdge<Action>])? {
+        from source: State,
+        to destination: State,
+        in allowed: Set<State>?
+    ) -> ([State], [GraphEdge<State, Action>])? {
         guard allowed?.contains(source) != false, allowed?.contains(destination) != false else { return nil }
         if source == destination { return ([source], []) }
         var queue = [source]
         var head = 0
-        var predecessors: [StateGraph.StateID: (StateGraph.StateID, GraphEdge<Action>)] = [:]
-        var seen: Set<StateGraph.StateID> = [source]
+        var predecessors: [State: (State, GraphEdge<State, Action>)] = [:]
+        var seen: Set<State> = [source]
         while head < queue.count {
             let state = queue[head]; head += 1
             for edge in edges(from: state).sorted(by: edgeOrder) where allowed?.contains(edge.target) != false && !seen.contains(edge.target) {
                 seen.insert(edge.target); predecessors[edge.target] = (state, edge)
                 if edge.target == destination {
-                    var states = [destination]; var actions: [GraphEdge<Action>] = []; var current = destination
+                    var states = [destination]; var actions: [GraphEdge<State, Action>] = []; var current = destination
                     while let predecessor = predecessors[current] {
                         actions.append(predecessor.1); states.append(predecessor.0); current = predecessor.0
                     }
@@ -430,10 +433,10 @@ extension LivenessChecker {
         return nil
     }
 
-    private func stronglyConnectedComponents(in allowed: Set<StateGraph.StateID>) -> [Set<StateGraph.StateID>] {
-        var index = 0; var indices: [StateGraph.StateID: Int] = [:]
-        var stack: [StateGraph.StateID] = []; var onStack: Set<StateGraph.StateID> = []; var components: [Set<StateGraph.StateID>] = []
-        func visit(_ state: StateGraph.StateID) -> Int {
+    private func stronglyConnectedComponents(in allowed: Set<State>) -> [Set<State>] {
+        var index = 0; var indices: [State: Int] = [:]
+        var stack: [State] = []; var onStack: Set<State> = []; var components: [Set<State>] = []
+        func visit(_ state: State) -> Int {
             let stateIndex = index
             var lowlink = stateIndex
             indices[state] = stateIndex; index += 1; stack.append(state); onStack.insert(state)
@@ -445,7 +448,7 @@ extension LivenessChecker {
                 }
             }
             if lowlink == stateIndex {
-                var component: Set<StateGraph.StateID> = []
+                var component: Set<State> = []
                 while let node = stack.popLast() { onStack.remove(node); component.insert(node); if node == state { break } }
                 components.append(component)
             }
@@ -455,27 +458,27 @@ extension LivenessChecker {
         return components
     }
 
-    private func explicitEdges(from state: StateGraph.StateID) -> [GraphEdge<Action>] {
+    private func explicitEdges(from state: State) -> [GraphEdge<State, Action>] {
         transitions[state] ?? []
     }
 
-    private func edges(from state: StateGraph.StateID) -> [GraphEdge<Action>] {
+    private func edges(from state: State) -> [GraphEdge<State, Action>] {
         explicitEdges(from: state) + [.init(source: state, action: nil, target: state)]
     }
 }
 
-private struct LassoSearch {
-    let cycleStates: Set<StateGraph.StateID>
+private struct LassoSearch<State: Hashable & Sendable> {
+    let cycleStates: Set<State>
     // nil imposes no visit requirement; an empty set makes the requirement impossible.
-    let prefixStates: Set<StateGraph.StateID>?
-    let prefixContinuationStates: Set<StateGraph.StateID>?
-    let cycleRequiredStates: Set<StateGraph.StateID>?
+    let prefixStates: Set<State>?
+    let prefixContinuationStates: Set<State>?
+    let cycleRequiredStates: Set<State>?
 
     init(
-        cycleStates: Set<StateGraph.StateID>,
-        prefixStates: Set<StateGraph.StateID>? = nil,
-        prefixContinuationStates: Set<StateGraph.StateID>? = nil,
-        cycleRequiredStates: Set<StateGraph.StateID>? = nil
+        cycleStates: Set<State>,
+        prefixStates: Set<State>? = nil,
+        prefixContinuationStates: Set<State>? = nil,
+        cycleRequiredStates: Set<State>? = nil
     ) {
         self.cycleStates = cycleStates
         self.prefixStates = prefixStates
@@ -484,20 +487,20 @@ private struct LassoSearch {
     }
 }
 
-package struct GraphEdge<Action: Hashable & Sendable>: Hashable, Sendable {
-    let source: StateGraph.StateID
+package struct GraphEdge<State: Hashable & Sendable, Action: Hashable & Sendable>: Hashable, Sendable {
+    let source: State
     let action: Action?
-    let target: StateGraph.StateID
+    let target: State
 }
 
-private struct CycleSearchConfiguration<Scope: Hashable & Sendable>: Hashable {
-    let state: StateGraph.StateID
+private struct CycleSearchConfiguration<State: Hashable & Sendable, Scope: Hashable & Sendable>: Hashable {
+    let state: State
     let visitedRequiredState: Bool
     let takenActions: Set<Scope>
     let disabledActions: Set<Scope>
     let enabledActions: Set<Scope>
 
-    static func initial(at state: StateGraph.StateID) -> CycleSearchConfiguration {
+    static func initial(at state: State) -> CycleSearchConfiguration {
         .init(
             state: state,
             visitedRequiredState: false,
@@ -508,18 +511,16 @@ private struct CycleSearchConfiguration<Scope: Hashable & Sendable>: Hashable {
     }
 }
 
-private struct CycleSearchPath<Action: Hashable & Sendable>: Hashable {
-    let states: [StateGraph.StateID]
-    let actions: [GraphEdge<Action>]
+private struct CycleSearchPath<State: Hashable & Sendable, Action: Hashable & Sendable>: Hashable {
+    let states: [State]
+    let actions: [GraphEdge<State, Action>]
 }
 
-private func stateOrder(_ lhs: StateGraph.StateID, _ rhs: StateGraph.StateID) -> Bool { lhs.id < rhs.id }
 extension LivenessChecker {
-    private func edgeOrder(_ lhs: GraphEdge<Action>, _ rhs: GraphEdge<Action>) -> Bool {
+    private func edgeOrder(_ lhs: GraphEdge<State, Action>, _ rhs: GraphEdge<State, Action>) -> Bool {
         if graphActionOrder(lhs.action, rhs.action) { return true }
         if graphActionOrder(rhs.action, lhs.action) { return false }
-        if lhs.target.id != rhs.target.id { return lhs.target.id < rhs.target.id }
-        return false
+        return stateOrder(lhs.target, rhs.target)
     }
 
     private func graphActionOrder(_ lhs: Action?, _ rhs: Action?) -> Bool {
@@ -534,10 +535,10 @@ extension LivenessChecker {
             return actionOrder(lhs, rhs)
         }
     }
-    private func cyclePathOrder(_ lhs: CycleSearchPath<Action>, _ rhs: CycleSearchPath<Action>) -> Bool {
-        let leftStates = lhs.states.map(\.id)
-        let rightStates = rhs.states.map(\.id)
-        if leftStates != rightStates { return leftStates.lexicographicallyPrecedes(rightStates) }
+    private func cyclePathOrder(_ lhs: CycleSearchPath<State, Action>, _ rhs: CycleSearchPath<State, Action>) -> Bool {
+        let leftStates = lhs.states
+        let rightStates = rhs.states
+        if leftStates != rightStates { return leftStates.lexicographicallyPrecedes(rightStates, by: stateOrder) }
         for (left, right) in zip(lhs.actions, rhs.actions) {
             if graphActionOrder(left.action, right.action) { return true }
             if graphActionOrder(right.action, left.action) { return false }
@@ -546,12 +547,12 @@ extension LivenessChecker {
     }
 }
 extension LivenessChecker {
-    private func witnessOrder(_ lhs: FairLassoWitness<StateGraph.StateID, Action?>, _ rhs: FairLassoWitness<StateGraph.StateID, Action?>) -> Bool {
+    private func witnessOrder(_ lhs: FairLassoWitness<State, Action?>, _ rhs: FairLassoWitness<State, Action?>) -> Bool {
         if lhs.prefix.count != rhs.prefix.count { return lhs.prefix.count < rhs.prefix.count }
         if lhs.cycleActions.count != rhs.cycleActions.count { return lhs.cycleActions.count < rhs.cycleActions.count }
-        let left = lhs.prefix.map(\.id) + lhs.cycle.map(\.id)
-        let right = rhs.prefix.map(\.id) + rhs.cycle.map(\.id)
-        if left != right { return left.lexicographicallyPrecedes(right) }
+        let left = lhs.prefix + lhs.cycle
+        let right = rhs.prefix + rhs.cycle
+        if left != right { return left.lexicographicallyPrecedes(right, by: stateOrder) }
         let leftActions = lhs.prefixActions + lhs.cycleActions
         let rightActions = rhs.prefixActions + rhs.cycleActions
         return leftActions.lexicographicallyPrecedes(rightActions, by: graphActionOrder)

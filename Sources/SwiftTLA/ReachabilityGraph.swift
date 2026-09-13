@@ -120,35 +120,29 @@ extension ReachabilityGraph {
     ) throws -> [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] {
         guard !properties.isEmpty else { return [:] }
         let snapshots = Array(transitions.keys)
-        let identities = Dictionary(uniqueKeysWithValues: snapshots.enumerated().map {
-            ($0.element, StateGraph.StateID($0.offset))
-        })
+        let stateOrder = Dictionary(uniqueKeysWithValues: snapshots.enumerated().map { ($0.element, $0.offset) })
         let actionNames = Dictionary(uniqueKeysWithValues: Set(transitions.values.flatMap { $0.map(\.action) }).map {
             ($0, String(describing: $0))
         })
         let fairness = machine.fairnessConditions()
-        let checker = LivenessChecker<Machine.Action, Int>(
-            states: Set(identities.values),
+        let checker = LivenessChecker<Machine.Snapshot, Machine.Action, Int>(
+            states: Set(snapshots),
             transitions: Dictionary(uniqueKeysWithValues: transitions.map { source, successors in
-                let sourceID = identities[source]!
-                return (sourceID, successors.map { successor in
-                    GraphEdge(source: sourceID, action: successor.action,
-                        target: identities[successor.target]!)
+                (source, successors.map { successor in
+                    GraphEdge(source: source, action: successor.action, target: successor.target)
                 })
             }),
             fairness: fairness.indices.map { ($0, fairness[$0].isStrong) },
             matches: { action, scope in fairness[scope].matches(action) },
-            actionOrder: { actionNames[$0]! < actionNames[$1]! }
+            actionOrder: { actionNames[$0]! < actionNames[$1]! },
+            stateOrder: { stateOrder[$0]! < stateOrder[$1]! }
         )
         return try properties.mapValues { property in
-            let predicates = property.map { predicate -> @Sendable (StateGraph.StateID) throws -> Bool in
-                { try predicate(snapshots[$0.id]) }
-            }
-            return try checker.analyze(
-                predicates,
-                initialStateIDs: initialStates.map { identities[$0]! },
+            try checker.analyze(
+                property,
+                initialStates: Array(initialStates),
                 renderScope: { fairness[$0].name }
-            ).map(state: { snapshots[$0.id] }, action: { $0 })
+            )
         }
     }
 }

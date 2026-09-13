@@ -9,20 +9,20 @@ import UpstreamParity
 struct LivenessCheckerTests {
   @Test("fairness enabledness is computed once across property checks")
   func sharesFairnessEnabledness() throws {
-    let first = StateGraph.StateID(0)
-    let second = StateGraph.StateID(1)
+    let first = "first"
+    let second = "second"
     var matchCount = 0
-    let checker = LivenessChecker<Int, Int>(states: [first, second], transitions: [
+    let checker = LivenessChecker<String, Int, Int>(states: [first, second], transitions: [
       first: [GraphEdge(source: first, action: 1, target: second)],
       second: [GraphEdge(source: second, action: 1, target: first)]
     ], fairness: [(scope: 1, isStrong: false)], matches: { action, scope in
       matchCount += 1
       return action == scope
-    }, actionOrder: <)
+    }, actionOrder: <, stateOrder: <)
     #expect(matchCount == 2)
     for _ in 0..<2 {
       let result = try checker.analyze(.eventually { _ in true },
-        initialStateIDs: [first], renderScope: { _ in "step" })
+        initialStates: [first], renderScope: { _ in "step" })
       #expect(result.status == .satisfied)
     }
     #expect(matchCount == 2)
