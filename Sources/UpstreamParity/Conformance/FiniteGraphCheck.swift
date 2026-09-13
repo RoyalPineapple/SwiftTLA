@@ -39,7 +39,7 @@ package struct FiniteGraphCheck: Sendable {
   }
 
   package func run(
-    swiftRun: () throws -> GraphRun,
+    nativeRun: () throws -> NativeModelRun,
     tlcRequest: TLCProcessRequest,
     outputDirectory: URL
   ) -> FiniteGraphCheckOutput {
@@ -79,7 +79,9 @@ package struct FiniteGraphCheck: Sendable {
       staging = directory
 
       phase = .swiftExport
-      let swiftRun = try swiftRun()
+      let native = try nativeRun()
+      let swiftRun = native.graph
+      try RetainedFiles.writeCanonical(native.checks, to: directory.appendingPathComponent("native-checks.json"))
       try GraphRunRecords.write(
         swiftRun,
         to: directory.appendingPathComponent("swift-graph.jsonl")
@@ -97,8 +99,10 @@ package struct FiniteGraphCheck: Sendable {
 
       phase = .comparison
       let comparison = compareFiniteGraphs(tlc: tlcRun, swift: swiftRun)
+      let matches = comparison.matches && native.checks.allSatisfied
       try writeComparison(
         comparison,
+        nativeChecksPassed: native.checks.allSatisfied,
         caseID: finiteGraphCase.id,
         swiftRun: swiftRun,
         tlcRun: tlcRun,
@@ -108,7 +112,7 @@ package struct FiniteGraphCheck: Sendable {
       phase = .publication
       try publish(staging: directory, to: outputDirectory)
       return .init(
-        exitCode: comparison.matches ? .exact : .semanticDifference,
+        exitCode: matches ? .exact : .semanticDifference,
         evidenceDirectory: outputDirectory,
         comparison: comparison,
         diagnostic: nil
@@ -151,6 +155,7 @@ package struct FiniteGraphCheck: Sendable {
 
   private func writeComparison(
     _ comparison: GraphComparison,
+    nativeChecksPassed: Bool,
     caseID: String,
     swiftRun: GraphRun,
     tlcRun: GraphRun,
@@ -159,7 +164,8 @@ package struct FiniteGraphCheck: Sendable {
     try RetainedFiles.writeJSON(
       [
         "caseID": caseID,
-        "result": comparison.matches ? "exact" : "difference",
+        "result": comparison.matches && nativeChecksPassed ? "exact" : "difference",
+        "nativeChecksPassed": nativeChecksPassed,
         "swiftComplete": swiftRun.isComplete,
         "tlcComplete": tlcRun.isComplete,
         "swift": graphSummary(swiftRun.graph),

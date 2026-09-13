@@ -116,7 +116,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         }
         let preparedCases = try selected.map { declaration in
             let compilation = try declaration.sourceModel.spec.compile()
-            return (declaration, try compilation.render().actions)
+            return (declaration, compilation.description, try compilation.render())
         }
         let toolRoot = try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", environment)
         let inputRoot = try requiredEnvironment("FINITE_GRAPH_INPUT_ROOT", environment)
@@ -172,7 +172,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false)
         }
         var exitCode: Int32 = FiniteGraphExitCode.exact.rawValue
-        for (declaration, renderedActions) in preparedCases {
+        for (declaration, description, rendered) in preparedCases {
             let caseOutput = selected.count == 1
                 ? output
                 : output.appendingPathComponent(declaration.id, isDirectory: true)
@@ -185,7 +185,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 arguments: arguments,
                 environment: [:],
                 pin: pin,
-                renderedActions: renderedActions
+                renderedActions: rendered.actions
             )
             let bundle = try TLCProcessRequest.declaredBundle(
                 root: inputPath(declaration.module, within: inputRoot),
@@ -214,7 +214,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 referenceArtifacts: referenceArtifacts
             )
             let check = FiniteGraphCheck().run(
-                swiftRun: { try declaration.sourceModel.nativeGraph(for: finiteGraphCase) },
+                nativeRun: { try declaration.sourceModel.nativeRun(description: description, rendered: rendered, for: finiteGraphCase) },
                 tlcRequest: request,
                 outputDirectory: caseOutput
             )

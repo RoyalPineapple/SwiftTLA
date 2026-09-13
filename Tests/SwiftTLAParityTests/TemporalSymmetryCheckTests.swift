@@ -20,13 +20,13 @@ struct TemporalSymmetryCheckTests {
     for temporalCase in cases {
       let fairness = temporalCase.fairness
       let model = try temporalConformanceRun(fairness: fairness, maximumStates: 10)
-      #expect(Set(model.properties.keys) == ["AlwaysP", "EventuallyP", "AlwaysEventuallyP",
+      #expect(Set(model.checks.properties.keys) == ["AlwaysP", "EventuallyP", "AlwaysEventuallyP",
         "EventuallyAlwaysP", "LeadsToPQ", "LeavesZero"])
       #expect(model.graph.isComplete)
       #expect(model.graph.graph == expected)
       #expect(model.graph.trace == nil)
-      #expect(model.properties.values.allSatisfy { $0 != .unavailable })
-      for (property, native) in model.properties {
+      #expect(model.checks.properties.values.allSatisfy { $0 != .unavailable })
+      for (property, native) in model.checks.properties {
         let expectsProgress = property == "LeavesZero" && fairness != .none
         if expectsProgress {
           #expect(native == .satisfied)

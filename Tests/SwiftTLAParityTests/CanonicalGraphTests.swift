@@ -176,7 +176,7 @@ struct CanonicalGraphTests {
             ]
         )
 
-        let run = try SwiftGraphExporter().export(exploration, for: finiteGraphCase)
+        let run = try FormalGraphExporter().export(exploration, for: finiteGraphCase)
         let expectedFirst = CanonicalState(bindings: [
             "cars": .record(["carA": .integer(0), "carB": .integer(1)])
         ])
@@ -235,7 +235,7 @@ struct CanonicalGraphTests {
                 compilation: specification.compile(),
                 configuration: configuration
             ).explore()
-            #expect(try SwiftGraphExporter().export(exploration).outcome == expected)
+            #expect(try FormalGraphExporter().export(exploration).outcome == expected)
         }
     }
 }

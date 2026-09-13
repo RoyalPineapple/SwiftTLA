@@ -7,48 +7,66 @@ struct NativeGraphExportTests {
     @Test("native lasso export retains named transitions and their rendered names")
     func retainsNamedCycleTransitions() throws {
         let native = try ReachabilityGraph(initialMachines: CyclicExportModel.initialMachines(), maximumStates: 2)
+        let compilation = try CyclicExportModel.spec.compile()
         let namedCase = try fixtureCase(testReferencePin(), renderedActions: [
             RenderedAction(sourceName: "advance", arguments: [], renderedName: "ConcreteAdvance")
         ])
-        let exported = try SwiftGraphExporter().export(native, for: namedCase)
-        let trace = try #require(exported.trace)
+        let exported = try NativeModelRun(native, description: compilation.description,
+            rendered: compilation.render(), for: namedCase)
+        let trace = try counterexample(exported.checks.properties["ReachesTwo"])
         let start = try #require(trace.cycleStartIndex)
         #expect(trace.steps[start].state == trace.steps.last?.state)
         #expect(trace.steps.dropFirst(start + 1).allSatisfy { $0.action == "ConcreteAdvance" })
-        #expect(exported.isComplete)
-        #expect(exported.isComparable)
+        #expect(exported.graph.isComplete)
     }
 
-    @Test("native graph export preserves safety and temporal failure categories")
-    func retainsNativeFailures() throws {
+    @Test("native export retains every property verdict when safety and temporal checks fail together")
+    func retainsAllNativeChecks() throws {
+        let compilation = try FailingExportModel.spec.compile()
+        let rendered = try compilation.render()
         for initial in try FailingExportModel.initialMachines() {
             let native = try ReachabilityGraph(initialMachines: [initial], maximumStates: 3)
-            let exported = try SwiftGraphExporter().export(native)
-            #expect(exported.isComplete)
-            #expect(exported.isComparable)
-            #expect(try exported.graph == CanonicalGraph(native))
+            let exported = try NativeModelRun(native, description: compilation.description, rendered: rendered)
+            #expect(exported.graph.isComplete)
+            #expect(try exported.graph.graph == CanonicalGraph(native))
+            #expect(Set(exported.checks.properties.keys) == ["BelowTwo", "BelowThree", "ReachesThree"])
+            #expect(exported.checks.properties["BelowThree"] == .satisfied)
+            #expect(!exported.checks.allSatisfied)
+            _ = try counterexample(exported.checks.deadlock)
+            let temporal = try counterexample(exported.checks.properties["ReachesThree"])
+            #expect(temporal.cycleStartIndex != nil)
             if initial.state.value == 0 {
-                #expect(exported.outcome == .temporalViolation(property: "ReachesThree", reason: .violatingFairLasso))
-                #expect(exported.graph.states.count == 1)
-                let trace = try #require(exported.trace)
-                #expect(trace.cycleStartIndex == 0)
-                #expect(trace.steps.map(\.action) == [nil, nil])
+                #expect(exported.checks.properties["BelowTwo"] == .satisfied)
+                #expect(temporal.steps.map(\.action) == [nil, nil])
             } else {
-                #expect(exported.outcome == .invariantViolation("BelowTwo"))
-                #expect(exported.graph.states.count == 2)
-                let trace = try #require(exported.trace)
+                let trace = try counterexample(exported.checks.properties["BelowTwo"])
                 #expect(trace.steps.map(\.action) == [nil, "advance"])
-                let values = trace.steps.map { exported.graph.states[$0.state]?.bindings["value"] }
+                let values = trace.steps.map { exported.graph.graph.states[$0.state]?.bindings["value"] }
                 #expect(values == [.integer(1), .integer(2)])
                 let namedCase = try fixtureCase(testReferencePin(), renderedActions: [
                     RenderedAction(sourceName: "advance", arguments: [], renderedName: "ConcreteAdvance")
                 ])
-                let named = try SwiftGraphExporter().export(native, for: namedCase)
-                #expect(named.outcome == exported.outcome)
-                #expect(named.trace?.steps.map(\.action) == [nil, "ConcreteAdvance"])
-                #expect(Set(named.graph.edges.map(\.action)) == ["ConcreteAdvance"])
+                let named = try NativeModelRun(native, description: compilation.description, rendered: rendered, for: namedCase)
+                #expect(try counterexample(named.checks.properties["BelowTwo"]).steps.map(\.action) == [nil, "ConcreteAdvance"])
+                #expect(Set(named.graph.graph.edges.map(\.action)) == ["ConcreteAdvance"])
             }
         }
+    }
+
+    @Test("export requires the native temporal results to cover the resolved declarations")
+    func rejectsMismatchedDeclarations() throws {
+        let native = try ReachabilityGraph(initialMachines: CyclicExportModel.initialMachines(), maximumStates: 2)
+        let other = try FailingExportModel.spec.compile()
+        #expect(throws: EvidenceFormatError.self) {
+            try NativeModelRun(native, description: other.description, rendered: other.render())
+        }
+    }
+
+    private func counterexample(_ result: PropertyResult?) throws -> GraphTrace {
+        guard case .violated(let trace) = result else {
+            throw EvidenceFormatError.invalidField(record: "test", field: "missing counterexample")
+        }
+        return trace
     }
 }
 
@@ -59,6 +77,8 @@ private struct FailingExportModel {
             let value = scope.sharedVar("value", in: 0...1)
             SwiftTLA.Action("advance") { value == 1 && value.becomes(2) }
             Invariant("BelowTwo") { value < 2 }
+            Invariant("BelowThree") { value < 3 }
+            DeadlockCheck()
             Eventually("ReachesThree", value == 3)
         }
     }

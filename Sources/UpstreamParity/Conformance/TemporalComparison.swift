@@ -8,8 +8,8 @@ package struct TemporalComparison: Equatable, Encodable, Sendable {
   package let property: String
   package let fairness: TemporalFairnessMode
   package let status: TemporalComparisonStatus
-  package let swiftResult: TemporalPropertyResult
-  package let tlcResult: TemporalPropertyResult
+  package let swiftResult: PropertyResult
+  package let tlcResult: PropertyResult
 
   package init(
     caseID: String,
@@ -17,8 +17,8 @@ package struct TemporalComparison: Equatable, Encodable, Sendable {
     fairness: TemporalFairnessMode,
     swiftRun: GraphRun,
     tlcRun: GraphRun,
-    swiftResult: TemporalPropertyResult,
-    tlcResult: TemporalPropertyResult
+    swiftResult: PropertyResult,
+    tlcResult: PropertyResult
   ) throws {
     guard swiftRun.isComparable, tlcRun.isComparable else {
       throw EvidenceFormatError.invalidField(record: caseID, field: "incomplete comparison graph")

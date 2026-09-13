@@ -320,10 +320,11 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case tlcmcGraph1 = "tlcmc-graph-1"
     case nQueensFour = "n-queens-four"
 
-    package func nativeGraph(for finiteGraphCase: FiniteGraphCase) throws -> GraphRun {
-        func explore<Machine: StateMachine>(_ initial: [Machine]) throws -> GraphRun {
-            try SwiftGraphExporter().export(ReachabilityGraph(initialMachines: initial,
-                maximumStates: finiteGraphCase.exploration.maximumStateLimit), for: finiteGraphCase)
+    package func nativeRun(description: CompilationDescription, rendered: RenderedSpecification, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {
+        func explore<Machine: StateMachine>(_ initial: [Machine]) throws -> NativeModelRun {
+            try NativeModelRun(ReachabilityGraph(initialMachines: initial,
+                maximumStates: finiteGraphCase.exploration.maximumStateLimit),
+                description: description, rendered: rendered, for: finiteGraphCase)
         }
         switch self {
         case .boulanger: return try explore(BoulangerModel.initialMachines())

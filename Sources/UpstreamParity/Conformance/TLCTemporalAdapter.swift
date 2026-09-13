@@ -7,7 +7,7 @@ package struct TLCTemporalCaptureInput: Sendable {
   package let request: TLCProcessRequest
   package let completeGraph: TLCProcessCapture
   package let swiftRun: GraphRun
-  package let swiftResult: TemporalPropertyResult
+  package let swiftResult: PropertyResult
   package let rendered: RenderedSpecification
   package let outputDirectory: URL
 
@@ -17,7 +17,7 @@ package struct TLCTemporalCaptureInput: Sendable {
     request: TLCProcessRequest,
     completeGraph: TLCProcessCapture,
     swiftRun: GraphRun,
-    swiftResult: TemporalPropertyResult,
+    swiftResult: PropertyResult,
     rendered: RenderedSpecification,
     outputDirectory: URL
   ) {
@@ -139,7 +139,7 @@ extension TLCTemporalAdapter {
     outcome: TLCExecutionOutcome,
     graph: GraphRun,
     outputDirectory: URL
-  ) throws -> TemporalPropertyResult {
+  ) throws -> PropertyResult {
     if outcome == .completed {
       return .satisfied
     }

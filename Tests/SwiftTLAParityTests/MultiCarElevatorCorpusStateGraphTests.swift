@@ -16,7 +16,7 @@ struct MultiCarElevatorCorpusStateGraphTests {
         let native = try ReachabilityGraph(initialMachines: initial, maximumStates: 4_000)
         #expect(native.safetyViolations.isEmpty)
         let exported = try CanonicalGraph(native)
-        let formal = try SwiftGraphExporter().export(exploration)
+        let formal = try FormalGraphExporter().export(exploration)
         #expect(exported == formal.graph)
         #expect(formal.outcome == .noViolation)
     }

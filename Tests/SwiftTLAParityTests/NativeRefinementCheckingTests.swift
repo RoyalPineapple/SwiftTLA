@@ -9,8 +9,9 @@ struct NativeRefinementCheckingTests {
         let graph = try ReachabilityGraph(initialMachines: NativeRefinementCounter.initialMachines(), maximumStates: 10)
         #expect(graph.transitions.count == 5)
         #expect(graph.refinementFailures.isEmpty)
-        #expect(try SwiftGraphExporter().export(graph).isComparable)
         let compilation = try NativeRefinementCounter.spec.compile()
+        let exported = try NativeModelRun(graph, description: compilation.description, rendered: compilation.render())
+        #expect(exported.checks.properties["Refines"] == .satisfied)
         let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
         guard case .ok = try ModelChecker(compilation: compilation, configuration: configuration).check() else {
             Issue.record("Abstract exploration constraints must not restrict the refinement relation")
@@ -23,9 +24,14 @@ struct NativeRefinementCheckingTests {
         for initial in try InvalidNativeRefinement.initialMachines() {
             let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 4)
             let failure = try #require(graph.refinementFailures["Refines"])
-            let exported = try SwiftGraphExporter().export(graph)
-            #expect(exported.outcome == .refinementViolation("Refines"))
-            let trace = try #require(exported.trace)
+            let compilation = try InvalidNativeRefinement.spec.compile()
+            let exported = try NativeModelRun(graph, description: compilation.description, rendered: compilation.render())
+            guard case .violated(let trace) = exported.checks.properties["Refines"],
+                  case .violated = exported.checks.properties["BelowTwo"],
+                  case .violated = exported.checks.properties["ReachesFour"] else {
+                Issue.record("All refinement, invariant, and temporal failures must be retained")
+                continue
+            }
             if initial.state.count == 0 {
                 guard case .transition(let source, let action, let target) = failure else {
                     Issue.record("Expected the concrete edge that skips an abstract state")
@@ -50,9 +56,12 @@ struct NativeRefinementCheckingTests {
         }
         #expect(witness.cycle.first == witness.cycle.last)
         #expect(witness.cycleActions == [nil])
-        let exported = try SwiftGraphExporter().export(graph)
-        #expect(exported.outcome == .refinementViolation("Refines"))
-        let trace = try #require(exported.trace)
+        let compilation = try FairNativeRefinement.spec.compile()
+        let exported = try NativeModelRun(graph, description: compilation.description, rendered: compilation.render())
+        guard case .violated(let trace) = exported.checks.properties["Refines"] else {
+            Issue.record("Expected a retained refinement counterexample")
+            return
+        }
         #expect(trace.cycleStartIndex == witness.prefix.count - 1)
         #expect(trace.steps[try #require(trace.cycleStartIndex)].state == trace.steps.last?.state)
         #expect(trace.steps.last?.action == nil)
@@ -108,6 +117,8 @@ private struct InvalidNativeRefinement {
                 SwiftTLA.Action("advance") { value.becomes(value + 1).when(value < 2) }
             }
             let count = scope.sharedVar("count", in: 0...1)
+            Invariant("BelowTwo") { count < 2 }
+            Eventually("ReachesFour", count == 4)
             SwiftTLA.Action("advance") { count.becomes(count + 2).when(count < 2) }
             let instance = Instance("Counter", of: abstract)
             instance

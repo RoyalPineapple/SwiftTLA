@@ -52,7 +52,7 @@ package struct TemporalSymmetryCheck: Sendable {
     let temporalOutcomes = try input.manifest.temporalCases.flatMap { temporalCase in
       let modelDirectory = try RetainedFiles.createDirectory(
         output.appendingPathComponent(temporalCase.id), beneath: output)
-      let native: TemporalModelRun
+      let native: NativeModelRun
       do {
         native = try temporalConformanceRun(
           fairness: temporalCase.fairness, maximumStates: temporalCase.exploration.maximumStateLimit)
@@ -68,7 +68,7 @@ package struct TemporalSymmetryCheck: Sendable {
           toolchain: toolchain, referencePin: input.referencePin, projectRoot: root, evidenceRoot: output)
         return (toolchain: toolchain, graph: graph)
       }
-      return try native.properties.keys.sorted().map { property in
+      return try native.checks.properties.keys.sorted().map { property in
         let propertyDirectory = modelDirectory.appendingPathComponent("properties").appendingPathComponent(property)
         let propertyCase = try TemporalCase(id: "\(temporalCase.id)-\(property)",
           fairness: temporalCase.fairness, exploration: temporalCase.exploration)
@@ -142,7 +142,7 @@ package struct TemporalSymmetryCheck: Sendable {
   }
 
   private func captureTemporalGraph(
-    temporalCase: TemporalCase, native: TemporalModelRun, toolchain: ResolvedTLCToolchain,
+    temporalCase: TemporalCase, native: NativeModelRun, toolchain: ResolvedTLCToolchain,
     referencePin: TLCReferencePin, projectRoot: URL, evidenceRoot: URL
   ) throws -> TLCProcessCapture {
     let bundle = try native.rendered.tlaBundle(checking: [], checkDeadlock: false)
@@ -159,11 +159,11 @@ package struct TemporalSymmetryCheck: Sendable {
   }
 
   private func captureTemporal(
-    temporalCase: TemporalCase, property: String, native: TemporalModelRun,
+    temporalCase: TemporalCase, property: String, native: NativeModelRun,
     toolchain: ResolvedTLCToolchain, completeGraph: TLCProcessCapture,
     referencePin: TLCReferencePin, projectRoot: URL, evidenceRoot: URL, outputDirectory: URL
   ) throws -> TemporalComparison {
-    guard let check = native.properties[property] else {
+    guard let check = native.checks.properties[property] else {
       throw EvidenceFormatError.invalidField(record: property, field: "native temporal checking")
     }
     let bundle = try native.rendered.tlaBundle(checking: [property], checkDeadlock: false)
@@ -246,11 +246,11 @@ package struct TemporalSymmetryCheck: Sendable {
     let reducedTLC = try processAdapter.capture(
       reducedRequest,
       retainingIn: outputDirectory.appendingPathComponent("tlc-reduced", isDirectory: true)).graph
-    let swiftRaw = try SwiftGraphExporter().export(ModelChecker(
+    let swiftRaw = try FormalGraphExporter().export(ModelChecker(
       compilation: compilation,
       configuration: symmetryCase.rawExploration
     ).explore(), for: rawCase)
-    let swiftReduced = try SwiftGraphExporter().export(ModelChecker(
+    let swiftReduced = try FormalGraphExporter().export(ModelChecker(
       compilation: compilation,
       configuration: symmetryCase.reducedExploration
     ).explore(), for: reducedCase)

@@ -64,15 +64,9 @@ private struct StronglyFairTemporalMatrix {
   }
 }
 
-package struct TemporalModelRun: Sendable {
-  package let rendered: RenderedSpecification
-  package let graph: GraphRun
-  package let properties: [String: TemporalPropertyResult]
-}
-
 package func temporalConformanceRun(
   fairness: TemporalFairnessMode, maximumStates: Int
-) throws -> TemporalModelRun {
+) throws -> NativeModelRun {
   switch fairness {
   case .none:
     try exportTemporalRun(UnfairTemporalMatrix.initialMachines(),
@@ -91,36 +85,7 @@ package func temporalConformanceRun(
 
 private func exportTemporalRun<Machine: StateMachine>(
   _ initialMachines: [Machine], compilation: CompiledSpecification, maximumStates: Int
-) throws -> TemporalModelRun {
-  let native = try ReachabilityGraph(initialMachines: initialMachines, maximumStates: maximumStates)
-  let declaredProperties = Set(compilation.description.temporalProperties)
-  guard !declaredProperties.isEmpty, declaredProperties == Set(native.temporalResults.keys),
-        native.safetyViolations.isEmpty else {
-    throw EvidenceFormatError.invalidField(record: compilation.description.name, field: "native temporal checking")
-  }
-  let states = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
-    ($0, try CanonicalState(native.formalProjection(of: $0)))
-  })
-  let canonical = try CanonicalGraph(native, states: states)
-  let observableActions = Set(canonical.edges.map(\.action))
-  let properties = try Dictionary(uniqueKeysWithValues: native.temporalResults.map { property, analysis in
-    let result: TemporalPropertyResult
-    switch analysis.status {
-    case .satisfied: result = .satisfied
-    case .unavailable: result = .unavailable
-    case .violated:
-      guard let witness = analysis.witness else {
-        throw EvidenceFormatError.invalidField(record: property, field: "native temporal witness")
-      }
-      let lasso = try GraphTrace(id: "native-lasso", witness: witness, stateKey: { snapshot in
-        guard let state = states[snapshot] else { throw CanonicalGraphError.missingNativeSnapshot }
-        return state.key
-      }, actionName: { try native.formalCall(for: $0).description })
-      result = .violated(lasso)
-    }
-    return (property, result)
-  })
-  let graph = try GraphRun(isComplete: true, graph: canonical,
-    observableActions: observableActions, outcome: .noViolation)
-  return TemporalModelRun(rendered: try compilation.render(), graph: graph, properties: properties)
+) throws -> NativeModelRun {
+  try NativeModelRun(ReachabilityGraph(initialMachines: initialMachines, maximumStates: maximumStates),
+    description: compilation.description, rendered: compilation.render())
 }

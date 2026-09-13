@@ -36,7 +36,7 @@ struct CompiledSpecificationProjectionTests {
             environment: [:],
             pin: try testReferencePin()
         )
-        let completedRun = try SwiftGraphExporter().export(exploration, for: matchingCase)
+        let completedRun = try FormalGraphExporter().export(exploration, for: matchingCase)
 
         #expect(tla.root.tla.contains("MODULE CompiledProjection"))
         #expect(plusCal.root.tla.contains("--algorithm CompiledProjection"))

@@ -15,7 +15,7 @@ struct HourClockCorpusStateGraphTests {
         let native = try ReachabilityGraph(initialMachines: initial, maximumStates: 100)
         #expect(native.safetyViolations.isEmpty)
         let exported = try CanonicalGraph(native)
-        let formal = try SwiftGraphExporter().export(exploration)
+        let formal = try FormalGraphExporter().export(exploration)
         #expect(exported == formal.graph)
         #expect(exported.initialStateKeys.count == 12)
         #expect(exported.states.count == 12)

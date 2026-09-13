@@ -23,7 +23,7 @@ struct ChangRobertsCorpusContractTests {
         #expect(native.safetyViolations.isEmpty)
         #expect(native.temporalResults["Liveness"]?.status == .satisfied)
         let exported = try CanonicalGraph(native)
-        let formal = try SwiftGraphExporter().export(exploration)
+        let formal = try FormalGraphExporter().export(exploration)
         #expect(exported == formal.graph)
         #expect(exported.states.count == Example.changRobertsN3.expectedDistinct)
     }

@@ -51,7 +51,7 @@ struct GraphRunRecordsTests {
         outcome: outcome, compilationIdentity: exploration.compilationIdentity,
         configuration: exploration.configuration, compiledStates: exploration.compiledStates
       )
-      let run = try SwiftGraphExporter().export(failed)
+      let run = try FormalGraphExporter().export(failed)
       try GraphRunRecords.write(run, to: url)
       let completion = try #require(records(in: Data(contentsOf: url)).last)
       #expect(completion["outcome"] as? [String: String] == expected)
