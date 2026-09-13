@@ -4,7 +4,7 @@ import SwiftTLA
 extension NativeSwiftEmitter {
     func supportsNativeRefinement(_ refinement: CompiledRefinementProgram) -> Bool {
         let abstract = refinement.abstract
-        return abstract.behavior.fairness.isEmpty && abstract.behavior.constraint == nil
+        return abstract.behavior.fairness.isEmpty
             && abstract.layout.variables.allSatisfy { $0.declaration.origin == .source && $0.collection == nil }
     }
 

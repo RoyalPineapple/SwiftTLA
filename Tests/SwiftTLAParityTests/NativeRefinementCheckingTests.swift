@@ -1,15 +1,21 @@
 import Testing
-import SwiftTLA
+@testable import SwiftTLA
 import SwiftTLAMacros
 import UpstreamParity
 
 struct NativeRefinementCheckingTests {
-    @Test("generated native refinement permits mapped stuttering and shared tuple types")
+    @Test("native refinement permits mapped stuttering independently of abstract exploration constraints")
     func acceptsNativeRefinement() throws {
         let graph = try ReachabilityGraph(initialMachines: NativeRefinementCounter.initialMachines(), maximumStates: 10)
         #expect(graph.transitions.count == 5)
         #expect(graph.refinementFailures.isEmpty)
         #expect(try SwiftGraphExporter().export(graph).isPassEligible)
+        let compilation = try NativeRefinementCounter.spec.compile()
+        let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
+        guard case .ok = try ModelChecker(compilation: compilation, configuration: configuration).check() else {
+            Issue.record("Abstract exploration constraints must not restrict the refinement relation")
+            return
+        }
     }
 
     @Test("native refinement failures retain the actual initial state or violating edge")
@@ -53,6 +59,7 @@ private struct NativeRefinementCounter {
                 SwiftTLA.Action("advance") {
                     value.becomes(Pair<Int, Int>.literal(value.first() + 1, 0)).when(value.first() < 2)
                 }
+                Constraint(value.first() < 1)
             }
             let count = scope.sharedVar("count", initial: 0)
             SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 4) }

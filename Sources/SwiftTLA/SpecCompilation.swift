@@ -833,7 +833,9 @@ public extension TLASpec {
                 }
                 return (parameter.name, source)
             })
-            let specialized = abstractModule.specializing(parameters: parameters)
+            var specialized = abstractModule.specializing(parameters: parameters)
+            // A TLC exploration constraint is configuration, not part of C!Spec.
+            specialized.constraint = nil
             return .init(
                 name: refinement.name,
                 instance: instanceID,
