@@ -176,7 +176,7 @@ extension TLCTemporalAdapter {
     }
     let violationOutcome: TLCExecutionOutcome = switch property {
     case .always: .safetyViolation
-    case .eventually, .alwaysEventually, .eventuallyAlways, .leadsTo: .livenessViolation
+    case .eventually, .alwaysEventually, .eventuallyAlways, .leadsTo, .leavesZero: .livenessViolation
     }
     guard run.outcome == violationOutcome,
           FileManager.default.fileExists(atPath: outputDirectory.appendingPathComponent("counterexample.json").path),

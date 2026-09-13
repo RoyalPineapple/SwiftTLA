@@ -25,4 +25,5 @@ EventuallyP == <>P
 AlwaysEventuallyP == []<>P
 EventuallyAlwaysP == <>[]P
 LeadsToPQ == P ~> Q
+LeavesZero == (x = 0) ~> (x # 0)
 ====

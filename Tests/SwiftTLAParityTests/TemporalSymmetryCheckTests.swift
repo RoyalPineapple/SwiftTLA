@@ -18,9 +18,14 @@ struct TemporalSymmetryCheckTests {
     for temporalCase in try registeredManifest().temporalCases {
       let native = try temporalConformanceRun(configuration: temporalCase.configuration,
         maximumStates: temporalCase.exploration.maximumStateLimit)
-      guard case .violated = native.result else {
+      let expectsProgress = temporalCase.configuration.property == .leavesZero
+        && temporalCase.configuration.fairness != .none
+      if expectsProgress {
+        #expect(native.result == .satisfied)
+      } else if case .violated = native.result {
+        // The remaining cases require a counterexample, including unfair stuttering at zero.
+      } else {
         Issue.record("Expected a native counterexample for \(temporalCase.id)")
-        continue
       }
       #expect(native.graph.graph == expected)
       #expect(throws: ExplorationError.stateLimitExceeded(2)) {

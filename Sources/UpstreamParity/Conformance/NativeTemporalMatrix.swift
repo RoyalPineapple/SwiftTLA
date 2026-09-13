@@ -17,6 +17,7 @@ private struct UnfairTemporalMatrix {
       AlwaysEventually("AlwaysEventuallyP", x == 2)
       EventuallyAlways("EventuallyAlwaysP", x == 2)
       LeadsTo("LeadsToPQ", x == 2, x == 1)
+      LeadsTo("LeavesZero", x == 0, x != 0)
     }
   }
 }
@@ -37,6 +38,7 @@ private struct WeaklyFairTemporalMatrix {
       AlwaysEventually("AlwaysEventuallyP", x == 2)
       EventuallyAlways("EventuallyAlwaysP", x == 2)
       LeadsTo("LeadsToPQ", x == 2, x == 1)
+      LeadsTo("LeavesZero", x == 0, x != 0)
     }
   }
 }
@@ -57,6 +59,7 @@ private struct StronglyFairTemporalMatrix {
       AlwaysEventually("AlwaysEventuallyP", x == 2)
       EventuallyAlways("EventuallyAlwaysP", x == 2)
       LeadsTo("LeadsToPQ", x == 2, x == 1)
+      LeadsTo("LeavesZero", x == 0, x != 0)
     }
   }
 }

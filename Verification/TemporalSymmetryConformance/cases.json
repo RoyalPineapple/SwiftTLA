@@ -5,7 +5,7 @@
       "id": "temporal-always-none",
       "sourceInput": {
         "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
-        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+        "sha256": "77247042014113e366b7d3f9091f2a67bdab690efb8594a8a393215c20bf2bc0"
       },
       "configuration": {
         "property": "always",
@@ -21,7 +21,7 @@
       "id": "temporal-eventually-none",
       "sourceInput": {
         "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
-        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+        "sha256": "77247042014113e366b7d3f9091f2a67bdab690efb8594a8a393215c20bf2bc0"
       },
       "configuration": {
         "property": "eventually",
@@ -37,7 +37,7 @@
       "id": "temporal-always-eventually-none",
       "sourceInput": {
         "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
-        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+        "sha256": "77247042014113e366b7d3f9091f2a67bdab690efb8594a8a393215c20bf2bc0"
       },
       "configuration": {
         "property": "alwaysEventually",
@@ -53,7 +53,7 @@
       "id": "temporal-eventually-always-weak",
       "sourceInput": {
         "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
-        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+        "sha256": "77247042014113e366b7d3f9091f2a67bdab690efb8594a8a393215c20bf2bc0"
       },
       "configuration": {
         "property": "eventuallyAlways",
@@ -69,7 +69,7 @@
       "id": "temporal-leads-to-strong",
       "sourceInput": {
         "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
-        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+        "sha256": "77247042014113e366b7d3f9091f2a67bdab690efb8594a8a393215c20bf2bc0"
       },
       "configuration": {
         "property": "leadsTo",
@@ -85,7 +85,7 @@
       "id": "temporal-weak-fairness-boundary",
       "sourceInput": {
         "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
-        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+        "sha256": "77247042014113e366b7d3f9091f2a67bdab690efb8594a8a393215c20bf2bc0"
       },
       "configuration": {
         "property": "alwaysEventually",
@@ -101,10 +101,58 @@
       "id": "temporal-strong-fairness-boundary",
       "sourceInput": {
         "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
-        "sha256": "a7364faca5a0316660f0de57a962453643f47f80895d1e0c0be03f9d6420d7c5"
+        "sha256": "77247042014113e366b7d3f9091f2a67bdab690efb8594a8a393215c20bf2bc0"
       },
       "configuration": {
         "property": "alwaysEventually",
+        "fairness": "strong",
+        "allowsImplicitStuttering": true
+      },
+      "exploration": {
+        "maximumStateLimit": 10,
+        "symmetryReduction": "disabled"
+      }
+    },
+    {
+      "id": "temporal-leaves-zero-none",
+      "sourceInput": {
+        "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
+        "sha256": "77247042014113e366b7d3f9091f2a67bdab690efb8594a8a393215c20bf2bc0"
+      },
+      "configuration": {
+        "property": "leavesZero",
+        "fairness": "none",
+        "allowsImplicitStuttering": true
+      },
+      "exploration": {
+        "maximumStateLimit": 10,
+        "symmetryReduction": "disabled"
+      }
+    },
+    {
+      "id": "temporal-leaves-zero-weak",
+      "sourceInput": {
+        "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
+        "sha256": "77247042014113e366b7d3f9091f2a67bdab690efb8594a8a393215c20bf2bc0"
+      },
+      "configuration": {
+        "property": "leavesZero",
+        "fairness": "weak",
+        "allowsImplicitStuttering": true
+      },
+      "exploration": {
+        "maximumStateLimit": 10,
+        "symmetryReduction": "disabled"
+      }
+    },
+    {
+      "id": "temporal-leaves-zero-strong",
+      "sourceInput": {
+        "path": "Verification/TemporalSymmetryConformance/fixtures/temporal/TemporalMatrix.tla",
+        "sha256": "77247042014113e366b7d3f9091f2a67bdab690efb8594a8a393215c20bf2bc0"
+      },
+      "configuration": {
+        "property": "leavesZero",
         "fairness": "strong",
         "allowsImplicitStuttering": true
       },

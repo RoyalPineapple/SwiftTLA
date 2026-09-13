@@ -13,6 +13,7 @@ package enum TemporalPropertyKind: String, Codable, Sendable {
   case alwaysEventually
   case eventuallyAlways
   case leadsTo
+  case leavesZero
 
   package var renderedName: String {
     switch self {
@@ -21,6 +22,7 @@ package enum TemporalPropertyKind: String, Codable, Sendable {
     case .alwaysEventually: "AlwaysEventuallyP"
     case .eventuallyAlways: "EventuallyAlwaysP"
     case .leadsTo: "LeadsToPQ"
+    case .leavesZero: "LeavesZero"
     }
   }
 }
