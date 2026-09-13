@@ -21,6 +21,10 @@ package struct NativeModelRun: Sendable {
   package let checks: ModelCheckResults
 
   package init(rendered: RenderedSpecification, graph: GraphRun, checks: ModelCheckResults) throws {
+    guard Set(checks.properties.keys) == rendered.checkNames,
+          (checks.deadlock != nil) == rendered.checksDeadlock else {
+      throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "native check coverage")
+    }
     for result in checks.properties.values {
       if case .violated(let trace) = result { try trace.validate(in: graph.graph) }
     }

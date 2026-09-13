@@ -44,6 +44,39 @@ package struct TLCPropertyCheck: Sendable {
     self.processAdapter = processAdapter
   }
 
+  package func captureAll(
+    _ native: NativeModelRun, completeGraph: Result<TLCProcessCapture, Error>, in directory: URL
+  ) throws -> [(check: ModelCheck, status: PropertyComparisonStatus)] {
+    var selected = native.checks.properties.sorted { $0.key < $1.key }.map {
+      (check: ModelCheck.property($0.key), result: $0.value)
+    }
+    if let deadlock = native.checks.deadlock {
+      selected.append((.deadlock, deadlock))
+    }
+    var results: [(check: ModelCheck, status: PropertyComparisonStatus)] = []
+    for (check, nativeResult) in selected {
+      let output = try RetainedFiles.resolve(directory.appendingPathComponent(check.artifactPath), beneath: directory)
+      do {
+        let completeGraph = try completeGraph.get()
+        let work = completeGraph.request.workingDirectory.appendingPathComponent(UUID().uuidString)
+        try RetainedFiles.createDirectory(work, beneath: completeGraph.request.workingDirectory)
+        defer { try? FileManager.default.removeItem(at: work) }
+        let propertyRequest = try completeGraph.request.selecting(bundle: check.bundle(from: native.rendered),
+          work: work, runID: UUID(), invocation: .propertyCheck)
+        let comparison = try capture(.init(
+          check: check, request: propertyRequest, completeGraph: completeGraph,
+          swiftRun: native.graph, swiftResult: nativeResult, rendered: native.rendered, outputDirectory: output))
+        results.append((check, comparison.status))
+      } catch {
+        results.append((check, .unavailable))
+        try RetainedFiles.createDirectory(output, beneath: directory)
+        try RetainedFiles.writeText(redactingSecrets(in: String(describing: error)),
+          to: output.appendingPathComponent("check-error.txt"))
+      }
+    }
+    return results
+  }
+
   package func capture(_ input: TLCPropertyCheckInput) throws -> PropertyComparison {
     guard FileManager.default.fileExists(atPath: input.outputDirectory.path) == false else {
       throw TLCPropertyCheckError.outputAlreadyExists

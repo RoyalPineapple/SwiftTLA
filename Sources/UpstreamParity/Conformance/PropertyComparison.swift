@@ -6,6 +6,13 @@ package enum ModelCheck: Equatable, Encodable, Sendable {
   case property(String)
   case deadlock
 
+  package var artifactPath: String {
+    switch self {
+    case .property(let name): "properties/\(name)"
+    case .deadlock: "deadlock"
+    }
+  }
+
   package func bundle(from rendered: RenderedSpecification) throws -> TLAModuleBundle {
     switch self {
     case .property(let name): try rendered.tlaBundle(checking: [name], checkDeadlock: false)

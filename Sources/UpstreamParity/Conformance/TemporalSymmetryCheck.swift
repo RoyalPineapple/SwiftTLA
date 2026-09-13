@@ -64,33 +64,19 @@ package struct TemporalSymmetryCheck: Sendable {
       try RetainedFiles.writeText(native.rendered.tlaBundle.tla, to: modelDirectory.appendingPathComponent("source-input"))
       let shared = Result {
         let toolchain = try ResolvedTLCToolchain(toolRoot: input.toolRoot, projectRoot: root, pin: input.referencePin)
-        let graph = try captureTemporalGraph(temporalCase: temporalCase, native: native,
+        return try captureTemporalGraph(temporalCase: temporalCase, native: native,
           toolchain: toolchain, referencePin: input.referencePin, projectRoot: root, evidenceRoot: output)
-        return (toolchain: toolchain, graph: graph)
       }
-      return try native.checks.properties.keys.sorted().map { property in
-        let propertyDirectory = modelDirectory.appendingPathComponent("properties").appendingPathComponent(property)
-        let propertyCase = try TemporalCase(id: "\(temporalCase.id)-\(property)",
-          fairness: temporalCase.fairness, exploration: temporalCase.exploration)
-        let observed: (outcome: TemporalSymmetryOutcome, diagnostic: String)
-        do {
-          let prepared = try shared.get()
-          let comparison = try captureTemporal(
-            temporalCase: propertyCase, property: property, native: native,
-            toolchain: prepared.toolchain, completeGraph: prepared.graph,
-            referencePin: input.referencePin, projectRoot: root, evidenceRoot: output,
-            outputDirectory: propertyDirectory)
-          let outcome: TemporalSymmetryOutcome = switch comparison.status {
-          case .exact: .exact
-          case .propertyOutcomeDifference, .graphDifference: .difference
-          case .unavailable: .unavailable
-          }
-          observed = (outcome, comparison.status.rawValue)
-        } catch {
-          observed = (.unavailable, "temporal-validation-unavailable: \(error)")
+      let checks = try TLCPropertyCheck().captureAll(native, completeGraph: shared, in: modelDirectory)
+      return try checks.map { check, status in
+        let outcome: TemporalSymmetryOutcome = switch status {
+        case .exact: .exact
+        case .propertyOutcomeDifference, .graphDifference: .difference
+        case .unavailable: .unavailable
         }
-        return try retainOutcome(caseID: propertyCase.id, outcome: observed.outcome,
-          diagnostic: observed.diagnostic, in: propertyDirectory, beneath: output)
+        let caseID = "\(temporalCase.id)-\(check.artifactPath.replacingOccurrences(of: "/", with: "-"))"
+        return try retainOutcome(caseID: caseID, outcome: outcome,
+          diagnostic: status.rawValue, in: modelDirectory.appendingPathComponent(check.artifactPath), beneath: output)
       }
     }
 
@@ -156,24 +142,6 @@ package struct TemporalSymmetryCheck: Sendable {
     }
     try GraphRunRecords.write(capture.graph, to: directory.appendingPathComponent("tlc-graph.jsonl"))
     return capture
-  }
-
-  private func captureTemporal(
-    temporalCase: TemporalCase, property: String, native: NativeModelRun,
-    toolchain: ResolvedTLCToolchain, completeGraph: TLCProcessCapture,
-    referencePin: TLCReferencePin, projectRoot: URL, evidenceRoot: URL, outputDirectory: URL
-  ) throws -> PropertyComparison {
-    guard let check = native.checks.properties[property] else {
-      throw EvidenceFormatError.invalidField(record: property, field: "native temporal checking")
-    }
-    let bundle = try native.rendered.tlaBundle(checking: [property], checkDeadlock: false)
-    let request = try temporalRequest(temporalCase: temporalCase, bundle: bundle,
-      invocation: .propertyCheck, toolchain: toolchain, referencePin: referencePin,
-      projectRoot: projectRoot, evidenceRoot: evidenceRoot)
-    return try TLCPropertyCheck().capture(TLCPropertyCheckInput(
-      check: .property(property), request: request,
-      completeGraph: completeGraph, swiftRun: native.graph, swiftResult: check,
-      rendered: native.rendered, outputDirectory: outputDirectory))
   }
 
   private func temporalRequest(

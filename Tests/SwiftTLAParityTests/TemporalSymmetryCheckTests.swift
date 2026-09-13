@@ -129,14 +129,14 @@ struct TemporalSymmetryCheckTests {
 
     #expect(outcomes.count == 7)
     #expect(outcomes.allSatisfy { $0.outcome == .unavailable })
-    #expect(Set(outcomes.map(\.caseID)) == ["temporal-AlwaysP", "temporal-EventuallyP",
-      "temporal-AlwaysEventuallyP", "temporal-EventuallyAlwaysP", "temporal-LeadsToPQ", "temporal-LeavesZero", "symmetry"])
+    #expect(Set(outcomes.map(\.caseID)) == ["temporal-properties-AlwaysP", "temporal-properties-EventuallyP",
+      "temporal-properties-AlwaysEventuallyP", "temporal-properties-EventuallyAlwaysP", "temporal-properties-LeadsToPQ", "temporal-properties-LeavesZero", "symmetry"])
     let modelDirectory = output.appendingPathComponent("temporal")
     #expect(FileManager.default.fileExists(atPath: modelDirectory.appendingPathComponent("swift-graph.jsonl").path))
     #expect(FileManager.default.fileExists(atPath: modelDirectory.appendingPathComponent("source-input").path))
     for caseID in outcomes.map(\.caseID) {
       let directory = caseID == "symmetry" ? output.appendingPathComponent(caseID)
-        : modelDirectory.appendingPathComponent("properties").appendingPathComponent(String(caseID.dropFirst("temporal-".count)))
+        : modelDirectory.appendingPathComponent("properties").appendingPathComponent(String(caseID.dropFirst("temporal-properties-".count)))
       #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("swift-graph.jsonl").path))
       let record = try #require(try JSONSerialization.jsonObject(
         with: Data(contentsOf: directory.appendingPathComponent("case-outcome.json"))
@@ -144,6 +144,9 @@ struct TemporalSymmetryCheckTests {
       #expect(record["caseID"] == caseID)
       #expect(record["outcome"] == TemporalSymmetryOutcome.unavailable.rawValue)
       #expect(record["diagnostic"]?.isEmpty == false)
+      if caseID != "symmetry" {
+        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("check-error.txt").path))
+      }
     }
   }
 

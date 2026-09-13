@@ -574,3 +574,22 @@ private final class ProcessOutputBuffers: Sendable {
   func appendStdout(_ data: Data) { stdoutBuffer.withLock { $0.append(data) } }
   func appendStderr(_ data: Data) { stderrBuffer.withLock { $0.append(data) } }
 }
+
+extension TLCProcessRequest {
+  package func selecting(
+    bundle: TLAModuleBundle,
+    work: URL, runID: UUID, invocation: TLCInvocationKind
+  ) throws -> TLCProcessRequest {
+    let configuration = finiteGraphCase
+    let selected = try FiniteGraphCase(id: configuration.id, exploration: configuration.exploration,
+      moduleSHA256: SHA256.hex(Data(bundle.tla.utf8)), cfgSHA256: SHA256.hex(Data(bundle.cfg.utf8)),
+      arguments: configuration.arguments, environment: configuration.environment, pin: configuration.pin,
+      renderedActions: configuration.renderedActions)
+    return TLCProcessRequest(javaExecutable: javaExecutable, jar: jar,
+      bridgeClasses: bridgeClasses, bundle: bundle,
+      graphEvents: work.appendingPathComponent("events.jsonl"), traceOutput: work.appendingPathComponent("counterexample.json"),
+      workingDirectory: work, finiteGraphCase: selected, runID: runID, timeout: timeout,
+      invocation: invocation, referenceArtifacts: referenceArtifacts)
+  }
+
+}
