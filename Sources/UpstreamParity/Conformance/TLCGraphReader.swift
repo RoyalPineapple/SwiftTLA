@@ -454,8 +454,8 @@ private func decodeObject(_ data: Data, line: Int) throws -> [String: Any] {
     var scanner = JSONDuplicateKeyScanner(data: data)
     do {
         try scanner.validate()
-    } catch let error as TLCGraphEventError {
-        throw error
+    } catch TLCGraphEventError.duplicateKey(_, let key) {
+        throw TLCGraphEventError.duplicateKey(line: line, key: key)
     } catch {
         throw TLCGraphEventError.malformedJSON(line: line)
     }
@@ -510,7 +510,7 @@ private struct JSONDuplicateKeyScanner {
         switch bytes[index] {
         case 123: try object()
         case 91: try list()
-        case 34: _ = try text()
+        case 34: _ = try consumeString()
         default: while index < bytes.count, ![44, 93, 125, 32, 9, 10, 13].contains(bytes[index]) { index += 1 }
         }
     }
@@ -533,58 +533,25 @@ private struct JSONDuplicateKeyScanner {
         }
     }
     private mutating func text() throws -> String {
-        guard consume(34) else { throw TLCGraphEventError.malformedJSON(line: 0) }
-        var value = String()
-        var plain = Data()
-        func appendPlain() throws {
-            guard let text = String(data: plain, encoding: .utf8) else { throw TLCGraphEventError.malformedJSON(line: 0) }
-            value += text
-            plain.removeAll(keepingCapacity: true)
+        let range = try consumeString()
+        guard let value = try JSONSerialization.jsonObject(
+            with: Data(bytes[range]), options: .fragmentsAllowed) as? String else {
+            throw TLCGraphEventError.malformedJSON(line: 0)
         }
+        return value
+    }
+
+    /// Only object keys need decoding here. Foundation validates and decodes the complete record.
+    private mutating func consumeString() throws -> Range<Int> {
+        let start = index
+        guard consume(34) else { throw TLCGraphEventError.malformedJSON(line: 0) }
         while index < bytes.count {
             let byte = bytes[index]
             index += 1
-            if byte == 34 { try appendPlain(); return value }
-            guard byte == 92 else { plain.append(byte); continue }
-            try appendPlain()
-            guard index < bytes.count else { throw TLCGraphEventError.malformedJSON(line: 0) }
-            let escaped = bytes[index]
-            index += 1
-            switch escaped {
-            case 34: value.append("\"")
-            case 92: value.append("\\")
-            case 47: value.append("/")
-            case 98: value.append("\u{08}")
-            case 102: value.append("\u{0C}")
-            case 110: value.append("\n")
-            case 114: value.append("\r")
-            case 116: value.append("\t")
-            case 117: try appendUnicodeEscape(to: &value)
-            default: throw TLCGraphEventError.malformedJSON(line: 0)
-            }
+            if byte == 34 { return start..<index }
+            if byte == 92 { index += 1 }
         }
         throw TLCGraphEventError.malformedJSON(line: 0)
-    }
-    private mutating func appendUnicodeEscape(to value: inout String) throws {
-        let first = try unicodeUnit()
-        if (0xD800...0xDBFF).contains(first) {
-            guard consume(92), consume(117) else { throw TLCGraphEventError.malformedJSON(line: 0) }
-            let second = try unicodeUnit()
-            guard (0xDC00...0xDFFF).contains(second) else { throw TLCGraphEventError.malformedJSON(line: 0) }
-            let scalar = 0x10000 + ((first - 0xD800) << 10) + second - 0xDC00
-            guard let unicode = UnicodeScalar(scalar) else { throw TLCGraphEventError.malformedJSON(line: 0) }
-            value.unicodeScalars.append(unicode)
-        } else {
-            guard !(0xDC00...0xDFFF).contains(first), let unicode = UnicodeScalar(first) else { throw TLCGraphEventError.malformedJSON(line: 0) }
-            value.unicodeScalars.append(unicode)
-        }
-    }
-    private mutating func unicodeUnit() throws -> UInt32 {
-        guard index + 4 <= bytes.count,
-              let unit = UInt32(String(decoding: bytes[index..<index + 4], as: UTF8.self), radix: 16)
-        else { throw TLCGraphEventError.malformedJSON(line: 0) }
-        index += 4
-        return unit
     }
     private mutating func consume(_ byte: UInt8) -> Bool { guard index < bytes.count, bytes[index] == byte else { return false }; index += 1; return true }
     private mutating func skip() { while index < bytes.count, [9, 10, 13, 32].contains(bytes[index]) { index += 1 } }

@@ -387,6 +387,31 @@ extension TLCGraphReaderTests {
     #expect(processOutput.stdout.contains("home=unset allowed=declared"))
   }
 
+  @Test("JSON validation rejects escaped duplicate keys and malformed string values at their source line")
+  func validatesJSONStringsAndKeys() throws {
+    let finiteGraphCase = try fixtureCase(try toolchainPin())
+    let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
+    let prefix = try header(finiteGraphCase) + "\n"
+    let duplicateKeys = [
+      (#"{"value":"escaped quote: \" and slash: \\","nested":{"x":0,"\u0078":1}}"#, "x"),
+      (#"{"\uD83D\uDE00":0,"😀":1}"#, "😀")
+    ]
+    for (record, key) in duplicateKeys {
+      #expect(throws: TLCGraphEventError.duplicateKey(line: 2, key: key)) {
+        try reader.parse(Data((prefix + record + "\n").utf8))
+      }
+    }
+    let malformed = [
+      #"{"value":"\q"}"#, #"{"value":"\uD800"}"#, #"{"value":"\uDC00"}"#,
+      #"{"value":"\u12"}"#, #"{"value":"unterminated}"#
+    ]
+    for record in malformed {
+      #expect(throws: TLCGraphEventError.malformedJSON(line: 2)) {
+        try reader.parse(Data((prefix + record + "\n").utf8))
+      }
+    }
+  }
+
   @Test("graph event reader rejects malformed footer and unsupported callbacks")
   func rejectsMalformedStreams() throws {
     let pin = try toolchainPin()
