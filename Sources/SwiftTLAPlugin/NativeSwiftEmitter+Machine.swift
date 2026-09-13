@@ -565,9 +565,15 @@ extension NativeSwiftEmitter {
             }
             temporalProperties.append("\(String(reflecting: property.name)): \(condition)")
         }
+        let propertyBody: String
+        if let refinement = program.refinementNames.first {
+            propertyBody = "throw ExplorationError.unsupportedRefinement(\(String(reflecting: refinement)))"
+        } else {
+            propertyBody = "[\(temporalProperties.isEmpty ? ":" : temporalProperties.joined(separator: ",\n"))]"
+        }
         declarations += try nativeDeclarations("""
-        public func temporalProperties() -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>] {
-            [\(temporalProperties.isEmpty ? ":" : temporalProperties.joined(separator: ",\n"))]
+        public func temporalProperties() throws -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>] {
+            \(propertyBody)
         }
         """)
         let fairness = try program.behavior.fairness.map { condition in

@@ -29,7 +29,7 @@ struct NQueensCorpusStateGraphTests {
         let edge = try #require(terminalEdges.first)
         #expect(edge.source == edge.target)
         let terminal = edge.source
-        guard case .eventually(let isDone) = machine.temporalProperties()["Termination"] else {
+        guard case .eventually(let isDone) = try machine.temporalProperties()["Termination"] else {
             Issue.record("Expected the generated termination predicate")
             return
         }

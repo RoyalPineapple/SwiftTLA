@@ -20,6 +20,7 @@ package struct CompiledProgram: Sendable {
     package let identity: CompilationIdentity
     package let layout: CompiledLayout
     package let behavior: CompiledBehavior
+    package let refinementNames: [String]
     package let enums: CompiledEnums
     /// Implicit conversions required by this program, including their components.
     package let projections: Set<ResolvedProjectionPair>

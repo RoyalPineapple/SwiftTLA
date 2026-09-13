@@ -54,7 +54,7 @@ private final class ProgramResolver {
             }
         }
         return .init(identity: checked.identity, layout: checked.layout,
-            behavior: behavior, enums: checked.enums,
+            behavior: behavior, refinementNames: checked.refinementNames, enums: checked.enums,
             projections: projections, variableTypes: checked.variableTypes, bindingTypes: checked.bindingTypes,
             functions: resolvedFunctions)
     }

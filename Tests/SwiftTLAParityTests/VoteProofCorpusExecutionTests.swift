@@ -3,6 +3,13 @@ import Testing
 import UpstreamParity
 
 struct VoteProofCorpusExecutionTests {
+    @Test("Native exploration cannot silently omit the declared refinement")
+    func rejectsUncheckedRefinement() throws {
+        #expect(throws: ExplorationError.unsupportedRefinement("Refines")) {
+            try ReachabilityGraph(initialMachines: VoteProofModel.initialMachines(), maximumStates: 1)
+        }
+    }
+
     @Test("Native voting guards, invariants and ambiguity agree with the formal corpus")
     func nativeVotingRelation() throws {
         let compilation = try VoteProofModel.spec.compile()

@@ -12,7 +12,7 @@ public protocol StateMachine: Sendable {
     static var checksDeadlock: Bool { get }
     func assumptionsHold() throws -> Bool
     func fairnessConditions() -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)]
-    func temporalProperties() -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
+    func temporalProperties() throws -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
     func violatedInvariants() throws -> [String]
     func successors() throws -> [(action: Action, machine: Self)]
 }
@@ -24,6 +24,7 @@ public enum ExplorationError: Error, Equatable, Sendable {
     case assumptionViolated
     case configurationMismatch
     case traceTargetNotReachable
+    case unsupportedRefinement(String)
 }
 
 public enum SafetyViolation: Hashable, Sendable {
@@ -43,6 +44,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     public init(initialMachines: [Machine], maximumStates: Int) throws {
         guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
         guard let initialMachine = initialMachines.first else { throw ExplorationError.noInitialStates }
+        let properties = try initialMachine.temporalProperties()
         machine = initialMachine
         var transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]] = [:]
         var pending: ArraySlice<Machine> = []
@@ -79,7 +81,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         self.predecessors = predecessors
         safetyViolations = violations
         temporalResults = try Self.analyzeTemporalProperties(
-            machine: initialMachine, transitions: transitions, initialStates: initialStates
+            machine: initialMachine, properties: properties, transitions: transitions, initialStates: initialStates
         )
     }
 
@@ -109,10 +111,10 @@ extension ReachabilityGraph {
 
     private static func analyzeTemporalProperties(
         machine: Machine,
+        properties: [String: TemporalCondition<@Sendable (Machine.Snapshot) throws -> Bool>],
         transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]],
         initialStates: Set<Machine.Snapshot>
     ) throws -> [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] {
-        let properties = machine.temporalProperties()
         guard !properties.isEmpty else { return [:] }
         let snapshots = Array(transitions.keys)
         let identities = Dictionary(uniqueKeysWithValues: snapshots.enumerated().map {
