@@ -1,40 +1,11 @@
 import Foundation
 import SwiftTLA
 
-package struct TLCPropertyCheckInput: Sendable {
-  package let check: ModelCheck
-  package let request: TLCProcessRequest
-  package let completeGraph: TLCProcessCapture
-  package let swiftRun: GraphRun
-  package let swiftResult: PropertyResult
-  package let rendered: RenderedSpecification
-  package let outputDirectory: URL
-
-  package init(
-    check: ModelCheck,
-    request: TLCProcessRequest,
-    completeGraph: TLCProcessCapture,
-    swiftRun: GraphRun,
-    swiftResult: PropertyResult,
-    rendered: RenderedSpecification,
-    outputDirectory: URL
-  ) {
-    self.check = check
-    self.request = request
-    self.completeGraph = completeGraph
-    self.swiftRun = swiftRun
-    self.swiftResult = swiftResult
-    self.rendered = rendered
-    self.outputDirectory = outputDirectory
-  }
-}
-
 package enum TLCPropertyCheckError: Error, Equatable, Sendable {
   case outputAlreadyExists
-  case configurationMismatch
   case requestMismatch
   case incompleteGraph
-  case graphEvidenceInvalid
+  case invalidNativeGraph
 }
 
 package struct TLCPropertyCheck: Sendable {
@@ -46,116 +17,63 @@ package struct TLCPropertyCheck: Sendable {
 
   package func captureAll(
     _ native: NativeModelRun, completeGraph: Result<TLCProcessCapture, Error>, in directory: URL
-  ) throws -> [(check: ModelCheck, status: PropertyComparisonStatus)] {
+  ) throws -> (
+    graphComparison: GraphComparison?,
+    checks: [(check: ModelCheck, result: Result<PropertyComparison, Error>)]
+  ) {
+    let prepared = Result {
+      let capture = try completeGraph.get()
+      guard native.graph.isComparable else { throw TLCPropertyCheckError.invalidNativeGraph }
+      guard capture.outcome == .completed, capture.graph.isComparable else {
+        throw TLCPropertyCheckError.incompleteGraph
+      }
+      let expected = try native.rendered.tlaBundle(checking: [], checkDeadlock: false)
+      guard capture.request.invocation == .finiteGraph, capture.request.bundle == expected else {
+        throw TLCPropertyCheckError.requestMismatch
+      }
+      return (capture, compareFiniteGraphs(tlc: capture.graph, swift: native.graph))
+    }
     var selected = native.checks.properties.sorted { $0.key < $1.key }.map {
       (check: ModelCheck.property($0.key), result: $0.value)
     }
-    if let deadlock = native.checks.deadlock {
-      selected.append((.deadlock, deadlock))
-    }
-    var results: [(check: ModelCheck, status: PropertyComparisonStatus)] = []
+    if let deadlock = native.checks.deadlock { selected.append((.deadlock, deadlock)) }
+    var results: [(check: ModelCheck, result: Result<PropertyComparison, Error>)] = []
     for (check, nativeResult) in selected {
       let output = try RetainedFiles.resolve(directory.appendingPathComponent(check.artifactPath), beneath: directory)
+      guard !FileManager.default.fileExists(atPath: output.path) else {
+        throw TLCPropertyCheckError.outputAlreadyExists
+      }
       do {
-        let completeGraph = try completeGraph.get()
-        let work = completeGraph.request.workingDirectory.appendingPathComponent(UUID().uuidString)
-        try RetainedFiles.createDirectory(work, beneath: completeGraph.request.workingDirectory)
+        let (capture, graphComparison) = try prepared.get()
+        let work = capture.request.workingDirectory.appendingPathComponent(UUID().uuidString)
+        try RetainedFiles.createDirectory(work, beneath: capture.request.workingDirectory)
         defer { try? FileManager.default.removeItem(at: work) }
-        let propertyRequest = try completeGraph.request.selecting(bundle: check.bundle(from: native.rendered),
+        let request = try capture.request.selecting(bundle: check.bundle(from: native.rendered),
           work: work, runID: UUID(), invocation: .propertyCheck)
-        let comparison = try capture(.init(
-          check: check, request: propertyRequest, completeGraph: completeGraph,
-          swiftRun: native.graph, swiftResult: nativeResult, rendered: native.rendered, outputDirectory: output))
-        results.append((check, comparison.status))
+        try RetainedFiles.outputDirectory(output, beneath: output.deletingLastPathComponent())
+        let outcome = try processAdapter.run(request, retainingIn: output)
+        let tlcResult = try propertyResult(check: check, outcome: outcome,
+          graph: capture.graph, outputDirectory: output)
+        let status: PropertyComparisonStatus
+        switch (nativeResult, tlcResult) {
+        case (.unavailable, _), (_, .unavailable): status = .unavailable
+        case (.satisfied, .violated), (.violated, .satisfied): status = .propertyOutcomeDifference
+        case (.satisfied, .satisfied), (.violated, .violated):
+          status = graphComparison.matches ? .exact : .graphDifference
+        }
+        let comparison = PropertyComparison(caseID: request.caseID, check: check, status: status,
+          swiftResult: nativeResult, tlcResult: tlcResult)
+        try RetainedFiles.writeCanonical(comparison, to: output.appendingPathComponent("property-comparison.json"))
+        results.append((check, .success(comparison)))
       } catch {
-        results.append((check, .unavailable))
+        results.append((check, .failure(error)))
         try RetainedFiles.createDirectory(output, beneath: directory)
         try RetainedFiles.writeText(redactingSecrets(in: String(describing: error)),
           to: output.appendingPathComponent("check-error.txt"))
       }
     }
-    return results
+    return (try? prepared.get().1, results)
   }
-
-  package func capture(_ input: TLCPropertyCheckInput) throws -> PropertyComparison {
-    guard FileManager.default.fileExists(atPath: input.outputDirectory.path) == false else {
-      throw TLCPropertyCheckError.outputAlreadyExists
-    }
-    try validate(input)
-    try RetainedFiles.outputDirectory(
-      input.outputDirectory, beneath: input.outputDirectory.deletingLastPathComponent())
-    let outcome = try processAdapter.run(input.request, retainingIn: input.outputDirectory)
-    let completeGraph = input.completeGraph.graph
-    let tlcOutcome = try propertyResult(
-      check: input.check, outcome: outcome,
-      graph: completeGraph,
-      outputDirectory: input.outputDirectory)
-    let comparison = try PropertyComparison(
-      caseID: input.request.caseID,
-      check: input.check,
-      swiftRun: input.swiftRun,
-      tlcRun: completeGraph,
-      swiftResult: input.swiftResult,
-      tlcResult: tlcOutcome)
-    try RetainedFiles.writeCanonical(
-      comparison, to: input.outputDirectory.appendingPathComponent("property-comparison.json"))
-    return comparison
-  }
-
-  private func validate(_ input: TLCPropertyCheckInput) throws {
-    try validateTraceOutputs(input)
-    guard input.swiftRun.isComparable else {
-      throw TLCPropertyCheckError.graphEvidenceInvalid
-    }
-    guard input.request.invocation == .propertyCheck else {
-      throw TLCPropertyCheckError.requestMismatch
-    }
-    let request = input.request.finiteGraphCase
-    let expected = try input.check.bundle(from: input.rendered)
-    guard input.request.bundle == expected else {
-      throw TLCPropertyCheckError.configurationMismatch
-    }
-    guard input.completeGraph.outcome == .completed, input.completeGraph.graph.isComparable else {
-      throw TLCPropertyCheckError.incompleteGraph
-    }
-    let graphRequest = input.completeGraph.request
-    let expectedGraph = try input.rendered.tlaBundle(checking: [], checkDeadlock: false)
-    guard graphRequest.bundle == expectedGraph else {
-      throw TLCPropertyCheckError.requestMismatch
-    }
-    guard graphRequest.invocation == .finiteGraph,
-          (graphRequest.runID == input.request.runID) == false,
-          graphRequest.finiteGraphCase.exploration == input.request.finiteGraphCase.exploration,
-          graphRequest.finiteGraphCase.arguments == input.request.finiteGraphCase.arguments,
-          graphRequest.finiteGraphCase.pin == input.request.finiteGraphCase.pin,
-          graphRequest.finiteGraphCase.environment == input.request.finiteGraphCase.environment,
-          graphRequest.finiteGraphCase.moduleSHA256 == request.moduleSHA256 else {
-      throw TLCPropertyCheckError.requestMismatch
-    }
-  }
-
-  private func validateTraceOutputs(_ input: TLCPropertyCheckInput) throws {
-    let requests = [input.request, input.completeGraph.request]
-    let protected = Set(requests.flatMap(protectedArtifacts(for:)))
-    let outputDirectory = resolvedURL(input.outputDirectory)
-    let outputPath = outputDirectory.path.hasSuffix("/") ? outputDirectory.path : outputDirectory.path + "/"
-    let request = input.request
-    if FileManager.default.fileExists(atPath: request.traceOutput.path) {
-      let values = try request.traceOutput.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
-      guard values.isRegularFile == true, values.isSymbolicLink != true else {
-        throw TLCPropertyCheckError.graphEvidenceInvalid
-      }
-    }
-    let traceOutput = resolvedURL(request.traceOutput)
-    guard (traceOutput == outputDirectory) == false,
-          traceOutput.path.hasPrefix(outputPath) == false,
-          protected.contains(traceOutput) == false else {
-      throw TLCPropertyCheckError.graphEvidenceInvalid
-    }
-
-  }
-
-
 }
 
 extension TLCPropertyCheck {
@@ -178,6 +96,12 @@ extension TLCPropertyCheck {
     let trace = try TLCTraceParser().parseCounterexample(
       Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json")))
     let bound = try boundTrace(trace, to: graph.graph, requiresCycle: outcome == .livenessViolation)
+    if check == .deadlock {
+      guard bound.cycleStartIndex == nil, let final = bound.steps.last,
+            !graph.graph.edges.contains(where: { $0.source == final.state }) else {
+        throw EvidenceFormatError.invalidField(record: "deadlock", field: "deadlock counterexample")
+      }
+    }
     return .violated(bound)
   }
 
@@ -206,30 +130,6 @@ extension TLCPropertyCheck {
     let bound = GraphTrace(id: trace.id, steps: steps, cycleStartIndex: cycleStart)
     try bound.validate(in: graph)
     return bound
-  }
-
-  private func protectedArtifacts(for request: TLCProcessRequest) -> [URL] {
-    [
-      request.javaExecutable,
-      request.jar,
-      request.bridgeClasses,
-      request.graphEvents
-    ].map(resolvedURL)
-  }
-
-  private func resolvedURL(_ url: URL) -> URL {
-    let candidate = url.standardizedFileURL
-    var existingAncestor = candidate
-    var suffix = [String]()
-    while !FileManager.default.fileExists(atPath: existingAncestor.path) {
-      let component = existingAncestor.lastPathComponent
-      guard component.isEmpty == false, component != "/" else { break }
-      suffix.insert(component, at: 0)
-      existingAncestor.deleteLastPathComponent()
-    }
-    return suffix.reduce(existingAncestor.resolvingSymlinksInPath().standardizedFileURL) {
-      $0.appendingPathComponent($1)
-    }
   }
 
 }

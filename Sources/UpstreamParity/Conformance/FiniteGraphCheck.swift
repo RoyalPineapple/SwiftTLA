@@ -111,10 +111,12 @@ package struct FiniteGraphCheck: Sendable {
       let generated = try tlcProcess.capture(generatedRequest, retainingIn: generatedDirectory)
       try GraphRunRecords.write(generated.graph, to: generatedDirectory.appendingPathComponent("tlc-graph.jsonl"))
       guard generated.graph.isComparable else { throw TLCPropertyCheckError.incompleteGraph }
-      let generatedComparison = compareFiniteGraphs(tlc: generated.graph, swift: swiftRun)
       let results = try TLCPropertyCheck(processAdapter: tlcProcess).captureAll(
         native, completeGraph: .success(generated), in: directory)
-      let checks = Dictionary(uniqueKeysWithValues: results.map { ($0.check.artifactPath, $0.status) })
+      guard let generatedComparison = results.graphComparison else { throw TLCPropertyCheckError.incompleteGraph }
+      let checks = Dictionary(uniqueKeysWithValues: results.checks.map {
+        ($0.check.artifactPath, (try? $0.result.get().status) ?? .unavailable)
+      })
       let exitCode: FiniteGraphExitCode
       if checks.values.contains(.unavailable) {
         exitCode = .failure

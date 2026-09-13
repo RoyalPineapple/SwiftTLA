@@ -28,7 +28,13 @@ package struct NativeModelRun: Sendable {
     for result in checks.properties.values {
       if case .violated(let trace) = result { try trace.validate(in: graph.graph) }
     }
-    if case .violated(let trace)? = checks.deadlock { try trace.validate(in: graph.graph) }
+    if case .violated(let trace)? = checks.deadlock {
+      try trace.validate(in: graph.graph)
+      guard trace.cycleStartIndex == nil, let final = trace.steps.last,
+            !graph.graph.edges.contains(where: { $0.source == final.state }) else {
+        throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "deadlock counterexample")
+      }
+    }
     self.rendered = rendered
     self.graph = graph
     self.checks = checks
