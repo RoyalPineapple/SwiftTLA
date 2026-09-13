@@ -85,7 +85,12 @@ private struct InvalidAssumption {
         let trace = try graph.trace(to: failure.key)
         #expect(trace.map { $0.state.state.value } == [0, 0, 2])
         #expect(trace.map(\.action) == [nil, .enter, .choose])
-        #expect(graph.transitions.filter { $0.value.isEmpty }.count == 2)
+        let terminalStates = graph.transitions.filter { $0.value.contains { $0.action == .Terminating } }
+        #expect(terminalStates.count == 2)
+        for (state, successors) in terminalStates {
+            #expect(successors.count == 1)
+            #expect(successors.first?.target == state)
+        }
         #expect(!graph.safetyViolations.values.joined().contains(.deadlock))
     }
 

@@ -518,15 +518,6 @@ extension NativeSwiftEmitter {
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
         declarations += try nativeDeclarations("public static var checksDeadlock: Bool { \(program.behavior.checkDeadlock) }")
-        if let terminal = program.layout.actions.first(where: { $0.isTermination }) {
-            declarations += try nativeDeclarations("""
-            public func isTerminated() throws -> Bool {
-                try !Self._updates\(terminal.id.ordinal)(from: _execution\(arguments), enabled: []).isEmpty
-            }
-            """)
-        } else {
-            declarations += try nativeDeclarations("public func isTerminated() throws -> Bool { false }")
-        }
         if let constraint = program.behavior.constraint {
             declarations += try nativeDeclarations("""
             private static func _constraintHolds(in state: Snapshot\(collectionParameters), enabled: Set<Int>) throws -> Bool {

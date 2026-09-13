@@ -10,7 +10,6 @@ public protocol StateMachine: Sendable {
     func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection
     func formalCall(for action: Action) throws -> FormalActionCall
     static var checksDeadlock: Bool { get }
-    func isTerminated() throws -> Bool
     func assumptionsHold() throws -> Bool
     func fairnessConditions() -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)]
     func temporalProperties() -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
@@ -67,7 +66,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             try Task.checkCancellation()
             let successors = try machine.successors()
             var failures = try machine.violatedInvariants().map(SafetyViolation.invariant)
-            if Machine.checksDeadlock, successors.isEmpty, try !machine.isTerminated() {
+            if Machine.checksDeadlock, successors.isEmpty {
                 failures.append(.deadlock)
             }
             if !failures.isEmpty { violations[machine.snapshot] = failures }

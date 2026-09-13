@@ -459,7 +459,7 @@ struct NativeCodeGenerationTests {
         let terminal = try #require(model.program.layout.actions.first {
             $0.declaration.name == CompilerControlSymbol.terminatingAction.rawValue
         })
-        #expect(generated.contains("func isTerminated()"))
+        #expect(!generated.contains("func isTerminated()"))
         #expect(generated.contains("func _updates\(terminal.id.ordinal)("))
         #expect(!Parser.parse(source: "struct Expansion {\n\(generated)\n}").hasError)
         print("native-code-generation model=counter declarations=\(members.count) sourceBytes=\(generated.utf8.count)")
