@@ -68,7 +68,13 @@ package struct FiniteGraphCheck: Sendable {
       return .init(exitCode: .failure, evidenceDirectory: nil, comparison: nil, diagnostic: failure)
     }
 
+    let started = ContinuousClock.now
     var phase: FiniteGraphPhase = .preflight
+    func enter(_ next: FiniteGraphPhase) {
+      phase = next
+      let elapsed = started.duration(to: .now)
+      FileHandle.standardError.write(Data("finite-graph \(finiteGraphCase.id): \(next.rawValue) at \(elapsed)\n".utf8))
+    }
     var staging: URL?
     do {
       let directory = try createStagingDirectory(
@@ -78,7 +84,7 @@ package struct FiniteGraphCheck: Sendable {
       )
       staging = directory
 
-      phase = .swiftExport
+      enter(.swiftExport)
       let native = try nativeRun()
       let swiftRun = native.graph
       try RetainedFiles.writeCanonical(native.checks, to: directory.appendingPathComponent("native-checks.json"))
@@ -87,18 +93,18 @@ package struct FiniteGraphCheck: Sendable {
         to: directory.appendingPathComponent("swift-graph.jsonl")
       )
 
-      phase = .tlcExecution
+      enter(.tlcExecution)
       try validateReference(tlcRequest)
       let tlcCapture = try tlcProcess.capture(tlcRequest, retainingIn: directory)
 
-      phase = .tlcParsing
+      enter(.tlcParsing)
       let tlcRun = tlcCapture.graph
       try GraphRunRecords.write(
         tlcRun,
         to: directory.appendingPathComponent("tlc-graph.jsonl")
       )
 
-      phase = .comparison
+      enter(.comparison)
       let comparison = compareFiniteGraphs(tlc: tlcRun, swift: swiftRun)
       guard tlcRun.isComparable, swiftRun.isComparable else { throw TLCPropertyCheckError.incompleteGraph }
       let generatedDirectory = directory.appendingPathComponent("generated")
@@ -133,7 +139,7 @@ package struct FiniteGraphCheck: Sendable {
         to: directory
       )
 
-      phase = .publication
+      enter(.publication)
       try publish(staging: directory, to: outputDirectory)
       return .init(
         exitCode: exitCode,
