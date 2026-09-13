@@ -86,6 +86,19 @@ package struct TLCTraceParser: Sendable {
         guard states[targetIndex].bindings.allSatisfy({ name, value in
             target[name].map { matchesJSON($0, value: value) } ?? false
         }) else { throw TLCTraceError.invalidAction(index) }
+        if let location = metadata["location"] as? [String: Any],
+           location["module"] as? String == "--TLA+ BUILTINS--" {
+            let coordinates = ["beginLine", "beginColumn", "endLine", "endColumn"]
+            guard name == "UnnamedAction", Set(location.keys) == Set(coordinates + ["module"]),
+                  coordinates.allSatisfy({ key in
+                      guard let number = location[key] as? NSNumber else { return false }
+                      return CFGetTypeID(number) != CFBooleanGetTypeID()
+                          && !CFNumberIsFloatType(number) && number.stringValue == "0"
+                  }), states[index].key == states[targetIndex].key else {
+                throw TLCTraceError.invalidAction(index)
+            }
+            return (targetIndex, GraphTraceStep(state: states[targetIndex].key, action: nil))
+        }
         return (targetIndex, GraphTraceStep(state: states[targetIndex].key, action: name))
     }
 

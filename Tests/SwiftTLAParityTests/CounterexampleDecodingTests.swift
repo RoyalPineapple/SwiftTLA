@@ -3,6 +3,32 @@ import Testing
 import UpstreamParity
 
 struct CounterexampleDecodingTests {
+    @Test("TLC built-in stuttering requires a valid marker and unchanged state")
+    func validatesBuiltInStuttering() throws {
+        let first: [Any] = [1, ["x": 0]]
+        let second: [Any] = [2, ["x": 1]]
+        let states = [0, 1].map { CanonicalState(bindings: ["x": .integer($0)]) }
+        for coordinate: Any in [0, 1, false, 0.5] {
+            let metadata: [String: Any] = ["name": "UnnamedAction", "location": [
+                "module": "--TLA+ BUILTINS--", "beginLine": coordinate,
+                "beginColumn": 0, "endLine": 0, "endColumn": 0
+            ]]
+            for changesState in [false, true] {
+                let data = try JSONSerialization.data(withJSONObject: ["vars": ["x"], "counterexample": [
+                    "state": changesState ? [first, second] : [first],
+                    "action": [[first, metadata, changesState ? second : first]]]])
+                if !changesState, type(of: coordinate) == Int.self, coordinate as? Int == 0 {
+                    let trace = try TLCTraceParser().parseCounterexample(data, states: states)
+                    #expect(trace.steps.map(\.action) == [nil, nil])
+                } else {
+                    #expect(throws: TLCTraceError.invalidAction(0)) {
+                        try TLCTraceParser().parseCounterexample(data, states: states)
+                    }
+                }
+            }
+        }
+    }
+
     @Test("Trace binding preserves typed collections and model values erased by JSON")
     func bindsTypedValues() throws {
         let nested = CanonicalValue.set([

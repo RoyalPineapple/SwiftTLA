@@ -114,11 +114,11 @@ extension TLCPropertyCheck {
       guard let action = target.action else { return target }
       let edge = CanonicalEdge(source: source.state, action: action, target: target.state)
       if graph.edges.contains(edge) { return target }
-      guard source.state == target.state else {
+      // TLC can reuse the preceding action's label for an implicit temporal
+      // stutter. An unrelated or unknown action must still fail graph binding.
+      guard requiresCycle, source.state == target.state, source.action == action else {
         throw GraphRunError.traceEdgeMissing(edge)
       }
-      // Generated specifications include [Next]_vars. TLC can label implicit
-      // stuttering with the preceding action, even when that action is disabled.
       return GraphTraceStep(state: target.state, action: nil)
     }
     var cycleStart = trace.cycleStartIndex

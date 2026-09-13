@@ -269,17 +269,29 @@ struct TLCPropertyCheckTests {
     #expect(retained.steps == nativeTrace.steps)
   }
 
-  @Test("generated specifications bind TLC's named implicit stuttering")
-  func bindsNamedImplicitStuttering() throws {
+  @Test("only the preceding action can label an implicit temporal stutter", arguments: ["A", "B", "Missing", "UnnamedAction"])
+  func bindsNamedImplicitStuttering(action: String) throws {
     let fixture = try Fixture()
-    let stream = try graphStream(case: fixture.completeGraphCase, runID: fixture.completeGraphRequest.runID)
-    let graph = try completedGraph(stream, for: fixture.completeGraphCase)
-    let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
-    let comparison = try fixture.capture(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
-        trace: try numberedStutteringTrace(action: "A"))), swiftRun: graph, swiftResult: .violated(testCycle([state, state])))
-    #expect(comparison.status == .exact)
-    let trace = try #require(counterexample(in: comparison.tlcResult))
-    #expect(trace.steps.allSatisfy { $0.action == nil })
+    let stream = try temporalGraphStream(case: fixture.completeGraphCase, runID: fixture.completeGraphRequest.runID)
+    let complete = try fixture.captureGraph(stream: stream)
+    let first: [Any] = [1, ["x": 1]]
+    let second: [Any] = [2, ["x": 2]]
+    let data = try JSONSerialization.data(withJSONObject: ["vars": ["x"], "counterexample": [
+      "state": [first, second], "action": [[first, ["name": "A"], second], [second, ["name": action], second]]]])
+    func capture() throws -> PropertyComparison {
+      try fixture.capture(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(trace: data)),
+        completeGraph: complete, swiftRun: complete.graph, swiftResult: .satisfied)
+    }
+    if action == "A" {
+      let trace = try #require(counterexample(in: capture().tlcResult))
+      #expect(trace.steps.map(\.action) == [nil, "A", nil])
+      #expect(trace.cycleStartIndex == 1)
+    } else {
+      let state = CanonicalState(bindings: ["x": .integer(2)]).key
+      #expect(throws: GraphRunError.traceEdgeMissing(.init(source: state, action: action, target: state))) {
+        try capture()
+      }
+    }
   }
 
   @Test("TLC property checker rejects a lasso that is foreign to the captured graph")
@@ -615,13 +627,15 @@ private func numberedLoopBackTrace(secondValue: Int = 2) throws -> Data {
   return try JSONSerialization.data(withJSONObject: trace, options: [.sortedKeys])
 }
 
-private func numberedStutteringTrace(action: String = "UnnamedAction") throws -> Data {
+private func numberedStutteringTrace() throws -> Data {
   let state: [Any] = [1, ["x": 1]]
   return try JSONSerialization.data(withJSONObject: [
     "vars": ["x"],
     "counterexample": [
       "state": [state],
-      "action": [[state, ["name": action], state]]
+      "action": [[state, ["name": "UnnamedAction", "location": [
+        "module": "--TLA+ BUILTINS--", "beginLine": 0, "beginColumn": 0, "endLine": 0, "endColumn": 0
+      ]], state]]
     ]
   ], options: [.sortedKeys])
 }
