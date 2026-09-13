@@ -1,0 +1,30 @@
+/// TLC directives retained separately so validation can select checks without reparsing output.
+struct TLCConfiguration: Equatable, Sendable {
+    let declarations: [String]
+    let checkDeadlock: Bool
+    let invariants: [String]
+    let properties: [String]
+    let symmetry: [String]
+
+    func selecting(_ checks: Set<String>, checkDeadlock: Bool) throws -> Self {
+        let unknown = checks.subtracting(invariants + properties)
+        guard unknown.isEmpty else {
+            throw CompilationDiagnostic(
+                code: .unknownReference, stage: .rendering, path: "TLC configuration",
+                expected: "declared invariant or temporal property names",
+                actual: unknown.sorted().joined(separator: ", "),
+                nextSafeAction: "Select checks declared by this model."
+            )
+        }
+        return Self(declarations: declarations, checkDeadlock: checkDeadlock,
+            invariants: invariants.filter(checks.contains), properties: properties.filter(checks.contains),
+            symmetry: symmetry)
+    }
+
+    func render(usesSymmetryReduction: Bool) -> String {
+        let header = ["SPECIFICATION Spec", checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
+        let checks = invariants.map { "INVARIANT \($0)" } + properties.map { "PROPERTY \($0)" }
+        let reduction = usesSymmetryReduction ? symmetry.map { "SYMMETRY \($0)" } : []
+        return (header + declarations + checks + reduction).joined(separator: "\n") + "\n"
+    }
+}

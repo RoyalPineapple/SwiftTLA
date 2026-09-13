@@ -66,20 +66,27 @@ private struct StronglyFairTemporalMatrix {
 
 package func temporalConformanceRun(
   configuration: TemporalCaseConfiguration, maximumStates: Int
-) throws -> (graph: GraphRun, result: TemporalPropertyResult) {
+) throws -> (graph: GraphRun, result: TemporalPropertyResult, rendered: RenderedSpecification) {
   switch configuration.fairness {
   case .none:
-    try exportTemporalRun(UnfairTemporalMatrix.initialMachines(), configuration: configuration, maximumStates: maximumStates)
+    try exportTemporalRun(UnfairTemporalMatrix.initialMachines(),
+      rendered: UnfairTemporalMatrix.spec.compile().render(),
+      configuration: configuration, maximumStates: maximumStates)
   case .weak:
-    try exportTemporalRun(WeaklyFairTemporalMatrix.initialMachines(), configuration: configuration, maximumStates: maximumStates)
+    try exportTemporalRun(WeaklyFairTemporalMatrix.initialMachines(),
+      rendered: WeaklyFairTemporalMatrix.spec.compile().render(),
+      configuration: configuration, maximumStates: maximumStates)
   case .strong:
-    try exportTemporalRun(StronglyFairTemporalMatrix.initialMachines(), configuration: configuration, maximumStates: maximumStates)
+    try exportTemporalRun(StronglyFairTemporalMatrix.initialMachines(),
+      rendered: StronglyFairTemporalMatrix.spec.compile().render(),
+      configuration: configuration, maximumStates: maximumStates)
   }
 }
 
 private func exportTemporalRun<Machine: StateMachine>(
-  _ initialMachines: [Machine], configuration: TemporalCaseConfiguration, maximumStates: Int
-) throws -> (graph: GraphRun, result: TemporalPropertyResult) {
+  _ initialMachines: [Machine], rendered: RenderedSpecification,
+  configuration: TemporalCaseConfiguration, maximumStates: Int
+) throws -> (graph: GraphRun, result: TemporalPropertyResult, rendered: RenderedSpecification) {
   let native = try ReachabilityGraph(initialMachines: initialMachines, maximumStates: maximumStates)
   let property = configuration.property.renderedName
   guard native.safetyViolations.isEmpty, let analysis = native.temporalResults[property] else {
@@ -112,5 +119,5 @@ private func exportTemporalRun<Machine: StateMachine>(
   // Property results are reported separately; the run owns and validates their trace.
   let graph = try GraphRun(isComplete: true, graph: canonical,
     observableActions: Set(canonical.edges.map(\.action)), outcome: .noViolation, trace: trace)
-  return (graph, result)
+  return (graph, result, rendered)
 }

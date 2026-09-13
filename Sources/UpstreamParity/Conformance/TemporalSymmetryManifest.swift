@@ -60,17 +60,6 @@ package struct TemporalCaseConfiguration: Equatable, Codable, Sendable {
     self.allowsImplicitStuttering = allowsImplicitStuttering
   }
 
-  package var renderedPropertyConfiguration: String {
-    let specification = switch fairness {
-    case .none: "Spec"
-    case .weak: "WFSpec"
-    case .strong: "SFSpec"
-    }
-    return "SPECIFICATION \(specification)\nPROPERTY \(property.renderedName)\n"
-  }
-
-  package static let renderedGraphConfiguration = "SPECIFICATION Spec\n"
-
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case property, fairness, allowsImplicitStuttering
   }
@@ -86,25 +75,21 @@ package struct TemporalCaseConfiguration: Equatable, Codable, Sendable {
 
 package struct TemporalCase: Equatable, Codable, Sendable {
   package let id: String
-  package let sourceInput: SourceInputPin
   package let configuration: TemporalCaseConfiguration
   package let exploration: FiniteExplorationConfiguration
 
   package init(
     id: String,
-    sourceInput: SourceInputPin,
     configuration: TemporalCaseConfiguration,
     exploration: FiniteExplorationConfiguration
   ) throws {
     self.id = id
-    self.sourceInput = sourceInput
     self.configuration = configuration
     self.exploration = exploration
     try validate()
   }
 
   private func validate() throws {
-    try sourceInput.validate()
     guard id.isEmpty == false,
           case .disabled = exploration.symmetryReduction else {
       throw EvidenceFormatError.invalidField(record: id, field: "temporal case")
@@ -112,14 +97,13 @@ package struct TemporalCase: Equatable, Codable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case id, sourceInput, configuration, exploration
+    case id, configuration, exploration
   }
 
   package init(from decoder: Decoder) throws {
     let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: try container.decode(String.self, forKey: .id),
-      sourceInput: try container.decode(SourceInputPin.self, forKey: .sourceInput),
       configuration: try container.decode(TemporalCaseConfiguration.self, forKey: .configuration),
       exploration: try container.decode(FiniteExplorationConfiguration.self, forKey: .exploration))
   }

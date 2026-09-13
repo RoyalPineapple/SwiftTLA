@@ -45,7 +45,6 @@ struct TemporalSymmetryCheckTests {
     #expect(throws: EvidenceFormatError.self) {
       _ = try TemporalCase(
         id: temporalCase.id,
-        sourceInput: temporalCase.sourceInput,
         configuration: temporalCase.configuration,
         exploration: FiniteExplorationConfiguration(
           maximumStateLimit: temporalCase.exploration.maximumStateLimit,
@@ -103,10 +102,6 @@ struct TemporalSymmetryCheckTests {
     )
     let temporalCase = try TemporalCase(
       id: "temporal",
-      sourceInput: try SourceInputPin(
-        path: "TemporalFixture.tla",
-        sha256: SHA256.hex(Data(contentsOf: source))
-      ),
       configuration: .init(property: .always, fairness: .none, allowsImplicitStuttering: false),
       exploration: exploration
     )

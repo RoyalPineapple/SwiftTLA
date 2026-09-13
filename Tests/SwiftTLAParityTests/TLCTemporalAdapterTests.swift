@@ -96,16 +96,6 @@ struct TLCTemporalAdapterTests {
     }
   }
 
-  @Test("TLC temporal adapter rejects changed source before comparison")
-  func rejectsChangedSource() throws {
-    let fixture = try Fixture()
-    try Data("changed".utf8).write(to: fixture.module, options: .atomic)
-    #expect(throws: TLCTemporalAdapterError.sourceInputMismatch) {
-      try TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
-        .capture(try fixture.input())
-    }
-  }
-
   @Test("TLC temporal adapter rejects a property configuration that does not match the typed case")
   func rejectsMismatchedTypedProperty() throws {
     let fixture = try Fixture()
@@ -463,6 +453,7 @@ struct TLCTemporalAdapterTests {
     let request: TLCProcessRequest
     let completeGraphRequest: TLCProcessRequest
     let swiftRun: GraphRun
+    let rendered: RenderedSpecification
 
     init(property: TemporalPropertyKind = .alwaysEventually) throws {
       root = FileManager.default.temporaryDirectory.appendingPathComponent("TLCTemporalAdapterTests-\(UUID())")
@@ -475,9 +466,21 @@ struct TLCTemporalAdapterTests {
         property: property,
         fairness: .none,
         allowsImplicitStuttering: false)
-      try Data("---- MODULE TemporalFixture ----\n====\n".utf8).write(to: module)
-      try Data(caseConfiguration.renderedPropertyConfiguration.utf8).write(to: configuration)
-      try Data(TemporalCaseConfiguration.renderedGraphConfiguration.utf8).write(to: graphConfiguration)
+      let x = Var<Int>("x")
+      rendered = try TLASpec("TemporalFixture") {
+        Variable(x, 1)
+        Always("AlwaysP", x == 2)
+        Eventually("EventuallyP", x == 2)
+        AlwaysEventually("AlwaysEventuallyP", x == 2)
+        EventuallyAlways("EventuallyAlwaysP", x == 2)
+        LeadsTo("LeadsToPQ", x == 2, x == 1)
+        LeadsTo("LeavesZero", x == 0, x != 0)
+      }.compile().render()
+      let propertyBundle = try rendered.tlaBundle(checking: [property.renderedName], checkDeadlock: false)
+      let graphBundle = try rendered.tlaBundle(checking: [], checkDeadlock: false)
+      try Data(propertyBundle.tla.utf8).write(to: module)
+      try Data(propertyBundle.cfg.utf8).write(to: configuration)
+      try Data(graphBundle.cfg.utf8).write(to: graphConfiguration)
       launchCase = try FiniteGraphCase(
         id: "temporal",
         exploration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled),
@@ -492,20 +495,19 @@ struct TLCTemporalAdapterTests {
         environment: [:], pin: try testReferencePin())
       temporalCase = try TemporalCase(
         id: launchCase.id,
-        sourceInput: try Fixture.reference(module, path: "Verification/TemporalSymmetryConformance/TemporalFixture.tla"),
         configuration: caseConfiguration,
         exploration: launchCase.exploration)
       request = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
         bridgeClasses: root.appendingPathComponent("bridge"),
-        bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
+        bundle: propertyBundle,
         graphEvents: root.appendingPathComponent("events.jsonl"), traceOutput: root.appendingPathComponent("trace.json"),
         workingDirectory: root,
         finiteGraphCase: launchCase, runID: UUID(), invocation: .temporalProperty)
       completeGraphRequest = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
         bridgeClasses: root.appendingPathComponent("bridge"),
-        bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: graphConfiguration),
+        bundle: graphBundle,
         graphEvents: root.appendingPathComponent("complete-events.jsonl"),
         traceOutput: root.appendingPathComponent("complete-trace.json"),
         workingDirectory: root,
@@ -526,7 +528,6 @@ struct TLCTemporalAdapterTests {
       let graphResult = swiftResult ?? .unavailable
       let selectedCase = try TemporalCase(
           id: temporalCase.id,
-          sourceInput: temporalCase.sourceInput,
           configuration: TemporalCaseConfiguration(
             property: property ?? temporalCase.configuration.property,
             fairness: temporalCase.configuration.fairness,
@@ -538,7 +539,7 @@ struct TLCTemporalAdapterTests {
         completeGraphRequest: completeGraphRequest ?? self.completeGraphRequest,
         swiftRun: swiftRun ?? self.swiftRun,
         swiftResult: graphResult,
-        sourceInputURL: module,
+        rendered: rendered,
         outputDirectory: output)
     }
 
@@ -596,9 +597,7 @@ struct TLCTemporalAdapterTests {
         traceFails: traceFails)
     }
 
-    static func reference(_ url: URL, path: String) throws -> SourceInputPin {
-      try SourceInputPin(path: path, sha256: SHA256.hex(Data(contentsOf: url)))
-    }
+
   }
 }
 

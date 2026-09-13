@@ -135,17 +135,13 @@ package struct TemporalSymmetryCheck: Sendable {
     let toolchain = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(temporalCase.id)
     try RetainedFiles.createDirectory(work, beneath: projectRoot)
-    let sourceInput = temporalCase.sourceInput
-    let source = try RetainedFiles.resolve(
-      projectRoot.appendingPathComponent(sourceInput.path), beneath: projectRoot)
-    let bundle = try externalBundle(
-      source: source,
-      renderedConfiguration: temporalCase.configuration.renderedPropertyConfiguration)
+    let bundle = try native.rendered.tlaBundle(
+      checking: [temporalCase.configuration.property.renderedName], checkDeadlock: false)
     let arguments = ["-workers", "1", "-fp", "1"]
     let launch = try FiniteGraphCase(
       id: temporalCase.id,
       exploration: temporalCase.exploration,
-      moduleSHA256: sourceInput.sha256,
+      moduleSHA256: SHA256.hex(Data(bundle.tla.utf8)),
       cfgSHA256: SHA256.hex(Data(bundle.cfg.utf8)),
       arguments: arguments,
       environment: [:], pin: referencePin)
@@ -158,12 +154,10 @@ package struct TemporalSymmetryCheck: Sendable {
       finiteGraphCase: launch,
       runID: UUID(), invocation: .temporalProperty,
       referenceArtifacts: toolchain.artifacts)
-    let graphBundle = try externalBundle(
-      source: source,
-      renderedConfiguration: TemporalCaseConfiguration.renderedGraphConfiguration)
+    let graphBundle = try native.rendered.tlaBundle(checking: [], checkDeadlock: false)
     let graphCase = try FiniteGraphCase(
       id: temporalCase.id, exploration: temporalCase.exploration,
-      moduleSHA256: sourceInput.sha256,
+      moduleSHA256: SHA256.hex(Data(bundle.tla.utf8)),
       cfgSHA256: SHA256.hex(Data(graphBundle.cfg.utf8)),
       arguments: arguments,
       environment: [:], pin: referencePin)
@@ -178,18 +172,9 @@ package struct TemporalSymmetryCheck: Sendable {
     return try TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
       temporalCase: temporalCase, request: request,
       completeGraphRequest: completeGraphRequest, swiftRun: native.graph, swiftResult: native.result,
-      sourceInputURL: source, outputDirectory: outputDirectory))
+      rendered: native.rendered, outputDirectory: outputDirectory))
   }
 
-  private func externalBundle(
-    source: URL,
-    renderedConfiguration: String
-  ) throws -> TLAModuleBundle {
-    TLAModuleBundle.external(root: TLAModuleFile(
-      name: source.deletingPathExtension().lastPathComponent,
-      tla: try String(contentsOf: source, encoding: .utf8),
-      cfg: renderedConfiguration))
-  }
 
   private func captureSymmetry(
     compilation: CompiledSpecification,

@@ -101,8 +101,7 @@ public struct ModuleDescription: Sendable, Equatable {
 /// TLA+ output and declaration text shared with authored PlusCal rendering.
 struct RenderedModule: Sendable, Equatable {
     let renderedModuleSource: String
-    let renderedConfiguration: String
-    let renderedConfigurationWithoutSymmetry: String
+    let configuration: TLCConfiguration
     let renderedActions: [RenderedAction]
     let definitions: [String]
     let instances: [String]
@@ -198,7 +197,7 @@ public struct CompiledSpecification: Sendable {
         let metadata = module.metadata
         let rootModule = try metadata.renderModule(module)
         let renderedBundle = TLAModuleBundle(
-            root: .init(name: metadata.name, tla: rootModule.renderedModuleSource, cfg: rootModule.renderedConfiguration),
+            root: .init(name: metadata.name, tla: rootModule.renderedModuleSource, cfg: rootModule.configuration.render(usesSymmetryReduction: true)),
             imports: try imports.map { imported in
                 let plan = try imported.metadata.renderModule(imported)
                 return .init(name: imported.metadata.name, tla: plan.renderedModuleSource, cfg: nil)
@@ -225,7 +224,7 @@ public struct CompiledSpecification: Sendable {
         }
         return RenderedSpecification(
             tlaBundle: renderedBundle,
-            renderedConfigurationWithoutSymmetry: rootModule.renderedConfigurationWithoutSymmetry,
+            configuration: rootModule.configuration,
             actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle
         )
     }
@@ -234,7 +233,7 @@ public struct CompiledSpecification: Sendable {
 /// Verification output rendered once and reusable by exporters and TLC checks.
 public struct RenderedSpecification: Sendable {
     public let tlaBundle: TLAModuleBundle
-    fileprivate let renderedConfigurationWithoutSymmetry: String
+    fileprivate let configuration: TLCConfiguration
     package let actions: [RenderedAction]
     fileprivate let renderedPlusCalModuleBundle: TLAModuleBundle?
 
@@ -249,12 +248,23 @@ public struct RenderedSpecification: Sendable {
                 root: .init(
                     name: tlaBundle.root.name,
                     tla: tlaBundle.root.tla,
-                    cfg: renderedConfigurationWithoutSymmetry
+                    cfg: configuration.render(usesSymmetryReduction: false)
                 ),
                 imports: tlaBundle.imports,
                 provenance: tlaBundle.provenance
             )
         }
+    }
+
+    /// Selects declared checks for an independent validation pass without rendering the model again.
+    /// Symmetry is disabled so the pass retains the complete, unreduced graph.
+    package func tlaBundle(checking checks: Set<String>, checkDeadlock: Bool) throws -> TLAModuleBundle {
+        let selected = try configuration.selecting(checks, checkDeadlock: checkDeadlock)
+        return TLAModuleBundle(
+            root: .init(name: tlaBundle.root.name, tla: tlaBundle.root.tla,
+                cfg: selected.render(usesSymmetryReduction: false)),
+            imports: tlaBundle.imports, provenance: tlaBundle.provenance
+        )
     }
 
     /// Returns the source-faithful PlusCal bundle produced by rendering.
@@ -1197,11 +1207,7 @@ private extension CompiledModuleMetadata {
                 semantics: semantics,
                 requiredStandardModules: requiredStandardModules
             ),
-            renderedConfiguration: renderedTLCConfiguration(semantics: semantics, usesSymmetryReduction: true),
-            renderedConfigurationWithoutSymmetry: renderedTLCConfiguration(
-                semantics: semantics,
-                usesSymmetryReduction: false
-            ),
+            configuration: tlcConfiguration(semantics: semantics),
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
             definitions: definitions, instances: instances, refinements: renderedRefinements,
             properties: Dictionary(uniqueKeysWithValues: invariants + temporalProperties), constraint: constraint
@@ -1393,13 +1399,8 @@ private extension CompiledModuleMetadata {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    private func renderedTLCConfiguration(
-        semantics: CompiledSemantics,
-        usesSymmetryReduction: Bool
-    ) -> String {
+    private func tlcConfiguration(semantics: CompiledSemantics) -> TLCConfiguration {
         var lines: [String] = []
-        lines.append("SPECIFICATION Spec")
-        lines.append(semantics.behavior.checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE")
         for constant in constants.sorted(by: { $0.name < $1.name }) {
             lines.append("CONSTANT \(constant.name) = \(constant.value)")
         }
@@ -1414,12 +1415,13 @@ private extension CompiledModuleMetadata {
             }
         }
         if semantics.behavior.constraint != nil { lines.append("CONSTRAINT StateConstraint") }
-        for invariant in semantics.behavior.invariants { lines.append("INVARIANT \(invariant.name)") }
-        for temporal in semantics.behavior.temporalProperties { lines.append("PROPERTY \(temporal.name)") }
-        if usesSymmetryReduction {
-            for symmetry in symmetrySets { lines.append("SYMMETRY Symm\(symmetry.variableName)") }
-        }
-        return lines.joined(separator: "\n") + "\n"
+        return TLCConfiguration(
+            declarations: lines,
+            checkDeadlock: semantics.behavior.checkDeadlock,
+            invariants: semantics.behavior.invariants.map(\.name),
+            properties: semantics.behavior.temporalProperties.map(\.name),
+            symmetry: symmetrySets.map { "Symm\($0.variableName)" }
+        )
     }
 
 }
