@@ -5,14 +5,16 @@ package struct TemporalComparison: Equatable, Encodable, Sendable {
 
   package let schema: String
   package let caseID: String
-  package let configuration: TemporalCaseConfiguration
+  package let property: String
+  package let fairness: TemporalFairnessMode
   package let status: TemporalComparisonStatus
   package let swiftResult: TemporalPropertyResult
   package let tlcResult: TemporalPropertyResult
 
   package init(
     caseID: String,
-    configuration: TemporalCaseConfiguration,
+    property: String,
+    fairness: TemporalFairnessMode,
     swiftRun: GraphRun,
     tlcRun: GraphRun,
     swiftResult: TemporalPropertyResult,
@@ -25,7 +27,8 @@ package struct TemporalComparison: Equatable, Encodable, Sendable {
     if case .violated(let trace) = tlcResult { try trace.validate(in: tlcRun.graph) }
     self.schema = Self.schema
     self.caseID = caseID
-    self.configuration = configuration
+    self.property = property
+    self.fairness = fairness
     self.swiftResult = swiftResult
     self.tlcResult = tlcResult
     guard !caseID.isEmpty else {

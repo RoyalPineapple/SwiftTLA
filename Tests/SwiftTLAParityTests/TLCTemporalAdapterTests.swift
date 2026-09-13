@@ -106,8 +106,20 @@ struct TLCTemporalAdapterTests {
     let fixture = try Fixture()
     #expect(throws: TLCTemporalAdapterError.configurationMismatch) {
       try TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
-        .capture(try fixture.input(property: .eventually))
+        .capture(try fixture.input(property: "EventuallyP"))
     }
+  }
+
+  @Test("declared property names need no validation registry entry")
+  func checksCustomProperty() throws {
+    let fixture = try Fixture(property: "CustomProgress")
+    let comparison = try TLCTemporalAdapter(
+      processAdapter: TLCProcessAdapter(executor: try fixture.executor(
+        propertyStream: graphStream(case: fixture.launchCase, runID: fixture.request.runID),
+        propertyResult: Fixture.success)))
+      .capture(try fixture.input(swiftResult: .satisfied))
+    #expect(comparison.property == "CustomProgress")
+    #expect(comparison.status == .exact)
   }
 
   @Test("TLC temporal adapter does not invent a lasso from an open trace")
@@ -207,7 +219,7 @@ struct TLCTemporalAdapterTests {
 
   @Test("TLC temporal adapter binds an always violation in the initial state")
   func bindsInitialAlwaysViolation() throws {
-    let fixture = try Fixture(property: .always)
+    let fixture = try Fixture(property: "AlwaysP")
     let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try completedGraph(stream, for: fixture.launchCase)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
@@ -220,8 +232,7 @@ struct TLCTemporalAdapterTests {
         trace: try numberedInitialStateTrace())))
       .capture(try fixture.input(
         swiftRun: graph,
-        swiftResult: swiftResult,
-        allowsImplicitStuttering: true))
+        swiftResult: swiftResult))
 
     #expect(comparison.status == .exact)
     let retained = try #require(counterexample(in: comparison.tlcResult))
@@ -231,7 +242,7 @@ struct TLCTemporalAdapterTests {
 
   @Test("safety counterexamples retain finite paths without inventing a cycle")
   func retainsFiniteSafetyPath() throws {
-    let fixture = try Fixture(property: .always)
+    let fixture = try Fixture(property: "AlwaysP")
     let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try completedGraph(stream, for: fixture.launchCase)
     let first: [Any] = [1, ["x": 1]]
@@ -251,42 +262,19 @@ struct TLCTemporalAdapterTests {
     #expect(retained.steps == nativeTrace.steps)
   }
 
-  @Test("TLC temporal adapter binds a named same-state dump step only when the declared behavior allows stuttering")
-  func bindsNamedSameStateDumpStepOnlyWithDeclaredStuttering() throws {
-    let rejectedFixture = try Fixture()
-    let stream = try graphStream(case: rejectedFixture.launchCase, runID: rejectedFixture.request.runID)
-    let graph = try completedGraph(
-      stream, for: rejectedFixture.launchCase, outcome: .livenessViolation)
+  @Test("generated specifications bind TLC's named implicit stuttering")
+  func bindsNamedImplicitStuttering() throws {
+    let fixture = try Fixture()
+    let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
+    let graph = try completedGraph(stream, for: fixture.launchCase)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
-    let swiftResult = TemporalPropertyResult.violated(
-      testCycle([state, state]))
-    let namedTrace = try numberedStutteringTrace(action: "A")
-    #expect(throws: GraphRunError.self) {
-      try TLCTemporalAdapter(
-        processAdapter: TLCProcessAdapter(executor: try rejectedFixture.executor(
-          propertyStream: stream,
-          trace: namedTrace)))
-        .capture(try rejectedFixture.input(swiftRun: completedSwiftRun(graph), swiftResult: swiftResult))
-    }
-
-    let admittedFixture = try Fixture()
-    let admittedStream = try graphStream(case: admittedFixture.launchCase, runID: admittedFixture.request.runID)
-    let admittedGraph = try completedGraph(
-      admittedStream, for: admittedFixture.launchCase, outcome: .livenessViolation)
-    let admittedState = try #require(admittedGraph.graph.initialStateKeys.first).canonicalEncoding
-    let admittedSwiftResult = TemporalPropertyResult.violated(
-      testCycle([admittedState, admittedState]))
-    let admitted = try TLCTemporalAdapter(
-      processAdapter: TLCProcessAdapter(executor: try admittedFixture.executor(
-        propertyStream: admittedStream,
-        trace: namedTrace)))
-      .capture(try admittedFixture.input(
-        swiftRun: completedSwiftRun(admittedGraph),
-        swiftResult: admittedSwiftResult,
-        allowsImplicitStuttering: true
-      ))
-    #expect(admitted.status == .exact)
-    _ = try #require(counterexample(in: admitted.tlcResult))
+    let comparison = try TLCTemporalAdapter(
+      processAdapter: TLCProcessAdapter(executor: try fixture.executor(
+        propertyStream: stream, trace: try numberedStutteringTrace(action: "A"))))
+      .capture(try fixture.input(swiftRun: graph, swiftResult: .violated(testCycle([state, state]))))
+    #expect(comparison.status == .exact)
+    let trace = try #require(counterexample(in: comparison.tlcResult))
+    #expect(trace.steps.allSatisfy { $0.action == nil })
   }
 
   @Test("TLC temporal adapter rejects a lasso that is foreign to the captured graph")
@@ -312,7 +300,7 @@ struct TLCTemporalAdapterTests {
     let trace = GraphTrace(id: "foreign", steps: [
       .init(state: CanonicalState(bindings: ["x": .integer(99)]).key, action: nil)])
     #expect(throws: GraphRunError.self) {
-      try TemporalComparison(caseID: "foreign", configuration: fixture.temporalCase.configuration,
+      try TemporalComparison(caseID: "foreign", property: fixture.property, fairness: fixture.temporalCase.fairness,
         swiftRun: fixture.swiftRun, tlcRun: fixture.swiftRun,
         swiftResult: .violated(trace), tlcResult: .satisfied)
     }
@@ -498,22 +486,20 @@ struct TLCTemporalAdapterTests {
     let launchCase: FiniteGraphCase
     let completeGraphCase: FiniteGraphCase
     let temporalCase: TemporalCase
+    let property: String
     let request: TLCProcessRequest
     let completeGraphRequest: TLCProcessRequest
     let swiftRun: GraphRun
     let rendered: RenderedSpecification
 
-    init(property: TemporalPropertyKind = .alwaysEventually) throws {
+    init(property: String = "AlwaysEventuallyP") throws {
+      self.property = property
       root = FileManager.default.temporaryDirectory.appendingPathComponent("TLCTemporalAdapterTests-\(UUID())")
       module = root.appendingPathComponent("TemporalFixture.tla")
       configuration = root.appendingPathComponent("TemporalFixture.cfg")
       graphConfiguration = root.appendingPathComponent("TemporalFixtureGraph.cfg")
       output = root.appendingPathComponent("evidence")
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-      let caseConfiguration = TemporalCaseConfiguration(
-        property: property,
-        fairness: .none,
-        allowsImplicitStuttering: false)
       let x = Var<Int>("x")
       rendered = try TLASpec("TemporalFixture") {
         Variable(x, 1)
@@ -523,8 +509,9 @@ struct TLCTemporalAdapterTests {
         EventuallyAlways("EventuallyAlwaysP", x == 2)
         LeadsTo("LeadsToPQ", x == 2, x == 1)
         LeadsTo("LeavesZero", x == 0, x != 0)
+        Eventually("CustomProgress", x == 2)
       }.compile().render()
-      let propertyBundle = try rendered.tlaBundle(checking: [property.renderedName], checkDeadlock: false)
+      let propertyBundle = try rendered.tlaBundle(checking: [property], checkDeadlock: false)
       let graphBundle = try rendered.tlaBundle(checking: [], checkDeadlock: false)
       try Data(propertyBundle.tla.utf8).write(to: module)
       try Data(propertyBundle.cfg.utf8).write(to: configuration)
@@ -543,7 +530,7 @@ struct TLCTemporalAdapterTests {
         environment: [:], pin: try testReferencePin())
       temporalCase = try TemporalCase(
         id: launchCase.id,
-        configuration: caseConfiguration,
+        fairness: .none,
         exploration: launchCase.exploration)
       request = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
@@ -570,19 +557,12 @@ struct TLCTemporalAdapterTests {
       swiftResult: TemporalPropertyResult? = nil,
       request: TLCProcessRequest? = nil,
       completeGraphRequest: TLCProcessRequest? = nil,
-      property: TemporalPropertyKind? = nil,
-      allowsImplicitStuttering: Bool = false
+      property: String? = nil
     ) throws -> TLCTemporalCaptureInput {
       let graphResult = swiftResult ?? .unavailable
-      let selectedCase = try TemporalCase(
-          id: temporalCase.id,
-          configuration: TemporalCaseConfiguration(
-            property: property ?? temporalCase.configuration.property,
-            fairness: temporalCase.configuration.fairness,
-            allowsImplicitStuttering: allowsImplicitStuttering),
-          exploration: temporalCase.exploration)
       return TLCTemporalCaptureInput(
-        temporalCase: selectedCase,
+        temporalCase: temporalCase,
+        property: property ?? self.property,
         request: request ?? self.request,
         completeGraphRequest: completeGraphRequest ?? self.completeGraphRequest,
         swiftRun: swiftRun ?? self.swiftRun,

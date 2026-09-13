@@ -49,38 +49,36 @@ package struct TemporalSymmetryCheck: Sendable {
   package func run(_ input: TemporalSymmetryCheckRequest) throws -> [TemporalSymmetryCheckOutcome] {
     let root = try RetainedFiles.projectRoot(input.projectRoot)
     let output = try RetainedFiles.outputDirectory(input.outputDirectory, beneath: root)
-    var nativeRuns: [TemporalFairnessMode: [Int: Result<TemporalModelRun, Error>]] = [:]
-    let temporalOutcomes = try input.manifest.temporalCases.map { temporalCase in
-      let observed: (outcome: TemporalSymmetryOutcome, diagnostic: String)
+    let temporalOutcomes = try input.manifest.temporalCases.flatMap { temporalCase in
+      let native: TemporalModelRun
       do {
-        let fairness = temporalCase.configuration.fairness
-        let limit = temporalCase.exploration.maximumStateLimit
-        let native = nativeRuns[fairness]?[limit] ?? Result {
-          try temporalConformanceRun(fairness: fairness, maximumStates: limit)
-        }
-        nativeRuns[fairness, default: [:]][limit] = native
-        let comparison = try captureTemporal(
-          temporalCase: temporalCase, native: native.get(), toolRoot: input.toolRoot,
-          referencePin: input.referencePin, projectRoot: root, evidenceRoot: output,
-          outputDirectory: output.appendingPathComponent(temporalCase.id, isDirectory: true))
-        let outcome: TemporalSymmetryOutcome = switch comparison.status {
-        case .exact: .exact
-        case .propertyOutcomeDifference, .graphDifference: .difference
-        case .unavailable: .unavailable
-        }
-        observed = (outcome, comparison.status.rawValue)
+        native = try temporalConformanceRun(
+          fairness: temporalCase.fairness, maximumStates: temporalCase.exploration.maximumStateLimit)
       } catch {
-        observed = (
-          .unavailable,
-          "temporal-validation-unavailable: \(String(describing: error))"
-        )
+        return [try retainOutcome(caseID: temporalCase.id, outcome: .unavailable,
+          diagnostic: "native-temporal-validation-unavailable: \(error)", beneath: output)]
       }
-      return try retainOutcome(
-        caseID: temporalCase.id,
-        outcome: observed.outcome,
-        diagnostic: observed.diagnostic,
-        beneath: output
-      )
+      return try native.properties.keys.sorted().map { property in
+        let propertyCase = try TemporalCase(id: "\(temporalCase.id)-\(property)",
+          fairness: temporalCase.fairness, exploration: temporalCase.exploration)
+        let observed: (outcome: TemporalSymmetryOutcome, diagnostic: String)
+        do {
+          let comparison = try captureTemporal(
+            temporalCase: propertyCase, property: property, native: native, toolRoot: input.toolRoot,
+            referencePin: input.referencePin, projectRoot: root, evidenceRoot: output,
+            outputDirectory: output.appendingPathComponent(propertyCase.id, isDirectory: true))
+          let outcome: TemporalSymmetryOutcome = switch comparison.status {
+          case .exact: .exact
+          case .propertyOutcomeDifference, .graphDifference: .difference
+          case .unavailable: .unavailable
+          }
+          observed = (outcome, comparison.status.rawValue)
+        } catch {
+          observed = (.unavailable, "temporal-validation-unavailable: \(error)")
+        }
+        return try retainOutcome(caseID: propertyCase.id, outcome: observed.outcome,
+          diagnostic: observed.diagnostic, beneath: output)
+      }
     }
 
     let symmetryOutcomes = try input.manifest.symmetryCases.map { symmetryCase in
@@ -131,6 +129,7 @@ package struct TemporalSymmetryCheck: Sendable {
 
   private func captureTemporal(
     temporalCase: TemporalCase,
+    property: String,
     native: TemporalModelRun,
     toolRoot: URL,
     referencePin: TLCReferencePin,
@@ -138,7 +137,6 @@ package struct TemporalSymmetryCheck: Sendable {
     evidenceRoot: URL,
     outputDirectory: URL
   ) throws -> TemporalComparison {
-    let property = temporalCase.configuration.property.renderedName
     guard let check = native.properties[property] else {
       throw EvidenceFormatError.invalidField(record: property, field: "native temporal checking")
     }
@@ -146,7 +144,7 @@ package struct TemporalSymmetryCheck: Sendable {
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(temporalCase.id)
     try RetainedFiles.createDirectory(work, beneath: projectRoot)
     let bundle = try native.rendered.tlaBundle(
-      checking: [temporalCase.configuration.property.renderedName], checkDeadlock: false)
+      checking: [property], checkDeadlock: false)
     let arguments = ["-workers", "1", "-fp", "1"]
     let launch = try FiniteGraphCase(
       id: temporalCase.id,
@@ -180,7 +178,7 @@ package struct TemporalSymmetryCheck: Sendable {
       finiteGraphCase: graphCase, runID: UUID(), invocation: .finiteGraph,
       referenceArtifacts: toolchain.artifacts)
     return try TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
-      temporalCase: temporalCase, request: request,
+      temporalCase: temporalCase, property: property, request: request,
       completeGraphRequest: completeGraphRequest, swiftRun: check.graph, swiftResult: check.result,
       rendered: native.rendered, outputDirectory: outputDirectory))
   }

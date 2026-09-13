@@ -7,26 +7,6 @@ package enum TemporalFairnessMode: String, Codable, Sendable {
   case strong
 }
 
-package enum TemporalPropertyKind: String, Codable, Sendable {
-  case always
-  case eventually
-  case alwaysEventually
-  case eventuallyAlways
-  case leadsTo
-  case leavesZero
-
-  package var renderedName: String {
-    switch self {
-    case .always: "AlwaysP"
-    case .eventually: "EventuallyP"
-    case .alwaysEventually: "AlwaysEventuallyP"
-    case .eventuallyAlways: "EventuallyAlwaysP"
-    case .leadsTo: "LeadsToPQ"
-    case .leavesZero: "LeavesZero"
-    }
-  }
-}
-
 package enum TemporalSymmetryOutcome: String, Codable, Sendable {
   case exact
   case difference
@@ -45,46 +25,18 @@ package enum SymmetryGraphSource: String, Codable, Sendable {
   case tlc
 }
 
-package struct TemporalCaseConfiguration: Equatable, Codable, Sendable {
-  package let property: TemporalPropertyKind
-  package let fairness: TemporalFairnessMode
-  package let allowsImplicitStuttering: Bool
-
-  package init(
-    property: TemporalPropertyKind,
-    fairness: TemporalFairnessMode,
-    allowsImplicitStuttering: Bool
-  ) {
-    self.property = property
-    self.fairness = fairness
-    self.allowsImplicitStuttering = allowsImplicitStuttering
-  }
-
-  private enum CodingKeys: String, CodingKey, CaseIterable {
-    case property, fairness, allowsImplicitStuttering
-  }
-
-  package init(from decoder: Decoder) throws {
-    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    self.init(
-      property: try container.decode(TemporalPropertyKind.self, forKey: .property),
-      fairness: try container.decode(TemporalFairnessMode.self, forKey: .fairness),
-      allowsImplicitStuttering: try container.decode(Bool.self, forKey: .allowsImplicitStuttering))
-  }
-}
-
 package struct TemporalCase: Equatable, Codable, Sendable {
   package let id: String
-  package let configuration: TemporalCaseConfiguration
+  package let fairness: TemporalFairnessMode
   package let exploration: FiniteExplorationConfiguration
 
   package init(
     id: String,
-    configuration: TemporalCaseConfiguration,
+    fairness: TemporalFairnessMode,
     exploration: FiniteExplorationConfiguration
   ) throws {
     self.id = id
-    self.configuration = configuration
+    self.fairness = fairness
     self.exploration = exploration
     try validate()
   }
@@ -97,14 +49,14 @@ package struct TemporalCase: Equatable, Codable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case id, configuration, exploration
+    case id, fairness, exploration
   }
 
   package init(from decoder: Decoder) throws {
     let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
     try self.init(
       id: try container.decode(String.self, forKey: .id),
-      configuration: try container.decode(TemporalCaseConfiguration.self, forKey: .configuration),
+      fairness: try container.decode(TemporalFairnessMode.self, forKey: .fairness),
       exploration: try container.decode(FiniteExplorationConfiguration.self, forKey: .exploration))
   }
 }

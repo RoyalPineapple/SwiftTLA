@@ -3,6 +3,7 @@ import SwiftTLA
 
 package struct TLCTemporalCaptureInput: Sendable {
   package let temporalCase: TemporalCase
+  package let property: String
   package let request: TLCProcessRequest
   package let completeGraphRequest: TLCProcessRequest
   package let swiftRun: GraphRun
@@ -12,6 +13,7 @@ package struct TLCTemporalCaptureInput: Sendable {
 
   package init(
     temporalCase: TemporalCase,
+    property: String,
     request: TLCProcessRequest,
     completeGraphRequest: TLCProcessRequest,
     swiftRun: GraphRun,
@@ -20,6 +22,7 @@ package struct TLCTemporalCaptureInput: Sendable {
     outputDirectory: URL
   ) {
     self.temporalCase = temporalCase
+    self.property = property
     self.request = request
     self.completeGraphRequest = completeGraphRequest
     self.swiftRun = swiftRun
@@ -68,12 +71,11 @@ package struct TLCTemporalAdapter: Sendable {
     let tlcOutcome = try temporalResult(
       outcome: capture.outcome,
       graph: completeGraph,
-      outputDirectory: input.outputDirectory,
-      property: input.temporalCase.configuration.property,
-      allowsImplicitStuttering: input.temporalCase.configuration.allowsImplicitStuttering)
+      outputDirectory: input.outputDirectory)
     let comparison = try TemporalComparison(
       caseID: input.temporalCase.id,
-      configuration: input.temporalCase.configuration,
+      property: input.property,
+      fairness: input.temporalCase.fairness,
       swiftRun: input.swiftRun,
       tlcRun: completeGraph,
       swiftResult: input.swiftResult,
@@ -94,7 +96,7 @@ package struct TLCTemporalAdapter: Sendable {
     }
     let request = input.request.finiteGraphCase
     let expected = try input.rendered.tlaBundle(
-      checking: [input.temporalCase.configuration.property.renderedName], checkDeadlock: false)
+      checking: [input.property], checkDeadlock: false)
     guard input.request.bundle == expected else {
       throw TLCTemporalAdapterError.configurationMismatch
     }
@@ -154,44 +156,40 @@ extension TLCTemporalAdapter {
   private func temporalResult(
     outcome: TLCExecutionOutcome,
     graph: GraphRun,
-    outputDirectory: URL,
-    property: TemporalPropertyKind,
-    allowsImplicitStuttering: Bool
+    outputDirectory: URL
   ) throws -> TemporalPropertyResult {
     if outcome == .completed {
       return .satisfied
     }
-    let violationOutcome: TLCExecutionOutcome = switch property {
-    case .always: .safetyViolation
-    case .eventually, .alwaysEventually, .eventuallyAlways, .leadsTo, .leavesZero: .livenessViolation
-    }
-    guard outcome == violationOutcome,
+    guard outcome == .safetyViolation || outcome == .livenessViolation,
           FileManager.default.fileExists(atPath: outputDirectory.appendingPathComponent("counterexample.json").path) else {
       return .unavailable
     }
     let trace = try TLCTraceParser().parseCounterexample(
       Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json")))
     return .violated(try boundTrace(trace, to: graph.graph,
-      requiresCycle: outcome == .livenessViolation, allowsImplicitStuttering: allowsImplicitStuttering))
+      requiresCycle: outcome == .livenessViolation))
   }
 
   private func boundTrace(
     _ trace: GraphTrace, to graph: CanonicalGraph,
-    requiresCycle: Bool, allowsImplicitStuttering: Bool
+    requiresCycle: Bool
   ) throws -> GraphTrace {
     guard let first = trace.steps.first else { throw GraphRunError.emptyTrace }
     var steps = try [first] + zip(trace.steps, trace.steps.dropFirst()).map { source, target in
       guard let action = target.action else { return target }
       let edge = CanonicalEdge(source: source.state, action: action, target: target.state)
       if graph.edges.contains(edge) { return target }
-      guard source.state == target.state, allowsImplicitStuttering || action == "UnnamedAction" else {
+      guard source.state == target.state else {
         throw GraphRunError.traceEdgeMissing(edge)
       }
+      // Generated specifications include [Next]_vars. TLC can label implicit
+      // stuttering with the preceding action, even when that action is disabled.
       return GraphTraceStep(state: target.state, action: nil)
     }
     var cycleStart = trace.cycleStartIndex
     if requiresCycle, cycleStart == nil {
-      guard allowsImplicitStuttering, steps.count == 1 else { throw GraphRunError.invalidLasso }
+      guard steps.count == 1 else { throw GraphRunError.invalidLasso }
       steps.append(GraphTraceStep(state: first.state, action: nil))
       cycleStart = 0
     }

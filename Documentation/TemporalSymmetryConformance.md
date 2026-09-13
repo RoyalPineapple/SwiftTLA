@@ -5,23 +5,30 @@ Each case declares its model, configuration, tool identity, and state limits.
 
 ## Temporal cases
 
-SwiftTLA compiles the typed model from `TemporalCaseConfiguration`. TLC runs
-the pinned `TemporalMatrix.tla` module with the same property and fairness
-values.
+The manifest supplies finite exploration bounds and fairness configurations.
+Each configuration selects a typed DSL model. Native checking explores its
+generated Swift transitions once, then validation checks every declared temporal
+property. The native property results must cover exactly the compiler's declared
+properties. There is no separate property registry or per-case stuttering flag.
 
-The comparison requires these facts:
+TLC receives the TLA+ exported from that same model. Each comparison requires:
 
-- both property runs produce the same result.
-- both complete graphs have the same initial states.
-- both complete graphs have the same states.
-- both complete graphs have the same labeled edge multiplicities.
-- each TLC lasso starts from a TLC initial state and follows ordered labeled
-  edges in the TLC graph.
-- each SwiftTLA lasso starts from a SwiftTLA initial state and follows ordered
-  labeled edges in the SwiftTLA graph.
+- matching property verdicts;
+- complete graphs with identical initial states, states, and labeled edges;
+- native and TLC counterexamples that start at initial states and follow their
+  graph's transitions or implicit stuttering, as allowed by the generated
+  specification's `[Next]_vars` semantics.
 
-Each case uses one TLC run for the complete graph and one TLC run for the
-property. A property violation also captures its trace.
+Safety counterexamples remain finite. Liveness counterexamples retain their
+closed cycles. Counterexamples need not be identical between engines.
+
+Each TLC property invocation captures graph events and any counterexample
+together. If it stops before completing exploration, a separate property-free
+pass captures the complete graph. Timeouts, malformed data, and incomplete
+comparisons cannot succeed.
+
+These finite configurations provide bounded validation, not a universal proof
+of compiler correctness.
 
 ## Symmetry cases
 

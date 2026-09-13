@@ -16,7 +16,9 @@ struct TemporalSymmetryCheckTests {
       .init(source: two.key, action: "Stay", target: two.key)
     ])
     let cases = try registeredManifest().temporalCases
-    for fairness in [TemporalFairnessMode.none, .weak, .strong] {
+    #expect(cases.map(\.fairness) == [.none, .weak, .strong])
+    for temporalCase in cases {
+      let fairness = temporalCase.fairness
       let model = try temporalConformanceRun(fairness: fairness, maximumStates: 10)
       #expect(Set(model.properties.keys) == ["AlwaysP", "EventuallyP", "AlwaysEventuallyP",
         "EventuallyAlwaysP", "LeadsToPQ", "LeavesZero"])
@@ -25,17 +27,14 @@ struct TemporalSymmetryCheckTests {
         #expect(check.graph.graph == expected)
         #expect(check.result != .unavailable)
       }
-      for temporalCase in cases where temporalCase.configuration.fairness == fairness {
-        let native = try #require(model.properties[temporalCase.configuration.property.renderedName])
-        let expectsProgress = temporalCase.configuration.property == .leavesZero
-          && temporalCase.configuration.fairness != .none
+      for (property, native) in model.properties {
+        let expectsProgress = property == "LeavesZero" && fairness != .none
         if expectsProgress {
           #expect(native.result == .satisfied)
-        } else if case .violated(let lasso) = native.result {
-          let trace = try #require(native.graph.trace)
-          #expect(lasso == trace)
+        } else if case .violated(let trace) = native.result {
+          #expect(trace == native.graph.trace)
         } else {
-          Issue.record("Expected a native counterexample for \(temporalCase.id)")
+          Issue.record("Expected a native counterexample for \(temporalCase.id)/\(property)")
         }
       }
       #expect(throws: ExplorationError.stateLimitExceeded(2)) {
@@ -51,7 +50,7 @@ struct TemporalSymmetryCheckTests {
     #expect(throws: EvidenceFormatError.self) {
       _ = try TemporalCase(
         id: temporalCase.id,
-        configuration: temporalCase.configuration,
+        fairness: temporalCase.fairness,
         exploration: FiniteExplorationConfiguration(
           maximumStateLimit: temporalCase.exploration.maximumStateLimit,
           symmetryReduction: .enabled(maximumPermutationCount: 2)
@@ -108,7 +107,7 @@ struct TemporalSymmetryCheckTests {
     )
     let temporalCase = try TemporalCase(
       id: "temporal",
-      configuration: .init(property: .always, fairness: .none, allowsImplicitStuttering: false),
+      fairness: .none,
       exploration: exploration
     )
     let symmetryCase = try SymmetryCase(
@@ -129,8 +128,11 @@ struct TemporalSymmetryCheckTests {
       referencePin: try testReferencePin()
     ))
 
-    #expect(outcomes.map(\.outcome) == [.unavailable, .unavailable])
-    for caseID in ["temporal", "symmetry"] {
+    #expect(outcomes.count == 7)
+    #expect(outcomes.allSatisfy { $0.outcome == .unavailable })
+    #expect(Set(outcomes.map(\.caseID)) == ["temporal-AlwaysP", "temporal-EventuallyP",
+      "temporal-AlwaysEventuallyP", "temporal-EventuallyAlwaysP", "temporal-LeadsToPQ", "temporal-LeavesZero", "symmetry"])
+    for caseID in outcomes.map(\.caseID) {
       let record = try #require(try JSONSerialization.jsonObject(
         with: Data(contentsOf: output
           .appendingPathComponent(caseID, isDirectory: true)

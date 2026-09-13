@@ -75,25 +75,27 @@ package func temporalConformanceRun(
   switch fairness {
   case .none:
     try exportTemporalRun(UnfairTemporalMatrix.initialMachines(),
-      rendered: UnfairTemporalMatrix.spec.compile().render(),
+      compilation: UnfairTemporalMatrix.spec.compile(),
       maximumStates: maximumStates)
   case .weak:
     try exportTemporalRun(WeaklyFairTemporalMatrix.initialMachines(),
-      rendered: WeaklyFairTemporalMatrix.spec.compile().render(),
+      compilation: WeaklyFairTemporalMatrix.spec.compile(),
       maximumStates: maximumStates)
   case .strong:
     try exportTemporalRun(StronglyFairTemporalMatrix.initialMachines(),
-      rendered: StronglyFairTemporalMatrix.spec.compile().render(),
+      compilation: StronglyFairTemporalMatrix.spec.compile(),
       maximumStates: maximumStates)
   }
 }
 
 private func exportTemporalRun<Machine: StateMachine>(
-  _ initialMachines: [Machine], rendered: RenderedSpecification, maximumStates: Int
+  _ initialMachines: [Machine], compilation: CompiledSpecification, maximumStates: Int
 ) throws -> TemporalModelRun {
   let native = try ReachabilityGraph(initialMachines: initialMachines, maximumStates: maximumStates)
-  guard native.safetyViolations.isEmpty else {
-    throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "native temporal checking")
+  let declaredProperties = Set(compilation.description.temporalProperties)
+  guard !declaredProperties.isEmpty, declaredProperties == Set(native.temporalResults.keys),
+        native.safetyViolations.isEmpty else {
+    throw EvidenceFormatError.invalidField(record: compilation.description.name, field: "native temporal checking")
   }
   let states = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
     ($0, try CanonicalState(native.formalProjection(of: $0)))
@@ -122,5 +124,5 @@ private func exportTemporalRun<Machine: StateMachine>(
       observableActions: observableActions, outcome: .noViolation, trace: trace)
     return (property, (graph: graph, result: result))
   })
-  return TemporalModelRun(rendered: rendered, properties: properties)
+  return TemporalModelRun(rendered: try compilation.render(), properties: properties)
 }

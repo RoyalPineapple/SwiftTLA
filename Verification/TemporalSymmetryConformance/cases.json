@@ -2,120 +2,24 @@
   "schema": "TemporalSymmetryManifest",
   "temporalCases": [
     {
-      "id": "temporal-always-none",
-      "configuration": {
-        "property": "always",
-        "fairness": "none",
-        "allowsImplicitStuttering": true
-      },
+      "id": "temporal-none",
+      "fairness": "none",
       "exploration": {
         "maximumStateLimit": 10,
         "symmetryReduction": "disabled"
       }
     },
     {
-      "id": "temporal-eventually-none",
-      "configuration": {
-        "property": "eventually",
-        "fairness": "none",
-        "allowsImplicitStuttering": false
-      },
+      "id": "temporal-weak",
+      "fairness": "weak",
       "exploration": {
         "maximumStateLimit": 10,
         "symmetryReduction": "disabled"
       }
     },
     {
-      "id": "temporal-always-eventually-none",
-      "configuration": {
-        "property": "alwaysEventually",
-        "fairness": "none",
-        "allowsImplicitStuttering": false
-      },
-      "exploration": {
-        "maximumStateLimit": 10,
-        "symmetryReduction": "disabled"
-      }
-    },
-    {
-      "id": "temporal-eventually-always-weak",
-      "configuration": {
-        "property": "eventuallyAlways",
-        "fairness": "weak",
-        "allowsImplicitStuttering": false
-      },
-      "exploration": {
-        "maximumStateLimit": 10,
-        "symmetryReduction": "disabled"
-      }
-    },
-    {
-      "id": "temporal-leads-to-strong",
-      "configuration": {
-        "property": "leadsTo",
-        "fairness": "strong",
-        "allowsImplicitStuttering": true
-      },
-      "exploration": {
-        "maximumStateLimit": 10,
-        "symmetryReduction": "disabled"
-      }
-    },
-    {
-      "id": "temporal-weak-fairness-boundary",
-      "configuration": {
-        "property": "alwaysEventually",
-        "fairness": "weak",
-        "allowsImplicitStuttering": false
-      },
-      "exploration": {
-        "maximumStateLimit": 10,
-        "symmetryReduction": "disabled"
-      }
-    },
-    {
-      "id": "temporal-strong-fairness-boundary",
-      "configuration": {
-        "property": "alwaysEventually",
-        "fairness": "strong",
-        "allowsImplicitStuttering": true
-      },
-      "exploration": {
-        "maximumStateLimit": 10,
-        "symmetryReduction": "disabled"
-      }
-    },
-    {
-      "id": "temporal-leaves-zero-none",
-      "configuration": {
-        "property": "leavesZero",
-        "fairness": "none",
-        "allowsImplicitStuttering": true
-      },
-      "exploration": {
-        "maximumStateLimit": 10,
-        "symmetryReduction": "disabled"
-      }
-    },
-    {
-      "id": "temporal-leaves-zero-weak",
-      "configuration": {
-        "property": "leavesZero",
-        "fairness": "weak",
-        "allowsImplicitStuttering": true
-      },
-      "exploration": {
-        "maximumStateLimit": 10,
-        "symmetryReduction": "disabled"
-      }
-    },
-    {
-      "id": "temporal-leaves-zero-strong",
-      "configuration": {
-        "property": "leavesZero",
-        "fairness": "strong",
-        "allowsImplicitStuttering": true
-      },
+      "id": "temporal-strong",
+      "fairness": "strong",
       "exploration": {
         "maximumStateLimit": 10,
         "symmetryReduction": "disabled"
@@ -126,26 +30,54 @@
     {
       "id": "symmetry-single-collection-scope-2",
       "scope": 2,
-      "rawExploration": { "maximumStateLimit": 8, "symmetryReduction": "disabled" },
-      "reducedExploration": { "maximumStateLimit": 8, "symmetryReduction": "enabled", "maximumPermutationCount": 2 }
+      "rawExploration": {
+        "maximumStateLimit": 8,
+        "symmetryReduction": "disabled"
+      },
+      "reducedExploration": {
+        "maximumStateLimit": 8,
+        "symmetryReduction": "enabled",
+        "maximumPermutationCount": 2
+      }
     },
     {
       "id": "symmetry-single-collection-scope-3",
       "scope": 3,
-      "rawExploration": { "maximumStateLimit": 16, "symmetryReduction": "disabled" },
-      "reducedExploration": { "maximumStateLimit": 16, "symmetryReduction": "enabled", "maximumPermutationCount": 6 }
+      "rawExploration": {
+        "maximumStateLimit": 16,
+        "symmetryReduction": "disabled"
+      },
+      "reducedExploration": {
+        "maximumStateLimit": 16,
+        "symmetryReduction": "enabled",
+        "maximumPermutationCount": 6
+      }
     },
     {
       "id": "symmetry-single-collection-scope-4",
       "scope": 4,
-      "rawExploration": { "maximumStateLimit": 32, "symmetryReduction": "disabled" },
-      "reducedExploration": { "maximumStateLimit": 32, "symmetryReduction": "enabled", "maximumPermutationCount": 24 }
+      "rawExploration": {
+        "maximumStateLimit": 32,
+        "symmetryReduction": "disabled"
+      },
+      "reducedExploration": {
+        "maximumStateLimit": 32,
+        "symmetryReduction": "enabled",
+        "maximumPermutationCount": 24
+      }
     },
     {
       "id": "symmetry-single-collection-scope-5",
       "scope": 5,
-      "rawExploration": { "maximumStateLimit": 64, "symmetryReduction": "disabled" },
-      "reducedExploration": { "maximumStateLimit": 64, "symmetryReduction": "enabled", "maximumPermutationCount": 120 }
+      "rawExploration": {
+        "maximumStateLimit": 64,
+        "symmetryReduction": "disabled"
+      },
+      "reducedExploration": {
+        "maximumStateLimit": 64,
+        "symmetryReduction": "enabled",
+        "maximumPermutationCount": 120
+      }
     }
   ]
 }
