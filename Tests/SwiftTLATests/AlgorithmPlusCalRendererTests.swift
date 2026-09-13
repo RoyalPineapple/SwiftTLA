@@ -29,6 +29,27 @@ struct AlgorithmPlusCalRendererTests {
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
+    @Test("Both exporters declare model values from typed algorithm state")
+    func declaresTypedModelValues() throws {
+        enum Member: String, CaseIterable, FiniteTLAValueDomain {
+            case node
+            static var defaultValue: Self { .node }
+            static var finiteValues: [Self] { allCases }
+            var tlaValue: TLAValue { .constant(rawValue) }
+        }
+        let specification = TLASpec("ModelValueDeclarations") {
+            Algorithm("ModelValueDeclarations", scoped: { scope in
+                let _ = scope.sharedVar("value", initial: Member.node)
+                Do(TestControlLabel.stop) { Stop() }
+            })
+        }
+        let rendered = try specification.compile().render()
+        for bundle in [rendered.tlaBundle, try rendered.plusCalBundle()] {
+            #expect(bundle.tla.contains("CONSTANTS node\n"))
+            #expect(bundle.cfg.contains("CONSTANT node = node\n"))
+        }
+    }
+
     @Test("renders process declarations, source labels, and structured statements")
     func rendersProcessAlgorithm() throws {
         let algorithm = Algorithm("RenderedProcess", scoped: { scope in

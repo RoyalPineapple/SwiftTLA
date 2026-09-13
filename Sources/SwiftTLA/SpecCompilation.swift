@@ -156,6 +156,12 @@ struct CompiledModuleMetadata: Sendable {
     let formalDefinitionCount: Int
     let recursiveFunctionCount: Int
 
+    var constantDeclaration: String? {
+        let formalConstants = formalParameters.filter { $0.kind == .constant }.map(\.name)
+        let names = Set(constants.map(\.name) + formalConstants).union(modelValueNames).sorted()
+        return names.isEmpty ? nil : "CONSTANTS \(names.joined(separator: ", "))"
+    }
+
     init(source: TLASpec, modelValueNames: Set<String>) {
         self.modelValueNames = modelValueNames.union(CompiledValue.modelValueNames(
             in: source.collections.flatMap(\.metadata.members).map(CompiledValue.init(formal:))))
@@ -1255,15 +1261,11 @@ private extension CompiledModuleMetadata {
         lines.append("EXTENDS \(modules.joined(separator: ", "))")
         lines.append("")
 
-        let formalConstantSymbols = formalParameters
-            .filter { $0.kind == .constant }
-            .map(\.name)
         let formalVariableSymbols = formalParameters
             .filter { $0.kind == .variable }
             .map(\.name)
-        let allConstantSymbols = Set(constants.map(\.name) + formalConstantSymbols).union(modelValueNames).sorted()
-        if !allConstantSymbols.isEmpty {
-            lines.append("CONSTANTS \(allConstantSymbols.joined(separator: ", "))")
+        if let declaration = constantDeclaration {
+            lines.append(declaration)
             for constant in constants.sorted(by: { $0.name < $1.name }) {
                 lines.append("ASSUME \(constant.name) = \(constant.value)")
             }

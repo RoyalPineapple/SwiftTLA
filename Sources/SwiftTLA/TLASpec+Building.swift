@@ -223,7 +223,7 @@ extension CompiledModuleMetadata {
     let module = AuthoredPlusCalModule(
       name: name,
       extendsModules: authoredPlusCalExtends,
-      constants: authoredPlusCalPrelude,
+      constants: constantDeclaration.map { [$0] } ?? [],
       preludeDeclarations: declarationSections.prelude,
       algorithm: plusCalAlgorithm,
       defineDeclarations: declarationSections.define,
@@ -244,15 +244,6 @@ extension CompiledModuleMetadata {
       modules.append(module)
     }
     return modules
-  }
-
-  private var authoredPlusCalPrelude: [String] {
-    var lines: [String] = []
-    let constantNames = (constants.map(\.name) + formalParameters.filter { $0.kind == .constant }.map(\.name)).sorted()
-    if !constantNames.isEmpty {
-      lines.append("CONSTANTS \(constantNames.joined(separator: ", "))")
-    }
-    return lines
   }
 
   private func authoredPlusCalDeclarationSections(
