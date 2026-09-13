@@ -106,6 +106,15 @@ package struct CompiledExpression: Hashable, Sendable {
 
     package var computationType: CompiledValueType { computation.resultType }
 
+    /// A direct function-space membership test can avoid enumerating the space.
+    /// Keep explicit representation conversions on their normal evaluation path.
+    package var functionSpaceMembership: (candidate: Self, domain: Self, range: Self)? {
+        guard case .in = operation, children.count == 2,
+              case .functionSet = children[1].operation else { return nil }
+        let space = children[1]
+        return (children[0], space.children[0], space.children[1])
+    }
+
     /// Recognizes Boolean constants without evaluating state reads or fallible operations.
     package var booleanConstant: Bool? {
         var expression = self

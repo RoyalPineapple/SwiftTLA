@@ -133,15 +133,7 @@ public enum _NativeMachineOperations: Sendable {
     public static func functionSet<Key: Hashable & Sendable, Value: Hashable & Sendable>(
         _ domain: Set<Key>, _ range: Set<Value>
     ) throws -> Set<[Key: Value]> {
-        // Preflight the complete product before materializing any partial functions.
-        var cardinality = 1
-        for _ in domain {
-            let product = cardinality.multipliedReportingOverflow(by: range.count)
-            guard !product.overflow else {
-                throw NativeMachineEvaluationError.collectionCardinalityOverflow(.functionSet, operands: [domain.count, range.count])
-            }
-            cardinality = product.partialValue
-        }
+        try validateFunctionSetCardinality(domainCount: domain.count, rangeCount: range.count)
         var functions: [[Key: Value]] = [[:]]
         for key in domain {
             functions = functions.flatMap { partial in
@@ -153,6 +145,19 @@ public enum _NativeMachineOperations: Sendable {
             }
         }
         return Set(functions)
+    }
+
+    /// Preserve function-space overflow failures even when membership needs no enumeration.
+    public static func validateFunctionSetCardinality(domainCount: Int, rangeCount: Int) throws {
+        var cardinality = 1
+        for _ in 0..<domainCount {
+            let product = cardinality.multipliedReportingOverflow(by: rangeCount)
+            guard !product.overflow else {
+                throw NativeMachineEvaluationError.collectionCardinalityOverflow(
+                    .functionSet, operands: [domainCount, rangeCount])
+            }
+            cardinality = product.partialValue
+        }
     }
 
     /// The generator supplies structural order so CHOOSE remains deterministic.

@@ -687,6 +687,21 @@ struct NativeSwiftEmitter {
             default: throw unsupported("tuple literal")
             }
         case .in:
+            if let membership = node.functionSpaceMembership {
+                let domain = try self.expression(membership.domain, state: state,
+                    substitutions: substitutions, activeFunctions: activeFunctions)
+                let range = try self.expression(membership.range, state: state,
+                    substitutions: substitutions, activeFunctions: activeFunctions)
+                return """
+                (try { () throws -> Bool in
+                    let domain = \(domain)
+                    let range = \(range)
+                    try _NativeMachineOperations.validateFunctionSetCardinality(domainCount: domain.count, rangeCount: range.count)
+                    let function = \(try emit(0))
+                    return Set(function.keys) == domain && function.values.allSatisfy(range.contains)
+                }())
+                """
+            }
             return "(\(try emit(1)).contains(\(try emit(0))))"
         case .subset:
             return "(\(try emit(0)).isSubset(of: \(try emit(1))))"

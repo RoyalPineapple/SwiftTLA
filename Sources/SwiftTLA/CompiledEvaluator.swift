@@ -243,6 +243,8 @@ private struct FoldEvaluation {
 private enum EvaluatorTask {
     case expression(CompiledExpression, EvaluatorScope)
     case finish(CompiledOperation, operandCount: Int)
+    case functionSpaceDomain(candidate: CompiledExpression, scope: EvaluatorScope)
+    case functionSpaceMember(domain: Set<CompiledValue>, range: Set<CompiledValue>)
     case booleanResult
     case conditional(then: CompiledExpression, otherwise: CompiledExpression, scope: EvaluatorScope)
     case booleanRight(CompiledExpression, scope: EvaluatorScope, shortCircuit: Bool)
@@ -324,6 +326,28 @@ struct CompiledEvaluator: Sendable {
             switch task {
             case .finish(let operation, let operandCount):
                 try operation.apply(to: &values, operandCount: operandCount)
+
+            case .functionSpaceDomain(let candidate, let scope):
+                let range = try popValue(from: &values)
+                let domain = try popValue(from: &values)
+                guard case .set(let domainValues) = domain, case .set(let rangeValues) = range else {
+                    throw EvalError.expected(.functionSetDomains, actual: [domain, range])
+                }
+                try nativeOperation {
+                    try _NativeMachineOperations.validateFunctionSetCardinality(
+                        domainCount: domainValues.count, rangeCount: rangeValues.count)
+                }
+                tasks.append(.functionSpaceMember(domain: domainValues, range: rangeValues))
+                tasks.append(.expression(candidate, scope))
+
+            case .functionSpaceMember(let domain, let range):
+                let candidate = try popValue(from: &values)
+                if case .function(let function) = candidate {
+                    let matches = Set(function.keys) == domain && function.values.allSatisfy(range.contains)
+                    values.append(.boolean(matches))
+                } else {
+                    values.append(.boolean(false))
+                }
 
             case .booleanResult:
                 values.append(.boolean(try boolean(popValue(from: &values))))
@@ -506,6 +530,12 @@ struct CompiledEvaluator: Sendable {
                 values.append(value)
 
             case .expression(let expression, let scope):
+                if let membership = expression.functionSpaceMembership {
+                    tasks.append(.functionSpaceDomain(candidate: membership.candidate, scope: scope))
+                    tasks.append(.expression(membership.range, scope))
+                    tasks.append(.expression(membership.domain, scope))
+                    continue
+                }
                 func schedule(_ operation: CompiledOperation, _ operands: [CompiledExpression]) {
                     tasks.append(.finish(operation, operandCount: operands.count))
                     let evaluationOrder = operation.evaluatesRightOperandFirst ? Array(operands.reversed()) : operands
