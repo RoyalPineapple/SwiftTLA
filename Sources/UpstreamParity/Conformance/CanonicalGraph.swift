@@ -292,9 +292,10 @@ package enum GraphRunOutcome: Hashable, Sendable {
 
 package struct GraphTraceStep: Hashable, Sendable {
     package let state: CanonicalStateKey
-    package let action: String
+    /// Nil denotes the initial state or an implicit stuttering step.
+    package let action: String?
 
-    package init(state: CanonicalStateKey, action: String) {
+    package init(state: CanonicalStateKey, action: String?) {
         self.state = state
         self.action = action
     }
@@ -303,10 +304,13 @@ package struct GraphTraceStep: Hashable, Sendable {
 package struct GraphTrace: Hashable, Sendable {
     package let id: String
     package let steps: [GraphTraceStep]
+    /// The step where the repeating cycle begins, or nil for a finite trace.
+    package let cycleStartIndex: Int?
 
-    package init(id: String, steps: [GraphTraceStep]) {
+    package init(id: String, steps: [GraphTraceStep], cycleStartIndex: Int? = nil) {
         self.id = id
         self.steps = steps
+        self.cycleStartIndex = cycleStartIndex
     }
 }
 
@@ -315,6 +319,10 @@ package enum CompletedGraphRunError: Error, Equatable, Sendable {
     case deadlockStateMissing(CanonicalStateKey)
     case traceStateMissing(CanonicalStateKey)
     case emptyTrace
+    case traceInitialActionPresent
+    case invalidCycleStart(Int)
+    case openCycle
+    case stateChangingStutter
     case traceInitialStateMissing(CanonicalStateKey)
     case traceEdgeMissing(CanonicalEdge)
 }
@@ -339,6 +347,15 @@ package struct CompletedGraphRun: Equatable, Sendable {
         }
         if let trace {
             guard let first = trace.steps.first else { throw CompletedGraphRunError.emptyTrace }
+            guard first.action == nil else { throw CompletedGraphRunError.traceInitialActionPresent }
+            if let start = trace.cycleStartIndex {
+                guard start >= 0, start < trace.steps.count - 1 else {
+                    throw CompletedGraphRunError.invalidCycleStart(start)
+                }
+                guard trace.steps[start].state == trace.steps.last?.state else {
+                    throw CompletedGraphRunError.openCycle
+                }
+            }
             for step in trace.steps where graph.states[step.state] == nil {
                 throw CompletedGraphRunError.traceStateMissing(step.state)
             }
@@ -346,7 +363,11 @@ package struct CompletedGraphRun: Equatable, Sendable {
                 throw CompletedGraphRunError.traceInitialStateMissing(first.state)
             }
             for (source, target) in zip(trace.steps, trace.steps.dropFirst()) {
-                let edge = CanonicalEdge(source: source.state, action: target.action, target: target.state)
+                guard let action = target.action else {
+                    guard source.state == target.state else { throw CompletedGraphRunError.stateChangingStutter }
+                    continue
+                }
+                let edge = CanonicalEdge(source: source.state, action: action, target: target.state)
                 guard graph.edges.contains(edge) else {
                     throw CompletedGraphRunError.traceEdgeMissing(edge)
                 }

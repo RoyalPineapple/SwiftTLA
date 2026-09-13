@@ -33,7 +33,7 @@ struct NativeRefinementCheckingTests {
                 }
                 #expect(source.state.count == 0 && target.state.count == 2)
                 #expect(action == .advance)
-                #expect(trace.steps.map(\.action) == ["Init", "advance"])
+                #expect(trace.steps.map(\.action) == [nil, "advance"])
             } else {
                 #expect(failure == .initialState(initial.snapshot))
                 #expect(trace.steps.count == 1)
@@ -50,7 +50,12 @@ struct NativeRefinementCheckingTests {
         }
         #expect(witness.cycle.first == witness.cycle.last)
         #expect(witness.cycleActions == [nil])
-        #expect(try SwiftGraphExporter().export(graph).outcome == .refinementViolation("Refines"))
+        let exported = try SwiftGraphExporter().export(graph)
+        #expect(exported.outcome == .refinementViolation("Refines"))
+        let trace = try #require(exported.trace)
+        #expect(trace.cycleStartIndex == witness.prefix.count - 1)
+        #expect(trace.steps[try #require(trace.cycleStartIndex)].state == trace.steps.last?.state)
+        #expect(trace.steps.last?.action == nil)
     }
 
     @Test("concrete fairness establishes abstract progress")

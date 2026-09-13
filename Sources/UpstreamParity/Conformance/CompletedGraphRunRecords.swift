@@ -31,7 +31,7 @@ package enum CompletedGraphRunRecords {
     var records: [[String: Any]] = [[
       "type": "header",
       "schema": "swifttla.finite-graph",
-      "version": 2,
+      "version": 3,
       "observableActions": run.observableActions.sorted()
     ]]
     records += graphRecords(for: run.graph)
@@ -39,8 +39,9 @@ package enum CompletedGraphRunRecords {
       records.append([
         "type": "trace",
         "id": trace.id,
+        "cycleStartIndex": trace.cycleStartIndex.map { $0 as Any } ?? NSNull(),
         "steps": trace.steps.map {
-          ["state": $0.state.canonicalEncoding, "action": $0.action]
+          ["state": $0.state.canonicalEncoding, "action": $0.action.map { $0 as Any } ?? NSNull()]
         }
       ])
     }

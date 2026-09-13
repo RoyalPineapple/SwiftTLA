@@ -4,6 +4,7 @@ package enum SwiftGraphExporterError: Error, Equatable, Sendable {
   case initialStateMissing(Int)
   case transitionStateMissing(Int)
   case traceStateMissing
+  case invalidLasso
 }
 
 package struct SwiftGraphExporter: Sendable {
@@ -22,6 +23,19 @@ package struct SwiftGraphExporter: Sendable {
     let states = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
       ($0, try CanonicalState(native.formalProjection(of: $0)))
     })
+    func lassoTrace(_ witness: FairLassoWitness<Machine.Snapshot, Machine.Action?>) throws -> GraphTrace {
+      guard witness.prefix.count == witness.prefixActions.count + 1,
+            witness.cycle.count == witness.cycleActions.count + 1,
+            witness.cycle.count >= 2, witness.prefix.last == witness.cycle.first,
+            witness.cycle.first == witness.cycle.last else { throw SwiftGraphExporterError.invalidLasso }
+      let prefix = zip(witness.prefix, [nil] + witness.prefixActions)
+      let cycle = zip(witness.cycle.dropFirst(), witness.cycleActions)
+      let steps = try (Array(prefix) + Array(cycle)).map { state, action in
+        guard let canonical = states[state] else { throw SwiftGraphExporterError.traceStateMissing }
+        return GraphTraceStep(state: canonical.key, action: try action.map(actionName))
+      }
+      return GraphTrace(id: "native-lasso", steps: steps, cycleStartIndex: witness.prefix.count - 1)
+    }
     let graph = try CanonicalGraph(native, states: states, renderedActionNames: renderedNames)
     let outcome: GraphRunOutcome
     var trace: GraphTrace?
@@ -33,26 +47,29 @@ package struct SwiftGraphExporter: Sendable {
       }
       trace = GraphTrace(id: "native-safety-trace", steps: try native.trace(to: failure.key).map {
         GraphTraceStep(state: states[$0.state]!.key,
-          action: try $0.action.map(actionName) ?? "Init")
+          action: try $0.action.map(actionName))
       })
     } else if let failure = native.refinementFailures.sorted(by: { $0.key < $1.key }).first {
       outcome = .refinementViolation(failure.key)
       let steps: [(action: Machine.Action?, state: Machine.Snapshot)]?
       switch failure.value {
       case .initialState(let state): steps = try native.trace(to: state)
-      case .fairness: steps = nil
+      case .fairness(_, let witness):
+        steps = nil
+        trace = try lassoTrace(witness)
       case .transition(let source, let action, let target):
         steps = try native.trace(to: source) + [(action, target)]
       }
       if let steps {
         trace = GraphTrace(id: "native-refinement-trace", steps: try steps.map {
-          GraphTraceStep(state: states[$0.state]!.key, action: try $0.action.map(actionName) ?? "Init")
+          GraphTraceStep(state: states[$0.state]!.key, action: try $0.action.map(actionName))
         })
       }
     } else if let failure = native.temporalResults.sorted(by: { $0.key < $1.key }).first(where: { $0.value.status != .satisfied }) {
       outcome = failure.value.status == .violated
         ? .temporalViolation(property: failure.key, reason: failure.value.reason)
         : .incomplete(reason: "\(failure.key): \(failure.value.reason.rawValue)")
+      if let witness = failure.value.witness { trace = try lassoTrace(witness) }
     } else {
       outcome = .exhaustiveSuccess
     }
@@ -168,9 +185,10 @@ package struct SwiftGraphExporter: Sendable {
     guard case .invariantViolated(_, _, let trace) = outcome else { return nil }
     return GraphTrace(
       id: "swift-invariant-trace",
-      steps: try trace.map { step in
+      steps: try trace.enumerated().map { index, step in
         let canonical = try CanonicalState(step.state)
-        return GraphTraceStep(state: canonical.key, action: renderedActionNames[step.action] ?? step.action)
+        return GraphTraceStep(state: canonical.key,
+          action: index == 0 ? nil : renderedActionNames[step.action] ?? step.action)
       }
     )
   }

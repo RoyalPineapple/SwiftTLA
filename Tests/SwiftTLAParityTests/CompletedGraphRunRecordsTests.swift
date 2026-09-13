@@ -92,7 +92,7 @@ struct CompletedGraphRunRecordsTests {
       "header", "initial", "state", "state", "state", "state", "edge", "complete"
     ])
     let completion = try #require(streamRecords.last)
-    #expect(streamRecords.first?["version"] as? Int == 2)
+    #expect(streamRecords.first?["version"] as? Int == 3)
     let edge = try #require(streamRecords.first { $0["type"] as? String == "edge" })
     #expect(Set(edge.keys) == ["type", "source", "action", "target"])
     #expect(completion["eligible"] as? Bool == true)
@@ -130,7 +130,7 @@ struct CompletedGraphRunRecordsTests {
       trace: .init(
         id: "counterexample",
         steps: [
-          .init(state: first.key, action: "Init"),
+          .init(state: first.key, action: nil),
           .init(state: second.key, action: "advance")
         ]
       )
@@ -144,9 +144,43 @@ struct CompletedGraphRunRecordsTests {
     let streamRecords = try records(in: Data(contentsOf: url))
     let trace = try #require(streamRecords.first { $0["type"] as? String == "trace" })
     #expect(trace["id"] as? String == "counterexample")
-    #expect((trace["steps"] as? [[String: String]])?.count == 2)
+    #expect((trace["steps"] as? [[String: Any]])?.count == 2)
     #expect(streamRecords.last?["traceCount"] as? Int == 1)
     #expect(streamRecords.last?["eligible"] as? Bool == false)
+  }
+
+  @Test("lasso records retain the cycle boundary and implicit stuttering")
+  func retainsLassoAndRejectsInvalidCycles() throws {
+    let first = state(counter: 0, values: [])
+    let second = state(counter: 1, values: [])
+    let graph = try graph(first, second, edges: [
+      .init(source: first.key, action: "advance", target: second.key)
+    ])
+    let steps: [GraphTraceStep] = [
+      .init(state: first.key, action: nil),
+      .init(state: second.key, action: "advance"),
+      .init(state: second.key, action: nil)
+    ]
+    let run = try CompletedGraphRun(graph: graph, observableActions: ["advance"],
+      outcome: .temporalViolation(property: "Progress", reason: .violatingFairLasso),
+      trace: .init(id: "lasso", steps: steps, cycleStartIndex: 1))
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: url) }
+    try CompletedGraphRunRecords.write(run, to: url)
+    let stream = try records(in: Data(contentsOf: url))
+    let trace = try #require(stream.first { $0["type"] as? String == "trace" })
+    #expect(trace["cycleStartIndex"] as? Int == 1)
+    let encodedSteps = try #require(trace["steps"] as? [[String: Any]])
+    #expect(encodedSteps[0]["action"] is NSNull)
+    #expect(encodedSteps[1]["action"] as? String == "advance")
+    #expect(encodedSteps[2]["action"] is NSNull)
+    #expect(stream.last?["eligible"] as? Bool == false)
+    for start in [-1, 0, 2, 3] {
+      #expect(throws: CompletedGraphRunError.self) {
+        try CompletedGraphRun(graph: graph, observableActions: ["advance"], outcome: run.outcome,
+          trace: .init(id: "invalid-cycle", steps: steps, cycleStartIndex: start))
+      }
+    }
   }
 
   @Test("retained counterexamples must follow graph transitions from an initial state")
@@ -158,10 +192,12 @@ struct CompletedGraphRunRecordsTests {
       edges: [.init(source: first.key, action: "advance", target: second.key)])
     let invalid: [[GraphTraceStep]] = [
       [],
-      [.init(state: missing.key, action: "Init")],
-      [.init(state: second.key, action: "Init")],
-      [.init(state: first.key, action: "Init"), .init(state: second.key, action: "wrong")],
-      [.init(state: first.key, action: "Init"), .init(state: first.key, action: "advance")]
+      [.init(state: first.key, action: "Init")],
+      [.init(state: first.key, action: nil), .init(state: second.key, action: nil)],
+      [.init(state: missing.key, action: nil)],
+      [.init(state: second.key, action: nil)],
+      [.init(state: first.key, action: nil), .init(state: second.key, action: "wrong")],
+      [.init(state: first.key, action: nil), .init(state: first.key, action: "advance")]
     ]
     for steps in invalid {
       #expect(throws: CompletedGraphRunError.self) {
