@@ -150,7 +150,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
       )
     }
     let missingModules = expectedModules.subtracting(sources.keys)
-    if let missing = missingModules.sorted().first {
+    if let missing = missingModules.min() {
       let importingModule = dependencies.first(where: {
         $0.importedModule == missing
       })?.importingModule ?? root.name
@@ -160,7 +160,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
         line: 0
       )
     }
-    if let unexpected = Set(sources.keys).subtracting(expectedModules).sorted().first {
+    if let unexpected = Set(sources.keys).subtracting(expectedModules).min() {
       throw TLAModuleBundleIntegrityError.undeclaredModule(
         module: unexpected,
         root: root.name
@@ -202,7 +202,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
     }
 
     try visit(root.name)
-    if let unreachable = Set(sources.keys).subtracting(visited).sorted().first {
+    if let unreachable = Set(sources.keys).subtracting(visited).min() {
       throw TLAModuleBundleIntegrityError.unreachableModule(
         module: unreachable,
         root: root.name

@@ -82,20 +82,20 @@ func graphDifferencesJSON(_ comparison: GraphComparison) -> [[String: Any]] {
         case .initialStates(let tlc, let swift):
             [
                 "kind": "initialStates",
-                "tlc": tlc.subtracting(swift).sorted().prefix(1).map(\.canonicalEncoding),
-                "swift": swift.subtracting(tlc).sorted().prefix(1).map(\.canonicalEncoding)
+                "tlc": tlc.subtracting(swift).min().map { [$0.canonicalEncoding] } ?? [],
+                "swift": swift.subtracting(tlc).min().map { [$0.canonicalEncoding] } ?? []
             ]
         case .states(let tlc, let swift):
             [
                 "kind": "states",
-                "tlc": tlc.subtracting(swift).sorted().prefix(1).map(\.canonicalEncoding),
-                "swift": swift.subtracting(tlc).sorted().prefix(1).map(\.canonicalEncoding)
+                "tlc": tlc.subtracting(swift).min().map { [$0.canonicalEncoding] } ?? [],
+                "swift": swift.subtracting(tlc).min().map { [$0.canonicalEncoding] } ?? []
             ]
         case .edges(let tlc, let swift):
             [
                 "kind": "edges",
-                "tlc": tlc.subtracting(swift).sorted().prefix(1).map(\.canonicalEncoding),
-                "swift": swift.subtracting(tlc).sorted().prefix(1).map(\.canonicalEncoding)
+                "tlc": tlc.subtracting(swift).min().map { [$0.canonicalEncoding] } ?? [],
+                "swift": swift.subtracting(tlc).min().map { [$0.canonicalEncoding] } ?? []
             ]
         case .completion(let tlc, let swift):
             ["kind": "completion", "tlcComplete": tlc, "swiftComplete": swift]

@@ -178,8 +178,8 @@ private func setDifferenceReport(
   actual: Set<CanonicalStateKey>,
   next: String
 ) -> CheckFailureReport {
-  let onlyExpected = expected.subtracting(actual).sorted().first
-  let onlyActual = actual.subtracting(expected).sorted().first
+  let onlyExpected = expected.subtracting(actual).min()
+  let onlyActual = actual.subtracting(expected).min()
   return .init(
     whatFailed: what,
     whereItFailed: location,
@@ -192,7 +192,7 @@ private func setDifferenceReport(
 private func edgeDifferenceReport(
   expected: Set<CanonicalEdge>, actual: Set<CanonicalEdge>
 ) -> CheckFailureReport {
-  let witness = expected.symmetricDifference(actual).sorted().first
+  let witness = expected.symmetricDifference(actual).min()
   guard let witness else {
     return .init(
       whatFailed: "The labeled transition relations differ.", whereItFailed: "canonical transition relation",
