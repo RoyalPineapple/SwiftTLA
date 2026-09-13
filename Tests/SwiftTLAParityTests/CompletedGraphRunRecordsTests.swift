@@ -15,7 +15,7 @@ struct CompletedGraphRunRecordsTests {
     let initial = try #require(exploration.initialStateIDs.first)
     let projection = try #require(exploration.graph.states[initial])
     let outcomes: [(ModelCheckOutcome, [String: String])] = [
-      (.invariantViolated(invariant: "Check", state: projection, trace: []),
+      (.invariantViolated(invariant: "Check", state: projection, trace: [.init(state: projection, action: "init")]),
        ["kind": "invariantViolation", "message": "Check"]),
       (.livenessViolated(property: "Check", reason: .violatingFairLasso,
         witness: .init(prefix: [initial], cycle: [initial, initial],
@@ -127,8 +127,8 @@ struct CompletedGraphRunRecordsTests {
       trace: .init(
         id: "counterexample",
         steps: [
-          .init(state: first.key, action: "advance"),
-          .init(state: second.key, action: "")
+          .init(state: first.key, action: "Init"),
+          .init(state: second.key, action: "advance")
         ]
       )
     )
@@ -144,6 +144,28 @@ struct CompletedGraphRunRecordsTests {
     #expect((trace["steps"] as? [[String: String]])?.count == 2)
     #expect(streamRecords.last?["traceCount"] as? Int == 1)
     #expect(streamRecords.last?["eligible"] as? Bool == false)
+  }
+
+  @Test("retained counterexamples must follow graph transitions from an initial state")
+  func rejectsInvalidTracePaths() throws {
+    let first = state(counter: 0, values: [])
+    let second = state(counter: 1, values: [])
+    let missing = state(counter: 2, values: [])
+    let graph = try graph(first, second,
+      edges: [.init(source: first.key, action: "advance", target: second.key)])
+    let invalid: [[GraphTraceStep]] = [
+      [],
+      [.init(state: missing.key, action: "Init")],
+      [.init(state: second.key, action: "Init")],
+      [.init(state: first.key, action: "Init"), .init(state: second.key, action: "wrong")],
+      [.init(state: first.key, action: "Init"), .init(state: first.key, action: "advance")]
+    ]
+    for steps in invalid {
+      #expect(throws: CompletedGraphRunError.self) {
+        try CompletedGraphRun(graph: graph, observableActions: ["advance"],
+          outcome: .invariantViolation("Check"), trace: .init(id: "invalid", steps: steps))
+      }
+    }
   }
 
   private func state(counter: Int, values: [CanonicalValue]) -> CanonicalState {

@@ -102,7 +102,7 @@ package struct SwiftGraphExporter: Sendable {
       outcome: try canonicalOutcome(
         exploration.outcome, states: states),
       trace: try canonicalTrace(
-        exploration.outcome, states: states)
+        exploration.outcome, renderedActionNames: renderedActionNames)
     )
   }
 
@@ -149,17 +149,14 @@ package struct SwiftGraphExporter: Sendable {
 
   private func canonicalTrace(
     _ outcome: ModelCheckOutcome,
-    states: [StateGraph.StateID: CanonicalState]
+    renderedActionNames: [String: String]
   ) throws -> GraphTrace? {
     guard case .invariantViolated(_, _, let trace) = outcome else { return nil }
     return GraphTrace(
       id: "swift-invariant-trace",
       steps: try trace.map { step in
         let canonical = try CanonicalState(step.state)
-        guard states.values.contains(canonical) else {
-          throw SwiftGraphExporterError.traceStateMissing
-        }
-        return GraphTraceStep(state: canonical.key, action: step.action)
+        return GraphTraceStep(state: canonical.key, action: renderedActionNames[step.action] ?? step.action)
       }
     )
   }

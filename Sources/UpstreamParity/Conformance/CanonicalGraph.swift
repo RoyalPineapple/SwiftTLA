@@ -314,6 +314,9 @@ package enum CompletedGraphRunError: Error, Equatable, Sendable {
     case graphActionUndeclared(String)
     case deadlockStateMissing(CanonicalStateKey)
     case traceStateMissing(CanonicalStateKey)
+    case emptyTrace
+    case traceInitialStateMissing(CanonicalStateKey)
+    case traceEdgeMissing(CanonicalEdge)
 }
 
 package struct CompletedGraphRun: Equatable, Sendable {
@@ -335,8 +338,18 @@ package struct CompletedGraphRun: Equatable, Sendable {
             throw CompletedGraphRunError.deadlockStateMissing(state)
         }
         if let trace {
+            guard let first = trace.steps.first else { throw CompletedGraphRunError.emptyTrace }
             for step in trace.steps where graph.states[step.state] == nil {
                 throw CompletedGraphRunError.traceStateMissing(step.state)
+            }
+            guard graph.initialStateKeys.contains(first.state) else {
+                throw CompletedGraphRunError.traceInitialStateMissing(first.state)
+            }
+            for (source, target) in zip(trace.steps, trace.steps.dropFirst()) {
+                let edge = CanonicalEdge(source: source.state, action: target.action, target: target.state)
+                guard graph.edgeOccurrences[edge] != nil else {
+                    throw CompletedGraphRunError.traceEdgeMissing(edge)
+                }
             }
         }
 
