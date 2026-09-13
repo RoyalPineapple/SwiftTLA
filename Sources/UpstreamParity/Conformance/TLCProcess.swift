@@ -141,9 +141,15 @@ package struct TLCProcessRequest: Equatable, Sendable {
     ] : []
     let graphDump = invocation == .finiteGraph
       ? ["-dump", "class,org.swifttla.conformance.LosslessStateWriter"] : []
-    return graphOptions + ["-cp", "\(jar.path):\(bridgeClasses.path)", "tlc2.TLC"]
-      + graphDump + ["-dumpTrace", "json", traceOutput.path]
-      + finiteGraphCase.arguments + ["-config", configuration.path, module.path]
+    let argumentGroups: [[String]] = [
+      graphOptions,
+      ["-cp", "\(jar.path):\(bridgeClasses.path)", "tlc2.TLC"],
+      graphDump,
+      ["-dumpTrace", "json", traceOutput.path],
+      finiteGraphCase.arguments,
+      ["-config", configuration.path, module.path]
+    ]
+    return argumentGroups.flatMap { $0 }
   }
 
   package func validateLaunchBinding(module: URL, configuration: URL) throws {
