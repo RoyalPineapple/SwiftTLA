@@ -1571,7 +1571,7 @@ struct CompiledLowerer {
     }
 
     private mutating func lower(
-        _ expression: TemporalExpr,
+        _ expression: TemporalCondition<StateExpr>,
         at path: String,
         scope: BindingScope
     ) throws -> TemporalCondition<CompiledExpression> {

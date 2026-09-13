@@ -61,7 +61,7 @@ func alphaKey(_ expression: StateExpr) -> String {
     return stateKey(expression, environment: [:], next: &next)
 }
 
-func alphaKey(_ expression: TemporalExpr) -> String {
+func alphaKey(_ expression: TemporalCondition<StateExpr>) -> String {
     switch expression {
     case .always(let state): return "always(\(alphaKey(state)))"
     case .eventually(let state): return "eventually(\(alphaKey(state)))"

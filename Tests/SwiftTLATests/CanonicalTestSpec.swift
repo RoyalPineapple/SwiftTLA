@@ -16,7 +16,7 @@ func canonicalTestSpec(
     variables: [(name: String, initialization: VariableInitialization)] = [],
     actions: [(name: String, body: ActionExpr, bindings: [ActionBinding])] = [],
     invariants: [(name: String, body: StateExpr)] = [],
-    temporal: [(name: String, expr: TemporalExpr)] = [],
+    temporal: [(name: String, expr: TemporalCondition<StateExpr>)] = [],
     fairness: [FairnessCondition] = [],
     constraint: StateExpr? = nil,
     imports: [TLASpec] = [],

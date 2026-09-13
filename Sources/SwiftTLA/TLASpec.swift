@@ -193,8 +193,8 @@ func actionVariants(_ action: NamedAction) -> [(
 }
 public struct NamedTemporal: Sendable, CustomStringConvertible, Equatable {
   public let name: String
-  public let expr: TemporalExpr
-  public init(name: String, expr: TemporalExpr) {
+  public let expr: TemporalCondition<StateExpr>
+  public init(name: String, expr: TemporalCondition<StateExpr>) {
     self.name = name
     self.expr = expr
   }
@@ -376,8 +376,8 @@ public struct InvDecl: SpecComponent {
 }
 public struct TemporalDecl: SpecComponent {
   public let name: String
-  public let expr: TemporalExpr
-  package init(_ name: String, _ expr: TemporalExpr) {
+  public let expr: TemporalCondition<StateExpr>
+  package init(_ name: String, _ expr: TemporalCondition<StateExpr>) {
     self.name = name
     self.expr = expr
   }

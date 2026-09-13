@@ -1,27 +1,3 @@
-public enum TemporalExpr: Hashable, Sendable, CustomStringConvertible {
-    case always(StateExpr)
-    case eventually(StateExpr)
-    case alwaysEventually(StateExpr)
-    case eventuallyAlways(StateExpr)
-    case leadsTo(StateExpr, StateExpr)
-
-    public var description: String {
-        switch self {
-        case .always(let p): return "[](\(p))"
-        case .eventually(let p): return "<>(\(p))"
-        case .alwaysEventually(let p): return "[]<>(\(p))"
-        case .eventuallyAlways(let p): return "<>[](\(p))"
-        case .leadsTo(let p, let q): return "(\(p) ~> \(q))"
-        }
-    }
-}
-
-extension TypedExpression where ExpressionValue == Bool {
-    public func leadsTo(_ q: some TypedExpression<Bool>) -> TemporalExpr {
-        .leadsTo(self.stateExpr, q.stateExpr)
-    }
-}
-
 public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
     case weakFairness(String)
     case strongFairness(String)

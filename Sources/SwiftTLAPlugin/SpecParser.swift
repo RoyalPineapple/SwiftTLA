@@ -2056,7 +2056,7 @@ package enum SpecParser {
         try ParserSession().decodeActionFromClosure(closure)
     }
 
-    static func decodeTemporal(_ call: FunctionCallExprSyntax) -> TemporalExpr? {
+    static func decodeTemporal(_ call: FunctionCallExprSyntax) -> TemporalCondition<StateExpr>? {
         ParserSession().decodeTemporal(call)
     }
 
@@ -2347,7 +2347,7 @@ extension ParserSession {
     func decodeTemporal(
         _ call: FunctionCallExprSyntax,
         scope: TypedFacadeScope = .empty
-    ) -> TemporalExpr? {
+    ) -> TemporalCondition<StateExpr>? {
         let operation: String
         let syntax: [ExprSyntax]
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),

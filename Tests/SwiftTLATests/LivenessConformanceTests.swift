@@ -46,7 +46,7 @@ struct LivenessConformanceTests {
 
     private func analyze(
         _ graph: StateGraph,
-        property: TemporalExpr,
+        property: TemporalCondition<StateExpr>,
         fairness: [FairnessCondition] = [],
         actions: [NamedAction] = [],
         initialStateIDs: [StateGraph.StateID],
@@ -142,7 +142,7 @@ struct LivenessConformanceTests {
         let graph = try graph(transitions: [:], values: [initial: 0])
         let falsePredicate = predicate(1)
         let truePredicate = predicate(0)
-        let cases: [(String, TemporalExpr)] = [
+        let cases: [(String, TemporalCondition<StateExpr>)] = [
             ("always", .always(falsePredicate)),
             ("eventually", .eventually(falsePredicate)),
             ("alwaysEventually", .alwaysEventually(falsePredicate)),
@@ -162,7 +162,7 @@ struct LivenessConformanceTests {
         let graph = try graph(transitions: [:], values: [initial: 0])
         let falsePredicate = predicate(1)
         let truePredicate = predicate(0)
-        let properties: [TemporalExpr] = [
+        let properties: [TemporalCondition<StateExpr>] = [
             .always(truePredicate),
             .eventually(truePredicate),
             .alwaysEventually(truePredicate),
@@ -366,7 +366,7 @@ struct LivenessConformanceTests {
             values: [initial: 0, disabled: 0, terminal: 1]
         )
         let actions = [action("A"), action("B"), action("C"), action("done")]
-        let property = TemporalExpr.alwaysEventually(predicate(1))
+        let property = TemporalCondition<StateExpr>.alwaysEventually(predicate(1))
         let cases: [(String, [FairnessCondition])] = [
             ("none", []),
             ("weak", [.weakFairness("A")]),

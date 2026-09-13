@@ -115,16 +115,6 @@ package struct AlgorithmModel: Sendable {
             return lowerAnonymousLambdas(family.replacingCurrentProcess(with: .variable("self")))
         }
 
-        func temporal(_ value: TemporalExpr) -> TemporalExpr {
-            switch value {
-            case .always(let predicate): return .always(expression(predicate))
-            case .eventually(let predicate): return .eventually(expression(predicate))
-            case .alwaysEventually(let predicate): return .alwaysEventually(expression(predicate))
-            case .eventuallyAlways(let predicate): return .eventuallyAlways(expression(predicate))
-            case .leadsTo(let source, let destination): return .leadsTo(expression(source), expression(destination))
-            }
-        }
-
         func initialization(_ value: VariableInitialization) -> VariableInitialization {
             switch value {
             case .value: return value
@@ -309,7 +299,7 @@ package struct AlgorithmModel: Sendable {
             case .invariant(let invariant):
                 return .invariant(.init(name: invariant.name, body: expression(invariant.body)))
             case .temporal(let declaration):
-                return .temporal(.init(name: declaration.name, expr: temporal(declaration.expr)))
+                return .temporal(.init(name: declaration.name, expr: declaration.expr.map(expression)))
             case .invalidPlacement:
                 return value
             case .formalOperator(let definition):

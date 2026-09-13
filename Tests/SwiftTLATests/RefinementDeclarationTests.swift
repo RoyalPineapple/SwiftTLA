@@ -6,6 +6,31 @@ import Testing
 
 @Suite("typed refinement declarations")
 struct RefinementDeclarationTests {
+  @Test("abstract specialization substitutes parameters in every temporal predicate")
+  func specializesTemporalPredicates() throws {
+    let value = Var<Int>("value")
+    let limit = Var<Int>("Limit")
+    let abstract = TLASpec("AbstractTemporal") {
+      Parameter("Limit")
+      Variable(value, 3)
+      Action("stay") { value.stays }
+      Always("Always", value == limit)
+      Eventually("Eventually", value == limit)
+      AlwaysEventually("Recurring", value == limit)
+      EventuallyAlways("Stable", value == limit)
+      LeadsTo("Progress", value < limit, value == limit)
+    }
+    let specialized = abstract.specializing(parameters: ["Limit": .value(.int(3))])
+    let compilation = try specialized.compile()
+    let runtime = CompiledRuntime(compilation: compilation)
+    let initial = try #require(try runtime.initialStates().first)
+    let results = try Dictionary(uniqueKeysWithValues: compilation.semantics.behavior.temporalProperties.map { property in
+      (property.name, try property.expression.predicates.map { try runtime.predicateHolds($0, in: initial) })
+    })
+    #expect(results == ["Always": [true], "Eventually": [true], "Recurring": [true],
+      "Stable": [true], "Progress": [false, true]])
+  }
+
   @Test("direct module rendering follows linked instance declarations")
   func rendersLinkedTarget() throws {
     let state = Var<Int>("state", 0)

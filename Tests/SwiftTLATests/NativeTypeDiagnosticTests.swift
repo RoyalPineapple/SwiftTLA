@@ -324,13 +324,13 @@ import Testing
     }
 
     @Test("Temporal predicates retain Boolean types and resolved operands", arguments: [
-        TemporalExpr.always(.equal(.variable("count"), .value(.int(0)))),
+        TemporalCondition<StateExpr>.always(.equal(.variable("count"), .value(.int(0)))),
         .eventually(.equal(.variable("count"), .value(.int(0)))),
         .alwaysEventually(.equal(.variable("count"), .value(.int(0)))),
         .eventuallyAlways(.equal(.variable("count"), .value(.int(0)))),
         .leadsTo(.equal(.variable("count"), .value(.int(0))), .value(.bool(true)))
     ])
-    func resolvedTemporalPredicates(_ property: TemporalExpr) throws {
+    func resolvedTemporalPredicates(_ property: TemporalCondition<StateExpr>) throws {
         let specification = TLASpec(name: "TemporalTypes", variables: [
             .init(name: "count", initial: .int(0))
         ], actions: [], invariants: [], temporalProperties: [.init(name: "Progress", expr: property)])
@@ -360,14 +360,14 @@ import Testing
     }
 
     @Test("Temporal predicate type errors identify the property", arguments: [
-        TemporalExpr.always(.value(.int(1))),
+        TemporalCondition<StateExpr>.always(.value(.int(1))),
         .eventually(.value(.int(1))),
         .alwaysEventually(.value(.int(1))),
         .eventuallyAlways(.value(.int(1))),
         .leadsTo(.value(.int(1)), .value(.bool(true))),
         .leadsTo(.value(.bool(true)), .value(.int(1)))
     ])
-    func temporalPredicateDiagnostics(_ property: TemporalExpr) throws {
+    func temporalPredicateDiagnostics(_ property: TemporalCondition<StateExpr>) throws {
         let specification = TLASpec(name: "InvalidTemporalType", variables: [], actions: [], invariants: [],
             temporalProperties: [.init(name: "Progress", expr: property)])
         let compilation = try specification.compile()

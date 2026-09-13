@@ -26,3 +26,23 @@ public enum TemporalCondition<Expression: Sendable>: Sendable {
     }
 }
 
+extension TemporalCondition: Equatable where Expression: Equatable {}
+extension TemporalCondition: Hashable where Expression: Hashable {}
+
+extension TemporalCondition: CustomStringConvertible where Expression: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .always(let predicate): "[](\(predicate))"
+        case .eventually(let predicate): "<>(\(predicate))"
+        case .alwaysEventually(let predicate): "[]<>(\(predicate))"
+        case .eventuallyAlways(let predicate): "<>[](\(predicate))"
+        case .leadsTo(let source, let target): "(\(source) ~> \(target))"
+        }
+    }
+}
+
+extension TypedExpression where ExpressionValue == Bool {
+    public func leadsTo(_ target: some TypedExpression<Bool>) -> TemporalCondition<StateExpr> {
+        .leadsTo(stateExpr, target.stateExpr)
+    }
+}

@@ -1080,7 +1080,7 @@ private struct CanonicalSpecificationEncoder {
         node("action", [alphaKey(expression, bindingNames: bindingNames)])
     }
 
-    private func canonicalTemporal(_ expression: TemporalExpr) -> String {
+    private func canonicalTemporal(_ expression: TemporalCondition<StateExpr>) -> String {
         node("temporal", [alphaKey(expression)])
     }
 

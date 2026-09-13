@@ -534,7 +534,7 @@ extension ParserSession {
     ) -> NamedTemporal? {
         guard let name = extractStringArg(call, index: 0) else { return nil }
         let arguments = Array(call.arguments).map(\.expression)
-        let expression: TemporalExpr?
+        let expression: TemporalCondition<StateExpr>?
         switch construct {
         case .leadsTo:
             guard arguments.count == 3,
@@ -543,13 +543,13 @@ extension ParserSession {
             else { return nil }
             expression = .leadsTo(from, to)
         case .eventually:
-            expression = arguments.count == 2 ? decodeTypedFacadeValue(arguments[1], scope: scope).map(TemporalExpr.eventually) : nil
+            expression = arguments.count == 2 ? decodeTypedFacadeValue(arguments[1], scope: scope).map(TemporalCondition<StateExpr>.eventually) : nil
         case .always:
-            expression = arguments.count == 2 ? decodeTypedFacadeValue(arguments[1], scope: scope).map(TemporalExpr.always) : nil
+            expression = arguments.count == 2 ? decodeTypedFacadeValue(arguments[1], scope: scope).map(TemporalCondition<StateExpr>.always) : nil
         case .alwaysEventually:
-            expression = arguments.count == 2 ? decodeTypedFacadeValue(arguments[1], scope: scope).map(TemporalExpr.alwaysEventually) : nil
+            expression = arguments.count == 2 ? decodeTypedFacadeValue(arguments[1], scope: scope).map(TemporalCondition<StateExpr>.alwaysEventually) : nil
         case .eventuallyAlways:
-            expression = arguments.count == 2 ? decodeTypedFacadeValue(arguments[1], scope: scope).map(TemporalExpr.eventuallyAlways) : nil
+            expression = arguments.count == 2 ? decodeTypedFacadeValue(arguments[1], scope: scope).map(TemporalCondition<StateExpr>.eventuallyAlways) : nil
         default:
             return nil
         }
