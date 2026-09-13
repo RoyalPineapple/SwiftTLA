@@ -1,4 +1,18 @@
 import Foundation
+import SwiftTLA
+
+/// A named model property and deadlock freedom are independent checks.
+package enum ModelCheck: Equatable, Encodable, Sendable {
+  case property(String)
+  case deadlock
+
+  package func bundle(from rendered: RenderedSpecification) throws -> TLAModuleBundle {
+    switch self {
+    case .property(let name): try rendered.tlaBundle(checking: [name], checkDeadlock: false)
+    case .deadlock: try rendered.tlaBundle(checking: [], checkDeadlock: true)
+    }
+  }
+}
 
 package enum PropertyComparisonStatus: String, Codable, Sendable {
   case exact
@@ -12,14 +26,14 @@ package struct PropertyComparison: Equatable, Encodable, Sendable {
 
   package let schema: String
   package let caseID: String
-  package let property: String
+  package let check: ModelCheck
   package let status: PropertyComparisonStatus
   package let swiftResult: PropertyResult
   package let tlcResult: PropertyResult
 
   package init(
     caseID: String,
-    property: String,
+    check: ModelCheck,
     swiftRun: GraphRun,
     tlcRun: GraphRun,
     swiftResult: PropertyResult,
@@ -28,11 +42,19 @@ package struct PropertyComparison: Equatable, Encodable, Sendable {
     guard swiftRun.isComparable, tlcRun.isComparable else {
       throw EvidenceFormatError.invalidField(record: caseID, field: "incomplete comparison graph")
     }
-    if case .violated(let trace) = swiftResult { try trace.validate(in: swiftRun.graph) }
-    if case .violated(let trace) = tlcResult { try trace.validate(in: tlcRun.graph) }
+    for (result, graph) in [(swiftResult, swiftRun.graph), (tlcResult, tlcRun.graph)] {
+      guard case .violated(let trace) = result else { continue }
+      try trace.validate(in: graph)
+      if check == .deadlock {
+        guard trace.cycleStartIndex == nil, let final = trace.steps.last,
+              !graph.edges.contains(where: { $0.source == final.state }) else {
+          throw EvidenceFormatError.invalidField(record: caseID, field: "deadlock counterexample")
+        }
+      }
+    }
     self.schema = Self.schema
     self.caseID = caseID
-    self.property = property
+    self.check = check
     self.swiftResult = swiftResult
     self.tlcResult = tlcResult
     guard !caseID.isEmpty else {

@@ -171,7 +171,7 @@ package struct TemporalSymmetryCheck: Sendable {
       invocation: .propertyCheck, toolchain: toolchain, referencePin: referencePin,
       projectRoot: projectRoot, evidenceRoot: evidenceRoot)
     return try TLCPropertyCheck().capture(TLCPropertyCheckInput(
-      property: property, request: request,
+      check: .property(property), request: request,
       completeGraph: completeGraph, swiftRun: native.graph, swiftResult: check,
       rendered: native.rendered, outputDirectory: outputDirectory))
   }

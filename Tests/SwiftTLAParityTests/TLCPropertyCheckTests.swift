@@ -46,7 +46,7 @@ struct TLCPropertyCheckTests {
 
   @Test("property reports retain results without copying shared graphs", arguments: ["AlwaysEventuallyP", "Positive"])
   func retainsResultsWithoutGraphCopies(property: String) throws {
-    let fixture = try Fixture(property: property)
+    let fixture = try Fixture(check: .property(property))
     let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try completedGraph(stream, for: fixture.launchCase)
     let swiftResult = PropertyResult.satisfied
@@ -144,19 +144,19 @@ struct TLCPropertyCheckTests {
     let fixture = try Fixture()
     #expect(throws: TLCPropertyCheckError.configurationMismatch) {
       try TLCPropertyCheck(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))
-        .capture(try fixture.input(property: "EventuallyP"))
+        .capture(try fixture.input(check: .property("EventuallyP")))
     }
   }
 
   @Test("declared property names need no validation registry entry")
   func checksCustomProperty() throws {
-    let fixture = try Fixture(property: "CustomProgress")
+    let fixture = try Fixture(check: .property("CustomProgress"))
     let comparison = try TLCPropertyCheck(
       processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
         propertyStream: graphStream(case: fixture.launchCase, runID: fixture.request.runID),
         propertyResult: Fixture.success)))
       .capture(try fixture.input(swiftResult: .satisfied))
-    #expect(comparison.property == "CustomProgress")
+    #expect(comparison.check == .property("CustomProgress"))
     #expect(comparison.status == .exact)
   }
 
@@ -246,7 +246,7 @@ struct TLCPropertyCheckTests {
 
   @Test("initial safety violations use the same property checker", arguments: ["AlwaysP", "IsTwo"])
   func bindsInitialSafetyViolation(property: String) throws {
-    let fixture = try Fixture(property: property)
+    let fixture = try Fixture(check: .property(property))
     let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try completedGraph(stream, for: fixture.launchCase)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
@@ -267,9 +267,51 @@ struct TLCPropertyCheckTests {
     #expect(retained.steps.map { $0.state.canonicalEncoding } == [state])
   }
 
+  @Test("deadlock checks retain finite counterexamples independently of named properties")
+  func retainsDeadlock() throws {
+    let fixture = try Fixture(check: .deadlock)
+    let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
+    let trace = try numberedInitialStateTrace()
+    let nativeTrace = try TLCTraceParser().parseCounterexample(trace)
+    let comparison = try TLCPropertyCheck(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
+      propertyStream: stream, propertyResult: .init(status: 11, stdout: "Deadlock reached.", stderr: ""), trace: trace)))
+      .capture(try fixture.input(swiftResult: .violated(nativeTrace)))
+    #expect(comparison.status == .exact)
+    #expect(comparison.check == .deadlock)
+    #expect(counterexample(in: comparison.tlcResult)?.cycleStartIndex == nil)
+  }
+
+  @Test("a deadlock counterexample must end at a state without outgoing transitions", arguments: [false, true])
+  func rejectsFalseDeadlock(nativeFailure: Bool) throws {
+    let fixture = try Fixture(check: .deadlock)
+    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
+    let graph = try completedGraph(stream, for: fixture.launchCase)
+    let shared = try fixture.captureGraph(stream: temporalGraphStream(
+      case: fixture.completeGraphCase, runID: fixture.completeGraphRequest.runID))
+    let trace = try numberedInitialStateTrace()
+    let nativeResult: PropertyResult = nativeFailure
+      ? .violated(try TLCTraceParser().parseCounterexample(trace)) : .satisfied
+    let tlcResult = nativeFailure ? Fixture.success : TLCProcessResult(status: 11, stdout: "Deadlock reached.", stderr: "")
+    #expect(throws: EvidenceFormatError.self) {
+      try TLCPropertyCheck(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
+        propertyStream: stream, propertyResult: tlcResult, trace: trace)))
+        .capture(try fixture.input(completeGraph: shared, swiftRun: graph, swiftResult: nativeResult))
+    }
+  }
+
+  @Test("a named property failure cannot satisfy a deadlock check")
+  func rejectsWrongFailureKind() throws {
+    let fixture = try Fixture(check: .deadlock)
+    let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
+    let comparison = try TLCPropertyCheck(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
+      propertyStream: stream, propertyResult: Fixture.safetyViolation, trace: numberedInitialStateTrace())))
+      .capture(try fixture.input(swiftResult: .satisfied))
+    #expect(comparison.status == .unavailable)
+  }
+
   @Test("safety counterexamples retain finite paths without inventing a cycle")
   func retainsFiniteSafetyPath() throws {
-    let fixture = try Fixture(property: "AlwaysP")
+    let fixture = try Fixture(check: .property("AlwaysP"))
     let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try completedGraph(stream, for: fixture.launchCase)
     let first: [Any] = [1, ["x": 1]]
@@ -328,7 +370,7 @@ struct TLCPropertyCheckTests {
     let trace = GraphTrace(id: "foreign", steps: [
       .init(state: CanonicalState(bindings: ["x": .integer(99)]).key, action: nil)])
     #expect(throws: GraphRunError.self) {
-      try PropertyComparison(caseID: "foreign", property: fixture.property,
+      try PropertyComparison(caseID: "foreign", check: fixture.check,
         swiftRun: fixture.swiftRun, tlcRun: fixture.swiftRun,
         swiftResult: .violated(trace), tlcResult: .satisfied)
     }
@@ -503,14 +545,14 @@ struct TLCPropertyCheckTests {
     let output: URL
     let launchCase: FiniteGraphCase
     let completeGraphCase: FiniteGraphCase
-    let property: String
+    let check: ModelCheck
     let request: TLCProcessRequest
     let completeGraphRequest: TLCProcessRequest
     let swiftRun: GraphRun
     let rendered: RenderedSpecification
 
-    init(property: String = "AlwaysEventuallyP", completeGraphStateLimit: Int = 10) throws {
-      self.property = property
+    init(check: ModelCheck = .property("AlwaysEventuallyP"), completeGraphStateLimit: Int = 10) throws {
+      self.check = check
       root = FileManager.default.temporaryDirectory.appendingPathComponent("TLCPropertyCheckTests-\(UUID())")
       module = root.appendingPathComponent("TemporalFixture.tla")
       configuration = root.appendingPathComponent("TemporalFixture.cfg")
@@ -530,7 +572,7 @@ struct TLCPropertyCheckTests {
         LeadsTo("LeavesZero", x == 0, x != 0)
         Eventually("CustomProgress", x == 2)
       }.compile().render()
-      let propertyBundle = try rendered.tlaBundle(checking: [property], checkDeadlock: false)
+      let propertyBundle = try check.bundle(from: rendered)
       let graphBundle = try rendered.tlaBundle(checking: [], checkDeadlock: false)
       try Data(propertyBundle.tla.utf8).write(to: module)
       try Data(propertyBundle.cfg.utf8).write(to: configuration)
@@ -573,12 +615,12 @@ struct TLCPropertyCheckTests {
       swiftResult: PropertyResult? = nil,
       request: TLCProcessRequest? = nil,
       completeGraphRequest: TLCProcessRequest? = nil,
-      property: String? = nil,
+      check: ModelCheck? = nil,
       outputDirectory: URL? = nil
     ) throws -> TLCPropertyCheckInput {
       let graphResult = swiftResult ?? .unavailable
       return TLCPropertyCheckInput(
-        property: property ?? self.property,
+        check: check ?? self.check,
         request: request ?? self.request,
         completeGraph: try completeGraph ?? captureGraph(request: completeGraphRequest),
         swiftRun: swiftRun ?? self.swiftRun,

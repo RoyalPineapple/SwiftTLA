@@ -2,7 +2,7 @@ import Foundation
 import SwiftTLA
 
 package struct TLCPropertyCheckInput: Sendable {
-  package let property: String
+  package let check: ModelCheck
   package let request: TLCProcessRequest
   package let completeGraph: TLCProcessCapture
   package let swiftRun: GraphRun
@@ -11,7 +11,7 @@ package struct TLCPropertyCheckInput: Sendable {
   package let outputDirectory: URL
 
   package init(
-    property: String,
+    check: ModelCheck,
     request: TLCProcessRequest,
     completeGraph: TLCProcessCapture,
     swiftRun: GraphRun,
@@ -19,7 +19,7 @@ package struct TLCPropertyCheckInput: Sendable {
     rendered: RenderedSpecification,
     outputDirectory: URL
   ) {
-    self.property = property
+    self.check = check
     self.request = request
     self.completeGraph = completeGraph
     self.swiftRun = swiftRun
@@ -57,12 +57,12 @@ package struct TLCPropertyCheck: Sendable {
       throw TLCPropertyCheckError.graphEvidenceInvalid
     }
     let tlcOutcome = try propertyResult(
-      outcome: capture.outcome,
+      check: input.check, outcome: capture.outcome,
       graph: completeGraph,
       outputDirectory: input.outputDirectory)
     let comparison = try PropertyComparison(
       caseID: input.request.caseID,
-      property: input.property,
+      check: input.check,
       swiftRun: input.swiftRun,
       tlcRun: completeGraph,
       swiftResult: input.swiftResult,
@@ -81,8 +81,7 @@ package struct TLCPropertyCheck: Sendable {
       throw TLCPropertyCheckError.requestMismatch
     }
     let request = input.request.finiteGraphCase
-    let expected = try input.rendered.tlaBundle(
-      checking: [input.property], checkDeadlock: false)
+    let expected = try input.check.bundle(from: input.rendered)
     guard input.request.bundle == expected else {
       throw TLCPropertyCheckError.configurationMismatch
     }
@@ -131,21 +130,25 @@ package struct TLCPropertyCheck: Sendable {
 
 extension TLCPropertyCheck {
   private func propertyResult(
-    outcome: TLCExecutionOutcome,
+    check: ModelCheck, outcome: TLCExecutionOutcome,
     graph: GraphRun,
     outputDirectory: URL
   ) throws -> PropertyResult {
     if outcome == .completed {
       return .satisfied
     }
-    guard outcome == .safetyViolation || outcome == .livenessViolation,
+    let expectedViolation = switch check {
+    case .property: outcome == .safetyViolation || outcome == .livenessViolation
+    case .deadlock: outcome == .deadlock
+    }
+    guard expectedViolation,
           FileManager.default.fileExists(atPath: outputDirectory.appendingPathComponent("counterexample.json").path) else {
       return .unavailable
     }
     let trace = try TLCTraceParser().parseCounterexample(
       Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json")))
-    return .violated(try boundTrace(trace, to: graph.graph,
-      requiresCycle: outcome == .livenessViolation))
+    let bound = try boundTrace(trace, to: graph.graph, requiresCycle: outcome == .livenessViolation)
+    return .violated(bound)
   }
 
   private func boundTrace(
