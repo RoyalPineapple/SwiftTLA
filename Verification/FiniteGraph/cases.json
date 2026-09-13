@@ -157,6 +157,55 @@
       "moduleSHA256": "1d67d71c71ba69612c1537630b514d70766f408234da2ac36526da35e4700022",
       "cfgSHA256": "e749e11984b6c3aab9f2efb06fa2abbbbd86361f6e5f0725d5e1f1358a68e136",
       "timeoutSeconds": 600
+    },
+    {
+      "sourceModel": "kvsnap",
+      "module": "kvsnap/MCKVsnap.tla",
+      "configuration": "kvsnap/MCKVsnap.cfg",
+      "imports": [
+        "kvsnap/KVsnap.tla",
+        "kvsnap/ClientCentric.tla",
+        "kvsnap/Util.tla",
+        "kvsnap/Functions.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCKVsnap",
+          "importedModule": "KVsnap"
+        },
+        {
+          "importingModule": "KVsnap",
+          "importedModule": "Util"
+        },
+        {
+          "importingModule": "KVsnap",
+          "importedModule": "ClientCentric"
+        },
+        {
+          "importingModule": "ClientCentric",
+          "importedModule": "Util"
+        },
+        {
+          "importingModule": "Util",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/KeyValueStore/MCKVsnap.tla",
+        "sha256": "c500a1abde66e13467cdb882071601e9b1442487c47510348ded4e86b34e9329"
+      },
+      "exploration": {
+        "maximumStateLimit": 250000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c500a1abde66e13467cdb882071601e9b1442487c47510348ded4e86b34e9329",
+      "cfgSHA256": "a3971f2e748e54bff7cab9cb15b9c23ff829edcf54b134a2d8b88bdeec4e4892",
+      "timeoutSeconds": 600
     }
   ]
 }
