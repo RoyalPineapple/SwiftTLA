@@ -124,6 +124,30 @@
       },
       "moduleSHA256": "998f02144752a51a35e4237b52758341b8bfeb95b47457738441262f8a506309",
       "cfgSHA256": "009c66f37d8ea5b247424ae2795358e6d0787e2c272fb71ba04db06e4b963f2b"
+    },
+    {
+      "sourceModel": "voteproof",
+      "module": "voteproof/VoteProof.tla",
+      "configuration": "voteproof/VoteProof.cfg",
+      "imports": [
+        "voteproof/Consensus.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "VoteProof",
+          "importedModule": "Consensus"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/byzpaxos/VoteProof.tla",
+        "sha256": "89f9ca0345801ed0834542c1332bc2b6bb3feb9a95da40d750793e8948d696da"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "658c477a90be6e5ef464c01a84a5a6925049639fcab644cd27e8924232ac4a47",
+      "cfgSHA256": "e749e11984b6c3aab9f2efb06fa2abbbbd86361f6e5f0725d5e1f1358a68e136"
     }
   ]
 }

@@ -3,13 +3,6 @@ import Testing
 import UpstreamParity
 
 struct VoteProofCorpusExecutionTests {
-    @Test("Native refinement generation admits VoteProof to bounded exploration")
-    func admitsNativeRefinement() throws {
-        #expect(throws: ExplorationError.stateLimitExceeded(1)) {
-            try ReachabilityGraph(initialMachines: VoteProofModel.initialMachines(), maximumStates: 1)
-        }
-    }
-
     @Test("Native voting guards, invariants and ambiguity agree with the formal corpus")
     func nativeVotingRelation() throws {
         let compilation = try VoteProofModel.spec.compile()

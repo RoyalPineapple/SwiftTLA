@@ -307,6 +307,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
 package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, Sendable {
     case channel
     case boulanger
+    case voteProof = "voteproof"
     case asynchInterface = "asynch-interface"
     case hourClock = "hour-clock"
     case dieHardTypeOK = "die-hard-type-ok"
@@ -321,6 +322,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         }
         switch self {
         case .boulanger: return try explore(BoulangerModel.initialMachines())
+        case .voteProof: return try explore(VoteProofModel.initialMachines())
         case .channel: return try explore(ChannelModel.initialMachines())
         case .asynchInterface: return try explore(AsynchInterfaceModel.initialMachines())
         case .hourClock: return try explore(HourClockModel.initialMachines())
@@ -334,6 +336,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     package var spec: TLASpec {
         switch self {
         case .boulanger: BoulangerModel.spec
+        case .voteProof: VoteProofModel.spec
         case .channel: ChannelModel.spec
         case .asynchInterface: AsynchInterfaceModel.spec
         case .hourClock: Example.hourClock.spec
