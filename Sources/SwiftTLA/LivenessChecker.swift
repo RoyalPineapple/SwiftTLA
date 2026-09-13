@@ -88,10 +88,35 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
     let transitions: [StateGraph.StateID: [GraphEdge<Action>]]
     let matches: (Action, Scope) -> Bool
     let actionOrder: (Action, Action) -> Bool
+    private let fairness: [(scope: Scope, isStrong: Bool)]
+    private let enabled: [Scope: [StateGraph.StateID: Bool]]
+
+    init(
+        states: Set<StateGraph.StateID>,
+        transitions: [StateGraph.StateID: [GraphEdge<Action>]],
+        fairness: [(scope: Scope, isStrong: Bool)],
+        matches: @escaping (Action, Scope) -> Bool,
+        actionOrder: @escaping (Action, Action) -> Bool
+    ) {
+        self.states = states
+        self.transitions = transitions
+        self.fairness = fairness
+        self.matches = matches
+        self.actionOrder = actionOrder
+        enabled = Dictionary(uniqueKeysWithValues: Set(fairness.map(\.scope)).map { scope in
+            let values = Dictionary(uniqueKeysWithValues: states.map { state in
+                let isEnabled = (transitions[state] ?? []).contains { edge in
+                    guard let action = edge.action else { return false }
+                    return matches(action, scope) && edge.target != state
+                }
+                return (state, isEnabled)
+            })
+            return (scope, values)
+        })
+    }
 
     func analyze(
         _ property: TemporalCondition<@Sendable (StateGraph.StateID) throws -> Bool>,
-        fairness: [(scope: Scope, isStrong: Bool)],
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true,
         renderScope: (Scope) throws -> String
@@ -120,7 +145,6 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
         case .leadsTo(_, let target): predicate = target
         }
         let negative = try states.filter { try !predicate($0) }
-        let enabled = enabledness(for: fairness)
         let allStates = states
         let search: LassoSearch
 
@@ -193,19 +217,6 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
     private func matches(_ edge: GraphEdge<Action>, _ scope: Scope) -> Bool {
         guard let action = edge.action else { return false }
         return matches(action, scope)
-    }
-
-    private func enabledness(for fairness: [(scope: Scope, isStrong: Bool)]) -> [Scope: [StateGraph.StateID: Bool]] {
-        Dictionary(
-            uniqueKeysWithValues: Set(fairness.map(\.scope)).map { scope in
-                let states = Dictionary(uniqueKeysWithValues: self.states.map { state in
-                    (state, explicitEdges(from: state).contains { edge in
-                        matches(edge, scope) && (edge.target == state) == false
-                    })
-                })
-                return (scope, states)
-            }
-        )
     }
 
     private func fairComponents(

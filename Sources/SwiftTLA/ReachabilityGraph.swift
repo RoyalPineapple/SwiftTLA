@@ -131,6 +131,7 @@ extension ReachabilityGraph {
                         target: identities[successor.target]!)
                 })
             }),
+            fairness: fairness.indices.map { ($0, fairness[$0].isStrong) },
             matches: { action, scope in fairness[scope].matches(action) },
             actionOrder: { actionNames[$0]! < actionNames[$1]! }
         )
@@ -139,7 +140,7 @@ extension ReachabilityGraph {
                 { try predicate(snapshots[$0.id]) }
             }
             return try checker.analyze(
-                predicates, fairness: fairness.indices.map { ($0, fairness[$0].isStrong) },
+                predicates,
                 initialStateIDs: initialStates.map { identities[$0]! },
                 renderScope: { fairness[$0].name }
             ).map(state: { snapshots[$0.id] }, action: { $0 })

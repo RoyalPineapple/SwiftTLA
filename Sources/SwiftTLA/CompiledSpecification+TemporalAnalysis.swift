@@ -26,6 +26,7 @@ extension CompiledSpecification {
                     return GraphEdge(source: source, action: call, target: successor.target)
                 })
             }),
+            fairness: semantics.behavior.fairness.map { ($0.scope, $0.isStrong) },
             matches: { call, scope in
                 switch scope {
                 case .next: return true
@@ -74,7 +75,7 @@ extension CompiledSpecification {
                 expression = property.expression.map { predicate($0) }
             }
             return try checker.analyze(
-                expression, fairness: semantics.behavior.fairness.map { ($0.scope, $0.isStrong) },
+                expression,
                 initialStateIDs: initialStateIDs, isComplete: isComplete,
                 renderScope: { scope in
                     switch scope {
