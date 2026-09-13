@@ -509,10 +509,11 @@ extension TLCGraphReaderTests {
     }
   }
 
-  @Test("an unchanged action name does not require invocation decoding")
-  func retainsUnchangedActionNames() throws {
-    let action = RenderedAction(sourceName: "Next", arguments: [], renderedName: "Next")
-    let finiteGraphCase = try fixtureCase(try toolchainPin(), renderedActions: [action])
+  @Test("argument-free actions resolve alongside parameterized actions", arguments: ["Next", "NextAlias"])
+  func resolvesMixedActionArities(_ renderedName: String) throws {
+    let action = RenderedAction(sourceName: "Next", arguments: [], renderedName: renderedName)
+    let parameterized = RenderedAction(sourceName: "Step", arguments: [.int(0)], renderedName: "Step__0")
+    let finiteGraphCase = try fixtureCase(try toolchainPin(), renderedActions: [action, parameterized])
     let stream = try refreshedFooterDigest(Data(String(
       decoding: completeGraphStream(finiteGraphCase), as: UTF8.self
     ).replacingOccurrences(
@@ -522,7 +523,7 @@ extension TLCGraphReaderTests {
 
     let parsed = try TLCGraphReader(finiteGraphCase: finiteGraphCase).parse(stream)
 
-    #expect(parsed.transitions.map(\.action) == ["Next"])
+    #expect(parsed.transitions.map(\.action) == [renderedName])
   }
 
   @Test("reduced TLC fingerprint aliases must belong to the declared symmetry orbit")

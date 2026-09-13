@@ -41,14 +41,13 @@ package struct TLCGraphEventStream: Equatable, Sendable {
 
 package struct TLCGraphReader: Sendable {
     private let finiteGraphCase: FiniteGraphCase
-    private let invocationWrappers: [String: String]
+    private let renderedActions: [String: String]
 
     package init(finiteGraphCase: FiniteGraphCase) {
         self.finiteGraphCase = finiteGraphCase
-        self.invocationWrappers = Dictionary(
-            uniqueKeysWithValues: finiteGraphCase.renderedActions.compactMap {
-                guard $0.sourceInvocationName != $0.renderedName else { return nil }
-                return (
+        self.renderedActions = Dictionary(
+            uniqueKeysWithValues: finiteGraphCase.renderedActions.map {
+                (
                     tlaInvocationLocationIdentity(
                         action: $0.sourceName,
                         arguments: $0.arguments.map(\.description)
@@ -332,9 +331,11 @@ package struct TLCGraphReader: Sendable {
     }
 
     private func resolvedAction(name: String, location: String, line: Int) throws -> String {
-        guard !invocationWrappers.isEmpty else { return name }
+        guard !renderedActions.isEmpty else { return name }
+        let directIdentity = tlaInvocationLocationIdentity(action: name, arguments: [])
+        if let directName = renderedActions[directIdentity] { return directName }
         let identity = try actionLocationIdentity(name: name, location: location, line: line)
-        guard let wrapper = invocationWrappers[identity] else {
+        guard let wrapper = renderedActions[identity] else {
             throw TLCGraphEventError.invalidRecord(line: line, reason: "undeclared invocation identity")
         }
         return wrapper
