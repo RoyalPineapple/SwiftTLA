@@ -531,9 +531,9 @@ extension TLCGraphReaderTests {
     let finiteGraphCase = try fixtureCase(try toolchainPin())
     let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
     let parsed = try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: true))
-    #expect(parsed.transitions.count == 2)
-    #expect(parsed.transitions[0].target == parsed.transitions[1].target)
-    #expect(parsed.fingerprintRepresentatives["2"] == parsed.transitions[0].target)
+    #expect(parsed.transitions.count == 1)
+    #expect(Set(parsed.transitions.map(\.target)) == ["2"])
+    #expect(parsed.states["2"]?.bindings.first?.tla == "A")
     #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "fingerprint binding mismatch")) {
       try reader.parse(try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: false, aliasValue: "B"))
     }
@@ -552,8 +552,9 @@ extension TLCGraphReaderTests {
     let reduced = try TLCGraphReader(finiteGraphCase: reducedCase).parse(
       try fingerprintAliasGraphStream(reducedCase, aliasSeen: true, aliasValue: "B")
     )
-    #expect(reduced.transitions.count == 2)
-    #expect(reduced.transitions[0].target == reduced.transitions[1].target)
+    #expect(reduced.transitions.count == 1)
+    #expect(Set(reduced.transitions.map(\.target)) == ["2"])
+    #expect(reduced.states["2"]?.bindings.first?.tla == "A")
     #expect(throws: TLCGraphEventError.invalidRecord(
       line: 4, reason: "fingerprint binding outside declared symmetry orbit")) {
       try TLCGraphReader(finiteGraphCase: reducedCase).parse(try fingerprintAliasGraphStream(

@@ -1,4 +1,5 @@
 import CoreFoundation
+import CryptoKit
 import Foundation
 
 package enum TLCGraphEventError: Error, Equatable, Sendable {
@@ -20,23 +21,22 @@ package struct TLCBinding: Equatable, Sendable {
 
 package struct TLCGraphState: Equatable, Sendable {
     package let fingerprint: String
-    package let level: Int
     package let bindings: [TLCBinding]
 }
 
-package struct TLCGraphTransition: Equatable, Sendable {
-    package let source: TLCGraphState
-    package let target: TLCGraphState
+/// A validated transition between TLC state fingerprints.
+package struct TLCGraphTransition: Hashable, Sendable {
+    package let source: String
+    package let target: String
     package let action: String
-    package let seen: Bool
 }
 
 package struct TLCGraphEventStream: Equatable, Sendable {
     package let runID: UUID
     package let caseID: String
-    package let fingerprintRepresentatives: [String: TLCGraphState]
-    package let initialStates: [TLCGraphState]
-    package let transitions: [TLCGraphTransition]
+    package let states: [String: TLCGraphState]
+    package let initialStates: Set<String>
+    package let transitions: Set<TLCGraphTransition>
 }
 
 package struct TLCGraphReader: Sendable {
@@ -68,12 +68,13 @@ package struct TLCGraphReader: Sendable {
         guard !records.isEmpty else { throw TLCGraphEventError.missingFooter }
 
         var runID: UUID?
-        var initialStates: [TLCGraphState] = []
-        var transitions: [TLCGraphTransition] = []
+        var initialStates: Set<String> = []
+        var transitions: Set<TLCGraphTransition> = []
         var representatives: [String: TLCGraphState] = [:]
         var counts: [String: Int] = [:]
         var footer: [String: Any]?
-        var body = Data()
+        var bodyHash = CryptoKit.SHA256()
+        let newline = Data([10])
 
         for (index, bytes) in records.enumerated() {
             let line = index + 1
@@ -96,7 +97,7 @@ package struct TLCGraphReader: Sendable {
                 }
                 let state = try parseState(try dictionary(object, "state", line), line: line)
                 try registerRepresentative(state, in: &representatives, line: line)
-                initialStates.append(state)
+                initialStates.insert(state.fingerprint)
             case "transition":
                 try exactKeys(object, [
                     "schema", "version", "type", "callback", "seq", "runId", "caseId", "source",
@@ -142,11 +143,8 @@ package struct TLCGraphReader: Sendable {
                     } else {
                         try registerRepresentative(target, in: &representatives, line: line)
                     }
-                    transitions.append(TLCGraphTransition(
-                        source: source,
-                        target: target,
-                        action: resolvedAction,
-                        seen: seen
+                    transitions.insert(TLCGraphTransition(
+                        source: source.fingerprint, target: target.fingerprint, action: resolvedAction
                     ))
                 }
             case "unsupported":
@@ -167,8 +165,8 @@ package struct TLCGraphReader: Sendable {
             }
             if type != "footer" {
                 counts[type, default: 0] += 1
-                body.append(lineData)
-                body.append(10)
+                bodyHash.update(data: lineData)
+                bodyHash.update(data: newline)
             }
         }
 
@@ -177,7 +175,8 @@ package struct TLCGraphReader: Sendable {
         guard try int(footer, "lastBodySeq", records.count) == records.count - 2 else {
             throw TLCGraphEventError.invalidFooter("last body sequence")
         }
-        guard try string(footer, "bodySha256", records.count) == SHA256.hex(body) else { throw TLCGraphEventError.invalidFooter("body digest") }
+        let digest = bodyHash.finalize().map { String(format: "%02x", $0) }.joined()
+        guard try string(footer, "bodySha256", records.count) == digest else { throw TLCGraphEventError.invalidFooter("body digest") }
         let footerCounts = try dictionary(footer, "counts", records.count)
         for (type, count) in counts {
             guard try int(footerCounts, type, records.count) == count else {
@@ -186,33 +185,21 @@ package struct TLCGraphReader: Sendable {
         }
         guard counts["header"] == 1, footerCounts.count == counts.count else { throw TLCGraphEventError.invalidFooter("counts") }
         guard let runID else { throw TLCGraphEventError.invalidRecord(line: 1, reason: "missing run ID") }
-        func resolvedState(_ state: TLCGraphState) throws -> TLCGraphState {
-            guard let representative = representatives[state.fingerprint] else {
-                throw TLCGraphEventError.invalidRecord(line: 0, reason: "unmapped fingerprint")
-            }
-            return representative
-        }
         return TLCGraphEventStream(
-            runID: runID, caseID: finiteGraphCase.id,
-            fingerprintRepresentatives: representatives,
-            initialStates: try initialStates.map(resolvedState),
-            transitions: try transitions.map {
-                TLCGraphTransition(source: try resolvedState($0.source), target: try resolvedState($0.target), action: $0.action, seen: $0.seen)
-            })
+            runID: runID, caseID: finiteGraphCase.id, states: representatives,
+            initialStates: initialStates, transitions: transitions)
     }
 
     package func makeCompletedGraphRun(
         _ stream: TLCGraphEventStream,
         outcome: TLCExecutionOutcome
     ) throws -> CompletedGraphRun {
-        var canonicalStatesByFingerprint: [String: CanonicalState] = [:]
-        func canonicalRepresentative(_ state: TLCGraphState) throws -> CanonicalState {
-            if let existing = canonicalStatesByFingerprint[state.fingerprint] {
-                return existing
+        let canonicalStatesByFingerprint = try stream.states.mapValues(canonicalState)
+        func canonicalRepresentative(_ fingerprint: String) throws -> CanonicalState {
+            guard let state = canonicalStatesByFingerprint[fingerprint] else {
+                throw TLCGraphEventError.invalidRecord(line: 0, reason: "unmapped fingerprint")
             }
-            let parsed = try canonicalState(state)
-            canonicalStatesByFingerprint[state.fingerprint] = parsed
-            return parsed
+            return state
         }
         let initialStates = try stream.initialStates.map(canonicalRepresentative)
         let edges = try stream.transitions.map { transition in
@@ -281,13 +268,15 @@ package struct TLCGraphReader: Sendable {
         guard Set(bindings.map(\.name)).count == bindings.count else {
             throw TLCGraphEventError.invalidRecord(line: line, reason: "duplicate binding")
         }
-        return TLCGraphState(fingerprint: try string(value, "fingerprint", line), level: try int(value, "level", line), bindings: bindings)
+        _ = try int(value, "level", line)
+        return TLCGraphState(fingerprint: try string(value, "fingerprint", line), bindings: bindings)
     }
 
     private func registerRepresentative(
         _ state: TLCGraphState, in representatives: inout [String: TLCGraphState], line: Int
     ) throws {
         if let existing = representatives[state.fingerprint] {
+            if existing.bindings == state.bindings { return }
             guard try canonicalState(existing) == canonicalState(state) else {
                 throw TLCGraphEventError.invalidRecord(line: line, reason: "fingerprint binding mismatch")
             }
@@ -302,6 +291,7 @@ package struct TLCGraphReader: Sendable {
         guard let representative = representatives[state.fingerprint] else {
             throw TLCGraphEventError.invalidRecord(line: line, reason: "seen fingerprint without representative")
         }
+        if representative.bindings == state.bindings { return }
         let representativeState = try canonicalState(representative)
         let alias = try canonicalState(state)
         if representativeState == alias {
