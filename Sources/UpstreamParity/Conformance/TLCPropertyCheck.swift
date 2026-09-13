@@ -1,8 +1,7 @@
 import Foundation
 import SwiftTLA
 
-package struct TLCTemporalCaptureInput: Sendable {
-  package let temporalCase: TemporalCase
+package struct TLCPropertyCheckInput: Sendable {
   package let property: String
   package let request: TLCProcessRequest
   package let completeGraph: TLCProcessCapture
@@ -12,7 +11,6 @@ package struct TLCTemporalCaptureInput: Sendable {
   package let outputDirectory: URL
 
   package init(
-    temporalCase: TemporalCase,
     property: String,
     request: TLCProcessRequest,
     completeGraph: TLCProcessCapture,
@@ -21,7 +19,6 @@ package struct TLCTemporalCaptureInput: Sendable {
     rendered: RenderedSpecification,
     outputDirectory: URL
   ) {
-    self.temporalCase = temporalCase
     self.property = property
     self.request = request
     self.completeGraph = completeGraph
@@ -32,7 +29,7 @@ package struct TLCTemporalCaptureInput: Sendable {
   }
 }
 
-package enum TLCTemporalAdapterError: Error, Equatable, Sendable {
+package enum TLCPropertyCheckError: Error, Equatable, Sendable {
   case outputAlreadyExists
   case configurationMismatch
   case requestMismatch
@@ -40,16 +37,16 @@ package enum TLCTemporalAdapterError: Error, Equatable, Sendable {
   case graphEvidenceInvalid
 }
 
-package struct TLCTemporalAdapter: Sendable {
+package struct TLCPropertyCheck: Sendable {
   private let processAdapter: TLCProcessAdapter
 
   package init(processAdapter: TLCProcessAdapter = TLCProcessAdapter()) {
     self.processAdapter = processAdapter
   }
 
-  package func capture(_ input: TLCTemporalCaptureInput) throws -> TemporalComparison {
+  package func capture(_ input: TLCPropertyCheckInput) throws -> PropertyComparison {
     guard FileManager.default.fileExists(atPath: input.outputDirectory.path) == false else {
-      throw TLCTemporalAdapterError.outputAlreadyExists
+      throw TLCPropertyCheckError.outputAlreadyExists
     }
     try validate(input)
     try RetainedFiles.outputDirectory(
@@ -57,47 +54,45 @@ package struct TLCTemporalAdapter: Sendable {
     let capture = try processAdapter.capture(input.request, retainingIn: input.outputDirectory)
     let completeGraph = input.completeGraph.graph
     if capture.graph.isComplete, !compareFiniteGraphs(tlc: capture.graph, swift: completeGraph).matches {
-      throw TLCTemporalAdapterError.graphEvidenceInvalid
+      throw TLCPropertyCheckError.graphEvidenceInvalid
     }
-    let tlcOutcome = try temporalResult(
+    let tlcOutcome = try propertyResult(
       outcome: capture.outcome,
       graph: completeGraph,
       outputDirectory: input.outputDirectory)
-    let comparison = try TemporalComparison(
-      caseID: input.temporalCase.id,
+    let comparison = try PropertyComparison(
+      caseID: input.request.caseID,
       property: input.property,
-      fairness: input.temporalCase.fairness,
       swiftRun: input.swiftRun,
       tlcRun: completeGraph,
       swiftResult: input.swiftResult,
       tlcResult: tlcOutcome)
     try RetainedFiles.writeCanonical(
-      comparison, to: input.outputDirectory.appendingPathComponent("temporal-comparison.json"))
+      comparison, to: input.outputDirectory.appendingPathComponent("property-comparison.json"))
     return comparison
   }
 
-  private func validate(_ input: TLCTemporalCaptureInput) throws {
+  private func validate(_ input: TLCPropertyCheckInput) throws {
     try validateTraceOutputs(input)
     guard input.swiftRun.isComparable else {
-      throw TLCTemporalAdapterError.graphEvidenceInvalid
+      throw TLCPropertyCheckError.graphEvidenceInvalid
     }
-    guard input.request.caseID == input.temporalCase.id,
-          input.request.invocation == .temporalProperty else {
-      throw TLCTemporalAdapterError.requestMismatch
+    guard input.request.invocation == .propertyCheck else {
+      throw TLCPropertyCheckError.requestMismatch
     }
     let request = input.request.finiteGraphCase
     let expected = try input.rendered.tlaBundle(
       checking: [input.property], checkDeadlock: false)
     guard input.request.bundle == expected else {
-      throw TLCTemporalAdapterError.configurationMismatch
+      throw TLCPropertyCheckError.configurationMismatch
     }
     guard input.completeGraph.outcome == .completed, input.completeGraph.graph.isComparable else {
-      throw TLCTemporalAdapterError.incompleteGraph
+      throw TLCPropertyCheckError.incompleteGraph
     }
     let graphRequest = input.completeGraph.request
     let expectedGraph = try input.rendered.tlaBundle(checking: [], checkDeadlock: false)
     guard graphRequest.bundle == expectedGraph else {
-      throw TLCTemporalAdapterError.requestMismatch
+      throw TLCPropertyCheckError.requestMismatch
     }
     guard graphRequest.invocation == .finiteGraph,
           (graphRequest.runID == input.request.runID) == false,
@@ -106,11 +101,11 @@ package struct TLCTemporalAdapter: Sendable {
           graphRequest.finiteGraphCase.pin == input.request.finiteGraphCase.pin,
           graphRequest.finiteGraphCase.environment == input.request.finiteGraphCase.environment,
           graphRequest.finiteGraphCase.moduleSHA256 == request.moduleSHA256 else {
-      throw TLCTemporalAdapterError.requestMismatch
+      throw TLCPropertyCheckError.requestMismatch
     }
   }
 
-  private func validateTraceOutputs(_ input: TLCTemporalCaptureInput) throws {
+  private func validateTraceOutputs(_ input: TLCPropertyCheckInput) throws {
     let requests = [input.request, input.completeGraph.request]
     let protected = Set(requests.flatMap(protectedArtifacts(for:)))
     let outputDirectory = resolvedURL(input.outputDirectory)
@@ -119,14 +114,14 @@ package struct TLCTemporalAdapter: Sendable {
     if FileManager.default.fileExists(atPath: request.traceOutput.path) {
       let values = try request.traceOutput.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
       guard values.isRegularFile == true, values.isSymbolicLink != true else {
-        throw TLCTemporalAdapterError.graphEvidenceInvalid
+        throw TLCPropertyCheckError.graphEvidenceInvalid
       }
     }
     let traceOutput = resolvedURL(request.traceOutput)
     guard (traceOutput == outputDirectory) == false,
           traceOutput.path.hasPrefix(outputPath) == false,
           protected.contains(traceOutput) == false else {
-      throw TLCTemporalAdapterError.graphEvidenceInvalid
+      throw TLCPropertyCheckError.graphEvidenceInvalid
     }
 
   }
@@ -134,8 +129,8 @@ package struct TLCTemporalAdapter: Sendable {
 
 }
 
-extension TLCTemporalAdapter {
-  private func temporalResult(
+extension TLCPropertyCheck {
+  private func propertyResult(
     outcome: TLCExecutionOutcome,
     graph: GraphRun,
     outputDirectory: URL

@@ -5,7 +5,7 @@ import SwiftTLA
 
 package enum TLCInvocationKind: Equatable, Sendable {
   case finiteGraph
-  case temporalProperty
+  case propertyCheck
 }
 
 package enum TLCExecutionOutcome: Equatable, Sendable {
@@ -23,7 +23,7 @@ package enum TLCExecutionOutcome: Equatable, Sendable {
     case (10, _): self = .assumptionViolation
     case (11, _): self = .deadlock
     case (12, _): self = .safetyViolation
-    case (13, .temporalProperty): self = .livenessViolation
+    case (13, .propertyCheck): self = .livenessViolation
     case (14, _): self = .assertionViolation
     default: self = .failed(exitStatus: exitStatus)
     }

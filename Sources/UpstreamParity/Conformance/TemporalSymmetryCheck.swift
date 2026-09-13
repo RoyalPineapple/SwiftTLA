@@ -152,7 +152,7 @@ package struct TemporalSymmetryCheck: Sendable {
     let directory = evidenceRoot.appendingPathComponent(temporalCase.id).appendingPathComponent("complete-graph")
     let capture = try TLCProcessAdapter().capture(request, retainingIn: directory)
     guard capture.outcome == .completed, capture.graph.isComparable else {
-      throw TLCTemporalAdapterError.incompleteGraph
+      throw TLCPropertyCheckError.incompleteGraph
     }
     try GraphRunRecords.write(capture.graph, to: directory.appendingPathComponent("tlc-graph.jsonl"))
     return capture
@@ -162,16 +162,16 @@ package struct TemporalSymmetryCheck: Sendable {
     temporalCase: TemporalCase, property: String, native: NativeModelRun,
     toolchain: ResolvedTLCToolchain, completeGraph: TLCProcessCapture,
     referencePin: TLCReferencePin, projectRoot: URL, evidenceRoot: URL, outputDirectory: URL
-  ) throws -> TemporalComparison {
+  ) throws -> PropertyComparison {
     guard let check = native.checks.properties[property] else {
       throw EvidenceFormatError.invalidField(record: property, field: "native temporal checking")
     }
     let bundle = try native.rendered.tlaBundle(checking: [property], checkDeadlock: false)
     let request = try temporalRequest(temporalCase: temporalCase, bundle: bundle,
-      invocation: .temporalProperty, toolchain: toolchain, referencePin: referencePin,
+      invocation: .propertyCheck, toolchain: toolchain, referencePin: referencePin,
       projectRoot: projectRoot, evidenceRoot: evidenceRoot)
-    return try TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
-      temporalCase: temporalCase, property: property, request: request,
+    return try TLCPropertyCheck().capture(TLCPropertyCheckInput(
+      property: property, request: request,
       completeGraph: completeGraph, swiftRun: native.graph, swiftResult: check,
       rendered: native.rendered, outputDirectory: outputDirectory))
   }

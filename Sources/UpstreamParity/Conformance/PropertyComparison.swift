@@ -1,20 +1,25 @@
 import Foundation
 
-package struct TemporalComparison: Equatable, Encodable, Sendable {
-  package static let schema = "TemporalComparison"
+package enum PropertyComparisonStatus: String, Codable, Sendable {
+  case exact
+  case propertyOutcomeDifference
+  case graphDifference
+  case unavailable
+}
+
+package struct PropertyComparison: Equatable, Encodable, Sendable {
+  package static let schema = "PropertyComparison"
 
   package let schema: String
   package let caseID: String
   package let property: String
-  package let fairness: TemporalFairnessMode
-  package let status: TemporalComparisonStatus
+  package let status: PropertyComparisonStatus
   package let swiftResult: PropertyResult
   package let tlcResult: PropertyResult
 
   package init(
     caseID: String,
     property: String,
-    fairness: TemporalFairnessMode,
     swiftRun: GraphRun,
     tlcRun: GraphRun,
     swiftResult: PropertyResult,
@@ -28,11 +33,10 @@ package struct TemporalComparison: Equatable, Encodable, Sendable {
     self.schema = Self.schema
     self.caseID = caseID
     self.property = property
-    self.fairness = fairness
     self.swiftResult = swiftResult
     self.tlcResult = tlcResult
     guard !caseID.isEmpty else {
-      throw EvidenceFormatError.inconsistentReference(record: caseID, field: "temporal comparison")
+      throw EvidenceFormatError.inconsistentReference(record: caseID, field: "property comparison")
     }
     switch (swiftResult, tlcResult) {
     case (.unavailable, _), (_, .unavailable):

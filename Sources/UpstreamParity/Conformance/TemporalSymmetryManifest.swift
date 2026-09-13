@@ -13,12 +13,6 @@ package enum TemporalSymmetryOutcome: String, Codable, Sendable {
   case unavailable
 }
 
-package enum TemporalComparisonStatus: String, Codable, Sendable {
-  case exact
-  case propertyOutcomeDifference
-  case graphDifference
-  case unavailable
-}
 
 package enum SymmetryGraphSource: String, Codable, Sendable {
   case swift
