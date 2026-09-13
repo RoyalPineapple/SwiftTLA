@@ -3,6 +3,27 @@ import Testing
 import UpstreamParity
 
 struct CanonicalGraphTests {
+    @Test("Edge ordering preserves wire bytes, including prefix keys and Unicode actions")
+    func edgeOrderingMatchesEncoding() {
+        let states = ["", "a", "a!", "a-", "a--", "é", "e\u{301}"]
+            .map { CanonicalStateKey(canonicalEncoding: $0) }
+        let actions = ["", "a", "a!", "aa", "é", "e\u{301}"]
+        let edges = states.flatMap { source in
+            actions.flatMap { action in
+                states.map { target in CanonicalEdge(source: source, action: action, target: target) }
+            }
+        }
+        for left in edges {
+            for right in edges {
+                let wireOrder = left.canonicalEncoding.utf8.lexicographicallyPrecedes(right.canonicalEncoding.utf8)
+                #expect((left < right) == wireOrder)
+            }
+        }
+        let composed = CanonicalEdge(source: states[1], action: "é", target: states[1])
+        let decomposed = CanonicalEdge(source: states[1], action: "e\u{301}", target: states[1])
+        #expect(Set([composed, decomposed]).count == 2)
+    }
+
     @Test("canonical graph preserves action labels and collapses repeated witnesses")
     func preservesParallelLabelsAcrossTraversalOrder() throws {
         let first = CanonicalState(bindings: ["counter": .integer(1)])

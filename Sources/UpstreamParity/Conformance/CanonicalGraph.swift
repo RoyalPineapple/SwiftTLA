@@ -168,22 +168,31 @@ package struct CanonicalState: Hashable, Sendable {
 }
 
 package struct CanonicalEdge: Hashable, Sendable, Comparable {
-  package let source: CanonicalStateKey
-  package let action: String
-  package let target: CanonicalStateKey
-  package let canonicalEncoding: String
+    package let source: CanonicalStateKey
+    package let action: String
+    package let target: CanonicalStateKey
+    private let encodedAction: String
 
-  package init(source: CanonicalStateKey, action: String, target: CanonicalStateKey) {
-    self.source = source
-    self.action = action
-    self.target = target
-    canonicalEncoding = "edge:\(source.canonicalEncoding)--\(encodedBytes(action))-->\(target.canonicalEncoding)"
+    package init(source: CanonicalStateKey, action: String, target: CanonicalStateKey) {
+        self.source = source
+        self.action = action
+        self.target = target
+        encodedAction = encodedBytes(action)
+    }
+
+    package var canonicalEncoding: String {
+        "edge:\(source.canonicalEncoding)--\(encodedAction)-->\(target.canonicalEncoding)"
+    }
+
+    // Compare the original wire order without copying both state keys into every edge.
+    private var orderingBytes: some Sequence<UInt8> {
+        [source.canonicalEncoding, "--", encodedAction, "-->", target.canonicalEncoding]
+            .lazy.flatMap { $0.utf8 }
     }
 
     package static func < (lhs: Self, rhs: Self) -> Bool {
-        canonicalBytes(lhs.canonicalEncoding, rhs.canonicalEncoding)
+        lhs.orderingBytes.lexicographicallyPrecedes(rhs.orderingBytes)
     }
-
 }
 
 package enum CanonicalGraphError: Error, Equatable, Sendable {
