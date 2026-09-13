@@ -77,98 +77,100 @@ package struct TLCGraphReader: Sendable {
         let newline = Data([10])
 
         for (index, bytes) in records.enumerated() {
-            let line = index + 1
-            let lineData = Data(bytes)
-            let object = try decodeObject(lineData, line: line)
-            try validateCommon(object, line: line, expectedSequence: index, runID: &runID)
-            guard footer == nil else { throw TLCGraphEventError.invalidRecord(line: line, reason: "record after footer") }
-            let type = try string(object, "type", line)
-            switch type {
-            case "header":
-                guard index == 0 else { throw TLCGraphEventError.invalidRecord(line: line, reason: "header is not first") }
-                try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId"], line)
-                guard try string(object, "callback", line) == "writer.header" else {
-                    throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid header callback")
-                }
-            case "initial":
-                try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId", "state"], line)
-                guard try string(object, "callback", line) == "writeState.initial" else {
-                    throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid initial callback")
-                }
-                let state = try parseState(try dictionary(object, "state", line), line: line)
-                try registerRepresentative(state, in: &representatives, line: line)
-                initialStates.insert(state.fingerprint)
-            case "transition":
-                try exactKeys(object, [
-                    "schema", "version", "type", "callback", "seq", "runId", "caseId", "source",
-                    "target", "action", "stateFlags", "visualization", "predicateLocation", "reachable"
-                ], line)
-                let callback = try string(object, "callback", line)
-                guard callback == "writeState.action" || callback == "writeState.actionPredicate",
-                      try string(object, "visualization", line) == "none"
-                else { throw TLCGraphEventError.invalidRecord(line: line, reason: "unsupported transition transport") }
-                let action = try dictionary(object, "action", line)
-                try exactKeys(action, ["name", "location", "named"], line)
-                let actionName = try string(action, "name", line)
-                let actionLocation = try string(action, "location", line)
-                guard try bool(action, "named", line), !actionName.isEmpty else {
-                    throw TLCGraphEventError.invalidRecord(line: line, reason: "unnamed action")
-                }
-                let resolvedAction = try resolvedAction(
-                    name: actionName, location: actionLocation, line: line)
-                let flags = try dictionary(object, "stateFlags", line)
-                try exactKeys(flags, ["raw", "seen", "notInModel"], line)
-                let rawFlags = try int(flags, "raw", line)
-                let notInModel = try bool(flags, "notInModel", line)
-                let source = try parseState(try dictionary(object, "source", line), line: line)
-                let target = try parseState(try dictionary(object, "target", line), line: line)
-                let seen = try bool(flags, "seen", line)
-                if callback == "writeState.actionPredicate" {
-                    guard try string(object, "reachable", line) == "excluded",
-                          rawFlags == 2, !seen, notInModel,
-                          let predicateLocation = object["predicateLocation"] as? String,
-                          predicateLocation.hasPrefix("line "), predicateLocation.contains(" of module "),
-                          actionLocation.hasPrefix("<\(actionName)(")
-                    else { throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid excluded predicate transition") }
-                    _ = try canonicalState(source)
-                    if source.bindings != target.bindings {
-                        _ = try canonicalState(target)
+            try autoreleasepool {
+                let line = index + 1
+                let lineData = Data(bytes)
+                let object = try decodeObject(lineData, line: line)
+                try validateCommon(object, line: line, expectedSequence: index, runID: &runID)
+                guard footer == nil else { throw TLCGraphEventError.invalidRecord(line: line, reason: "record after footer") }
+                let type = try string(object, "type", line)
+                switch type {
+                case "header":
+                    guard index == 0 else { throw TLCGraphEventError.invalidRecord(line: line, reason: "header is not first") }
+                    try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId"], line)
+                    guard try string(object, "callback", line) == "writer.header" else {
+                        throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid header callback")
                     }
-                } else {
-                    guard try string(object, "reachable", line) == "reachable",
-                          object["predicateLocation"] is NSNull,
-                          !notInModel
-                    else { throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid reachable transition") }
-                    try validateReference(source, in: representatives, line: line)
-                    if seen {
-                        try validateReference(target, in: representatives, line: line)
+                case "initial":
+                    try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId", "state"], line)
+                    guard try string(object, "callback", line) == "writeState.initial" else {
+                        throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid initial callback")
+                    }
+                    let state = try parseState(try dictionary(object, "state", line), line: line)
+                    try registerRepresentative(state, in: &representatives, line: line)
+                    initialStates.insert(state.fingerprint)
+                case "transition":
+                    try exactKeys(object, [
+                        "schema", "version", "type", "callback", "seq", "runId", "caseId", "source",
+                        "target", "action", "stateFlags", "visualization", "predicateLocation", "reachable"
+                    ], line)
+                    let callback = try string(object, "callback", line)
+                    guard callback == "writeState.action" || callback == "writeState.actionPredicate",
+                          try string(object, "visualization", line) == "none"
+                    else { throw TLCGraphEventError.invalidRecord(line: line, reason: "unsupported transition transport") }
+                    let action = try dictionary(object, "action", line)
+                    try exactKeys(action, ["name", "location", "named"], line)
+                    let actionName = try string(action, "name", line)
+                    let actionLocation = try string(action, "location", line)
+                    guard try bool(action, "named", line), !actionName.isEmpty else {
+                        throw TLCGraphEventError.invalidRecord(line: line, reason: "unnamed action")
+                    }
+                    let resolvedAction = try resolvedAction(
+                        name: actionName, location: actionLocation, line: line)
+                    let flags = try dictionary(object, "stateFlags", line)
+                    try exactKeys(flags, ["raw", "seen", "notInModel"], line)
+                    let rawFlags = try int(flags, "raw", line)
+                    let notInModel = try bool(flags, "notInModel", line)
+                    let source = try parseState(try dictionary(object, "source", line), line: line)
+                    let target = try parseState(try dictionary(object, "target", line), line: line)
+                    let seen = try bool(flags, "seen", line)
+                    if callback == "writeState.actionPredicate" {
+                        guard try string(object, "reachable", line) == "excluded",
+                              rawFlags == 2, !seen, notInModel,
+                              let predicateLocation = object["predicateLocation"] as? String,
+                              predicateLocation.hasPrefix("line "), predicateLocation.contains(" of module "),
+                              actionLocation.hasPrefix("<\(actionName)(")
+                        else { throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid excluded predicate transition") }
+                        _ = try canonicalState(source)
+                        if source.bindings != target.bindings {
+                            _ = try canonicalState(target)
+                        }
                     } else {
-                        try registerRepresentative(target, in: &representatives, line: line)
+                        guard try string(object, "reachable", line) == "reachable",
+                              object["predicateLocation"] is NSNull,
+                              !notInModel
+                        else { throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid reachable transition") }
+                        try validateReference(source, in: representatives, line: line)
+                        if seen {
+                            try validateReference(target, in: representatives, line: line)
+                        } else {
+                            try registerRepresentative(target, in: &representatives, line: line)
+                        }
+                        transitions.insert(TLCGraphTransition(
+                            source: source.fingerprint, target: target.fingerprint, action: resolvedAction
+                        ))
                     }
-                    transitions.insert(TLCGraphTransition(
-                        source: source.fingerprint, target: target.fingerprint, action: resolvedAction
-                    ))
+                case "unsupported":
+                    try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId", "reason"], line)
+                    guard try string(object, "callback", line) == "writeState.visualization",
+                          try string(object, "reason", line) == "callback has no Action identity: STUTTERING"
+                    else {
+                        throw TLCGraphEventError.unsupportedCallback(try string(object, "callback", line))
+                    }
+                case "footer":
+                    try exactKeys(object, [
+                        "schema", "version", "type", "callback", "seq", "runId", "caseId", "status",
+                        "counts", "lastBodySeq", "bodySha256"
+                    ], line)
+                    footer = object
+                default:
+                    throw TLCGraphEventError.invalidRecord(line: line, reason: "unknown record type")
                 }
-            case "unsupported":
-                try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId", "reason"], line)
-                guard try string(object, "callback", line) == "writeState.visualization",
-                      try string(object, "reason", line) == "callback has no Action identity: STUTTERING"
-                else {
-                    throw TLCGraphEventError.unsupportedCallback(try string(object, "callback", line))
+                if type != "footer" {
+                    counts[type, default: 0] += 1
+                    bodyHash.update(data: lineData)
+                    bodyHash.update(data: newline)
                 }
-            case "footer":
-                try exactKeys(object, [
-                    "schema", "version", "type", "callback", "seq", "runId", "caseId", "status",
-                    "counts", "lastBodySeq", "bodySha256"
-                ], line)
-                footer = object
-            default:
-                throw TLCGraphEventError.invalidRecord(line: line, reason: "unknown record type")
-            }
-            if type != "footer" {
-                counts[type, default: 0] += 1
-                bodyHash.update(data: lineData)
-                bodyHash.update(data: newline)
             }
         }
 
