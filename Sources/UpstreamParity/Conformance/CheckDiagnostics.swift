@@ -194,22 +194,22 @@ private func setDifferenceReport(
 }
 
 private func edgeDifferenceReport(
-  expected: [CanonicalEdge: Int], actual: [CanonicalEdge: Int]
+  expected: Set<CanonicalEdge>, actual: Set<CanonicalEdge>
 ) -> CheckFailureReport {
-  let witness = Set(expected.keys).union(actual.keys).sorted().first { expected[$0, default: 0] != actual[$0, default: 0] }
+  let witness = expected.symmetricDifference(actual).sorted().first
   guard let witness else {
     return .init(
-      whatFailed: "The labeled transition multisets differ.", whereItFailed: "canonical transition relation",
-      expected: "TLC and SwiftTLA retain the same transition occurrences.",
-      actual: "The occurrence counts differ, but no stable witness was available.",
+      whatFailed: "The labeled transition relations differ.", whereItFailed: "canonical transition relation",
+      expected: "TLC and SwiftTLA permit the same labeled transitions.",
+      actual: "The transition sets differ, but no stable witness was available.",
       nextSafeAction: "Inspect the retained edges in tlc-graph.jsonl and swift-graph.jsonl."
     )
   }
   return .init(
-    whatFailed: "The labeled transition multisets differ.",
+    whatFailed: "The labeled transition relations differ.",
     whereItFailed: "action \(witness.action) from \(witness.source.canonicalEncoding) to \(witness.target.canonicalEncoding)",
-    expected: "TLC permits this transition \(expected[witness, default: 0]) time(s).",
-    actual: "SwiftTLA permits this transition \(actual[witness, default: 0]) time(s).",
+    expected: expected.contains(witness) ? "TLC permits this transition." : "TLC does not permit this transition.",
+    actual: actual.contains(witness) ? "SwiftTLA permits this transition." : "SwiftTLA does not permit this transition.",
     nextSafeAction: "Compare the \(witness.action) guard and update at the named source state in tlc-graph.jsonl and swift-graph.jsonl."
   )
 }

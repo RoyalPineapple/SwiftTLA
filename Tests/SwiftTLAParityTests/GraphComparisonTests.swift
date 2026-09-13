@@ -2,8 +2,8 @@ import Testing
 @testable import UpstreamParity
 
 struct GraphComparisonTests {
-    @Test("identical complete canonical runs compare exactly")
-    func comparesIdenticalRuns() throws {
+    @Test("complete transition relations compare exactly despite repeated existential witnesses")
+    func comparesRelationsIndependentlyOfWitnessCounts() throws {
         let first = CanonicalState(bindings: ["counter": .integer(1)])
         let second = CanonicalState(bindings: ["counter": .integer(2)])
         let graph = try CanonicalGraph(
@@ -17,7 +17,11 @@ struct GraphComparisonTests {
             outcome: .exhaustiveSuccess
         )
 
-        let comparison = compareFiniteGraphs(tlc: run, swift: run)
+        let repeated = try CompletedGraphRun(
+            graph: CanonicalGraph(initialStates: [first], states: [first, second],
+                edges: Array(repeating: CanonicalEdge(source: first.key, action: "advance", target: second.key), count: 100)),
+            observableActions: ["advance"], outcome: .exhaustiveSuccess)
+        let comparison = compareFiniteGraphs(tlc: repeated, swift: run)
 
         #expect(comparison.matches)
     }
@@ -75,8 +79,8 @@ struct GraphComparisonTests {
         #expect(comparison.differences.contains { if case .edges = $0 { true } else { false } })
         #expect(comparison.differences.contains { if case .observableNames = $0 { true } else { false } })
         let edgeReport = try #require(comparison.failureReports.first { $0.whereItFailed.contains("action advance") })
-        #expect(edgeReport.expected.contains("TLC permits this transition 1 time(s)."))
-        #expect(edgeReport.actual.contains("SwiftTLA permits this transition 0 time(s)."))
+        #expect(edgeReport.expected.contains("TLC permits this transition."))
+        #expect(edgeReport.actual.contains("SwiftTLA does not permit this transition."))
         #expect(edgeReport.nextSafeAction.contains("advance"))
     }
 

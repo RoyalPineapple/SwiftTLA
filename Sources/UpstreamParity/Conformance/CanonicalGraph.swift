@@ -195,7 +195,8 @@ package func canonicalStateTable(
 package struct CanonicalGraph: Equatable, Sendable {
     package let initialStateKeys: Set<CanonicalStateKey>
     package let states: [CanonicalStateKey: CanonicalState]
-    package let edgeOccurrences: [CanonicalEdge: Int]
+    /// The labeled transition relation; repeated evaluation witnesses add no behavior.
+    package let edges: Set<CanonicalEdge>
 
     package init(
         initialStates: [CanonicalState],
@@ -216,20 +217,19 @@ package struct CanonicalGraph: Equatable, Sendable {
             throw CanonicalGraphError.initialStateMissing(key)
         }
 
-        var occurrences: [CanonicalEdge: Int] = [:]
-        for edge in edges {
+        let transitions = Set(edges)
+        for edge in transitions {
             guard stateTable[edge.source] != nil else {
                 throw CanonicalGraphError.edgeStateMissing(edge.source)
             }
             guard stateTable[edge.target] != nil else {
                 throw CanonicalGraphError.edgeStateMissing(edge.target)
             }
-            occurrences[edge, default: 0] += 1
         }
 
         self.initialStateKeys = initialKeys
         self.states = stateTable
-        self.edgeOccurrences = occurrences
+        self.edges = transitions
     }
 
     /// Export native topology only; this does not issue a property-checking verdict.
@@ -331,7 +331,7 @@ package struct CompletedGraphRun: Equatable, Sendable {
         outcome: GraphRunOutcome,
         trace: GraphTrace? = nil
     ) throws {
-        for edge in graph.edgeOccurrences.keys where !observableActions.contains(edge.action) {
+        for edge in graph.edges where !observableActions.contains(edge.action) {
             throw CompletedGraphRunError.graphActionUndeclared(edge.action)
         }
         if case .deadlock(let state) = outcome, graph.states[state] == nil {
@@ -347,7 +347,7 @@ package struct CompletedGraphRun: Equatable, Sendable {
             }
             for (source, target) in zip(trace.steps, trace.steps.dropFirst()) {
                 let edge = CanonicalEdge(source: source.state, action: target.action, target: target.state)
-                guard graph.edgeOccurrences[edge] != nil else {
+                guard graph.edges.contains(edge) else {
                     throw CompletedGraphRunError.traceEdgeMissing(edge)
                 }
             }

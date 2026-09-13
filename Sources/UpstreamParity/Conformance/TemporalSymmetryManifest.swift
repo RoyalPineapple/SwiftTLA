@@ -246,7 +246,7 @@ package extension CompletedGraphRun {
     for (index, edge) in edges.enumerated() {
       guard edge.source == states[index].key,
             edge.target == states[index + 1].key,
-            graph.edgeOccurrences[edge] != nil
+            graph.edges.contains(edge)
               || (edge.source == edge.target
                 && (allowsImplicitStuttering || implicitStutterActions.contains(edge.action))) else {
         return false

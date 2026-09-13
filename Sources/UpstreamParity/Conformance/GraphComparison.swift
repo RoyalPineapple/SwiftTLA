@@ -9,7 +9,7 @@ package enum GraphDifference: Equatable, Sendable {
     )
     case initialStates(tlc: Set<CanonicalStateKey>, swift: Set<CanonicalStateKey>)
     case states(tlc: Set<CanonicalStateKey>, swift: Set<CanonicalStateKey>)
-    case edges(tlc: [CanonicalEdge: Int], swift: [CanonicalEdge: Int])
+    case edges(tlc: Set<CanonicalEdge>, swift: Set<CanonicalEdge>)
     case outcome(tlc: GraphRunOutcome, swift: GraphRunOutcome)
 }
 
@@ -45,8 +45,8 @@ package func compareFiniteGraphs(
     if (Set(tlc.graph.states.keys) == Set(swift.graph.states.keys)) == false {
         differences.append(.states(tlc: Set(tlc.graph.states.keys), swift: Set(swift.graph.states.keys)))
     }
-    if (tlc.graph.edgeOccurrences == swift.graph.edgeOccurrences) == false {
-        differences.append(.edges(tlc: tlc.graph.edgeOccurrences, swift: swift.graph.edgeOccurrences))
+    if (tlc.graph.edges == swift.graph.edges) == false {
+        differences.append(.edges(tlc: tlc.graph.edges, swift: swift.graph.edges))
     }
     if (tlc.outcome == swift.outcome) == false
         || tlc.isPassEligible == false
@@ -91,8 +91,8 @@ func graphDifferencesJSON(_ comparison: GraphComparison) -> [[String: Any]] {
         case .edges(let tlc, let swift):
             [
                 "kind": "edges",
-                "tlc": firstDifferentEdgeOccurrenceJSON(tlc, swift),
-                "swift": firstDifferentEdgeOccurrenceJSON(swift, tlc)
+                "tlc": tlc.subtracting(swift).sorted().prefix(1).map(\.canonicalEncoding),
+                "swift": swift.subtracting(tlc).sorted().prefix(1).map(\.canonicalEncoding)
             ]
         case .outcome(let tlc, let swift):
             [
@@ -102,13 +102,4 @@ func graphDifferencesJSON(_ comparison: GraphComparison) -> [[String: Any]] {
             ]
         }
     }
-}
-
-private func firstDifferentEdgeOccurrenceJSON(
-    _ graph: [CanonicalEdge: Int], _ other: [CanonicalEdge: Int]
-) -> [[String: Any]] {
-    guard let edge = Set(graph.keys).union(other.keys).sorted().first(where: {
-        (graph[$0] == other[$0]) == false
-    }), let count = graph[edge] else { return [] }
-    return [["edge": edge.canonicalEncoding, "count": count]]
 }

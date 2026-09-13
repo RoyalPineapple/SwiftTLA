@@ -18,7 +18,7 @@ struct FiniteGraphCheckTests {
         compilation: compilation, configuration: declaration.exploration
       ).explore(), for: finiteGraphCase)
       let renderedNames = Set(finiteGraphCase.renderedActions.map(\.renderedName))
-      #expect(Set(native.graph.edgeOccurrences.keys.map(\.action)).isSubset(of: renderedNames))
+      #expect(Set(native.graph.edges.map(\.action)).isSubset(of: renderedNames))
       #expect(native.graph == formal.graph, "\(declaration.id)")
       #expect(native.outcome == .exhaustiveSuccess, "\(declaration.id)")
       #expect(formal.outcome == .exhaustiveSuccess, "\(declaration.id)")
@@ -205,7 +205,7 @@ struct FiniteGraphCheckTests {
     #expect(try json(at: output.appendingPathComponent("comparison.json"))["result"] as? String == "difference")
     let comparison = try #require(checkOutput.comparison)
     let report = try #require(comparison.failureReports.first {
-      $0.whatFailed == "The labeled transition multisets differ."
+      $0.whatFailed == "The labeled transition relations differ."
     })
     #expect(report.expected.contains("TLC permits"))
     #expect(report.actual.contains("SwiftTLA permits"))

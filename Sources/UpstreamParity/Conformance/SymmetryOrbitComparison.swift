@@ -172,7 +172,7 @@ package func compareSymmetryOrbits(
     )])
   }
   let undeclaredActions = Set(runs.flatMap { run in
-    run.graph.edgeOccurrences.keys.map(\.action).filter { !declaredActions.contains($0) }
+    run.graph.edges.map(\.action).filter { !declaredActions.contains($0) }
   })
   guard undeclaredActions.isEmpty else {
     return .difference([SymmetryOrbitDifference(
@@ -290,7 +290,7 @@ private func quotientTransitions(
   derivation: SymmetryOrbitDerivation,
   actionPlan: SymmetryActionPlan
 ) throws -> [SymmetryQuotientTransition] {
-  try Set(run.graph.edgeOccurrences.keys.map { edge in
+  try Set(run.graph.edges.map { edge in
     guard let source = derivation.representativeForState[edge.source],
           let target = derivation.representativeForState[edge.target],
           let sourceState = run.graph.states[edge.source] else {

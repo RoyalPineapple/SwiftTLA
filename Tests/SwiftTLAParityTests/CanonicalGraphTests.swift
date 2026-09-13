@@ -3,8 +3,8 @@ import Testing
 import UpstreamParity
 
 struct CanonicalGraphTests {
-    @Test("canonical graph preserves labels and repeated edge occurrences")
-    func preservesParallelLabelsAndMultiplicityAcrossTraversalOrder() throws {
+    @Test("canonical graph preserves action labels and collapses repeated witnesses")
+    func preservesParallelLabelsAcrossTraversalOrder() throws {
         let first = CanonicalState(bindings: ["counter": .integer(1)])
         let second = CanonicalState(bindings: ["counter": .integer(2)])
 
@@ -28,9 +28,9 @@ struct CanonicalGraphTests {
         )
 
         #expect(forward == reversed)
-        #expect(forward.edgeOccurrences.count == 2)
-        #expect(forward.edgeOccurrences[.init(source: first.key, action: "advance", target: second.key)] == 2)
-        #expect(forward.edgeOccurrences[.init(source: first.key, action: "reset", target: second.key)] == 1)
+        #expect(forward.edges.count == 2)
+        #expect(forward.edges.contains(.init(source: first.key, action: "advance", target: second.key)))
+        #expect(forward.edges.contains(.init(source: first.key, action: "reset", target: second.key)))
     }
 
     @Test("canonical values are stable across unordered collection insertion")
@@ -186,8 +186,8 @@ struct CanonicalGraphTests {
 
         #expect(Set(run.graph.states.values) == Set([expectedFirst, expectedSecond]))
         #expect(run.graph.initialStateKeys == Set([expectedFirst.key]))
-        #expect(run.graph.edgeOccurrences == [
-            CanonicalEdge(source: expectedFirst.key, action: "Move", target: expectedSecond.key): 1
+        #expect(run.graph.edges == [
+            CanonicalEdge(source: expectedFirst.key, action: "Move", target: expectedSecond.key)
         ])
     }
 

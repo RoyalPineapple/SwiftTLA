@@ -19,7 +19,7 @@ struct HourClockCorpusStateGraphTests {
         #expect(exported == formal.graph)
         #expect(exported.initialStateKeys.count == 12)
         #expect(exported.states.count == 12)
-        #expect(exported.edgeOccurrences.count == 12)
+        #expect(exported.edges.count == 12)
         #expect(throws: GeneratedMachineError.ambiguousInitialState) { try HourClockModel.makeMachine() }
         for invalid in [0, 13] {
             #expect(throws: GeneratedMachineError.invalidInitialState) {

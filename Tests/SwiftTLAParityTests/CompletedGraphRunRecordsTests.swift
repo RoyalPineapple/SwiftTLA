@@ -92,6 +92,9 @@ struct CompletedGraphRunRecordsTests {
       "header", "initial", "state", "state", "state", "state", "edge", "complete"
     ])
     let completion = try #require(streamRecords.last)
+    #expect(streamRecords.first?["version"] as? Int == 2)
+    let edge = try #require(streamRecords.first { $0["type"] as? String == "edge" })
+    #expect(Set(edge.keys) == ["type", "source", "action", "target"])
     #expect(completion["eligible"] as? Bool == true)
     #expect(completion["initialStateCount"] as? Int == 1)
     #expect(completion["stateCount"] as? Int == 4)
@@ -201,7 +204,7 @@ struct CompletedGraphRunRecordsTests {
     try CompletedGraphRunRecords.write(
       CompletedGraphRun(
         graph: graph,
-        observableActions: Set(graph.edgeOccurrences.keys.map(\.action)),
+        observableActions: Set(graph.edges.map(\.action)),
         outcome: .exhaustiveSuccess
       ),
       to: url

@@ -54,8 +54,7 @@ struct CompiledSpecificationProjectionTests {
         #expect(exploration.graph.states.count == 2)
         #expect(completedRun.graph.variableNames.contains("counter"))
         #expect(completedRun.graph.initialStateKeys.count == 1)
-        #expect(completedRun.graph.edgeOccurrences.count == 2)
-        #expect(completedRun.graph.edgeOccurrences.values.sorted() == [1, 1])
+        #expect(completedRun.graph.edges.count == 2)
         #expect(completedRun.observableActions == ["Terminating", "advance"])
         #expect(completedRun.outcome == .exhaustiveSuccess)
     }

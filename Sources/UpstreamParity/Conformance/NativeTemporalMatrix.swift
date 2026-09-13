@@ -91,7 +91,7 @@ private func exportTemporalRun<Machine: StateMachine>(
   let canonical = try CanonicalGraph(native, states: states)
   // This is the complete topology used by the separately reported property result.
   let graph = try CompletedGraphRun(graph: canonical,
-    observableActions: Set(canonical.edgeOccurrences.keys.map(\.action)), outcome: .exhaustiveSuccess)
+    observableActions: Set(canonical.edges.map(\.action)), outcome: .exhaustiveSuccess)
   let result: TemporalPropertyResult
   switch analysis.status {
   case .satisfied: result = .satisfied

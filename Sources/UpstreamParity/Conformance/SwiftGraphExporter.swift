@@ -53,7 +53,7 @@ package struct SwiftGraphExporter: Sendable {
     } else {
       outcome = .exhaustiveSuccess
     }
-    return try CompletedGraphRun(graph: graph, observableActions: Set(graph.edgeOccurrences.keys.map(\.action)),
+    return try CompletedGraphRun(graph: graph, observableActions: Set(graph.edges.map(\.action)),
       outcome: outcome, trace: trace)
   }
 

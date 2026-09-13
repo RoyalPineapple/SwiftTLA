@@ -10,13 +10,12 @@ package enum CompletedGraphRunRecords {
       ["type": "initial", "state": $0.canonicalEncoding]
     } + graph.states.keys.sorted().map {
       ["type": "state", "state": $0.canonicalEncoding]
-    } + graph.edgeOccurrences.keys.sorted().map { edge in
+    } + graph.edges.sorted().map { edge in
       [
         "type": "edge",
         "source": edge.source.canonicalEncoding,
         "action": edge.action,
-        "target": edge.target.canonicalEncoding,
-        "occurrences": graph.edgeOccurrences[edge, default: 0]
+        "target": edge.target.canonicalEncoding
       ]
     }
   }
@@ -32,7 +31,7 @@ package enum CompletedGraphRunRecords {
     var records: [[String: Any]] = [[
       "type": "header",
       "schema": "swifttla.finite-graph",
-      "version": 1,
+      "version": 2,
       "observableActions": run.observableActions.sorted()
     ]]
     records += graphRecords(for: run.graph)
@@ -51,7 +50,7 @@ package enum CompletedGraphRunRecords {
       "outcome": outcomeRecord(run.outcome),
       "initialStateCount": run.graph.initialStateKeys.count,
       "stateCount": run.graph.states.count,
-      "edgeCount": run.graph.edgeOccurrences.values.reduce(0, +),
+      "edgeCount": run.graph.edges.count,
       "traceCount": run.trace == nil ? 0 : 1
     ])
     return records

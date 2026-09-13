@@ -27,7 +27,7 @@ struct NativeGraphExportTests {
                 let named = try SwiftGraphExporter().export(native, for: namedCase)
                 #expect(named.outcome == exported.outcome)
                 #expect(named.trace?.steps.map(\.action) == ["Init", "ConcreteAdvance"])
-                #expect(Set(named.graph.edgeOccurrences.keys.map(\.action)) == ["ConcreteAdvance"])
+                #expect(Set(named.graph.edges.map(\.action)) == ["ConcreteAdvance"])
             }
         }
     }

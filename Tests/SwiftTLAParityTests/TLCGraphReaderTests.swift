@@ -14,7 +14,7 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       outcome: .completed)
     #expect(run.isPassEligible)
     #expect(run.graph.initialStateKeys.count == 1)
-    #expect(run.graph.edgeOccurrences.values.sorted() == [1])
+    #expect(run.graph.edges.count == 1)
     #expect(run.observableActions == ["Next"])
   }
 
