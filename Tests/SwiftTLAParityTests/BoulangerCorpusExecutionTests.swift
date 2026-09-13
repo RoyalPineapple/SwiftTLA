@@ -3,6 +3,18 @@ import Testing
 import UpstreamParity
 
 struct BoulangerCorpusExecutionTests {
+    @Test("The complete bounded Boulanger graph uses equivalent native transitions")
+    func completeNativeGraph() throws {
+        let native = try ReachabilityGraph(initialMachines: BoulangerModel.initialMachines(), maximumStates: 100_000)
+        let formal = try ModelChecker(compilation: BoulangerModel.spec.compile(),
+            configuration: .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).explore()
+        let nativeRun = try SwiftGraphExporter().export(native)
+        let formalRun = try SwiftGraphExporter().export(formal)
+        #expect(nativeRun.isPassEligible)
+        #expect(formalRun.isPassEligible)
+        #expect(compareFiniteGraphs(tlc: formalRun, swift: nativeRun).matches)
+    }
+
     @Test("Native process control and ambiguity agree with the formal Boulanger relation")
     func nativeProcessControl() throws {
         let compilation = try BoulangerModel.spec.compile()
