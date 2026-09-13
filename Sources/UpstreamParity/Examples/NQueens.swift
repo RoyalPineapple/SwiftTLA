@@ -64,6 +64,7 @@ package struct NQueensModel: Sendable {
                     solutions.expr.isSubset(of: validSolutions)
                         && (!todo.expr.isEmpty || validSolutions.isSubset(of: solutions.expr))
                 }
+                Invariant("NoSolutions") { solutions.expr.isEmpty }
                 Eventually("Termination", Finished())
 
                 Invariant("TypeInvariant") {

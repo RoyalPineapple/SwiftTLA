@@ -28,14 +28,23 @@ struct FiniteGraphCheckTests {
       let native = try declaration.sourceModel.nativeRun(description: compilation.description, rendered: rendered, for: finiteGraphCase)
       let formal = try FormalGraphExporter().export(ModelChecker(
         compilation: compilation, configuration: declaration.exploration
-      ).explore(), for: finiteGraphCase)
+      ).explore(checkingSafety: false), for: finiteGraphCase)
       let renderedNames = Set(finiteGraphCase.renderedActions.map(\.renderedName))
       #expect(Set(native.graph.graph.edges.map(\.action)).isSubset(of: renderedNames))
       #expect(native.graph.graph == formal.graph, "\(declaration.id)")
-      #expect(native.checks.allSatisfied, "\(declaration.id)")
+      if declaration.sourceModel == .nQueensFour {
+        guard case .violated(let trace) = native.checks.properties["NoSolutions"] else {
+          Issue.record("FourQueens must report the upstream NoSolutions counterexample")
+          continue
+        }
+        try trace.validate(in: native.graph.graph)
+        #expect(native.checks.properties.filter { $0.key != "NoSolutions" }.values.allSatisfy { $0 == .satisfied })
+      } else {
+        #expect(native.checks.allSatisfied, "\(declaration.id)")
+      }
       #expect(Set(native.checks.properties.keys) == rendered.checkNames, "\(declaration.id)")
       #expect((native.checks.deadlock != nil) == rendered.checksDeadlock, "\(declaration.id)")
-      #expect(formal.outcome == .noViolation, "\(declaration.id)")
+      #expect(formal.isComplete, "\(declaration.id)")
     }
   }
 

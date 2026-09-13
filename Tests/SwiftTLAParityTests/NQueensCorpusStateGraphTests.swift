@@ -9,14 +9,18 @@ struct NQueensCorpusStateGraphTests {
         let exploration = try ModelChecker(
             compilation: compilation,
             configuration: try FiniteExplorationConfiguration(maximumStateLimit: 5_000, symmetryReduction: .disabled)
-        ).explore()
+        ).explore(checkingSafety: false)
         try #require(exploration.isComplete)
         #expect(compilation.semantics.behavior.temporalProperties.map(\.name) == ["Termination"])
         let temporal = try exploration.analyzeTemporalProperties(in: compilation)
         #expect(temporal.map(\.status) == [.satisfied])
         let machine = try NQueensModel.makeMachine()
         let native = try ReachabilityGraph(initialMachines: NQueensModel.initialMachines(), maximumStates: 5_000)
-        #expect(native.safetyViolations.isEmpty)
+        #expect(!native.safetyViolations.isEmpty)
+        for (snapshot, violations) in native.safetyViolations {
+            #expect(violations == [.invariant("NoSolutions")])
+            #expect(!snapshot.state.sols.isEmpty)
+        }
         #expect(native.temporalResults["Termination"]?.status == .satisfied)
         let exported = try CanonicalGraph(native)
         let formal = try FormalGraphExporter().export(exploration)
@@ -40,14 +44,8 @@ struct NQueensCorpusStateGraphTests {
 
     @Test("FourQueens reports the upstream NoSolutions counterexample separately from its successful properties")
     func noSolutionsProducesCounterexample() throws {
-        var spec = NQueensModel.spec
-        // The pinned upstream FourQueens MC.cfg adds this deliberately false invariant.
-        spec.invariants.append(.init(
-            name: "NoSolutions",
-            body: .equal(.variable("sols"), .setLiteral([]))
-        ))
         let result = try ModelChecker(
-            compilation: spec.compile(),
+            compilation: NQueensModel.spec.compile(),
             configuration: try FiniteExplorationConfiguration(maximumStateLimit: 5_000, symmetryReduction: .disabled)
         ).check()
         guard case .invariantViolated(let invariant, let state, let trace) = result else {

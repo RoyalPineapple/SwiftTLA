@@ -139,7 +139,10 @@ package struct ModelChecker {
     }
     func exploreGraph() throws -> StateGraph { try explore().graph }
 
-    package func explore() throws -> FiniteExploration { try runExploration() }
+    /// Graph comparisons can defer safety checks so an expected violation does not truncate exploration.
+    package func explore(checkingSafety: Bool = true) throws -> FiniteExploration {
+        try runExploration(checkingSafety: checkingSafety)
+    }
 
     func checkLiveness() throws -> ModelCheckOutcome {
         let exploration = try explore()
@@ -174,7 +177,7 @@ package struct ModelChecker {
         return .ok(statesCount: exploration.graph.states.count)
     }
 
-    private func runExploration() throws -> FiniteExploration {
+    private func runExploration(checkingSafety: Bool) throws -> FiniteExploration {
         try configuration.validatePropertySupport(in: compilation)
         let symmetry = try SymmetryPlan(
             compilation: compilation,
@@ -198,7 +201,8 @@ package struct ModelChecker {
             runtime: runtime,
             seeds: initialStates,
             layout: compilation.layout,
-            checkDeadlock: compilation.semantics.behavior.checkDeadlock,
+            checkingSafety: checkingSafety,
+            checkDeadlock: checkingSafety && compilation.semantics.behavior.checkDeadlock,
             specificationName: compilation.description.name,
             configuration: configuration,
             symmetry: symmetry
@@ -238,6 +242,7 @@ private func compiledBFS(
     runtime: CompiledRuntime,
     seeds: [CompiledState],
     layout: CompiledLayout,
+    checkingSafety: Bool,
     checkDeadlock: Bool,
     specificationName: String,
     configuration: FiniteExplorationConfiguration,
@@ -346,7 +351,7 @@ private func compiledBFS(
         let key = try representative(current)
         guard let currentID = stateToID[key] else { continue }
 
-        for invariant in runtime.behavior.invariants {
+        for invariant in runtime.behavior.invariants where checkingSafety {
             guard try runtime.invariantHolds(invariant, in: current) else {
                 let counterexample = try trace(to: current)
                 guard try !runtime.invariantHolds(invariant, in: counterexample.state) else {
