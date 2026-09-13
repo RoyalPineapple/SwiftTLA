@@ -41,7 +41,7 @@ struct NQueensCorpusStateGraphTests {
     @Test("FourQueens reports the upstream NoSolutions counterexample separately from its successful properties")
     func noSolutionsProducesCounterexample() throws {
         var spec = NQueensModel.spec
-        // The checked-in FourQueens MC.cfg adds this deliberately false invariant.
+        // The pinned upstream FourQueens MC.cfg adds this deliberately false invariant.
         spec.invariants.append(.init(
             name: "NoSolutions",
             body: .equal(.variable("sols"), .setLiteral([]))

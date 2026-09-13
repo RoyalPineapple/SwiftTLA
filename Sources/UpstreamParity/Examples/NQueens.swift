@@ -84,11 +84,3 @@ package struct NQueensModel: Sendable {
         }
     }
 }
-
-extension Example {
-    package static let nQueensFour = FiniteModelFixture(
-        expectedDistinct: 786,
-        maximumStateLimit: 50_000,
-        spec: NQueensModel.spec,
-    )
-}

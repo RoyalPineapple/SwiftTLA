@@ -119,13 +119,6 @@ struct UpstreamParityTests {
         _ = try specification.compile()
     }
 
-    @Test("N-Queens FourQueens PlusCal port matches the published TLC graph")
-    func nQueensMatchesTLC() throws {
-        let exploration = try explore(Example.nQueensFour.spec, maximumStateLimit: 5_000)
-        #expect(exploration.graph.states.count == Example.nQueensFour.expectedDistinct)
-        #expect(isSuccessful(exploration))
-    }
-
     @Test("two-process Lock PlusCal port matches TLC")
     func lockMatchesTLC() throws {
         let exploration = try explore(Example.lockTwoProcess.spec, maximumStateLimit: 100)
