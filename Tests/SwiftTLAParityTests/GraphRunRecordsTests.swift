@@ -4,6 +4,24 @@ import Testing
 @testable import UpstreamParity
 
 struct GraphRunRecordsTests {
+  @Test("native lasso conversion rejects truncated paths and disconnected cycles")
+  func rejectsMalformedNativeLassos() throws {
+    let witnesses: [FairLassoWitness<Int, String?>] = [
+      .init(prefix: [], cycle: [0, 0], prefixActions: [], cycleActions: [nil]),
+      .init(prefix: [0, 1], cycle: [1, 1], prefixActions: [], cycleActions: [nil]),
+      .init(prefix: [0], cycle: [0, 0], prefixActions: [], cycleActions: []),
+      .init(prefix: [0], cycle: [1, 1], prefixActions: [], cycleActions: [nil]),
+      .init(prefix: [0], cycle: [0, 1], prefixActions: [], cycleActions: ["advance"]),
+      .init(prefix: [0], cycle: [0], prefixActions: [], cycleActions: [])
+    ]
+    for witness in witnesses {
+      #expect(throws: GraphRunError.invalidLasso) {
+        try GraphTrace(id: "invalid", witness: witness,
+          stateKey: { CanonicalState(bindings: ["value": .integer($0)]).key }, actionName: { $0 })
+      }
+    }
+  }
+
   @Test("exported failures preserve their check category in retained records")
   func preservesFailureCategories() throws {
     let value = Var<Int>("value")

@@ -310,6 +310,24 @@ package struct GraphTrace: Hashable, Sendable {
     /// The step where the repeating cycle begins, or nil for a finite trace.
     package let cycleStartIndex: Int?
 
+    package init<State: Hashable & Sendable, Action: Equatable & Sendable>(
+        id: String,
+        witness: FairLassoWitness<State, Action?>,
+        stateKey: (State) throws -> CanonicalStateKey,
+        actionName: (Action) throws -> String
+    ) throws {
+        guard witness.prefix.count == witness.prefixActions.count + 1,
+              witness.cycle.count == witness.cycleActions.count + 1,
+              witness.cycle.count >= 2, witness.prefix.last == witness.cycle.first,
+              witness.cycle.first == witness.cycle.last else { throw GraphRunError.invalidLasso }
+        let prefix = zip(witness.prefix, [nil] + witness.prefixActions)
+        let cycle = zip(witness.cycle.dropFirst(), witness.cycleActions)
+        let steps = try (Array(prefix) + Array(cycle)).map { state, action in
+            GraphTraceStep(state: try stateKey(state), action: try action.map(actionName))
+        }
+        self.init(id: id, steps: steps, cycleStartIndex: witness.prefix.count - 1)
+    }
+
     package init(id: String, steps: [GraphTraceStep], cycleStartIndex: Int? = nil) {
         self.id = id
         self.steps = steps
@@ -322,6 +340,7 @@ package enum GraphRunError: Error, Equatable, Sendable {
     case deadlockStateMissing(CanonicalStateKey)
     case traceStateMissing(CanonicalStateKey)
     case emptyTrace
+    case invalidLasso
     case traceInitialActionPresent
     case invalidCycleStart(Int)
     case openCycle

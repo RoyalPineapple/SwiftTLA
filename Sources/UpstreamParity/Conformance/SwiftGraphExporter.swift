@@ -4,7 +4,6 @@ package enum SwiftGraphExporterError: Error, Equatable, Sendable {
   case initialStateMissing(Int)
   case transitionStateMissing(Int)
   case traceStateMissing
-  case invalidLasso
 }
 
 package struct SwiftGraphExporter: Sendable {
@@ -24,17 +23,10 @@ package struct SwiftGraphExporter: Sendable {
       ($0, try CanonicalState(native.formalProjection(of: $0)))
     })
     func lassoTrace(_ witness: FairLassoWitness<Machine.Snapshot, Machine.Action?>) throws -> GraphTrace {
-      guard witness.prefix.count == witness.prefixActions.count + 1,
-            witness.cycle.count == witness.cycleActions.count + 1,
-            witness.cycle.count >= 2, witness.prefix.last == witness.cycle.first,
-            witness.cycle.first == witness.cycle.last else { throw SwiftGraphExporterError.invalidLasso }
-      let prefix = zip(witness.prefix, [nil] + witness.prefixActions)
-      let cycle = zip(witness.cycle.dropFirst(), witness.cycleActions)
-      let steps = try (Array(prefix) + Array(cycle)).map { state, action in
+      try GraphTrace(id: "native-lasso", witness: witness, stateKey: { state in
         guard let canonical = states[state] else { throw SwiftGraphExporterError.traceStateMissing }
-        return GraphTraceStep(state: canonical.key, action: try action.map(actionName))
-      }
-      return GraphTrace(id: "native-lasso", steps: steps, cycleStartIndex: witness.prefix.count - 1)
+        return canonical.key
+      }, actionName: actionName)
     }
     let graph = try CanonicalGraph(native, states: states, renderedActionNames: renderedNames)
     let outcome: GraphRunOutcome

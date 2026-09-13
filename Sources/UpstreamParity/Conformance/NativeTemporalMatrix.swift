@@ -89,9 +89,7 @@ private func exportTemporalRun<Machine: StateMachine>(
     ($0, try CanonicalState(native.formalProjection(of: $0)))
   })
   let canonical = try CanonicalGraph(native, states: states)
-  // This is the complete topology used by the separately reported property result.
-  let graph = try GraphRun(isComplete: true, graph: canonical,
-    observableActions: Set(canonical.edges.map(\.action)), outcome: .noViolation)
+  var trace: GraphTrace?
   let result: TemporalPropertyResult
   switch analysis.status {
   case .satisfied: result = .satisfied
@@ -100,31 +98,19 @@ private func exportTemporalRun<Machine: StateMachine>(
     guard let witness = analysis.witness else {
       throw EvidenceFormatError.invalidField(record: property, field: "native temporal witness")
     }
-    func state(_ snapshot: Machine.Snapshot) throws -> CanonicalState {
+    let lasso = try GraphTrace(id: "native-lasso", witness: witness, stateKey: { snapshot in
       guard let state = states[snapshot] else { throw CanonicalGraphError.missingNativeSnapshot }
-      return state
-    }
-    func edges(_ snapshots: [Machine.Snapshot], _ actions: [Machine.Action?]) throws -> [CanonicalEdge] {
-      guard snapshots.count == actions.count + 1 else {
-        throw EvidenceFormatError.invalidField(record: property, field: "native temporal path")
-      }
-      return try actions.enumerated().map { index, action in
-        CanonicalEdge(source: try state(snapshots[index]).key,
-          action: try action.map { try native.formalCall(for: $0).description } ?? "[stutter]",
-          target: try state(snapshots[index + 1]).key)
-      }
-    }
-    let prefix = try witness.prefix.map(state)
-    let cycle = try witness.cycle.map(state)
-    guard prefix.last == cycle.first,
-      graph.containsTemporalTrace(states: prefix + cycle.dropFirst(),
-        edges: try edges(witness.prefix, witness.prefixActions) + edges(witness.cycle, witness.cycleActions),
-        implicitStutterActions: ["[stutter]"]) else {
-      throw EvidenceFormatError.invalidField(record: property, field: "native temporal transitions")
-    }
+      return state.key
+    }, actionName: { try native.formalCall(for: $0).description })
+    let cycleStart = witness.prefix.count - 1
+    let stateIDs = lasso.steps.map { $0.state.canonicalEncoding }
     result = .violated(try TemporalLassoWitness(
-      prefixStateIDs: prefix.map { $0.key.canonicalEncoding },
-      cycleStateIDs: cycle.map { $0.key.canonicalEncoding }))
+      prefixStateIDs: Array(stateIDs[...cycleStart]),
+      cycleStateIDs: Array(stateIDs[cycleStart...])))
+    trace = lasso
   }
+  // Property results are reported separately; the run owns and validates their trace.
+  let graph = try GraphRun(isComplete: true, graph: canonical,
+    observableActions: Set(canonical.edges.map(\.action)), outcome: .noViolation, trace: trace)
   return (graph, result)
 }

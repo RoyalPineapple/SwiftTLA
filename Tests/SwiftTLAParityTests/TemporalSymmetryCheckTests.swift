@@ -22,8 +22,12 @@ struct TemporalSymmetryCheckTests {
         && temporalCase.configuration.fairness != .none
       if expectsProgress {
         #expect(native.result == .satisfied)
-      } else if case .violated = native.result {
-        // The remaining cases require a counterexample, including unfair stuttering at zero.
+      } else if case .violated(let lasso) = native.result {
+        let trace = try #require(native.graph.trace)
+        let cycleStart = try #require(trace.cycleStartIndex)
+        let stateIDs = trace.steps.map { $0.state.canonicalEncoding }
+        #expect(lasso.prefixStateIDs == Array(stateIDs[...cycleStart]))
+        #expect(lasso.cycleStateIDs == Array(stateIDs[cycleStart...]))
       } else {
         Issue.record("Expected a native counterexample for \(temporalCase.id)")
       }
