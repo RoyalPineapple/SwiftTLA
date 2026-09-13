@@ -3,11 +3,6 @@ import Foundation
 import os
 import SwiftTLA
 
-package enum TLCTraceMode: Equatable, Sendable {
-  case none
-  case dumpJSON
-}
-
 package enum TLCInvocationKind: Equatable, Sendable {
   case finiteGraph
   case temporalProperty
@@ -34,26 +29,6 @@ package enum TLCExecutionOutcome: Equatable, Sendable {
     }
   }
 
-  fileprivate var requiresTrace: Bool {
-    switch self {
-    case .assumptionViolation, .deadlock, .safetyViolation, .livenessViolation,
-         .assertionViolation: true
-    case .completed, .failed: false
-    }
-  }
-}
-
-enum TLCInvocationPhase: String, Hashable {
-  case primary
-  case trace
-
-  var stdoutLog: String {
-    self == .primary ? "tlc.stdout.log" : "tlc.\(rawValue).stdout.log"
-  }
-
-  var stderrLog: String {
-    self == .primary ? "tlc.stderr.log" : "tlc.\(rawValue).stderr.log"
-  }
 }
 
 package struct TLCProcessExecutionFailure: Equatable, Sendable {
@@ -93,8 +68,6 @@ package enum TLCProcessError: Error, Equatable, Sendable {
   case timedOut(partialStdout: String, partialStderr: String)
   case failedToStart(String)
   case invalidModuleBundle(TLCModuleBundleError)
-  case traceCaptureFailed(completed: TLCProcessRun, failed: TLCProcessResult)
-  case traceCaptureExecutionFailed(completed: TLCProcessRun, error: TLCProcessExecutionFailure)
 }
 
 package struct TLCProcessRequest: Equatable, Sendable {
@@ -109,7 +82,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
   package let finiteGraphCase: FiniteGraphCase
   package let runID: UUID
   package let timeout: TimeInterval
-  package let traceMode: TLCTraceMode
   package let invocation: TLCInvocationKind
   package let referenceArtifacts: TLCReferenceArtifacts?
 
@@ -124,7 +96,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
     finiteGraphCase: FiniteGraphCase,
     runID: UUID,
     timeout: TimeInterval = 60,
-    traceMode: TLCTraceMode = .none,
     invocation: TLCInvocationKind,
     referenceArtifacts: TLCReferenceArtifacts? = nil
   ) {
@@ -138,7 +109,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
     self.finiteGraphCase = finiteGraphCase
     self.runID = runID
     self.timeout = timeout
-    self.traceMode = traceMode
     self.invocation = invocation
     self.referenceArtifacts = referenceArtifacts
   }
@@ -157,7 +127,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
 
   private var inputDirectory: URL {
     workingDirectory.appendingPathComponent(
-      "input-\(runID.uuidString.lowercased())-\(traceMode)", isDirectory: true)
+      "input-\(runID.uuidString.lowercased())", isDirectory: true)
   }
 
   private func commandArguments(
@@ -169,8 +139,9 @@ package struct TLCProcessRequest: Equatable, Sendable {
       "-Dswifttla.tlc.graph.run-id=\(runID.uuidString.lowercased())",
       "-Dswifttla.tlc.graph.case-id=\(caseID)",
       "-cp", "\(jar.path):\(bridgeClasses.path)",
-      "tlc2.TLC", "-dump", "class,org.swifttla.conformance.LosslessStateWriter"
-    ] + traceArguments(traceMode) + finiteGraphCase.arguments + ["-config", configuration.path, module.path]
+      "tlc2.TLC", "-dump", "class,org.swifttla.conformance.LosslessStateWriter",
+      "-dumpTrace", "json", traceOutput.path
+    ] + finiteGraphCase.arguments + ["-config", configuration.path, module.path]
   }
 
   package func validateLaunchBinding(module: URL, configuration: URL) throws {
@@ -285,13 +256,6 @@ package struct TLCProcessRequest: Equatable, Sendable {
     }
   }
 
-  private func traceArguments(_ mode: TLCTraceMode) -> [String] {
-    switch mode {
-    case .none: []
-    case .dumpJSON: ["-dumpTrace", "json", traceOutput.path]
-    }
-  }
-
   private func sameFile(_ lhs: URL, _ rhs: URL) -> Bool {
     lhs.resolvingSymlinksInPath().standardizedFileURL
       == rhs.resolvingSymlinksInPath().standardizedFileURL
@@ -343,14 +307,8 @@ package struct SystemTLCProcessExecutor: TLCProcessExecuting {
   }
 }
 
-package struct TLCProcessRun: Equatable, Sendable {
-  package let primary: TLCProcessResult
-  package let outcome: TLCExecutionOutcome
-  package let trace: TLCProcessResult?
-}
-
 package struct TLCProcessCapture: Sendable {
-  package let run: TLCProcessRun
+  package let outcome: TLCExecutionOutcome
   package let graph: GraphRun
 }
 
@@ -361,237 +319,84 @@ package struct TLCProcessAdapter: Sendable {
     self.executor = executor
   }
 
-  private func captureTrace(
-    after primary: TLCProcessResult,
-    outcome: TLCExecutionOutcome,
-    request: TLCProcessRequest
-  ) throws -> TLCProcessResult? {
-    guard outcome.requiresTrace else {
-      return nil
-    }
-
-    let trace: TLCProcessResult
-    do {
-      trace = try executor.execute(traceRequest(request))
-    } catch {
-      throw TLCProcessError.traceCaptureExecutionFailed(
-        completed: TLCProcessRun(primary: primary, outcome: outcome, trace: nil),
-        error: TLCProcessExecutionFailure(error))
-    }
-    guard trace.status == primary.status else {
-      throw TLCProcessError.traceCaptureFailed(
-        completed: TLCProcessRun(primary: primary, outcome: outcome, trace: nil), failed: trace)
-    }
-    return trace
-  }
-
   package func capture(
     _ request: TLCProcessRequest,
     retainingIn directory: URL
   ) throws -> TLCProcessCapture {
     try RetainedFiles.createDirectory(directory, beneath: directory.deletingLastPathComponent())
+    try clearTraceOutput(for: request, retainingIn: directory)
+    let process: TLCProcessResult
+    do {
+      process = try executor.execute(request)
+    } catch {
+      try retain(request, failure: TLCProcessExecutionFailure(error), in: directory)
+      throw error
+    }
+    // Keep output even when the graph is malformed or incomplete.
+    try retain(request, process: process, in: directory)
     let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase)
-    let primary: TLCProcessResult
-    do {
-      primary = try executor.execute(request)
-    } catch {
-      try retain(error, request: request, in: directory)
-      throw error
+    let stream = try reader.parse(Data(contentsOf: request.graphEvents))
+    guard stream.runID == request.runID else {
+      throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
     }
-    let stream: TLCGraphEventStream
-    do {
-      stream = try reader.parse(Data(contentsOf: request.graphEvents))
-      guard stream.runID == request.runID else {
-        throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
-      }
-    } catch {
-      try retain([.primary: primary], request: request, in: directory)
-      throw error
+    let outcome = TLCExecutionOutcome(exitStatus: process.status, invocation: request.invocation)
+    return TLCProcessCapture(outcome: outcome, graph: try reader.makeGraphRun(stream, outcome: outcome))
+  }
+
+  private func clearTraceOutput(for request: TLCProcessRequest, retainingIn directory: URL) throws {
+    let root = request.workingDirectory.resolvingSymlinksInPath().standardizedFileURL
+    let trace = try RetainedFiles.resolve(request.traceOutput, beneath: root)
+    let retained = directory.resolvingSymlinksInPath().standardizedFileURL
+    let protected = [request.javaExecutable, request.jar, request.bridgeClasses, request.graphEvents]
+      .map { $0.resolvingSymlinksInPath().standardizedFileURL }
+    guard trace != root, trace != retained, !trace.path.hasPrefix(retained.path + "/"),
+          !protected.contains(trace) else {
+      throw EvidenceFormatError.invalidField(record: request.traceOutput.path, field: "trace output aliases an input or retained output")
     }
-    let outcome = TLCExecutionOutcome(
-      exitStatus: primary.status,
-      invocation: request.invocation
-    )
-    let run: TLCProcessRun
-    do {
-      run = TLCProcessRun(
-        primary: primary,
-        outcome: outcome,
-        trace: try captureTrace(after: primary, outcome: outcome, request: request)
-      )
-    } catch {
-      try retain(error, request: request, in: directory)
-      throw error
+    if (try? FileManager.default.destinationOfSymbolicLink(atPath: request.traceOutput.path)) != nil {
+      throw EvidenceFormatError.invalidField(record: request.traceOutput.path, field: "trace output is a symbolic link")
     }
-    try retain(run, request: request, in: directory)
-    return TLCProcessCapture(
-      run: run,
-      graph: try reader.makeGraphRun(stream, outcome: run.outcome)
-    )
+    guard FileManager.default.fileExists(atPath: request.traceOutput.path) else { return }
+    let values = try request.traceOutput.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+    guard values.isRegularFile == true, values.isSymbolicLink != true else {
+      throw EvidenceFormatError.invalidField(record: request.traceOutput.path, field: "trace output must be a regular file")
+    }
+    try FileManager.default.removeItem(at: trace)
   }
 
   private func retain(
-    _ run: TLCProcessRun,
-    request: TLCProcessRequest,
+    _ request: TLCProcessRequest,
+    process: TLCProcessResult? = nil,
+    failure: TLCProcessExecutionFailure? = nil,
     in directory: URL
   ) throws {
-    var results: [TLCInvocationPhase: TLCProcessResult] = [.primary: run.primary]
-    if let trace = run.trace { results[.trace] = trace }
-    try retain(results, request: request, in: directory)
-  }
-
-  private func retain(
-    _ results: [TLCInvocationPhase: TLCProcessResult],
-    request: TLCProcessRequest,
-    in directory: URL
-  ) throws {
-    try writeProcessRecord(
-      request: request,
-      results: results,
-      failures: [:],
-      to: directory
-    )
-    let logs = try RetainedFiles.createDirectory(
-      directory.appendingPathComponent("logs"), beneath: directory)
-    for (phase, processResult) in results {
-      try retain(processResult, phase: phase, in: logs)
-    }
-    try retainRawFiles(from: request, in: directory)
-  }
-
-  private func retain(
-    _ error: Error,
-    request: TLCProcessRequest,
-    in directory: URL
-  ) throws {
-    let lifecycle = processLifecycle(for: error)
-    try writeProcessRecord(
-      request: request, results: lifecycle.results, failures: lifecycle.failures, to: directory)
-    let logs = try RetainedFiles.createDirectory(
-      directory.appendingPathComponent("logs"), beneath: directory)
-    switch error {
-    case TLCProcessError.traceCaptureFailed(let completed, let failed):
-      try retain(completed.primary, phase: .primary, in: logs)
-      try retain(failed, phase: .trace, in: logs)
-    case TLCProcessError.traceCaptureExecutionFailed(let completed, let failure):
-      try retain(completed.primary, phase: .primary, in: logs)
-      try retain(failure, phase: .trace, in: logs)
-    default:
-      try retain(TLCProcessExecutionFailure(error), phase: .primary, in: logs)
-    }
-    try retainRawFiles(from: request, in: directory)
-  }
-
-  private func retainRawFiles(from request: TLCProcessRequest, in directory: URL) throws {
-    let artifacts = [
-      (request.graphEvents, "graph-events.jsonl"),
-      (traceGraphEvents(for: request.graphEvents), "graph-events.trace.jsonl"),
-      (request.traceOutput, "counterexample.json")
-    ]
-    for (source, name) in artifacts {
-      let destination = directory.appendingPathComponent(name)
-      let exists = FileManager.default.fileExists(atPath: source.path)
-      if exists {
-        if FileManager.default.fileExists(atPath: destination.path) {
-          try FileManager.default.removeItem(at: destination)
-        }
-        try FileManager.default.copyItem(at: source, to: destination)
-      }
-    }
-  }
-
-  private func traceRequest(_ request: TLCProcessRequest) -> TLCProcessRequest {
-    TLCProcessRequest(
-      javaExecutable: request.javaExecutable, jar: request.jar,
-      bridgeClasses: request.bridgeClasses,
-      bundle: request.bundle,
-      graphEvents: traceGraphEvents(for: request.graphEvents),
-      traceOutput: request.traceOutput,
-      workingDirectory: request.workingDirectory,
-      finiteGraphCase: request.finiteGraphCase, runID: request.runID,
-      timeout: request.timeout, traceMode: .dumpJSON,
-      invocation: request.invocation,
-      referenceArtifacts: request.referenceArtifacts
-    )
-  }
-
-  private func processLifecycle(
-    for error: Error
-  ) -> (
-    results: [TLCInvocationPhase: TLCProcessResult],
-    failures: [TLCInvocationPhase: TLCProcessExecutionFailure]
-  ) {
-    switch error {
-    case TLCProcessError.traceCaptureFailed(let completed, let failed):
-      return ([.primary: completed.primary, .trace: failed], [:])
-    case TLCProcessError.traceCaptureExecutionFailed(let completed, let failure):
-      return ([.primary: completed.primary], [.trace: failure])
-    default:
-      return ([:], [.primary: TLCProcessExecutionFailure(error)])
-    }
-  }
-
-  private func writeProcessRecord(
-    request: TLCProcessRequest,
-    results: [TLCInvocationPhase: TLCProcessResult],
-    failures: [TLCInvocationPhase: TLCProcessExecutionFailure],
-    to directory: URL
-  ) throws {
-    var record: [String: Any] = [
+    let record: [String: Any] = [
       "caseID": request.caseID,
       "runID": request.runID.uuidString.lowercased(),
       "timeout": request.timeout,
       "inputs": bundleInputJSON(request.bundle),
       "toolPin": pinJSON(request.finiteGraphCase.pin),
-      TLCInvocationPhase.primary.rawValue: invocationJSON(
-        request: request,
-        process: results[.primary],
-        failure: failures[.primary])
+      "invocation": invocationJSON(request: request, process: process, failure: failure)
     ]
-    if results[.trace] != nil || failures[.trace] != nil {
-      record[TLCInvocationPhase.trace.rawValue] = invocationJSON(
-        request: traceRequest(request),
-        process: results[.trace],
-        failure: failures[.trace])
-    }
     try RetainedFiles.writeJSON(record, to: directory.appendingPathComponent("tlc-process.json"))
-  }
-
-  private func retain(_ process: TLCProcessResult, phase: TLCInvocationPhase, in directory: URL) throws {
-    try RetainedFiles.writeText(
-      redactingSecrets(in: process.stdout),
-      to: directory.appendingPathComponent(phase.stdoutLog)
-    )
-    try RetainedFiles.writeText(
-      redactingSecrets(in: process.stderr),
-      to: directory.appendingPathComponent(phase.stderrLog)
-    )
-  }
-
-  private func retain(
-    _ failure: TLCProcessExecutionFailure,
-    phase: TLCInvocationPhase,
-    in directory: URL
-  ) throws {
-    if let stdout = failure.partialStdout, let stderr = failure.partialStderr {
-      try RetainedFiles.writeText(
-        redactingSecrets(in: stdout),
-        to: directory.appendingPathComponent(phase.stdoutLog)
-      )
-      try RetainedFiles.writeText(
-        redactingSecrets(in: stderr),
-        to: directory.appendingPathComponent(phase.stderrLog)
-      )
-    } else {
-      try RetainedFiles.writeText(
-        redactingSecrets(in: failure.message),
-        to: directory.appendingPathComponent("tlc.\(phase.rawValue).failure.log")
-      )
+    let logs = try RetainedFiles.createDirectory(directory.appendingPathComponent("logs"), beneath: directory)
+    if let stdout = process?.stdout ?? failure?.partialStdout {
+      try RetainedFiles.writeText(redactingSecrets(in: stdout), to: logs.appendingPathComponent("tlc.stdout.log"))
     }
-  }
-
-  private func traceGraphEvents(for primary: URL) -> URL {
-    return primary.deletingPathExtension().appendingPathExtension("trace.jsonl")
+    if let stderr = process?.stderr ?? failure?.partialStderr {
+      try RetainedFiles.writeText(redactingSecrets(in: stderr), to: logs.appendingPathComponent("tlc.stderr.log"))
+    }
+    if let failure {
+      try RetainedFiles.writeText(redactingSecrets(in: failure.message), to: logs.appendingPathComponent("tlc.failure.log"))
+    }
+    for (source, name) in [(request.graphEvents, "graph-events.jsonl"), (request.traceOutput, "counterexample.json")] {
+      guard FileManager.default.fileExists(atPath: source.path) else { continue }
+      let destination = directory.appendingPathComponent(name)
+      if FileManager.default.fileExists(atPath: destination.path) {
+        try FileManager.default.removeItem(at: destination)
+      }
+      try FileManager.default.copyItem(at: source, to: destination)
+    }
   }
 }
 

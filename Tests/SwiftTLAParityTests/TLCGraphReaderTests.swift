@@ -48,7 +48,7 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       bundle: try TLCProcessRequest.declaredBundle(root: root, configuration: cfg),
       graphEvents: directory.appendingPathComponent("events.jsonl"),
       traceOutput: directory.appendingPathComponent("trace.json"),
-      workingDirectory: directory.appendingPathComponent("work"),
+      workingDirectory: directory,
       finiteGraphCase: try fixtureCase(try toolchainPin()),
       runID: UUID(),
       invocation: .finiteGraph
@@ -125,7 +125,7 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       ),
       graphEvents: directory.appendingPathComponent("events.jsonl"),
       traceOutput: directory.appendingPathComponent("trace.json"),
-      workingDirectory: directory.appendingPathComponent("work"),
+      workingDirectory: directory,
       finiteGraphCase: try fixtureCase(try toolchainPin()),
       runID: UUID(),
       invocation: .finiteGraph
@@ -160,6 +160,23 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
     )
     #expect(!run.isComparable)
     #expect(run.outcome == .invariantViolation("TLC safety property violation"))
+  }
+
+  @Test("process capture rejects trace symlinks before executing", arguments: [true, false])
+  func rejectsTraceSymlink(targetExists: Bool) throws {
+    let directory = try helperProcessDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let request = try retainedCaptureRequest(in: directory)
+    let target = directory.appendingPathComponent("protected.json")
+    if targetExists { try Data("keep".utf8).write(to: target) }
+    try FileManager.default.createSymbolicLink(at: request.traceOutput, withDestinationURL: target)
+    let executor = RecordingTLCExecutor(results: [])
+    #expect(throws: EvidenceFormatError.self) {
+      try TLCProcessAdapter(executor: executor).capture(request, retainingIn: directory.appendingPathComponent("retained"))
+    }
+    #expect(executor.requests.isEmpty)
+    if targetExists { #expect(try String(contentsOf: target) == "keep") }
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: request.traceOutput.path) == target.path)
   }
 
   @Test("TLC exit status and closed event stream define graph outcomes")
@@ -262,7 +279,6 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       workingDirectory: URL(fileURLWithPath: "/tmp"),
       finiteGraphCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1"]),
       runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001")),
-      traceMode: .dumpJSON,
       invocation: .finiteGraph
     )
     let command = request.launchArguments
@@ -594,28 +610,22 @@ extension TLCGraphReaderTests {
     }
   }
 
-  @Test("process adapter adds trace capture only after a violation")
-  func onlyRequestsTraceAfterViolation() throws {
+  @Test("process capture requests graph and counterexample in one invocation", arguments: [Int32(0), 12, 13])
+  func capturesOnce(status: Int32) throws {
     let directory = try helperProcessDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
     let request = try retainedCaptureRequest(in: directory)
     try completeGraphStream(request.finiteGraphCase).write(to: request.graphEvents, options: .atomic)
-    let executor = RecordingTLCExecutor(results: [
-      .init(status: 12, stdout: "Error: Invariant broken", stderr: ""),
-      .init(status: 12, stdout: "Error: Invariant broken", stderr: "")
-    ])
-    let adapter = TLCProcessAdapter(executor: executor)
-    let capture = try adapter.capture(
-      request,
-      retainingIn: directory.appendingPathComponent("evidence")
-    )
-    #expect(capture.run.outcome == .safetyViolation)
-    #expect(executor.requests.count == 2)
-    #expect(executor.requests[0].traceMode == .none)
-    #expect(executor.requests[1].traceMode == .dumpJSON)
-    #expect(executor.requests[0].graphEvents == request.graphEvents)
-    #expect(executor.requests[1].graphEvents.lastPathComponent == "events.trace.jsonl")
-    #expect(capture.run.trace == .init(status: 12, stdout: "Error: Invariant broken", stderr: ""))
+    try Data("stale trace".utf8).write(to: request.traceOutput)
+    let executor = RecordingTLCExecutor(results: [.init(status: status, stdout: "TLC output", stderr: "")])
+    let output = directory.appendingPathComponent("retained")
+    let capture = try TLCProcessAdapter(executor: executor).capture(request, retainingIn: output)
+    #expect(executor.requests.count == 1)
+    #expect(executor.requests.first == request)
+    #expect(request.launchArguments.contains("-dumpTrace"))
+    #expect(capture.graph.isComplete == (status == 0))
+    #expect(!FileManager.default.fileExists(atPath: request.traceOutput.path))
+    #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("counterexample.json").path))
   }
 
   @Test("TLC exit status defines the process outcome")
@@ -633,7 +643,7 @@ extension TLCGraphReaderTests {
       retainingIn: directory.appendingPathComponent("evidence")
     )
 
-    #expect(capture.run.outcome == .completed)
+    #expect(capture.outcome == .completed)
     #expect(capture.graph.isComparable)
     #expect(executor.requests.count == 1)
   }
@@ -770,7 +780,7 @@ private func retainedCaptureRequest(in directory: URL) throws -> TLCProcessReque
     bundle: fixtureBundle(),
     graphEvents: directory.appendingPathComponent("events.jsonl"),
     traceOutput: directory.appendingPathComponent("counterexample.json"),
-    workingDirectory: directory.appendingPathComponent("work"),
+    workingDirectory: directory,
     finiteGraphCase: try fixtureCase(try toolchainPin(), arguments: ["-workers", "1", "-fp", "1"]),
     runID: try #require(UUID(uuidString: "00000000-0000-4000-8000-000000000001")),
     invocation: .finiteGraph

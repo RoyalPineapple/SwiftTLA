@@ -318,8 +318,8 @@ struct TLCTemporalAdapterTests {
     }
   }
 
-  @Test("TLC temporal adapter retains primary evidence when trace capture throws")
-  func retainsPrimaryEvidenceAfterTraceCaptureFailure() throws {
+  @Test("TLC temporal adapter retains partial output when execution throws")
+  func retainsPartialOutputAfterExecutionFailure() throws {
     let fixture = try Fixture()
     let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
     try Data("stale trace".utf8).write(to: fixture.request.traceOutput, options: .atomic)
@@ -327,7 +327,7 @@ struct TLCTemporalAdapterTests {
       try TLCTemporalAdapter(
         processAdapter: TLCProcessAdapter(executor: try fixture.executor(
           propertyStream: stream,
-          traceFails: true)))
+          executionFails: true)))
         .capture(try fixture.input())
     }
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("logs/tlc.stdout.log").path))
@@ -337,8 +337,8 @@ struct TLCTemporalAdapterTests {
     #expect(!FileManager.default.fileExists(atPath: fixture.request.traceOutput.path))
     let resultJSON = try JSONSerialization.jsonObject(
       with: Data(contentsOf: fixture.output.appendingPathComponent("tlc-process.json"))) as? [String: Any]
-    let primary = resultJSON?["primary"] as? [String: Any]
-    #expect(primary?["exitStatus"] as? Int == 13)
+    let invocation = resultJSON?["invocation"] as? [String: Any]
+    #expect(invocation?["executionError"] as? String != nil)
   }
 
   @Test("TLC temporal adapter rejects a trace path that collides with generated evidence")
@@ -447,7 +447,7 @@ struct TLCTemporalAdapterTests {
     let propertyResult: TLCProcessResult
     let graphResult: TLCProcessResult
     let trace: Data?
-    let traceFails: Bool
+    let executionFails: Bool
 
     init(
       propertyStream: Data,
@@ -456,7 +456,7 @@ struct TLCTemporalAdapterTests {
       propertyResult: TLCProcessResult = Fixture.temporalViolation,
       graphResult: TLCProcessResult = Fixture.success,
       trace: Data? = nil,
-      traceFails: Bool = false
+      executionFails: Bool = false
     ) {
       self.propertyStream = propertyStream
       self.graphStream = graphStream
@@ -464,20 +464,19 @@ struct TLCTemporalAdapterTests {
       self.propertyResult = propertyResult
       self.graphResult = graphResult
       self.trace = trace
-      self.traceFails = traceFails
+      self.executionFails = executionFails
     }
 
     func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
-      if request.traceMode == .dumpJSON {
-        if traceFails { throw TLCProcessError.failedToStart("trace failed") }
-        if let trace { try trace.write(to: request.traceOutput, options: .atomic) }
-        return propertyResult
-      }
       if request.runID == graphRunID {
         try graphStream.write(to: request.graphEvents, options: .atomic)
         return graphResult
       }
       try propertyStream.write(to: request.graphEvents, options: .atomic)
+      if executionFails {
+        throw TLCProcessError.timedOut(partialStdout: "partial stdout", partialStderr: "partial stderr")
+      }
+      if let trace { try trace.write(to: request.traceOutput, options: .atomic) }
       return propertyResult
     }
   }
@@ -604,7 +603,6 @@ struct TLCTemporalAdapterTests {
         finiteGraphCase: request.finiteGraphCase,
         runID: request.runID,
         timeout: request.timeout,
-        traceMode: request.traceMode,
         invocation: request.invocation,
         referenceArtifacts: request.referenceArtifacts
       )
@@ -625,7 +623,6 @@ struct TLCTemporalAdapterTests {
         finiteGraphCase: completeGraphRequest.finiteGraphCase,
         runID: completeGraphRequest.runID,
         timeout: completeGraphRequest.timeout,
-        traceMode: completeGraphRequest.traceMode,
         invocation: completeGraphRequest.invocation,
         referenceArtifacts: completeGraphRequest.referenceArtifacts
       )
@@ -635,7 +632,7 @@ struct TLCTemporalAdapterTests {
       propertyStream: Data,
       propertyResult: TLCProcessResult = Fixture.temporalViolation,
       trace: Data? = nil,
-      traceFails: Bool = false
+      executionFails: Bool = false
     ) throws -> CompleteGraphExecutor {
       try CompleteGraphExecutor(
         propertyStream: propertyStream,
@@ -643,7 +640,7 @@ struct TLCTemporalAdapterTests {
         graphRunID: completeGraphRequest.runID,
         propertyResult: propertyResult,
         trace: trace,
-        traceFails: traceFails)
+        executionFails: executionFails)
     }
 
 

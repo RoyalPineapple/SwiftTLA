@@ -196,7 +196,7 @@ struct FiniteGraphCheckTests {
     #expect(Set(inputs.compactMap { $0["file"] }) == ["Fixture.tla", "Fixture.cfg"])
     #expect(Set(inputs.compactMap { $0["sha256"] }) == [SHA256.hex(Data())])
     #expect(process["toolPin"] != nil)
-    let primary = try #require(process["primary"] as? [String: Any])
+    let primary = try #require(process["invocation"] as? [String: Any])
     let arguments = try #require(primary["arguments"] as? [String])
     #expect(arguments.contains("-workers"))
     #expect(arguments.contains(where: { $0.hasSuffix("/Fixture.cfg") }))
@@ -334,67 +334,29 @@ struct FiniteGraphCheckTests {
 }
 
 extension FiniteGraphCheckTests {
-  @Test("finite graph check preserves primary logs and the trace stream after a thrown trace execution failure")
-  func retainsThrownTraceExecutionEvidenceByPhase() throws {
+  @Test("failed TLC execution retains partial output and the graph stream", arguments: [true, false])
+  func retainsFailedExecution(timedOut: Bool) throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = try temporaryRequest(in: root)
-    let output = root.appendingPathComponent("trace-execution-failure")
-    let check = FiniteGraphCheck(
-      tlcProcess: TLCProcessAdapter(
-        executor: ThrowingFollowupTLCExecutor(
-          stream: try graphStream(for: request.finiteGraphCase, runID: request.runID),
-          failure: .trace
-        )
-      )
-    )
-    let checkOutput = check.run(
-      swiftRun: { try fixtureRun() },
-      tlcRequest: request,
-      outputDirectory: output
-    )
-    #expect(checkOutput.exitCode == .failure)
-    let primaryLog = try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))
-    let traceLog = try String(contentsOf: output.appendingPathComponent("logs/tlc.trace.stdout.log"))
-    #expect(primaryLog.contains("primary stdout"))
-    #expect(!primaryLog.contains("primary-secret"))
-    #expect(traceLog.contains("trace partial stdout"))
-    #expect(!traceLog.contains("trace-secret"))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.jsonl").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.trace.jsonl").path))
-    let process = try json(at: output.appendingPathComponent("tlc-process.json"))
-    #expect((process["primary"] as? [String: Any])?["exitStatus"] as? Int == 12)
-    #expect((process["trace"] as? [String: Any])?["executionError"] as? String != nil)
-  }
-  @Test("finite graph check retains completed primary evidence after an arbitrary trace execution error")
-  func retainsArbitraryTraceExecutionEvidenceByPhase() throws {
-    let fileManager = FileManager.default
-    let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? fileManager.removeItem(at: root) }
-    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = try temporaryRequest(in: root)
-    let output = root.appendingPathComponent("arbitrary-trace-execution-failure")
+    let output = root.appendingPathComponent("failed-run")
     let checkOutput = FiniteGraphCheck(
-      tlcProcess: TLCProcessAdapter(
-        executor: ArbitraryFollowupFailureTLCExecutor(
-          stream: try graphStream(for: request.finiteGraphCase, runID: request.runID),
-          failure: .trace
-        )
-      )
-    ).run(
-      swiftRun: { try fixtureRun() },
-      tlcRequest: request,
-      outputDirectory: output
-    )
+      tlcProcess: TLCProcessAdapter(executor: InterruptedTLCExecutor(
+        stream: try graphStream(for: request.finiteGraphCase, runID: request.runID), timedOut: timedOut))
+    ).run(swiftRun: { try fixtureRun() }, tlcRequest: request, outputDirectory: output)
     #expect(checkOutput.exitCode == .failure)
-    #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains("primary stdout"))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.trace.failure.log").path))
-    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.failure.log").path))
-    let process = try json(at: output.appendingPathComponent("tlc-process.json"))
-    #expect((process["primary"] as? [String: Any])?["exitStatus"] as? Int == 12)
-    #expect((process["trace"] as? [String: Any])?["executionError"] as? String != nil)
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.jsonl").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.failure.log").path))
+    let invocation = try #require(json(at: output.appendingPathComponent("tlc-process.json"))["invocation"] as? [String: Any])
+    #expect(invocation["executionError"] as? String != nil)
+    #expect(invocation["exitStatus"] == nil)
+    if timedOut {
+      let stdout = try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))
+      #expect(stdout.contains("partial stdout"))
+      #expect(!stdout.contains("private-secret"))
+    }
   }
   @Test("finite graph check rejects an existing output without touching it")
   func rejectsExistingOutput() throws {
@@ -483,49 +445,16 @@ private struct FailingTLCExecutor: TLCProcessExecuting {
       partialStdout: "partial stdout TOKEN=secret", partialStderr: "partial stderr")
   }
 }
-private enum FollowupFailure: Sendable {
-  case trace
-}
-private final class ThrowingFollowupTLCExecutor: TLCProcessExecuting, Sendable {
+private struct InterruptedTLCExecutor: TLCProcessExecuting {
   let stream: Data
-  let failure: FollowupFailure
-  init(stream: Data, failure: FollowupFailure) {
-    self.stream = stream
-    self.failure = failure
-  }
+  let timedOut: Bool
+
   func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     try stream.write(to: request.graphEvents)
-    switch request.traceMode {
-    case .none:
-      return TLCProcessResult(status: 12, stdout: "Error: primary stdout TOKEN=primary-secret", stderr: "")
-    case .dumpJSON where failure == .trace:
-      throw TLCProcessError.timedOut(
-        partialStdout: "trace partial stdout TOKEN=trace-secret", partialStderr: "trace partial stderr")
-    case .dumpJSON:
-      return TLCProcessResult(status: 12, stdout: "Error: trace stdout", stderr: "")
+    if timedOut {
+      throw TLCProcessError.timedOut(partialStdout: "partial stdout TOKEN=private-secret", partialStderr: "partial stderr")
     }
-  }
-}
-private enum ArbitraryTLCExecutorFailure: Error, Sendable {
-  case launchValidation
-}
-private final class ArbitraryFollowupFailureTLCExecutor: TLCProcessExecuting, Sendable {
-  let stream: Data
-  let failure: FollowupFailure
-  init(stream: Data, failure: FollowupFailure) {
-    self.stream = stream
-    self.failure = failure
-  }
-  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
-    try stream.write(to: request.graphEvents)
-    switch request.traceMode {
-    case .none:
-      return TLCProcessResult(status: 12, stdout: "Error: primary stdout", stderr: "")
-    case .dumpJSON where failure == .trace:
-      throw ArbitraryTLCExecutorFailure.launchValidation
-    case .dumpJSON:
-      return TLCProcessResult(status: 12, stdout: "Error: trace stdout", stderr: "")
-    }
+    throw TLCProcessError.failedToStart("launch validation failed")
   }
 }
 private func json(at url: URL) throws -> [String: Any] {

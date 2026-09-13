@@ -57,9 +57,7 @@ package struct TLCTemporalAdapter: Sendable {
       input.swiftRun,
       to: input.outputDirectory.appendingPathComponent("swift-graph.jsonl")
     )
-    try clearTraceOutput(for: input.request)
     let capture = try processAdapter.capture(input.request, retainingIn: input.outputDirectory)
-    let run = capture.run
     let completeGraph = capture.graph.isComparable
       ? capture.graph
       : try captureCompleteGraph(input)
@@ -68,7 +66,7 @@ package struct TLCTemporalAdapter: Sendable {
       to: input.outputDirectory.appendingPathComponent("tlc-graph.jsonl")
     )
     let tlcOutcome = try temporalResult(
-      run: run,
+      outcome: capture.outcome,
       graph: completeGraph,
       outputDirectory: input.outputDirectory,
       property: input.temporalCase.configuration.property,
@@ -141,11 +139,10 @@ package struct TLCTemporalAdapter: Sendable {
     _ input: TLCTemporalCaptureInput
   ) throws -> GraphRun {
     let request = input.completeGraphRequest
-    try clearTraceOutput(for: request)
     let directory = input.outputDirectory.appendingPathComponent("complete-graph-pass", isDirectory: true)
     try RetainedFiles.createDirectory(directory, beneath: input.outputDirectory)
     let capture = try processAdapter.capture(request, retainingIn: directory)
-    guard capture.run.outcome == .completed, capture.graph.isComparable else {
+    guard capture.outcome == .completed, capture.graph.isComparable else {
       throw TLCTemporalAdapterError.incompleteGraph
     }
     return capture.graph
@@ -155,27 +152,27 @@ package struct TLCTemporalAdapter: Sendable {
 
 extension TLCTemporalAdapter {
   private func temporalResult(
-    run: TLCProcessRun,
+    outcome: TLCExecutionOutcome,
     graph: GraphRun,
     outputDirectory: URL,
     property: TemporalPropertyKind,
     allowsImplicitStuttering: Bool
   ) throws -> TemporalPropertyResult {
-    if run.outcome == .completed {
+    if outcome == .completed {
       return .satisfied
     }
     let violationOutcome: TLCExecutionOutcome = switch property {
     case .always: .safetyViolation
     case .eventually, .alwaysEventually, .eventuallyAlways, .leadsTo, .leavesZero: .livenessViolation
     }
-    guard run.outcome == violationOutcome,
+    guard outcome == violationOutcome,
           FileManager.default.fileExists(atPath: outputDirectory.appendingPathComponent("counterexample.json").path) else {
       return .unavailable
     }
     let trace = try TLCTraceParser().parseCounterexample(
       Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json")))
     return .violated(try boundTrace(trace, to: graph.graph,
-      requiresCycle: run.outcome == .livenessViolation, allowsImplicitStuttering: allowsImplicitStuttering))
+      requiresCycle: outcome == .livenessViolation, allowsImplicitStuttering: allowsImplicitStuttering))
   }
 
   private func boundTrace(
@@ -201,23 +198,6 @@ extension TLCTemporalAdapter {
     let bound = GraphTrace(id: trace.id, steps: steps, cycleStartIndex: cycleStart)
     try bound.validate(in: graph)
     return bound
-  }
-
-  private func clearTraceOutput(for request: TLCProcessRequest) throws {
-    let originalTraceOutput = request.traceOutput.standardizedFileURL
-    let traceOutput = resolvedURL(originalTraceOutput)
-    let workingDirectory = resolvedURL(request.workingDirectory)
-    let workingPath = workingDirectory.path.hasSuffix("/") ? workingDirectory.path : workingDirectory.path + "/"
-    guard traceOutput.path.hasPrefix(workingPath),
-          !protectedArtifacts(for: request).contains(traceOutput) else {
-      throw TLCTemporalAdapterError.graphEvidenceInvalid
-    }
-    guard FileManager.default.fileExists(atPath: originalTraceOutput.path) else { return }
-    let values = try originalTraceOutput.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
-    guard values.isRegularFile == true, values.isSymbolicLink != true else {
-      throw TLCTemporalAdapterError.graphEvidenceInvalid
-    }
-    try FileManager.default.removeItem(at: traceOutput)
   }
 
   private func protectedArtifacts(for request: TLCProcessRequest) -> [URL] {
