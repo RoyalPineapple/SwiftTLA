@@ -237,6 +237,15 @@ package struct CanonicalGraph: Equatable, Sendable {
         let states = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
             ($0, try CanonicalState(native.formalProjection(of: $0)))
         })
+        try self.init(native, states: states)
+    }
+
+    package init<Machine: StateMachine>(
+        _ native: ReachabilityGraph<Machine>, states: [Machine.Snapshot: CanonicalState]
+    ) throws {
+        guard Set(states.keys) == Set(native.transitions.keys) else {
+            throw CanonicalGraphError.missingNativeSnapshot
+        }
         func state(_ snapshot: Machine.Snapshot) throws -> CanonicalState {
             guard let result = states[snapshot] else { throw CanonicalGraphError.missingNativeSnapshot }
             return result

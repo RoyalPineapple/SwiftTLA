@@ -6,14 +6,26 @@ import UpstreamParity
 struct TemporalSymmetryCheckTests {
   @Test("Temporal cases preserve bounded fairness outcomes")
   func temporalCasesPreserveFairnessOutcomes() throws {
+    let zero = CanonicalState(bindings: ["x": .integer(0)])
+    let one = CanonicalState(bindings: ["x": .integer(1)])
+    let two = CanonicalState(bindings: ["x": .integer(2)])
+    let expected = try CanonicalGraph(initialStates: [zero], states: [zero, one, two], edges: [
+      .init(source: zero.key, action: "A", target: two.key),
+      .init(source: zero.key, action: "B", target: one.key),
+      .init(source: one.key, action: "C", target: zero.key),
+      .init(source: two.key, action: "Stay", target: two.key)
+    ])
     for temporalCase in try registeredManifest().temporalCases {
-      let compilation = try temporalConformanceSpec(configuration: temporalCase.configuration).compile()
-      let exploration = try ModelChecker(
-        compilation: compilation,
-        configuration: temporalCase.exploration
-      ).explore()
-      let analyses = try exploration.analyzeTemporalProperties(in: compilation)
-      #expect(analyses.allSatisfy { $0.status == .violated })
+      let native = try temporalConformanceRun(configuration: temporalCase.configuration,
+        maximumStates: temporalCase.exploration.maximumStateLimit)
+      guard case .violated = native.result else {
+        Issue.record("Expected a native counterexample for \(temporalCase.id)")
+        continue
+      }
+      #expect(native.graph.graph == expected)
+      #expect(throws: ExplorationError.stateLimitExceeded(2)) {
+        try temporalConformanceRun(configuration: temporalCase.configuration, maximumStates: 2)
+      }
     }
   }
 

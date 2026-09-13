@@ -52,14 +52,8 @@ package struct TemporalSymmetryCheck: Sendable {
     let temporalOutcomes = try input.manifest.temporalCases.map { temporalCase in
       let observed: (outcome: TemporalSymmetryOutcome, diagnostic: String)
       do {
-        let compilation = try temporalConformanceSpec(configuration: temporalCase.configuration).compile()
-        let exploration = try ModelChecker(
-          compilation: compilation,
-          configuration: temporalCase.exploration
-        ).explore()
         let comparison = try captureTemporal(
-          compilation: compilation, temporalCase: temporalCase,
-          exploration: exploration, toolRoot: input.toolRoot,
+          temporalCase: temporalCase, toolRoot: input.toolRoot,
           referencePin: input.referencePin, projectRoot: root, evidenceRoot: output,
           outputDirectory: output.appendingPathComponent(temporalCase.id, isDirectory: true))
         let outcome: TemporalSymmetryOutcome = switch comparison.status {
@@ -129,22 +123,15 @@ package struct TemporalSymmetryCheck: Sendable {
   }
 
   private func captureTemporal(
-    compilation: CompiledSpecification,
     temporalCase: TemporalCase,
-    exploration: FiniteExploration,
     toolRoot: URL,
     referencePin: TLCReferencePin,
     projectRoot: URL,
     evidenceRoot: URL,
     outputDirectory: URL
   ) throws -> TemporalComparison {
-    let swiftRun = try SwiftGraphExporter().export(exploration)
-    let swiftResult = try temporalResult(
-      compilation: compilation,
-      temporalCase: temporalCase,
-      exploration: exploration,
-      swiftRun: swiftRun
-    )
+    let native = try temporalConformanceRun(configuration: temporalCase.configuration,
+      maximumStates: temporalCase.exploration.maximumStateLimit)
     let toolchain = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(temporalCase.id)
     try RetainedFiles.createDirectory(work, beneath: projectRoot)
@@ -190,7 +177,7 @@ package struct TemporalSymmetryCheck: Sendable {
       referenceArtifacts: toolchain.artifacts)
     return try TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
       temporalCase: temporalCase, request: request,
-      completeGraphRequest: completeGraphRequest, swiftRun: swiftRun, swiftResult: swiftResult,
+      completeGraphRequest: completeGraphRequest, swiftRun: native.graph, swiftResult: native.result,
       sourceInputURL: source, outputDirectory: outputDirectory))
   }
 
@@ -363,82 +350,6 @@ extension TemporalSymmetryCheck {
     return permutations
   }
 
-  private func temporalResult(
-    compilation: CompiledSpecification,
-    temporalCase: TemporalCase,
-    exploration: FiniteExploration,
-    swiftRun: CompletedGraphRun
-  ) throws -> TemporalPropertyResult {
-    let analyses = try exploration.analyzeTemporalProperties(in: compilation)
-    guard let analysis = analyses.first else {
-      throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "compiled temporal property")
-    }
-    switch analysis.status {
-    case .satisfied:
-      return .satisfied
-    case .violated:
-      guard let witness = analysis.witness else {
-        throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso")
-      }
-      let canonicalStates = try SwiftGraphExporter().canonicalStates(exploration)
-      func canonicalState(_ state: StateGraph.StateID) throws -> CanonicalState {
-        guard let canonical = canonicalStates[state] else {
-          throw EvidenceFormatError.invalidField(
-            record: temporalCase.id,
-            field: "Swift lasso state"
-          )
-        }
-        return canonical
-      }
-      func pathEdges(states: [CanonicalState], actions: [String]) throws -> [CanonicalEdge] {
-        if states.isEmpty {
-          guard actions.isEmpty else {
-            throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso actions")
-          }
-          return []
-        }
-        guard states.count == actions.count + 1 else {
-          throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso actions")
-        }
-        return actions.indices.map { index in
-          CanonicalEdge(
-            source: states[index].key,
-            action: actions[index],
-            target: states[index + 1].key
-          )
-        }
-      }
-      let prefixStates = try witness.prefix.map(canonicalState)
-      let cycleStates = try witness.cycle.map(canonicalState)
-      guard let cycleStart = cycleStates.first,
-            prefixStates.last == nil || prefixStates.last == cycleStart else {
-        throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso cycle")
-      }
-      let edges = try pathEdges(states: prefixStates, actions: witness.prefixActions)
-        + pathEdges(states: cycleStates, actions: witness.cycleActions)
-      let states = prefixStates.isEmpty
-        ? cycleStates
-        : prefixStates + Array(cycleStates.dropFirst())
-      guard swiftRun.containsTemporalTrace(
-        states: states,
-        edges: edges,
-        implicitStutterActions: ["[stutter]"]
-      ) else {
-        throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso transition")
-      }
-      let prefix = prefixStates.map { $0.key.canonicalEncoding }
-      let cycle = cycleStates.map { $0.key.canonicalEncoding }
-      guard let first = cycle.first else {
-        throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "Swift lasso cycle")
-      }
-      let closedCycle = cycle.last == first ? cycle : cycle + [first]
-      let lasso = try TemporalLassoWitness(
-        prefixStateIDs: prefix, cycleStateIDs: closedCycle)
-      return .violated(lasso)
-    case .unavailable:
-      return .unavailable
-    }
-  }
 
 }
 
@@ -468,45 +379,6 @@ private struct ResolvedTLCToolchain {
 
 private struct ConformanceMember: Identifiable, Sendable {
   let id: Int
-}
-
-package func temporalConformanceSpec(configuration: TemporalCaseConfiguration) -> TLASpec {
-  let x = Var<Int>("x")
-  let p = x == 2
-  let q = x == 1
-  let temporal = temporalProperty(property: configuration.property, p: p.stateExpr, q: q.stateExpr)
-  return TLASpec(
-    name: "TemporalMatrix",
-    variables: [NamedVar(name: x.name, initial: 0)],
-    actions: [
-      NamedAction(name: "A", body: x.becomes(2).when(x == 0)),
-      NamedAction(name: "B", body: x.becomes(1).when(x == 0)),
-      NamedAction(name: "C", body: x.becomes(0).when(x == 1)),
-      NamedAction(name: "Stay", body: x.becomes(2).when(x == 2))
-    ],
-    invariants: [],
-    temporalProperties: [NamedTemporal(name: temporal.0, expr: temporal.1)],
-    fairness: fairness(configuration.fairness))
-}
-
-private func temporalProperty(
-  property: TemporalPropertyKind, p: StateExpr, q: StateExpr
-) -> (String, TemporalExpr) {
-  switch property {
-  case .always: return ("AlwaysP", .always(p))
-  case .eventually: return ("EventuallyP", .eventually(p))
-  case .alwaysEventually: return ("AlwaysEventuallyP", .alwaysEventually(p))
-  case .eventuallyAlways: return ("EventuallyAlwaysP", .eventuallyAlways(p))
-  case .leadsTo: return ("LeadsToPQ", .leadsTo(p, q))
-  }
-}
-
-private func fairness(_ fairness: TemporalFairnessMode) -> [FairnessCondition] {
-  switch fairness {
-  case .weak: return [.weakFairness("A")]
-  case .strong: return [.strongFairness("A")]
-  case .none: return []
-  }
 }
 
 package func symmetryConformanceSpec(scope: Int) -> TLASpec {
