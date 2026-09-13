@@ -22,10 +22,14 @@ TLC receives the TLA+ exported from that same model. Each comparison requires:
 Safety counterexamples remain finite. Liveness counterexamples retain their
 closed cycles. Counterexamples need not be identical between engines.
 
+Each finite configuration captures its complete TLC graph once in a property-free
+pass. All property comparisons reuse that graph, bound to its original module,
+exploration bounds, arguments, environment, and tool pin. A failed shared capture
+makes every property comparison unavailable; it is not retried per property.
+
 Each TLC property invocation captures graph events and any counterexample
-together. If it stops before completing exploration, a separate property-free
-pass captures the complete graph. Timeouts, malformed data, and incomplete
-comparisons cannot succeed.
+together. A completed property graph must agree with the shared graph. Timeouts,
+malformed data, and incomplete comparisons cannot succeed.
 
 These finite configurations provide bounded validation, not a universal proof
 of compiler correctness.

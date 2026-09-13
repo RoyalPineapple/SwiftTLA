@@ -58,13 +58,21 @@ package struct TemporalSymmetryCheck: Sendable {
         return [try retainOutcome(caseID: temporalCase.id, outcome: .unavailable,
           diagnostic: "native-temporal-validation-unavailable: \(error)", beneath: output)]
       }
+      let shared = Result {
+        let toolchain = try ResolvedTLCToolchain(toolRoot: input.toolRoot, projectRoot: root, pin: input.referencePin)
+        let graph = try captureTemporalGraph(temporalCase: temporalCase, native: native,
+          toolchain: toolchain, referencePin: input.referencePin, projectRoot: root, evidenceRoot: output)
+        return (toolchain: toolchain, graph: graph)
+      }
       return try native.properties.keys.sorted().map { property in
         let propertyCase = try TemporalCase(id: "\(temporalCase.id)-\(property)",
           fairness: temporalCase.fairness, exploration: temporalCase.exploration)
         let observed: (outcome: TemporalSymmetryOutcome, diagnostic: String)
         do {
+          let prepared = try shared.get()
           let comparison = try captureTemporal(
-            temporalCase: propertyCase, property: property, native: native, toolRoot: input.toolRoot,
+            temporalCase: propertyCase, property: property, native: native,
+            toolchain: prepared.toolchain, completeGraph: prepared.graph,
             referencePin: input.referencePin, projectRoot: root, evidenceRoot: output,
             outputDirectory: output.appendingPathComponent(propertyCase.id, isDirectory: true))
           let outcome: TemporalSymmetryOutcome = switch comparison.status {
@@ -127,62 +135,57 @@ package struct TemporalSymmetryCheck: Sendable {
     return value
   }
 
+  private func captureTemporalGraph(
+    temporalCase: TemporalCase, native: TemporalModelRun, toolchain: ResolvedTLCToolchain,
+    referencePin: TLCReferencePin, projectRoot: URL, evidenceRoot: URL
+  ) throws -> TLCProcessCapture {
+    let bundle = try native.rendered.tlaBundle(checking: [], checkDeadlock: false)
+    let request = try temporalRequest(temporalCase: temporalCase, bundle: bundle,
+      invocation: .finiteGraph, toolchain: toolchain, referencePin: referencePin,
+      projectRoot: projectRoot, evidenceRoot: evidenceRoot)
+    let directory = evidenceRoot.appendingPathComponent(temporalCase.id).appendingPathComponent("complete-graph")
+    let capture = try TLCProcessAdapter().capture(request, retainingIn: directory)
+    guard capture.outcome == .completed, capture.graph.isComparable else {
+      throw TLCTemporalAdapterError.incompleteGraph
+    }
+    try GraphRunRecords.write(capture.graph, to: directory.appendingPathComponent("tlc-graph.jsonl"))
+    return capture
+  }
+
   private func captureTemporal(
-    temporalCase: TemporalCase,
-    property: String,
-    native: TemporalModelRun,
-    toolRoot: URL,
-    referencePin: TLCReferencePin,
-    projectRoot: URL,
-    evidenceRoot: URL,
-    outputDirectory: URL
+    temporalCase: TemporalCase, property: String, native: TemporalModelRun,
+    toolchain: ResolvedTLCToolchain, completeGraph: TLCProcessCapture,
+    referencePin: TLCReferencePin, projectRoot: URL, evidenceRoot: URL, outputDirectory: URL
   ) throws -> TemporalComparison {
     guard let check = native.properties[property] else {
       throw EvidenceFormatError.invalidField(record: property, field: "native temporal checking")
     }
-    let toolchain = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
-    let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(temporalCase.id)
-    try RetainedFiles.createDirectory(work, beneath: projectRoot)
-    let bundle = try native.rendered.tlaBundle(
-      checking: [property], checkDeadlock: false)
-    let arguments = ["-workers", "1", "-fp", "1"]
-    let launch = try FiniteGraphCase(
-      id: temporalCase.id,
-      exploration: temporalCase.exploration,
-      moduleSHA256: SHA256.hex(Data(bundle.tla.utf8)),
-      cfgSHA256: SHA256.hex(Data(bundle.cfg.utf8)),
-      arguments: arguments,
-      environment: [:], pin: referencePin)
-    let request = TLCProcessRequest(
-      javaExecutable: toolchain.java, jar: toolchain.jar, bridgeClasses: toolchain.bridgeClasses,
-      bundle: bundle,
-      graphEvents: work.appendingPathComponent("events.jsonl"),
-      traceOutput: work.appendingPathComponent("counterexample.json"),
-      workingDirectory: work,
-      finiteGraphCase: launch,
-      runID: UUID(), invocation: .temporalProperty,
-      referenceArtifacts: toolchain.artifacts)
-    let graphBundle = try native.rendered.tlaBundle(checking: [], checkDeadlock: false)
-    let graphCase = try FiniteGraphCase(
-      id: temporalCase.id, exploration: temporalCase.exploration,
-      moduleSHA256: SHA256.hex(Data(bundle.tla.utf8)),
-      cfgSHA256: SHA256.hex(Data(graphBundle.cfg.utf8)),
-      arguments: arguments,
-      environment: [:], pin: referencePin)
-    let completeGraphRequest = TLCProcessRequest(
-      javaExecutable: toolchain.java, jar: toolchain.jar, bridgeClasses: toolchain.bridgeClasses,
-      bundle: graphBundle,
-      graphEvents: work.appendingPathComponent("complete-graph-events.jsonl"),
-      traceOutput: work.appendingPathComponent("complete-graph-counterexample.json"),
-      workingDirectory: work,
-      finiteGraphCase: graphCase, runID: UUID(), invocation: .finiteGraph,
-      referenceArtifacts: toolchain.artifacts)
+    let bundle = try native.rendered.tlaBundle(checking: [property], checkDeadlock: false)
+    let request = try temporalRequest(temporalCase: temporalCase, bundle: bundle,
+      invocation: .temporalProperty, toolchain: toolchain, referencePin: referencePin,
+      projectRoot: projectRoot, evidenceRoot: evidenceRoot)
     return try TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
       temporalCase: temporalCase, property: property, request: request,
-      completeGraphRequest: completeGraphRequest, swiftRun: check.graph, swiftResult: check.result,
+      completeGraph: completeGraph, swiftRun: check.graph, swiftResult: check.result,
       rendered: native.rendered, outputDirectory: outputDirectory))
   }
 
+  private func temporalRequest(
+    temporalCase: TemporalCase, bundle: TLAModuleBundle, invocation: TLCInvocationKind,
+    toolchain: ResolvedTLCToolchain, referencePin: TLCReferencePin,
+    projectRoot: URL, evidenceRoot: URL
+  ) throws -> TLCProcessRequest {
+    let work = evidenceRoot.appendingPathComponent("work").appendingPathComponent(temporalCase.id)
+    try RetainedFiles.createDirectory(work, beneath: projectRoot)
+    let launch = try FiniteGraphCase(id: temporalCase.id, exploration: temporalCase.exploration,
+      moduleSHA256: SHA256.hex(Data(bundle.tla.utf8)), cfgSHA256: SHA256.hex(Data(bundle.cfg.utf8)),
+      arguments: ["-workers", "1", "-fp", "1"], environment: [:], pin: referencePin)
+    return TLCProcessRequest(
+      javaExecutable: toolchain.java, jar: toolchain.jar, bridgeClasses: toolchain.bridgeClasses,
+      bundle: bundle, graphEvents: work.appendingPathComponent("events.jsonl"),
+      traceOutput: work.appendingPathComponent("counterexample.json"), workingDirectory: work,
+      finiteGraphCase: launch, runID: UUID(), invocation: invocation, referenceArtifacts: toolchain.artifacts)
+  }
 
   private func captureSymmetry(
     compilation: CompiledSpecification,

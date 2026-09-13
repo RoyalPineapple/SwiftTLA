@@ -308,8 +308,15 @@ package struct SystemTLCProcessExecutor: TLCProcessExecuting {
 }
 
 package struct TLCProcessCapture: Sendable {
+  package let request: TLCProcessRequest
   package let outcome: TLCExecutionOutcome
   package let graph: GraphRun
+
+  fileprivate init(request: TLCProcessRequest, outcome: TLCExecutionOutcome, graph: GraphRun) {
+    self.request = request
+    self.outcome = outcome
+    self.graph = graph
+  }
 }
 
 package struct TLCProcessAdapter: Sendable {
@@ -340,7 +347,7 @@ package struct TLCProcessAdapter: Sendable {
       throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
     }
     let outcome = TLCExecutionOutcome(exitStatus: process.status, invocation: request.invocation)
-    return TLCProcessCapture(outcome: outcome, graph: try reader.makeGraphRun(stream, outcome: outcome))
+    return TLCProcessCapture(request: request, outcome: outcome, graph: try reader.makeGraphRun(stream, outcome: outcome))
   }
 
   private func clearTraceOutput(for request: TLCProcessRequest, retainingIn directory: URL) throws {
