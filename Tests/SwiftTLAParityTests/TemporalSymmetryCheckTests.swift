@@ -22,17 +22,16 @@ struct TemporalSymmetryCheckTests {
       let model = try temporalConformanceRun(fairness: fairness, maximumStates: 10)
       #expect(Set(model.properties.keys) == ["AlwaysP", "EventuallyP", "AlwaysEventuallyP",
         "EventuallyAlwaysP", "LeadsToPQ", "LeavesZero"])
-      for check in model.properties.values {
-        #expect(check.graph.isComplete)
-        #expect(check.graph.graph == expected)
-        #expect(check.result != .unavailable)
-      }
+      #expect(model.graph.isComplete)
+      #expect(model.graph.graph == expected)
+      #expect(model.graph.trace == nil)
+      #expect(model.properties.values.allSatisfy { $0 != .unavailable })
       for (property, native) in model.properties {
         let expectsProgress = property == "LeavesZero" && fairness != .none
         if expectsProgress {
-          #expect(native.result == .satisfied)
-        } else if case .violated(let trace) = native.result {
-          #expect(trace == native.graph.trace)
+          #expect(native == .satisfied)
+        } else if case .violated(let trace) = native {
+          try trace.validate(in: model.graph.graph)
         } else {
           Issue.record("Expected a native counterexample for \(temporalCase.id)/\(property)")
         }
@@ -132,11 +131,15 @@ struct TemporalSymmetryCheckTests {
     #expect(outcomes.allSatisfy { $0.outcome == .unavailable })
     #expect(Set(outcomes.map(\.caseID)) == ["temporal-AlwaysP", "temporal-EventuallyP",
       "temporal-AlwaysEventuallyP", "temporal-EventuallyAlwaysP", "temporal-LeadsToPQ", "temporal-LeavesZero", "symmetry"])
+    let modelDirectory = output.appendingPathComponent("temporal")
+    #expect(FileManager.default.fileExists(atPath: modelDirectory.appendingPathComponent("swift-graph.jsonl").path))
+    #expect(FileManager.default.fileExists(atPath: modelDirectory.appendingPathComponent("source-input").path))
     for caseID in outcomes.map(\.caseID) {
+      let directory = caseID == "symmetry" ? output.appendingPathComponent(caseID)
+        : modelDirectory.appendingPathComponent("properties").appendingPathComponent(String(caseID.dropFirst("temporal-".count)))
+      #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("swift-graph.jsonl").path))
       let record = try #require(try JSONSerialization.jsonObject(
-        with: Data(contentsOf: output
-          .appendingPathComponent(caseID, isDirectory: true)
-          .appendingPathComponent("case-outcome.json"))
+        with: Data(contentsOf: directory.appendingPathComponent("case-outcome.json"))
       ) as? [String: String])
       #expect(record["caseID"] == caseID)
       #expect(record["outcome"] == TemporalSymmetryOutcome.unavailable.rawValue)

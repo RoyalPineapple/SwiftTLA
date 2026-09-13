@@ -50,14 +50,18 @@ package struct TemporalSymmetryCheck: Sendable {
     let root = try RetainedFiles.projectRoot(input.projectRoot)
     let output = try RetainedFiles.outputDirectory(input.outputDirectory, beneath: root)
     let temporalOutcomes = try input.manifest.temporalCases.flatMap { temporalCase in
+      let modelDirectory = try RetainedFiles.createDirectory(
+        output.appendingPathComponent(temporalCase.id), beneath: output)
       let native: TemporalModelRun
       do {
         native = try temporalConformanceRun(
           fairness: temporalCase.fairness, maximumStates: temporalCase.exploration.maximumStateLimit)
       } catch {
         return [try retainOutcome(caseID: temporalCase.id, outcome: .unavailable,
-          diagnostic: "native-temporal-validation-unavailable: \(error)", beneath: output)]
+          diagnostic: "native-temporal-validation-unavailable: \(error)", in: modelDirectory, beneath: output)]
       }
+      try GraphRunRecords.write(native.graph, to: modelDirectory.appendingPathComponent("swift-graph.jsonl"))
+      try RetainedFiles.writeText(native.rendered.tlaBundle.tla, to: modelDirectory.appendingPathComponent("source-input"))
       let shared = Result {
         let toolchain = try ResolvedTLCToolchain(toolRoot: input.toolRoot, projectRoot: root, pin: input.referencePin)
         let graph = try captureTemporalGraph(temporalCase: temporalCase, native: native,
@@ -65,6 +69,7 @@ package struct TemporalSymmetryCheck: Sendable {
         return (toolchain: toolchain, graph: graph)
       }
       return try native.properties.keys.sorted().map { property in
+        let propertyDirectory = modelDirectory.appendingPathComponent("properties").appendingPathComponent(property)
         let propertyCase = try TemporalCase(id: "\(temporalCase.id)-\(property)",
           fairness: temporalCase.fairness, exploration: temporalCase.exploration)
         let observed: (outcome: TemporalSymmetryOutcome, diagnostic: String)
@@ -74,7 +79,7 @@ package struct TemporalSymmetryCheck: Sendable {
             temporalCase: propertyCase, property: property, native: native,
             toolchain: prepared.toolchain, completeGraph: prepared.graph,
             referencePin: input.referencePin, projectRoot: root, evidenceRoot: output,
-            outputDirectory: output.appendingPathComponent(propertyCase.id, isDirectory: true))
+            outputDirectory: propertyDirectory)
           let outcome: TemporalSymmetryOutcome = switch comparison.status {
           case .exact: .exact
           case .propertyOutcomeDifference, .graphDifference: .difference
@@ -85,7 +90,7 @@ package struct TemporalSymmetryCheck: Sendable {
           observed = (.unavailable, "temporal-validation-unavailable: \(error)")
         }
         return try retainOutcome(caseID: propertyCase.id, outcome: observed.outcome,
-          diagnostic: observed.diagnostic, beneath: output)
+          diagnostic: observed.diagnostic, in: propertyDirectory, beneath: output)
       }
     }
 
@@ -109,6 +114,7 @@ package struct TemporalSymmetryCheck: Sendable {
         caseID: symmetryCase.id,
         outcome: observed.outcome,
         diagnostic: observed.diagnostic,
+        in: output.appendingPathComponent(symmetryCase.id),
         beneath: output
       )
     }
@@ -119,6 +125,7 @@ package struct TemporalSymmetryCheck: Sendable {
     caseID: String,
     outcome: TemporalSymmetryOutcome,
     diagnostic: String,
+    in directory: URL,
     beneath outputDirectory: URL
   ) throws -> TemporalSymmetryCheckOutcome {
     let value = try TemporalSymmetryCheckOutcome(
@@ -126,7 +133,6 @@ package struct TemporalSymmetryCheck: Sendable {
       outcome: outcome,
       diagnostic: diagnostic
     )
-    let directory = outputDirectory.appendingPathComponent(caseID, isDirectory: true)
     try RetainedFiles.createDirectory(directory, beneath: outputDirectory)
     try RetainedFiles.writeJSON(
       ["caseID": value.caseID, "outcome": value.outcome.rawValue, "diagnostic": value.diagnostic],
@@ -166,7 +172,7 @@ package struct TemporalSymmetryCheck: Sendable {
       projectRoot: projectRoot, evidenceRoot: evidenceRoot)
     return try TLCTemporalAdapter().capture(TLCTemporalCaptureInput(
       temporalCase: temporalCase, property: property, request: request,
-      completeGraph: completeGraph, swiftRun: check.graph, swiftResult: check.result,
+      completeGraph: completeGraph, swiftRun: native.graph, swiftResult: check,
       rendered: native.rendered, outputDirectory: outputDirectory))
   }
 

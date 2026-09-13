@@ -44,8 +44,8 @@ struct TLCTemporalAdapterTests {
     }
   }
 
-  @Test("TLC temporal adapter retains exact graph evidence")
-  func retainsExactEvidence() throws {
+  @Test("property reports retain results without copying shared graphs")
+  func retainsResultsWithoutGraphCopies() throws {
     let fixture = try Fixture()
     let stream = try graphStream(case: fixture.launchCase, runID: fixture.request.runID)
     let graph = try completedGraph(stream, for: fixture.launchCase)
@@ -57,10 +57,10 @@ struct TLCTemporalAdapterTests {
       .capture(input)
 
     #expect(comparison.status == .exact)
-    #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("source-input").path))
+    #expect(!FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("source-input").path))
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("graph-events.jsonl").path))
-    #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("swift-graph.jsonl").path))
-    #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("tlc-graph.jsonl").path))
+    #expect(!FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("swift-graph.jsonl").path))
+    #expect(!FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("tlc-graph.jsonl").path))
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("logs/tlc.stdout.log").path))
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("temporal-comparison.json").path))
     #expect(FileManager.default.fileExists(
@@ -360,7 +360,7 @@ struct TLCTemporalAdapterTests {
   @Test("TLC temporal adapter rejects a trace path that collides with generated evidence")
   func rejectsTraceOutputThatCollidesWithEvidence() throws {
     let fixture = try Fixture()
-    let protectedOutput = fixture.output.appendingPathComponent("source-input")
+    let protectedOutput = fixture.output.appendingPathComponent("temporal-comparison.json")
     let request = fixture.makeRequest(traceOutput: protectedOutput)
     #expect(throws: TLCTemporalAdapterError.graphEvidenceInvalid) {
       try TLCTemporalAdapter(processAdapter: TLCProcessAdapter(executor: FixtureExecutor()))

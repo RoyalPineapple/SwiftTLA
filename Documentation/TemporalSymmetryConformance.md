@@ -34,6 +34,13 @@ malformed data, and incomplete comparisons cannot succeed.
 These finite configurations provide bounded validation, not a universal proof
 of compiler correctness.
 
+Artifacts are grouped by finite model configuration. Each model directory owns
+one `source-input`, one `swift-graph.jsonl`, and the independently captured
+`complete-graph/tlc-graph.jsonl`. Property reports live below
+`properties/<property-name>/`; their comparison JSON contains both verdicts and
+any native or TLC counterexamples. Graphs are not copied into property folders.
+Native graph artifacts remain available even if the TLC toolchain is unavailable.
+
 ## Symmetry cases
 
 Each symmetry case uses one compiled specification. SwiftTLA renders the raw

@@ -66,7 +66,8 @@ private struct StronglyFairTemporalMatrix {
 
 package struct TemporalModelRun: Sendable {
   package let rendered: RenderedSpecification
-  package let properties: [String: (graph: GraphRun, result: TemporalPropertyResult)]
+  package let graph: GraphRun
+  package let properties: [String: TemporalPropertyResult]
 }
 
 package func temporalConformanceRun(
@@ -103,7 +104,6 @@ private func exportTemporalRun<Machine: StateMachine>(
   let canonical = try CanonicalGraph(native, states: states)
   let observableActions = Set(canonical.edges.map(\.action))
   let properties = try Dictionary(uniqueKeysWithValues: native.temporalResults.map { property, analysis in
-    var trace: GraphTrace?
     let result: TemporalPropertyResult
     switch analysis.status {
     case .satisfied: result = .satisfied
@@ -117,12 +117,10 @@ private func exportTemporalRun<Machine: StateMachine>(
         return state.key
       }, actionName: { try native.formalCall(for: $0).description })
       result = .violated(lasso)
-      trace = lasso
     }
-    // Property results are reported separately; the run owns and validates their trace.
-    let graph = try GraphRun(isComplete: true, graph: canonical,
-      observableActions: observableActions, outcome: .noViolation, trace: trace)
-    return (property, (graph: graph, result: result))
+    return (property, result)
   })
-  return TemporalModelRun(rendered: try compilation.render(), properties: properties)
+  let graph = try GraphRun(isComplete: true, graph: canonical,
+    observableActions: observableActions, outcome: .noViolation)
+  return TemporalModelRun(rendered: try compilation.render(), graph: graph, properties: properties)
 }

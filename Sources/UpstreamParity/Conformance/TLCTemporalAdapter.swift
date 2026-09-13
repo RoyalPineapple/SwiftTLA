@@ -54,21 +54,11 @@ package struct TLCTemporalAdapter: Sendable {
     try validate(input)
     try RetainedFiles.outputDirectory(
       input.outputDirectory, beneath: input.outputDirectory.deletingLastPathComponent())
-    try Data(input.rendered.tlaBundle.tla.utf8).write(
-      to: input.outputDirectory.appendingPathComponent("source-input"), options: .atomic)
-    try GraphRunRecords.write(
-      input.swiftRun,
-      to: input.outputDirectory.appendingPathComponent("swift-graph.jsonl")
-    )
     let capture = try processAdapter.capture(input.request, retainingIn: input.outputDirectory)
     let completeGraph = input.completeGraph.graph
     if capture.graph.isComplete, !compareFiniteGraphs(tlc: capture.graph, swift: completeGraph).matches {
       throw TLCTemporalAdapterError.graphEvidenceInvalid
     }
-    try GraphRunRecords.write(
-      completeGraph,
-      to: input.outputDirectory.appendingPathComponent("tlc-graph.jsonl")
-    )
     let tlcOutcome = try temporalResult(
       outcome: capture.outcome,
       graph: completeGraph,
