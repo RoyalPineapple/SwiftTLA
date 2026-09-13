@@ -205,21 +205,6 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
             fairness: fairness, enabled: enabled, allowsCycleEdge: allowsEdge)
     }
 
-    public func computeSCCs() -> [Set<State>] {
-        stronglyConnectedComponents(in: states)
-    }
-
-    public func terminalSCCs(from sccs: [Set<State>]) -> [Set<State>] {
-        let nodeToSCC = Dictionary(uniqueKeysWithValues: sccs.enumerated().flatMap { index, component in
-            component.map { ($0, index) }
-        })
-        return sccs.filter { component in
-            !component.contains { state in
-                explicitEdges(from: state).contains { edge in nodeToSCC[edge.target] != nodeToSCC[state] }
-            }
-        }
-    }
-
     private func renderedEnabledness(
         _ enabled: [Scope: [State: Bool]],
         renderScope: (Scope) throws -> String
@@ -461,27 +446,53 @@ extension LivenessChecker {
     private func stronglyConnectedComponents(
         in allowed: Set<State>, allowsEdge: (GraphEdge<State, Action>) -> Bool = { _ in true }
     ) -> [Set<State>] {
-        var index = 0; var indices: [State: Int] = [:]
-        var stack: [State] = []; var onStack: Set<State> = []; var components: [Set<State>] = []
-        func visit(_ state: State) -> Int {
-            let stateIndex = index
-            var lowlink = stateIndex
-            indices[state] = stateIndex; index += 1; stack.append(state); onStack.insert(state)
-            for edge in edges(from: state).sorted(by: edgeOrder) where allowed.contains(edge.target) && allowsEdge(edge) {
-                if let targetIndex = indices[edge.target] {
-                    if onStack.contains(edge.target) { lowlink = min(lowlink, targetIndex) }
-                } else {
-                    lowlink = min(lowlink, visit(edge.target))
+        var indices: [State: Int] = [:]
+        var stack: [State] = []
+        var onStack: Set<State> = []
+        var components: [Set<State>] = []
+        var pending: [(state: State, successors: ArraySlice<State>, lowlink: Int)] = []
+
+        func discover(_ state: State) {
+            let index = indices.count
+            indices[state] = index
+            stack.append(state)
+            onStack.insert(state)
+            let successors = edges(from: state).sorted(by: edgeOrder)
+                .filter { allowed.contains($0.target) && allowsEdge($0) }
+                .map(\.target)
+            pending.append((state, ArraySlice(successors), index))
+        }
+
+        for root in allowed.sorted(by: stateOrder) where indices[root] == nil {
+            discover(root)
+            while !pending.isEmpty {
+                let current = pending.count - 1
+                if let target = pending[current].successors.popFirst() {
+                    if let targetIndex = indices[target] {
+                        if onStack.contains(target) {
+                            pending[current].lowlink = min(pending[current].lowlink, targetIndex)
+                        }
+                    } else {
+                        discover(target)
+                    }
+                    continue
+                }
+                let completed = pending.removeLast()
+                if completed.lowlink == indices[completed.state] {
+                    var component: Set<State> = []
+                    while let node = stack.popLast() {
+                        onStack.remove(node)
+                        component.insert(node)
+                        if node == completed.state { break }
+                    }
+                    components.append(component)
+                }
+                if !pending.isEmpty {
+                    let parent = pending.count - 1
+                    pending[parent].lowlink = min(pending[parent].lowlink, completed.lowlink)
                 }
             }
-            if lowlink == stateIndex {
-                var component: Set<State> = []
-                while let node = stack.popLast() { onStack.remove(node); component.insert(node); if node == state { break } }
-                components.append(component)
-            }
-            return lowlink
         }
-        for state in allowed.sorted(by: stateOrder) where indices[state] == nil { _ = visit(state) }
         return components
     }
 

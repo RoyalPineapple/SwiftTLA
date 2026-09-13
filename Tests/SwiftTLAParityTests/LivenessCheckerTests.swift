@@ -1,13 +1,24 @@
-import Foundation
 import os
-import SwiftParser
-import SwiftSyntax
 @testable import SwiftTLA
 import Testing
-import UpstreamParity
 
 @Suite(.serialized)
 struct LivenessCheckerTests {
+  @Test("deep transition graphs do not consume the call stack")
+  func deepTransitionGraph() throws {
+    let count = 20_000
+    let states = Set(0...count)
+    let transitions = Dictionary(uniqueKeysWithValues: (0...count).map { state in
+      (state, [GraphEdge(source: state, action: 0, target: state == count ? 1 : state + 1)])
+    })
+    let checker = LivenessChecker<Int, Int, Int>(states: states, transitions: transitions,
+      fairness: [], matches: { $0 == $1 }, actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+    let result = try checker.analyze(.always { _ in true }, initialStates: [0], renderScope: { _ in "step" })
+    #expect(result.status == .satisfied)
+    #expect(result.witness == nil)
+    #expect(Set(result.fairComponents) == [Set([0]), Set(1...count)])
+  }
+
   @Test("impossible counterexamples retain fairness diagnostics without searching cycles")
   func skipsImpossibleCounterexampleSearch() throws {
     let matchCount = OSAllocatedUnfairLock(initialState: 0)
@@ -78,26 +89,6 @@ struct LivenessCheckerTests {
         #expect(witness == nil)
       }
     }
-  }
-
-  @Test("SCC decomposition finds one twelve-state cycle")
-  func singleCycleSCC() throws {
-    let compilation = try Example.hourClock.spec.compile()
-    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let lc = compilation.livenessChecker(graph: exploration.graph)
-    let sccs = lc.computeSCCs()
-    #expect(sccs.count == 1)
-    #expect(sccs[0].count == 12)
-  }
-
-  @Test("Terminal SCC detection works")
-  func terminalSCC() throws {
-    let compilation = try Example.hourClock.spec.compile()
-    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let lc = compilation.livenessChecker(graph: exploration.graph)
-    let sccs = lc.computeSCCs()
-    let terminals = lc.terminalSCCs(from: sccs)
-    #expect(terminals.count == 1)
   }
 
   @Test("Eventually holds when the target belongs to a fair cycle")
