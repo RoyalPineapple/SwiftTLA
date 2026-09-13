@@ -1,42 +1,42 @@
+import Darwin
 import Foundation
 
 package enum GraphRunRecords {
   package static func write(_ run: GraphRun, to url: URL) throws {
-    try encoded(records(for: run)).write(to: url, options: .atomic)
-  }
-
-  private static func graphRecords(for graph: CanonicalGraph) -> [[String: Any]] {
-    graph.initialStateKeys.sorted().map {
-      ["type": "initial", "state": $0.canonicalEncoding]
-    } + graph.states.keys.sorted().map {
-      ["type": "state", "state": $0.canonicalEncoding]
-    } + graph.edges.sorted().map { edge in
-      [
-        "type": "edge",
-        "source": edge.source.canonicalEncoding,
-        "action": edge.action,
-        "target": edge.target.canonicalEncoding
-      ]
+    let temporary = url.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString).jsonl")
+    try Data().write(to: temporary, options: .withoutOverwriting)
+    defer { try? FileManager.default.removeItem(at: temporary) }
+    let output = try FileHandle(forWritingTo: temporary)
+    defer { try? output.close() }
+    func emit(_ record: [String: Any]) throws {
+      try autoreleasepool {
+        var data = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
+        data.append(0x0a)
+        try output.write(contentsOf: data)
+      }
     }
-  }
-
-  private static func encoded(_ records: [[String: Any]]) throws -> Data {
-    try records.reduce(into: Data()) { output, record in
-      output.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
-      output.append(0x0a)
-    }
-  }
-
-  private static func records(for run: GraphRun) -> [[String: Any]] {
-    var records: [[String: Any]] = [[
+    try emit([
       "type": "header",
       "schema": "swifttla.finite-graph",
       "version": 4,
       "observableActions": run.observableActions.sorted()
-    ]]
-    records += graphRecords(for: run.graph)
+    ])
+    for state in run.graph.initialStateKeys.sorted() {
+      try emit(["type": "initial", "state": state.canonicalEncoding])
+    }
+    for state in run.graph.states.keys.sorted() {
+      try emit(["type": "state", "state": state.canonicalEncoding])
+    }
+    for edge in run.graph.edges.sorted() {
+      try emit([
+        "type": "edge",
+        "source": edge.source.canonicalEncoding,
+        "action": edge.action,
+        "target": edge.target.canonicalEncoding
+      ])
+    }
     if let trace = run.trace {
-      records.append([
+      try emit([
         "type": "trace",
         "id": trace.id,
         "cycleStartIndex": trace.cycleStartIndex.map { $0 as Any } ?? NSNull(),
@@ -45,7 +45,7 @@ package enum GraphRunRecords {
         }
       ])
     }
-    records.append([
+    try emit([
       "type": "complete",
       "isComplete": run.isComplete,
       "outcome": outcomeRecord(run.outcome),
@@ -54,7 +54,10 @@ package enum GraphRunRecords {
       "edgeCount": run.graph.edges.count,
       "traceCount": run.trace == nil ? 0 : 1
     ])
-    return records
+    try output.close()
+    guard rename(temporary.path, url.path) == 0 else {
+      throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+    }
   }
 
   static func outcomeRecord(_ outcome: GraphRunOutcome) -> [String: String] {

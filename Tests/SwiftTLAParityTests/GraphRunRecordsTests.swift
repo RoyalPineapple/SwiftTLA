@@ -4,6 +4,38 @@ import Testing
 @testable import UpstreamParity
 
 struct GraphRunRecordsTests {
+  @Test("graph publication preserves exact bytes and cleans temporary files")
+  func publishesCompleteRecords() throws {
+    let state = CanonicalState(bindings: ["x": .integer(0)])
+    let graph = try CanonicalGraph(initialStates: [state], states: [state], edges: [
+      CanonicalEdge(source: state.key, action: "step", target: state.key)
+    ])
+    let run = try GraphRun(isComplete: true, graph: graph, observableActions: ["step"], outcome: .noViolation)
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let url = root.appendingPathComponent("graph.jsonl")
+    let expected = """
+    {"observableActions":["step"],"schema":"swifttla.finite-graph","type":"header","version":4}
+    {"state":"state:[78=integer:0]","type":"initial"}
+    {"state":"state:[78=integer:0]","type":"state"}
+    {"action":"step","source":"state:[78=integer:0]","target":"state:[78=integer:0]","type":"edge"}
+    {"edgeCount":1,"initialStateCount":1,"isComplete":true,"outcome":{"kind":"noViolation"},"stateCount":1,"traceCount":0,"type":"complete"}
+    """ + "\n"
+    for _ in 0..<2 {
+      try GraphRunRecords.write(run, to: url)
+      #expect(try Data(contentsOf: url) == Data(expected.utf8))
+      #expect(try FileManager.default.contentsOfDirectory(atPath: root.path) == ["graph.jsonl"])
+    }
+    try FileManager.default.removeItem(at: url)
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+    let sentinel = url.appendingPathComponent("keep")
+    try Data("existing content".utf8).write(to: sentinel)
+    #expect(throws: (any Error).self) { try GraphRunRecords.write(run, to: url) }
+    #expect(try Data(contentsOf: sentinel) == Data("existing content".utf8))
+    #expect(try FileManager.default.contentsOfDirectory(atPath: root.path) == ["graph.jsonl"])
+  }
+
   @Test("native lasso conversion rejects truncated paths and disconnected cycles")
   func rejectsMalformedNativeLassos() throws {
     let witnesses: [FairLassoWitness<Int, String?>] = [
