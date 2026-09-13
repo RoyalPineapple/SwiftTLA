@@ -64,4 +64,5 @@ jobs:
           name: finite-graph-${{ env.ADMISSION_MODE }}-${{ steps.revision.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             .build/finite-graph-evidence
+          include-hidden-files: true
           if-no-files-found: error
