@@ -17,7 +17,7 @@ struct NQueensCorpusStateGraphTests {
         let machine = try NQueensModel.makeMachine()
         let native = try ReachabilityGraph(initialMachines: NQueensModel.initialMachines(), maximumStates: 5_000)
         #expect(native.safetyViolations.isEmpty)
-        #expect(try native.analyzeTemporalProperties()["Termination"]?.status == .satisfied)
+        #expect(native.temporalResults["Termination"]?.status == .satisfied)
         let exported = try CanonicalGraph(native)
         let formal = try SwiftGraphExporter().export(exploration)
         #expect(exported == formal.graph)

@@ -21,7 +21,7 @@ struct ChangRobertsCorpusContractTests {
         #expect(throws: GeneratedMachineError.ambiguousInitialState) { try ChangRobertsModel.makeMachine() }
         let native = try ReachabilityGraph(initialMachines: initial, maximumStates: 500)
         #expect(native.safetyViolations.isEmpty)
-        #expect(try native.analyzeTemporalProperties()["Liveness"]?.status == .satisfied)
+        #expect(native.temporalResults["Liveness"]?.status == .satisfied)
         let exported = try CanonicalGraph(native)
         let formal = try SwiftGraphExporter().export(exploration)
         #expect(exported == formal.graph)

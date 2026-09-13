@@ -7,7 +7,7 @@ struct NativeTemporalCheckingTests {
     func counterexampleRetainsTypedTransitions() throws {
         let machine = try UnreachableCounter.makeMachine()
         let graph = try ReachabilityGraph(initialMachines: [machine], maximumStates: 10)
-        let results = try graph.analyzeTemporalProperties()
+        let results = graph.temporalResults
         let result = try #require(results["ReachesTwo"])
         #expect(result.status == .violated)
         #expect(result.reason == .violatingFairLasso)

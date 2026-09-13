@@ -146,7 +146,7 @@ struct ModelCollectionGeneratedMachineTests {
     #expect(first.hasSameConfiguration(as: advanced))
     let graph = try ReachabilityGraph(initialMachines: [first], maximumStates: 10)
     #expect(graph.transitions.count == 4)
-    #expect(try graph.analyzeTemporalProperties().isEmpty)
+    #expect(graph.temporalResults.isEmpty)
   }
 
   @Test("Formal projection uses configured collection identities rather than application IDs")

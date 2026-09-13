@@ -32,12 +32,12 @@ public enum SafetyViolation: Hashable, Sendable {
     case deadlock
 }
 
-/// A complete reachable graph and native safety results for one finite configuration.
-/// Temporal properties require separate analysis; empty safety results do not establish liveness.
+/// A complete reachable graph with native safety and temporal results for one finite configuration.
 public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     private let machine: Machine
     private let predecessors: [Machine.Snapshot: (source: Machine.Snapshot, action: Machine.Action)]
     public let safetyViolations: [Machine.Snapshot: [SafetyViolation]]
+    public let temporalResults: [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>]
     public let initialStates: Set<Machine.Snapshot>
     public let transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]]
 
@@ -60,7 +60,8 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             guard try machine.assumptionsHold() else { throw ExplorationError.assumptionViolated }
             try discover(machine)
         }
-        initialStates = Set(transitions.keys)
+        let initialStates = Set(transitions.keys)
+        self.initialStates = initialStates
         var violations: [Machine.Snapshot: [SafetyViolation]] = [:]
         while let machine = pending.popFirst() {
             try Task.checkCancellation()
@@ -78,6 +79,9 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         self.transitions = transitions
         self.predecessors = predecessors
         safetyViolations = violations
+        temporalResults = try Self.analyzeTemporalProperties(
+            machine: initialMachine, transitions: transitions, initialStates: initialStates
+        )
     }
 
     /// A shortest native execution trace, including its initial state.
@@ -104,8 +108,13 @@ extension ReachabilityGraph {
         try machine.formalCall(for: action)
     }
 
-    /// Analyze generated predicates over the same native transitions used by applications.
-    public func analyzeTemporalProperties() throws -> [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] {
+    private static func analyzeTemporalProperties(
+        machine: Machine,
+        transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]],
+        initialStates: Set<Machine.Snapshot>
+    ) throws -> [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] {
+        let properties = machine.temporalProperties()
+        guard !properties.isEmpty else { return [:] }
         let snapshots = Array(transitions.keys)
         let identities = Dictionary(uniqueKeysWithValues: snapshots.enumerated().map {
             ($0.element, StateGraph.StateID($0.offset))
@@ -126,7 +135,7 @@ extension ReachabilityGraph {
             matches: { action, scope in fairness[scope].matches(action) },
             actionOrder: { actionNames[$0]! < actionNames[$1]! }
         )
-        return try machine.temporalProperties().mapValues { property in
+        return try properties.mapValues { property in
             let predicates = property.map { predicate -> @Sendable (StateGraph.StateID) throws -> Bool in
                 { try predicate(snapshots[$0.id]) }
             }
