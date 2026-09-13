@@ -7,7 +7,7 @@ VARIABLES chosen
 
 Init == chosen = {}
 
-Next == \E candidate \in Value: ((chosen = {}) /\ chosen' = {candidate})
+Next == \E candidate \in Value: (((chosen = {})) = TRUE /\ chosen' = {candidate})
 
 
 Spec ==

@@ -36,7 +36,13 @@ struct CompiledTLARenderer {
                 case .unchanged(let variable):
                     parts.append("UNCHANGED \(try variableName(variable))")
                 case .guard_(let condition):
-                    parts.append(try state(condition))
+                    let predicate = try state(condition)
+                    // A state predicate produces one Boolean, not a successor per existential witness.
+                    if case .value(.boolean) = condition.operation {
+                        parts.append(predicate)
+                    } else {
+                        parts.append("(\(predicate)) = TRUE")
+                    }
                 case .existsAction(let binder, let set, let body):
                     parts.append("\\E \(try binderName(binder)) \\in \(try state(set)): ")
                     tasks.append(.expression(body))

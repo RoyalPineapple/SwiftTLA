@@ -56,6 +56,8 @@ struct CompiledSpecificationRendererTests {
                 .or(.guard_(no), .assign(variable, one)))))
         #expect(try renderer.action(action)
             == #"\E selected \in {1}: LET saved == 1 IN IF TRUE THEN ((count' = 1 /\ UNCHANGED count)) ELSE ((FALSE \/ count' = 1))"#)
+        let exists = CompiledExpression(operation: .exists(selected), resultType: .bool, children: [domain, yes])
+        #expect(try renderer.action(.guard_(exists)) == #"(\E selected \in {1} : TRUE) = TRUE"#)
         let trueQuery = CompiledStateQuery(expression: yes, enabledActions: [])
         let falseQuery = CompiledStateQuery(expression: no, enabledActions: [])
         let properties: [(TemporalCondition<CompiledStateQuery>, String)] = [
