@@ -83,12 +83,12 @@ public struct TemporalAnalysis<State: Hashable & Sendable, Action: Equatable & S
 ///
 /// Every reachable state has an implicit stutter edge. Fairness uses only
 /// explicit, state-changing named-action transitions.
-package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Sendable, Scope: Hashable & Sendable> {
+package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Sendable, Scope: Hashable & Sendable>: Sendable {
     let states: Set<State>
     let transitions: [State: [GraphEdge<State, Action>]]
-    let matches: (Action, Scope) -> Bool
-    let actionOrder: (Action, Action) -> Bool
-    let stateOrder: (State, State) -> Bool
+    let matches: @Sendable (Action, Scope) -> Bool
+    let actionOrder: @Sendable (Action, Action) -> Bool
+    let stateOrder: @Sendable (State, State) -> Bool
     private let fairness: [(scope: Scope, isStrong: Bool)]
     private let enabled: [Scope: [State: Bool]]
 
@@ -96,9 +96,9 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
         states: Set<State>,
         transitions: [State: [GraphEdge<State, Action>]],
         fairness: [(scope: Scope, isStrong: Bool)],
-        matches: @escaping (Action, Scope) -> Bool,
-        actionOrder: @escaping (Action, Action) -> Bool,
-        stateOrder: @escaping (State, State) -> Bool
+        matches: @escaping @Sendable (Action, Scope) -> Bool,
+        actionOrder: @escaping @Sendable (Action, Action) -> Bool,
+        stateOrder: @escaping @Sendable (State, State) -> Bool
     ) {
         self.states = states
         self.transitions = transitions
@@ -187,6 +187,24 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
         )
     }
 
+    /// Finds a concrete fair behavior that eventually stops taking an abstract fair action.
+    func fairnessViolation(
+        initialStates: [State], isStrong: Bool, enabledStates: Set<State>,
+        takesAction: @Sendable (State, State) -> Bool
+    ) -> FairLassoWitness<State, Action?>? {
+        guard !enabledStates.isEmpty else { return nil }
+        let cycleStates = isStrong ? states : enabledStates
+        func allowsEdge(_ edge: GraphEdge<State, Action>) -> Bool {
+            !takesAction(edge.source, edge.target)
+        }
+        let components = fairComponents(in: cycleStates, fairness: fairness, enabled: enabled,
+            allowsEdge: allowsEdge)
+        return findWitness(components.fair, initialStates: initialStates,
+            prefixStates: nil, prefixContinuationStates: nil,
+            cycleRequiredStates: isStrong ? enabledStates : nil,
+            fairness: fairness, enabled: enabled, allowsCycleEdge: allowsEdge)
+    }
+
     public func computeSCCs() -> [Set<State>] {
         stronglyConnectedComponents(in: states)
     }
@@ -225,23 +243,24 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
     private func fairComponents(
         in states: Set<State>,
         fairness: [(scope: Scope, isStrong: Bool)],
-        enabled: [Scope: [State: Bool]]
+        enabled: [Scope: [State: Bool]],
+        allowsEdge: (GraphEdge<State, Action>) -> Bool = { _ in true }
     ) -> (fair: [Set<State>], rejected: [Set<State>]) {
         var fair: [Set<State>] = []
         var rejected: [Set<State>] = []
 
         func prune(_ candidates: Set<State>) {
-            for component in stronglyConnectedComponents(in: candidates) where !component.isEmpty {
+            for component in stronglyConnectedComponents(in: candidates, allowsEdge: allowsEdge) where !component.isEmpty {
                 if let action = fairness.compactMap({ condition -> Scope? in
                     guard condition.isStrong else { return nil }
-                    return isFair(condition, in: component, enabled: enabled) ? nil : condition.scope
+                    return isFair(condition, in: component, enabled: enabled, allowsEdge: allowsEdge) ? nil : condition.scope
                 }).first {
                     rejected.append(component)
                     let reduced = component.filter { enabled[action]?[$0] != true }
                     if !reduced.isEmpty { prune(Set(reduced)) }
                     continue
                 }
-                if fairness.contains(where: { !isFair($0, in: component, enabled: enabled) }) {
+                if fairness.contains(where: { !isFair($0, in: component, enabled: enabled, allowsEdge: allowsEdge) }) {
                     rejected.append(component)
                 } else {
                     fair.append(component)
@@ -256,11 +275,12 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
     private func isFair(
         _ condition: (scope: Scope, isStrong: Bool),
         in component: Set<State>,
-        enabled: [Scope: [State: Bool]]
+        enabled: [Scope: [State: Bool]],
+        allowsEdge: (GraphEdge<State, Action>) -> Bool
     ) -> Bool {
         let taken = component.contains { state in
             explicitEdges(from: state).contains { edge in
-                matches(edge, condition.scope) && (edge.target == state) == false && component.contains(edge.target)
+                allowsEdge(edge) && matches(edge, condition.scope) && (edge.target == state) == false && component.contains(edge.target)
             }
         }
         if taken { return true }
@@ -278,7 +298,8 @@ extension LivenessChecker {
         prefixContinuationStates: Set<State>?,
         cycleRequiredStates: Set<State>?,
         fairness: [(scope: Scope, isStrong: Bool)],
-        enabled: [Scope: [State: Bool]]
+        enabled: [Scope: [State: Bool]],
+        allowsCycleEdge: (GraphEdge<State, Action>) -> Bool = { _ in true }
     ) -> FairLassoWitness<State, Action?>? {
         var bestWitness: FairLassoWitness<State, Action?>?
         func consider(_ candidate: FairLassoWitness<State, Action?>) {
@@ -296,7 +317,8 @@ extension LivenessChecker {
                     root: cycleStart,
                     requiredStates: requiredCycle,
                     fairness: fairness,
-                    enabled: enabled
+                    enabled: enabled,
+                    allowsEdge: allowsCycleEdge
                 ) else { continue }
                 for initial in orderedInitialStates {
                     if requiredPrefixStates == nil {
@@ -331,7 +353,8 @@ extension LivenessChecker {
         root: State,
         requiredStates: Set<State>,
         fairness: [(scope: Scope, isStrong: Bool)],
-        enabled: [Scope: [State: Bool]]
+        enabled: [Scope: [State: Bool]],
+        allowsEdge: (GraphEdge<State, Action>) -> Bool
     ) -> ([State], [GraphEdge<State, Action>])? {
         let scopes = Set(fairness.map(\.scope))
         func advance(
@@ -372,7 +395,7 @@ extension LivenessChecker {
             var next: [CycleSearchConfiguration<State, Scope>: CycleSearchPath<State, Action>] = [:]
             var completed: [CycleSearchPath<State, Action>] = []
             for (configuration, path) in frontier {
-                for edge in edges(from: configuration.state).sorted(by: edgeOrder) where component.contains(edge.target) {
+                for edge in edges(from: configuration.state).sorted(by: edgeOrder) where component.contains(edge.target) && allowsEdge(edge) {
                     let nextConfiguration = advance(configuration, state: edge.target, edge: edge)
                     let nextPath = CycleSearchPath<State, Action>(
                         states: path.states + [edge.target],
@@ -433,14 +456,16 @@ extension LivenessChecker {
         return nil
     }
 
-    private func stronglyConnectedComponents(in allowed: Set<State>) -> [Set<State>] {
+    private func stronglyConnectedComponents(
+        in allowed: Set<State>, allowsEdge: (GraphEdge<State, Action>) -> Bool = { _ in true }
+    ) -> [Set<State>] {
         var index = 0; var indices: [State: Int] = [:]
         var stack: [State] = []; var onStack: Set<State> = []; var components: [Set<State>] = []
         func visit(_ state: State) -> Int {
             let stateIndex = index
             var lowlink = stateIndex
             indices[state] = stateIndex; index += 1; stack.append(state); onStack.insert(state)
-            for edge in edges(from: state).sorted(by: edgeOrder) where allowed.contains(edge.target) {
+            for edge in edges(from: state).sorted(by: edgeOrder) where allowed.contains(edge.target) && allowsEdge(edge) {
                 if let targetIndex = indices[edge.target] {
                     if onStack.contains(edge.target) { lowlink = min(lowlink, targetIndex) }
                 } else {

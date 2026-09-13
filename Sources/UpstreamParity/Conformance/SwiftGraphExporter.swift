@@ -37,15 +37,18 @@ package struct SwiftGraphExporter: Sendable {
       })
     } else if let failure = native.refinementFailures.sorted(by: { $0.key < $1.key }).first {
       outcome = .refinementViolation(failure.key)
-      let steps: [(action: Machine.Action?, state: Machine.Snapshot)]
+      let steps: [(action: Machine.Action?, state: Machine.Snapshot)]?
       switch failure.value {
       case .initialState(let state): steps = try native.trace(to: state)
+      case .fairness: steps = nil
       case .transition(let source, let action, let target):
         steps = try native.trace(to: source) + [(action, target)]
       }
-      trace = GraphTrace(id: "native-refinement-trace", steps: try steps.map {
-        GraphTraceStep(state: states[$0.state]!.key, action: try $0.action.map(actionName) ?? "Init")
-      })
+      if let steps {
+        trace = GraphTrace(id: "native-refinement-trace", steps: try steps.map {
+          GraphTraceStep(state: states[$0.state]!.key, action: try $0.action.map(actionName) ?? "Init")
+        })
+      }
     } else if let failure = native.temporalResults.sorted(by: { $0.key < $1.key }).first(where: { $0.value.status != .satisfied }) {
       outcome = failure.value.status == .violated
         ? .temporalViolation(property: failure.key, reason: failure.value.reason)

@@ -41,12 +41,34 @@ struct NativeRefinementCheckingTests {
         }
     }
 
-    @Test("abstract fairness is rejected before native refinement exploration")
-    func rejectsUncheckedAbstractFairness() throws {
-        #expect(throws: ExplorationError.unsupportedRefinement("Refines")) {
-            try ReachabilityGraph(initialMachines: FairNativeRefinement.initialMachines(), maximumStates: 1)
+    @Test("native refinement reports unfair mapped stuttering")
+    func reportsAbstractFairnessViolation() throws {
+        let graph = try ReachabilityGraph(initialMachines: FairNativeRefinement.initialMachines(), maximumStates: 3)
+        guard case .fairness(_, let witness) = try #require(graph.refinementFailures["Refines"]) else {
+            Issue.record("Expected an abstract fairness counterexample")
+            return
         }
+        #expect(witness.cycle.first == witness.cycle.last)
+        #expect(witness.cycleActions == [nil])
+        #expect(try SwiftGraphExporter().export(graph).outcome == .refinementViolation("Refines"))
     }
+
+    @Test("concrete fairness establishes abstract progress")
+    func acceptsFairRefinement() throws {
+        let graph = try ReachabilityGraph(initialMachines: FairConcreteRefinement.initialMachines(), maximumStates: 3)
+        #expect(graph.refinementFailures.isEmpty)
+    }
+
+    @Test("abstract enabledness includes successors missing from the concrete graph")
+    func checksUnreachableAbstractSuccessors() throws {
+        let graph = try ReachabilityGraph(initialMachines: StoppedConcreteRefinement.initialMachines(), maximumStates: 2)
+        guard case .fairness(_, let witness) = try #require(graph.refinementFailures["Refines"]) else {
+            Issue.record("Expected missing abstract progress")
+            return
+        }
+        #expect(witness.cycle.allSatisfy { $0.state.count == 1 })
+    }
+
 }
 
 @TLAModel
@@ -101,6 +123,46 @@ private struct FairNativeRefinement {
             }
             let count = scope.sharedVar("count", initial: 0)
             SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 2) }
+            let instance = Instance("Counter", of: abstract)
+            instance
+            Refinement(name: "Refines", instance: instance, mappings: [.init(Var<Int>("value"), from: count)])
+        }
+    }
+}
+
+@TLAModel
+private struct FairConcreteRefinement {
+    static var spec: TLASpec {
+        #spec("FairConcreteRefinement") { scope in
+            let abstract = TLASpec("FairAbstractCounter") {
+                let value = Var<Int>("value")
+                Variable(value, 0)
+                SwiftTLA.Action("advance") { value.becomes(value + 1).when(value < 2) }
+                WeakFairnessNext()
+            }
+            let count = scope.sharedVar("count", initial: 0)
+            SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 2) }
+            WeakFairnessNext()
+            let instance = Instance("Counter", of: abstract)
+            instance
+            Refinement(name: "Refines", instance: instance, mappings: [.init(Var<Int>("value"), from: count)])
+        }
+    }
+}
+
+@TLAModel
+private struct StoppedConcreteRefinement {
+    static var spec: TLASpec {
+        #spec("StoppedConcreteRefinement") { scope in
+            let abstract = TLASpec("FairAbstractCounter") {
+                let value = Var<Int>("value")
+                Variable(value, 0)
+                SwiftTLA.Action("advance") { value.becomes(value + 1).when(value < 2) }
+                WeakFairnessNext()
+            }
+            let count = scope.sharedVar("count", initial: 0)
+            SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 1) }
+            WeakFairnessNext()
             let instance = Instance("Counter", of: abstract)
             instance
             Refinement(name: "Refines", instance: instance, mappings: [.init(Var<Int>("value"), from: count)])

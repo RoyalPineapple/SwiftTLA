@@ -4,8 +4,7 @@ import SwiftTLA
 extension NativeSwiftEmitter {
     func supportsNativeRefinement(_ refinement: CompiledRefinementProgram) -> Bool {
         let abstract = refinement.abstract
-        return abstract.behavior.fairness.isEmpty
-            && abstract.layout.variables.allSatisfy { $0.declaration.origin == .source && $0.collection == nil }
+        return abstract.layout.variables.allSatisfy { $0.declaration.origin == .source && $0.collection == nil }
     }
 
     mutating func refinementDeclarations(nested: Bool) throws -> [DeclSyntax] {
@@ -53,8 +52,7 @@ extension NativeSwiftEmitter {
                 }
                 """)
                 checks.append("""
-                if let failure = try graph.refinementFailure(named: \(String(reflecting: refinement.name)),
-                    initialMachines: \(name).initialMachines(), mapping: _mapRefinement\(index)) {
+                if let failure = try graph.refinementFailure(initialMachines: \(name).initialMachines(), mapping: _mapRefinement\(index)) {
                     failures[\(String(reflecting: refinement.name))] = failure
                 }
                 """)
@@ -62,7 +60,7 @@ extension NativeSwiftEmitter {
         }
         let body = checks.isEmpty ? "return [:]" : "var failures: [String: RefinementFailure<Snapshot, Action>] = [:]\n" + checks.joined(separator: "\n") + "\nreturn failures"
         declarations += try nativeDeclarations("""
-        public func refinementFailures(in graph: ReachabilityGraph<Self>) throws -> [String: RefinementFailure<Snapshot, Action>] {
+        public func refinementFailures(in graph: inout ReachabilityGraph<Self>) throws -> [String: RefinementFailure<Snapshot, Action>] {
             \(body)
         }
         """)

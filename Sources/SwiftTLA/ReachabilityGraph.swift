@@ -14,7 +14,7 @@ public protocol StateMachine: Sendable {
     func fairnessConditions() -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)]
     func temporalProperties() throws -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
     func violatedInvariants() throws -> [String]
-    func refinementFailures(in graph: ReachabilityGraph<Self>) throws -> [String: RefinementFailure<Snapshot, Action>]
+    func refinementFailures(in graph: inout ReachabilityGraph<Self>) throws -> [String: RefinementFailure<Snapshot, Action>]
     func successors() throws -> [(action: Action, machine: Self)]
 }
 
@@ -39,7 +39,8 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     private let predecessors: [Machine.Snapshot: (source: Machine.Snapshot, action: Machine.Action)]
     public let safetyViolations: [Machine.Snapshot: [SafetyViolation]]
     public private(set) var refinementFailures: [String: RefinementFailure<Machine.Snapshot, Machine.Action>] = [:]
-    public let temporalResults: [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>]
+    public private(set) var temporalResults: [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] = [:]
+    private var checker: LivenessChecker<Machine.Snapshot, Machine.Action, Int>?
     public let initialStates: Set<Machine.Snapshot>
     public let transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]]
 
@@ -82,10 +83,15 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         self.transitions = transitions
         self.predecessors = predecessors
         safetyViolations = violations
-        temporalResults = try Self.analyzeTemporalProperties(
-            machine: initialMachine, properties: properties, transitions: transitions, initialStates: initialStates
-        )
-        refinementFailures = try initialMachine.refinementFailures(in: self)
+        if !properties.isEmpty {
+            let checker = temporalChecker()
+            let fairness = initialMachine.fairnessConditions()
+            temporalResults = try properties.mapValues {
+                try checker.analyze($0, initialStates: Array(initialStates), renderScope: { fairness[$0].name })
+            }
+        }
+        refinementFailures = try initialMachine.refinementFailures(in: &self)
+        checker = nil
     }
 
     /// A shortest native execution trace, including its initial state.
@@ -112,13 +118,8 @@ extension ReachabilityGraph {
         try machine.formalCall(for: action)
     }
 
-    private static func analyzeTemporalProperties(
-        machine: Machine,
-        properties: [String: TemporalCondition<@Sendable (Machine.Snapshot) throws -> Bool>],
-        transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]],
-        initialStates: Set<Machine.Snapshot>
-    ) throws -> [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] {
-        guard !properties.isEmpty else { return [:] }
+    mutating func temporalChecker() -> LivenessChecker<Machine.Snapshot, Machine.Action, Int> {
+        if let checker { return checker }
         let snapshots = Array(transitions.keys)
         let stateOrder = Dictionary(uniqueKeysWithValues: snapshots.enumerated().map { ($0.element, $0.offset) })
         let actionNames = Dictionary(uniqueKeysWithValues: Set(transitions.values.flatMap { $0.map(\.action) }).map {
@@ -137,12 +138,7 @@ extension ReachabilityGraph {
             actionOrder: { actionNames[$0]! < actionNames[$1]! },
             stateOrder: { stateOrder[$0]! < stateOrder[$1]! }
         )
-        return try properties.mapValues { property in
-            try checker.analyze(
-                property,
-                initialStates: Array(initialStates),
-                renderScope: { fairness[$0].name }
-            )
-        }
+        self.checker = checker
+        return checker
     }
 }

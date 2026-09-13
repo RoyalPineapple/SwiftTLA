@@ -1,4 +1,5 @@
 import Foundation
+import os
 import SwiftParser
 import SwiftSyntax
 @testable import SwiftTLA
@@ -11,21 +12,45 @@ struct LivenessCheckerTests {
   func sharesFairnessEnabledness() throws {
     let first = "first"
     let second = "second"
-    var matchCount = 0
+    let matchCount = OSAllocatedUnfairLock(initialState: 0)
     let checker = LivenessChecker<String, Int, Int>(states: [first, second], transitions: [
       first: [GraphEdge(source: first, action: 1, target: second)],
       second: [GraphEdge(source: second, action: 1, target: first)]
     ], fairness: [(scope: 1, isStrong: false)], matches: { action, scope in
-      matchCount += 1
+      matchCount.withLock { $0 += 1 }
       return action == scope
-    }, actionOrder: <, stateOrder: <)
-    #expect(matchCount == 2)
+    }, actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+    #expect(matchCount.withLock { $0 } == 2)
     for _ in 0..<2 {
       let result = try checker.analyze(.eventually { _ in true },
         initialStates: [first], renderScope: { _ in "step" })
       #expect(result.status == .satisfied)
     }
-    #expect(matchCount == 2)
+    #expect(matchCount.withLock { $0 } == 2)
+  }
+
+  @Test("refinement cycle filtering preserves concrete fairness and unrestricted prefixes", arguments: [false, true])
+  func refinementFairnessCycle(_ strongConcreteFairness: Bool) throws {
+    let checker = LivenessChecker<String, String, String>(states: ["start", "on", "off", "exit"], transitions: [
+      "start": [.init(source: "start", action: "enter", target: "on")],
+      "on": [.init(source: "on", action: "leave", target: "exit"),
+             .init(source: "on", action: "toggle", target: "off")],
+      "off": [.init(source: "off", action: "toggle", target: "on")],
+      "exit": []
+    ], fairness: [(scope: "leave", isStrong: strongConcreteFairness)], matches: { $0 == $1 },
+      actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+    for strongAbstractFairness in [false, true] {
+      let witness = checker.fairnessViolation(initialStates: ["start"],
+        isStrong: strongAbstractFairness, enabledStates: ["on"],
+        takesAction: { $0 == "start" || $1 == "exit" })
+      if strongAbstractFairness && !strongConcreteFairness {
+        let trace = try #require(witness)
+        #expect(trace.prefix.first == "start")
+        #expect(Set(trace.cycle) == ["on", "off"])
+      } else {
+        #expect(witness == nil)
+      }
+    }
   }
 
   @Test("SCC decomposition finds one twelve-state cycle")
