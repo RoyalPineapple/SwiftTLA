@@ -14,6 +14,7 @@ struct KVsnapCorpusRenderingTests {
         let plusCalBundle = try rendered.plusCalBundle()
         for configuration in [bundle.cfg, plusCalBundle.cfg] {
             #expect(configuration.contains("PROPERTY Termination"))
+            #expect(configuration.contains("CHECK_DEADLOCK TRUE"))
             #expect(!configuration.contains("SYMMETRY"))
         }
         let plusCal = plusCalBundle.root.tla
