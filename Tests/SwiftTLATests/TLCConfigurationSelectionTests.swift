@@ -43,6 +43,8 @@ struct TLCConfigurationSelectionTests {
         INVARIANT First
 
         """)
-        #expect(configuration.render(usesSymmetryReduction: true).hasSuffix("SYMMETRY Nodes\n"))
+        #expect(!configuration.render(usesSymmetryReduction: true).contains("SYMMETRY"))
+        #expect(configuration.render(usesSymmetryReduction: true).contains("PROPERTY Progress\n"))
+        #expect(selected.render(usesSymmetryReduction: true).hasSuffix("SYMMETRY Nodes\n"))
     }
 }

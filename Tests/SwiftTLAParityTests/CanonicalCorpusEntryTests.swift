@@ -29,6 +29,9 @@ struct CanonicalCorpusEntryTests {
             if let constraint = compiled.description.stateConstraint {
                 #expect(directives.contains("CONSTRAINT \(constraint)"))
             }
+            if !compiled.description.temporalProperties.isEmpty || !compiled.description.refinements.isEmpty {
+                #expect(!directives.contains { $0.hasPrefix("SYMMETRY ") })
+            }
             #expect(try rendered.plusCalBundle().cfg == configuration)
         }
     }

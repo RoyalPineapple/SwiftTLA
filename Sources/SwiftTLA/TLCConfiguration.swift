@@ -24,7 +24,8 @@ struct TLCConfiguration: Equatable, Sendable {
     func render(usesSymmetryReduction: Bool) -> String {
         let header = ["SPECIFICATION Spec", checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
         let checks = invariants.map { "INVARIANT \($0)" } + properties.map { "PROPERTY \($0)" }
-        let reduction = usesSymmetryReduction ? symmetry.map { "SYMMETRY \($0)" } : []
+        // TLC cannot soundly check liveness on a symmetry-reduced graph.
+        let reduction = usesSymmetryReduction && properties.isEmpty ? symmetry.map { "SYMMETRY \($0)" } : []
         return (header + declarations + checks + reduction).joined(separator: "\n") + "\n"
     }
 }
