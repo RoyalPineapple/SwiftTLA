@@ -12,7 +12,8 @@
         "symmetryReduction": "disabled"
       },
       "moduleSHA256": "985903176db4725f9cf25df84ad84dcd53ba94be80d26298b87ec86fbc9b08b3",
-      "cfgSHA256": "c1e28ec8c38919b15577a0a7148840ba1d4e4c6541ea43e36edd482c5ff16687"
+      "cfgSHA256": "c1e28ec8c38919b15577a0a7148840ba1d4e4c6541ea43e36edd482c5ff16687",
+      "timeoutSeconds": 60
     },
     {
       "sourceModel": "die-hard-type-ok",
@@ -25,7 +26,8 @@
         "symmetryReduction": "disabled"
       },
       "moduleSHA256": "295495de6509d86a82b88757835b95e3f91fad8691d764ece4d98886dcf42b66",
-      "cfgSHA256": "d653a6add3e94b67cd6ccdc7e7473ab0a381df7931ecaf3c8760fad4bcabdc7d"
+      "cfgSHA256": "d653a6add3e94b67cd6ccdc7e7473ab0a381df7931ecaf3c8760fad4bcabdc7d",
+      "timeoutSeconds": 60
     },
     {
       "sourceModel": "multicar-elevator",
@@ -38,7 +40,8 @@
         "symmetryReduction": "disabled"
       },
       "moduleSHA256": "af971fe32f8e8fe62e39985201894929beb0e85c99504d6db56350701bcaead5",
-      "cfgSHA256": "280ad5e348229375fdfa102db511108fe5bd2237fd4e5f52d0218b2f3e7ec593"
+      "cfgSHA256": "280ad5e348229375fdfa102db511108fe5bd2237fd4e5f52d0218b2f3e7ec593",
+      "timeoutSeconds": 60
     },
     {
       "sourceModel": "tlcmc-graph-1",
@@ -55,7 +58,8 @@
         "symmetryReduction": "disabled"
       },
       "moduleSHA256": "0a2644a88f4caf9521dc188d712d3776db6e6f3220c4b815e2014c4e16db0fc7",
-      "cfgSHA256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87"
+      "cfgSHA256": "5bf5c523864e1276b5d53c0d1158be61b2144a461b1d68d904b18fb4322bff87",
+      "timeoutSeconds": 60
     },
     {
       "sourceModel": "n-queens-four",
@@ -72,7 +76,8 @@
         "symmetryReduction": "disabled"
       },
       "moduleSHA256": "72930a0df9675c8bc140091f67404c785d4b1db7bb61335354affe9218fd03de",
-      "cfgSHA256": "e0e287b855faadf8ae708b4740447183407b5beffa36d90742c7589a1c13c056"
+      "cfgSHA256": "e0e287b855faadf8ae708b4740447183407b5beffa36d90742c7589a1c13c056",
+      "timeoutSeconds": 60
     },
     {
       "sourceModel": "asynch-interface",
@@ -89,7 +94,8 @@
         "symmetryReduction": "disabled"
       },
       "moduleSHA256": "86adf068c65219ebe140e047dece85a9d04b9492d508e4aa4d5f86685ada09d4",
-      "cfgSHA256": "1d5437ab52c06defaa83bd3b860310e94865e2e19b60524d56c4de08f13c068f"
+      "cfgSHA256": "1d5437ab52c06defaa83bd3b860310e94865e2e19b60524d56c4de08f13c068f",
+      "timeoutSeconds": 60
     },
     {
       "sourceModel": "channel",
@@ -106,7 +112,8 @@
         "symmetryReduction": "disabled"
       },
       "moduleSHA256": "8b2cbd4533a157ae0760e3117e3c008fb9a31dc3673005fc8b537d3879de1bfc",
-      "cfgSHA256": "1d5437ab52c06defaa83bd3b860310e94865e2e19b60524d56c4de08f13c068f"
+      "cfgSHA256": "1d5437ab52c06defaa83bd3b860310e94865e2e19b60524d56c4de08f13c068f",
+      "timeoutSeconds": 60
     },
     {
       "sourceModel": "boulanger",
@@ -123,7 +130,8 @@
         "symmetryReduction": "disabled"
       },
       "moduleSHA256": "998f02144752a51a35e4237b52758341b8bfeb95b47457738441262f8a506309",
-      "cfgSHA256": "009c66f37d8ea5b247424ae2795358e6d0787e2c272fb71ba04db06e4b963f2b"
+      "cfgSHA256": "009c66f37d8ea5b247424ae2795358e6d0787e2c272fb71ba04db06e4b963f2b",
+      "timeoutSeconds": 60
     },
     {
       "sourceModel": "voteproof",
@@ -147,7 +155,8 @@
         "symmetryReduction": "disabled"
       },
       "moduleSHA256": "658c477a90be6e5ef464c01a84a5a6925049639fcab644cd27e8924232ac4a47",
-      "cfgSHA256": "e749e11984b6c3aab9f2efb06fa2abbbbd86361f6e5f0725d5e1f1358a68e136"
+      "cfgSHA256": "e749e11984b6c3aab9f2efb06fa2abbbbd86361f6e5f0725d5e1f1358a68e136",
+      "timeoutSeconds": 600
     }
   ]
 }

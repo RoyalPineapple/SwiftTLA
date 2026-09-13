@@ -220,9 +220,10 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package let moduleSHA256: String
         package let cfgSHA256: String
         package let exploration: FiniteExplorationConfiguration
+        package let timeoutSeconds: TimeInterval
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case sourceModel, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration
+            case sourceModel, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration, timeoutSeconds
         }
 
         package struct Dependency: Decodable, Sendable {
@@ -250,6 +251,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             sourceInput = try container.decodeIfPresent(SourceInputPin.self, forKey: .sourceInput)
             moduleSHA256 = try container.decode(String.self, forKey: .moduleSHA256)
             cfgSHA256 = try container.decode(String.self, forKey: .cfgSHA256)
+            timeoutSeconds = try container.decode(TimeInterval.self, forKey: .timeoutSeconds)
             exploration = try container.decode(
                 FiniteExplorationConfiguration.self,
                 forKey: .exploration
@@ -258,6 +260,9 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         package func validate() throws {
+            guard timeoutSeconds.isFinite, timeoutSeconds > 0 else {
+                throw EvidenceFormatError.invalidField(record: id, field: "timeoutSeconds")
+            }
             guard module.isEmpty == false, configuration.isEmpty == false,
                   Set(imports).count == imports.count, imports.allSatisfy({ $0.isEmpty == false }),
                   dependencies.allSatisfy({

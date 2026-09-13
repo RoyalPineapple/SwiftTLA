@@ -128,9 +128,22 @@ struct FiniteGraphCheckTests {
     }
   }
 
+  @Test("finite graph cases require a positive process timeout")
+  func rejectsInvalidTimeouts() {
+    for timeout in [0, -1] {
+      #expect(throws: EvidenceFormatError.invalidField(record: "hour-clock", field: "timeoutSeconds")) {
+        try JSONDecoder().decode(FiniteGraphManifest.self, from: manifest(timeoutSeconds: timeout,
+          exploration: """
+            {"maximumStateLimit": 10, "symmetryReduction": "disabled"}
+            """))
+      }
+    }
+  }
+
   private func manifest(
     sourceModel: String = "hour-clock",
     dependencies: String = "[]",
+    timeoutSeconds: Int = 60,
     exploration: String
   ) -> Data {
     Data("""
@@ -138,6 +151,7 @@ struct FiniteGraphCheckTests {
         "schema": "FiniteGraphCases",
         "cases": [{
           "sourceModel": "\(sourceModel)",
+          "timeoutSeconds": \(timeoutSeconds),
           "module": "Fixture.tla",
           "configuration": "Fixture.cfg",
           "imports": [],
