@@ -17,7 +17,7 @@ struct NativeSwiftEmitter {
     private var expressionOrdinals: [CompiledExpression: Int] = [:]
     private var hasDepthScope = false
 
-    init(model: MacroCompilation) {
+    init(model: MacroCompilation, sharedTypes: NativeTypeDeclarations? = nil) {
         self.model = model
         let program = model.program
         var enabledActionIDs = program.behavior.constraint?.enabledActions ?? []
@@ -30,8 +30,11 @@ struct NativeSwiftEmitter {
         for predicate in program.behavior.temporalProperties.flatMap({ $0.expression.predicates }) {
             enabledActionIDs.formUnion(predicate.enabledActions)
         }
+        for mapping in program.refinements.flatMap({ $0.variableMappings }) {
+            enabledActionIDs.formUnion(mapping.enabledActions)
+        }
         self.enabledActionIDs = enabledActionIDs
-        typeDeclarations = NativeTypeDeclarations(program: program)
+        typeDeclarations = sharedTypes ?? NativeTypeDeclarations(program: program)
         variableNames = Dictionary(uniqueKeysWithValues: program.layout.variables.map { variable in
             let name = String(variable.declaration.name.unicodeScalars.map { scalar -> Character in
                 switch scalar.value {

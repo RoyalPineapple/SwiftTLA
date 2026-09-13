@@ -4,7 +4,7 @@ import SwiftParser
 import SwiftTLA
 
 extension NativeSwiftEmitter {
-    mutating func machineMembers() throws -> [DeclSyntax] {
+    mutating func machineMembers(nested: Bool = false) throws -> [DeclSyntax] {
         let api = model.api
         let collections = api.collections
         let collectionParameters = collections.map { "\($0.swiftIdentifier) \($0.membersIdentifier): [\($0.elementType).ID]" }.joined(separator: ", ")
@@ -78,6 +78,8 @@ extension NativeSwiftEmitter {
         declarations += actionFunctions
         declarations += try dispatchDeclarations(collectionArguments: appendedArguments)
         declarations += try propertyDeclarations(collectionParameters: appendedParameters)
+        declarations += try refinementDeclarations(nested: nested)
+        if nested { return declarations }
         declarations += actorMembers()
         if !program.layout.controlLocations.isEmpty {
             declarations += try nativeDeclarations("""
@@ -336,7 +338,7 @@ extension NativeSwiftEmitter {
         """)
     }
 
-    private func enabledActionsCall(_ dependencies: Set<ActionID>, state: String, collectionArguments: String) -> String {
+    func enabledActionsCall(_ dependencies: Set<ActionID>, state: String, collectionArguments: String) -> String {
         guard !dependencies.isEmpty else { return "[]" }
         let identifiers = dependencies.map(\.ordinal).sorted().map(String.init).joined(separator: ", ")
         return "try Self._enabledActions(in: \(state)\(collectionArguments), required: [\(identifiers)])"
@@ -566,7 +568,7 @@ extension NativeSwiftEmitter {
             temporalProperties.append("\(String(reflecting: property.name)): \(condition)")
         }
         let propertyBody: String
-        if let refinement = program.refinements.first?.name {
+        if let refinement = program.refinements.first(where: { !supportsNativeRefinement($0) })?.name {
             propertyBody = "throw ExplorationError.unsupportedRefinement(\(String(reflecting: refinement)))"
         } else {
             propertyBody = "[\(temporalProperties.isEmpty ? ":" : temporalProperties.joined(separator: ",\n"))]"
@@ -626,7 +628,7 @@ extension NativeSwiftEmitter {
 
 }
 
-private func nativeDeclarations(_ source: String) throws -> [DeclSyntax] {
+func nativeDeclarations(_ source: String) throws -> [DeclSyntax] {
     let parsed = Parser.parse(source: source)
     return try parsed.statements.map { statement in
         guard let declaration = statement.item.as(DeclSyntax.self) else {

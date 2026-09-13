@@ -14,6 +14,7 @@ public protocol StateMachine: Sendable {
     func fairnessConditions() -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)]
     func temporalProperties() throws -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
     func violatedInvariants() throws -> [String]
+    func refinementFailures(in graph: ReachabilityGraph<Self>) throws -> [String: RefinementFailure<Snapshot, Action>]
     func successors() throws -> [(action: Action, machine: Self)]
 }
 
@@ -37,6 +38,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     private let machine: Machine
     private let predecessors: [Machine.Snapshot: (source: Machine.Snapshot, action: Machine.Action)]
     public let safetyViolations: [Machine.Snapshot: [SafetyViolation]]
+    public private(set) var refinementFailures: [String: RefinementFailure<Machine.Snapshot, Machine.Action>] = [:]
     public let temporalResults: [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>]
     public let initialStates: Set<Machine.Snapshot>
     public let transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]]
@@ -83,6 +85,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         temporalResults = try Self.analyzeTemporalProperties(
             machine: initialMachine, properties: properties, transitions: transitions, initialStates: initialStates
         )
+        refinementFailures = try initialMachine.refinementFailures(in: self)
     }
 
     /// A shortest native execution trace, including its initial state.

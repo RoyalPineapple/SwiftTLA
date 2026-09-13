@@ -3,9 +3,9 @@ import Testing
 import UpstreamParity
 
 struct VoteProofCorpusExecutionTests {
-    @Test("Native exploration cannot silently omit the declared refinement")
-    func rejectsUncheckedRefinement() throws {
-        #expect(throws: ExplorationError.unsupportedRefinement("Refines")) {
+    @Test("Native refinement generation admits VoteProof to bounded exploration")
+    func admitsNativeRefinement() throws {
+        #expect(throws: ExplorationError.stateLimitExceeded(1)) {
             try ReachabilityGraph(initialMachines: VoteProofModel.initialMachines(), maximumStates: 1)
         }
     }

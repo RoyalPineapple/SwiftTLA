@@ -1,4 +1,4 @@
-package enum RefinementFailure: Sendable, Equatable {
+package enum FormalRefinementFailure: Sendable, Equatable {
     case initialState(
         mapped: TLAStateProjection,
         abstractInitialStates: [TLAStateProjection]

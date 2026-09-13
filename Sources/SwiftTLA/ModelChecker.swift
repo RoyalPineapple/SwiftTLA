@@ -491,7 +491,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
         witness: FairLassoWitness<StateGraph.StateID, String>
     )
     case livenessUnavailable(property: String, reason: TemporalDiagnosticReason)
-    case refinementViolated(refinement: String, failure: RefinementFailure)
+    case refinementViolated(refinement: String, failure: FormalRefinementFailure)
     case refinementUnproven(refinement: String, exploration: ModelCheckOutcome)
 
     /// The typed explanation of a failed check, including projected state and
