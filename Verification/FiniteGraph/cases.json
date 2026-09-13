@@ -107,6 +107,23 @@
       },
       "moduleSHA256": "8b2cbd4533a157ae0760e3117e3c008fb9a31dc3673005fc8b537d3879de1bfc",
       "cfgSHA256": "1d5437ab52c06defaa83bd3b860310e94865e2e19b60524d56c4de08f13c068f"
+    },
+    {
+      "sourceModel": "boulanger",
+      "module": "boulanger/Boulanger.tla",
+      "configuration": "boulanger/Boulanger.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Bakery-Boulangerie/Boulanger.tla",
+        "sha256": "e0f76da20c999aa23ed494d319119575f678ccd77f3c1e105eead18d3fe66fa0"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "998f02144752a51a35e4237b52758341b8bfeb95b47457738441262f8a506309",
+      "cfgSHA256": "009c66f37d8ea5b247424ae2795358e6d0787e2c272fb71ba04db06e4b963f2b"
     }
   ]
 }
