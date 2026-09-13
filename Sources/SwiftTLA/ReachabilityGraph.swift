@@ -5,6 +5,7 @@ public protocol StateMachine: Sendable {
 
     /// Complete execution state, including compiler-owned control state.
     var snapshot: Snapshot { get }
+    func hasSameConfiguration(as other: Self) -> Bool
     /// Explicit conversions used by independent validation and export.
     func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection
     func formalCall(for action: Action) throws -> FormalActionCall
@@ -22,6 +23,7 @@ public enum ExplorationError: Error, Equatable, Sendable {
     case stateLimitExceeded(Int)
     case noInitialStates
     case assumptionViolated
+    case configurationMismatch
     case traceTargetNotReachable
 }
 
@@ -33,6 +35,7 @@ public enum SafetyViolation: Hashable, Sendable {
 /// A complete reachable graph and native safety results for one finite configuration.
 /// Temporal properties require separate analysis; empty safety results do not establish liveness.
 public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
+    private let machine: Machine
     private let predecessors: [Machine.Snapshot: (source: Machine.Snapshot, action: Machine.Action)]
     public let safetyViolations: [Machine.Snapshot: [SafetyViolation]]
     public let initialStates: Set<Machine.Snapshot>
@@ -40,11 +43,13 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
 
     public init(initialMachines: [Machine], maximumStates: Int) throws {
         guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
-        guard !initialMachines.isEmpty else { throw ExplorationError.noInitialStates }
+        guard let initialMachine = initialMachines.first else { throw ExplorationError.noInitialStates }
+        machine = initialMachine
         var transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]] = [:]
         var pending: ArraySlice<Machine> = []
         var predecessors: [Machine.Snapshot: (source: Machine.Snapshot, action: Machine.Action)] = [:]
         func discover(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
+            guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
             guard transitions[machine.snapshot] == nil else { return }
             guard transitions.count < maximumStates else { throw ExplorationError.stateLimitExceeded(maximumStates) }
             transitions[machine.snapshot] = []
@@ -90,8 +95,17 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
 }
 
 extension ReachabilityGraph {
+    package func formalProjection(of snapshot: Machine.Snapshot) throws -> TLAStateProjection {
+        guard transitions[snapshot] != nil else { throw ExplorationError.traceTargetNotReachable }
+        return try machine.formalProjection(of: snapshot)
+    }
+
+    package func formalCall(for action: Machine.Action) throws -> FormalActionCall {
+        try machine.formalCall(for: action)
+    }
+
     /// Analyze generated predicates over the same native transitions used by applications.
-    public func analyzeTemporalProperties(using machine: Machine) throws -> [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] {
+    public func analyzeTemporalProperties() throws -> [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] {
         let snapshots = Array(transitions.keys)
         let identities = Dictionary(uniqueKeysWithValues: snapshots.enumerated().map {
             ($0.element, StateGraph.StateID($0.offset))

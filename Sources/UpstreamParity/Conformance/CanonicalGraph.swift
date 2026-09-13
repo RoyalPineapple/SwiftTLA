@@ -233,9 +233,9 @@ package struct CanonicalGraph: Equatable, Sendable {
     }
 
     /// Export native topology only; this does not issue a property-checking verdict.
-    package init<Machine: StateMachine>(_ native: ReachabilityGraph<Machine>, using machine: Machine) throws {
+    package init<Machine: StateMachine>(_ native: ReachabilityGraph<Machine>) throws {
         let states = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
-            ($0, try CanonicalState(machine.formalProjection(of: $0)))
+            ($0, try CanonicalState(native.formalProjection(of: $0)))
         })
         func state(_ snapshot: Machine.Snapshot) throws -> CanonicalState {
             guard let result = states[snapshot] else { throw CanonicalGraphError.missingNativeSnapshot }
@@ -244,7 +244,7 @@ package struct CanonicalGraph: Equatable, Sendable {
         var actionNames: [Machine.Action: String] = [:]
         func actionName(_ action: Machine.Action) throws -> String {
             if let name = actionNames[action] { return name }
-            let name = try machine.formalCall(for: action).description
+            let name = try native.formalCall(for: action).description
             actionNames[action] = name
             return name
         }

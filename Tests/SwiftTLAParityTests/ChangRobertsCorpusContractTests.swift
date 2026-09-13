@@ -19,11 +19,10 @@ struct ChangRobertsCorpusContractTests {
         let initial = try ChangRobertsModel.initialMachines()
         #expect(initial.count == 8)
         #expect(throws: GeneratedMachineError.ambiguousInitialState) { try ChangRobertsModel.makeMachine() }
-        let machine = try #require(initial.first)
         let native = try ReachabilityGraph(initialMachines: initial, maximumStates: 500)
         #expect(native.safetyViolations.isEmpty)
-        #expect(try native.analyzeTemporalProperties(using: machine)["Liveness"]?.status == .satisfied)
-        let exported = try CanonicalGraph(native, using: machine)
+        #expect(try native.analyzeTemporalProperties()["Liveness"]?.status == .satisfied)
+        let exported = try CanonicalGraph(native)
         let formal = try SwiftGraphExporter().export(exploration)
         #expect(exported == formal.graph)
         #expect(exported.states.count == Example.changRobertsN3.expectedDistinct)

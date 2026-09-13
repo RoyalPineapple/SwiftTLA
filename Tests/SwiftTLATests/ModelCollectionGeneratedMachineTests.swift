@@ -132,6 +132,23 @@ public struct GeneratedContainsPredicateMachine {
 
 @Suite(.serialized)
 struct ModelCollectionGeneratedMachineTests {
+  @Test("Exploration rejects different collection bindings before merging equal snapshots")
+  func rejectsMixedConfigurations() throws {
+    let first = try GeneratedScopedSymmetricMachine.makeMachine(devices: ["a", "b"])
+    let reversed = try GeneratedScopedSymmetricMachine.makeMachine(devices: ["b", "a"])
+    #expect(first.snapshot == reversed.snapshot)
+    #expect(!first.hasSameConfiguration(as: reversed))
+    #expect(throws: ExplorationError.configurationMismatch) {
+      try ReachabilityGraph(initialMachines: [first, reversed], maximumStates: 10)
+    }
+    var advanced = first
+    _ = try advanced.send(.begin(member: "a"))
+    #expect(first.hasSameConfiguration(as: advanced))
+    let graph = try ReachabilityGraph(initialMachines: [first], maximumStates: 10)
+    #expect(graph.transitions.count == 4)
+    #expect(try graph.analyzeTemporalProperties().isEmpty)
+  }
+
   @Test("Formal projection uses configured collection identities rather than application IDs")
   func projectsConfiguredCollectionMembers() throws {
     let ids = ["device-z", "device-a"]

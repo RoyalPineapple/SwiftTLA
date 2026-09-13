@@ -31,6 +31,14 @@ extension NativeSwiftEmitter {
             \(collections.map { "self.\($0.membersIdentifier) = \($0.membersIdentifier)" }.joined(separator: "\n"))
         }
         """)
+        let configurationChecks = collections.map {
+            "\($0.membersIdentifier) == other.\($0.membersIdentifier)"
+        }
+        declarations += try nativeDeclarations("""
+        public func hasSameConfiguration(as other: Self) -> Bool {
+            \(configurationChecks.isEmpty ? "true" : configurationChecks.joined(separator: " && "))
+        }
+        """)
         let stateFields = try api.variables.map { variable in
             "public let \(variable.swiftIdentifier): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: "\n")
