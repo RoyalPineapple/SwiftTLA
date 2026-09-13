@@ -23,7 +23,8 @@ package enum CanonicalValue: Hashable, Sendable {
     case orderedFunction([CanonicalFunctionEntry])
 
     package static func set(_ values: [CanonicalValue]) -> CanonicalValue {
-        .orderedSet(Set(values).sorted { canonicalBytes($0.canonicalEncoding, $1.canonicalEncoding) })
+        let members = Set(values).map { (value: $0, encoding: $0.canonicalEncoding) }
+        return .orderedSet(members.sorted { canonicalBytes($0.encoding, $1.encoding) }.map(\.value))
     }
 
     package static func tuple(_ values: [CanonicalValue]) -> CanonicalValue {
@@ -37,7 +38,8 @@ package enum CanonicalValue: Hashable, Sendable {
     }
 
     package static func function(_ entries: [CanonicalFunctionEntry]) throws -> CanonicalValue {
-        let ordered = entries.sorted { canonicalBytes($0.key.canonicalEncoding, $1.key.canonicalEncoding) }
+        let keyedEntries = entries.map { (entry: $0, encoding: $0.key.canonicalEncoding) }
+        let ordered = keyedEntries.sorted { canonicalBytes($0.encoding, $1.encoding) }.map(\.entry)
         var keys = Set<CanonicalValue>()
         for entry in ordered {
             guard keys.insert(entry.key).inserted else {
