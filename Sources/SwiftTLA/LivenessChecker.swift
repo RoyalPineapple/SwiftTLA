@@ -301,6 +301,8 @@ extension LivenessChecker {
         enabled: [Scope: [State: Bool]],
         allowsCycleEdge: (GraphEdge<State, Action>) -> Bool = { _ in true }
     ) -> FairLassoWitness<State, Action?>? {
+        // A required prefix or cycle state must exist before a witness can exist.
+        guard prefixStates?.isEmpty != true, cycleRequiredStates?.isEmpty != true else { return nil }
         var bestWitness: FairLassoWitness<State, Action?>?
         func consider(_ candidate: FairLassoWitness<State, Action?>) {
             if let bestWitness, !witnessOrder(candidate, bestWitness) { return }

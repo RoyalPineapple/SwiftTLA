@@ -8,6 +8,33 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct LivenessCheckerTests {
+  @Test("impossible counterexamples retain fairness diagnostics without searching cycles")
+  func skipsImpossibleCounterexampleSearch() throws {
+    let matchCount = OSAllocatedUnfairLock(initialState: 0)
+    let checker = LivenessChecker<Int, Int, Int>(states: [0, 1], transitions: [
+      0: [.init(source: 0, action: 1, target: 1)],
+      1: [.init(source: 1, action: 1, target: 0)]
+    ], fairness: [(scope: 1, isStrong: false)], matches: { action, scope in
+      matchCount.withLock { $0 += 1 }
+      return action == scope
+    }, actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+    let properties: [TemporalCondition<@Sendable (Int) throws -> Bool>] = [
+      .always { _ in true },
+      .eventuallyAlways { _ in true },
+      .leadsTo({ _ in false }, { _ in false })
+    ]
+    for property in properties {
+      matchCount.withLock { $0 = 0 }
+      let result = try checker.analyze(property, initialStates: [0], renderScope: { _ in "step" })
+      #expect(result.status == .satisfied)
+      #expect(result.witness == nil)
+      #expect(result.fairComponents == [Set([0, 1])])
+      #expect(result.enabledActions == ["step": [0: true, 1: true]])
+      // One match establishes that the component is fair; no cycle search is needed.
+      #expect(matchCount.withLock { $0 } == 1)
+    }
+  }
+
   @Test("fairness enabledness is computed once across property checks")
   func sharesFairnessEnabledness() throws {
     let first = "first"
