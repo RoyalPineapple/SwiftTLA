@@ -266,7 +266,13 @@ extension LivenessChecker {
         fairness: [(scope: Scope, isStrong: Bool)],
         enabled: [Scope: [StateGraph.StateID: Bool]]
     ) -> FairLassoWitness<StateGraph.StateID, Action?>? {
-        var witnesses: [FairLassoWitness<StateGraph.StateID, Action?>] = []
+        var bestWitness: FairLassoWitness<StateGraph.StateID, Action?>?
+        func consider(_ candidate: FairLassoWitness<StateGraph.StateID, Action?>) {
+            if let bestWitness, !witnessOrder(candidate, bestWitness) { return }
+            bestWitness = candidate
+        }
+        let orderedInitialStates = initialStates.sorted(by: stateOrder)
+        let requiredPrefixStates = prefixStates.map { $0.sorted(by: stateOrder) }
         for component in components {
             let requiredCycle = cycleRequiredStates?.intersection(component) ?? []
             if cycleRequiredStates != nil, requiredCycle.isEmpty { continue }
@@ -278,21 +284,21 @@ extension LivenessChecker {
                     fairness: fairness,
                     enabled: enabled
                 ) else { continue }
-                for initial in initialStates.sorted(by: stateOrder) {
-                    if prefixStates == nil {
+                for initial in orderedInitialStates {
+                    if requiredPrefixStates == nil {
                         if let prefix = shortestPath(from: initial, to: cycleStart, in: prefixContinuationStates) {
-                            witnesses.append(.init(
+                            consider(.init(
                                 prefix: prefix.0,
                                 cycle: cycle.0,
                                 prefixActions: prefix.1.map(\.action),
                                 cycleActions: cycle.1.map(\.action)
                             ))
                         }
-                    } else if let prefixStates {
-                        for required in prefixStates.sorted(by: stateOrder) {
+                    } else if let requiredPrefixStates {
+                        for required in requiredPrefixStates {
                             guard let first = shortestPath(from: initial, to: required, in: nil),
                                   let second = shortestPath(from: required, to: cycleStart, in: prefixContinuationStates) else { continue }
-                            witnesses.append(.init(
+                            consider(.init(
                                 prefix: first.0 + second.0.dropFirst(),
                                 cycle: cycle.0,
                                 prefixActions: (first.1 + second.1).map(\.action),
@@ -303,7 +309,7 @@ extension LivenessChecker {
                 }
             }
         }
-        return witnesses.min(by: witnessOrder)
+        return bestWitness
     }
 
     private func makeCycle(
