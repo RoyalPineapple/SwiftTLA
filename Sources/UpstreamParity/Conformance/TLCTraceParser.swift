@@ -10,38 +10,12 @@ package enum TLCTraceError: Error, Equatable, Sendable {
     case invalidAction(Int)
 }
 
-package struct TLCCounterexampleAction: Equatable, Sendable {
-    package let source: CanonicalState
-    package let name: String
-    package let target: CanonicalState
-
-    package init(source: CanonicalState, name: String, target: CanonicalState) {
-        self.source = source
-        self.name = name
-        self.target = target
-    }
-
-    package var edge: CanonicalEdge {
-        CanonicalEdge(source: source.key, action: name, target: target.key)
-    }
-}
-
-package struct TLCCounterexampleEvidence: Equatable, Sendable {
-    package let states: [CanonicalState]
-    package let transitions: [TLCCounterexampleAction]
-
-    init(states: [CanonicalState], transitions: [TLCCounterexampleAction]) {
-        self.states = states
-        self.transitions = transitions
-    }
-}
-
 package struct TLCTraceParser: Sendable {
     package init() {}
 
-    package func parseCounterexample(_ data: Data) throws -> TLCCounterexampleEvidence {
-        guard String(data: data, encoding: .utf8) != nil else { throw TLCTraceError.invalidUTF8 }
-        let trimmed = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    package func parseCounterexample(_ data: Data) throws -> GraphTrace {
+        guard let source = String(data: data, encoding: .utf8) else { throw TLCTraceError.invalidUTF8 }
+        let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.hasPrefix("digraph"), !trimmed.hasPrefix("strict graph") else {
             throw TLCTraceError.dotIsNotTraceEvidence
         }
@@ -51,41 +25,28 @@ package struct TLCTraceParser: Sendable {
               let rawStates = counterexample["state"] as? [Any], !rawStates.isEmpty,
               let rawActions = counterexample["action"] as? [Any]
         else { throw TLCTraceError.missingStates }
-
         let states = try rawStates.enumerated().map { index, state in
             try parseNumberedState(state, variables: variables, index: index)
         }
-        let transitions = try rawActions.enumerated().map { index, action in
+        guard rawActions.count == states.count - 1 || rawActions.count == states.count else {
+            throw TLCTraceError.invalidAction(rawActions.count)
+        }
+        let actions = try rawActions.enumerated().map { index, action in
             try parseAction(action, variables: variables, index: index, states: states)
         }
-        guard transitions.count == states.count - 1 || transitions.count == states.count else {
-            throw TLCTraceError.invalidAction(transitions.count)
+        for (index, action) in actions.enumerated() where index < states.count - 1 {
+            guard action.targetIndex == index + 1 else { throw TLCTraceError.invalidAction(index) }
         }
-        for index in transitions.indices {
-            guard transitions[index].source == states[index].state else {
-                throw TLCTraceError.invalidAction(index)
-            }
-            if index < states.count - 1 {
-                guard transitions[index].target == states[index + 1].state else {
-                    throw TLCTraceError.invalidAction(index)
-                }
-            } else {
-                guard states.contains(where: { $0.state == transitions[index].target }) else {
-                    throw TLCTraceError.invalidAction(index)
-                }
-            }
-        }
-        return TLCCounterexampleEvidence(states: states.map(\.state), transitions: transitions)
+        let cycleStart = actions.count == states.count ? actions.last?.targetIndex : nil
+        return GraphTrace(id: "tlc-counterexample",
+            steps: [GraphTraceStep(state: states[0].key, action: nil)] + actions.map(\.step),
+            cycleStartIndex: cycleStart)
     }
 
-    private struct NumberedState {
-        let number: Int
-        let state: CanonicalState
-    }
-
-    private func parseNumberedState(_ raw: Any, variables: [String], index: Int) throws -> NumberedState {
+    private func parseNumberedState(_ raw: Any, variables: [String], index: Int) throws -> CanonicalState {
         guard let pair = raw as? [Any], pair.count == 2,
-              let number = pair[0] as? NSNumber, number.intValue == index + 1,
+              let number = pair[0] as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+              number.doubleValue == Double(index + 1),
               let bindings = pair[1] as? [String: Any], Set(bindings.keys) == Set(variables)
         else { throw TLCTraceError.invalidState(index) }
         var canonical: [String: CanonicalValue] = [:]
@@ -93,29 +54,27 @@ package struct TLCTraceParser: Sendable {
             guard let value = bindings[variable] else { throw TLCTraceError.invalidState(index) }
             canonical[variable] = try parseValue(value, state: index)
         }
-        return NumberedState(number: number.intValue, state: CanonicalState(bindings: canonical))
+        return CanonicalState(bindings: canonical)
     }
 
     private func parseAction(
-        _ raw: Any, variables: [String], index: Int, states: [NumberedState]
-    ) throws -> TLCCounterexampleAction {
+        _ raw: Any, variables: [String], index: Int, states: [CanonicalState]
+    ) throws -> (targetIndex: Int, step: GraphTraceStep) {
         guard let triple = raw as? [Any], triple.count == 3,
               let metadata = triple[1] as? [String: Any], let name = metadata["name"] as? String, !name.isEmpty
         else { throw TLCTraceError.invalidAction(index) }
         let source = try parseNumberedState(triple[0], variables: variables, index: index)
-        guard source.number == states[index].number, source.state == states[index].state else {
-            throw TLCTraceError.invalidAction(index)
-        }
+        guard source == states[index] else { throw TLCTraceError.invalidAction(index) }
         guard let targetPair = triple[2] as? [Any], targetPair.count == 2,
-              let targetNumber = targetPair[0] as? NSNumber,
-              let targetIndex = states.firstIndex(where: { $0.number == targetNumber.intValue }) else {
+              let number = targetPair[0] as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+              number.doubleValue >= 1, number.doubleValue <= Double(states.count),
+              number.doubleValue == Double(number.intValue) else {
             throw TLCTraceError.invalidAction(index)
         }
+        let targetIndex = number.intValue - 1
         let target = try parseNumberedState(targetPair, variables: variables, index: targetIndex)
-        guard target.number == states[targetIndex].number, target.state == states[targetIndex].state else {
-            throw TLCTraceError.invalidAction(index)
-        }
-        return TLCCounterexampleAction(source: source.state, name: name, target: target.state)
+        guard target == states[targetIndex] else { throw TLCTraceError.invalidAction(index) }
+        return (targetIndex, GraphTraceStep(state: target.key, action: name))
     }
 
     private func parseValue(_ raw: Any, state: Int) throws -> CanonicalValue {

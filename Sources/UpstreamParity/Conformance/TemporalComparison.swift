@@ -21,6 +21,8 @@ package struct TemporalComparison: Equatable, Encodable, Sendable {
     guard swiftRun.isComparable, tlcRun.isComparable else {
       throw EvidenceFormatError.invalidField(record: caseID, field: "incomplete comparison graph")
     }
+    if case .violated(let trace) = swiftResult { try trace.validate(in: swiftRun.graph) }
+    if case .violated(let trace) = tlcResult { try trace.validate(in: tlcRun.graph) }
     self.schema = Self.schema
     self.caseID = caseID
     self.configuration = configuration

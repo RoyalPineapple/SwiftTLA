@@ -118,11 +118,25 @@ package struct CanonicalFunctionEntry: Hashable, Sendable {
     }
 }
 
-package struct CanonicalStateKey: Hashable, Sendable, Comparable, CustomStringConvertible {
+package struct CanonicalStateKey: Hashable, Codable, Sendable, Comparable, CustomStringConvertible {
     package let canonicalEncoding: String
 
     package init(canonicalEncoding: String) {
         self.canonicalEncoding = canonicalEncoding
+    }
+
+    package init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        guard !value.isEmpty else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Empty canonical state key")
+        }
+        self.init(canonicalEncoding: value)
+    }
+
+    package func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(canonicalEncoding)
     }
 
     package var description: String { canonicalEncoding }
@@ -293,7 +307,7 @@ package enum GraphRunOutcome: Hashable, Sendable {
 
 }
 
-package struct GraphTraceStep: Hashable, Sendable {
+package struct GraphTraceStep: Hashable, Codable, Sendable {
     package let state: CanonicalStateKey
     /// Nil denotes the initial state or an implicit stuttering step.
     package let action: String?
@@ -302,9 +316,17 @@ package struct GraphTraceStep: Hashable, Sendable {
         self.state = state
         self.action = action
     }
+    private enum CodingKeys: String, CodingKey, CaseIterable { case state, action }
+
+    package init(from decoder: Decoder) throws {
+        let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+        self.init(state: try container.decode(CanonicalStateKey.self, forKey: .state),
+            action: try container.decodeIfPresent(String.self, forKey: .action))
+    }
+
 }
 
-package struct GraphTrace: Hashable, Sendable {
+package struct GraphTrace: Hashable, Codable, Sendable {
     package let id: String
     package let steps: [GraphTraceStep]
     /// The step where the repeating cycle begins, or nil for a finite trace.
@@ -333,6 +355,45 @@ package struct GraphTrace: Hashable, Sendable {
         self.steps = steps
         self.cycleStartIndex = cycleStartIndex
     }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable { case id, steps, cycleStartIndex }
+
+    package init(from decoder: Decoder) throws {
+        let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+        self.init(id: try container.decode(String.self, forKey: .id),
+            steps: try container.decode([GraphTraceStep].self, forKey: .steps),
+            cycleStartIndex: try container.decodeIfPresent(Int.self, forKey: .cycleStartIndex))
+        try validateStructure()
+    }
+
+    private func validateStructure() throws {
+        guard let first = steps.first else { throw GraphRunError.emptyTrace }
+        guard first.action == nil else { throw GraphRunError.traceInitialActionPresent }
+        if let start = cycleStartIndex {
+            guard start >= 0, start < steps.count - 1 else { throw GraphRunError.invalidCycleStart(start) }
+            guard steps[start].state == steps.last?.state else { throw GraphRunError.openCycle }
+        }
+        for (source, target) in zip(steps, steps.dropFirst()) where target.action == nil {
+            guard source.state == target.state else { throw GraphRunError.stateChangingStutter }
+        }
+    }
+
+    package func validate(in graph: CanonicalGraph) throws {
+        try validateStructure()
+        let first = steps[0]
+        for step in steps where graph.states[step.state] == nil {
+            throw GraphRunError.traceStateMissing(step.state)
+        }
+        guard graph.initialStateKeys.contains(first.state) else {
+            throw GraphRunError.traceInitialStateMissing(first.state)
+        }
+        for (source, target) in zip(steps, steps.dropFirst()) {
+            guard let action = target.action else { continue }
+            let edge = CanonicalEdge(source: source.state, action: action, target: target.state)
+            guard graph.edges.contains(edge) else { throw GraphRunError.traceEdgeMissing(edge) }
+        }
+    }
+
 }
 
 package enum GraphRunError: Error, Equatable, Sendable {
@@ -370,34 +431,7 @@ package struct GraphRun: Equatable, Sendable {
         if case .deadlock(let state) = outcome, graph.states[state] == nil {
             throw GraphRunError.deadlockStateMissing(state)
         }
-        if let trace {
-            guard let first = trace.steps.first else { throw GraphRunError.emptyTrace }
-            guard first.action == nil else { throw GraphRunError.traceInitialActionPresent }
-            if let start = trace.cycleStartIndex {
-                guard start >= 0, start < trace.steps.count - 1 else {
-                    throw GraphRunError.invalidCycleStart(start)
-                }
-                guard trace.steps[start].state == trace.steps.last?.state else {
-                    throw GraphRunError.openCycle
-                }
-            }
-            for step in trace.steps where graph.states[step.state] == nil {
-                throw GraphRunError.traceStateMissing(step.state)
-            }
-            guard graph.initialStateKeys.contains(first.state) else {
-                throw GraphRunError.traceInitialStateMissing(first.state)
-            }
-            for (source, target) in zip(trace.steps, trace.steps.dropFirst()) {
-                guard let action = target.action else {
-                    guard source.state == target.state else { throw GraphRunError.stateChangingStutter }
-                    continue
-                }
-                let edge = CanonicalEdge(source: source.state, action: action, target: target.state)
-                guard graph.edges.contains(edge) else {
-                    throw GraphRunError.traceEdgeMissing(edge)
-                }
-            }
-        }
+        try trace?.validate(in: graph)
 
         self.isComplete = isComplete
         self.graph = graph

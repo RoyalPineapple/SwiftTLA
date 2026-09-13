@@ -191,80 +191,31 @@ package struct TemporalSymmetryManifest: Equatable, Codable, Sendable {
   }
 }
 
-package struct TemporalLassoWitness: Equatable, Codable, Sendable {
-  package let prefixStateIDs: [String]
-  package let cycleStateIDs: [String]
-
-  package init(prefixStateIDs: [String], cycleStateIDs: [String]) throws {
-    self.prefixStateIDs = prefixStateIDs
-    self.cycleStateIDs = cycleStateIDs
-    guard prefixStateIDs.allSatisfy({ !$0.isEmpty }), cycleStateIDs.count >= 2,
-          cycleStateIDs.allSatisfy({ !$0.isEmpty }), cycleStateIDs.first == cycleStateIDs.last else {
-      throw EvidenceFormatError.invalidField(record: "temporal lasso", field: "state IDs")
-    }
-  }
-
-  private enum CodingKeys: String, CodingKey, CaseIterable { case prefixStateIDs, cycleStateIDs }
-
-  package init(from decoder: Decoder) throws {
-    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    try self.init(
-      prefixStateIDs: container.decode([String].self, forKey: .prefixStateIDs),
-      cycleStateIDs: container.decode([String].self, forKey: .cycleStateIDs))
-  }
-}
-
-package extension GraphRun {
-  func containsTemporalTrace(
-    states: [CanonicalState],
-    edges: [CanonicalEdge],
-    implicitStutterActions: Set<String> = [],
-    allowsImplicitStuttering: Bool = false
-  ) -> Bool {
-    guard let first = states.first,
-          states.count == edges.count + 1,
-          graph.initialStateKeys.contains(first.key),
-          states.allSatisfy({ graph.states[$0.key] == $0 }) else {
-      return false
-    }
-    for (index, edge) in edges.enumerated() {
-      guard edge.source == states[index].key,
-            edge.target == states[index + 1].key,
-            graph.edges.contains(edge)
-              || (edge.source == edge.target
-                && (allowsImplicitStuttering || implicitStutterActions.contains(edge.action))) else {
-        return false
-      }
-    }
-    return true
-  }
-}
-
 package enum TemporalPropertyResult: Equatable, Codable, Sendable {
   case satisfied
-  case violated(TemporalLassoWitness)
+  case violated(GraphTrace)
   case unavailable
 
   private enum Status: String, Codable { case satisfied, violated, unavailable }
-  private enum CodingKeys: String, CodingKey, CaseIterable { case status, lasso }
+  private enum CodingKeys: String, CodingKey, CaseIterable { case status, trace }
 
   package init(from decoder: Decoder) throws {
     let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
-    let lasso = try container.decodeIfPresent(TemporalLassoWitness.self, forKey: .lasso)
+    let trace = try container.decodeIfPresent(GraphTrace.self, forKey: .trace)
     switch try container.decode(Status.self, forKey: .status) {
     case .satisfied:
-      guard lasso == nil else {
-        throw EvidenceFormatError.invalidField(record: "temporal result", field: "satisfied lasso")
+      guard trace == nil else {
+        throw EvidenceFormatError.invalidField(record: "temporal result", field: "satisfied trace")
       }
       self = .satisfied
     case .violated:
-      guard let lasso else {
-        throw EvidenceFormatError.invalidField(record: "temporal result", field: "violated lasso")
+      guard let trace else {
+        throw EvidenceFormatError.invalidField(record: "temporal result", field: "violated trace")
       }
-      self = .violated(lasso)
+      self = .violated(trace)
     case .unavailable:
-      guard lasso == nil else {
-        throw EvidenceFormatError.invalidField(record: "temporal result", field: "unavailable lasso")
+      guard trace == nil else {
+        throw EvidenceFormatError.invalidField(record: "temporal result", field: "unavailable trace")
       }
       self = .unavailable
     }
@@ -275,9 +226,9 @@ package enum TemporalPropertyResult: Equatable, Codable, Sendable {
     switch self {
     case .satisfied:
       try container.encode(Status.satisfied, forKey: .status)
-    case .violated(let lasso):
+    case .violated(let trace):
       try container.encode(Status.violated, forKey: .status)
-      try container.encode(lasso, forKey: .lasso)
+      try container.encode(trace, forKey: .trace)
     case .unavailable:
       try container.encode(Status.unavailable, forKey: .status)
     }

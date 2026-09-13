@@ -309,13 +309,11 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       testFile
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
       .appendingPathComponent("Tests/Fixtures/FiniteGraph/TLCTrace/violation-counterexample.json")
-    let evidence = try TLCTraceParser().parseCounterexample(Data(contentsOf: traceURL))
-    #expect(evidence.states.count == 4)
-    #expect(evidence.transitions.map(\.name) == ["Next", "Next", "Next"])
-    #expect(
-      evidence.states.map { $0.bindings["x"] } == [
-        .integer(0), .integer(1), .integer(2), .integer(3)
-      ])
+    let trace = try TLCTraceParser().parseCounterexample(Data(contentsOf: traceURL))
+    #expect(trace.steps.count == 4)
+    #expect(trace.steps.map(\.action) == [nil, "Next", "Next", "Next"])
+    #expect(trace.cycleStartIndex == nil)
+    #expect(trace.steps.map(\.state) == (0...3).map { CanonicalState(bindings: ["x": .integer($0)]).key })
   }
 }
 

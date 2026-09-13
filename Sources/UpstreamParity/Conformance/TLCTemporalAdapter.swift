@@ -169,53 +169,38 @@ extension TLCTemporalAdapter {
     case .eventually, .alwaysEventually, .eventuallyAlways, .leadsTo, .leavesZero: .livenessViolation
     }
     guard run.outcome == violationOutcome,
-          FileManager.default.fileExists(atPath: outputDirectory.appendingPathComponent("counterexample.json").path),
-          let counterexample = try? TLCTraceParser().parseCounterexample(
-            Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json"))),
-          traceIsBound(counterexample, to: graph, allowsImplicitStuttering: allowsImplicitStuttering),
-          let lasso = lasso(from: counterexample, allowsImplicitStuttering: allowsImplicitStuttering) else {
+          FileManager.default.fileExists(atPath: outputDirectory.appendingPathComponent("counterexample.json").path) else {
       return .unavailable
     }
-    return .violated(lasso)
+    let trace = try TLCTraceParser().parseCounterexample(
+      Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json")))
+    return .violated(try boundTrace(trace, to: graph.graph,
+      requiresCycle: run.outcome == .livenessViolation, allowsImplicitStuttering: allowsImplicitStuttering))
   }
 
-  private func lasso(
-    from evidence: TLCCounterexampleEvidence, allowsImplicitStuttering: Bool
-  ) -> TemporalLassoWitness? {
-    let stateIDs = evidence.states.map { $0.key.canonicalEncoding }
-    if evidence.transitions.isEmpty, allowsImplicitStuttering, let state = stateIDs.first {
-      return try? TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state])
+  private func boundTrace(
+    _ trace: GraphTrace, to graph: CanonicalGraph,
+    requiresCycle: Bool, allowsImplicitStuttering: Bool
+  ) throws -> GraphTrace {
+    guard let first = trace.steps.first else { throw GraphRunError.emptyTrace }
+    var steps = try [first] + zip(trace.steps, trace.steps.dropFirst()).map { source, target in
+      guard let action = target.action else { return target }
+      let edge = CanonicalEdge(source: source.state, action: action, target: target.state)
+      if graph.edges.contains(edge) { return target }
+      guard source.state == target.state, allowsImplicitStuttering || action == "UnnamedAction" else {
+        throw GraphRunError.traceEdgeMissing(edge)
+      }
+      return GraphTraceStep(state: target.state, action: nil)
     }
-    guard evidence.transitions.count == stateIDs.count,
-          let finalTarget = evidence.transitions.last?.target.key.canonicalEncoding,
-          let loopStart = stateIDs.firstIndex(of: finalTarget) else {
-      return nil
+    var cycleStart = trace.cycleStartIndex
+    if requiresCycle, cycleStart == nil {
+      guard allowsImplicitStuttering, steps.count == 1 else { throw GraphRunError.invalidLasso }
+      steps.append(GraphTraceStep(state: first.state, action: nil))
+      cycleStart = 0
     }
-    return try? TemporalLassoWitness(
-      prefixStateIDs: Array(stateIDs[..<loopStart]),
-      cycleStateIDs: Array(stateIDs[loopStart...]) + [stateIDs[loopStart]])
-  }
-
-  private func traceIsBound(
-    _ trace: TLCCounterexampleEvidence,
-    to graph: GraphRun,
-    allowsImplicitStuttering: Bool
-  ) -> Bool {
-    var states = trace.states
-    var edges = trace.transitions.map(\.edge)
-    if edges.isEmpty, allowsImplicitStuttering, let state = states.first {
-      states.append(state)
-      edges.append(CanonicalEdge(source: state.key, action: "UnnamedAction", target: state.key))
-    } else if let target = edges.last?.target,
-              let finalState = graph.graph.states[target] {
-      states.append(finalState)
-    }
-    return graph.containsTemporalTrace(
-      states: states,
-      edges: edges,
-      implicitStutterActions: ["UnnamedAction"],
-      allowsImplicitStuttering: allowsImplicitStuttering
-    )
+    let bound = GraphTrace(id: trace.id, steps: steps, cycleStartIndex: cycleStart)
+    try bound.validate(in: graph)
+    return bound
   }
 
   private func clearTraceOutput(for request: TLCProcessRequest) throws {

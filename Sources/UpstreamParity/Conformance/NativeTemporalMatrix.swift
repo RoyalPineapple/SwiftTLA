@@ -114,11 +114,7 @@ private func exportTemporalRun<Machine: StateMachine>(
         guard let state = states[snapshot] else { throw CanonicalGraphError.missingNativeSnapshot }
         return state.key
       }, actionName: { try native.formalCall(for: $0).description })
-      let cycleStart = witness.prefix.count - 1
-      let stateIDs = lasso.steps.map { $0.state.canonicalEncoding }
-      result = .violated(try TemporalLassoWitness(
-        prefixStateIDs: Array(stateIDs[...cycleStart]),
-        cycleStateIDs: Array(stateIDs[cycleStart...])))
+      result = .violated(lasso)
       trace = lasso
     }
     // Property results are reported separately; the run owns and validates their trace.

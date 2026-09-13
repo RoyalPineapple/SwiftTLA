@@ -17,23 +17,28 @@ struct TLCTemporalAdapterTests {
       outcome: .noViolation
     )
 
-    #expect(run.containsTemporalTrace(states: [zero, one], edges: [advance]))
-    #expect(run.containsTemporalTrace(
-      states: [zero, one],
-      edges: [CanonicalEdge(source: zero.key, action: "Other", target: one.key)]
-    ) == false)
-    #expect(run.containsTemporalTrace(states: [one, zero], edges: [advance]) == false)
+    let valid = GraphTrace(id: "path", steps: [
+      .init(state: zero.key, action: nil), .init(state: one.key, action: "Advance")])
+    try valid.validate(in: run.graph)
+    #expect(throws: GraphRunError.self) {
+      try GraphTrace(id: "wrong action", steps: [
+        .init(state: zero.key, action: nil), .init(state: one.key, action: "Other")]).validate(in: run.graph)
+    }
+    #expect(throws: GraphRunError.self) {
+      try GraphTrace(id: "wrong initial", steps: [
+        .init(state: one.key, action: nil), .init(state: zero.key, action: "Advance")]).validate(in: run.graph)
+    }
   }
 
   @Test("Temporal property results encode only valid states")
   func temporalPropertyResultIsClosed() throws {
-    let lasso = try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ["s", "s"])
+    let lasso = testCycle(["s", "s"])
     let violated = TemporalPropertyResult.violated(lasso)
     #expect(try JSONDecoder().decode(
       TemporalPropertyResult.self,
       from: JSONEncoder().encode(violated)) == violated)
 
-    let impossible = Data(#"{"status":"satisfied","lasso":{"prefixStateIDs":[],"cycleStateIDs":["s","s"]}}"#.utf8)
+    let impossible = Data(#"{"status":"satisfied","trace":{"id":"bad","steps":[{"state":"s"}]}}"#.utf8)
     #expect(throws: EvidenceFormatError.self) {
       try JSONDecoder().decode(TemporalPropertyResult.self, from: impossible)
     }
@@ -148,7 +153,7 @@ struct TLCTemporalAdapterTests {
     let graph = try completedGraph(stream, for: fixture.launchCase, outcome: .livenessViolation)
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = TemporalPropertyResult.violated(
-      try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
+      testCycle(ids + [ids[0]]))
     let comparison = try TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: CompleteGraphExecutor(
         propertyStream: stream,
@@ -159,7 +164,7 @@ struct TLCTemporalAdapterTests {
       .capture(try fixture.input(swiftRun: completedSwiftRun(graph), swiftResult: swiftResult))
 
     #expect(comparison.status == .exact)
-    #expect(lasso(in: comparison.tlcResult)?.cycleStateIDs.count == 3)
+    #expect(counterexample(in: comparison.tlcResult)?.steps.count == 3)
   }
 
   @Test("TLC temporal adapter reports different property outcomes over a complete graph")
@@ -188,7 +193,7 @@ struct TLCTemporalAdapterTests {
     let graph = try completedGraph(stream, for: fixture.launchCase, outcome: .livenessViolation)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = TemporalPropertyResult.violated(
-      try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
+      testCycle([state, state]))
     let trace = try numberedStutteringTrace()
     let comparison = try TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: try fixture.executor(
@@ -197,7 +202,7 @@ struct TLCTemporalAdapterTests {
       .capture(try fixture.input(swiftRun: completedSwiftRun(graph), swiftResult: swiftResult))
 
     #expect(comparison.status == .exact)
-    #expect(lasso(in: comparison.tlcResult) != nil)
+    #expect(counterexample(in: comparison.tlcResult) != nil)
   }
 
   @Test("TLC temporal adapter binds an always violation in the initial state")
@@ -207,7 +212,7 @@ struct TLCTemporalAdapterTests {
     let graph = try completedGraph(stream, for: fixture.launchCase)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = TemporalPropertyResult.violated(
-      try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
+      testCycle([state, state]))
     let comparison = try TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: try fixture.executor(
         propertyStream: stream,
@@ -219,7 +224,31 @@ struct TLCTemporalAdapterTests {
         allowsImplicitStuttering: true))
 
     #expect(comparison.status == .exact)
-    #expect(lasso(in: comparison.tlcResult)?.cycleStateIDs == [state, state])
+    let retained = try #require(counterexample(in: comparison.tlcResult))
+    #expect(retained.cycleStartIndex == nil)
+    #expect(retained.steps.map { $0.state.canonicalEncoding } == [state])
+  }
+
+  @Test("safety counterexamples retain finite paths without inventing a cycle")
+  func retainsFiniteSafetyPath() throws {
+    let fixture = try Fixture(property: .always)
+    let stream = try temporalGraphStream(case: fixture.launchCase, runID: fixture.request.runID)
+    let graph = try completedGraph(stream, for: fixture.launchCase)
+    let first: [Any] = [1, ["x": 1]]
+    let second: [Any] = [2, ["x": 2]]
+    let data = try JSONSerialization.data(withJSONObject: ["vars": ["x"], "counterexample": [
+      "state": [first, second], "action": [[first, ["name": "A"], second]]]])
+    let nativeTrace = try TLCTraceParser().parseCounterexample(data)
+    let comparison = try TLCTemporalAdapter(
+      processAdapter: TLCProcessAdapter(executor: CompleteGraphExecutor(
+        propertyStream: stream,
+        graphStream: try temporalGraphStream(case: fixture.completeGraphCase, runID: fixture.completeGraphRequest.runID),
+        graphRunID: fixture.completeGraphRequest.runID, propertyResult: Fixture.safetyViolation, trace: data)))
+      .capture(try fixture.input(swiftRun: graph, swiftResult: .violated(nativeTrace)))
+    #expect(comparison.status == .exact)
+    let retained = try #require(counterexample(in: comparison.tlcResult))
+    #expect(retained.cycleStartIndex == nil)
+    #expect(retained.steps == nativeTrace.steps)
   }
 
   @Test("TLC temporal adapter binds a named same-state dump step only when the declared behavior allows stuttering")
@@ -230,14 +259,15 @@ struct TLCTemporalAdapterTests {
       stream, for: rejectedFixture.launchCase, outcome: .livenessViolation)
     let state = try #require(graph.graph.initialStateKeys.first).canonicalEncoding
     let swiftResult = TemporalPropertyResult.violated(
-      try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [state, state]))
+      testCycle([state, state]))
     let namedTrace = try numberedStutteringTrace(action: "A")
-    let rejected = try TLCTemporalAdapter(
-      processAdapter: TLCProcessAdapter(executor: try rejectedFixture.executor(
-        propertyStream: stream,
-        trace: namedTrace)))
-      .capture(try rejectedFixture.input(swiftRun: completedSwiftRun(graph), swiftResult: swiftResult))
-    #expect(rejected.tlcResult == .unavailable)
+    #expect(throws: GraphRunError.self) {
+      try TLCTemporalAdapter(
+        processAdapter: TLCProcessAdapter(executor: try rejectedFixture.executor(
+          propertyStream: stream,
+          trace: namedTrace)))
+        .capture(try rejectedFixture.input(swiftRun: completedSwiftRun(graph), swiftResult: swiftResult))
+    }
 
     let admittedFixture = try Fixture()
     let admittedStream = try graphStream(case: admittedFixture.launchCase, runID: admittedFixture.request.runID)
@@ -245,7 +275,7 @@ struct TLCTemporalAdapterTests {
       admittedStream, for: admittedFixture.launchCase, outcome: .livenessViolation)
     let admittedState = try #require(admittedGraph.graph.initialStateKeys.first).canonicalEncoding
     let admittedSwiftResult = TemporalPropertyResult.violated(
-      try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: [admittedState, admittedState]))
+      testCycle([admittedState, admittedState]))
     let admitted = try TLCTemporalAdapter(
       processAdapter: TLCProcessAdapter(executor: try admittedFixture.executor(
         propertyStream: admittedStream,
@@ -256,7 +286,7 @@ struct TLCTemporalAdapterTests {
         allowsImplicitStuttering: true
       ))
     #expect(admitted.status == .exact)
-    _ = try #require(lasso(in: admitted.tlcResult))
+    _ = try #require(counterexample(in: admitted.tlcResult))
   }
 
   @Test("TLC temporal adapter rejects a lasso that is foreign to the captured graph")
@@ -266,14 +296,26 @@ struct TLCTemporalAdapterTests {
     let graph = try completedGraph(stream, for: fixture.launchCase, outcome: .livenessViolation)
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = TemporalPropertyResult.violated(
-      try TemporalLassoWitness(prefixStateIDs: [], cycleStateIDs: ids + [ids[0]]))
-    let comparison = try TLCTemporalAdapter(
-      processAdapter: TLCProcessAdapter(executor: try fixture.executor(
-        propertyStream: stream,
-        trace: try numberedLoopBackTrace(secondValue: 99))))
-      .capture(try fixture.input(swiftRun: completedSwiftRun(graph), swiftResult: swiftResult))
+      testCycle(ids + [ids[0]]))
+    #expect(throws: GraphRunError.self) {
+      try TLCTemporalAdapter(
+        processAdapter: TLCProcessAdapter(executor: try fixture.executor(
+          propertyStream: stream,
+          trace: try numberedLoopBackTrace(secondValue: 99))))
+        .capture(try fixture.input(swiftRun: completedSwiftRun(graph), swiftResult: swiftResult))
+    }
+  }
 
-    #expect(comparison.tlcResult == .unavailable)
+  @Test("comparison rejects a native counterexample outside its graph")
+  func rejectsForeignNativeCounterexample() throws {
+    let fixture = try Fixture()
+    let trace = GraphTrace(id: "foreign", steps: [
+      .init(state: CanonicalState(bindings: ["x": .integer(99)]).key, action: nil)])
+    #expect(throws: GraphRunError.self) {
+      try TemporalComparison(caseID: "foreign", configuration: fixture.temporalCase.configuration,
+        swiftRun: fixture.swiftRun, tlcRun: fixture.swiftRun,
+        swiftResult: .violated(trace), tlcResult: .satisfied)
+    }
   }
 
   @Test("TLC temporal adapter retains primary evidence when trace capture throws")
@@ -362,7 +404,14 @@ struct TLCTemporalAdapterTests {
     #expect(FileManager.default.fileExists(atPath: traceAlias.path))
   }
 
-  private func lasso(in propertyResult: TemporalPropertyResult) -> TemporalLassoWitness? {
+  private func testCycle(_ states: [String]) -> GraphTrace {
+    GraphTrace(id: "test", steps: states.enumerated().map { index, state in
+      let action: String? = index == 0 || state == states[index - 1] ? nil : (index == 1 ? "A" : "B")
+      return GraphTraceStep(state: .init(canonicalEncoding: state), action: action)
+    }, cycleStartIndex: 0)
+  }
+
+  private func counterexample(in propertyResult: TemporalPropertyResult) -> GraphTrace? {
     if case .violated(let lasso) = propertyResult { return lasso }
     return nil
   }
