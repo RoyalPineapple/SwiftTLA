@@ -51,7 +51,7 @@ struct LivenessConformanceTests {
         actions: [NamedAction] = [],
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true
-    ) throws -> TemporalAnalysis {
+    ) throws -> TemporalAnalysis<StateGraph.StateID, String> {
         let spec = TLASpec(
             name: graph.specName,
             variables: [NamedVar(name: "x", initial: .int(0))],
@@ -412,7 +412,7 @@ struct LivenessConformanceTests {
             transitions: [initial: [.init(label: .init(.init(name: "unknown")), target: initial)]],
             values: [initial: 0]
         )
-        let unavailable: [(String, TemporalAnalysis, TemporalDiagnosticReason)] = [
+        let unavailable: [(String, TemporalAnalysis<StateGraph.StateID, String>, TemporalDiagnosticReason)] = [
             (
                 "unknown action",
                 try analyze(unknownActionGraph, property: .eventually(predicate(1)), actions: [action("known")], initialStateIDs: [initial]),

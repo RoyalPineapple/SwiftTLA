@@ -1,12 +1,12 @@
 import Foundation
 
-package enum TemporalAnalysisStatus: Equatable, Sendable {
+public enum TemporalAnalysisStatus: Equatable, Sendable {
     case satisfied
     case violated
     case unavailable
 }
 
-package enum TemporalDiagnosticReason: String, Equatable, Sendable {
+public enum TemporalDiagnosticReason: String, Equatable, Sendable {
     case satisfied
     case violatingFairLasso = "violating-fair-lasso"
     case missingInitialStateIdentity = "missing-initial-state-identity"
@@ -15,17 +15,17 @@ package enum TemporalDiagnosticReason: String, Equatable, Sendable {
     case unknownAction = "unknown-action"
 }
 
-package struct FairLassoWitness: Equatable, Sendable {
-    public let prefix: [StateGraph.StateID]
-    public let cycle: [StateGraph.StateID]
-    public let prefixActions: [String]
-    public let cycleActions: [String]
+public struct FairLassoWitness<State: Hashable & Sendable, Action: Equatable & Sendable>: Equatable, Sendable {
+    public let prefix: [State]
+    public let cycle: [State]
+    public let prefixActions: [Action]
+    public let cycleActions: [Action]
 
     init(
-        prefix: [StateGraph.StateID],
-        cycle: [StateGraph.StateID],
-        prefixActions: [String],
-        cycleActions: [String]
+        prefix: [State],
+        cycle: [State],
+        prefixActions: [Action],
+        cycleActions: [Action]
     ) {
         self.prefix = prefix
         self.cycle = cycle
@@ -34,23 +34,23 @@ package struct FairLassoWitness: Equatable, Sendable {
     }
 }
 
-package struct TemporalAnalysis: Equatable, Sendable {
+public struct TemporalAnalysis<State: Hashable & Sendable, Action: Equatable & Sendable>: Equatable, Sendable {
     public let status: TemporalAnalysisStatus
     public let reason: TemporalDiagnosticReason
-    public let witness: FairLassoWitness?
-    public let propertyValues: [StateGraph.StateID: Bool]
-    public let enabledActions: [String: [StateGraph.StateID: Bool]]
-    public let fairComponents: [Set<StateGraph.StateID>]
-    public let rejectedComponents: [Set<StateGraph.StateID>]
+    public let witness: FairLassoWitness<State, Action>?
+    public let propertyValues: [State: Bool]
+    public let enabledActions: [String: [State: Bool]]
+    public let fairComponents: [Set<State>]
+    public let rejectedComponents: [Set<State>]
 
     public init(
         status: TemporalAnalysisStatus,
         reason: TemporalDiagnosticReason,
-        witness: FairLassoWitness? = nil,
-        propertyValues: [StateGraph.StateID: Bool] = [:],
-        enabledActions: [String: [StateGraph.StateID: Bool]] = [:],
-        fairComponents: [Set<StateGraph.StateID>] = [],
-        rejectedComponents: [Set<StateGraph.StateID>] = []
+        witness: FairLassoWitness<State, Action>? = nil,
+        propertyValues: [State: Bool] = [:],
+        enabledActions: [String: [State: Bool]] = [:],
+        fairComponents: [Set<State>] = [],
+        rejectedComponents: [Set<State>] = []
     ) {
         self.status = status
         self.reason = reason
@@ -60,6 +60,27 @@ package struct TemporalAnalysis: Equatable, Sendable {
         self.fairComponents = fairComponents
         self.rejectedComponents = rejectedComponents
     }
+
+    func map<NewState: Hashable & Sendable, NewAction: Equatable & Sendable>(
+        state: (State) throws -> NewState,
+        action: (Action) throws -> NewAction
+    ) rethrows -> TemporalAnalysis<NewState, NewAction> {
+        func values(_ source: [State: Bool]) throws -> [NewState: Bool] {
+            try Dictionary(uniqueKeysWithValues: source.map { (try state($0.key), $0.value) })
+        }
+        return try .init(
+            status: status, reason: reason,
+            witness: witness.map { trace in
+                try .init(prefix: trace.prefix.map(state), cycle: trace.cycle.map(state),
+                    prefixActions: trace.prefixActions.map(action), cycleActions: trace.cycleActions.map(action))
+            },
+            propertyValues: values(propertyValues),
+            enabledActions: enabledActions.mapValues(values),
+            fairComponents: fairComponents.map { try Set($0.map(state)) },
+            rejectedComponents: rejectedComponents.map { try Set($0.map(state)) }
+        )
+    }
+
 }
 
 /// Bounded liveness checking over `[][Next]_vars` behaviors.
@@ -78,7 +99,7 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true,
         renderScope: (Scope) throws -> String
-    ) throws -> TemporalAnalysis {
+    ) throws -> TemporalAnalysis<StateGraph.StateID, Action?> {
         guard isComplete else {
             return .init(status: .unavailable, reason: .incompleteExploration)
         }
@@ -252,8 +273,8 @@ extension LivenessChecker {
         cycleRequiredStates: Set<StateGraph.StateID>?,
         fairness: [(scope: Scope, isStrong: Bool)],
         enabled: [Scope: [StateGraph.StateID: Bool]]
-    ) -> FairLassoWitness? {
-        var witnesses: [FairLassoWitness] = []
+    ) -> FairLassoWitness<StateGraph.StateID, Action?>? {
+        var witnesses: [FairLassoWitness<StateGraph.StateID, Action?>] = []
         for component in components {
             let requiredCycle = cycleRequiredStates?.intersection(component) ?? []
             if cycleRequiredStates != nil, requiredCycle.isEmpty { continue }
@@ -271,8 +292,8 @@ extension LivenessChecker {
                             witnesses.append(.init(
                                 prefix: prefix.0,
                                 cycle: cycle.0,
-                                prefixActions: prefix.1.map(\.renderedAction),
-                                cycleActions: cycle.1.map(\.renderedAction)
+                                prefixActions: prefix.1.map(\.action),
+                                cycleActions: cycle.1.map(\.action)
                             ))
                         }
                     } else if let prefixStates {
@@ -282,8 +303,8 @@ extension LivenessChecker {
                             witnesses.append(.init(
                                 prefix: first.0 + second.0.dropFirst(),
                                 cycle: cycle.0,
-                                prefixActions: (first.1 + second.1).map(\.renderedAction),
-                                cycleActions: cycle.1.map(\.renderedAction)
+                                prefixActions: (first.1 + second.1).map(\.action),
+                                cycleActions: cycle.1.map(\.action)
                             ))
                         }
                     }
@@ -430,7 +451,7 @@ extension LivenessChecker {
     }
 
     private func edges(from state: StateGraph.StateID) -> [GraphEdge<Action>] {
-        explicitEdges(from: state) + [.init(source: state, action: nil, renderedAction: "[stutter]", target: state)]
+        explicitEdges(from: state) + [.init(source: state, action: nil, target: state)]
     }
 }
 
@@ -457,7 +478,6 @@ private struct LassoSearch {
 package struct GraphEdge<Action: Hashable & Sendable>: Hashable, Sendable {
     let source: StateGraph.StateID
     let action: Action?
-    let renderedAction: String
     let target: StateGraph.StateID
 }
 
@@ -516,13 +536,15 @@ extension LivenessChecker {
         return false
     }
 }
-private func witnessOrder(_ lhs: FairLassoWitness, _ rhs: FairLassoWitness) -> Bool {
-    if lhs.prefix.count != rhs.prefix.count { return lhs.prefix.count < rhs.prefix.count }
-    if lhs.cycleActions.count != rhs.cycleActions.count { return lhs.cycleActions.count < rhs.cycleActions.count }
-    let left = lhs.prefix.map(\.id) + lhs.cycle.map(\.id)
-    let right = rhs.prefix.map(\.id) + rhs.cycle.map(\.id)
-    if left != right { return left.lexicographicallyPrecedes(right) }
-    let leftActions = lhs.prefixActions + lhs.cycleActions
-    let rightActions = rhs.prefixActions + rhs.cycleActions
-    return leftActions.lexicographicallyPrecedes(rightActions)
+extension LivenessChecker {
+    private func witnessOrder(_ lhs: FairLassoWitness<StateGraph.StateID, Action?>, _ rhs: FairLassoWitness<StateGraph.StateID, Action?>) -> Bool {
+        if lhs.prefix.count != rhs.prefix.count { return lhs.prefix.count < rhs.prefix.count }
+        if lhs.cycleActions.count != rhs.cycleActions.count { return lhs.cycleActions.count < rhs.cycleActions.count }
+        let left = lhs.prefix.map(\.id) + lhs.cycle.map(\.id)
+        let right = rhs.prefix.map(\.id) + rhs.cycle.map(\.id)
+        if left != right { return left.lexicographicallyPrecedes(right) }
+        let leftActions = lhs.prefixActions + lhs.cycleActions
+        let rightActions = rhs.prefixActions + rhs.cycleActions
+        return leftActions.lexicographicallyPrecedes(rightActions, by: graphActionOrder)
+    }
 }

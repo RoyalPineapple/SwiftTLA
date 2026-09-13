@@ -91,7 +91,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
 
 extension ReachabilityGraph {
     /// Analyze generated predicates over the same native transitions used by applications.
-    package func analyzeTemporalProperties(using machine: Machine) throws -> [String: TemporalAnalysis] {
+    public func analyzeTemporalProperties(using machine: Machine) throws -> [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] {
         let snapshots = Array(transitions.keys)
         let identities = Dictionary(uniqueKeysWithValues: snapshots.enumerated().map {
             ($0.element, StateGraph.StateID($0.offset))
@@ -106,7 +106,7 @@ extension ReachabilityGraph {
                 let sourceID = identities[source]!
                 return (sourceID, successors.map { successor in
                     GraphEdge(source: sourceID, action: successor.action,
-                        renderedAction: actionNames[successor.action]!, target: identities[successor.target]!)
+                        target: identities[successor.target]!)
                 })
             }),
             matches: { action, scope in fairness[scope].matches(action) },
@@ -120,7 +120,7 @@ extension ReachabilityGraph {
                 predicates, fairness: fairness.indices.map { ($0, fairness[$0].isStrong) },
                 initialStateIDs: initialStates.map { identities[$0]! },
                 renderScope: { fairness[$0].name }
-            )
+            ).map(state: { snapshots[$0.id] }, action: { $0 })
         }
     }
 }

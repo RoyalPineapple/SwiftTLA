@@ -4,7 +4,7 @@ enum TemporalEvaluationError: Error, Equatable {
 }
 
 extension FiniteExploration {
-    package func analyzeTemporalProperties(in compilation: CompiledSpecification) throws -> [TemporalAnalysis] {
+    package func analyzeTemporalProperties(in compilation: CompiledSpecification) throws -> [TemporalAnalysis<StateGraph.StateID, String>] {
         try validate(for: compilation)
         return try compilation.analyzeTemporalProperties(
             graph: graph, states: compiledStates, initialStateIDs: initialStateIDs, isComplete: isComplete
@@ -23,7 +23,7 @@ extension CompiledSpecification {
                         knownActions.contains(action)
                             ? CompiledActionCall(action: action, arguments: successor.label.arguments) : nil
                     }
-                    return GraphEdge(source: source, action: call, renderedAction: successor.action, target: successor.target)
+                    return GraphEdge(source: source, action: call, target: successor.target)
                 })
             }),
             matches: { call, scope in
@@ -45,7 +45,7 @@ extension CompiledSpecification {
         states: [StateGraph.StateID: CompiledState],
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true
-    ) throws -> [TemporalAnalysis] {
+    ) throws -> [TemporalAnalysis<StateGraph.StateID, String>] {
         let runtime = CompiledRuntime(compilation: self)
         let checker = livenessChecker(graph: graph)
         func predicate(_ query: CompiledStateQuery, isTrigger: Bool = false) -> @Sendable (StateGraph.StateID) throws -> Bool {
@@ -87,7 +87,13 @@ extension CompiledSpecification {
                         )
                     }
                 }
-            )
+            ).map(state: { $0 }, action: { call in
+                guard let call else { return "[stutter]" }
+                return formalActionCall(
+                    named: layout.actions[call.action.ordinal].declaration.name,
+                    arguments: try call.arguments.map { try $0.rendered(using: layout) }
+                )
+            })
         }
     }
 }
