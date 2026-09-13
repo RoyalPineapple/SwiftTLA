@@ -6,6 +6,30 @@ import Testing
 
 @Suite("typed refinement declarations")
 struct RefinementDeclarationTests {
+  @Test("native refinement inputs retain typed abstract state and resolved mappings")
+  func resolvesAbstractProgramAndMappings() throws {
+    let value = Var<Int>("value")
+    let abstract = TLASpec("AbstractCounter") {
+      Variable(value, 0)
+      Action("advance") { value.becomes(value + 1).when(value < 2) }
+    }
+    let count = Var<Int>("count")
+    let instance = Instance("Counter", of: abstract)
+    let concrete = TLASpec("ConcreteCounter") {
+      Variable(count, 0)
+      Action("advance") { count.becomes(count + 1).when(count < 2) }
+      instance
+      Refinement(name: "Refines", instance: instance, mappings: [.init(value, from: count)])
+    }
+    let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: concrete.compile()))
+    let refinement = try #require(program.refinements.first)
+    #expect(refinement.name == "Refines")
+    #expect(refinement.abstract.variableTypes.values.allSatisfy { $0 == .int })
+    #expect(refinement.variableMappings.count == 1)
+    #expect(refinement.variableMappings.first?.expression.resultType == .int)
+    #expect(refinement.abstract.behavior.actions.count == 1)
+  }
+
   @Test("abstract specialization substitutes parameters in every temporal predicate")
   func specializesTemporalPredicates() throws {
     let value = Var<Int>("value")

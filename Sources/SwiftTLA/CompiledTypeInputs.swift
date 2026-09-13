@@ -11,7 +11,7 @@ package struct CompiledEnums: Sendable {
 
 /// Resolved declaration types and domains shared by compiler checking scopes.
 package final class CompiledTypeInputs: Sendable {
-    let refinementNames: [String]
+    let refinements: [CompiledRefinementProgram]
     let identity: CompilationIdentity
     let layout: CompiledLayout
     let semantics: CompiledSemantics
@@ -26,7 +26,12 @@ package final class CompiledTypeInputs: Sendable {
         types: CompiledTypeContext,
         resolveSourceType: (String) throws -> CompiledValueType
     ) throws {
-        refinementNames = compilation.description.refinements
+        refinements = try compilation.refinements.map { refinement in
+            let abstractInputs = try CompiledTypeInputs(compilation: refinement.abstract,
+                types: types, resolveSourceType: resolveSourceType)
+            return .init(name: refinement.name, abstract: try CompiledProgram(inputs: abstractInputs),
+                variableMappings: refinement.variableMappings)
+        }
         identity = compilation.identity
         layout = compilation.layout
         semantics = compilation.semantics

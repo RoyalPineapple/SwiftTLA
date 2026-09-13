@@ -566,7 +566,7 @@ extension NativeSwiftEmitter {
             temporalProperties.append("\(String(reflecting: property.name)): \(condition)")
         }
         let propertyBody: String
-        if let refinement = program.refinementNames.first {
+        if let refinement = program.refinements.first?.name {
             propertyBody = "throw ExplorationError.unsupportedRefinement(\(String(reflecting: refinement)))"
         } else {
             propertyBody = "[\(temporalProperties.isEmpty ? ":" : temporalProperties.joined(separator: ",\n"))]"

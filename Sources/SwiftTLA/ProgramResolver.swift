@@ -43,6 +43,10 @@ private final class ProgramResolver {
 
     func resolve() throws -> CompiledProgram {
         let behavior = try checked.behavior.map(root)
+        let refinements = try checked.refinements.map { refinement in
+            CompiledRefinementProgram(name: refinement.name, abstract: refinement.abstract,
+                variableMappings: try refinement.variableMappings.map { try $0.map(root) })
+        }
         let projections = Set(projectionChecks.compactMap { pair, allowed in allowed ? pair : nil })
         let resolvedFunctions = try functions.map { try require($0) }
         for (index, function) in resolvedFunctions.enumerated() {
@@ -54,7 +58,7 @@ private final class ProgramResolver {
             }
         }
         return .init(identity: checked.identity, layout: checked.layout,
-            behavior: behavior, refinementNames: checked.refinementNames, enums: checked.enums,
+            behavior: behavior, refinements: refinements, enums: checked.enums,
             projections: projections, variableTypes: checked.variableTypes, bindingTypes: checked.bindingTypes,
             functions: resolvedFunctions)
     }

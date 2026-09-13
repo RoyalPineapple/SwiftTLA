@@ -20,7 +20,7 @@ package struct CompiledProgram: Sendable {
     package let identity: CompilationIdentity
     package let layout: CompiledLayout
     package let behavior: CompiledBehavior
-    package let refinementNames: [String]
+    package let refinements: [CompiledRefinementProgram]
     package let enums: CompiledEnums
     /// Implicit conversions required by this program, including their components.
     package let projections: Set<ResolvedProjectionPair>
@@ -33,4 +33,11 @@ package struct CompiledProgram: Sendable {
     package let functions: [ResolvedFunction]
     package subscript(_ id: ResolvedFunctionID) -> ResolvedFunction { functions[id.ordinal] }
     package subscript(_ id: ActionID) -> CompiledAction { behavior.actions[id.ordinal] }
+}
+
+/// An abstract native program and its state mapping, checked in the concrete program's scope.
+package struct CompiledRefinementProgram: Sendable {
+    package let name: String
+    package let abstract: CompiledProgram
+    package let variableMappings: [CompiledStateQuery]
 }

@@ -378,6 +378,27 @@ package struct CompiledTypeChecker: Sendable {
                 return try checkOperand(source, expected: expected)
             }
         }
+        let refinements = try inputs.refinements.map { refinement in
+            let declarations = refinement.abstract.layout.variables
+            guard declarations.count == refinement.variableMappings.count else {
+                throw CompilationDiagnostic(code: .incompleteRefinementMapping, stage: .binding,
+                    path: "refinements.\(refinement.name).mappings",
+                    expected: "one mapping for each abstract variable", actual: "mapping count differs",
+                    nextSafeAction: "Map every abstract variable before generating native code.")
+            }
+            let mappings = try zip(declarations, refinement.variableMappings).map { variable, mapping in
+                do {
+                    return try mapping.map {
+                        try checkOperand($0, expected: refinement.abstract.variableTypes[variable.id]!)
+                    }
+                } catch let diagnostic as CompilationDiagnostic {
+                    throw Self.contextualDiagnostic("refinements.\(refinement.name).mappings.\(variable.declaration.name)",
+                        causedBy: diagnostic)
+                }
+            }
+            return CompiledRefinementProgram(name: refinement.name, abstract: refinement.abstract,
+                variableMappings: mappings)
+        }
         let behavior = CompiledBehavior(
             checkDeadlock: inputs.semantics.behavior.checkDeadlock,
             initializations: initializations,
@@ -389,7 +410,7 @@ package struct CompiledTypeChecker: Sendable {
             fairness: inputs.semantics.behavior.fairness,
             constraint: constraint,
             assume: assume)
-        return CompiledProgram(identity: inputs.identity, layout: inputs.layout, behavior: behavior, refinementNames: inputs.refinementNames,
+        return CompiledProgram(identity: inputs.identity, layout: inputs.layout, behavior: behavior, refinements: refinements,
             enums: inputs.types.enums, projections: [], variableTypes: variables, bindingTypes: bindingTypes,
             functions: [])
     }
