@@ -69,6 +69,7 @@ struct CompiledLowerer {
     private var operatorNames: [OperatorID: String]
     private var boundedLocalOperators: Set<OperatorID> = []
     private(set) var operators = CompiledOperators()
+    private(set) var modelValueNames: Set<String> = []
     private(set) var requiredStandardModules: Set<StandardModule> = []
 
     init(
@@ -763,7 +764,7 @@ struct CompiledLowerer {
         return ordered
     }
 
-    private func lower(
+    private mutating func lower(
         _ condition: FairnessCondition,
         actions: [ActionID: CompiledAction],
         at path: String
@@ -1969,8 +1970,13 @@ struct CompiledLowerer {
         return binder
     }
 
-    private func validateValue(_ value: TLAValue, at path: String) throws {
+    private mutating func validateValue(_ value: TLAValue, at path: String) throws {
         let compiled = CompiledValue(formal: value)
+        let names = CompiledValue.modelValueNames(in: [compiled])
+        for name in names.subtracting(modelValueNames).sorted() {
+            try requireDeclarationName(name, kind: "model value", at: path)
+        }
+        modelValueNames.formUnion(names)
         guard let member = collectionMembers.first(where: { compiled.contains($0) }) else { return }
         let renderedMember = try member.rendered(using: layout)
         throw CompilationDiagnostic(

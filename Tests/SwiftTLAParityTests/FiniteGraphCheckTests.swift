@@ -4,6 +4,17 @@ import SwiftTLA
 import Testing
 import UpstreamParity
 struct FiniteGraphCheckTests {
+  @Test("Finite enum model values are declared in generated upstream modules")
+  func declaresFiniteEnumModelValues() throws {
+    for spec in [AsynchInterfaceModel.spec, ChannelModel.spec] {
+      let rendered = try spec.compile().render()
+      #expect(rendered.tlaBundle.tla.contains("CONSTANTS d1, d2, d3\n"))
+      for name in ["d1", "d2", "d3"] {
+        #expect(rendered.tlaBundle.cfg.contains("CONSTANT \(name) = \(name)\n"))
+      }
+    }
+  }
+
   @Test("finite graph models export the same complete graph through native execution")
   func nativeModelsMatchFormalGraphs() throws {
     let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,

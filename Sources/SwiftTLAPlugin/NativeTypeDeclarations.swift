@@ -99,20 +99,7 @@ struct NativeTypeDeclarations: Sendable {
             for case .named(let name) in visited {
                 values.append(contentsOf: namedDomains[name] ?? [])
             }
-            var visitedValues: Set<CompiledValue> = []
-            while let value = values.popLast() {
-                guard visitedValues.insert(value).inserted else { continue }
-                switch value {
-                case .constant(let name): modelValues.insert(name)
-                case .set(let members): values.append(contentsOf: members)
-                case .tuple(let members): values.append(contentsOf: members)
-                case .record(let record): values.append(contentsOf: record.fields.map(\.value))
-                case .function(let entries):
-                    values.append(contentsOf: entries.keys)
-                    values.append(contentsOf: entries.values)
-                case .integer, .boolean, .string, .controlLocation: break
-                }
-            }
+            modelValues = CompiledValue.modelValueNames(in: values)
         }
         let values = modelValues.sorted()
         let caseNames = GeneratedMachineAPI.generatedIdentifiers(values, fallback: "modelValue")

@@ -1,8 +1,25 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 
 @Suite("Compiled specification rendering")
 struct CompiledSpecificationRendererTests {
+    @Test("Model values in nested literals are declared and assigned once", arguments: [
+        TLAValue.constant("d1"),
+        .set([.constant("d1")]),
+        .tuple([.constant("d1"), .constant("d1")]),
+        .record(TLARecord([.init("value", .constant("d1"))])),
+        .function([.constant("d1"): .set([.constant("d1")])])
+    ])
+    func declaresNestedModelValues(value: TLAValue) throws {
+        let rendered = try TLASpec(name: "ModelValues", variables: [
+            .init(name: "value", initial: value)
+        ], actions: [], invariants: []).compile().render()
+        #expect(rendered.tlaBundle.tla.components(separatedBy: "CONSTANTS d1\n").count == 2)
+        #expect(rendered.tlaBundle.cfg.components(separatedBy: "CONSTANT d1 = d1\n").count == 2)
+        #expect(try rendered.tlaBundle(checking: [], checkDeadlock: false).cfg.contains("CONSTANT d1 = d1\n"))
+    }
+
     @Test("Structured operation syntax uses resolved operand positions and binding identities")
     func structuredOperationSyntax() throws {
         let binder = BinderID(ordinal: 0)

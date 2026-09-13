@@ -148,6 +148,7 @@ struct CompiledModuleMetadata: Sendable {
     let name: String
     let constants: [ConstantDecl]
     let formalParameters: [FormalModuleParameter]
+    let modelValueNames: Set<String>
     let extendsModules: [StandardModule]
     let imports: [String]
     let collections: [(domainSymbol: String, members: [TLAValue])]
@@ -155,7 +156,9 @@ struct CompiledModuleMetadata: Sendable {
     let formalDefinitionCount: Int
     let recursiveFunctionCount: Int
 
-    init(source: TLASpec) {
+    init(source: TLASpec, modelValueNames: Set<String>) {
+        self.modelValueNames = modelValueNames.union(CompiledValue.modelValueNames(
+            in: source.collections.flatMap(\.metadata.members).map(CompiledValue.init(formal:))))
         name = source.name
         constants = source.constants
         formalParameters = source.formalParameters
@@ -574,7 +577,7 @@ public extension TLASpec {
         semantics.operators.resolveDependencies()
         try validateAuthoredProperties(algorithm: authoredAlgorithm?.plan, layout: layout)
         return CompiledModule(
-            metadata: .init(source: self), layout: layout, bindings: lowerer.bindings, semantics: semantics,
+            metadata: .init(source: self, modelValueNames: lowerer.modelValueNames), layout: layout, bindings: lowerer.bindings, semantics: semantics,
             refinements: refinements, authoredAlgorithm: authoredAlgorithm,
             requiredStandardModules: lowerer.requiredStandardModules,
             definitionsBeforeInstances: definitionOrder.beforeInstances,
@@ -1252,17 +1255,13 @@ private extension CompiledModuleMetadata {
         lines.append("EXTENDS \(modules.joined(separator: ", "))")
         lines.append("")
 
-        let generatedMemberSymbols = collections.flatMap(\.members).compactMap { member -> String? in
-            guard case .constant(let symbol) = member else { return nil }
-            return symbol
-        }
         let formalConstantSymbols = formalParameters
             .filter { $0.kind == .constant }
             .map(\.name)
         let formalVariableSymbols = formalParameters
             .filter { $0.kind == .variable }
             .map(\.name)
-        let allConstantSymbols = (constants.map(\.name) + formalConstantSymbols + generatedMemberSymbols).sorted()
+        let allConstantSymbols = Set(constants.map(\.name) + formalConstantSymbols).union(modelValueNames).sorted()
         if !allConstantSymbols.isEmpty {
             lines.append("CONSTANTS \(allConstantSymbols.joined(separator: ", "))")
             for constant in constants.sorted(by: { $0.name < $1.name }) {
@@ -1412,10 +1411,8 @@ private extension CompiledModuleMetadata {
                 "CONSTANT \(replacement.operatorName) <- [\(replacement.moduleName)]\(replacement.definitionName)"
             )
         }
-        for collection in collections {
-            for member in collection.members {
-                lines.append("CONSTANT \(member) = \(member)")
-            }
+        for name in modelValueNames.subtracting(constants.map(\.name)).sorted() {
+            lines.append("CONSTANT \(name) = \(name)")
         }
         if semantics.behavior.constraint != nil { lines.append("CONSTRAINT StateConstraint") }
         return TLCConfiguration(

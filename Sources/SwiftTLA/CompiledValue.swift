@@ -37,6 +37,26 @@ package indirect enum CompiledValue: Hashable, Sendable, Comparable {
     case function([CompiledValue: CompiledValue])
     case constant(String)
 
+    package static func modelValueNames(in values: some Sequence<CompiledValue>) -> Set<String> {
+        var pending = Array(values)
+        var names: Set<String> = []
+        var visited: Set<CompiledValue> = []
+        while let value = pending.popLast() {
+            guard visited.insert(value).inserted else { continue }
+            switch value {
+            case .constant(let name): names.insert(name)
+            case .set(let members): pending.append(contentsOf: members)
+            case .tuple(let members): pending.append(contentsOf: members)
+            case .record(let record): pending.append(contentsOf: record.fields.map(\.value))
+            case .function(let entries):
+                pending.append(contentsOf: entries.keys)
+                pending.append(contentsOf: entries.values)
+            case .integer, .boolean, .string, .controlLocation: break
+            }
+        }
+        return names
+    }
+
     package init(formal value: TLAValue) {
         self = Self.formalValue(value)
     }
