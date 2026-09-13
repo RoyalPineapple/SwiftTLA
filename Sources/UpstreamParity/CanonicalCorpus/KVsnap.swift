@@ -122,8 +122,8 @@ package struct KVsnapModel: Sendable {
                 Each(Transaction.all, fairness: .weak, scoped: { selfID, scope in
                     let snapshotStore: LocalVariable<Function<Key, Value>> = scope.localVar("snapshotStore", initial: FormalCall("InitialState")
                     )
-                    let readKeys: LocalVariable<SetExpr<Key>> = scope.localVar("readKeys", initial: SetExpr<Key>())
-                    let writeKeys: LocalVariable<SetExpr<Key>> = scope.localVar("writeKeys", initial: SetExpr<Key>())
+                    let readKeys: LocalVariable<SetExpr<Key>> = scope.localVar("read_keys", initial: SetExpr<Key>())
+                    let writeKeys: LocalVariable<SetExpr<Key>> = scope.localVar("write_keys", initial: SetExpr<Key>())
                     let ops: LocalVariable<TupleExpr<Record<OperationSchema>>> = scope.localVar("ops", initial: TupleExpr<Record<OperationSchema>>())
 
                     Do(Step.start) {

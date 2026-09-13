@@ -11,23 +11,17 @@ struct KVsnapCorpusExecutionTests {
         #expect(initialStates.count == 1)
         let initial = try #require(initialStates.first)
         var native = try KVsnapModel.makeMachine()
-        let tx = try #require(compilation.layout.testVariableID(named: "tx"))
-        let missed = try #require(compilation.layout.testVariableID(named: "missed"))
         let start = try #require(compilation.layout.testActionID(named: "START"))
+        let projection = try native.formalProjection(of: native.snapshot)
+        #expect(Set(projection.entries.map { $0.token.description }) == [
+            "pc", "store", "tx", "missed", "snapshotStore", "read_keys", "write_keys", "ops"
+        ])
+        #expect(try projection == initial.projection(using: compilation.layout))
         #expect(native.state.tx.isEmpty)
         #expect(Set(native.state.store.keys) == [.k1, .k2])
         #expect(Set(native.state.store.values).count == 1)
-        #expect(try initial.value(for: tx) == .set([]))
-        let formalMissed = CompiledValue.function(Dictionary(uniqueKeysWithValues:
-            native.state.missed.map { transaction, keys in
-                (CompiledValue(formal: transaction.tlaValue), .set(Set(keys.map {
-                    CompiledValue(formal: $0.tlaValue)
-                })))
-            }
-        ))
         let hasNoMissedVersions = native.state.missed.values.allSatisfy(\.isEmpty)
         #expect(hasNoMissedVersions)
-        #expect(try initial.value(for: missed) == formalMissed)
         let violations = try compilation.semantics.behavior.invariants.filter {
             try !runtime.invariantHolds($0, in: initial)
         }.map(\.name)
@@ -40,6 +34,10 @@ struct KVsnapCorpusExecutionTests {
             $0.arguments == [CompiledValue(formal: KVsnapModel.Transaction.t1.tlaValue)]
         }
         #expect(Set(alternatives.map(\.state)).count == 9)
+        let nativeAlternatives = try native.successors().filter { $0.action == .START(process: .t1) }
+        let nativeStates = try Set(nativeAlternatives.map { try $0.machine.formalProjection(of: $0.machine.snapshot) })
+        let formalStates = try Set(alternatives.map { try $0.state.projection(using: compilation.layout) })
+        #expect(nativeStates == formalStates)
         let before = native.state
         do {
             _ = try native.send(.START(process: .t1))
