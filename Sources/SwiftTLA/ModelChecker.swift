@@ -493,7 +493,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
     case livenessViolated(
         property: String,
         reason: TemporalDiagnosticReason,
-        witness: FairLassoWitness<StateGraph.StateID, String>
+        witness: FairLassoWitness<StateGraph.StateID, String?>
     )
     case livenessUnavailable(property: String, reason: TemporalDiagnosticReason)
     case refinementViolated(refinement: String, failure: FormalRefinementFailure)

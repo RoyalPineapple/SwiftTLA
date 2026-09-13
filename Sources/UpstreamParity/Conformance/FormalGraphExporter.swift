@@ -66,7 +66,7 @@ package struct FormalGraphExporter: Sendable {
       outcome: try canonicalOutcome(
         exploration.outcome, states: states),
       trace: try canonicalTrace(
-        exploration.outcome, renderedActionNames: renderedActionNames)
+        exploration.outcome, states: states, renderedActionNames: renderedActionNames)
     )
   }
 
@@ -113,17 +113,27 @@ package struct FormalGraphExporter: Sendable {
 
   private func canonicalTrace(
     _ outcome: ModelCheckOutcome,
+    states: [StateGraph.StateID: CanonicalState],
     renderedActionNames: [String: String]
   ) throws -> GraphTrace? {
-    guard case .invariantViolated(_, _, let trace) = outcome else { return nil }
-    return GraphTrace(
-      id: "swift-invariant-trace",
-      steps: try trace.enumerated().map { index, step in
-        let canonical = try CanonicalState(step.state)
-        return GraphTraceStep(state: canonical.key,
-          action: index == 0 ? nil : renderedActionNames[step.action] ?? step.action)
-      }
-    )
+    switch outcome {
+    case .invariantViolated(_, _, let trace):
+      return GraphTrace(
+        id: "swift-invariant-trace",
+        steps: try trace.enumerated().map { index, step in
+          let canonical = try CanonicalState(step.state)
+          return GraphTraceStep(state: canonical.key,
+            action: index == 0 ? nil : renderedActionNames[step.action] ?? step.action)
+        })
+    case .livenessViolated(_, _, let witness):
+      return try GraphTrace(id: "swift-temporal-trace", witness: witness,
+        stateKey: { identifier in
+          guard let state = states[identifier] else { throw FormalGraphExportError.traceStateMissing }
+          return state.key
+        },
+        actionName: { renderedActionNames[$0] ?? $0 })
+    default:
+      return nil
+    }
   }
-
 }

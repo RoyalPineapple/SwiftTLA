@@ -69,7 +69,7 @@ struct GraphRunRecordsTests {
        ["kind": "invariantViolation", "message": "Check"]),
       (.livenessViolated(property: "Check", reason: .violatingFairLasso,
         witness: .init(prefix: [initial], cycle: [initial, initial],
-          prefixActions: [], cycleActions: ["[stutter]"])),
+          prefixActions: [], cycleActions: [nil])),
        ["kind": "temporalViolation", "property": "Check", "reason": "violating-fair-lasso"]),
       (.refinementViolated(refinement: "Check",
         failure: .initialState(mapped: projection, abstractInitialStates: [])),
@@ -84,6 +84,14 @@ struct GraphRunRecordsTests {
         configuration: exploration.configuration, compiledStates: exploration.compiledStates
       )
       let run = try FormalGraphExporter().export(failed)
+      if case .livenessViolated = outcome {
+        let trace = try #require(run.trace)
+        #expect(trace.cycleStartIndex == 0)
+        #expect(trace.steps.count == 2)
+        #expect(trace.steps.allSatisfy { $0.action == nil })
+        #expect(trace.steps.first?.state == trace.steps.last?.state)
+        try trace.validate(in: run.graph)
+      }
       try GraphRunRecords.write(run, to: url)
       let completion = try #require(records(in: Data(contentsOf: url)).last)
       #expect(completion["outcome"] as? [String: String] == expected)
