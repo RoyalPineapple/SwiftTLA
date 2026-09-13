@@ -471,6 +471,18 @@ extension TLCGraphReaderTests {
     }
   }
 
+  @Test("excluded predicate observations still require decodable values", arguments: ["source", "target"])
+  func rejectsUndecodableExcludedValues(_ position: String) throws {
+    let finiteGraphCase = try fixtureCase(try toolchainPin())
+    let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
+    let stream = try completeGraphStreamWithExcludedPredicateObservation(finiteGraphCase,
+      sourceValue: position == "source" ? "<<" : "2",
+      targetValue: position == "target" ? "<<" : "2")
+    #expect(throws: TLCGraphEventError.unsupportedValue("<<")) {
+      try reader.parse(stream)
+    }
+  }
+
   @Test("graph event reader retains only exact excluded predicate observations")
   func acceptsExcludedPredicateObservationsWithoutAddingGraphEdges() throws {
     let finiteGraphCase = try fixtureCase(try toolchainPin())

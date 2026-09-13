@@ -130,8 +130,10 @@ package struct TLCGraphReader: Sendable {
                           predicateLocation.hasPrefix("line "), predicateLocation.contains(" of module "),
                           actionLocation.hasPrefix("<\(actionName)(")
                     else { throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid excluded predicate transition") }
-                    _ = source
-                    _ = target
+                    _ = try canonicalState(source)
+                    if source.bindings != target.bindings {
+                        _ = try canonicalState(target)
+                    }
                 } else {
                     guard try string(object, "reachable", line) == "reachable",
                           object["predicateLocation"] is NSNull,

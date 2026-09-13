@@ -80,18 +80,21 @@ func completeGraphStreamWithStutteringObservation(_ finiteGraphCase: FiniteGraph
   )) + Data([10])
   return body + footer
 }
-func completeGraphStreamWithExcludedPredicateObservation(_ finiteGraphCase: FiniteGraphCase) throws -> Data {
+func completeGraphStreamWithExcludedPredicateObservation(
+  _ finiteGraphCase: FiniteGraphCase, sourceValue: String = "2", targetValue: String = "2"
+) throws -> Data {
   let runID = "00000000-0000-4000-8000-000000000001"
   let lines = String(decoding: try completeGraphStream(finiteGraphCase), as: UTF8.self)
     .split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
   let header = Data((lines[0] + "\n").utf8)
   let initial = Data((lines[1] + "\n").utf8)
   let transition = Data((lines[2] + "\n").utf8)
-  let state: [String: Any] = ["fingerprint": "3", "level": 2, "bindings": [binding(0, "x", "2")]]
+  let source: [String: Any] = ["fingerprint": "3", "level": 2, "bindings": [binding(0, "x", sourceValue)]]
+  let target: [String: Any] = ["fingerprint": "3", "level": 2, "bindings": [binding(0, "x", targetValue)]]
   let excluded = try jsonLine(record(
     "transition", 3, runID, finiteGraphCase.id,
     [
-      "callback": "writeState.actionPredicate", "source": state, "target": state,
+      "callback": "writeState.actionPredicate", "source": source, "target": target,
       "action": ["name": "Next", "location": "<Next(2) line 1, col 1 to line 1, col 2 of module Fixture>", "named": true],
       "stateFlags": ["raw": 2, "seen": false, "notInModel": true],
       "visualization": "none", "predicateLocation": "line 1, col 1 to line 1, col 2 of module Fixture", "reachable": "excluded"
