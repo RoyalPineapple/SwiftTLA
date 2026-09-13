@@ -1207,7 +1207,7 @@ private extension CompiledModuleMetadata {
                 semantics: semantics,
                 requiredStandardModules: requiredStandardModules
             ),
-            configuration: tlcConfiguration(semantics: semantics),
+            configuration: tlcConfiguration(semantics: semantics, refinements: refinements),
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
             definitions: definitions, instances: instances, refinements: renderedRefinements,
             properties: Dictionary(uniqueKeysWithValues: invariants + temporalProperties), constraint: constraint
@@ -1399,7 +1399,7 @@ private extension CompiledModuleMetadata {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    private func tlcConfiguration(semantics: CompiledSemantics) -> TLCConfiguration {
+    private func tlcConfiguration(semantics: CompiledSemantics, refinements: [CompiledRefinement]) -> TLCConfiguration {
         var lines: [String] = []
         for constant in constants.sorted(by: { $0.name < $1.name }) {
             lines.append("CONSTANT \(constant.name) = \(constant.value)")
@@ -1419,7 +1419,7 @@ private extension CompiledModuleMetadata {
             declarations: lines,
             checkDeadlock: semantics.behavior.checkDeadlock,
             invariants: semantics.behavior.invariants.map(\.name),
-            properties: semantics.behavior.temporalProperties.map(\.name),
+            properties: semantics.behavior.temporalProperties.map(\.name) + refinements.map(\.name),
             symmetry: symmetrySets.map { "Symm\($0.variableName)" }
         )
     }

@@ -12,6 +12,8 @@ struct NativeRefinementCheckingTests {
         let compilation = try NativeRefinementCounter.spec.compile()
         let exported = try NativeModelRun(graph, description: compilation.description, rendered: compilation.render())
         #expect(exported.checks.properties["Refines"] == .satisfied)
+        #expect(exported.rendered.tlaBundle.cfg.contains("PROPERTY Refines\n"))
+        #expect(try exported.rendered.tlaBundle(checking: ["Refines"], checkDeadlock: false).cfg.contains("PROPERTY Refines\n"))
         let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
         guard case .ok = try ModelChecker(compilation: compilation, configuration: configuration).check() else {
             Issue.record("Abstract exploration constraints must not restrict the refinement relation")
