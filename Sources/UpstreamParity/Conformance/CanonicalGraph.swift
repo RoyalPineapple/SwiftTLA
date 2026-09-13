@@ -148,22 +148,20 @@ package struct CanonicalStateKey: Hashable, Codable, Sendable, Comparable, Custo
 
 package struct CanonicalState: Hashable, Sendable {
     package let bindings: [String: CanonicalValue]
+    package let key: CanonicalStateKey
 
     package init(bindings: [String: CanonicalValue]) {
         self.bindings = bindings
-    }
-
-    package init(_ projection: TLAStateProjection) throws {
-        bindings = try Dictionary(uniqueKeysWithValues: projection.entries.map {
-            ($0.token.description, try CanonicalValue($0.value))
-        })
-    }
-
-    package var key: CanonicalStateKey {
         let fields = bindings.sorted { canonicalBytes($0.key, $1.key) }
             .map { "\(encodedBytes($0.key))=\($0.value.canonicalEncoding)" }
             .joined(separator: ",")
-        return CanonicalStateKey(canonicalEncoding: "state:[\(fields)]")
+        key = CanonicalStateKey(canonicalEncoding: "state:[\(fields)]")
+    }
+
+    package init(_ projection: TLAStateProjection) throws {
+        self.init(bindings: try Dictionary(uniqueKeysWithValues: projection.entries.map {
+            ($0.token.description, try CanonicalValue($0.value))
+        }))
     }
 }
 
