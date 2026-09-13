@@ -509,7 +509,9 @@ private struct PerCheckExecutor: TLCProcessExecuting {
   var failFirst = false
 
   func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
-    try graphStream(for: request.finiteGraphCase, runID: request.runID).write(to: request.graphEvents)
+    if request.invocation == .finiteGraph {
+      try graphStream(for: request.finiteGraphCase, runID: request.runID).write(to: request.graphEvents)
+    }
     var status: Int32 = 0
     if request.invocation == .propertyCheck {
       let first: [Any] = [1, ["x": 1]]

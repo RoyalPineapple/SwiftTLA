@@ -35,7 +35,9 @@ complete graph must match native execution. The runner separately explores the
 DSL-generated TLA+ with property and deadlock checks disabled, retaining that
 complete graph in `generated/tlc-graph.jsonl`. This graph must also match native
 execution. Each declared property and requested deadlock check then runs independently,
-sharing that captured graph. Reports in `properties/<name>/` and `deadlock/`
+reusing that captured graph without dumping or parsing another graph. Each check
+must use the same rendered module and exploration configuration, changing only
+the selected checks; its counterexample must belong to the shared graph. Reports in `properties/<name>/` and `deadlock/`
 compare both verdicts and retain their counterexamples. Matching violations can
 establish agreement; a violation need not hide other checks or stop validation.
 A check that cannot finish or produces an unavailable result cannot pass, and

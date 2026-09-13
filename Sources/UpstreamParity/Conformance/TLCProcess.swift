@@ -134,14 +134,16 @@ package struct TLCProcessRequest: Equatable, Sendable {
     module: URL,
     configuration: URL
   ) -> [String] {
-    return [
+    let graphOptions = invocation == .finiteGraph ? [
       "-Dswifttla.tlc.graph.path=\(graphEvents.path)",
       "-Dswifttla.tlc.graph.run-id=\(runID.uuidString.lowercased())",
-      "-Dswifttla.tlc.graph.case-id=\(caseID)",
-      "-cp", "\(jar.path):\(bridgeClasses.path)",
-      "tlc2.TLC", "-dump", "class,org.swifttla.conformance.LosslessStateWriter",
-      "-dumpTrace", "json", traceOutput.path
-    ] + finiteGraphCase.arguments + ["-config", configuration.path, module.path]
+      "-Dswifttla.tlc.graph.case-id=\(caseID)"
+    ] : []
+    let graphDump = invocation == .finiteGraph
+      ? ["-dump", "class,org.swifttla.conformance.LosslessStateWriter"] : []
+    return graphOptions + ["-cp", "\(jar.path):\(bridgeClasses.path)", "tlc2.TLC"]
+      + graphDump + ["-dumpTrace", "json", traceOutput.path]
+      + finiteGraphCase.arguments + ["-config", configuration.path, module.path]
   }
 
   package func validateLaunchBinding(module: URL, configuration: URL) throws {
@@ -330,6 +332,19 @@ package struct TLCProcessAdapter: Sendable {
     _ request: TLCProcessRequest,
     retainingIn directory: URL
   ) throws -> TLCProcessCapture {
+    let outcome = try run(request, retainingIn: directory)
+    let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase)
+    let stream = try reader.parse(Data(contentsOf: request.graphEvents))
+    guard stream.runID == request.runID else {
+      throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
+    }
+    return TLCProcessCapture(request: request, outcome: outcome, graph: try reader.makeGraphRun(stream, outcome: outcome))
+  }
+
+  package func run(
+    _ request: TLCProcessRequest,
+    retainingIn directory: URL
+  ) throws -> TLCExecutionOutcome {
     try RetainedFiles.createDirectory(directory, beneath: directory.deletingLastPathComponent())
     try clearTraceOutput(for: request, retainingIn: directory)
     let process: TLCProcessResult
@@ -339,15 +354,8 @@ package struct TLCProcessAdapter: Sendable {
       try retain(request, failure: TLCProcessExecutionFailure(error), in: directory)
       throw error
     }
-    // Keep output even when the graph is malformed or incomplete.
     try retain(request, process: process, in: directory)
-    let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase)
-    let stream = try reader.parse(Data(contentsOf: request.graphEvents))
-    guard stream.runID == request.runID else {
-      throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
-    }
-    let outcome = TLCExecutionOutcome(exitStatus: process.status, invocation: request.invocation)
-    return TLCProcessCapture(request: request, outcome: outcome, graph: try reader.makeGraphRun(stream, outcome: outcome))
+    return TLCExecutionOutcome(exitStatus: process.status, invocation: request.invocation)
   }
 
   private func clearTraceOutput(for request: TLCProcessRequest, retainingIn directory: URL) throws {
@@ -397,7 +405,8 @@ package struct TLCProcessAdapter: Sendable {
     if let failure {
       try RetainedFiles.writeText(redactingSecrets(in: failure.message), to: logs.appendingPathComponent("tlc.failure.log"))
     }
-    for (source, name) in [(request.graphEvents, "graph-events.jsonl"), (request.traceOutput, "counterexample.json")] {
+    let graphFiles = request.invocation == .finiteGraph ? [(request.graphEvents, "graph-events.jsonl")] : []
+    for (source, name) in graphFiles + [(request.traceOutput, "counterexample.json")] {
       guard FileManager.default.fileExists(atPath: source.path) else { continue }
       let destination = directory.appendingPathComponent(name)
       if FileManager.default.fileExists(atPath: destination.path) {

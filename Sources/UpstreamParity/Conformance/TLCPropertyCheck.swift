@@ -84,13 +84,10 @@ package struct TLCPropertyCheck: Sendable {
     try validate(input)
     try RetainedFiles.outputDirectory(
       input.outputDirectory, beneath: input.outputDirectory.deletingLastPathComponent())
-    let capture = try processAdapter.capture(input.request, retainingIn: input.outputDirectory)
+    let outcome = try processAdapter.run(input.request, retainingIn: input.outputDirectory)
     let completeGraph = input.completeGraph.graph
-    if capture.graph.isComplete, !compareFiniteGraphs(tlc: capture.graph, swift: completeGraph).matches {
-      throw TLCPropertyCheckError.graphEvidenceInvalid
-    }
     let tlcOutcome = try propertyResult(
-      check: input.check, outcome: capture.outcome,
+      check: input.check, outcome: outcome,
       graph: completeGraph,
       outputDirectory: input.outputDirectory)
     let comparison = try PropertyComparison(
