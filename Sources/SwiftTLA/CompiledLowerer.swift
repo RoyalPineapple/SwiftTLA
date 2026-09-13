@@ -108,7 +108,16 @@ struct CompiledLowerer {
     }
 
     var bindings: CompiledBindingTable {
-        .init(operatorNames: operatorNames, binders: binderNames)
+        var names = binderNames
+        var unavailable = reservedRenderedNames.union(modelValueNames)
+            .union(binderNames.values).union(operatorNames.values)
+        for (binder, name) in binderNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
+            where modelValueNames.contains(name) {
+            let renamed = StateExpr.freshBoundName(name, avoiding: unavailable)
+            names[binder] = renamed
+            unavailable.insert(renamed)
+        }
+        return .init(operatorNames: operatorNames, binders: names)
     }
 
     private var rootScope: BindingScope {
@@ -1975,6 +1984,15 @@ struct CompiledLowerer {
         let names = CompiledValue.modelValueNames(in: [compiled])
         for name in names.subtracting(modelValueNames).sorted() {
             try requireDeclarationName(name, kind: "model value", at: path)
+            let isIdentityConstant = constants.contains { $0.name == name && $0.value == .constant(name) }
+            guard !reservedRenderedNames.contains(name) || isIdentityConstant else {
+                throw CompilationDiagnostic(
+                    code: .invalidFormalDeclaration, stage: .binding, path: path,
+                    expected: "a model value distinct from module declarations",
+                    actual: "model value '\(name)' conflicts with a declared symbol",
+                    nextSafeAction: "Rename the model value or the conflicting declaration."
+                )
+            }
         }
         modelValueNames.formUnion(names)
         guard let member = collectionMembers.first(where: { compiled.contains($0) }) else { return }

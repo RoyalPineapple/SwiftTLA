@@ -4,6 +4,26 @@ import Testing
 
 @Suite("Compiled specification rendering")
 struct CompiledSpecificationRendererTests {
+    @Test("Model values cannot alias module variables")
+    func rejectsModelValueDeclarationCollision() throws {
+        #expect(throws: CompilationDiagnostic.self) {
+            _ = try TLASpec(name: "Collision", variables: [
+                .init(name: "d1", initial: .constant("d1"))
+            ], actions: [], invariants: []).compile()
+        }
+    }
+
+    @Test("Quantifier binders cannot capture model values discovered in their bodies")
+    func avoidsModelValueCapture() throws {
+        let body = StateExpr.forAll(.value(.set([.constant("d2")])), "d1",
+            .equal(.variable("d1"), .value(.constant("d1"))))
+        let compiled = try TLASpec(name: "Capture", variables: [], actions: [], invariants: [],
+            formalOperatorDefinitions: [.init(name: "Check", parameters: [], body: body)]).compile()
+        let name = try #require(compiled.bindings.binders.values.first)
+        #expect(name != "d1")
+        #expect(try compiled.render().tlaBundle.tla.contains("(\(name) = d1)"))
+    }
+
     @Test("Model values in nested literals are declared and assigned once", arguments: [
         TLAValue.constant("d1"),
         .set([.constant("d1")]),
