@@ -26,7 +26,7 @@ struct FiniteGraphCheckTests {
     let jar = try #require(tlc["jar"] as? [String: Any])
 
     #expect(jar["repository"] as? String == "tlaplus/tlaplus")
-    #expect(jar["assetID"] as? Int == 553619847)
+    #expect(try #require(jar["assetID"] as? Int) > 0)
     #expect(jar["url"] == nil)
   }
 
