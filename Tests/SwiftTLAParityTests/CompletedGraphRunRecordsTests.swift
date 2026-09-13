@@ -1,8 +1,46 @@
 import Foundation
 import Testing
+@testable import SwiftTLA
 @testable import UpstreamParity
 
 struct CompletedGraphRunRecordsTests {
+  @Test("exported failures preserve their check category in retained records")
+  func preservesFailureCategories() throws {
+    let value = Var<Int>("value")
+    let compilation = try TLASpec("FailureCategories") { Variable(value, 0) }.compile()
+    let exploration = try ModelChecker(
+      compilation: compilation,
+      configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)
+    ).explore()
+    let initial = try #require(exploration.initialStateIDs.first)
+    let projection = try #require(exploration.graph.states[initial])
+    let outcomes: [(ModelCheckOutcome, [String: String])] = [
+      (.invariantViolated(invariant: "Check", state: projection, trace: []),
+       ["kind": "invariantViolation", "message": "Check"]),
+      (.livenessViolated(property: "Check", reason: .violatingFairLasso,
+        witness: .init(prefix: [initial], cycle: [initial, initial],
+          prefixActions: [], cycleActions: ["[stutter]"])),
+       ["kind": "temporalViolation", "property": "Check", "reason": "violating-fair-lasso"]),
+      (.refinementViolated(refinement: "Check",
+        failure: .initialState(mapped: projection, abstractInitialStates: [])),
+       ["kind": "refinementViolation", "message": "Check"])
+    ]
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: url) }
+    for (outcome, expected) in outcomes {
+      let failed = FiniteExploration(
+        graph: exploration.graph, initialStateIDs: exploration.initialStateIDs,
+        outcome: outcome, compilationIdentity: exploration.compilationIdentity,
+        configuration: exploration.configuration, compiledStates: exploration.compiledStates
+      )
+      let run = try SwiftGraphExporter().export(failed)
+      try CompletedGraphRunRecords.write(run, to: url)
+      let completion = try #require(records(in: Data(contentsOf: url)).last)
+      #expect(completion["outcome"] as? [String: String] == expected)
+      #expect(completion["eligible"] as? Bool == false)
+    }
+  }
+
   @Test("canonical graph records ignore traversal and collection insertion order")
   func recordsAreStableAcrossEquivalentGraphs() throws {
     let first = state(counter: 1, values: [.integer(2), .integer(1)])

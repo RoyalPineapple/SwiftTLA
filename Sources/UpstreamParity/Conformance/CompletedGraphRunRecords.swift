@@ -63,6 +63,10 @@ package enum CompletedGraphRunRecords {
       ["kind": "exhaustiveSuccess"]
     case .invariantViolation(let message):
       ["kind": "invariantViolation", "message": message]
+    case .temporalViolation(let property, let reason):
+      ["kind": "temporalViolation", "property": property, "reason": reason.rawValue]
+    case .refinementViolation(let name):
+      ["kind": "refinementViolation", "message": name]
     case .deadlock(let state):
       ["kind": "deadlock", "state": state.canonicalEncoding]
     case .incomplete(let reason):

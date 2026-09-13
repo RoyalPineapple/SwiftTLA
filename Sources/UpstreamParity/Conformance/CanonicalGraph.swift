@@ -266,6 +266,8 @@ package struct CanonicalGraph: Equatable, Sendable {
 package enum GraphRunOutcome: Hashable, Sendable {
     case exhaustiveSuccess
     case invariantViolation(String)
+    case temporalViolation(property: String, reason: TemporalDiagnosticReason)
+    case refinementViolation(String)
     case deadlock(CanonicalStateKey)
     case incomplete(reason: String)
     case executionError(String)

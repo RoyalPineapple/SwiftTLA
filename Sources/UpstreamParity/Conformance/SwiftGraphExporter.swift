@@ -100,11 +100,11 @@ package struct SwiftGraphExporter: Sendable {
     case .assumptionViolated:
       return .executionError("the compiled assumption evaluated to false")
     case .livenessViolated(let property, let reason, _):
-      return .invariantViolation("\(property): \(reason.rawValue)")
+      return .temporalViolation(property: property, reason: reason)
     case .livenessUnavailable:
       return .incomplete(reason: outcome.description)
     case .refinementViolated(let refinement, _):
-      return .invariantViolation(refinement)
+      return .refinementViolation(refinement)
     case .refinementUnproven:
       return .incomplete(reason: outcome.description)
     }
