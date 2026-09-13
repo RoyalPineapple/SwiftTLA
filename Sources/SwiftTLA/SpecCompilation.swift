@@ -256,6 +256,9 @@ public struct RenderedSpecification: Sendable {
         }
     }
 
+    package var checkNames: Set<String> { Set(configuration.invariants + configuration.properties) }
+    package var checksDeadlock: Bool { configuration.checkDeadlock }
+
     /// Selects declared checks for an independent validation pass without rendering the model again.
     /// Symmetry is disabled so the pass retains the complete, unreduced graph.
     package func tlaBundle(checking checks: Set<String>, checkDeadlock: Bool) throws -> TLAModuleBundle {
