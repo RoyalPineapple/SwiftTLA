@@ -94,7 +94,7 @@ extension TLCPropertyCheck {
       return .unavailable
     }
     let trace = try TLCTraceParser().parseCounterexample(
-      Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json")))
+      Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json")), states: graph.graph.states.values)
     let bound = try boundTrace(trace, to: graph.graph, requiresCycle: outcome == .livenessViolation)
     if check == .deadlock {
       guard bound.cycleStartIndex == nil, let final = bound.steps.last,

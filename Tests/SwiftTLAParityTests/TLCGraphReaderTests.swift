@@ -325,7 +325,8 @@ struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonic
       testFile
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
       .appendingPathComponent("Tests/Fixtures/FiniteGraph/TLCTrace/violation-counterexample.json")
-    let trace = try TLCTraceParser().parseCounterexample(Data(contentsOf: traceURL))
+    let trace = try TLCTraceParser().parseCounterexample(Data(contentsOf: traceURL),
+      states: (0...3).map { CanonicalState(bindings: ["x": .integer($0)]) })
     #expect(trace.steps.count == 4)
     #expect(trace.steps.map(\.action) == [nil, "Next", "Next", "Next"])
     #expect(trace.cycleStartIndex == nil)

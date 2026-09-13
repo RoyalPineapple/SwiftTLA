@@ -3,6 +3,63 @@ import Testing
 import UpstreamParity
 
 struct CounterexampleDecodingTests {
+    @Test("Trace binding preserves typed collections and model values erased by JSON")
+    func bindsTypedValues() throws {
+        let nested = CanonicalValue.set([
+            .set([.integer(1), .integer(2)]), .tuple([.integer(1), .integer(2)])
+        ])
+        let function = try CanonicalValue.function([
+            .init(key: .integer(0), value: .constant("nodeA")),
+            .init(key: .boolean(true), value: .set([.integer(2), .integer(1)]))
+        ])
+        let examples: [(CanonicalValue, Any)] = [
+            (nested, [[1, 2], [2, 1]]),
+            (function, ["0": "nodeA", "TRUE": [1, 2]] as [String: Any]),
+            (.record(["items": .set([]), "name": .constant("nodeA")]),
+                ["items": [], "name": "nodeA"] as [String: Any]),
+            (.tuple([]), [:] as [String: Any]),
+            (.tuple([]), [] as [Any]),
+            (.integer(Int.max), Int.max)
+        ]
+        for (value, json) in examples {
+            let state = CanonicalState(bindings: ["value": value])
+            let data = try JSONSerialization.data(withJSONObject: ["vars": ["value"],
+                "counterexample": ["state": [[1, ["value": json]]], "action": []]])
+            let trace = try TLCTraceParser().parseCounterexample(data, states: [state])
+            #expect(trace.steps.map(\.state) == [state.key])
+        }
+    }
+
+    @Test("Erased JSON identities must resolve to exactly one graph state")
+    func rejectsAmbiguousValues() throws {
+        let data = Data(#"{"vars":["value"],"counterexample":{"state":[[1,{"value":[1]}]],"action":[]}}"#.utf8)
+        let states = [CanonicalValue.set([.integer(1)]), .tuple([.integer(1)])]
+            .map { CanonicalState(bindings: ["value": $0]) }
+        #expect(throws: TLCTraceError.ambiguousState(0)) {
+            try TLCTraceParser().parseCounterexample(data, states: states)
+        }
+    }
+
+    @Test("Duplicate set members, numeric overflow, and malformed JSON never bind a state")
+    func rejectsInvalidValues() throws {
+        let values: [(String, CanonicalValue)] = [
+            ("[1,1]", .set([.integer(1), .integer(2)])),
+            ("18446744073709551615", .integer(-1)),
+            ("true", .integer(1)),
+            ("1.5", .integer(1))
+        ]
+        for (json, value) in values {
+            let data = Data("{\"vars\":[\"value\"],\"counterexample\":{\"state\":[[1,{\"value\":\(json)}]],\"action\":[]}}".utf8)
+            #expect(throws: TLCTraceError.invalidState(0)) {
+                try TLCTraceParser().parseCounterexample(data, states: [CanonicalState(bindings: ["value": value])])
+            }
+        }
+        let duplicate = Data(#"{"vars":["value"],"counterexample":{"state":[[1,{"value":0,"value":1}]],"action":[]}}"#.utf8)
+        #expect(throws: TLCTraceError.malformedJSON) {
+            try TLCTraceParser().parseCounterexample(duplicate, states: [CanonicalState(bindings: ["value": .integer(1)])])
+        }
+    }
+
     @Test("loop-back positions retain numbered occurrences even when state values repeat")
     func retainsExactLoopOccurrence() throws {
         let first: [Any] = [1, ["x": 0]]
@@ -14,7 +71,7 @@ struct CounterexampleDecodingTests {
                 "action": [[first, ["name": "A"], second], [second, ["name": "B"], third],
                            [third, ["name": "Stay"], third]]
             ]
-        ]))
+        ]), states: [0, 1].map { CanonicalState(bindings: ["x": .integer($0)]) })
         #expect(trace.cycleStartIndex == 2)
         #expect(trace.steps.map(\.action) == [nil, "A", "B", "Stay"])
         #expect(trace.steps[0].state == trace.steps[2].state)
@@ -32,7 +89,8 @@ struct CounterexampleDecodingTests {
             ]
             for input in inputs {
                 #expect(throws: TLCTraceError.self) {
-                    try TLCTraceParser().parseCounterexample(JSONSerialization.data(withJSONObject: input))
+                    try TLCTraceParser().parseCounterexample(JSONSerialization.data(withJSONObject: input),
+                        states: [CanonicalState(bindings: ["x": .integer(0)])])
                 }
             }
         }
@@ -45,7 +103,7 @@ struct CounterexampleDecodingTests {
         let data = try JSONSerialization.data(withJSONObject: ["vars": ["x"],
             "counterexample": ["state": [state], "action": [action, action]]])
         #expect(throws: TLCTraceError.invalidAction(2)) {
-            try TLCTraceParser().parseCounterexample(data)
+            try TLCTraceParser().parseCounterexample(data, states: [CanonicalState(bindings: ["x": .integer(0)])])
         }
     }
 

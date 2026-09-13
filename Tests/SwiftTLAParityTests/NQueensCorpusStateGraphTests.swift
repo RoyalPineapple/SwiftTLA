@@ -1,8 +1,25 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 @testable import UpstreamParity
 
 struct NQueensCorpusStateGraphTests {
+    @Test("The retained TLC NoSolutions counterexample belongs to the complete native graph")
+    func decodesTLCCollectionCounterexample() throws {
+        let native = try ReachabilityGraph(initialMachines: NQueensModel.initialMachines(), maximumStates: 5_000)
+        let graph = try CanonicalGraph(native)
+        let fixture = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Tests/Fixtures/FiniteGraph/TLCTrace/nqueens-nosolutions.json")
+        let trace = try TLCTraceParser().parseCounterexample(Data(contentsOf: fixture), states: graph.states.values)
+        #expect(trace.steps.count == 5)
+        #expect(trace.cycleStartIndex == nil)
+        try trace.validate(in: graph)
+        let final = try #require(trace.steps.last)
+        let state = try #require(graph.states[final.state])
+        #expect(state.bindings["sols"] == .set([.tuple([.integer(2), .integer(4), .integer(1), .integer(3)])]))
+    }
+
     @Test("FourQueens native choices preserve the complete formal graph and invariants")
     func nativeGraphMatchesFormalGraph() throws {
         let compilation = try NQueensModel.spec.compile()

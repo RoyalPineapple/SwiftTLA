@@ -80,7 +80,7 @@ package struct TLCGraphReader: Sendable {
             try autoreleasepool {
                 let line = index + 1
                 let lineData = Data(bytes)
-                let object = try decodeObject(lineData, line: line)
+                let object = try decodeJSONObject(lineData, line: line)
                 try validateCommon(object, line: line, expectedSequence: index, runID: &runID)
                 guard footer == nil else { throw TLCGraphEventError.invalidRecord(line: line, reason: "record after footer") }
                 let type = try string(object, "type", line)
@@ -452,7 +452,7 @@ enum TLCValueParser {
     }
 }
 
-private func decodeObject(_ data: Data, line: Int) throws -> [String: Any] {
+func decodeJSONObject(_ data: Data, line: Int) throws -> [String: Any] {
     var scanner = JSONDuplicateKeyScanner(data: data)
     do {
         try scanner.validate()

@@ -216,7 +216,7 @@ struct TLCPropertyCheckTests {
   func retainsDeadlock() throws {
     let fixture = try Fixture(check: .deadlock)
     let trace = try numberedInitialStateTrace()
-    let nativeTrace = try TLCTraceParser().parseCounterexample(trace)
+    let nativeTrace = try TLCTraceParser().parseCounterexample(trace, states: fixture.swiftRun.graph.states.values)
     let comparison = try fixture.capture(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
       propertyResult: .init(status: 11, stdout: "Deadlock reached.", stderr: ""), trace: trace)), swiftResult: .violated(nativeTrace))
     #expect(comparison.status == .exact)
@@ -233,7 +233,7 @@ struct TLCPropertyCheckTests {
       case: fixture.completeGraphCase, runID: fixture.completeGraphRequest.runID))
     let trace = try numberedInitialStateTrace()
     let nativeResult: PropertyResult = nativeFailure
-      ? .violated(try TLCTraceParser().parseCounterexample(trace)) : .satisfied
+      ? .violated(try TLCTraceParser().parseCounterexample(trace, states: graph.graph.states.values)) : .satisfied
     let tlcResult = nativeFailure ? Fixture.success : TLCProcessResult(status: 11, stdout: "Deadlock reached.", stderr: "")
     #expect(throws: EvidenceFormatError.self) {
       try fixture.capture(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
@@ -258,7 +258,7 @@ struct TLCPropertyCheckTests {
     let second: [Any] = [2, ["x": 2]]
     let data = try JSONSerialization.data(withJSONObject: ["vars": ["x"], "counterexample": [
       "state": [first, second], "action": [[first, ["name": "A"], second]]]])
-    let nativeTrace = try TLCTraceParser().parseCounterexample(data)
+    let nativeTrace = try TLCTraceParser().parseCounterexample(data, states: graph.graph.states.values)
     let completeGraph = try fixture.captureGraph(stream: try temporalGraphStream(
       case: fixture.completeGraphCase, runID: fixture.completeGraphRequest.runID))
     let comparison = try fixture.capture(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
@@ -290,7 +290,7 @@ struct TLCPropertyCheckTests {
     let ids = graph.graph.states.keys.sorted().map(\.canonicalEncoding)
     let swiftResult = PropertyResult.violated(
       testCycle(ids + [ids[0]]))
-    #expect(throws: GraphRunError.self) {
+    #expect(throws: TLCTraceError.invalidState(1)) {
       try fixture.capture(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
           trace: try numberedLoopBackTrace(secondValue: 99))), swiftRun: completedSwiftRun(graph), swiftResult: swiftResult)
     }
