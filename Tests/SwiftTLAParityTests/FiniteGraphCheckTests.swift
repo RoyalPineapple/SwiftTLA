@@ -4,6 +4,27 @@ import SwiftTLA
 import Testing
 import UpstreamParity
 struct FiniteGraphCheckTests {
+  @Test("finite graph models export the same complete graph through native execution")
+  func nativeModelsMatchFormalGraphs() throws {
+    let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
+      from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
+    for declaration in manifest.cases {
+      let compilation = try declaration.sourceModel.spec.compile()
+      let finiteGraphCase = try FiniteGraphCase(id: declaration.id, exploration: declaration.exploration,
+        moduleSHA256: declaration.moduleSHA256, cfgSHA256: declaration.cfgSHA256,
+        arguments: [], environment: [:], pin: testReferencePin(), renderedActions: compilation.render().actions)
+      let native = try declaration.sourceModel.nativeGraph(for: finiteGraphCase)
+      let formal = try SwiftGraphExporter().export(ModelChecker(
+        compilation: compilation, configuration: declaration.exploration
+      ).explore(), for: finiteGraphCase)
+      let renderedNames = Set(finiteGraphCase.renderedActions.map(\.renderedName))
+      #expect(Set(native.graph.edgeOccurrences.keys.map(\.action)).isSubset(of: renderedNames))
+      #expect(native.graph == formal.graph, "\(declaration.id)")
+      #expect(native.outcome == .exhaustiveSuccess, "\(declaration.id)")
+      #expect(formal.outcome == .exhaustiveSuccess, "\(declaration.id)")
+    }
+  }
+
   @Test("finite graph staging consumes declared source model identities")
   func stagesDeclaredSourceModels() throws {
     let output = Pipe()
@@ -141,7 +162,7 @@ struct FiniteGraphCheckTests {
     let check = FiniteGraphCheck(tlcProcess: TLCProcessAdapter(executor: executor))
     let output = root.appendingPathComponent("evidence")
     let checkOutput = check.run(
-      compilation: try fixtureCompilation(),
+      swiftRun: { try fixtureRun() },
       tlcRequest: request,
       outputDirectory: output
     )
@@ -188,7 +209,7 @@ struct FiniteGraphCheckTests {
       tlcProcess: TLCProcessAdapter(executor: FailingTLCExecutor()))
     let output = root.appendingPathComponent("failed-evidence")
     let checkOutput = check.run(
-      compilation: try fixtureCompilation(),
+      swiftRun: { try fixtureRun() },
       tlcRequest: request,
       outputDirectory: output
     )
@@ -232,7 +253,7 @@ struct FiniteGraphCheckTests {
           stream: try graphStream(for: request.finiteGraphCase, runID: otherRun))))
     let output = root.appendingPathComponent("wrong-tlc-run")
     let checkOutput = check.run(
-      compilation: try fixtureCompilation(),
+      swiftRun: { try fixtureRun() },
       tlcRequest: request,
       outputDirectory: output
     )
@@ -255,7 +276,7 @@ struct FiniteGraphCheckTests {
     let checkOutput = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(executor: FixtureTLCExecutor(stream: stream))
     ).run(
-      compilation: try fixtureCompilation(action: "Next"),
+      swiftRun: { try fixtureRun(action: "Next") },
       tlcRequest: request,
       outputDirectory: output
     )
@@ -280,7 +301,7 @@ struct FiniteGraphCheckTests {
       tlcProcess: TLCProcessAdapter(
         executor: FixtureTLCExecutor(stream: try graphStream(for: request.finiteGraphCase, runID: request.runID))
     )).run(
-      compilation: try fixtureCompilation(action: "Next"),
+      swiftRun: { try fixtureRun(action: "Next") },
       tlcRequest: request,
       outputDirectory: output
     )
@@ -316,7 +337,7 @@ extension FiniteGraphCheckTests {
       )
     )
     let checkOutput = check.run(
-      compilation: try fixtureCompilation(),
+      swiftRun: { try fixtureRun() },
       tlcRequest: request,
       outputDirectory: output
     )
@@ -349,7 +370,7 @@ extension FiniteGraphCheckTests {
         )
       )
     ).run(
-      compilation: try fixtureCompilation(),
+      swiftRun: { try fixtureRun() },
       tlcRequest: request,
       outputDirectory: output
     )
@@ -372,7 +393,7 @@ extension FiniteGraphCheckTests {
     try fileManager.createDirectory(at: output, withIntermediateDirectories: true)
     try Data("keep".utf8).write(to: output.appendingPathComponent("existing.txt"))
     let checkOutput = FiniteGraphCheck().run(
-      compilation: try fixtureCompilation(),
+      swiftRun: { try fixtureRun() },
       tlcRequest: request,
       outputDirectory: output
     )
@@ -384,12 +405,13 @@ extension FiniteGraphCheckTests {
 }
 
 extension FiniteGraphCheckTests {
-  private func fixtureCompilation(action: String = "SwiftNext") throws -> CompiledSpecification {
-    let value = Var<Int>("x")
-    return try TLASpec("Fixture") {
-      Variable(value, 1)
-      Action(action) { value.becomes(2).when(value == 1) }
-    }.compile()
+  private func fixtureRun(action: String = "SwiftNext") throws -> CompletedGraphRun {
+    let first = CanonicalState(bindings: ["x": .integer(1)])
+    let second = CanonicalState(bindings: ["x": .integer(2)])
+    return try CompletedGraphRun(
+      graph: CanonicalGraph(initialStates: [first], states: [first, second],
+        edges: [CanonicalEdge(source: first.key, action: action, target: second.key)]),
+      observableActions: [action], outcome: .exhaustiveSuccess)
   }
   private func temporaryRequest(in root: URL) throws -> TLCProcessRequest {
     let module = root.appendingPathComponent("Fixture.tla")

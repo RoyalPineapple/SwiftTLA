@@ -9,6 +9,43 @@ package enum SwiftGraphExporterError: Error, Equatable, Sendable {
 package struct SwiftGraphExporter: Sendable {
   package init() {}
 
+  package func export<Machine: StateMachine>(
+    _ native: ReachabilityGraph<Machine>, for finiteGraphCase: FiniteGraphCase? = nil
+  ) throws -> CompletedGraphRun {
+    let renderedNames = Dictionary(uniqueKeysWithValues: (finiteGraphCase?.renderedActions ?? []).map {
+      ($0.sourceInvocationName, $0.renderedName)
+    })
+    func actionName(_ action: Machine.Action) throws -> String {
+      let invocation = try native.formalCall(for: action).description
+      return renderedNames[invocation] ?? invocation
+    }
+    let states = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
+      ($0, try CanonicalState(native.formalProjection(of: $0)))
+    })
+    let graph = try CanonicalGraph(native, states: states, renderedActionNames: renderedNames)
+    let outcome: GraphRunOutcome
+    var trace: GraphTrace?
+    if let failure = native.safetyViolations.sorted(by: { states[$0.key]!.key < states[$1.key]!.key }).first,
+       let violation = failure.value.first {
+      outcome = switch violation {
+      case .invariant(let name): .invariantViolation(name)
+      case .deadlock: .deadlock(states[failure.key]!.key)
+      }
+      trace = GraphTrace(id: "native-safety-trace", steps: try native.trace(to: failure.key).map {
+        GraphTraceStep(state: states[$0.state]!.key,
+          action: try $0.action.map(actionName) ?? "Init")
+      })
+    } else if let failure = native.temporalResults.sorted(by: { $0.key < $1.key }).first(where: { $0.value.status != .satisfied }) {
+      outcome = failure.value.status == .violated
+        ? .temporalViolation(property: failure.key, reason: failure.value.reason)
+        : .incomplete(reason: "\(failure.key): \(failure.value.reason.rawValue)")
+    } else {
+      outcome = .exhaustiveSuccess
+    }
+    return try CompletedGraphRun(graph: graph, observableActions: Set(graph.edgeOccurrences.keys.map(\.action)),
+      outcome: outcome, trace: trace)
+  }
+
   package func export(
     _ exploration: FiniteExploration,
     for finiteGraphCase: FiniteGraphCase

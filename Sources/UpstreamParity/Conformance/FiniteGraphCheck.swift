@@ -30,19 +30,16 @@ package struct FiniteGraphCheckOutput: Sendable {
 }
 
 package struct FiniteGraphCheck: Sendable {
-  private let swiftExporter: SwiftGraphExporter
   private let tlcProcess: TLCProcessAdapter
 
   package init(
-    swiftExporter: SwiftGraphExporter = SwiftGraphExporter(),
     tlcProcess: TLCProcessAdapter = TLCProcessAdapter()
   ) {
-    self.swiftExporter = swiftExporter
     self.tlcProcess = tlcProcess
   }
 
   package func run(
-    compilation: CompiledSpecification,
+    swiftRun: () throws -> CompletedGraphRun,
     tlcRequest: TLCProcessRequest,
     outputDirectory: URL
   ) -> FiniteGraphCheckOutput {
@@ -82,11 +79,7 @@ package struct FiniteGraphCheck: Sendable {
       staging = directory
 
       phase = .swiftExport
-      let exploration = try ModelChecker(
-        compilation: compilation,
-        configuration: finiteGraphCase.exploration
-      ).explore()
-      let swiftRun = try swiftExporter.export(exploration, for: finiteGraphCase)
+      let swiftRun = try swiftRun()
       try CompletedGraphRunRecords.write(
         swiftRun,
         to: directory.appendingPathComponent("swift-graph.jsonl")

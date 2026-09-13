@@ -116,7 +116,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         }
         let preparedCases = try selected.map { declaration in
             let compilation = try declaration.sourceModel.spec.compile()
-            return (declaration, compilation, try compilation.render().actions)
+            return (declaration, try compilation.render().actions)
         }
         let toolRoot = try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", environment)
         let inputRoot = try requiredEnvironment("FINITE_GRAPH_INPUT_ROOT", environment)
@@ -172,7 +172,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false)
         }
         var exitCode: Int32 = FiniteGraphExitCode.exact.rawValue
-        for (declaration, compilation, renderedActions) in preparedCases {
+        for (declaration, renderedActions) in preparedCases {
             let caseOutput = selected.count == 1
                 ? output
                 : output.appendingPathComponent(declaration.id, isDirectory: true)
@@ -213,7 +213,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 referenceArtifacts: referenceArtifacts
             )
             let check = FiniteGraphCheck().run(
-                compilation: compilation,
+                swiftRun: { try declaration.sourceModel.nativeGraph(for: finiteGraphCase) },
                 tlcRequest: request,
                 outputDirectory: caseOutput
             )

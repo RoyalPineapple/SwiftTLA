@@ -241,7 +241,8 @@ package struct CanonicalGraph: Equatable, Sendable {
     }
 
     package init<Machine: StateMachine>(
-        _ native: ReachabilityGraph<Machine>, states: [Machine.Snapshot: CanonicalState]
+        _ native: ReachabilityGraph<Machine>, states: [Machine.Snapshot: CanonicalState],
+        renderedActionNames: [String: String] = [:]
     ) throws {
         guard Set(states.keys) == Set(native.transitions.keys) else {
             throw CanonicalGraphError.missingNativeSnapshot
@@ -253,7 +254,8 @@ package struct CanonicalGraph: Equatable, Sendable {
         var actionNames: [Machine.Action: String] = [:]
         func actionName(_ action: Machine.Action) throws -> String {
             if let name = actionNames[action] { return name }
-            let name = try native.formalCall(for: action).description
+            let invocation = try native.formalCall(for: action).description
+            let name = renderedActionNames[invocation] ?? invocation
             actionNames[action] = name
             return name
         }

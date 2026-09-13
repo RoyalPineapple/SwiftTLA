@@ -313,6 +313,22 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case tlcmcGraph1 = "tlcmc-graph-1"
     case nQueensFour = "n-queens-four"
 
+    package func nativeGraph(for finiteGraphCase: FiniteGraphCase) throws -> CompletedGraphRun {
+        func explore<Machine: StateMachine>(_ initial: [Machine]) throws -> CompletedGraphRun {
+            try SwiftGraphExporter().export(ReachabilityGraph(initialMachines: initial,
+                maximumStates: finiteGraphCase.exploration.maximumStateLimit), for: finiteGraphCase)
+        }
+        switch self {
+        case .channel: return try explore(ChannelModel.initialMachines())
+        case .asynchInterface: return try explore(AsynchInterfaceModel.initialMachines())
+        case .hourClock: return try explore(HourClockModel.initialMachines())
+        case .dieHardTypeOK: return try explore(DieHardModel.initialMachines())
+        case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
+        case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
+        case .nQueensFour: return try explore(NQueensModel.initialMachines())
+        }
+    }
+
     package var spec: TLASpec {
         switch self {
         case .channel: ChannelModel.spec
