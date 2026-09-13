@@ -15,25 +15,34 @@ struct TemporalSymmetryCheckTests {
       .init(source: one.key, action: "C", target: zero.key),
       .init(source: two.key, action: "Stay", target: two.key)
     ])
-    for temporalCase in try registeredManifest().temporalCases {
-      let native = try temporalConformanceRun(configuration: temporalCase.configuration,
-        maximumStates: temporalCase.exploration.maximumStateLimit)
-      let expectsProgress = temporalCase.configuration.property == .leavesZero
-        && temporalCase.configuration.fairness != .none
-      if expectsProgress {
-        #expect(native.result == .satisfied)
-      } else if case .violated(let lasso) = native.result {
-        let trace = try #require(native.graph.trace)
-        let cycleStart = try #require(trace.cycleStartIndex)
-        let stateIDs = trace.steps.map { $0.state.canonicalEncoding }
-        #expect(lasso.prefixStateIDs == Array(stateIDs[...cycleStart]))
-        #expect(lasso.cycleStateIDs == Array(stateIDs[cycleStart...]))
-      } else {
-        Issue.record("Expected a native counterexample for \(temporalCase.id)")
+    let cases = try registeredManifest().temporalCases
+    for fairness in [TemporalFairnessMode.none, .weak, .strong] {
+      let model = try temporalConformanceRun(fairness: fairness, maximumStates: 10)
+      #expect(Set(model.properties.keys) == ["AlwaysP", "EventuallyP", "AlwaysEventuallyP",
+        "EventuallyAlwaysP", "LeadsToPQ", "LeavesZero"])
+      for check in model.properties.values {
+        #expect(check.graph.isComplete)
+        #expect(check.graph.graph == expected)
+        #expect(check.result != .unavailable)
       }
-      #expect(native.graph.graph == expected)
+      for temporalCase in cases where temporalCase.configuration.fairness == fairness {
+        let native = try #require(model.properties[temporalCase.configuration.property.renderedName])
+        let expectsProgress = temporalCase.configuration.property == .leavesZero
+          && temporalCase.configuration.fairness != .none
+        if expectsProgress {
+          #expect(native.result == .satisfied)
+        } else if case .violated(let lasso) = native.result {
+          let trace = try #require(native.graph.trace)
+          let cycleStart = try #require(trace.cycleStartIndex)
+          let stateIDs = trace.steps.map { $0.state.canonicalEncoding }
+          #expect(lasso.prefixStateIDs == Array(stateIDs[...cycleStart]))
+          #expect(lasso.cycleStateIDs == Array(stateIDs[cycleStart...]))
+        } else {
+          Issue.record("Expected a native counterexample for \(temporalCase.id)")
+        }
+      }
       #expect(throws: ExplorationError.stateLimitExceeded(2)) {
-        try temporalConformanceRun(configuration: temporalCase.configuration, maximumStates: 2)
+        try temporalConformanceRun(fairness: fairness, maximumStates: 2)
       }
     }
   }

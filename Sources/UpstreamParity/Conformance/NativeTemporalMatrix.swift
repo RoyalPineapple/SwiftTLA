@@ -64,60 +64,67 @@ private struct StronglyFairTemporalMatrix {
   }
 }
 
+package struct TemporalModelRun: Sendable {
+  package let rendered: RenderedSpecification
+  package let properties: [String: (graph: GraphRun, result: TemporalPropertyResult)]
+}
+
 package func temporalConformanceRun(
-  configuration: TemporalCaseConfiguration, maximumStates: Int
-) throws -> (graph: GraphRun, result: TemporalPropertyResult, rendered: RenderedSpecification) {
-  switch configuration.fairness {
+  fairness: TemporalFairnessMode, maximumStates: Int
+) throws -> TemporalModelRun {
+  switch fairness {
   case .none:
     try exportTemporalRun(UnfairTemporalMatrix.initialMachines(),
       rendered: UnfairTemporalMatrix.spec.compile().render(),
-      configuration: configuration, maximumStates: maximumStates)
+      maximumStates: maximumStates)
   case .weak:
     try exportTemporalRun(WeaklyFairTemporalMatrix.initialMachines(),
       rendered: WeaklyFairTemporalMatrix.spec.compile().render(),
-      configuration: configuration, maximumStates: maximumStates)
+      maximumStates: maximumStates)
   case .strong:
     try exportTemporalRun(StronglyFairTemporalMatrix.initialMachines(),
       rendered: StronglyFairTemporalMatrix.spec.compile().render(),
-      configuration: configuration, maximumStates: maximumStates)
+      maximumStates: maximumStates)
   }
 }
 
 private func exportTemporalRun<Machine: StateMachine>(
-  _ initialMachines: [Machine], rendered: RenderedSpecification,
-  configuration: TemporalCaseConfiguration, maximumStates: Int
-) throws -> (graph: GraphRun, result: TemporalPropertyResult, rendered: RenderedSpecification) {
+  _ initialMachines: [Machine], rendered: RenderedSpecification, maximumStates: Int
+) throws -> TemporalModelRun {
   let native = try ReachabilityGraph(initialMachines: initialMachines, maximumStates: maximumStates)
-  let property = configuration.property.renderedName
-  guard native.safetyViolations.isEmpty, let analysis = native.temporalResults[property] else {
-    throw EvidenceFormatError.invalidField(record: property, field: "native temporal checking")
+  guard native.safetyViolations.isEmpty else {
+    throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "native temporal checking")
   }
   let states = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
     ($0, try CanonicalState(native.formalProjection(of: $0)))
   })
   let canonical = try CanonicalGraph(native, states: states)
-  var trace: GraphTrace?
-  let result: TemporalPropertyResult
-  switch analysis.status {
-  case .satisfied: result = .satisfied
-  case .unavailable: result = .unavailable
-  case .violated:
-    guard let witness = analysis.witness else {
-      throw EvidenceFormatError.invalidField(record: property, field: "native temporal witness")
+  let observableActions = Set(canonical.edges.map(\.action))
+  let properties = try Dictionary(uniqueKeysWithValues: native.temporalResults.map { property, analysis in
+    var trace: GraphTrace?
+    let result: TemporalPropertyResult
+    switch analysis.status {
+    case .satisfied: result = .satisfied
+    case .unavailable: result = .unavailable
+    case .violated:
+      guard let witness = analysis.witness else {
+        throw EvidenceFormatError.invalidField(record: property, field: "native temporal witness")
+      }
+      let lasso = try GraphTrace(id: "native-lasso", witness: witness, stateKey: { snapshot in
+        guard let state = states[snapshot] else { throw CanonicalGraphError.missingNativeSnapshot }
+        return state.key
+      }, actionName: { try native.formalCall(for: $0).description })
+      let cycleStart = witness.prefix.count - 1
+      let stateIDs = lasso.steps.map { $0.state.canonicalEncoding }
+      result = .violated(try TemporalLassoWitness(
+        prefixStateIDs: Array(stateIDs[...cycleStart]),
+        cycleStateIDs: Array(stateIDs[cycleStart...])))
+      trace = lasso
     }
-    let lasso = try GraphTrace(id: "native-lasso", witness: witness, stateKey: { snapshot in
-      guard let state = states[snapshot] else { throw CanonicalGraphError.missingNativeSnapshot }
-      return state.key
-    }, actionName: { try native.formalCall(for: $0).description })
-    let cycleStart = witness.prefix.count - 1
-    let stateIDs = lasso.steps.map { $0.state.canonicalEncoding }
-    result = .violated(try TemporalLassoWitness(
-      prefixStateIDs: Array(stateIDs[...cycleStart]),
-      cycleStateIDs: Array(stateIDs[cycleStart...])))
-    trace = lasso
-  }
-  // Property results are reported separately; the run owns and validates their trace.
-  let graph = try GraphRun(isComplete: true, graph: canonical,
-    observableActions: Set(canonical.edges.map(\.action)), outcome: .noViolation, trace: trace)
-  return (graph, result, rendered)
+    // Property results are reported separately; the run owns and validates their trace.
+    let graph = try GraphRun(isComplete: true, graph: canonical,
+      observableActions: observableActions, outcome: .noViolation, trace: trace)
+    return (property, (graph: graph, result: result))
+  })
+  return TemporalModelRun(rendered: rendered, properties: properties)
 }
