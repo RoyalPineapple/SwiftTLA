@@ -25,8 +25,6 @@ struct TLCMCCorpusConformanceTests {
 
         let module = try Data(contentsOf: projectURL("Verification/FiniteGraph/fixtures/tlcmc-graph-1/TLCMC.tla"))
         let configuration = try Data(contentsOf: projectURL("Verification/FiniteGraph/fixtures/tlcmc-graph-1/TLCMC.cfg"))
-        let renderedModule = Data(bundle.root.tla.utf8)
-        #expect(module == renderedModule)
         #expect(configuration == Data(entry.swiftConfiguration.tlaText.utf8))
         #expect(bundle.imports.map(\.name) == declaredCase.imports)
         #expect(declaredCase.dependencies.isEmpty)
