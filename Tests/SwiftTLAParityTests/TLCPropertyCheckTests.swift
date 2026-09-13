@@ -57,6 +57,9 @@ struct TLCPropertyCheckTests {
       .capture(input)
 
     #expect(comparison.status == .exact)
+    let process = try #require(JSONSerialization.jsonObject(with: Data(contentsOf:
+      fixture.output.appendingPathComponent("tlc-process.json"))) as? [String: Any])
+    #expect(process["configuration"] as? String == fixture.request.bundle.cfg)
     #expect(!FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("source-input").path))
     #expect(FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("graph-events.jsonl").path))
     #expect(!FileManager.default.fileExists(atPath: fixture.output.appendingPathComponent("swift-graph.jsonl").path))
@@ -397,6 +400,7 @@ struct TLCPropertyCheckTests {
       with: Data(contentsOf: fixture.output.appendingPathComponent("tlc-process.json"))) as? [String: Any]
     let invocation = resultJSON?["invocation"] as? [String: Any]
     #expect(invocation?["executionError"] as? String != nil)
+    #expect(resultJSON?["configuration"] as? String == fixture.request.bundle.cfg)
   }
 
   @Test("TLC property checker rejects a trace path that collides with generated evidence")

@@ -382,6 +382,7 @@ package struct TLCProcessAdapter: Sendable {
       "runID": request.runID.uuidString.lowercased(),
       "timeout": request.timeout,
       "inputs": bundleInputJSON(request.bundle),
+      "configuration": request.bundle.cfg,
       "toolPin": pinJSON(request.finiteGraphCase.pin),
       "invocation": invocationJSON(request: request, process: process, failure: failure)
     ]
