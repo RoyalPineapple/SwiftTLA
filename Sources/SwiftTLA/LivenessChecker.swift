@@ -38,7 +38,6 @@ public struct TemporalAnalysis<State: Hashable & Sendable, Action: Equatable & S
     public let status: TemporalAnalysisStatus
     public let reason: TemporalDiagnosticReason
     public let witness: FairLassoWitness<State, Action>?
-    public let propertyValues: [State: Bool]
     public let enabledActions: [String: [State: Bool]]
     public let fairComponents: [Set<State>]
     public let rejectedComponents: [Set<State>]
@@ -47,7 +46,6 @@ public struct TemporalAnalysis<State: Hashable & Sendable, Action: Equatable & S
         status: TemporalAnalysisStatus,
         reason: TemporalDiagnosticReason,
         witness: FairLassoWitness<State, Action>? = nil,
-        propertyValues: [State: Bool] = [:],
         enabledActions: [String: [State: Bool]] = [:],
         fairComponents: [Set<State>] = [],
         rejectedComponents: [Set<State>] = []
@@ -55,7 +53,6 @@ public struct TemporalAnalysis<State: Hashable & Sendable, Action: Equatable & S
         self.status = status
         self.reason = reason
         self.witness = witness
-        self.propertyValues = propertyValues
         self.enabledActions = enabledActions
         self.fairComponents = fairComponents
         self.rejectedComponents = rejectedComponents
@@ -74,7 +71,6 @@ public struct TemporalAnalysis<State: Hashable & Sendable, Action: Equatable & S
                 try .init(prefix: trace.prefix.map(state), cycle: trace.cycle.map(state),
                     prefixActions: trace.prefixActions.map(action), cycleActions: trace.cycleActions.map(action))
             },
-            propertyValues: values(propertyValues),
             enabledActions: enabledActions.mapValues(values),
             fairComponents: fairComponents.map { try Set($0.map(state)) },
             rejectedComponents: rejectedComponents.map { try Set($0.map(state)) }
@@ -123,12 +119,9 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
             predicate = value
         case .leadsTo(_, let target): predicate = target
         }
-        let values = try Dictionary(uniqueKeysWithValues: states.map { state in
-            (state, try predicate(state))
-        })
+        let negative = try states.filter { try !predicate($0) }
         let enabled = enabledness(for: fairness)
         let allStates = states
-        let negative = Set(values.compactMap { $0.value ? nil : $0.key })
         let search: LassoSearch
 
         switch property {
@@ -161,7 +154,6 @@ package struct LivenessChecker<Action: Hashable & Sendable, Scope: Hashable & Se
             status: witness == nil ? .satisfied : .violated,
             reason: witness == nil ? .satisfied : .violatingFairLasso,
             witness: witness,
-            propertyValues: values,
             enabledActions: try renderedEnabledness(enabled, renderScope: renderScope),
             fairComponents: components.fair,
             rejectedComponents: components.rejected

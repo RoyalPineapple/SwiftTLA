@@ -11,8 +11,6 @@ struct NativeTemporalCheckingTests {
         let result = try #require(results["ReachesTwo"])
         #expect(result.status == .violated)
         #expect(result.reason == .violatingFairLasso)
-        #expect(Set(result.propertyValues.keys) == Set(graph.transitions.keys))
-        #expect(result.propertyValues.values.allSatisfy { !$0 })
         let trace = try #require(result.witness)
         #expect(graph.initialStates.contains(try #require(trace.prefix.first)))
         #expect(trace.cycle.first == trace.cycle.last)
