@@ -24,7 +24,28 @@ jobs:
         run: bash Tests/Fixtures/LocalValidation/assert_lock.sh
 
       - name: Run complete Swift test suite
-        run: swift test -Xswiftc -warnings-as-errors -j 1 --no-parallel
+        run: |
+          mkdir -p .build/test-diagnostics
+          git rev-parse HEAD > .build/test-diagnostics/source-sha.txt
+          (
+            while sleep 300; do
+              for pid in $(pgrep -x swiftpm-testing || true); do
+                sample "$pid" 1 -file ".build/test-diagnostics/$(date +%s)-$pid.txt" || true
+              done
+            done
+          ) &
+          sampler=$!
+          trap 'kill "$sampler" 2>/dev/null || true' EXIT
+          swift test -Xswiftc -warnings-as-errors -j 1 --no-parallel
+
+      - name: Retain Swift test stack samples
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: swift-test-diagnostics-${{ github.sha }}
+          path: .build/test-diagnostics
+          if-no-files-found: error
+          retention-days: 14
 
   apple-platform-examples:
     runs-on: macos-15
