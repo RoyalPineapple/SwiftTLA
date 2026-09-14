@@ -899,14 +899,18 @@ extension ParserSession {
                     return nil
                 }
                 let remaining = CodeBlockItemListSyntax(Array(statements.dropFirst(index + 1)))
-                let bodyScope = scope.extending(binding: binding.name, to: binding.value)
+                let saved = generatedBinderName(line: UInt(variable.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
+                let shape = variable.bindings.first?.initializer.flatMap {
+                    typedFacadeValueType($0.value, scope: scope)
+                }
+                let bodyScope = scope.extending(binding: binding.name, to: .variable(saved), shape: shape)
                 guard let body = parseAlgorithmStatements(
                     remaining,
                     processParameter: processParameter,
                     macros: macros,
                     scope: bodyScope
                 ) else { return nil }
-                return parsedStatements + body
+                return parsedStatements + [.letBinding(variable: saved, value: binding.value, body)]
             }
             guard case .expr(let expression) = statement.item
             else {
@@ -967,8 +971,8 @@ extension ParserSession {
         return parsedStatements
     }
 
-    /// Parses a Swift `let` inside a formal block as a lexical formal alias
-    /// whose initializer is represented by the formal parser.
+    /// Decodes a lexical value. Algorithm declarations use it as an alias;
+    /// step statements bind its value at that position in the transition.
     private func parseFormalLet(
         _ declaration: VariableDeclSyntax,
         scope: TypedFacadeScope

@@ -102,3 +102,30 @@ struct OrderedCallModel {
         }
     }
 }
+
+@TLAModel
+struct SavedStepValueModel {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("SavedStepValue") {
+            Algorithm("SavedStepValue", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 1)
+                let copied = scope.sharedVar("copied", initial: 0)
+                Do(Step.advance) {
+                    Assign(count, to: 2)
+                    let saved: Expr<Int> = count.expr
+                    Assign(count, to: 3)
+                    If(count == 3) {
+                        let saved = saved + 1
+                        Assign(count, to: 4)
+                        Assign(copied, to: saved)
+                    } else: {
+                        Assign(copied, to: -1)
+                    }
+                    Assert(saved == 2)
+                }
+            })
+        }
+    }
+}

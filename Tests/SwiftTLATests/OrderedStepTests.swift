@@ -1,5 +1,5 @@
 import Testing
-import SwiftTLA
+@testable import SwiftTLA
 
 @Suite struct OrderedStepTests {
     @Test("Later reads observe earlier writes in one atomic transition")
@@ -50,6 +50,24 @@ import SwiftTLA
         #expect(graph.safetyViolations.isEmpty)
         #expect(graph.transitions.keys.contains { $0.state.output == 7 })
         #expect(graph.transitions.keys.allSatisfy { $0.state.output == 0 || $0.state.output == 7 })
+    }
+
+    @Test("Ordinary let captures at its declaration and preserves shadowed values")
+    func savedValuesAreStable() throws {
+        var machine = try SavedStepValueModel.makeMachine()
+        let result = try machine.send(.advance)
+        #expect(result.after.count == 4)
+        #expect(result.after.copied == 3)
+        let graph = try ReachabilityGraph(
+            initialMachines: SavedStepValueModel.initialMachines(), maximumStates: 4)
+        #expect(graph.safetyViolations.isEmpty)
+
+        let compilation = try SavedStepValueModel.spec.compile()
+        let initial = try firstCompiledState(in: compilation)
+        let next = try #require(try compiledSuccessors(
+            named: "advance", arguments: [], in: compilation, from: initial).first)
+        #expect(try renderedValue(named: "count", in: next, compilation: compilation) == .int(4))
+        #expect(try renderedValue(named: "copied", in: next, compilation: compilation) == .int(3))
     }
 
 }

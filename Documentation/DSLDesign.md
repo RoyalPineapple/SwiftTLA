@@ -169,7 +169,18 @@ result. Intermediate compiler values are not separately observable model states.
 contract. Existing swaps and other pre-state-dependent assignments must capture
 the original values explicitly before writing. Audit and migrate every affected
 caller in the same implementation; do not retain an alternative legacy `Do` mode.
-The exact spelling for a saved local value remains part of the binding API design.
+Inside a `#spec` step, ordinary `let` saves a value at that position. Later
+assignments do not change it, and nested scopes may shadow the saved name.
+Explicit type annotations are checked by Swift. `Let(value) { saved in ... }`
+uses the same saved-value semantics.
+
+```swift
+Do(Step.swap) {
+    let originalLeft = left
+    Assign(left, to: right)
+    Assign(right, to: originalLeft)
+}
+```
 
 Preserve the distinction between a blocked step, deadlock, normal termination,
 and stuttering. An algorithm that loops back to a guarded step can deadlock when

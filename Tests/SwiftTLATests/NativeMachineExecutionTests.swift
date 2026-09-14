@@ -48,10 +48,9 @@ private struct SavedValueExecutionSwap {
                 let left = scope.sharedVar("left", initial: 1)
                 let right = scope.sharedVar("right", initial: 2)
                 While(Step.swap, true) {
-                    Let(left) { originalLeft in
-                        Assign(left, to: right)
-                        Assign(right, to: originalLeft)
-                    }
+                    let originalLeft = left
+                    Assign(left, to: right)
+                    Assign(right, to: originalLeft)
                 }
             })
         }
