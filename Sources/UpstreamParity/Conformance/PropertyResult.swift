@@ -1,3 +1,15 @@
+package enum PropertyExpectation: String, Codable, Sendable {
+  case satisfied
+  case violated
+
+  package func accepts(_ result: PropertyResult) -> Bool {
+    switch (self, result) {
+    case (.satisfied, .satisfied), (.violated, .violated): true
+    default: false
+    }
+  }
+}
+
 package enum PropertyResult: Equatable, Codable, Sendable {
   case satisfied
   case violated(GraphTrace)

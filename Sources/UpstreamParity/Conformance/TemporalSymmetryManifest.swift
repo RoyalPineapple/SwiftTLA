@@ -23,27 +23,31 @@ package struct TemporalCase: Equatable, Codable, Sendable {
   package let id: String
   package let fairness: TemporalFairnessMode
   package let exploration: FiniteExplorationConfiguration
+  package let expectedProperties: [String: PropertyExpectation]
 
   package init(
     id: String,
     fairness: TemporalFairnessMode,
-    exploration: FiniteExplorationConfiguration
+    exploration: FiniteExplorationConfiguration,
+    expectedProperties: [String: PropertyExpectation]
   ) throws {
     self.id = id
     self.fairness = fairness
     self.exploration = exploration
+    self.expectedProperties = expectedProperties
     try validate()
   }
 
   private func validate() throws {
-    guard id.isEmpty == false,
+    guard id.isEmpty == false, !expectedProperties.isEmpty,
+          expectedProperties.keys.allSatisfy({ !$0.isEmpty }),
           case .disabled = exploration.symmetryReduction else {
       throw EvidenceFormatError.invalidField(record: id, field: "temporal case")
     }
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case id, fairness, exploration
+    case id, fairness, exploration, expectedProperties
   }
 
   package init(from decoder: Decoder) throws {
@@ -51,7 +55,8 @@ package struct TemporalCase: Equatable, Codable, Sendable {
     try self.init(
       id: try container.decode(String.self, forKey: .id),
       fairness: try container.decode(TemporalFairnessMode.self, forKey: .fairness),
-      exploration: try container.decode(FiniteExplorationConfiguration.self, forKey: .exploration))
+      exploration: try container.decode(FiniteExplorationConfiguration.self, forKey: .exploration),
+      expectedProperties: try container.decode([String: PropertyExpectation].self, forKey: .expectedProperties))
   }
 }
 

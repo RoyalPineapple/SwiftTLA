@@ -4,6 +4,18 @@ import Testing
 import UpstreamParity
 
 struct TemporalSymmetryCheckTests {
+  @Test("expected violations require a counterexample result, never an unavailable check")
+  func expectedVerdictsRejectMissingAndOppositeResults() throws {
+    let model = try temporalConformanceRun(fairness: .none, maximumStates: 10)
+    let violation = try #require(model.checks.properties["AlwaysP"])
+    #expect(PropertyExpectation.violated.accepts(violation))
+    #expect(!PropertyExpectation.satisfied.accepts(violation))
+    #expect(PropertyExpectation.satisfied.accepts(.satisfied))
+    #expect(!PropertyExpectation.violated.accepts(.satisfied))
+    #expect(!PropertyExpectation.satisfied.accepts(.unavailable))
+    #expect(!PropertyExpectation.violated.accepts(.unavailable))
+  }
+
   @Test("Temporal cases preserve bounded fairness outcomes")
   func temporalCasesPreserveFairnessOutcomes() throws {
     let zero = CanonicalState(bindings: ["x": .integer(0)])
@@ -18,8 +30,7 @@ struct TemporalSymmetryCheckTests {
     let cases = try registeredManifest().temporalCases
     #expect(cases.map(\.fairness) == [.none, .weak, .strong])
     for temporalCase in cases {
-      let fairness = temporalCase.fairness
-      let model = try temporalConformanceRun(fairness: fairness, maximumStates: 10)
+      let model = try temporalConformanceRun(fairness: temporalCase.fairness, maximumStates: 10)
       #expect(Set(model.checks.properties.keys) == ["AlwaysP", "EventuallyP", "AlwaysEventuallyP",
         "EventuallyAlwaysP", "LeadsToPQ", "LeavesZero"])
       #expect(model.graph.isComplete)
@@ -27,17 +38,14 @@ struct TemporalSymmetryCheckTests {
       #expect(model.graph.trace == nil)
       #expect(model.checks.properties.values.allSatisfy { $0 != .unavailable })
       for (property, native) in model.checks.properties {
-        let expectsProgress = property == "LeavesZero" && fairness != .none
-        if expectsProgress {
-          #expect(native == .satisfied)
-        } else if case .violated(let trace) = native {
+        let expectation = try #require(temporalCase.expectedProperties[property])
+        #expect(expectation.accepts(native))
+        if case .violated(let trace) = native {
           try trace.validate(in: model.graph.graph)
-        } else {
-          Issue.record("Expected a native counterexample for \(temporalCase.id)/\(property)")
         }
       }
       #expect(throws: ExplorationError.stateLimitExceeded(2)) {
-        try temporalConformanceRun(fairness: fairness, maximumStates: 2)
+        try temporalConformanceRun(fairness: temporalCase.fairness, maximumStates: 2)
       }
     }
   }
@@ -53,7 +61,8 @@ struct TemporalSymmetryCheckTests {
         exploration: FiniteExplorationConfiguration(
           maximumStateLimit: temporalCase.exploration.maximumStateLimit,
           symmetryReduction: .enabled(maximumPermutationCount: 2)
-        )
+        ),
+        expectedProperties: temporalCase.expectedProperties
       )
     }
   }
@@ -107,7 +116,8 @@ struct TemporalSymmetryCheckTests {
     let temporalCase = try TemporalCase(
       id: "temporal",
       fairness: .none,
-      exploration: exploration
+      exploration: exploration,
+      expectedProperties: try #require(registeredManifest().temporalCases.first).expectedProperties
     )
     let symmetryCase = try SymmetryCase(
       id: "symmetry",

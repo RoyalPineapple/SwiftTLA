@@ -56,6 +56,10 @@ package struct TemporalSymmetryCheck: Sendable {
       do {
         native = try temporalConformanceRun(
           fairness: temporalCase.fairness, maximumStates: temporalCase.exploration.maximumStateLimit)
+        guard Set(native.checks.properties.keys) == Set(temporalCase.expectedProperties.keys),
+              native.checks.deadlock == nil else {
+          throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "expected property coverage")
+        }
       } catch {
         return [try retainOutcome(caseID: temporalCase.id, outcome: .unavailable,
           diagnostic: "native-temporal-validation-unavailable: \(error)", in: modelDirectory, beneath: output)]
@@ -69,15 +73,23 @@ package struct TemporalSymmetryCheck: Sendable {
       }
       let validation = try TLCPropertyCheck().captureAll(native, completeGraph: shared, source: .generated, in: modelDirectory)
       return try validation.checks.map { check, result in
-        let status = (try? result.get().status) ?? .unavailable
+        let comparison = try? result.get()
+        let status = comparison?.status ?? .unavailable
+        guard case .property(let name) = check, let expected = temporalCase.expectedProperties[name] else {
+          throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "unexpected check")
+        }
+        let matchesExpectation = comparison.map {
+          expected.accepts($0.swiftResult) && expected.accepts($0.tlcResult)
+        } ?? false
         let outcome: TemporalSymmetryOutcome = switch status {
-        case .exact: .exact
+        case .exact: matchesExpectation ? .exact : .difference
         case .propertyOutcomeDifference, .graphDifference: .difference
         case .unavailable: .unavailable
         }
         let caseID = "\(temporalCase.id)-\(check.artifactPath.replacingOccurrences(of: "/", with: "-"))"
         return try retainOutcome(caseID: caseID, outcome: outcome,
-          diagnostic: status.rawValue, in: modelDirectory.appendingPathComponent(check.artifactPath), beneath: output)
+          diagnostic: "\(status.rawValue); expected \(expected.rawValue); expectation matched: \(matchesExpectation)",
+          in: modelDirectory.appendingPathComponent(check.artifactPath), beneath: output)
       }
     }
 

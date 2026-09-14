@@ -7,6 +7,14 @@
       "exploration": {
         "maximumStateLimit": 10,
         "symmetryReduction": "disabled"
+      },
+      "expectedProperties": {
+        "AlwaysP": "violated",
+        "EventuallyP": "violated",
+        "AlwaysEventuallyP": "violated",
+        "EventuallyAlwaysP": "violated",
+        "LeadsToPQ": "violated",
+        "LeavesZero": "violated"
       }
     },
     {
@@ -15,6 +23,14 @@
       "exploration": {
         "maximumStateLimit": 10,
         "symmetryReduction": "disabled"
+      },
+      "expectedProperties": {
+        "AlwaysP": "violated",
+        "EventuallyP": "violated",
+        "AlwaysEventuallyP": "violated",
+        "EventuallyAlwaysP": "violated",
+        "LeadsToPQ": "violated",
+        "LeavesZero": "satisfied"
       }
     },
     {
@@ -23,6 +39,14 @@
       "exploration": {
         "maximumStateLimit": 10,
         "symmetryReduction": "disabled"
+      },
+      "expectedProperties": {
+        "AlwaysP": "violated",
+        "EventuallyP": "violated",
+        "AlwaysEventuallyP": "violated",
+        "EventuallyAlwaysP": "violated",
+        "LeadsToPQ": "violated",
+        "LeavesZero": "satisfied"
       }
     }
   ],
