@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import SwiftTLA
 
@@ -184,15 +185,21 @@ package struct CanonicalEdge: Hashable, Sendable, Comparable {
         "edge:\(source.canonicalEncoding)--\(encodedAction)-->\(target.canonicalEncoding)"
     }
 
-    // Compare the original wire order without copying both state keys into every edge.
-    private var orderingBytes: some Sequence<UInt8> {
-        [source.canonicalEncoding, "--", encodedAction, "-->", target.canonicalEncoding]
-            .lazy.flatMap { $0.utf8 }
+    package static func < (lhs: Self, rhs: Self) -> Bool {
+        let left = lhs.source.canonicalEncoding
+        let right = rhs.source.canonicalEncoding
+        let order = compareUTF8Prefixes(left, right)
+        if order != 0 { return order < 0 }
+        // A prefix key can overlap the wire delimiter; compare the complete
+        // encoding in that unusual case to preserve the exact byte ordering.
+        if left.utf8.count != right.utf8.count {
+            return canonicalBytes(lhs.canonicalEncoding, rhs.canonicalEncoding)
+        }
+        // Actions are hex-encoded. Their delimiter sorts before every hex digit.
+        if lhs.encodedAction != rhs.encodedAction { return lhs.encodedAction < rhs.encodedAction }
+        return canonicalBytes(lhs.target.canonicalEncoding, rhs.target.canonicalEncoding)
     }
 
-    package static func < (lhs: Self, rhs: Self) -> Bool {
-        lhs.orderingBytes.lexicographicallyPrecedes(rhs.orderingBytes)
-    }
 }
 
 package enum CanonicalGraphError: Error, Equatable, Sendable {
@@ -455,7 +462,21 @@ package struct GraphRun: Equatable, Sendable {
 }
 
 func canonicalBytes(_ lhs: String, _ rhs: String) -> Bool {
-    lhs.utf8.lexicographicallyPrecedes(rhs.utf8)
+    let order = compareUTF8Prefixes(lhs, rhs)
+    return order == 0 ? lhs.utf8.count < rhs.utf8.count : order < 0
+}
+
+/// Compare the shared byte extent without decoding Unicode or iterating byte by byte in Swift.
+private func compareUTF8Prefixes(_ lhs: String, _ rhs: String) -> Int32 {
+    var left = lhs
+    var right = rhs
+    return left.withUTF8 { leftBytes in
+        right.withUTF8 { rightBytes in
+            let count = min(leftBytes.count, rightBytes.count)
+            guard count > 0 else { return 0 }
+            return memcmp(leftBytes.baseAddress!, rightBytes.baseAddress!, count)
+        }
+    }
 }
 
 func encodedBytes(_ value: String) -> String {

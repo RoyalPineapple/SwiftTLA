@@ -3,9 +3,22 @@ import Testing
 import UpstreamParity
 
 struct CanonicalGraphTests {
+    @Test("large shared state prefixes retain deterministic edge ordering")
+    func sortsLongStateKeys() {
+        let count = 16_384
+        let prefix = String(repeating: "x", count: 4096)
+        let target = CanonicalStateKey(canonicalEncoding: "target")
+        let edges = (0..<count).map { index in
+            CanonicalEdge(source: .init(canonicalEncoding: prefix + String(count + (index * 4051) % count)),
+                action: "step", target: target)
+        }
+        let ordered = edges.sorted().map { $0.source.canonicalEncoding.suffix(5) }
+        #expect(ordered == (count..<(2 * count)).map { Substring(String($0)) })
+    }
+
     @Test("Edge ordering preserves wire bytes, including prefix keys and Unicode actions")
     func edgeOrderingMatchesEncoding() {
-        let states = ["", "a", "a!", "a-", "a--", "é", "e\u{301}"]
+        let states = ["", "a", "a!", "a-", "a--", "é", "e\u{301}", "\0", "\u{E000}", "😀"]
             .map { CanonicalStateKey(canonicalEncoding: $0) }
         let actions = ["", "a", "a!", "aa", "é", "e\u{301}"]
         let edges = states.flatMap { source in
