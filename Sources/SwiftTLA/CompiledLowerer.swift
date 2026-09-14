@@ -615,7 +615,9 @@ struct CompiledLowerer {
                     }
                 )
             case .return: return .return
-            case .stop: throw invalidAuthoredPlusCalStatement("stop", at: statementPath)
+            case .stop:
+                return .goto(try controlLocation(.init(CompilerControlSymbol.done.rawValue),
+                    owner: owner, at: "\(statementPath).label"))
             case .skip: return .skip
             }
         }

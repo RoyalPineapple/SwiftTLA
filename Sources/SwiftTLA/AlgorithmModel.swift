@@ -80,13 +80,8 @@ package struct AlgorithmModel: Sendable {
         return names
     }
 
-    func plusCalProjection() -> AlgorithmModel {
-        let localRoots: Set<String> = Set(processes.flatMap { process in
-            process.components.compactMap { component in
-                guard case .local(let declaration) = component else { return nil }
-                return declaration.root
-            }
-        })
+    /// Resolves ordered reads and writes before execution and export diverge.
+    func resolvingAtomicSteps() -> AlgorithmModel {
         var usedBindings = authoredIdentifiers
         var nextBinding = 0
 
@@ -98,50 +93,6 @@ package struct AlgorithmModel: Sendable {
                     return candidate
                 }
             }
-        }
-
-        func lowerAnonymousLambdas(_ value: StateExpr) -> StateExpr {
-            StateExpr.renamingRecursiveCalls(
-                in: value,
-                using: { $0 },
-                lowerAnonymousLambdaApplications: true
-            )
-        }
-
-        func expression(_ value: StateExpr) -> StateExpr {
-            let family = localRoots.reduce(value) { projectedExpression, root in
-                projectedExpression.replacingProcessLocalFamily(named: root, with: .variable(root))
-            }
-            return lowerAnonymousLambdas(family.replacingCurrentProcess(with: .variable("self")))
-        }
-
-        func initialization(_ value: VariableInitialization) -> VariableInitialization {
-            switch value {
-            case .value: return value
-            case .expression(let initial): return .expression(expression(initial))
-            case .memberOf(let set): return .memberOf(expression(set))
-            }
-        }
-
-        func state(_ value: AlgorithmStateModel) -> AlgorithmStateModel {
-            .init(
-                root: value.root,
-                initialization: initialization(value.initialization),
-                swiftTypeName: value.swiftTypeName
-            )
-        }
-
-        func statements(_ values: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
-            let projected = values.map { statement in
-                statement.replacingCurrentProcess(with: .variable("self"))
-            }.map { statement in
-                localRoots.reduce(statement) { projectedStatement, root in
-                    projectedStatement.replacingProcessLocalFamily(named: root, with: .variable(root))
-                }
-            }.map { statement in
-                statement.mappingExpressions(lowerAnonymousLambdas)
-            }
-            return schedule(projected)
         }
 
         // Snapshot each write where it occurs, then publish one assignment per
@@ -197,14 +148,84 @@ package struct AlgorithmModel: Sendable {
             case .either(let first, let second):
                 return [.either(continued(first), continued(second))]
             case .stop:
-                return finalWrites + [.goto(.init(name: CompilerControlSymbol.done.rawValue))]
+                return finalWrites + [.stop]
             case .goto, .return:
                 return finalWrites + [statement]
             case .call:
                 return finalWrites + [statement.mappingExpressions(expression)] + suffix
-            case .parallel(let group):
-                return continued(group.map { .set(target: $0.target, value: $0.value) })
+            case .parallel:
+                preconditionFailure("Atomic statements must only be scheduled once")
             }
+        }
+
+        func component(_ value: AlgorithmComponentModel) -> AlgorithmComponentModel {
+            switch value {
+            case .step(let step):
+                return .step(.init(label: step.label, statements: schedule(step.statements),
+                    loopCondition: step.loopCondition))
+            case .process(let process):
+                return .process(.init(typeName: process.typeName, domain: process.domain,
+                    fairness: process.fairness, components: process.components.map(component)))
+            case .procedure(let procedure):
+                return .procedure(.init(name: procedure.name, parameters: procedure.parameters,
+                    components: procedure.components.map(component)))
+            default:
+                return value
+            }
+        }
+        return .init(name: name, sequentialFairness: sequentialFairness,
+            components: components.map(component))
+    }
+
+    func plusCalProjection() -> AlgorithmModel {
+        let localRoots: Set<String> = Set(processes.flatMap { process in
+            process.components.compactMap { component in
+                guard case .local(let declaration) = component else { return nil }
+                return declaration.root
+            }
+        })
+        func lowerAnonymousLambdas(_ value: StateExpr) -> StateExpr {
+            StateExpr.renamingRecursiveCalls(
+                in: value,
+                using: { $0 },
+                lowerAnonymousLambdaApplications: true
+            )
+        }
+
+        func expression(_ value: StateExpr) -> StateExpr {
+            let family = localRoots.reduce(value) { projectedExpression, root in
+                projectedExpression.replacingProcessLocalFamily(named: root, with: .variable(root))
+            }
+            return lowerAnonymousLambdas(family.replacingCurrentProcess(with: .variable("self")))
+        }
+
+        func initialization(_ value: VariableInitialization) -> VariableInitialization {
+            switch value {
+            case .value: return value
+            case .expression(let initial): return .expression(expression(initial))
+            case .memberOf(let set): return .memberOf(expression(set))
+            }
+        }
+
+        func state(_ value: AlgorithmStateModel) -> AlgorithmStateModel {
+            .init(
+                root: value.root,
+                initialization: initialization(value.initialization),
+                swiftTypeName: value.swiftTypeName
+            )
+        }
+
+        func statements(_ values: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
+            let projected = values.map { statement in
+                statement.replacingCurrentProcess(with: .variable("self"))
+            }.map { statement in
+                localRoots.reduce(statement) { projectedStatement, root in
+                    projectedStatement.replacingProcessLocalFamily(named: root, with: .variable(root))
+                }
+            }.map { statement in
+                statement.mappingExpressions(lowerAnonymousLambdas)
+            }
+            return projected
         }
 
         func step(_ value: AlgorithmStepModel) -> AlgorithmStepModel {

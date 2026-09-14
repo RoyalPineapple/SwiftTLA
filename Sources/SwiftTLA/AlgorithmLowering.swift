@@ -755,8 +755,7 @@ enum AlgorithmLowerer {
         }
     }
 
-    /// Resolves ordered source reads into immutable bindings. Only the final
-    /// values become state assignments, so a blocked branch cannot partly commit.
+    /// Lowers scheduled atomic branches, preserving their bindings and final writes.
     private static func lower(
         _ statements: [AlgorithmStatementModel],
         processLocalRoots: Set<String>?,
@@ -766,18 +765,8 @@ enum AlgorithmLowerer {
         control: ControlFlow
     ) -> (action: ActionExpr, assertions: [StateExpr]) {
         typealias Result = (action: ActionExpr, assertions: [StateExpr])
-        var names = statements.algorithmScopeNames.union(processLocalRoots ?? [])
-        var nextBinding = 0
-        func fresh() -> String {
-            while true {
-                let name = "__pcal_value_\(nextBinding)"
-                nextBinding += 1
-                if names.insert(name).inserted { return name }
-            }
-        }
-        func scoped(_ value: StateExpr, _ values: [String: StateExpr]) -> StateExpr {
-            let expression = processLocalRoots.map { rewrite(value, localRoots: $0) } ?? value
-            return StateExpr.substituteVariables(values, in: expression)
+        func scoped(_ value: StateExpr) -> StateExpr {
+            processLocalRoots.map { rewrite(value, localRoots: $0) } ?? value
         }
         func assignments(_ values: [String: StateExpr], excluding: Set<ActionTarget> = []) -> ActionExpr {
             values.sorted { $0.key < $1.key }
@@ -802,55 +791,37 @@ enum AlgorithmLowerer {
                 run((body + rest)[...], values)
             }
             switch statement {
-            case .set(let target, let expression):
-                let value = scoped(expression, values)
-                let updated: StateExpr
-                switch target {
-                case .root(let root) where processLocalRoots?.contains(root) == true:
-                    updated = .except(values[root] ?? .variable(root), .variable(processBinding.rawValue), value)
-                case .root:
-                    updated = value
-                case .function(let root, let key):
-                    updated = .except(values[root] ?? .variable(root), scoped(key, values), value)
-                }
-                let name = fresh()
+            case .set, .choose:
+                preconditionFailure("Atomic statements must be scheduled before lowering")
+            case .parallel(let group):
                 var next = values
-                next[target.root] = .variable(name)
-                return defined(name, updated, run(rest, next))
-            case .parallel(let assignments):
-                let captured = assignments.map { (name: fresh(), assignment: $0) }
-                let writes = captured.map {
-                    AlgorithmStatementModel.set(target: $0.assignment.target, value: .variable($0.name))
+                for assignment in group {
+                    let root = assignment.target.root
+                    let value = scoped(assignment.value)
+                    switch assignment.target {
+                    case .root where processLocalRoots?.contains(root) == true:
+                        next[root] = .except(.variable(root), .variable(processBinding.rawValue), value)
+                    case .root:
+                        next[root] = value
+                    case .function:
+                        preconditionFailure("Scheduled assignments must target complete roots")
+                    }
                 }
-                let body = continueWith(writes, values)
-                return captured.reversed().reduce(body) {
-                    defined($1.name, scoped($1.assignment.value, values), $0)
-                }
+                return run(rest, next)
             case .when(let condition):
-                return guarded(scoped(condition, values), run(rest, values))
+                return guarded(scoped(condition), run(rest, values))
             case .assert(let condition):
                 let tail = run(rest, values)
-                return (tail.action, [scoped(condition, values)] + tail.assertions)
+                return (tail.action, [scoped(condition)] + tail.assertions)
             case .letBinding(let variable, let value, let body):
-                let name = fresh()
-                let renamed = body.map {
-                    $0.substitutingVariable(variable, with: .variable(name), assignmentTargets: .replaceWhenVariable)
-                }
-                return defined(name, scoped(value, values), continueWith(renamed, values))
+                return defined(variable, scoped(value), continueWith(body, values))
             case .with(let variable, let domain, let body):
-                let name = fresh()
-                let renamed = body.map {
-                    $0.substitutingVariable(variable, with: .variable(name), assignmentTargets: .replaceWhenVariable)
-                }
-                let source = scoped(domain, values)
-                let nested = continueWith(renamed, values)
-                return (.existsAction(name, source, nested.action),
-                    nested.assertions.map { .forAll(source, name, $0) })
-            case .choose(let variable, let domain, let body):
-                return continueWith([.with(variable: variable,
-                    source: .setLiteral(domain.map(StateExpr.value)), body)], values)
+                let source = scoped(domain)
+                let nested = continueWith(body, values)
+                return (.existsAction(variable, source, nested.action),
+                    nested.assertions.map { .forAll(source, variable, $0) })
             case .ifElse(let condition, let then, let otherwise):
-                let predicate = scoped(condition, values)
+                let predicate = scoped(condition)
                 let first = continueWith(then, values)
                 let second = continueWith(otherwise, values)
                 return (.ifElse(predicate, first.action, second.action),

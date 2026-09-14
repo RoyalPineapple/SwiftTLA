@@ -4,9 +4,10 @@ import Testing
 @Suite("Procedure Lowering")
 struct ProcedureLoweringTests {
     private func loweredSpecification(_ model: AlgorithmModel) throws -> TLASpec {
-        try AlgorithmLowerer.lower(
-            model,
-            processNames: AuthoredPlusCalAlgorithmPlan(model).processNames
+        let resolved = model.resolvingAtomicSteps()
+        return try AlgorithmLowerer.lower(
+            resolved,
+            processNames: AuthoredPlusCalAlgorithmPlan(resolved).processNames
         )
     }
 

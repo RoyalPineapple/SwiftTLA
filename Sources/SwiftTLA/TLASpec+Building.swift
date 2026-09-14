@@ -99,9 +99,10 @@ extension TLASpec {
     if algorithmPhase == .source {
       for algorithm in sourceAlgorithms {
         try algorithm.requireValid()
-        let authoredPlusCalPlan = AuthoredPlusCalAlgorithmPlan(algorithm.model)
+        let resolved = algorithm.model.resolvingAtomicSteps()
+        let authoredPlusCalPlan = AuthoredPlusCalAlgorithmPlan(resolved)
         let lowered = try AlgorithmLowerer.lower(
-          algorithm.model,
+          resolved,
           processNames: authoredPlusCalPlan.processNames,
           formalOperatorDefinitions: formalOperatorDefinitions
         )

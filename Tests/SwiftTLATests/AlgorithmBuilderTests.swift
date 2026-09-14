@@ -1095,7 +1095,7 @@ struct AlgorithmBuilderTests {
             ]
         )
 
-        let projected = source.plusCalProjection()
+        let projected = source.resolvingAtomicSteps()
         let step = try #require(projected.sequentialSteps.first)
         guard case .with(let binder, _, let body) = step.statements.first,
               body.count == 1,
@@ -1116,8 +1116,8 @@ struct AlgorithmBuilderTests {
         #expect(copiedValue == "value")
     }
 
-    @Test("PlusCal projection owns choice, parallel updates, and stopping control")
-    func plusCalProjectionOwnsStatementLowering() throws {
+    @Test("Shared atomic scheduling preserves choices, final writes, and stopping control")
+    func atomicSchedulingPreservesControl() throws {
         let source = AlgorithmModel(
             name: "ProjectedStatements",
             components: [
@@ -1130,7 +1130,7 @@ struct AlgorithmBuilderTests {
             ]
         )
 
-        let step = try #require(source.plusCalProjection().sequentialSteps.first)
+        let step = try #require(source.resolvingAtomicSteps().sequentialSteps.first)
         guard case .with(let binder, let source, let body) = step.statements.first,
               source == .setLiteral([.value(.int(1)), .value(.int(2))]),
               body.count == 1,
@@ -1140,12 +1140,11 @@ struct AlgorithmBuilderTests {
               case .parallel(let assignments) = final[0],
               assignments.count == 1,
               assignments[0].target.root == "value",
-              case .goto(let destination) = final[1]
+              case .stop = final[1]
         else {
             Issue.record("Expected one projected choice path.")
             return
         }
-        #expect(destination.name == CompilerControlSymbol.done.rawValue)
     }
 
     @Test("moving an independent update under a choice preserves successor multiplicity")
@@ -1157,26 +1156,15 @@ struct AlgorithmBuilderTests {
                 Assign(value, to: value + 1)
             }
         })
-        let scheduled = Algorithm(model: original.model.plusCalProjection())
 
         let originalCompilation = try TLASpec("OriginalChoice") { original }.compile()
-        let scheduledCompilation = try TLASpec("ScheduledChoice") { scheduled }.compile()
         let originalInitial = try firstCompiledState(in: originalCompilation)
-        let scheduledInitial = try firstCompiledState(in: scheduledCompilation)
         let originalValues = try compiledSuccessors(
             named: "advance",
             arguments: [],
             in: originalCompilation,
             from: originalInitial
         ).map { try renderedValue(named: "value", in: $0, compilation: originalCompilation) }
-        let scheduledValues = try compiledSuccessors(
-            named: "advance",
-            arguments: [],
-            in: scheduledCompilation,
-            from: scheduledInitial
-        ).map { try renderedValue(named: "value", in: $0, compilation: scheduledCompilation) }
-
-        #expect(originalValues == scheduledValues)
         #expect(originalValues == [.int(1), .int(1)])
     }
 
