@@ -337,6 +337,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case multiCarElevator = "multicar-elevator"
     case tlcmcGraph1 = "tlcmc-graph-1"
     case nQueensFour = "n-queens-four"
+    case stringLiterals = "string-literals"
 
     package func nativeRun(description: CompilationDescription, rendered: RenderedSpecification, checkingDeadlock: Bool, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {
         func explore<Machine: StateMachine>(_ initial: [Machine]) throws -> NativeModelRun {
@@ -356,6 +357,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
         case .nQueensFour: return try explore(NQueensModel.initialMachines())
+        case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         }
     }
 
@@ -372,6 +374,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .multiCarElevator: MultiCarElevator.spec
         case .tlcmcGraph1: TLCMCModel.spec
         case .nQueensFour: NQueensModel.spec
+        case .stringLiterals: StringLiteralModel.spec
         }
     }
 }

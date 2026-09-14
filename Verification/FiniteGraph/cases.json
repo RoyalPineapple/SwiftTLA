@@ -249,6 +249,21 @@
       "moduleSHA256": "c500a1abde66e13467cdb882071601e9b1442487c47510348ded4e86b34e9329",
       "cfgSHA256": "a3971f2e748e54bff7cab9cb15b9c23ff829edcf54b134a2d8b88bdeec4e4892",
       "timeoutSeconds": 600
+    },
+    {
+      "id": "string-literals",
+      "sourceModel": "string-literals",
+      "module": "string-literals/StringLiterals.tla",
+      "configuration": "string-literals/StringLiterals.cfg",
+      "imports": [],
+      "dependencies": [],
+      "exploration": {
+        "maximumStateLimit": 10,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "4907785a06efc6248e9916b398a72e6f55dc05f151500011747767a855ac0ccb",
+      "cfgSHA256": "14a1ab7cd2a42742116a763e423c8891895f3552f5ecaa0f7d3138e824849838",
+      "timeoutSeconds": 60
     }
   ]
 }
