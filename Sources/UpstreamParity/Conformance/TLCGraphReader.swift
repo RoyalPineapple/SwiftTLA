@@ -478,7 +478,7 @@ private func int(_ object: [String: Any], _ key: String, _ line: Int) throws -> 
     guard let value = object[key] as? NSNumber,
           CFGetTypeID(value) != CFBooleanGetTypeID(),
           !CFNumberIsFloatType(value),
-          let integer = Int(exactly: value.int64Value)
+          let integer = Int(value.stringValue)
     else { throw TLCGraphEventError.invalidRecord(line: line, reason: key) }
     return integer
 }

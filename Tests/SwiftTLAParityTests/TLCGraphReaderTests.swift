@@ -700,6 +700,23 @@ extension TLCGraphReaderTests {
     ))
   }
 
+  @Test("graph event integers reject overflow before narrowing")
+  func rejectsIntegerOverflow() throws {
+    let finiteGraphCase = try fixtureCase(try toolchainPin())
+    let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
+    for value in [String(UInt64(Int.max) + 1), String(UInt64.max)] {
+      let data = try mutatedCompleteGraphStream(finiteGraphCase) {
+        $0.replacingOccurrences(of: "\"level\":1", with: "\"level\":\(value)")
+      }
+      #expect(throws: TLCGraphEventError.invalidRecord(line: 2, reason: "level")) {
+        try reader.parse(data)
+      }
+    }
+    _ = try reader.parse(mutatedCompleteGraphStream(finiteGraphCase) {
+      $0.replacingOccurrences(of: "\"level\":1", with: "\"level\":\(Int.max)")
+    })
+  }
+
   @Test("graph event reader rejects booleans for integers and numbers for booleans")
   func rejectsWrongJSONPrimitiveTypes() throws {
     let finiteGraphCase = try fixtureCase(try toolchainPin())
