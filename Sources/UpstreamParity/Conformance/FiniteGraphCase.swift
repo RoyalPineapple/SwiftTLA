@@ -311,6 +311,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
 
 package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, Sendable {
     case channel
+    case majority
     case boulanger
     case voteProof = "voteproof"
     case kvsnap
@@ -331,6 +332,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .boulanger: return try explore(BoulangerModel.initialMachines())
         case .voteProof: return try explore(VoteProofModel.initialMachines())
         case .kvsnap: return try explore(KVsnapModel.initialMachines())
+        case .majority: return try explore(MajorityModel.initialMachines())
         case .channel: return try explore(ChannelModel.initialMachines())
         case .asynchInterface: return try explore(AsynchInterfaceModel.initialMachines())
         case .hourClock: return try explore(HourClockModel.initialMachines())
@@ -346,6 +348,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .boulanger: BoulangerModel.spec
         case .voteProof: VoteProofModel.spec
         case .kvsnap: KVsnapModel.spec
+        case .majority: MajorityModel.spec
         case .channel: ChannelModel.spec
         case .asynchInterface: AsynchInterfaceModel.spec
         case .hourClock: Example.hourClock.spec

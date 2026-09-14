@@ -159,6 +159,31 @@
       "timeoutSeconds": 600
     },
     {
+      "sourceModel": "majority",
+      "module": "majority/MCMajority.tla",
+      "configuration": "majority/MCMajority.cfg",
+      "imports": [
+        "majority/Majority.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCMajority",
+          "importedModule": "Majority"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Majority/MCMajority.tla",
+        "sha256": "26c9d3dfcc49022b59ce761677b8d75501c91e64bcf5c1c128ce3184aa7b811e"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "26c9d3dfcc49022b59ce761677b8d75501c91e64bcf5c1c128ce3184aa7b811e",
+      "cfgSHA256": "e23df42d2bedb1c098aba2db2eaab6ea2579f6a465dc106209dca7ecd19c5760",
+      "timeoutSeconds": 120
+    },
+    {
       "sourceModel": "kvsnap",
       "module": "kvsnap/MCKVsnap.tla",
       "configuration": "kvsnap/MCKVsnap.cfg",
