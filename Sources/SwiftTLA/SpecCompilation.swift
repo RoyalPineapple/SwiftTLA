@@ -1336,6 +1336,19 @@ private extension CompiledModuleMetadata {
             lines.append("vars == \(varsTuple)")
             lines.append("")
         }
+        for index in semantics.behavior.enabledActionIndices {
+            let renderedAction = renderedActions[index]
+            guard !renderedAction.sourceName.isEmpty else { continue }
+            let parameters = renderedAction.renderedParameters.joined(separator: ", ")
+            let emittedName = renderedAction.renderedName
+            let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
+            lines.append("\(header) == \(renderedAction.renderedBody)")
+            for call in renderedAction.calls where call.arguments.isEmpty == false {
+                lines.append("\(call.renderedName) == \(formalActionCall(named: emittedName, arguments: call.arguments))")
+            }
+        }
+        lines.append("")
+
         lines.append(contentsOf: renderedInvariants)
         if !renderedInvariants.isEmpty { lines.append("") }
         if let renderedConstraint {
@@ -1376,17 +1389,6 @@ private extension CompiledModuleMetadata {
         } else {
             lines.append("Init ==")
             for predicate in initialPredicates { lines.append("  /\\ \(predicate)") }
-        }
-        lines.append("")
-
-        for renderedAction in renderedActions where renderedAction.sourceName.isEmpty == false {
-            let parameters = renderedAction.renderedParameters.joined(separator: ", ")
-            let emittedName = renderedAction.renderedName
-            let header = parameters.isEmpty ? emittedName : "\(emittedName)(\(parameters))"
-            lines.append("\(header) == \(renderedAction.renderedBody)")
-            for call in renderedAction.calls where call.arguments.isEmpty == false {
-                lines.append("\(call.renderedName) == \(formalActionCall(named: emittedName, arguments: call.arguments))")
-            }
         }
         lines.append("")
 

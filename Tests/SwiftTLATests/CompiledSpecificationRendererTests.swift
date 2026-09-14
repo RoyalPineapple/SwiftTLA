@@ -22,6 +22,26 @@ struct CompiledSpecificationRendererTests {
         #expect(rendered.contains("CanAlsoAdvance == ENABLED advance_step__2\n"))
     }
 
+    @Test("Action dependencies are declared before their enabledness consumers")
+    func declaresActionsBeforeEnablednessConsumers() throws {
+        let compilation = try TLASpec(name: "EnablednessOrder", variables: [
+            .init(name: "count", initial: .int(0))
+        ], actions: [
+            .init(name: "advance", body: .and(.guard_(.enabledAction("ready")),
+                .assign(.named("count"), .value(.int(1))))),
+            .init(name: "ready", body: .unchanged(.named("count")))
+        ], invariants: [.init(name: "CanAdvance", body: .enabledAction("advance"))],
+            constraint: .enabledAction("ready")).compile()
+        let rendered = try compilation.render().tlaBundle.tla
+        let ready = try #require(rendered.range(of: "ready =="))
+        let advance = try #require(rendered.range(of: "advance =="))
+        let invariant = try #require(rendered.range(of: "CanAdvance =="))
+        let constraint = try #require(rendered.range(of: "StateConstraint =="))
+        #expect(ready.lowerBound < advance.lowerBound)
+        #expect(advance.lowerBound < invariant.lowerBound)
+        #expect(ready.lowerBound < constraint.lowerBound)
+    }
+
     @Test("Model values cannot alias module variables")
     func rejectsModelValueDeclarationCollision() throws {
         #expect(throws: CompilationDiagnostic.self) {
