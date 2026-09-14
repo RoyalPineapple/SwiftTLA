@@ -215,7 +215,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 invocation: .finiteGraph,
                 referenceArtifacts: referenceArtifacts
             )
-            let referenceConfiguration = try TLCReferenceConfiguration.parse(request)
+            let referenceConfiguration = try TLCReferenceConfiguration.parse(request, checking: rendered.checkNames)
             let check = FiniteGraphCheck().run(
                 nativeRun: { try declaration.sourceModel.nativeRun(description: description, rendered: rendered, checkingDeadlock: referenceConfiguration.checksDeadlock, for: finiteGraphCase) },
                 tlcRequest: request,

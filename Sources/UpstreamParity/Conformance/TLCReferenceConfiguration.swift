@@ -8,23 +8,23 @@ package struct TLCReferenceConfiguration: Decodable, Sendable {
   let properties: [String]
   package let checksDeadlock: Bool
 
-  package static func parse(_ request: TLCProcessRequest) throws -> Self {
+  package static func parse(_ request: TLCProcessRequest, checking nativeChecks: Set<String>) throws -> Self {
     guard let artifacts = request.referenceArtifacts else {
       throw FiniteGraphCaseError.missingArtifact("TLC reference artifacts")
     }
-    try request.validateDeclaredBundle()
     try request.validateReferenceBinding(artifacts: artifacts)
     try request.finiteGraphCase.pin.validate(artifacts)
     let directory = request.workingDirectory.appendingPathComponent(UUID().uuidString)
     try RetainedFiles.createDirectory(directory, beneath: request.workingDirectory)
     defer { try? FileManager.default.removeItem(at: directory) }
-    let input = directory.appendingPathComponent("original.cfg")
+    let input = try request.stageDeclaredBundle()
+    defer { try? FileManager.default.removeItem(at: input.module.deletingLastPathComponent()) }
     let output = directory.appendingPathComponent("configuration.json")
-    try Data(request.bundle.cfg.utf8).write(to: input)
     let result = try executeProcess(executable: request.javaExecutable,
       arguments: ["-cp", request.bridgeJar.path + ":" + request.jar.path,
-        "org.swifttla.conformance.ConfigurationParser", input.path, output.path],
-      directory: directory, timeout: request.timeout, environment: request.effectiveEnvironment)
+        "org.swifttla.conformance.ConfigurationParser", input.module.path, input.configuration.path, output.path]
+        + nativeChecks.sorted(),
+      directory: input.module.deletingLastPathComponent(), timeout: request.timeout, environment: request.effectiveEnvironment)
     guard result.status == 0 else {
       throw TLCProcessError.failedToStart("TLC configuration parsing failed: " + result.stderr + result.stdout)
     }

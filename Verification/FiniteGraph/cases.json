@@ -68,20 +68,27 @@
     {
       "id": "n-queens-four",
       "sourceModel": "n-queens-four",
-      "module": "n-queens-four/QueensPluscal.tla",
-      "configuration": "n-queens-four/QueensPluscal.cfg",
-      "imports": [],
-      "dependencies": [],
+      "module": "n-queens-four/MC.tla",
+      "configuration": "n-queens-four/MC.cfg",
+      "imports": [
+        "n-queens-four/QueensPluscal.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MC",
+          "importedModule": "QueensPluscal"
+        }
+      ],
       "sourceInput": {
-        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/N-Queens/QueensPluscal.tla",
-        "sha256": "289aee93c983706e825f30bdf438747cc76049a09ee6db143ea65d0ec3fa81a8"
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/N-Queens/QueensPluscal.toolbox/FourQueens/MC.tla",
+        "sha256": "f8b3417c12b3404f7abd2f83b78167e802bea08e1f44dbd084c42069250790fc"
       },
       "exploration": {
         "maximumStateLimit": 5000,
         "symmetryReduction": "disabled"
       },
-      "moduleSHA256": "289aee93c983706e825f30bdf438747cc76049a09ee6db143ea65d0ec3fa81a8",
-      "cfgSHA256": "f653a8be3d0d2a0789f3b3a52e4216683a1d5c7c1208f36fff8c0552c4d8f2da",
+      "moduleSHA256": "f8b3417c12b3404f7abd2f83b78167e802bea08e1f44dbd084c42069250790fc",
+      "cfgSHA256": "028f334c5d1d568e4c8a2a1bb5608c8675fa98f30d2e51df52e6fe24a15b6866",
       "timeoutSeconds": 60
     },
     {
