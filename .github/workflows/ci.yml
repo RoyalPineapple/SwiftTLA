@@ -15,6 +15,16 @@ env:
 
 jobs:
   swift-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: ordinary
+            selection: --skip 'FiniteGraphCheckTests|UpstreamParityTests'
+          - suite: finite-graphs
+            selection: --filter FiniteGraphCheckTests
+          - suite: upstream
+            selection: --filter UpstreamParityTests
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -29,20 +39,21 @@ jobs:
           git rev-parse HEAD > .build/test-diagnostics/source-sha.txt
           (
             while sleep 300; do
-              for pid in $(pgrep -x swiftpm-testing || true); do
+              ps -axo pid,ppid,etime,%cpu,rss,command > ".build/test-diagnostics/$(date +%s)-processes.txt"
+              for pid in $(pgrep -f '[/]swiftpm-testing([[:space:]]|$)' || true); do
                 sample "$pid" 1 -file ".build/test-diagnostics/$(date +%s)-$pid.txt" || true
               done
             done
           ) &
           sampler=$!
           trap 'kill "$sampler" 2>/dev/null || true' EXIT
-          swift test -Xswiftc -warnings-as-errors -j 1 --no-parallel
+          swift test -Xswiftc -warnings-as-errors -j 1 --no-parallel ${{ matrix.selection }}
 
       - name: Retain Swift test stack samples
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: swift-test-diagnostics-${{ github.sha }}
+          name: swift-test-diagnostics-${{ matrix.suite }}-${{ github.sha }}
           path: .build/test-diagnostics
           if-no-files-found: error
           retention-days: 14
