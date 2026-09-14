@@ -24,8 +24,8 @@ package enum CanonicalValue: Hashable, Sendable {
     case orderedFunction([CanonicalFunctionEntry])
 
     package static func set(_ values: [CanonicalValue]) -> CanonicalValue {
-        let members = Set(values).map { (value: $0, encoding: $0.canonicalEncoding) }
-        return .orderedSet(members.sorted { canonicalBytes($0.encoding, $1.encoding) }.map(\.value))
+        let members = Dictionary(values.map { ($0.canonicalEncoding, $0) }, uniquingKeysWith: { first, _ in first })
+        return .orderedSet(members.sorted { canonicalBytes($0.key, $1.key) }.map(\.value))
     }
 
     package static func tuple(_ values: [CanonicalValue]) -> CanonicalValue {
@@ -41,9 +41,9 @@ package enum CanonicalValue: Hashable, Sendable {
     package static func function(_ entries: [CanonicalFunctionEntry]) throws -> CanonicalValue {
         let keyedEntries = entries.map { (entry: $0, encoding: $0.key.canonicalEncoding) }
         let ordered = keyedEntries.sorted { canonicalBytes($0.encoding, $1.encoding) }.map(\.entry)
-        var keys = Set<CanonicalValue>()
-        for entry in ordered {
-            guard keys.insert(entry.key).inserted else {
+        var keys = Set<String>()
+        for (entry, encoding) in keyedEntries {
+            guard keys.insert(encoding).inserted else {
                 throw CanonicalValueError.duplicateFunctionKey(entry.key)
             }
         }
@@ -58,12 +58,12 @@ package enum CanonicalValue: Hashable, Sendable {
            indexedValues.enumerated().allSatisfy({ offset, entry in entry.index == offset + 1 }) {
             return .tuple(indexedValues.map(\.value))
         }
-        var fields: [String: CanonicalValue] = [:]
+        var fields: [CanonicalRecordField] = []
         for entry in ordered {
             guard case .string(let name) = entry.key else { return .orderedFunction(ordered) }
-            fields[name] = entry.value
+            fields.append(CanonicalRecordField(name: name, value: entry.value))
         }
-        return .record(fields)
+        return .orderedRecord(fields)
     }
 
     package init(_ value: TLAValue) throws {
@@ -81,6 +81,15 @@ package enum CanonicalValue: Hashable, Sendable {
         case .function(let entries):
             self = try .function(entries.map { try CanonicalFunctionEntry(key: Self($0.key), value: Self($0.value)) })
         }
+    }
+
+    // Formal string identity follows the encoded bytes, not Swift's Unicode equivalence.
+    package static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.canonicalEncoding == rhs.canonicalEncoding
+    }
+
+    package func hash(into hasher: inout Hasher) {
+        hasher.combine(canonicalEncoding)
     }
 
     package var canonicalEncoding: String {

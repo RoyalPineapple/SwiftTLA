@@ -612,6 +612,16 @@ extension TLCGraphReaderTests {
     #expect(parsed.transitions.map(\.action) == [renderedName])
   }
 
+  @Test("fingerprint matching preserves exact Unicode value bytes", arguments: [false, true])
+  func rejectsUnicodeFingerprintAlias(_ seen: Bool) throws {
+    let finiteGraphCase = try fixtureCase(try testReferencePin())
+    let stream = try fingerprintAliasGraphStream(finiteGraphCase, aliasSeen: seen,
+      representativeValue: "\"é\"", aliasValue: "\"e\u{301}\"")
+    #expect(throws: TLCGraphEventError.invalidRecord(line: 4, reason: "fingerprint binding mismatch")) {
+      try TLCGraphReader(finiteGraphCase: finiteGraphCase).parse(stream)
+    }
+  }
+
   @Test("reduced TLC fingerprint aliases must belong to the declared symmetry orbit")
   func acceptsOnlyDeclaredSymmetryAliases() throws {
     let finiteGraphCase = try fixtureCase(try testReferencePin())

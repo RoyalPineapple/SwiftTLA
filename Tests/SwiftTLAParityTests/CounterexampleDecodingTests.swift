@@ -3,6 +3,27 @@ import Testing
 import UpstreamParity
 
 struct CounterexampleDecodingTests {
+    @Test("counterexample strings and record keys bind by their exact encoding")
+    func bindsExactUnicodeValues() throws {
+        let composed = "é"
+        let decomposed = "e\u{301}"
+        let cases: [(CanonicalValue, CanonicalValue, Any)] = [
+            (.string(composed), .string(decomposed), composed),
+            (.record([composed: .integer(1)]), .record([decomposed: .integer(1)]), [composed: 1])
+        ]
+        for (expected, foreign, json) in cases {
+            let matching = CanonicalState(bindings: ["value": expected])
+            let different = CanonicalState(bindings: ["value": foreign])
+            let data = try JSONSerialization.data(withJSONObject: ["vars": ["value"],
+                "counterexample": ["state": [[1, ["value": json]]], "action": []]])
+            let trace = try TLCTraceParser().parseCounterexample(data, states: [different, matching])
+            #expect(trace.steps.map(\.state) == [matching.key])
+            #expect(throws: TLCTraceError.invalidState(0)) {
+                try TLCTraceParser().parseCounterexample(data, states: [different])
+            }
+        }
+    }
+
     @Test("TLC built-in stuttering requires a valid marker and unchanged state")
     func validatesBuiltInStuttering() throws {
         let first: [Any] = [1, ["x": 0]]

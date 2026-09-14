@@ -112,7 +112,8 @@ package struct TLCTraceParser: Sendable {
             guard let number = raw as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return false }
             return number.boolValue == expected
         case .string(let expected), .constant(let expected):
-            return (raw as? String) == expected
+            guard let actual = raw as? String else { return false }
+            return actual.utf8.elementsEqual(expected.utf8)
         case .orderedTuple(let values):
             if values.isEmpty, let object = raw as? [String: Any], object.isEmpty { return true }
             guard let array = raw as? [Any], array.count == values.count else { return false }
@@ -123,7 +124,10 @@ package struct TLCTraceParser: Sendable {
         case .orderedRecord(let fields):
             guard let object = raw as? [String: Any], object.count == fields.count else { return false }
             return fields.allSatisfy { field in
-                object[field.name].map { matchesJSON($0, value: field.value) } ?? false
+                guard let index = object.index(forKey: field.name) else { return false }
+                let entry = object[index]
+                return entry.key.utf8.elementsEqual(field.name.utf8)
+                    && matchesJSON(entry.value, value: field.value)
             }
         case .orderedFunction(let entries):
             guard let object = raw as? [String: Any], object.count == entries.count else { return false }

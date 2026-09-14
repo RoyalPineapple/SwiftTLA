@@ -17,6 +17,11 @@ package enum TLCGraphEventError: Error, Equatable, Sendable {
 package struct TLCBinding: Equatable, Sendable {
     package let name: String
     package let tla: String
+
+    package static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.name.utf8.elementsEqual(rhs.name.utf8)
+            && lhs.tla.utf8.elementsEqual(rhs.tla.utf8)
+    }
 }
 
 package struct TLCGraphState: Equatable, Sendable {

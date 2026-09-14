@@ -82,6 +82,31 @@ struct CanonicalGraphTests {
         #expect(left.canonicalEncoding == right.canonicalEncoding)
     }
 
+    @Test("formal strings retain distinct Unicode encodings in nested collections")
+    func preservesUnicodeValueIdentity() throws {
+        let composed = CanonicalValue.string("é")
+        let decomposed = CanonicalValue.string("e\u{301}")
+        #expect(composed != decomposed)
+        #expect(Set([composed, decomposed]).count == 2)
+        let members = CanonicalValue.set([composed, decomposed, composed])
+        guard case .orderedSet(let values) = members else {
+            Issue.record("Expected a canonical set")
+            return
+        }
+        #expect(values.count == 2)
+        let function = try CanonicalValue.function([
+            .init(key: composed, value: .integer(1)),
+            .init(key: decomposed, value: .integer(2))
+        ])
+        guard case .orderedRecord(let fields) = function else {
+            Issue.record("Expected a canonical string-keyed function")
+            return
+        }
+        #expect(fields.count == 2)
+        #expect(CanonicalValue.set([.tuple([composed]), .tuple([decomposed])])
+            != .set([.tuple([composed])]))
+    }
+
     @Test("canonical functions reject duplicate keys")
     func rejectsDuplicateFunctionKeys() {
         #expect(throws: CanonicalValueError.self) {

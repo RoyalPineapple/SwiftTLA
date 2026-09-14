@@ -113,6 +113,7 @@ func completeGraphStreamWithExcludedPredicateObservation(
 func fingerprintAliasGraphStream(
   _ finiteGraphCase: FiniteGraphCase,
   aliasSeen: Bool,
+  representativeValue: String = "A",
   aliasFingerprint: String = "2",
   aliasValue: String = "A",
   aliasStableValue: String = "0"
@@ -124,7 +125,7 @@ func fingerprintAliasGraphStream(
   ]
   let representative: [String: Any] = [
     "fingerprint": "2", "level": 2,
-    "bindings": [binding(0, "x", "A"), binding(1, "stable", "0")]
+    "bindings": [binding(0, "x", representativeValue), binding(1, "stable", "0")]
   ]
   let alias: [String: Any] = [
     "fingerprint": aliasFingerprint,
