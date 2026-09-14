@@ -56,7 +56,6 @@ struct CompiledLowerer {
     let layout: CompiledLayout
     private let constants: [ConstantDecl]
     private let formalParameters: Set<String>
-    private let collectionMembers: [CompiledValue]
     private let incomingModuleParameters: [FormalModuleReplacement]
     private let authoredAlgorithm: AlgorithmModel?
     private let reservedRenderedNames: Set<String>
@@ -82,7 +81,6 @@ struct CompiledLowerer {
         self.layout = layout
         constants = spec.constants
         formalParameters = Set(spec.formalParameters.map(\.name))
-        collectionMembers = layout.variables.compactMap(\.collection).flatMap(\.members)
         self.incomingModuleParameters = incomingModuleParameters
         authoredAlgorithm = spec.sourceAlgorithms.first?.model
         var renderedNames = spec.renderedDeclarationNames()
@@ -1995,16 +1993,7 @@ struct CompiledLowerer {
             }
         }
         modelValueNames.formUnion(names)
-        guard let member = collectionMembers.first(where: { compiled.contains($0) }) else { return }
-        let renderedMember = try member.rendered(using: layout)
-        throw CompilationDiagnostic(
-            code: .invalidModelCollection,
-            stage: .binding,
-            path: path,
-            expected: "logic invariant under exchangeable member renaming",
-            actual: "authored expression names compiler-owned symmetric member '\(renderedMember)'",
-            nextSafeAction: "Use the model collection declaration instead of a concrete member."
-        )
+
     }
 
     private func requireDistinct(_ names: [String], at path: String) throws {

@@ -149,12 +149,12 @@ struct ModelCollectionValidationTests {
     assertInvalidCollection(malformed, .invalidOwnership(collection: "devices"))
   }
 
-  @Test("Authored actions cannot name a compiler-owned symmetric member")
-  func asymmetricActionFailsCompilation() {
+  @Test("Authored actions cannot name a compiler-owned collection member")
+  func actionCannotReferenceGeneratedMember() {
     let devices = CollectionVar<Device, Int>("devices")
     let collection = ModelCollection(devices, verificationScope: 2, initial: 0)
     let member = collection.metadata.members[0]
-    let spec = TLASpec("AsymmetricAction") {
+    let spec = TLASpec("GeneratedMemberAction") {
       collection
       Action("biased") { .guard_(.equal(.value(member), .value(member))) }
     }
@@ -162,12 +162,12 @@ struct ModelCollectionValidationTests {
     assertMemberReferenceRejected(spec, path: "actions.biased.body.left.guard.left")
   }
 
-  @Test("Authored invariants cannot name a compiler-owned symmetric member")
-  func asymmetricInvariantFailsCompilation() {
+  @Test("Authored invariants cannot name a compiler-owned collection member")
+  func invariantCannotReferenceGeneratedMember() {
     let devices = CollectionVar<Device, Int>("devices")
     let collection = ModelCollection(devices, verificationScope: 2, initial: 0)
     let member = collection.metadata.members[0]
-    let spec = TLASpec("AsymmetricInvariant") {
+    let spec = TLASpec("GeneratedMemberInvariant") {
       collection
       Invariant("Biased") { .equal(.value(member), .value(member)) }
     }
@@ -247,12 +247,12 @@ struct ModelCollectionValidationTests {
   private func assertMemberReferenceRejected(_ spec: TLASpec, path: String) {
     do {
       _ = try spec.compile()
-      Issue.record("Expected compiler-owned symmetric member reference to fail")
+      Issue.record("Expected compiler-owned collection member reference to fail")
     } catch let diagnostic as CompilationDiagnostic {
-      #expect(diagnostic.code == .invalidModelCollection)
+      #expect(diagnostic.code == .invalidFormalDeclaration)
       #expect(diagnostic.stage == .binding)
       #expect(diagnostic.path == path)
-      #expect(diagnostic.expected == "logic invariant under exchangeable member renaming")
+      #expect(diagnostic.expected == "a model value distinct from module declarations")
     } catch {
       Issue.record("Expected CompilationDiagnostic, got \(error)")
     }
