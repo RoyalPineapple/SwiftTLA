@@ -275,6 +275,36 @@ The exact declaration syntax and validation rules remain to be specified.
 
 ## 6. Validation scenarios attached to the model
 
+### Configuration is part of the DSL
+
+The DSL must declare validation configuration beside the algorithm. Native
+validation and TLA+ export must consume the same resolved configuration.
+Authors must not repeat its bindings or check selection in a handwritten
+registry or generated `.cfg` file.
+
+The configuration must express the semantic choices of upstream TLC
+configurations, including parameter bindings, state constraints, action
+constraints, property selection, and deadlock selection. An unsupported choice
+must produce an explicit diagnostic. A backend must not ignore a choice or
+substitute its default.
+
+By default, exploration captures the complete reachable graph and evaluates
+every declared property, with deadlock checking enabled. Property violations
+must not stop graph capture. Normal completion retains the semantics in
+section 4. Resource limits remain runner controls, not model constraints.
+
+An upstream comparison must preserve the effective upstream check selection,
+including an explicit `CHECK_DEADLOCK FALSE`. Such a comparison establishes
+agreement for that selection. It does not establish results for omitted model
+properties or complete scenario validation under AC-16. Reports must identify
+the selected checks and separate these claims.
+
+An expected deadlock differs from a disabled deadlock check. The former requires
+a deadlock result and a valid witness. The latter establishes no deadlock
+verdict. Neither choice permits a truncated graph to pass equivalence validation.
+
+### Declaration syntax
+
 **API pending:** candidate syntax inside a model scope containing typed declarations:
 
 ```swift
