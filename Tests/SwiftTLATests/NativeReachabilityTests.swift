@@ -7,7 +7,6 @@ private struct BranchingControl {
     enum Step: String, CaseIterable { case enter, choose }
     static var spec: TLASpec {
         #spec("BranchingControl") {
-            DeadlockCheck()
             Algorithm("BranchingControl", scoped: { scope in
                 let value = scope.sharedVar("value", initial: 0)
                 Invariant("AtMostOne") { value <= 1 }
@@ -25,11 +24,9 @@ private struct BlockedControl {
     enum Step: String, CaseIterable { case wait }
     static var spec: TLASpec {
         #spec("BlockedControl") {
-            DeadlockCheck()
             Algorithm("BlockedControl", scoped: { scope in
                 let value = scope.sharedVar("value", initial: 0)
-                Do(Step.wait) {
-                    When(value == 1)
+                Do(Step.wait, when: value == 1) {
                     Assign(value, to: 2)
                 }
             })
@@ -96,7 +93,11 @@ private struct InvalidAssumption {
 
     @Test("An unfinished blocked machine is a deadlock with an initial-state trace")
     func blockedControlIsDeadlocked() throws {
-        let initial = try BlockedControl.makeMachine()
+        var initial = try BlockedControl.makeMachine()
+        let snapshot = initial.snapshot
+        #expect(try initial.successors(for: .wait).isEmpty)
+        #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try initial.send(.wait) }
+        #expect(initial.snapshot == snapshot)
         let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 10)
         #expect(graph.safetyViolations[initial.snapshot] == [.deadlock])
         let trace = try graph.trace(to: initial.snapshot)

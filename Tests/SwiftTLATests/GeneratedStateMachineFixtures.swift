@@ -134,17 +134,19 @@ struct GeneratedSequentialCounter {
 }
 
 @TLAModel
-struct GeneratedSimultaneousSwap {
+struct GeneratedSavedValueSwap {
     enum Step: String, CaseIterable { case swap }
 
     static var spec: TLASpec {
-        #spec("GeneratedSimultaneousSwap") {
-            Algorithm("GeneratedSimultaneousSwap", scoped: { scope in
+        #spec("GeneratedSavedValueSwap") {
+            Algorithm("GeneratedSavedValueSwap", scoped: { scope in
                 let left = scope.sharedVar("left", initial: 1)
                 let right = scope.sharedVar("right", initial: 2)
                 Do(Step.swap) {
-                    Assign(left, to: right)
-                    Assign(right, to: left)
+                    Let(left) { originalLeft in
+                        Assign(left, to: right)
+                        Assign(right, to: originalLeft)
+                    }
                 }
             })
         }
@@ -208,8 +210,7 @@ struct GeneratedRangeInitializedAlgorithm {
             Algorithm("GeneratedRangeInitializedAlgorithm", scoped: { scope in
                 let hour = scope.sharedVar("hour", in: 1...3)
                 Each(Node.all) { _ in
-                    Do(Step.advance) {
-                        When(hour < 3)
+                    Do(Step.advance, when: hour < 3) {
                         Assign(hour, to: hour + 1)
                     }
                 }

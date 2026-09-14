@@ -36,7 +36,7 @@ private enum AlgorithmSourceConstruct: Equatable {
     case fairness
     case assume
     case stateConstraint
-    case awaitCondition
+    case whenCondition
     case assert
     case assign
     case goto
@@ -102,7 +102,7 @@ private enum AlgorithmSourceConstruct: Equatable {
             self = .fairness
         case "Assume": self = .assume
         case "StateConstraint": self = .stateConstraint
-        case "Await", "When": self = .awaitCondition
+        case "When": self = .whenCondition
         case "Assert": self = .assert
         case "Assign": self = .assign
         case "Goto": self = .goto
@@ -847,7 +847,7 @@ extension ParserSession {
         case .doStep, .whileStep:
             guard let label = algorithmLabel(call.arguments.first?.expression),
                   let closure = call.trailingClosure,
-                  let statements = parseAlgorithmStatements(
+                  var statements = parseAlgorithmStatements(
                     closure.statements,
                     processParameter: processParameter,
                     macros: macros,
@@ -861,6 +861,15 @@ extension ParserSession {
                 else { return nil }
                 loopCondition = condition
             } else {
+                let arguments = Array(call.arguments.dropFirst())
+                guard arguments.count <= 1,
+                      arguments.allSatisfy({ $0.label?.text == "when" })
+                else { return nil }
+                if let argument = arguments.first {
+                    guard let condition = decodeAlgorithmStateExpression(argument.expression, scope: scope)
+                    else { return nil }
+                    statements.insert(.when(condition), at: 0)
+                }
                 loopCondition = nil
             }
             return .step(.init(label: .init(name: label), statements: statements, loopCondition: loopCondition))
@@ -982,11 +991,11 @@ extension ParserSession {
         scope: TypedFacadeScope
     ) -> AlgorithmStatementModel? {
         switch construct {
-        case .awaitCondition:
+        case .whenCondition:
             guard let expression = call.arguments.first?.expression,
                   let condition = decodeAlgorithmStateExpression(expression, scope: scope)
             else { return nil }
-            return .await(condition)
+            return .when(condition)
         case .assert:
             guard let expression = call.arguments.first?.expression,
                   let condition = decodeAlgorithmStateExpression(expression, scope: scope)
@@ -1296,7 +1305,7 @@ extension ParserSession {
                 if macroAssigns(to: parameter, in: then) || macroAssigns(to: parameter, in: otherwise) { return true }
             case .either(let first, let second):
                 if macroAssigns(to: parameter, in: first) || macroAssigns(to: parameter, in: second) { return true }
-            case .await, .assert, .call, .goto, .return, .stop, .skip:
+            case .when, .assert, .call, .goto, .return, .stop, .skip:
                 continue
             }
         }

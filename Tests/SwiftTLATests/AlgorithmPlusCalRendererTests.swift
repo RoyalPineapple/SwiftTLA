@@ -90,12 +90,12 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("fair+ process (pcalProcess1 \\in {\"left\", \"right\"})"))
         #expect(rendered.contains("local = 0"))
         #expect(rendered.contains("repeat: while ((count < 2)) {"))
-        #expect(rendered.contains("await (count >= 0);"))
+        #expect(rendered.contains("when (count >= 0);"))
         #expect(rendered.contains("assert (count < 3);"))
-        #expect(rendered.components(separatedBy: "with (").count == 3)
         #expect(rendered.contains("\\in {1, 2})"))
         #expect(rendered.contains("\\in {3, 4})"))
-        #expect(rendered.contains("flags := [flags EXCEPT ![self] = TRUE];"))
+        #expect(rendered.contains("[flags EXCEPT ![self] = TRUE]"))
+        #expect(rendered.contains("flags :="))
         #expect(rendered.contains("either {"))
         #expect(rendered.contains("goto repeat;"))
         #expect(rendered.contains("goto Done;"))
@@ -116,7 +116,8 @@ struct AlgorithmPlusCalRendererTests {
 
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
 
-        #expect(rendered.contains("flags := [flags EXCEPT ![self] = TRUE];"))
+        #expect(rendered.contains("[flags EXCEPT ![self] = TRUE]"))
+        #expect(rendered.contains("flags :="))
     }
 
     @Test("imports Integers when rendering a negative formal value")
@@ -150,7 +151,7 @@ struct AlgorithmPlusCalRendererTests {
         let rendered = try compilation.render().plusCalBundle().root.tla
         let renderedTLA = try compilation.render().tlaBundle.root.tla
 
-        #expect(rendered.contains("await \\A item_1 \\in {0, 1} : (item_1 >= count);"))
+        #expect(rendered.contains("when \\A item_1 \\in {0, 1} : (item_1 >= count);"))
         #expect(renderedTLA.contains("\\A item_1 \\in {0, 1}"))
     }
 
@@ -404,7 +405,8 @@ struct AlgorithmPlusCalRendererTests {
 
         #expect(rendered.contains("procedure work(parameter0)"))
         #expect(rendered.contains("enter:"))
-        #expect(rendered.contains("output := (parameter0 + offset);"))
+        #expect(rendered.contains("(parameter0 + offset)"))
+        #expect(rendered.contains("output :="))
         #expect(rendered.contains("call work(7);"))
         #expect(rendered.contains("{\n  start:"))
         #expect(renderedTLA.contains("VARIABLES pc, output, stack, parameter0, offset"))
@@ -444,10 +446,10 @@ struct AlgorithmPlusCalRendererTests {
         )
 
         let rendered = try renderedSourceAlgorithmPlusCal(Algorithm(model: model))
-        let authoredBinding = try #require(rendered.range(of: "with (__atomic_0 = 1)"))
-        let capturedArgument = try #require(rendered.range(of: "with (__atomic_1 = output)"))
-        let assignment = try #require(rendered.range(of: "output := __atomic_0;"))
-        let call = try #require(rendered.range(of: "call inner(__atomic_1);"))
+        let authoredBinding = try #require(rendered.range(of: "with (__atomic_1 = 1)"))
+        let capturedArgument = try #require(rendered.range(of: "with (__atomic_2 = __atomic_1)"))
+        let assignment = try #require(rendered.range(of: "output := __atomic_2;"))
+        let call = try #require(rendered.range(of: "call inner(__atomic_2);"))
         let tailReturn = try #require(rendered.range(of: "return;", range: call.upperBound..<rendered.endIndex))
         #expect(authoredBinding.lowerBound < capturedArgument.lowerBound)
         #expect(capturedArgument.lowerBound < assignment.lowerBound)
@@ -529,8 +531,7 @@ struct AlgorithmPlusCalRendererTests {
         )
         let specification = TLASpec("MutualLocalRecursion") {
             Algorithm("MutualLocalRecursion") {
-                Do(TestControlLabel.stop) {
-                    When(Expr<Bool>(expression))
+                Do(TestControlLabel.stop, when: Expr<Bool>(expression)) {
                     Stop()
                 }
             }
@@ -551,8 +552,7 @@ struct AlgorithmPlusCalRendererTests {
         let expression = StateExpr.letIn([outer], .recursiveCall("Repeat", []))
         let specification = TLASpec("NestedLocalRecursion") {
             Algorithm("NestedLocalRecursion") {
-                Do(TestControlLabel.stop) {
-                    When(Expr<Bool>(expression))
+                Do(TestControlLabel.stop, when: Expr<Bool>(expression)) {
                     Stop()
                 }
             }

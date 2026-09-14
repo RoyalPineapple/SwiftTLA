@@ -1,15 +1,10 @@
-@testable import SwiftTLAPlugin
-import Foundation
 import Testing
-@testable import SwiftTLA
-import SwiftTLAMacros
-import SwiftParser
-import SwiftSyntax
+import SwiftTLA
 
-struct GeneratedSimultaneousSwapTests {
-    @Test("generated updates read one old state and commit together")
+struct GeneratedSavedValueSwapTests {
+    @Test("Saved values preserve a swap in an ordered atomic step")
     func generatedMachineSwapsValues() throws {
-        var machine = try GeneratedSimultaneousSwap.makeMachine()
+        var machine = try GeneratedSavedValueSwap.makeMachine()
 
         let transition = try machine.send(.swap)
 

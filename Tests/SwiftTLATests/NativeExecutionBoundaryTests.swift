@@ -233,15 +233,17 @@ private struct CheckedRecordConversion {
             Algorithm("CheckedRecordConversion", scoped: { scope in
                 let record = scope.sharedVar("record", initial: Record<IntegerRecord>.literal(
                     .init(IntegerRecord.count, 0)))
-                Do(Step.valid) {
-                    When(record.expr.assuming(Record<FiniteRecord>.self)[FiniteRecord.count] == Level.zero)
-                }
+                Do(
+                    Step.valid,
+                    when: record.expr.assuming(Record<FiniteRecord>.self)[FiniteRecord.count] == Level.zero
+                ) {}
                 Do(Step.change) {
                     Assign(record, to: record.updating(IntegerRecord.count, to: 1))
                 }
-                Do(Step.invalid) {
-                    When(record.expr.assuming(Record<FiniteRecord>.self)[FiniteRecord.count] == Level.zero)
-                }
+                Do(
+                    Step.invalid,
+                    when: record.expr.assuming(Record<FiniteRecord>.self)[FiniteRecord.count] == Level.zero
+                ) {}
             })
         }
     }

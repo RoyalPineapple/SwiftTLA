@@ -63,8 +63,8 @@ extension AlgorithmStatementModel {
         return switch self {
         case .rejected, .goto, .return, .stop, .skip:
             self
-        case .await(let value):
-            .await(expression(value))
+        case .when(let value):
+            .when(expression(value))
         case .assert(let value):
             .assert(expression(value))
         case .set(let originalTarget, let value):
@@ -163,8 +163,8 @@ extension AlgorithmStatementModel {
         switch self {
         case .rejected, .goto, .return, .stop, .skip:
             return self
-        case .await(let value):
-            return .await(expression(value))
+        case .when(let value):
+            return .when(expression(value))
         case .assert(let value):
             return .assert(expression(value))
         case .set(let originalTarget, let value):
@@ -215,7 +215,7 @@ extension Array where Element == AlgorithmStatementModel {
     var algorithmScopeNames: Set<String> {
         reduce(into: []) { names, statement in
             switch statement {
-            case .await(let value), .assert(let value):
+            case .when(let value), .assert(let value):
                 names.formUnion(value.freeVariableNames)
             case .set(let target, let value):
                 names.insert(target.root)

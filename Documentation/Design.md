@@ -27,7 +27,7 @@ reconstruct types or independently reinterpret the source specification.
 
 Application execution selects generated transitions. Swift model checking
 explores all generated successors and evaluates generated properties. They use
-the same Swift transition functions, including guards, simultaneous assignments,
+the same Swift transition functions, including guards, ordered assignments within atomic steps,
 choices, checked arithmetic, constraints, and failures. An expression interpreter
 is not a second implementation of Swift model checking.
 

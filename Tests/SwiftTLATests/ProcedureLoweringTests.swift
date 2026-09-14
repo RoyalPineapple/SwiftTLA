@@ -39,22 +39,22 @@ struct ProcedureLoweringTests {
         #expect(parsed.identity == built.identity)
     }
 
-    @Test("different algorithms have different compiled identities")
+    @Test("Different assigned values have different compiled identities")
     func differentAlgorithmsHaveDifferentCompiledIdentities() throws {
-        let expected = try TLASpec("FidelityDifference") {
-            Algorithm(model: AlgorithmModel(
-                name: "FidelityDifference",
-                components: [.step(.init(label: .init(name: "start"), statements: [.skip]))]
-            ))
-        }.compile()
-        let actual = try TLASpec("FidelityDifference") {
-            Algorithm(model: AlgorithmModel(
-                name: "FidelityDifference",
-                components: [.step(.init(label: .init(name: "start"), statements: [.stop]))]
-            ))
-        }.compile()
-
-        #expect((expected.identity == actual.identity) == false)
+        func compilation(assigning value: Int) throws -> CompiledSpecification {
+            try TLASpec("FidelityDifference") {
+                Algorithm(model: AlgorithmModel(
+                    name: "FidelityDifference",
+                    components: [
+                        .shared(.init(root: "output", initialization: .value(.int(0)))),
+                        .step(.init(label: .init(name: "start"), statements: [
+                            .set(target: .root("output"), value: .int(value))
+                        ]))
+                    ]
+                ))
+            }.compile()
+        }
+        #expect(try compilation(assigning: 1).identity != compilation(assigning: 2).identity)
     }
 
     @Test("call and return restore the caller environment after one atomic procedure step")

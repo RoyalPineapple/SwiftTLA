@@ -11,8 +11,7 @@ struct GeneratedStorageAccess {
     #spec("GeneratedStorageAccess") {
       Algorithm("GeneratedStorageAccess", scoped: { scope in
         let value = scope.sharedVar("value", initial: 0)
-        Do(Step.advance) {
-          When(value < 1)
+        Do(Step.advance, when: value < 1) {
           Assign(value, to: value + 1)
         }
       })

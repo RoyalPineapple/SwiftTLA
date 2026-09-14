@@ -70,13 +70,12 @@ import UpstreamParity
     #expect(count == 48)
   }
 
-  @Test("Deadlock detected with DeadlockCheck()")
+  @Test("Deadlock detected by default")
   func deadlock() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
       Variable(x, 0)
       Action("once") { x.becomes(1).when(x == 0) }
-      DeadlockCheck()
     }
     let r = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     if case .deadlocked(let state) = r {

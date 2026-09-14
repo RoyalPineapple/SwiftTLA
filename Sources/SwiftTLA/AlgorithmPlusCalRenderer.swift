@@ -147,7 +147,7 @@ internal struct AlgorithmPlusCalRenderer {
 
     private func render(statement: CompiledAuthoredPlusCalStatement, indent: String) throws -> [String] {
         switch statement {
-        case .await(let condition): return ["\(indent)await \(try expression(condition));"]
+        case .when(let condition): return ["\(indent)when \(try expression(condition));"]
         case .assert(let condition): return ["\(indent)assert \(try expression(condition));"]
         case .set(let target, let value):
             return ["\(indent)\(try lvalue(target)) := \(try expression(value));"]

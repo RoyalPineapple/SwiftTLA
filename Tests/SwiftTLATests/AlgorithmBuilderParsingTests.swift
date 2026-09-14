@@ -67,6 +67,24 @@ import SwiftTLAMacros
         #expect(throws: SourceParseDiagnostic.self) { try parsed.compile() }
     }
 
+    @Test("Step guards reject undecodable expressions and invalid arguments", arguments: [
+        "when: unknownGuard()", "unless: count == 0", "when: count == 0, when: count == 1"
+    ])
+    func rejectsInvalidStepGuard(_ argument: String) throws {
+        let parsed = parseAlgorithm(try parseSpecTestClosure("""
+        {
+            Algorithm("InvalidGuard", scoped: { scope in
+                let count = scope.sharedVar("count", initial: 0)
+                Do(TestControlLabel.increment, \(argument)) {
+                    Assign(count, to: count + 1)
+                }
+            })
+        }
+        """))
+        #expect(!parsed.diagnostics.isEmpty)
+        #expect(throws: SourceParseDiagnostic.self) { try parsed.compile() }
+    }
+
     @Test("Algorithm Each Do syntax lowers through the ordinary parser AST")
     func parsesBoundedAlgorithm() throws {
         let source = """
@@ -74,8 +92,7 @@ import SwiftTLAMacros
             Algorithm("Counter", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
                 Each(Node.all) { node in
-                    Do(TestControlLabel.increment) {
-                        Await(count < 2)
+                    Do(TestControlLabel.increment, when: count < 2) {
                         Assign(count, to: count + 1)
                     }
                 }
@@ -179,8 +196,7 @@ import SwiftTLAMacros
             Algorithm("EachScope", scoped: { scope in
                 let enabled = scope.sharedVar("enabled", initial: true)
                 Each(Node.all) { _ in
-                    Do(TestControlLabel.advance) {
-                        Await(enabled == true)
+                    Do(TestControlLabel.advance, when: enabled == true) {
                         Stop()
                     }
                 }
@@ -203,7 +219,7 @@ import SwiftTLAMacros
             Algorithm("MacroScope", scoped: { scope in
                 let enabled = scope.sharedVar("enabled", initial: true)
                 let waitUntilEnabled = Macro { (value: MacroParameter<Bool>) in
-                    Await(enabled == value.expr)
+                    When(enabled == value.expr)
                 }
                 Do(TestControlLabel.advance) { waitUntilEnabled(enabled) }
             })
@@ -225,8 +241,7 @@ import SwiftTLAMacros
                 })
                 Each(Worker.all, scoped: { _, scope in
                     let current: LocalVariable<Node> = scope.localVar("\(localName)", initial: .one)
-                    Do(TestControlLabel.advance) {
-                        Await(phases[current] == .ready)
+                    Do(TestControlLabel.advance, when: phases[current] == .ready) {
                         Stop()
                     }
                 })
@@ -491,14 +506,12 @@ import SwiftTLAMacros
             Algorithm("SiblingScopes") {
                 Each(Node.all, scoped: { node, scope in
                     let local = scope.localVar("local", initial: 0)
-                    Do(TestControlLabel.increment) {
-                        Await(local == 0)
+                    Do(TestControlLabel.increment, when: local == 0) {
                         Stop()
                     }
                 })
                 Each(Node.all) { node in
-                    Do(TestControlLabel.done) {
-                        Await(local == 0)
+                    Do(TestControlLabel.done, when: local == 0) {
                         Stop()
                     }
                 }
@@ -966,7 +979,7 @@ import SwiftTLAMacros
             Algorithm("MacroLock") { scope in
                 let lock = scope.sharedVar("lock", initial: 1)
                 let acquire = Macro { (value: MacroParameter<Int>) in
-                    Await(value == 1)
+                    When(value == 1)
                     Assign(value, to: 0)
                 }
                 Each(Node.all) { _ in
@@ -1006,9 +1019,12 @@ import SwiftTLAMacros
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "CopyValue")
-        let rendered = try specification.compile().render().tlaBundle.tla
-        #expect(rendered.contains("destination' = source"))
-        #expect(rendered.contains("__pcal_macro_parameter") == false)
+        let compilation = try specification.compile()
+        let initial = try firstCompiledState(in: compilation)
+        let next = try #require(try compiledSuccessors(
+            named: "copy", arguments: [], in: compilation, from: initial).first)
+        #expect(try renderedValue(named: "destination", in: next, compilation: compilation) == .int(7))
+        #expect(try compilation.render().tlaBundle.tla.contains("__pcal_macro_parameter") == false)
     }
 
     @Test("parser retains formal expression macro arguments")
@@ -1030,7 +1046,11 @@ import SwiftTLAMacros
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "OffsetValue")
-        #expect(try specification.compile().render().tlaBundle.tla.contains("destination' = (source + 1)"))
+        let compilation = try specification.compile()
+        let initial = try firstCompiledState(in: compilation)
+        let next = try #require(try compiledSuccessors(
+            named: "copy", arguments: [], in: compilation, from: initial).first)
+        #expect(try renderedValue(named: "destination", in: next, compilation: compilation) == .int(8))
     }
 
     @Test("parser retains typed pair projections and formal calls in a statement macro")
@@ -1092,8 +1112,7 @@ import SwiftTLAMacros
                 let output = scope.sharedVar("output", initial: 0)
                 Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
                     let offset = scope.localVar("\(localName)", initial: 1)
-                    Do(TestControlLabel.enter) {
-                        Await(value.expr >= 0)
+                    Do(TestControlLabel.enter, when: value.expr >= 0) {
                         Assign(output, to: value.expr + offset.expr)
                         Return()
                     }
@@ -1151,7 +1170,11 @@ import SwiftTLAMacros
 
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "ParameterlessMacro")
-        #expect(try specification.compile().render().tlaBundle.tla.contains("count' = (count + 1)"))
+        let compilation = try specification.compile()
+        let initial = try firstCompiledState(in: compilation)
+        let next = try #require(try compiledSuccessors(
+            named: "increment", arguments: [], in: compilation, from: initial).first)
+        #expect(try renderedValue(named: "count", in: next, compilation: compilation) == .int(1))
     }
 
     @Test("parser retains a filtered formal function initial domain")
@@ -1486,8 +1509,7 @@ import SwiftTLAMacros
             Algorithm("Counter", scoped: { scope in
                 let count = scope.sharedVar("count", initial: 0)
                 Each(ParserNode.all) { _ in
-                    Do(TestControlLabel.increment) {
-                        Await(count < 2)
+                    Do(TestControlLabel.increment, when: count < 2) {
                         Assign(count, to: count + 1)
                     }
                 }

@@ -558,8 +558,8 @@ struct CompiledLowerer {
             switch statement {
             case .rejected(let diagnostic):
                 throw invalidAuthoredPlusCalStatement(diagnostic.rawValue, at: statementPath)
-            case .await(let expression):
-                return .await(try lower(expression, at: "\(statementPath).condition", scope: scope))
+            case .when(let expression):
+                return .when(try lower(expression, at: "\(statementPath).condition", scope: scope))
             case .assert(let expression):
                 return .assert(try lower(expression, at: "\(statementPath).condition", scope: scope))
             case .set(let target, let value):

@@ -138,7 +138,7 @@ print(
 
 let nonBooleanExistential = Exists(in: SetExpr<Int>.literal(1)) { _ in Expr<Int>(1) }
 let nonBooleanUniversal = ForAll(in: SetExpr<Int>.literal(1)) { _ in Expr<Int>(1) }
-let nonBooleanAwait = Await(1)
+let nonBooleanWhen = When(1)
 let nonBooleanAssertion = Assert(Expr<Int>(1))
 let nonBooleanCondition = If(Expr<Int>(1), then: 1, else: 2)
 let scalarIntersection = SetExpr<Int>.literal(1).intersection(Expr<Int>(1))

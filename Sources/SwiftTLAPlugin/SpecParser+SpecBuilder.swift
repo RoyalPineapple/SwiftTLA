@@ -653,15 +653,6 @@ extension ParserSession {
             }
         case "Invariant":
             parseInvariant(call, into: &components)
-        case "DeadlockCheck":
-            if call.arguments.isEmpty, call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty {
-                components.checkDeadlock = true
-            } else {
-                components.diagnostics.append(.init(
-                    message: "DeadlockCheck takes no arguments or closures.",
-                    source: call
-                ))
-            }
         case "Constraint", "Assume":
             if call.arguments.count == 1, let argument = call.arguments.first,
                let expression = decodeStateExpr(argument.expression) {

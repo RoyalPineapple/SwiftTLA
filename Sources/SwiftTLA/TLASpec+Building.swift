@@ -49,8 +49,6 @@ extension TLASpec {
         assume = assume.map { .and($0, a.expr) } ?? a.expr
       } else if let e = comp as? ExtendsDecl {
         extendsModules.append(contentsOf: e.modules)
-      } else if comp is DeadlockDecl {
-        checkDeadlock = true
       } else if let c = comp as? ConstraintDecl {
         constraint = constraint.map { .and($0, c.body) } ?? c.body
       } else if let rf = comp as? RecursiveFuncDecl {

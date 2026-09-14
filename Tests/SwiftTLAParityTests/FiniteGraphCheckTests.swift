@@ -571,14 +571,15 @@ extension FiniteGraphCheckTests {
 }
 private func fixtureRendered(checks: Set<String>, checkDeadlock: Bool) throws -> RenderedSpecification {
   let x = Var<Int>("x")
-  return try TLASpec("Fixture") {
+  var specification = TLASpec("Fixture") {
     Variable(x, 1)
     SwiftTLA.Action("Next") { x == 1 && x.becomes(2) }
     for name in checks.sorted() {
       Invariant(name) { name == "Failed" ? x > 1 : x > 0 }
     }
-    if checkDeadlock { DeadlockCheck() }
-  }.compile().render()
+  }
+  specification.checkDeadlock = checkDeadlock
+  return try specification.compile().render()
 }
 
 private struct PerCheckExecutor: TLCProcessExecuting {

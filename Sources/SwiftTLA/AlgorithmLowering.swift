@@ -211,15 +211,15 @@ enum AlgorithmLowerer {
                 )
                 let body: ActionExpr
                 if !requiresProgramCounter {
-                    body = loweredStatements
+                    body = loweredStatements.action
                 } else if let loopCondition = atomic.loopCondition {
                     body = .ifElse(
                         rewrite(loopCondition, localRoots: localRoots),
-                        completingControl(loweredStatements, fallthrough: control.location(atomic.label.name)),
+                        completingControl(loweredStatements.action, fallthrough: control.location(atomic.label.name)),
                         transfer(to: nextLabel)
                     )
                 } else {
-                    body = completingControl(loweredStatements, fallthrough: nextLabel)
+                    body = completingControl(loweredStatements.action, fallthrough: nextLabel)
                 }
                 let generatedAction = NamedAction(
                     name: requiresProgramCounter ? atomic.label.name : processNames[processIndex],
@@ -242,16 +242,19 @@ enum AlgorithmLowerer {
                     )]
                 )
                 if requiresProgramCounter {
-                    let actionAssertions = assertionInvariants(
-                        in: atomic.statements,
-                        process: process,
-                        label: control.location(atomic.label.name),
-                        localRoots: localRoots,
-                        executionCondition: atomic.loopCondition.map { rewrite($0, localRoots: localRoots) },
-                        pathCondition: .value(.bool(true)),
-                        quantifiedBindings: []
-                    )
-                    generatedAssertionInvariants += actionAssertions
+                    let atStep = StateExpr.equal(
+                        .functionApply(.programCounter, .variable(processBinding.rawValue)),
+                        control.location(atomic.label.name))
+                    let enabled = atomic.loopCondition.map {
+                        StateExpr.and(atStep, rewrite($0, localRoots: localRoots))
+                    } ?? atStep
+                    generatedAssertionInvariants += process.domain.flatMap { member in
+                        loweredStatements.assertions.map { predicate in
+                            NamedInvariant(name: "__pcal_assert", body: StateExpr.substituteVariables(
+                                [processBinding.rawValue: .value(member)],
+                                in: .or(.not(enabled), predicate)))
+                        }
+                    }
                 }
                 fairness += fairnessConditions(for: generatedAction, policy: process.fairness)
                 return generatedAction
@@ -283,7 +286,14 @@ enum AlgorithmLowerer {
                     nextLabel: nextLabel,
                     control: control
                 )
-                let body = completingControl(loweredStatements, fallthrough: nextLabel)
+                let body = completingControl(loweredStatements.action, fallthrough: nextLabel)
+                generatedAssertionInvariants += controlDomainValues(processes).flatMap { member in
+                    loweredStatements.assertions.map { predicate in
+                        NamedInvariant(name: "__pcal_assert", body: StateExpr.substituteVariables(
+                            [processBinding.rawValue: .value(member)],
+                            in: .or(.not(guardExpression), predicate)))
+                    }
+                }
                 return NamedAction(
                     name: label,
                     body: ActionNormalization.complete(.and(.guard_(guardExpression), body), variables: variables),
@@ -383,7 +393,7 @@ enum AlgorithmLowerer {
                 return containsControlTransfer(body)
             case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
                 return containsControlTransfer(then) || containsControlTransfer(otherwise)
-            case .await, .set, .skip:
+            case .when, .set, .skip:
                 return false
             }
         }
@@ -511,11 +521,11 @@ enum AlgorithmLowerer {
             if let condition = atomic.loopCondition {
                 body = .ifElse(
                     condition,
-                    completingSequentialControl(statements, fallthrough: control.location(atomic.label.name)),
+                    completingSequentialControl(statements.action, fallthrough: control.location(atomic.label.name)),
                     sequentialTransfer(to: nextLabel)
                 )
             } else {
-                body = completingSequentialControl(statements, fallthrough: nextLabel)
+                body = completingSequentialControl(statements.action, fallthrough: nextLabel)
             }
             actions.append(NamedAction(
                 name: label,
@@ -524,12 +534,11 @@ enum AlgorithmLowerer {
                     variables: variables
                 )
             ))
-            generatedAssertionInvariants += sequentialAssertionInvariants(
-                in: atomic.statements,
-                label: control.location(atomic.label.name),
-                executionCondition: atomic.loopCondition,
-                pathCondition: .value(.bool(true))
-            )
+            let atStep = StateExpr.equal(.programCounter, control.location(atomic.label.name))
+            let enabled = atomic.loopCondition.map { StateExpr.and(atStep, $0) } ?? atStep
+            generatedAssertionInvariants += statements.assertions.map {
+                NamedInvariant(name: "__pcal_assert", body: .or(.not(enabled), $0))
+            }
             }
         }
 
@@ -746,60 +755,8 @@ enum AlgorithmLowerer {
         }
     }
 
-    private static func sequentialAssertionInvariants(
-        in statements: [AlgorithmStatementModel],
-        label: StateExpr,
-        executionCondition: StateExpr?,
-        pathCondition: StateExpr
-    ) -> [NamedInvariant] {
-        let atLabel = StateExpr.equal(.programCounter, label)
-        let executed = StateExpr.and(executionCondition.map { .and(atLabel, $0) } ?? atLabel, pathCondition)
-        return statements.flatMap { statement in
-            switch statement {
-            case .rejected:
-                return [NamedInvariant]()
-            case .assert(let condition):
-                return [NamedInvariant(
-                    name: "__pcal_assert",
-                    body: .or(.not(executed), condition)
-                )]
-            case .parallel:
-                return []
-            case .ifElse(let condition, let then, let otherwise):
-                return sequentialAssertionInvariants(in: then, label: label, executionCondition: executionCondition, pathCondition: .and(pathCondition, condition))
-                    + sequentialAssertionInvariants(in: otherwise, label: label, executionCondition: executionCondition, pathCondition: .and(pathCondition, .not(condition)))
-            case .either(let first, let second):
-                return sequentialAssertionInvariants(in: first, label: label, executionCondition: executionCondition, pathCondition: pathCondition)
-                    + sequentialAssertionInvariants(in: second, label: label, executionCondition: executionCondition, pathCondition: pathCondition)
-            case .choose(let variable, let domain, let body):
-                return sequentialAssertionInvariants(in: body, label: label, executionCondition: executionCondition, pathCondition: pathCondition)
-                    .map { invariant in
-                        NamedInvariant(name: invariant.name, body: .forAll(.setLiteral(domain.map(StateExpr.value)), variable, invariant.body))
-                    }
-            case .letBinding(let variable, let value, let body):
-                return sequentialAssertionInvariants(
-                    in: body.map {
-                        $0.substitutingVariable(
-                            variable,
-                            with: value,
-                            assignmentTargets: .preserve
-                        )
-                    },
-                    label: label,
-                    executionCondition: executionCondition,
-                    pathCondition: pathCondition
-                )
-            case .with(let variable, let source, let body):
-                return sequentialAssertionInvariants(in: body, label: label, executionCondition: executionCondition, pathCondition: pathCondition)
-                    .map { invariant in
-                        NamedInvariant(name: invariant.name, body: .forAll(source, variable, invariant.body))
-                    }
-            case .await, .set, .goto, .call, .return, .stop, .skip: return []
-            }
-        }
-    }
-
-    // Nil selects sequential storage; an empty set still selects process storage.
+    /// Resolves ordered source reads into immutable bindings. Only the final
+    /// values become state assignments, so a blocked branch cannot partly commit.
     private static func lower(
         _ statements: [AlgorithmStatementModel],
         processLocalRoots: Set<String>?,
@@ -807,33 +764,124 @@ enum AlgorithmLowerer {
         owner: AlgorithmProcedureModel?,
         nextLabel: StateExpr,
         control: ControlFlow
-    ) -> ActionExpr {
-        var action = ActionExpr.guard_(.value(.bool(true)))
-        var index = 0
-        while index < statements.count {
-            if case .call(let target, let arguments) = statements[index],
-               index + 1 < statements.count,
-               case .return = statements[index + 1] {
-                let tailCall = if let roots = processLocalRoots {
-                    processCallAction(target: target, arguments: arguments.map { rewrite($0, localRoots: roots) }, returnTo: nil, procedures: procedures, control: control)
-                } else {
-                    callAction(target: target, arguments: arguments, returnTo: nil, procedures: procedures, control: control)
-                }
-                action = .and(action, tailCall)
-                index += 2
-            } else {
-                action = .and(action, lower(
-                    statements[index],
-                    processLocalRoots: processLocalRoots,
-                    procedures: procedures,
-                    owner: owner,
-                    nextLabel: nextLabel,
-                    control: control
-                ))
-                index += 1
+    ) -> (action: ActionExpr, assertions: [StateExpr]) {
+        typealias Result = (action: ActionExpr, assertions: [StateExpr])
+        var names = statements.algorithmScopeNames.union(processLocalRoots ?? [])
+        var nextBinding = 0
+        func fresh() -> String {
+            while true {
+                let name = "__pcal_value_\(nextBinding)"
+                nextBinding += 1
+                if names.insert(name).inserted { return name }
             }
         }
-        return action
+        func scoped(_ value: StateExpr, _ values: [String: StateExpr]) -> StateExpr {
+            let expression = processLocalRoots.map { rewrite(value, localRoots: $0) } ?? value
+            return StateExpr.substituteVariables(values, in: expression)
+        }
+        func assignments(_ values: [String: StateExpr], excluding: Set<ActionTarget> = []) -> ActionExpr {
+            values.sorted { $0.key < $1.key }
+                .filter { !excluding.contains(.named($0.key)) }
+                .reduce(.guard_(.bool(true))) {
+                    .and($0, .assign(.named($1.key), $1.value))
+                }
+        }
+        func defined(_ name: String, _ value: StateExpr, _ body: Result) -> Result {
+            (.define(name, value, body.action), body.assertions.map {
+                .letIn([LocalOperator(name, body: value)],
+                    StateExpr.substituteVariable(name, with: .recursiveCall(name, []), in: $0))
+            })
+        }
+        func guarded(_ condition: StateExpr, _ body: Result) -> Result {
+            (.and(.guard_(condition), body.action), body.assertions.map { .or(.not(condition), $0) })
+        }
+        func run(_ remaining: ArraySlice<AlgorithmStatementModel>, _ values: [String: StateExpr]) -> Result {
+            guard let statement = remaining.first else { return (assignments(values), []) }
+            let rest = remaining.dropFirst()
+            func continueWith(_ body: [AlgorithmStatementModel], _ values: [String: StateExpr]) -> Result {
+                run((body + rest)[...], values)
+            }
+            switch statement {
+            case .set(let target, let expression):
+                let value = scoped(expression, values)
+                let updated: StateExpr
+                switch target {
+                case .root(let root) where processLocalRoots?.contains(root) == true:
+                    updated = .except(values[root] ?? .variable(root), .variable(processBinding.rawValue), value)
+                case .root:
+                    updated = value
+                case .function(let root, let key):
+                    updated = .except(values[root] ?? .variable(root), scoped(key, values), value)
+                }
+                let name = fresh()
+                var next = values
+                next[target.root] = .variable(name)
+                return defined(name, updated, run(rest, next))
+            case .parallel(let assignments):
+                let captured = assignments.map { (name: fresh(), assignment: $0) }
+                let writes = captured.map {
+                    AlgorithmStatementModel.set(target: $0.assignment.target, value: .variable($0.name))
+                }
+                let body = continueWith(writes, values)
+                return captured.reversed().reduce(body) {
+                    defined($1.name, scoped($1.assignment.value, values), $0)
+                }
+            case .when(let condition):
+                return guarded(scoped(condition, values), run(rest, values))
+            case .assert(let condition):
+                let tail = run(rest, values)
+                return (tail.action, [scoped(condition, values)] + tail.assertions)
+            case .letBinding(let variable, let value, let body):
+                let name = fresh()
+                let renamed = body.map {
+                    $0.substitutingVariable(variable, with: .variable(name), assignmentTargets: .replaceWhenVariable)
+                }
+                return defined(name, scoped(value, values), continueWith(renamed, values))
+            case .with(let variable, let domain, let body):
+                let name = fresh()
+                let renamed = body.map {
+                    $0.substitutingVariable(variable, with: .variable(name), assignmentTargets: .replaceWhenVariable)
+                }
+                let source = scoped(domain, values)
+                let nested = continueWith(renamed, values)
+                return (.existsAction(name, source, nested.action),
+                    nested.assertions.map { .forAll(source, name, $0) })
+            case .choose(let variable, let domain, let body):
+                return continueWith([.with(variable: variable,
+                    source: .setLiteral(domain.map(StateExpr.value)), body)], values)
+            case .ifElse(let condition, let then, let otherwise):
+                let predicate = scoped(condition, values)
+                let first = continueWith(then, values)
+                let second = continueWith(otherwise, values)
+                return (.ifElse(predicate, first.action, second.action),
+                    first.assertions.map { .or(.not(predicate), $0) }
+                        + second.assertions.map { .or(predicate, $0) })
+            case .either(let first, let second):
+                let lhs = continueWith(first, values)
+                let rhs = continueWith(second, values)
+                return (.or(lhs.action, rhs.action), lhs.assertions + rhs.assertions)
+            case .skip:
+                return run(rest, values)
+            case .rejected:
+                return (.guard_(.bool(false)), [])
+            case .goto, .call, .return, .stop:
+                let transfer: ActionExpr
+                if case .call(let target, let arguments) = statement,
+                   rest.first == .return {
+                    transfer = processLocalRoots.map { roots in
+                        processCallAction(target: target, arguments: arguments.map { rewrite($0, localRoots: roots) },
+                            returnTo: nil, procedures: procedures, control: control)
+                    } ?? callAction(target: target, arguments: arguments, returnTo: nil,
+                        procedures: procedures, control: control)
+                } else {
+                    transfer = lower(statement, processLocalRoots: processLocalRoots,
+                        procedures: procedures, owner: owner, nextLabel: nextLabel, control: control)
+                }
+                let effect = transfer.substitutingVariables(values)
+                return (.and(assignments(values, excluding: assignedVars(effect)), effect), [])
+            }
+        }
+        return run(statements[...], [:])
     }
 
     private static func transfer(to location: StateExpr) -> ActionExpr {
@@ -869,69 +917,13 @@ enum AlgorithmLowerer {
         nextLabel: StateExpr,
         control: ControlFlow
     ) -> ActionExpr {
-        func lowerBody(_ body: [AlgorithmStatementModel]) -> ActionExpr {
-            lower(body, processLocalRoots: processLocalRoots, procedures: procedures, owner: owner, nextLabel: nextLabel, control: control)
-        }
-        func scoped(_ expression: StateExpr) -> StateExpr {
-            guard let roots = processLocalRoots else { return expression }
-            return rewrite(expression, localRoots: roots)
+        func scoped(_ value: StateExpr) -> StateExpr {
+            processLocalRoots.map { rewrite(value, localRoots: $0) } ?? value
         }
         func jump(to location: StateExpr) -> ActionExpr {
             processLocalRoots == nil ? sequentialTransfer(to: location) : transfer(to: location)
         }
         switch statement {
-        case .rejected:
-            return .guard_(.value(.bool(false)))
-        case .await(let condition):
-            return .guard_(scoped(condition))
-        case .assert:
-            // `Assert` is checked through a generated invariant at its program
-            // location. It remains a no-op in the transition relation.
-            return .guard_(.value(.bool(true)))
-        case .set(let target, let value):
-            let value = scoped(value)
-            switch target {
-            case .root(let root) where processLocalRoots?.contains(root) == true:
-                return .assign(
-                    .named(root),
-                    .except(.variable(root), .variable(processBinding.rawValue), value))
-            case .root(let root):
-                return .assign(.named(root), value)
-            case .function(let root, let key):
-                return .assign(
-                    .named(root),
-                    .except(
-                        .variable(root),
-                        scoped(key),
-                        value))
-            }
-        case .parallel(let assignments):
-            return lowerBody(assignments.map { .set(target: $0.target, value: $0.value) })
-        case .letBinding(let variable, let value, let body):
-            return .define(
-                variable,
-                scoped(value),
-                lowerBody(body)
-            )
-        case .with(let variable, let source, let body):
-            return .existsAction(
-                variable,
-                scoped(source),
-                lowerBody(body))
-        case .ifElse(let condition, let then, let otherwise):
-            return .ifElse(
-                scoped(condition),
-                lowerBody(then),
-                lowerBody(otherwise))
-        case .either(let first, let second):
-            return .or(
-                lowerBody(first),
-                lowerBody(second))
-        case .choose(let variable, let domain, let body):
-            return .existsAction(
-                variable,
-                .setLiteral(domain.map { .value($0) }),
-                lowerBody(body))
         case .goto(let label):
             return jump(to: control.location(label.name))
         case .call(let target, let arguments):
@@ -948,118 +940,11 @@ enum AlgorithmLowerer {
                 owner: .generated(algorithm: control.algorithm, purpose: CompilerControlSymbol.done.rawValue),
                 sourceName: CompilerControlSymbol.done.rawValue
             )))
-        case .skip:
-            return .guard_(.value(.bool(true)))
+        default:
+            preconditionFailure("Only terminal statements reach control-transfer lowering")
         }
     }
 
-    private static func assertionInvariants(
-        in statements: [AlgorithmStatementModel],
-        process: AlgorithmProcessModel,
-        label: StateExpr,
-        localRoots: Set<String>,
-        executionCondition: StateExpr?,
-        pathCondition: StateExpr,
-        quantifiedBindings: [(variable: String, source: StateExpr)]
-    ) -> [NamedInvariant] {
-        let pcAtLabel = StateExpr.equal(
-            .functionApply(.programCounter, .variable(processBinding.rawValue)),
-            label
-        )
-        let executedAtLabel = StateExpr.and(
-            executionCondition.map { .and(pcAtLabel, $0) } ?? pcAtLabel,
-            pathCondition
-        )
-        return statements.flatMap { statement in
-            switch statement {
-            case .rejected:
-                return [NamedInvariant]()
-            case .assert(let condition):
-                return process.domain.map { identifier in
-                    let assertion = quantifiedBindings.reversed().reduce(
-                        rewrite(condition, localRoots: localRoots)
-                    ) { predicate, binding in
-                        .forAll(
-                            rewrite(binding.source, localRoots: localRoots),
-                            binding.variable,
-                            predicate
-                        )
-                    }
-                    let predicate = StateExpr.substituteVariable(
-                        processBinding.rawValue,
-                        identifier,
-                        in: .or(.not(executedAtLabel), assertion)
-                    )
-                    return NamedInvariant(
-                        name: "__pcal_assert",
-                        body: predicate
-                    )
-                }
-            case .parallel:
-                return []
-            case .ifElse(let condition, let then, let otherwise):
-                let condition = rewrite(condition, localRoots: localRoots)
-                return assertionInvariants(
-                    in: then,
-                    process: process,
-                    label: label,
-                    localRoots: localRoots,
-                    executionCondition: executionCondition,
-                    pathCondition: .and(pathCondition, condition),
-                    quantifiedBindings: quantifiedBindings
-                ) + assertionInvariants(
-                    in: otherwise,
-                    process: process,
-                    label: label,
-                    localRoots: localRoots,
-                    executionCondition: executionCondition,
-                    pathCondition: .and(pathCondition, .not(condition)),
-                    quantifiedBindings: quantifiedBindings
-                )
-            case .either(let then, let otherwise):
-                return assertionInvariants(in: then, process: process, label: label, localRoots: localRoots, executionCondition: executionCondition, pathCondition: pathCondition, quantifiedBindings: quantifiedBindings)
-                    + assertionInvariants(in: otherwise, process: process, label: label, localRoots: localRoots, executionCondition: executionCondition, pathCondition: pathCondition, quantifiedBindings: quantifiedBindings)
-            case .choose(let variable, let domain, let body):
-                return assertionInvariants(
-                    in: body,
-                    process: process,
-                    label: label,
-                    localRoots: localRoots,
-                    executionCondition: executionCondition,
-                    pathCondition: pathCondition,
-                    quantifiedBindings: quantifiedBindings + [(variable, .setLiteral(domain.map(StateExpr.value)))]
-                )
-            case .letBinding(let variable, let value, let body):
-                return assertionInvariants(
-                    in: body.map {
-                        $0.substitutingVariable(
-                            variable,
-                            with: rewrite(value, localRoots: localRoots),
-                            assignmentTargets: .preserve
-                        )
-                    },
-                    process: process,
-                    label: label,
-                    localRoots: localRoots,
-                    executionCondition: executionCondition,
-                    pathCondition: pathCondition,
-                    quantifiedBindings: quantifiedBindings
-                )
-            case .with(let variable, let source, let body):
-                return assertionInvariants(
-                    in: body,
-                    process: process,
-                    label: label,
-                    localRoots: localRoots,
-                    executionCondition: executionCondition,
-                    pathCondition: pathCondition,
-                    quantifiedBindings: quantifiedBindings + [(variable, source)]
-                )
-            case .await, .set, .goto, .call, .return, .stop, .skip:
-                return []
-            }
-        }
-    }
 
     private static func fairnessConditions(
         for action: NamedAction,

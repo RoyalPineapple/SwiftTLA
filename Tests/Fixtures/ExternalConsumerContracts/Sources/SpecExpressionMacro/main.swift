@@ -57,8 +57,7 @@ struct Counter {
                 ))
                 Each(Node.all, scoped: { _, scope in
                     let visits = scope.localVar("visits", initial: 0)
-                    Do(Step.advance) {
-                        When(value < 1)
+                    Do(Step.advance, when: value < 1) {
                         Assign(value, to: value + 1)
                         Assign(cars, to: cars.updating(.one) { car in
                             car.updating(CarSchema.floor, to: 2)

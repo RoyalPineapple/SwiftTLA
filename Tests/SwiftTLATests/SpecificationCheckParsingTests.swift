@@ -6,24 +6,13 @@ import SwiftParser
 import SwiftTLAMacros
 
 @Suite struct SpecificationCheckParsingTests {
-    @Test("Deadlock checking is opt-in in both the parser and DSL builder")
-    func deadlockCheckingIsOptIn() throws {
-        let defaultSpec = SpecParser.parseSpecClosure(named: "Default", try parseSpecTestClosure("{}"))
-        let parsed = SpecParser.parseSpecClosure(named: "Checked", try parseSpecTestClosure("{ DeadlockCheck() }"))
-        let built = TLASpec("Checked") { DeadlockCheck() }
-        #expect(!defaultSpec.checkDeadlock)
+    @Test("Deadlock checking is enabled by default in the parser and DSL")
+    func deadlockCheckingIsDefault() throws {
+        let parsed = SpecParser.parseSpecClosure(named: "Default", try parseSpecTestClosure("{}"))
+        let built = TLASpec("Default") {}
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.checkDeadlock == built.checkDeadlock)
         #expect(parsed.checkDeadlock)
-    }
-
-    @Test("Malformed deadlock declarations fail at the source boundary", arguments: [
-        "DeadlockCheck(true)", "DeadlockCheck { true }"
-    ])
-    func rejectsMalformedDeadlockChecks(_ source: String) throws {
-        let parsed = SpecParser.parseSpecClosure(named: "Checked", try parseSpecTestClosure("{ \(source) }"))
-        #expect(!parsed.diagnostics.isEmpty)
-        #expect(!parsed.checkDeadlock)
+        #expect(built.checkDeadlock)
     }
 
     @Test("Specification assumptions match the DSL builder and remain conjunctive")

@@ -200,8 +200,7 @@ private struct ContextualCollectionModel {
                 let table = scope.sharedVar("table", initial: Function<Key, Entry>.literal(
                     (Key.first, Entry.first), (Key.second, Entry.first)))
                 let selected: SharedVariable<Entry> = scope.sharedVar("selected", initial: .first)
-                Do(Step.update) {
-                    Await(selected == .first)
+                Do(Step.update, when: selected == .first) {
                     Assign(table, to: table.updating(.first) { current in
                         If(current == .first, then: .second, else: current)
                     })

@@ -52,7 +52,7 @@ package struct PetersonModel: Sendable {
                                 then: Process.two,
                                 else: Process.one
                             )) { other in
-                            Await(c[other] == false || turn.stateExpr == process.stateExpr)
+                            When(c[other] == false || turn.stateExpr == process.stateExpr)
                         }
                     }
                     Do(Step.cs) {

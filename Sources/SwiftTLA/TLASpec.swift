@@ -273,7 +273,7 @@ public struct TLASpec: Sendable {
     name: String, variables: [NamedVar], constants: [ConstantDecl] = [],
     formalParameters: [FormalModuleParameter] = [],
     actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [],
-    fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = false,
+    fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = true,
     extendsModules: [StandardModule] = [.integers],
     constraint: StateExpr? = nil,
     recursiveFuncs: [RecursiveFunc] = [],
@@ -618,7 +618,6 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ImportDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FormalModuleInstance) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RefinementDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: DeadlockDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
@@ -815,8 +814,6 @@ public func WeakFairnessNext() -> FairnessDecl {
 public func StrongFairnessNext() -> FairnessDecl {
   FairnessDecl(.strongFairnessNext)
 }
-public struct DeadlockDecl: SpecComponent { init() {} }
-public func DeadlockCheck() -> DeadlockDecl { DeadlockDecl() }
 public struct SymmetrySet: Hashable, Sendable, CustomStringConvertible {
   public let variableName: String
   public let values: Set<TLAValue>

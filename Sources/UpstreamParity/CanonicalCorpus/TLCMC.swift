@@ -67,14 +67,15 @@ package struct TLCMCModel: Sendable {
                 )
 
                 While(Step.scanInitialStates, initialIndex <= frontier.expr.count) {
-                    let initial = frontier.expr.at(initialIndex.expr)
-                    Assign(currentState, to: SearchNode.first(initial))
-                    Assign(closed, to: closed.inserting(initial))
-                    Assign(levels, to: levels.overriding(initial, with: 0))
-                    Assign(initialIndex, to: initialIndex + 1)
-                    If(violations.contains(initial)) {
-                        Assign(counterexample, to: TupleExpr<Node>.literal(initial))
-                        Goto(Step.trace)
+                    Let(frontier.expr.at(initialIndex.expr)) { initial in
+                        Assign(currentState, to: SearchNode.first(initial))
+                        Assign(closed, to: closed.inserting(initial))
+                        Assign(levels, to: levels.overriding(initial, with: 0))
+                        Assign(initialIndex, to: initialIndex + 1)
+                        If(violations.contains(initial)) {
+                            Assign(counterexample, to: TupleExpr<Node>.literal(initial))
+                            Goto(Step.trace)
+                        }
                     }
                 }
 
@@ -86,16 +87,17 @@ package struct TLCMCModel: Sendable {
                     If(frontier.expr.count == 0) {
                         Stop()
                     } else: {
-                        let current = frontier.at(1)
-                        let nonSelfSuccessors = transitionTargets[current].removing(current)
-                        Assign(currentState, to: SearchNode.first(current))
-                        Assign(frontier, to: frontier.expr.removing(at: 1))
-                        Assign(successors, to: nonSelfSuccessors.subtracting(closed.expr))
-                        If(nonSelfSuccessors.cardinality == 0) {
-                            Assign(counterexample, to: TupleExpr<Node>.literal(current))
-                            Goto(Step.trace)
-                        } else: {
-                            Goto(Step.exploreSuccessors)
+                        Let(frontier.at(1)) { current in
+                            let nonSelfSuccessors = transitionTargets[current].removing(current)
+                            Assign(currentState, to: SearchNode.first(current))
+                            Assign(frontier, to: frontier.expr.removing(at: 1))
+                            Assign(successors, to: nonSelfSuccessors.subtracting(closed.expr))
+                            If(nonSelfSuccessors.cardinality == 0) {
+                                Assign(counterexample, to: TupleExpr<Node>.literal(current))
+                                Goto(Step.trace)
+                            } else: {
+                                Goto(Step.exploreSuccessors)
+                            }
                         }
                     }
                 }

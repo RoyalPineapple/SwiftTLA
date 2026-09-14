@@ -579,9 +579,7 @@ struct TLCPropertyCheckTests {
       let x = Var<Int>("x")
       rendered = try renderedOverride ?? TLASpec("TemporalFixture") {
         Variable(x, 1)
-        switch check {
-        case .deadlock: DeadlockCheck()
-        case .property(let name):
+        if case .property(let name) = check {
           switch name {
           case "Positive": Invariant(name) { x > 0 }
           case "IsTwo": Invariant(name) { x == 2 }

@@ -27,7 +27,6 @@ import UpstreamParity
     let spec = TLASpec("T") {
       Variable(x, 0)
       Action("a") { x.becomes(2).when(x == 1) }
-      DeadlockCheck()
     }
     let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     var dead = false
@@ -41,7 +40,6 @@ import UpstreamParity
     let spec = TLASpec("T") {
       Variable(x, 0)
       Action("a") { x.becomes(x + 1).when(x < 2) }
-      DeadlockCheck()
     }
     let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     let xToken = try #require(TLAStateProjection.Token(validating: "x"))
@@ -56,7 +54,6 @@ import UpstreamParity
     let spec = TLASpec("T") {
       Variable(x, 0)
       Action("a") { x.becomes((x + 1) % 2) }
-      DeadlockCheck()
     }
     let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
     var ok = false

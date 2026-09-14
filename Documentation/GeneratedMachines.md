@@ -44,8 +44,7 @@ struct BoundedCounter {
             Algorithm("BoundedCounter", scoped: { scope in
                 let value = scope.sharedVar("value", initial: 0)
                 Each(Process.all) { _ in
-                    Do(Step.advance) {
-                        When(value < 1)
+                    Do(Step.advance, when: value < 1) {
                         Assign(value, to: value + 1)
                         Stop()
                     }
@@ -207,8 +206,7 @@ struct CounterHost {
             Algorithm("CounterHost", scoped: { scope in
                 let value = scope.sharedVar("value", initial: 0)
                 Each(Process.all) { _ in
-                    Do(Step.advance) {
-                        When(value < 1)
+                    Do(Step.advance, when: value < 1) {
                         Assign(value, to: value + 1)
                         Stop()
                     }
@@ -278,7 +276,7 @@ includes control state: two equal public `State` values can still have different
 successors. Exploration throws on exhaustion of the state limit or cancellation;
 it never returns a truncated graph as complete. Exploration evaluates generated
 assumptions and invariant predicates. It retains invariant and deadlock failures in `safetyViolations` while completing the graph;
-`DeadlockCheck()` enables deadlock reporting; normal algorithm termination is
+Deadlock reporting is enabled by default; normal algorithm termination is
 not a deadlock. `trace(to:)` reconstructs a
 shortest native execution from the discovery predecessors. False assumptions and
 evaluation errors throw. Temporal checking and independent equivalence validation

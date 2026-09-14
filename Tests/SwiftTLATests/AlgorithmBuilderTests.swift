@@ -41,6 +41,30 @@ struct AlgorithmBuilderTests {
         #expect(try value(named: "ready", in: next, compilation: compilation) == .bool(false))
     }
 
+    @Test("A step guard protects every branch and update", arguments: [false, true])
+    func wholeStepGuard(enabled: Bool) throws {
+        let algorithm = Algorithm("GuardedBranches", scoped: { scope in
+            let ready = scope.sharedVar("ready", initial: enabled)
+            let value = scope.sharedVar("value", initial: 0)
+            let changed = scope.sharedVar("changed", initial: false)
+            Do(TestControlLabel.advance, when: ready) {
+                Assign(changed, to: true)
+                Either {
+                    Assign(value, to: 1)
+                } or: {
+                    Assign(value, to: 2)
+                }
+            }
+        })
+        let (compilation, initial) = try initialState(of: loweredSourceSpecification(algorithm))
+        let next = try successors(named: "advance", in: compilation, from: initial)
+        #expect(next.count == (enabled ? 2 : 0))
+        for state in next {
+            #expect(try value(named: "changed", in: state, compilation: compilation) == .bool(true))
+        }
+        #expect(try value(named: "changed", in: initial, compilation: compilation) == .bool(false))
+    }
+
     @Test("compilation rejects multiple Algorithms")
     func rejectsMultipleAlgorithms() {
         let specification = TLASpec("MultipleAlgorithms") {
@@ -392,7 +416,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("MacroLock", scoped: { scope in
             let lock = scope.sharedVar("lock", initial: 1)
             let acquire = Macro { (value: MacroParameter<Int>) in
-                Await(value == 1)
+                When(value == 1)
                 Assign(value, to: 0)
             }
             let release = Macro { (value: MacroParameter<Int>) in
@@ -769,8 +793,7 @@ struct AlgorithmBuilderTests {
             let selected = scope.sharedVar("selected", initial: Node.first)
             Each(Node.all, scoped: { node, scope in
                 let inbox = scope.localVar("inbox", initial: 0)
-                Do(AlgorithmLabel.receive) {
-                    Await(inbox > 0)
+                Do(AlgorithmLabel.receive, when: inbox > 0) {
                     Choose(Node.all) { candidate in
                         If(candidate != node) {
                             Assign(selected, to: candidate)
@@ -918,7 +941,6 @@ struct AlgorithmBuilderTests {
         #expect(codes.contains(.emptyDomain))
         #expect(codes.contains(.duplicateLabel))
         #expect(codes.contains(.invalidTarget))
-        #expect(codes.contains(.duplicateRootWrite))
         #expect(throws: CompilationDiagnostic.self) {
             try invalid.requireValid()
         }
@@ -944,8 +966,8 @@ struct AlgorithmBuilderTests {
         }
     }
 
-    @Test("authored PlusCal evaluates a later guard before atomic updates")
-    func authoredPlusCalMovesLaterGuardBeforeAtomicUpdates() throws {
+    @Test("A later guard reads the updated value before committing the step")
+    func laterGuardReadsUpdatedValue() throws {
         let algorithm = Algorithm("ReadAfterWrite", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Do(TestControlLabel.advance) {
@@ -958,17 +980,14 @@ struct AlgorithmBuilderTests {
         let rendered = try compilation
             .render().plusCalBundle()
             .root.tla
-        let guardRange = try #require(rendered.range(of: "await (value > 0);"))
-        let assignmentRange = try #require(rendered.range(of: "value := (value + 1);"))
+        let guardRange = try #require(rendered.range(of: "when (__atomic_0 > 0);"))
+        let assignmentRange = try #require(rendered.range(of: "value := __atomic_0;"))
         #expect(guardRange.lowerBound < assignmentRange.lowerBound)
 
         let initial = try firstCompiledState(in: compilation)
-        #expect(try compiledSuccessors(
-            named: "advance",
-            arguments: [],
-            in: compilation,
-            from: initial
-        ).isEmpty)
+        let next = try #require(try compiledSuccessors(
+            named: "advance", arguments: [], in: compilation, from: initial).first)
+        #expect(try renderedValue(named: "value", in: next, compilation: compilation) == .int(1))
     }
 
     @Test("authored PlusCal emits one update group for separated assignments")
@@ -987,7 +1006,7 @@ struct AlgorithmBuilderTests {
         let rendered = try compilation
             .render().plusCalBundle()
             .root.tla
-        #expect(rendered.contains("first := (first + 1) || second := (first + 1);"))
+        #expect(rendered.contains("first := __atomic_0 || second := __atomic_1;"))
 
         let initial = try firstCompiledState(in: compilation)
         let successor = try #require(try compiledSuccessors(
@@ -997,7 +1016,7 @@ struct AlgorithmBuilderTests {
             from: initial
         ).first)
         #expect(try renderedValue(named: "first", in: successor, compilation: compilation) == .int(2))
-        #expect(try renderedValue(named: "second", in: successor, compilation: compilation) == .int(2))
+        #expect(try renderedValue(named: "second", in: successor, compilation: compilation) == .int(3))
     }
 
     @Test("atomic paths reject competing transfers and accept exclusive transfers")
@@ -1053,9 +1072,9 @@ struct AlgorithmBuilderTests {
             .compile()
             .render().plusCalBundle()
             .root.tla
-        #expect(rendered.components(separatedBy: "common := (common + 1)").count == 3)
-        #expect(rendered.contains("common := (common + 1) || first := __binder_"))
-        #expect(rendered.contains("common := (common + 1) || second := __binder_"))
+        #expect(rendered.components(separatedBy: "common := __atomic_0").count == 3)
+        #expect(rendered.contains("common := __atomic_0 || first := __atomic_"))
+        #expect(rendered.contains("common := __atomic_0 || second := __atomic_"))
     }
 
     @Test("moving a continuation under a binder preserves its outer names")
@@ -1080,10 +1099,14 @@ struct AlgorithmBuilderTests {
         let step = try #require(projected.sequentialSteps.first)
         guard case .with(let binder, _, let body) = step.statements.first,
               body.count == 1,
-              case .parallel(let assignments) = body[0],
+              case .letBinding(let selectedSnapshot, .variable(let selectedValue), let next) = body[0],
+              next.count == 1,
+              case .letBinding(let copiedSnapshot, .variable(let copiedValue), let final) = next[0],
+              final.count == 1,
+              case .parallel(let assignments) = final[0],
               assignments.count == 2,
-              case .variable(let selectedValue) = assignments[0].value,
-              case .variable(let copiedValue) = assignments[1].value
+              assignments[0].value == .variable(selectedSnapshot),
+              assignments[1].value == .variable(copiedSnapshot)
         else {
             Issue.record("Expected one capture-free scheduled scope.")
             return
@@ -1109,13 +1132,15 @@ struct AlgorithmBuilderTests {
 
         let step = try #require(source.plusCalProjection().sequentialSteps.first)
         guard case .with(let binder, let source, let body) = step.statements.first,
-              binder == "selected",
               source == .setLiteral([.value(.int(1)), .value(.int(2))]),
-              body.count == 2,
-              case .parallel(let assignments) = body[0],
+              body.count == 1,
+              case .letBinding(_, .variable(let captured), let final) = body[0],
+              captured == binder,
+              final.count == 2,
+              case .parallel(let assignments) = final[0],
               assignments.count == 1,
               assignments[0].target.root == "value",
-              case .goto(let destination) = body[1]
+              case .goto(let destination) = final[1]
         else {
             Issue.record("Expected one projected choice path.")
             return
@@ -1249,8 +1274,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("LocalCounter") {
             Each(Node.all, scoped: { _, scope in
                 let inbox = scope.localVar("inbox", initial: 0)
-                Do(AlgorithmLabel.receive) {
-                    Await(inbox == 0)
+                Do(AlgorithmLabel.receive, when: inbox == 0) {
                     Assign(inbox, to: inbox + 1)
                     Goto(AlgorithmLabel.done)
                 }
@@ -1403,8 +1427,7 @@ struct AlgorithmBuilderTests {
             let count = scope.sharedVar("count", initial: 0)
             let selected = scope.sharedVar("selected", initial: 0)
             Each(Node.all, fairness: .weak) { node in
-                Do(TestControlLabel.choose) {
-                    When(count == 0)
+                Do(TestControlLabel.choose, when: count == 0) {
                     With(SetExpr<Int>.literal(1, 2)) { choice in
                         Assert(choice > 0)
                         Assign(selected, to: choice)
@@ -1533,8 +1556,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("NondeterministicSharedInitialization", scoped: { scope in
             let value = scope.sharedVar("value", in: 1...3)
             Each(Node.all) { _ in
-                Do(TestControlLabel.tick) {
-                    When(value < 3)
+                Do(TestControlLabel.tick, when: value < 3) {
                     Assign(value, to: value + 1)
                     Stop()
                 }
@@ -1770,8 +1792,7 @@ private struct ProcedureGeneratedModel {
                 let output = scope.sharedVar("output", initial: 0)
                 Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
                     let offset = scope.localVar("offset", initial: 1)
-                    Do(Step.enter) {
-                        Await(value.expr >= 0)
+                    Do(Step.enter, when: value.expr >= 0) {
                         Assign(output, to: value.expr + offset.expr)
                         Return()
                     }

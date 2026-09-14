@@ -693,13 +693,26 @@ private func process<Value: FiniteTLAValueDomain>(
 
 /// Defines one labeled atomic region of a PlusCal algorithm.
 ///
-/// All statements in the body read the same pre-state and produce one
-/// transition. The label is the program-counter destination for `Goto`.
+/// Statements read earlier updates in source order and produce one atomic
+/// transition. No intermediate state is visible to another process.
+/// The label is the program-counter destination for `Goto`.
 public func Do<Name: CaseIterable & RawRepresentable & Sendable>(
     _ label: Name,
     @DoBuilder _ body: () -> [StepStatement]
 ) -> AlgorithmElement where Name.RawValue == String {
     AlgorithmElement(model: .step(AlgorithmStepModel(label: AlgorithmLabelModel(name: label.rawValue), statements: body().map(\.model))))
+}
+
+/// Defines an atomic step whose entire body is guarded by `condition`.
+public func Do<Name: CaseIterable & RawRepresentable & Sendable>(
+    _ label: Name,
+    when condition: some TypedExpression<Bool>,
+    @DoBuilder _ body: () -> [StepStatement]
+) -> AlgorithmElement where Name.RawValue == String {
+    Do(label) {
+        When(condition)
+        body()
+    }
 }
 
 /// Defines a labeled bounded `while` loop.
@@ -718,14 +731,9 @@ public func While<Name: CaseIterable & RawRepresentable & Sendable>(
     )))
 }
 
-public func Await(_ condition: some TypedExpression<Bool>) -> StepStatement {
-    StepStatement(model: .await(condition.stateExpr))
-}
-
-/// PlusCal `when`: a guarded atomic step. `When` and `Await` have the same
-/// transition semantics; the different spelling is author intent only.
+/// Enables the enclosing branch only when the condition holds.
 public func When(_ condition: some TypedExpression<Bool>) -> StepStatement {
-    Await(condition)
+    StepStatement(model: .when(condition.stateExpr))
 }
 
 /// A PlusCal assertion. A false assertion creates a compiled safety
@@ -735,7 +743,7 @@ public func Assert(_ condition: some TypedExpression<Bool>) -> StepStatement {
 }
 
 /// Invokes a declared PlusCal procedure from a sequential algorithm step.
-/// Arguments are formal expressions evaluated in the caller's pre-state.
+/// Arguments read the caller's values at the call, including earlier updates.
 public func Call<Name: CaseIterable & RawRepresentable & Sendable>(
     _ target: Name,
     with arguments: (any StateExprConvertible)...
@@ -1334,10 +1342,6 @@ package enum AlgorithmValidator {
     ) {
         let allSteps = labels
         validateName(step.label.name, at: .algorithm, diagnostics: &diagnostics)
-        let paths = writePaths(step.statements)
-        if paths.contains(where: { Set($0).count != $0.count }) {
-            diagnostics.append(AlgorithmDiagnostic(.duplicateRootWrite, at: .algorithm))
-        }
         if controlTransferCounts(step.statements).contains(where: { $0 > 1 }) {
             diagnostics.append(AlgorithmDiagnostic(.invalidAtomicControlFlow, at: .algorithm))
         }
@@ -1406,10 +1410,6 @@ package enum AlgorithmValidator {
         diagnostics: inout [AlgorithmDiagnostic]
     ) {
         let anchor = AlgorithmDiagnosticAnchor.step(process: process, label: step.label.name)
-        let paths = writePaths(step.statements)
-        if paths.contains(where: { Set($0).count != $0.count }) {
-            diagnostics.append(AlgorithmDiagnostic(.duplicateRootWrite, at: anchor))
-        }
         if controlTransferCounts(step.statements).contains(where: { $0 > 1 }) {
             diagnostics.append(AlgorithmDiagnostic(.invalidAtomicControlFlow, at: anchor))
         }
@@ -1446,10 +1446,6 @@ package enum AlgorithmValidator {
         for step in procedure.steps {
             let stepAnchor = AlgorithmDiagnosticAnchor.step(process: index, label: step.label.name)
             validateName(step.label.name, at: stepAnchor, diagnostics: &diagnostics)
-            let paths = writePaths(step.statements)
-            if paths.contains(where: { Set($0).count < $0.count }) {
-                diagnostics.append(.init(.duplicateRootWrite, at: stepAnchor))
-            }
             if controlTransferCounts(step.statements).contains(where: { $0 > 1 }) {
                 diagnostics.append(.init(.invalidAtomicControlFlow, at: stepAnchor))
             }
@@ -1487,7 +1483,7 @@ package enum AlgorithmValidator {
             switch statement {
             case .rejected(let code):
                 diagnostics.append(AlgorithmDiagnostic(code, at: anchor))
-            case .await, .assert, .skip:
+            case .when, .assert, .skip:
                 break
             case .letBinding(_, _, let body), .with(_, _, let body):
                 validateStatements(body, at: anchor, labels: labels, procedures: procedures, procedureArities: procedureArities, inProcedure: inProcedure, diagnostics: &diagnostics)
@@ -1502,6 +1498,9 @@ package enum AlgorithmValidator {
                 validateDomain(domain, at: anchor, diagnostics: &diagnostics)
                 validateStatements(body, at: anchor, labels: labels, procedures: procedures, procedureArities: procedureArities, inProcedure: inProcedure, diagnostics: &diagnostics)
             case .goto(let label):
+                if index < statements.index(before: statements.endIndex) {
+                    diagnostics.append(.init(.invalidAtomicControlFlow, at: anchor))
+                }
                 if !labels.contains(label.name) {
                     diagnostics.append(AlgorithmDiagnostic(.invalidTarget, at: anchor))
                 }
@@ -1530,30 +1529,10 @@ package enum AlgorithmValidator {
                     diagnostics.append(.init(.invalidProcedureControlFlow, at: anchor))
                 }
             case .stop:
-                break
+                if index < statements.index(before: statements.endIndex) {
+                    diagnostics.append(.init(.invalidAtomicControlFlow, at: anchor))
+                }
             }
-        }
-    }
-
-    private static func writePaths(_ statements: [AlgorithmStatementModel]) -> [[String]] {
-        statements.reduce(into: [[]]) { paths, statement in
-            let statementPaths: [[String]]
-            switch statement {
-            case .rejected: statementPaths = [[]]
-            case .set(let target, _):
-                statementPaths = [[target.root]]
-            case .parallel(let assignments):
-                statementPaths = [assignments.map(\.target.root)]
-            case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
-                statementPaths = writePaths(then) + writePaths(otherwise)
-            case .choose(_, _, let body):
-                statementPaths = writePaths(body)
-            case .await, .assert, .goto, .call, .return, .stop, .skip:
-                statementPaths = [[]]
-            case .letBinding(_, _, let body), .with(_, _, let body):
-                statementPaths = writePaths(body)
-            }
-            paths = paths.flatMap { path in statementPaths.map { path + $0 } }
         }
     }
 
@@ -1578,7 +1557,7 @@ package enum AlgorithmValidator {
                     statementPaths = [0]
                 case .ifElse(_, let then, let otherwise), .either(let then, let otherwise):
                     statementPaths = controlTransferCounts(then) + controlTransferCounts(otherwise)
-                case .rejected, .await, .assert, .set, .skip:
+                case .rejected, .when, .assert, .set, .skip:
                     statementPaths = [0]
                 }
                 index += 1

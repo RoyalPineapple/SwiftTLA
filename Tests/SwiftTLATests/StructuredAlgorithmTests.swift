@@ -60,8 +60,7 @@ private struct StructuredCarModel {
                 ))
 
                 Each(Car.all) { car in
-                    Do(Step.open) {
-                        When(cars[car][CarRecord.door] == Door.closed)
+                    Do(Step.open, when: cars[car][CarRecord.door] == Door.closed) {
                         Assign(cars, to: cars.updating(car) { vehicle in
                             vehicle.updating(CarRecord.door, to: Door.open)
                         })

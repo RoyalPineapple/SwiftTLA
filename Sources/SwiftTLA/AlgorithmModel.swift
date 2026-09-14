@@ -144,126 +144,67 @@ package struct AlgorithmModel: Sendable {
             return schedule(projected)
         }
 
-        func call(
-            _ target: String,
-            arguments: [StateExpr],
-            after assignments: [AlgorithmAssignmentModel],
-            followedBy suffix: [AlgorithmStatementModel]
+        // Snapshot each write where it occurs, then publish one assignment per
+        // root at the end of the atomic branch. PlusCal labels require that form.
+        func schedule(
+            _ values: [AlgorithmStatementModel],
+            assignments: [AlgorithmAssignmentModel] = [],
+            replacements: [String: StateExpr] = [:]
         ) -> [AlgorithmStatementModel] {
-            let assignmentGroup = assignments.isEmpty ? [] : [AlgorithmStatementModel.parallel(assignments)]
-            guard arguments.isEmpty == false, assignments.isEmpty == false else {
-                return assignmentGroup + [.call(target: target, arguments: arguments)] + suffix
+            let finalWrites = assignments.isEmpty ? [] : [AlgorithmStatementModel.parallel(assignments)]
+            guard let statement = values.first else { return finalWrites }
+            let suffix = Array(values.dropFirst())
+            func expression(_ value: StateExpr) -> StateExpr {
+                StateExpr.substituteVariables(replacements, in: value)
             }
-            let bindings = arguments.map { argument in (name: binding(), value: argument) }
-            let call = AlgorithmStatementModel.call(
-                target: target,
-                arguments: bindings.map { .variable($0.name) }
-            )
-            return bindings.reversed().reduce(assignmentGroup + [call] + suffix) { body, value in
-                [.letBinding(variable: value.name, value: value.value, body)]
+            func continued(_ body: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
+                schedule(body + suffix, assignments: assignments, replacements: replacements)
             }
-        }
-
-        func movingScope(
-            _ variable: String,
-            body: [AlgorithmStatementModel],
-            over suffix: [AlgorithmStatementModel]
-        ) -> (String, [AlgorithmStatementModel]) {
-            guard suffix.algorithmScopeNames.contains(variable) else { return (variable, body) }
-            let fresh = StateExpr.freshBoundName(
-                variable,
-                avoiding: usedBindings
-                    .union(body.algorithmScopeNames)
-                    .union(suffix.algorithmScopeNames)
-            )
-            usedBindings.insert(fresh)
-            return (
-                fresh,
-                body.map {
-                    $0.substitutingVariable(
-                        variable,
-                        with: .variable(fresh),
-                        assignmentTargets: .replaceWhenVariable
-                    )
+            switch statement {
+            case .set(let target, let value):
+                let name = binding()
+                let updated: StateExpr
+                switch target {
+                case .root: updated = expression(value)
+                case .function(let root, let key):
+                    updated = expression(.except(.variable(root), key, value))
                 }
-            )
-        }
-
-        func assignmentStatements(_ assignments: [AlgorithmAssignmentModel]) -> [AlgorithmStatementModel] {
-            assignments.map { .set(target: $0.target, value: $0.value) }
-        }
-
-        func schedule(_ values: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
-            var reads: [AlgorithmStatementModel] = []
-            var assignments: [AlgorithmAssignmentModel] = []
-            var terminals: [AlgorithmStatementModel] = []
-
-            for (index, statement) in values.enumerated() {
-                let suffix = Array(values.dropFirst(index + 1))
-                switch statement {
-                case .set(let target, let value):
-                    assignments.append(.init(target: target, value: value))
-                case .parallel(let values):
-                    assignments.append(contentsOf: values)
-                case .await, .assert, .skip, .rejected:
-                    reads.append(statement)
-                case .goto, .return:
-                    terminals.append(statement)
-                case .stop:
-                    terminals.append(.goto(.init(name: CompilerControlSymbol.done.rawValue)))
-                case .call(let target, let arguments):
-                    return reads + call(
-                        target,
-                        arguments: arguments,
-                        after: assignments,
-                        followedBy: suffix
-                    ) + terminals
-                case .letBinding(let variable, let value, let body):
-                    let scoped = movingScope(variable, body: body, over: suffix)
-                    return reads + [
-                        .letBinding(
-                            variable: scoped.0,
-                            value: value,
-                            schedule(assignmentStatements(assignments) + scoped.1 + suffix + terminals)
-                        )
-                    ]
-                case .with(let variable, let source, let body):
-                    let scoped = movingScope(variable, body: body, over: suffix)
-                    return reads + [
-                        .with(
-                            variable: scoped.0,
-                            source: source,
-                            schedule(assignmentStatements(assignments) + scoped.1 + suffix + terminals)
-                        )
-                    ]
-                case .choose(let variable, let domain, let body):
-                    let scoped = movingScope(variable, body: body, over: suffix)
-                    return reads + [
-                        .with(
-                            variable: scoped.0,
-                            source: .setLiteral(domain.map(StateExpr.value)),
-                            schedule(assignmentStatements(assignments) + scoped.1 + suffix + terminals)
-                        )
-                    ]
-                case .ifElse(let condition, let then, let otherwise):
-                    return reads + [
-                        .ifElse(
-                            condition,
-                            schedule(assignmentStatements(assignments) + then + suffix + terminals),
-                            schedule(assignmentStatements(assignments) + otherwise + suffix + terminals)
-                        )
-                    ]
-                case .either(let first, let second):
-                    return reads + [
-                        .either(
-                            schedule(assignmentStatements(assignments) + first + suffix + terminals),
-                            schedule(assignmentStatements(assignments) + second + suffix + terminals)
-                        )
-                    ]
+                let pending = assignments.filter { $0.target.root != target.root }
+                    + [.init(target: .root(target.root), value: .variable(name))]
+                var next = replacements
+                next[target.root] = .variable(name)
+                return [.letBinding(variable: name, value: updated,
+                    schedule(suffix, assignments: pending, replacements: next))]
+            case .when, .assert, .skip, .rejected:
+                return [statement.mappingExpressions(expression)] + continued([])
+            case .letBinding(let variable, let value, let body):
+                let name = binding()
+                let renamed = body.map {
+                    $0.substitutingVariable(variable, with: .variable(name), assignmentTargets: .replaceWhenVariable)
                 }
+                return [.letBinding(variable: name, value: expression(value), continued(renamed))]
+            case .with(let variable, let source, let body):
+                let name = binding()
+                let renamed = body.map {
+                    $0.substitutingVariable(variable, with: .variable(name), assignmentTargets: .replaceWhenVariable)
+                }
+                return [.with(variable: name, source: expression(source), continued(renamed))]
+            case .choose(let variable, let domain, let body):
+                return continued([.with(variable: variable,
+                    source: .setLiteral(domain.map(StateExpr.value)), body)])
+            case .ifElse(let condition, let then, let otherwise):
+                return [.ifElse(expression(condition), continued(then), continued(otherwise))]
+            case .either(let first, let second):
+                return [.either(continued(first), continued(second))]
+            case .stop:
+                return finalWrites + [.goto(.init(name: CompilerControlSymbol.done.rawValue))]
+            case .goto, .return:
+                return finalWrites + [statement]
+            case .call:
+                return finalWrites + [statement.mappingExpressions(expression)] + suffix
+            case .parallel(let group):
+                return continued(group.map { .set(target: $0.target, value: $0.value) })
             }
-            let assignmentGroup = assignments.isEmpty ? [] : [AlgorithmStatementModel.parallel(assignments)]
-            return reads + assignmentGroup + terminals
         }
 
         func step(_ value: AlgorithmStepModel) -> AlgorithmStepModel {
@@ -449,7 +390,7 @@ internal enum CompiledAuthoredPlusCalLValue: Sendable {
 }
 
 internal indirect enum CompiledAuthoredPlusCalStatement: Sendable {
-    case await(CompiledExpression)
+    case when(CompiledExpression)
     case assert(CompiledExpression)
     case set(target: CompiledAuthoredPlusCalLValue, value: CompiledExpression)
     case parallel([CompiledAuthoredPlusCalAssignment])
@@ -637,7 +578,7 @@ package struct AlgorithmAssignmentModel: Sendable, Equatable {
 
 package indirect enum AlgorithmStatementModel: Sendable, Equatable {
     case rejected(AlgorithmDiagnosticCode)
-    case await(StateExpr)
+    case when(StateExpr)
     case assert(StateExpr)
     case set(target: AlgorithmLValueModel, value: StateExpr)
     case parallel([AlgorithmAssignmentModel])

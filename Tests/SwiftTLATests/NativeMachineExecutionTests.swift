@@ -40,16 +40,18 @@ private struct BoundedExecutionCounter {
 }
 
 @TLAModel
-private struct SimultaneousExecutionSwap {
+private struct SavedValueExecutionSwap {
     enum Step: String, CaseIterable { case swap }
     static var spec: TLASpec {
-        #spec("SimultaneousExecutionSwap") {
-            Algorithm("SimultaneousExecutionSwap", scoped: { scope in
+        #spec("SavedValueExecutionSwap") {
+            Algorithm("SavedValueExecutionSwap", scoped: { scope in
                 let left = scope.sharedVar("left", initial: 1)
                 let right = scope.sharedVar("right", initial: 2)
                 While(Step.swap, true) {
-                    Assign(left, to: right)
-                    Assign(right, to: left)
+                    Let(left) { originalLeft in
+                        Assign(left, to: right)
+                        Assign(right, to: originalLeft)
+                    }
                 }
             })
         }
@@ -153,15 +155,15 @@ struct NativeMachineExecutionTests {
         #expect(checked == Set(observed.map(CompiledValue.integer)))
     }
 
-    @Test("Simultaneous assignments preserve old-state reads across a complete cycle")
+    @Test("Saved values preserve a swap across a complete cycle")
     func swapMatchesFormalSuccessors() throws {
-        let compilation = try SimultaneousExecutionSwap.spec.compile()
+        let compilation = try SavedValueExecutionSwap.spec.compile()
         let runtime = CompiledRuntime(compilation: compilation)
         var formal = try #require(try runtime.initialStates().only)
         let swap = try #require(compilation.layout.testActionID(named: "swap"))
         let left = try #require(compilation.layout.testVariableID(named: "left"))
         let right = try #require(compilation.layout.testVariableID(named: "right"))
-        var machine = try SimultaneousExecutionSwap.makeMachine()
+        var machine = try SavedValueExecutionSwap.makeMachine()
         for _ in 0..<2 {
             let before = machine.state
             let successor = try #require(try runtime.successors(for: swap, from: formal).only)
