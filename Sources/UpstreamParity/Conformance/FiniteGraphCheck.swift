@@ -95,7 +95,10 @@ package struct FiniteGraphCheck: Sendable {
 
       enter(.tlcExecution)
       try validateReference(tlcRequest)
-      let tlcCapture = try tlcProcess.capture(tlcRequest, retainingIn: directory)
+      let propertyCheck = TLCPropertyCheck(processAdapter: tlcProcess)
+      let referenceSource = TLCPropertySource.reference(tlcRequest.bundle)
+      let tlcCapture = try propertyCheck.captureGraph(native, request: tlcRequest,
+        source: referenceSource, in: directory)
 
       enter(.tlcParsing)
       let tlcRun = tlcCapture.graph
@@ -106,8 +109,8 @@ package struct FiniteGraphCheck: Sendable {
 
       enter(.comparison)
       guard tlcRun.isComparable, swiftRun.isComparable else { throw TLCPropertyCheckError.incompleteGraph }
-      let reference = try TLCPropertyCheck(processAdapter: tlcProcess).captureAll(
-        native, completeGraph: .success(tlcCapture), source: .reference,
+      let reference = try propertyCheck.captureAll(
+        native, completeGraph: .success(tlcCapture), source: referenceSource,
         in: directory.appendingPathComponent("reference"))
       guard let comparison = reference.graphComparison else { throw TLCPropertyCheckError.incompleteGraph }
       let generatedDirectory = directory.appendingPathComponent("generated")
@@ -117,10 +120,11 @@ package struct FiniteGraphCheck: Sendable {
       let generatedRequest = try tlcRequest.selecting(
         bundle: native.rendered.tlaBundle(checking: [], checkDeadlock: false),
         work: generatedWork, runID: UUID(), invocation: .finiteGraph)
-      let generated = try tlcProcess.capture(generatedRequest, retainingIn: generatedDirectory)
+      let generated = try propertyCheck.captureGraph(native, request: generatedRequest,
+        source: .generated, in: generatedDirectory)
       try GraphRunRecords.write(generated.graph, to: generatedDirectory.appendingPathComponent("tlc-graph.jsonl"))
       guard generated.graph.isComparable else { throw TLCPropertyCheckError.incompleteGraph }
-      let results = try TLCPropertyCheck(processAdapter: tlcProcess).captureAll(
+      let results = try propertyCheck.captureAll(
         native, completeGraph: .success(generated), source: .generated, in: directory)
       guard let generatedComparison = results.graphComparison else { throw TLCPropertyCheckError.incompleteGraph }
       let checks = Dictionary(uniqueKeysWithValues: results.checks.map {

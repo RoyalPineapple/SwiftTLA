@@ -149,7 +149,7 @@ package struct TemporalSymmetryCheck: Sendable {
       invocation: .finiteGraph, toolchain: toolchain, referencePin: referencePin,
       projectRoot: projectRoot, evidenceRoot: evidenceRoot)
     let directory = evidenceRoot.appendingPathComponent(temporalCase.id).appendingPathComponent("complete-graph")
-    let capture = try TLCProcessAdapter().capture(request, retainingIn: directory)
+    let capture = try TLCPropertyCheck().captureGraph(native, request: request, source: .generated, in: directory)
     guard capture.outcome == .completed, capture.graph.isComparable else {
       throw TLCPropertyCheckError.incompleteGraph
     }

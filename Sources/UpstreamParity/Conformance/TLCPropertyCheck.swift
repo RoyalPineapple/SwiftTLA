@@ -11,7 +11,18 @@ package enum TLCPropertyCheckError: Error, Equatable, Sendable {
 
 package enum TLCPropertySource: Sendable {
   case generated
-  case reference
+  case reference(TLAModuleBundle)
+
+  func bundle(for native: NativeModelRun, checkingSatisfied: Bool) throws -> TLAModuleBundle {
+    let names = checkingSatisfied ? Set(native.checks.properties.filter { $0.value == .satisfied }.keys) : []
+    switch self {
+    case .generated:
+      return try native.rendered.tlaBundle(checking: names,
+        checkDeadlock: checkingSatisfied && native.checks.deadlock == .satisfied)
+    case .reference(let original):
+      return names.isEmpty ? original : try native.rendered.referenceBundle(checking: names, in: original)
+    }
+  }
 }
 
 package struct TLCPropertyCheck: Sendable {
@@ -21,6 +32,38 @@ package struct TLCPropertyCheck: Sendable {
     self.processAdapter = processAdapter
   }
 
+  package func captureGraph(
+    _ native: NativeModelRun, request: TLCProcessRequest, source: TLCPropertySource, in directory: URL
+  ) throws -> TLCProcessCapture {
+    guard native.graph.isComparable else { throw TLCPropertyCheckError.invalidNativeGraph }
+    let unchecked = try source.bundle(for: native, checkingSatisfied: false)
+    guard request.bundle == unchecked else { throw TLCPropertyCheckError.requestMismatch }
+    let checked = try source.bundle(for: native, checkingSatisfied: true)
+    if checked != unchecked {
+      let batch = try request.selecting(bundle: checked, work: request.workingDirectory,
+        runID: UUID(), invocation: .finiteGraph)
+      let output = directory.appendingPathComponent("checked-graph")
+      let capture = try processAdapter.capture(batch, retainingIn: output)
+      if capture.outcome == .completed { return capture }
+      let outcome: TLCExecutionOutcome = capture.outcome == .failed(exitStatus: 13)
+        ? .livenessViolation : capture.outcome
+      let check: ModelCheck
+      if outcome == .deadlock {
+        check = .deadlock
+      } else {
+        guard let name = native.checks.properties.keys.sorted().first(where: {
+          native.checks.properties[$0] == .satisfied
+        }) else { throw TLCPropertyCheckError.requestMismatch }
+        check = .property(name)
+      }
+      guard case .violated = try propertyResult(check: check, outcome: outcome,
+        graph: native.graph, outputDirectory: output) else {
+        throw TLCPropertyCheckError.incompleteGraph
+      }
+    }
+    return try processAdapter.capture(request, retainingIn: directory)
+  }
+
   package func captureAll(
     _ native: NativeModelRun, completeGraph: Result<TLCProcessCapture, Error>,
     source: TLCPropertySource, in directory: URL
@@ -28,6 +71,11 @@ package struct TLCPropertyCheck: Sendable {
     graphComparison: GraphComparison?,
     checks: [(check: ModelCheck, result: Result<PropertyComparison, Error>)]
   ) {
+    var selected = native.checks.properties.sorted { $0.key < $1.key }.map {
+      (check: ModelCheck.property($0.key), result: $0.value)
+    }
+    if case .generated = source, let deadlock = native.checks.deadlock { selected.append((.deadlock, deadlock)) }
+    let passingChecks = selected.filter { $0.result == .satisfied }.map(\.check)
     let prepared = Result {
       let capture = try completeGraph.get()
       guard native.graph.isComparable else { throw TLCPropertyCheckError.invalidNativeGraph }
@@ -35,41 +83,27 @@ package struct TLCPropertyCheck: Sendable {
         throw TLCPropertyCheckError.incompleteGraph
       }
       guard capture.request.invocation == .finiteGraph else { throw TLCPropertyCheckError.requestMismatch }
-      switch source {
-      case .generated:
-        guard try capture.request.bundle == native.rendered.tlaBundle(checking: [], checkDeadlock: false) else {
-          throw TLCPropertyCheckError.requestMismatch
-        }
-      case .reference:
-        let request = capture.request
-        try request.validateDeclaredBundle()
-        guard SHA256.hex(Data(request.bundle.tla.utf8)) == request.finiteGraphCase.moduleSHA256,
-              SHA256.hex(Data(request.bundle.cfg.utf8)) == request.finiteGraphCase.cfgSHA256 else {
-          throw TLCPropertyCheckError.requestMismatch
-        }
+      let unchecked = try source.bundle(for: native, checkingSatisfied: false)
+      let checked = try source.bundle(for: native, checkingSatisfied: true)
+      guard capture.request.bundle == unchecked || capture.request.bundle == checked else {
+        throw TLCPropertyCheckError.requestMismatch
       }
-      return (capture, compareFiniteGraphs(tlc: capture.graph, swift: native.graph))
+      try capture.request.validateDeclaredBundle()
+      guard SHA256.hex(Data(capture.request.bundle.tla.utf8)) == capture.request.finiteGraphCase.moduleSHA256,
+            SHA256.hex(Data(capture.request.bundle.cfg.utf8)) == capture.request.finiteGraphCase.cfgSHA256 else {
+        throw TLCPropertyCheckError.requestMismatch
+      }
+      return (capture, compareFiniteGraphs(tlc: capture.graph, swift: native.graph),
+        checked == capture.request.bundle)
     }
-    var selected = native.checks.properties.sorted { $0.key < $1.key }.map {
-      (check: ModelCheck.property($0.key), result: $0.value)
-    }
-    if case .generated = source, let deadlock = native.checks.deadlock { selected.append((.deadlock, deadlock)) }
-    let passingChecks = selected.filter { $0.result == .satisfied }.map(\.check)
     let batch = Result {
+      let (capture, _, alreadyChecked) = try prepared.get()
+      if alreadyChecked { return true }
       guard passingChecks.count > 1 else { return false }
-      let (capture, _) = try prepared.get()
       let work = capture.request.workingDirectory.appendingPathComponent(UUID().uuidString)
       try RetainedFiles.createDirectory(work, beneath: capture.request.workingDirectory)
       defer { try? FileManager.default.removeItem(at: work) }
-      let names = Set(passingChecks.compactMap { check -> String? in
-        if case .property(let name) = check { return name }
-        return nil
-      })
-      let bundle = switch source {
-      case .generated: try native.rendered.tlaBundle(checking: names,
-        checkDeadlock: passingChecks.contains(.deadlock))
-      case .reference: try native.rendered.referenceBundle(checking: names, in: capture.request.bundle)
-      }
+      let bundle = try source.bundle(for: native, checkingSatisfied: true)
       let request = try capture.request.selecting(bundle: bundle,
         work: work, runID: UUID(), invocation: .propertyCheck)
       let output = directory.appendingPathComponent("batch")
@@ -97,7 +131,7 @@ package struct TLCPropertyCheck: Sendable {
         throw TLCPropertyCheckError.outputAlreadyExists
       }
       do {
-        let (capture, graphComparison) = try prepared.get()
+        let (capture, graphComparison, _) = try prepared.get()
         let tlcResult: PropertyResult
         if passingChecks.contains(check), try batch.get() {
           tlcResult = .satisfied
@@ -108,9 +142,9 @@ package struct TLCPropertyCheck: Sendable {
           let bundle: TLAModuleBundle
           switch source {
           case .generated: bundle = try check.bundle(from: native.rendered)
-          case .reference:
+          case .reference(let original):
             guard case .property(let name) = check else { throw TLCPropertyCheckError.requestMismatch }
-            bundle = try native.rendered.referenceBundle(checking: [name], in: capture.request.bundle)
+            bundle = try native.rendered.referenceBundle(checking: [name], in: original)
           }
           let request = try capture.request.selecting(bundle: bundle,
             work: work, runID: UUID(), invocation: .propertyCheck)

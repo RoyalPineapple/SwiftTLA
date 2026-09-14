@@ -5,8 +5,9 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct TLCPropertyCheckTests {
-  @Test("passing checks share one TLC invocation and batch failures are isolated", arguments: [false, true])
-  func batchesPassingChecks(isTwoFails: Bool) throws {
+  @Test("passing checks share TLC graph capture and batch failures are isolated",
+    arguments: [(false, false), (true, false), (false, true), (true, true)])
+  func batchesPassingChecks(isTwoFails: Bool, reuseGraph: Bool) throws {
     let x = Var<Int>("x", 1)
     let rendered = try TLASpec("TemporalFixture") {
       Variable(x)
@@ -16,9 +17,13 @@ struct TLCPropertyCheckTests {
     let fixture = try Fixture(renderedOverride: rendered)
     let native = try NativeModelRun(rendered: rendered, graph: fixture.swiftRun,
       checks: .init(properties: ["Positive": .satisfied, "IsTwo": .satisfied], deadlock: nil))
-    let result = try TLCPropertyCheck(processAdapter: .init(executor: BatchExecutor(isTwoFails: isTwoFails)))
-      .captureAll(native, completeGraph: .success(fixture.captureGraph()), source: .generated,
-        in: fixture.directory)
+    let checker = TLCPropertyCheck(processAdapter: .init(executor: BatchExecutor(isTwoFails: isTwoFails)))
+    let graphDirectory = fixture.root.appendingPathComponent("graph")
+    let capture = try reuseGraph
+      ? checker.captureGraph(native, request: fixture.completeGraphRequest, source: .generated, in: graphDirectory)
+      : fixture.captureGraph()
+    let result = try checker.captureAll(native, completeGraph: .success(capture), source: .generated,
+      in: fixture.directory)
     #expect(result.checks.count == 2)
     for (check, comparison) in result.checks {
       let expected: PropertyComparisonStatus = isTwoFails && check == .property("IsTwo")
@@ -27,8 +32,12 @@ struct TLCPropertyCheckTests {
     }
     let files = try #require(FileManager.default.enumerator(atPath: fixture.directory.path))
       .allObjects.compactMap { $0 as? String }
-    #expect(files.filter { $0.hasSuffix("tlc-process.json") }.count == (isTwoFails ? 3 : 1))
-    let batch = try String(contentsOf: fixture.directory.appendingPathComponent("batch/tlc-process.json"), encoding: .utf8)
+    let expectedPropertyRuns = isTwoFails ? 3 : (reuseGraph ? 0 : 1)
+    #expect(files.filter { $0.hasSuffix("tlc-process.json") }.count == expectedPropertyRuns)
+    let batchFile = reuseGraph && !isTwoFails
+      ? graphDirectory.appendingPathComponent("checked-graph/tlc-process.json")
+      : fixture.directory.appendingPathComponent("batch/tlc-process.json")
+    let batch = try String(contentsOf: batchFile, encoding: .utf8)
     #expect(batch.contains("INVARIANT Positive"))
     #expect(batch.contains("INVARIANT IsTwo"))
   }
@@ -37,7 +46,9 @@ struct TLCPropertyCheckTests {
     let isTwoFails: Bool
 
     func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
-      #expect(request.invocation == .propertyCheck)
+      if request.invocation == .finiteGraph {
+        try graphStream(case: request.finiteGraphCase, runID: request.runID).write(to: request.graphEvents)
+      }
       if isTwoFails && request.bundle.cfg.contains("INVARIANT IsTwo") {
         try numberedInitialStateTrace().write(to: request.traceOutput)
         return Fixture.safetyViolation

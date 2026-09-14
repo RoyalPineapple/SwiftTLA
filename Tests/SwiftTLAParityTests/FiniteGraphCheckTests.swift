@@ -425,8 +425,8 @@ extension FiniteGraphCheckTests {
     #expect((retained["tlcResult"] as? [String: Any])?["status"] as? String == "violated")
   }
 
-  @Test("an unavailable property does not skip later checks")
-  func continuesAfterFailedCheck() throws {
+  @Test("a batch timeout fails without inventing individual property verdicts")
+  func rejectsTimedOutBatch() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -436,10 +436,10 @@ extension FiniteGraphCheckTests {
       .run(nativeRun: { try fixtureRun(action: "Next", checks: ["Failed": .satisfied, "Unknown": .satisfied]) },
         tlcRequest: request, outputDirectory: output)
     #expect(result.exitCode == .failure)
-    let checks = try json(at: output.appendingPathComponent("comparison.json"))["checks"] as? [String: String]
-    #expect(checks == ["properties/Failed": "unavailable", "properties/Unknown": "exact",
-      "reference/properties/Failed": "unavailable", "reference/properties/Unknown": "exact"])
-    #expect(FileManager.default.fileExists(atPath: output.appendingPathComponent("properties/Failed/check-error.txt").path))
+    #expect(result.diagnostic != nil)
+    #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
+    #expect(FileManager.default.fileExists(atPath:
+      output.appendingPathComponent("checked-graph/logs/tlc.failure.log").path))
   }
 
   @Test("a property verdict difference fails matching complete graphs")
@@ -554,12 +554,12 @@ private struct PerCheckExecutor: TLCProcessExecuting {
       try graphStream(for: request.finiteGraphCase, runID: request.runID).write(to: request.graphEvents)
     }
     var status: Int32 = 0
-    if request.invocation == .propertyCheck {
+    if request.bundle.cfg.contains("INVARIANT") || request.bundle.cfg.contains("CHECK_DEADLOCK TRUE") {
       let first: [Any] = [1, ["x": 1]]
       let second: [Any] = [2, ["x": 2]]
       var states: [Any] = []
       var actions: [Any] = []
-      if referenceDisagrees && request.bundle.tla.contains("Original reference fixture") {
+      if referenceDisagrees && request.bundle.cfg.contains("INVARIANT Unknown") && request.bundle.tla.contains("Original reference fixture") {
         status = 12
         states = [first]
       } else if request.bundle.cfg.contains("INVARIANT Failed") {
