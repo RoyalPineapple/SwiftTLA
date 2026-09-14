@@ -307,7 +307,6 @@ package struct CanonicalGraph: Equatable, Sendable {
 package enum GraphRunOutcome: Hashable, Sendable {
     case noViolation
     case invariantViolation(String)
-    case temporalViolation(property: String, reason: TemporalDiagnosticReason)
     case refinementViolation(String)
     case deadlock(CanonicalStateKey)
     case incomplete(reason: String)
@@ -316,7 +315,6 @@ package enum GraphRunOutcome: Hashable, Sendable {
     package var isConclusive: Bool {
         switch self {
         case .noViolation, .invariantViolation, .refinementViolation, .deadlock: true
-        case .temporalViolation(_, let reason): reason == .violatingFairLasso
         case .incomplete, .executionError: false
         }
     }

@@ -24,9 +24,6 @@ struct ConcreteVerificationGraphTests {
         #expect(throws: FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly) {
             _ = try reduced.explore()
         }
-        #expect(throws: FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly) {
-            _ = try reduced.checkLiveness()
-        }
         let concrete = ModelChecker(
             compilation: compilation,
             configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled)
@@ -41,10 +38,6 @@ struct ConcreteVerificationGraphTests {
         )
         #expect(throws: FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly) {
             _ = try reductionEvidence.analyzeTemporalProperties(in: compilation)
-        }
-        guard case .ok(statesCount: 2) = try concrete.checkLiveness() else {
-            Issue.record("Expected fairness to force both concrete member states to recur.")
-            return
         }
         let safetyOnly = TLASpec(
             name: specification.name, variables: specification.variables,

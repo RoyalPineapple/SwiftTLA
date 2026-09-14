@@ -144,39 +144,6 @@ package struct ModelChecker {
         try runExploration(checkingSafety: checkingSafety)
     }
 
-    func checkLiveness() throws -> ModelCheckOutcome {
-        let exploration = try explore()
-        guard case .ok = exploration.outcome else { return exploration.outcome }
-        guard compilation.semantics.behavior.temporalProperties.isEmpty == false else { return exploration.outcome }
-
-        let analyses = try exploration.analyzeTemporalProperties(in: compilation)
-        for (property, analysis) in zip(compilation.semantics.behavior.temporalProperties, analyses) {
-            switch analysis.status {
-            case .satisfied:
-                continue
-            case .violated:
-                guard let witness = analysis.witness else {
-                    throw CompilationDiagnostic(
-                        code: .compilationIdentityMismatch,
-                        stage: .checking,
-                        path: "temporalProperties.\(property.name).witness",
-                        expected: "a fair-lasso witness for the violated property",
-                        actual: "the violated analysis has no witness",
-                        nextSafeAction: "Explore the compiled specification again before checking liveness."
-                    )
-                }
-                return .livenessViolated(
-                    property: property.name,
-                    reason: analysis.reason,
-                    witness: witness
-                )
-            case .unavailable:
-                return .livenessUnavailable(property: property.name, reason: analysis.reason)
-            }
-        }
-        return .ok(statesCount: exploration.graph.states.count)
-    }
-
     private func runExploration(checkingSafety: Bool) throws -> FiniteExploration {
         try configuration.validatePropertySupport(in: compilation)
         let symmetry = try SymmetryPlan(
@@ -436,7 +403,6 @@ package enum ModelCheckingFailureKind: String, Sendable, Equatable {
     case invariantViolated
     case deadlock
     case stateLimit
-    case liveness
     case refinement
     case assumption
     case initialState
@@ -490,12 +456,6 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
     case deadlocked(state: TLAStateProjection)
     case noInitialStates
     case assumptionViolated
-    case livenessViolated(
-        property: String,
-        reason: TemporalDiagnosticReason,
-        witness: FairLassoWitness<StateGraph.StateID, String?>
-    )
-    case livenessUnavailable(property: String, reason: TemporalDiagnosticReason)
     case refinementViolated(refinement: String, failure: FormalRefinementFailure)
     case refinementUnproven(refinement: String, exploration: ModelCheckOutcome)
 
@@ -544,22 +504,6 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
                 actual: "false",
                 nextSafeAction: "Revise the assumption or its constant inputs."
             )
-        case .livenessViolated(let property, let reason, _):
-            return .init(
-                kind: .liveness,
-                subject: property,
-                expected: "the declared temporal property to hold",
-                actual: reason.rawValue,
-                nextSafeAction: "Inspect the lasso or fairness diagnostic and revise the temporal property or transition relation."
-            )
-        case .livenessUnavailable(let property, let reason):
-            return .init(
-                kind: .liveness,
-                subject: property,
-                expected: "complete temporal analysis",
-                actual: reason.rawValue,
-                nextSafeAction: "Complete the declared exploration inputs before checking the temporal property."
-            )
         case .refinementViolated(let refinement, let failure):
             switch failure {
             case .initialState(let mapped, let abstractInitialStates):
@@ -601,7 +545,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
         case .depthExceeded(let count, let l):
             return "DEPTH EXCEEDED — explored " + String(count) + " state(s) before hitting limit of " + String(l)
         case .deadlocked, .noInitialStates, .assumptionViolated,
-             .livenessViolated, .livenessUnavailable, .refinementViolated:
+             .refinementViolated:
             return diagnostic?.description ?? "Verification diagnostic unavailable"
         case .refinementUnproven:
             return diagnostic?.description ?? "Refinement is unproven"

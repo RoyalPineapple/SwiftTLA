@@ -66,7 +66,7 @@ package struct FormalGraphExporter: Sendable {
       outcome: try canonicalOutcome(
         exploration.outcome, states: states),
       trace: try canonicalTrace(
-        exploration.outcome, states: states, renderedActionNames: renderedActionNames)
+        exploration.outcome, renderedActionNames: renderedActionNames)
     )
   }
 
@@ -100,10 +100,6 @@ package struct FormalGraphExporter: Sendable {
       return .executionError("the compiled initial-state relation is empty")
     case .assumptionViolated:
       return .executionError("the compiled assumption evaluated to false")
-    case .livenessViolated(let property, let reason, _):
-      return .temporalViolation(property: property, reason: reason)
-    case .livenessUnavailable:
-      return .incomplete(reason: outcome.description)
     case .refinementViolated(let refinement, _):
       return .refinementViolation(refinement)
     case .refinementUnproven:
@@ -113,7 +109,6 @@ package struct FormalGraphExporter: Sendable {
 
   private func canonicalTrace(
     _ outcome: ModelCheckOutcome,
-    states: [StateGraph.StateID: CanonicalState],
     renderedActionNames: [String: String]
   ) throws -> GraphTrace? {
     switch outcome {
@@ -125,13 +120,6 @@ package struct FormalGraphExporter: Sendable {
           return GraphTraceStep(state: canonical.key,
             action: index == 0 ? nil : renderedActionNames[step.action] ?? step.action)
         })
-    case .livenessViolated(_, _, let witness):
-      return try GraphTrace(id: "swift-temporal-trace", witness: witness,
-        stateKey: { identifier in
-          guard let state = states[identifier] else { throw FormalGraphExportError.traceStateMissing }
-          return state.key
-        },
-        actionName: { renderedActionNames[$0] ?? $0 })
     default:
       return nil
     }

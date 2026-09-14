@@ -579,31 +579,30 @@ struct LivenessConformanceTests {
         #expect(action == compilation.layout.actions[0].id)
     }
 
-    @Test("ModelChecker reports liveness violations and bounded exploration separately")
+    @Test("temporal analysis distinguishes violations from incomplete exploration")
     func reportsDistinctLivenessAndBoundedOutcomes() throws {
         let x = Var<Int>("x")
-        let livenessSpec = TLASpec("liveness") {
+        let liveness = try TLASpec("liveness") {
             Variable(x, 0)
             Eventually("reachesOne", x == 1)
-        }
-        let liveness = try ModelChecker(compilation: try livenessSpec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).checkLiveness()
-        if case .livenessViolated(let property, let reason, let witness) = liveness {
-            #expect(property == "reachesOne")
-            #expect(reason == .violatingFairLasso)
-            #expect(witness.cycle.isEmpty == false)
-        } else {
-            Issue.record("Expected liveness violation, got \(liveness)")
-        }
+        }.compile()
+        let exploration = try ModelChecker(compilation: liveness, configuration: .init(
+            maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
+        let analysis = try #require(exploration.analyzeTemporalProperties(in: liveness).first)
+        #expect(analysis.status == .violated)
+        #expect(analysis.reason == .violatingFairLasso)
+        #expect(try #require(analysis.witness).cycle.isEmpty == false)
 
-        let completeSpec = TLASpec("incomplete") {
+        let bounded = try TLASpec("incomplete") {
             Variable(x, in: 0...2)
             Action("step") { x.becomes(x + 1).when(x < 2) }
             Eventually("reachesTwo", x == 2)
-        }
-        let incomplete = try ModelChecker(compilation: try completeSpec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1, symmetryReduction: .disabled)).checkLiveness()
-        if case .depthExceeded = incomplete {
-        } else {
-            Issue.record("Expected depth-exceeded outcome, got \(incomplete)")
-        }
+        }.compile()
+        let incomplete = try ModelChecker(compilation: bounded, configuration: .init(
+            maximumStateLimit: 1, symmetryReduction: .disabled)).explore()
+        let unavailable = try #require(incomplete.analyzeTemporalProperties(in: bounded).first)
+        #expect(unavailable.status == .unavailable)
+        #expect(unavailable.reason == .incompleteExploration)
+        #expect(unavailable.witness == nil)
     }
 }

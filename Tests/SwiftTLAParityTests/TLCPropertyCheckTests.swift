@@ -44,6 +44,36 @@ struct TLCPropertyCheckTests {
     }
   }
 
+  @Test("property counterexamples retain their cycle boundary and implicit stuttering")
+  func retainsLassoAndRejectsInvalidCycles() throws {
+    let first = CanonicalState(bindings: ["x": .integer(0)])
+    let second = CanonicalState(bindings: ["x": .integer(1)])
+    let graph = try CanonicalGraph(initialStates: [first], states: [first, second], edges: [
+      .init(source: first.key, action: "advance", target: second.key)
+    ])
+    let steps: [GraphTraceStep] = [
+      .init(state: first.key, action: nil),
+      .init(state: second.key, action: "advance"),
+      .init(state: second.key, action: nil)
+    ]
+    let lasso = GraphTrace(id: "lasso", steps: steps, cycleStartIndex: 1)
+    let encoded = try JSONEncoder().encode(PropertyResult.violated(lasso))
+    let decoded = try JSONDecoder().decode(PropertyResult.self, from: encoded)
+    #expect(decoded == .violated(lasso))
+    guard case .violated(let trace) = decoded else {
+      Issue.record("Expected the retained temporal counterexample")
+      return
+    }
+    try trace.validate(in: graph)
+    #expect(trace.cycleStartIndex == 1)
+    #expect(trace.steps.map(\.action) == [nil, "advance", nil])
+    for start in [-1, 0, 2, 3] {
+      #expect(throws: GraphRunError.self) {
+        try GraphTrace(id: "invalid-cycle", steps: steps, cycleStartIndex: start).validate(in: graph)
+      }
+    }
+  }
+
   @Test("property reports retain results without copying shared graphs", arguments: ["AlwaysEventuallyP", "Positive"])
   func retainsResultsWithoutGraphCopies(property: String) throws {
     let fixture = try Fixture(check: .property(property))

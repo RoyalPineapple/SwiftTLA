@@ -214,7 +214,6 @@ private func describe(_ value: GraphRunOutcome) -> String {
   switch value {
   case .noViolation: "no violation found"
   case .invariantViolation(let message): "invariant violation: \(message)"
-  case .temporalViolation(let property, let reason): "temporal violation: \(property) (\(reason.rawValue))"
   case .refinementViolation(let name): "refinement violation: \(name)"
   case .deadlock(let state): "deadlock at \(state.canonicalEncoding)"
   case .incomplete(let reason): "incomplete: \(reason)"

@@ -67,10 +67,6 @@ struct GraphRunRecordsTests {
     let outcomes: [(ModelCheckOutcome, [String: String])] = [
       (.invariantViolated(invariant: "Check", state: projection, trace: [.init(state: projection, action: "init")]),
        ["kind": "invariantViolation", "message": "Check"]),
-      (.livenessViolated(property: "Check", reason: .violatingFairLasso,
-        witness: .init(prefix: [initial], cycle: [initial, initial],
-          prefixActions: [], cycleActions: [nil])),
-       ["kind": "temporalViolation", "property": "Check", "reason": "violating-fair-lasso"]),
       (.refinementViolated(refinement: "Check",
         failure: .initialState(mapped: projection, abstractInitialStates: [])),
        ["kind": "refinementViolation", "message": "Check"])
@@ -84,14 +80,6 @@ struct GraphRunRecordsTests {
         configuration: exploration.configuration, compiledStates: exploration.compiledStates
       )
       let run = try FormalGraphExporter().export(failed)
-      if case .livenessViolated = outcome {
-        let trace = try #require(run.trace)
-        #expect(trace.cycleStartIndex == 0)
-        #expect(trace.steps.count == 2)
-        #expect(trace.steps.allSatisfy { $0.action == nil })
-        #expect(trace.steps.first?.state == trace.steps.last?.state)
-        try trace.validate(in: run.graph)
-      }
       try GraphRunRecords.write(run, to: url)
       let completion = try #require(records(in: Data(contentsOf: url)).last)
       #expect(completion["outcome"] as? [String: String] == expected)
@@ -208,40 +196,6 @@ struct GraphRunRecordsTests {
     #expect((trace["steps"] as? [[String: Any]])?.count == 2)
     #expect(streamRecords.last?["traceCount"] as? Int == 1)
     #expect(streamRecords.last?["isComplete"] as? Bool == true)
-  }
-
-  @Test("lasso records retain the cycle boundary and implicit stuttering")
-  func retainsLassoAndRejectsInvalidCycles() throws {
-    let first = state(counter: 0, values: [])
-    let second = state(counter: 1, values: [])
-    let graph = try graph(first, second, edges: [
-      .init(source: first.key, action: "advance", target: second.key)
-    ])
-    let steps: [GraphTraceStep] = [
-      .init(state: first.key, action: nil),
-      .init(state: second.key, action: "advance"),
-      .init(state: second.key, action: nil)
-    ]
-    let run = try GraphRun(isComplete: true, graph: graph, observableActions: ["advance"],
-      outcome: .temporalViolation(property: "Progress", reason: .violatingFairLasso),
-      trace: .init(id: "lasso", steps: steps, cycleStartIndex: 1))
-    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: url) }
-    try GraphRunRecords.write(run, to: url)
-    let stream = try records(in: Data(contentsOf: url))
-    let trace = try #require(stream.first { $0["type"] as? String == "trace" })
-    #expect(trace["cycleStartIndex"] as? Int == 1)
-    let encodedSteps = try #require(trace["steps"] as? [[String: Any]])
-    #expect(encodedSteps[0]["action"] is NSNull)
-    #expect(encodedSteps[1]["action"] as? String == "advance")
-    #expect(encodedSteps[2]["action"] is NSNull)
-    #expect(stream.last?["isComplete"] as? Bool == true)
-    for start in [-1, 0, 2, 3] {
-      #expect(throws: GraphRunError.self) {
-        try GraphRun(isComplete: true, graph: graph, observableActions: ["advance"], outcome: run.outcome,
-          trace: .init(id: "invalid-cycle", steps: steps, cycleStartIndex: start))
-      }
-    }
   }
 
   @Test("retained counterexamples must follow graph transitions from an initial state")

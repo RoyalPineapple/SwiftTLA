@@ -66,8 +66,6 @@ package enum GraphRunRecords {
       ["kind": "noViolation"]
     case .invariantViolation(let message):
       ["kind": "invariantViolation", "message": message]
-    case .temporalViolation(let property, let reason):
-      ["kind": "temporalViolation", "property": property, "reason": reason.rawValue]
     case .refinementViolation(let name):
       ["kind": "refinementViolation", "message": name]
     case .deadlock(let state):

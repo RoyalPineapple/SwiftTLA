@@ -33,8 +33,7 @@ struct GraphComparisonTests {
         let state = CanonicalState(bindings: ["counter": .integer(0)])
         let graph = try CanonicalGraph(initialStates: [state], states: [state], edges: [])
         let outcomes: [GraphRunOutcome] = [
-            .invariantViolation("Safe"), .refinementViolation("Refines"), .deadlock(state.key),
-            .temporalViolation(property: "Progress", reason: .violatingFairLasso)
+            .invariantViolation("Safe"), .refinementViolation("Refines"), .deadlock(state.key)
         ]
         for outcome in outcomes {
             let complete = try GraphRun(isComplete: true, graph: graph, observableActions: [], outcome: outcome)
@@ -54,8 +53,7 @@ struct GraphComparisonTests {
         let state = CanonicalState(bindings: ["counter": .integer(0)])
         let graph = try CanonicalGraph(initialStates: [state], states: [state], edges: [])
         let outcomes: [GraphRunOutcome] = [
-            .incomplete(reason: "timeout"), .executionError("undecodable output"),
-            .temporalViolation(property: "Progress", reason: .incompleteExploration)
+            .incomplete(reason: "timeout"), .executionError("undecodable output")
         ]
         for outcome in outcomes {
             let run = try GraphRun(isComplete: true, graph: graph, observableActions: [], outcome: outcome)
