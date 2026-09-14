@@ -57,7 +57,7 @@ package struct TemporalSymmetryCheck: Sendable {
         native = try temporalConformanceRun(
           fairness: temporalCase.fairness, maximumStates: temporalCase.exploration.maximumStateLimit)
         guard Set(native.checks.properties.keys) == Set(temporalCase.expectedProperties.keys),
-              native.checks.deadlock == nil else {
+              (native.checks.deadlock != nil) == native.rendered.checksDeadlock else {
           throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "expected property coverage")
         }
       } catch {
@@ -75,8 +75,15 @@ package struct TemporalSymmetryCheck: Sendable {
       return try validation.checks.map { check, result in
         let comparison = try? result.get()
         let status = comparison?.status ?? .unavailable
-        guard case .property(let name) = check, let expected = temporalCase.expectedProperties[name] else {
-          throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "unexpected check")
+        let expected: PropertyExpectation
+        switch check {
+        case .property(let name):
+          guard let expectation = temporalCase.expectedProperties[name] else {
+            throw EvidenceFormatError.invalidField(record: temporalCase.id, field: "unexpected check")
+          }
+          expected = expectation
+        case .deadlock:
+          expected = .satisfied
         }
         let matchesExpectation = comparison.map {
           expected.accepts($0.swiftResult) && expected.accepts($0.tlcResult)

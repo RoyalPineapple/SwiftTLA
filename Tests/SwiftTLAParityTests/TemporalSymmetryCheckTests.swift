@@ -34,6 +34,7 @@ struct TemporalSymmetryCheckTests {
       #expect(Set(model.checks.properties.keys) == ["AlwaysP", "EventuallyP", "AlwaysEventuallyP",
         "EventuallyAlwaysP", "LeadsToPQ", "LeavesZero"])
       #expect(model.graph.isComplete)
+      #expect(model.checks.deadlock == .satisfied)
       #expect(model.graph.graph == expected)
       #expect(model.graph.trace == nil)
       #expect(model.checks.properties.values.allSatisfy { $0 != .unavailable })
@@ -137,16 +138,22 @@ struct TemporalSymmetryCheckTests {
       referencePin: try testReferencePin()
     ))
 
-    #expect(outcomes.count == 7)
+    #expect(outcomes.count == 8)
     #expect(outcomes.allSatisfy { $0.outcome == .unavailable })
     #expect(Set(outcomes.map(\.caseID)) == ["temporal-properties-AlwaysP", "temporal-properties-EventuallyP",
-      "temporal-properties-AlwaysEventuallyP", "temporal-properties-EventuallyAlwaysP", "temporal-properties-LeadsToPQ", "temporal-properties-LeavesZero", "symmetry"])
+      "temporal-properties-AlwaysEventuallyP", "temporal-properties-EventuallyAlwaysP", "temporal-properties-LeadsToPQ", "temporal-properties-LeavesZero", "temporal-deadlock", "symmetry"])
     let modelDirectory = output.appendingPathComponent("temporal")
     #expect(FileManager.default.fileExists(atPath: modelDirectory.appendingPathComponent("swift-graph.jsonl").path))
     #expect(FileManager.default.fileExists(atPath: modelDirectory.appendingPathComponent("source-input").path))
     for caseID in outcomes.map(\.caseID) {
-      let directory = caseID == "symmetry" ? output.appendingPathComponent(caseID)
-        : modelDirectory.appendingPathComponent("properties").appendingPathComponent(String(caseID.dropFirst("temporal-properties-".count)))
+      let directory: URL
+      switch caseID {
+      case "symmetry": directory = output.appendingPathComponent(caseID)
+      case "temporal-deadlock": directory = modelDirectory.appendingPathComponent("deadlock")
+      default:
+        directory = modelDirectory.appendingPathComponent("properties")
+          .appendingPathComponent(String(caseID.dropFirst("temporal-properties-".count)))
+      }
       #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("swift-graph.jsonl").path))
       let record = try #require(try JSONSerialization.jsonObject(
         with: Data(contentsOf: directory.appendingPathComponent("case-outcome.json"))
