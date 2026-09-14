@@ -214,7 +214,7 @@ public struct CompiledSpecification: Sendable {
             provenance: provenance
         )
         try renderedBundle.validateDeclaredClosure()
-        let renderer = CompiledTLARenderer(layout: module.layout, bindings: module.bindings, operators: module.semantics.operators)
+        let renderer = CompiledTLARenderer(layout: module.layout, bindings: module.bindings, semantics: module.semantics)
         let algorithm = try module.authoredAlgorithm.map { authored in
             try metadata.authoredPlusCalModule(
                 algorithm: authored.plan, declarationOrder: authored.declarations,
@@ -1170,7 +1170,7 @@ private extension CompiledModuleMetadata {
         let semantics = module.semantics
         let refinements = module.refinements
         let requiredStandardModules = module.requiredStandardModules
-        let renderer = CompiledTLARenderer(layout: layout, bindings: bindings, operators: semantics.operators)
+        let renderer = CompiledTLARenderer(layout: layout, bindings: bindings, semantics: semantics)
         let definitions = try semantics.operators.formalDefinitionIDs.prefix(formalDefinitionCount).map(renderer.formalDefinition)
         let instances = try semantics.moduleInstances.map(renderer.moduleInstance)
         let invariants = try semantics.behavior.invariants.map { ($0.id, "\($0.name) == \(try renderer.state($0.predicate.expression))") }
@@ -1410,7 +1410,7 @@ private extension CompiledModuleMetadata {
         lines.append("  /\\ Init")
         lines.append("  /\\ [][Next]_\(varsTuple)")
         for condition in semantics.behavior.fairness {
-            lines.append("  /\\ \(try renderer.fairness(condition, vars: varsTuple, actionNames: emittedActionNamesByID, actionCalls: emittedActionCallNames))")
+            lines.append("  /\\ \(try renderer.fairness(condition, vars: varsTuple, actionCalls: emittedActionCallNames))")
         }
         lines.append("")
         lines.append(contentsOf: renderedTemporalProperties)

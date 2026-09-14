@@ -42,6 +42,26 @@ struct CompiledSpecificationRendererTests {
         #expect(ready.lowerBound < constraint.lowerBound)
     }
 
+    @Test("Parameterized enabledness and whole-action fairness quantify finite domains")
+    func quantifiesActionParameters() throws {
+        let compilation = try TLASpec(name: "ParameterizedReferences", variables: [
+            .init(name: "count", initial: .int(0))
+        ], actions: [
+            .init(name: "advance", body: .assign(.named("count"), .variable("amount")),
+                bindings: [.init(name: "amount", values: [.int(1), .int(2)])])
+        ], invariants: [.init(name: "CanAdvance", body: .enabledAction("advance"))],
+            fairness: [.weakFairness("advance"), .strongFairness("advance"),
+                .weakFairnessActionCall(.init(name: "advance", arguments: [.int(1)]))]).compile()
+        let binding = try #require(compilation.semantics.behavior.actions.first?.bindings.first)
+        let parameter = try #require(compilation.bindings.binderName(binding.binder))
+        let action = "(\\E \(parameter) \\in {1, 2}: advance(\(parameter)))"
+        let rendered = try compilation.render().tlaBundle.tla
+        #expect(rendered.contains("CanAdvance == ENABLED \(action)"))
+        #expect(rendered.contains("WF_count(\(action))"))
+        #expect(rendered.contains("SF_count(\(action))"))
+        #expect(rendered.contains("WF_count(advance__0)"))
+    }
+
     @Test("Model values cannot alias module variables")
     func rejectsModelValueDeclarationCollision() throws {
         #expect(throws: CompilationDiagnostic.self) {
@@ -117,7 +137,7 @@ struct CompiledSpecificationRendererTests {
         let saved = BinderID(ordinal: 1)
         let renderer = CompiledTLARenderer(layout: compilation.layout,
             bindings: .init(binders: [selected: "selected", saved: "saved"]),
-            operators: compilation.semantics.operators)
+            semantics: compilation.semantics)
         func literal(_ value: CompiledValue, type: CompiledValueType) -> CompiledExpression {
             .init(operation: .value(value), resultType: type, children: [])
         }
@@ -152,7 +172,7 @@ struct CompiledSpecificationRendererTests {
         ], actions: [], invariants: []).compile()
         let variable = try #require(compilation.layout.variables.first?.id)
         let renderer = CompiledTLARenderer(layout: compilation.layout,
-            bindings: .init(), operators: compilation.semantics.operators)
+            bindings: .init(), semantics: compilation.semantics)
         let source = CompiledExpression.stateVariable(variable)
         #expect(try renderer.state(.assertView(source, .integer))
             == "(LET _checkedValue_ == _checkedValue IN CASE _checkedValue_ \\in Int -> _checkedValue_)")

@@ -15,7 +15,8 @@ private enum ActionRenderingTask {
 struct CompiledTLARenderer {
     let layout: CompiledLayout
     let bindings: CompiledBindingTable
-    let operators: CompiledOperators
+    let semantics: CompiledSemantics
+    var operators: CompiledOperators { semantics.operators }
 
     func action(
         _ expression: CompiledActionExpr
@@ -98,7 +99,6 @@ struct CompiledTLARenderer {
     func fairness(
         _ condition: CompiledFairnessCondition,
         vars: String,
-        actionNames: [ActionID: String],
         actionCalls: [CompiledActionCall: String]
     ) throws -> String {
         let action: String
@@ -106,8 +106,7 @@ struct CompiledTLARenderer {
         case .next:
             action = "Next"
         case .action(let id):
-            guard let name = actionNames[id] else { throw missing("action", id.ordinal) }
-            action = name
+            action = try actionReference(id)
         case .actionCall(let call):
             guard let name = actionCalls[call] else { throw missing("action", call.action.ordinal) }
             action = name
@@ -209,7 +208,7 @@ struct CompiledTLARenderer {
                 case .boundValue(let binder): parts.append(try binderName(binder))
                 case .controlLocation(let location): parts.append(try controlLocationName(location))
                 case .operatorReference(let operation): parts.append(try operatorName(operation))
-                case .enabledAction(let action): parts.append("ENABLED \(try actionName(action))")
+                case .enabledAction(let action): parts.append("ENABLED \(try actionReference(action))")
                 case .convert:
                     tasks.append(.expression(expression.children[0]))
                 case .call, .checkedCall:
@@ -293,9 +292,18 @@ struct CompiledTLARenderer {
         return layout.variables[id.ordinal].declaration.name
     }
 
-    private func actionName(_ id: ActionID) throws -> String {
-        guard layout.actions.indices.contains(id.ordinal) else { throw missing("action", id.ordinal) }
-        return layout.actions[id.ordinal].renderedName
+    private func actionReference(_ id: ActionID) throws -> String {
+        guard layout.actions.indices.contains(id.ordinal),
+              semantics.behavior.actions.indices.contains(id.ordinal) else { throw missing("action", id.ordinal) }
+        let name = layout.actions[id.ordinal].renderedName
+        let action = semantics.behavior.actions[id.ordinal]
+        guard !action.bindings.isEmpty else { return name }
+        let parameters = try action.bindings.map { try binderName($0.binder) }
+        let domains = try zip(parameters, action.bindings).map { parameter, binding in
+            let values = try CompiledValue.set(Set(binding.values)).rendered(using: layout)
+            return "\(parameter) \\in \(values)"
+        }
+        return "(\\E \(domains.joined(separator: ", ")): \(name)(\(parameters.joined(separator: ", "))))"
     }
 
     func binderName(_ id: BinderID) throws -> String {
