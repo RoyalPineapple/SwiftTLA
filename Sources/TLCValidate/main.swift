@@ -114,9 +114,14 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         } else {
             throw FiniteGraphCLIError.unknownCase(options.caseID)
         }
-        let preparedCases = try selected.map { declaration in
-            let compilation = try declaration.sourceModel.spec.compile()
-            return (declaration, compilation.description, try compilation.render())
+        let models = Set(selected.map(\.sourceModel))
+        let preparedModels = try Dictionary(uniqueKeysWithValues: models.map { model in
+            let compilation = try model.spec.compile()
+            return (model, (compilation.description, try compilation.render()))
+        })
+        let preparedCases = selected.map { declaration in
+            let (description, rendered) = preparedModels[declaration.sourceModel]!
+            return (declaration, description, rendered)
         }
         let toolRoot = try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", environment)
         let inputRoot = try requiredEnvironment("FINITE_GRAPH_INPUT_ROOT", environment)

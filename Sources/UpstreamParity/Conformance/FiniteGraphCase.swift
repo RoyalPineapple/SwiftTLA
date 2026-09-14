@@ -260,7 +260,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             try validate()
         }
 
-        package func validate() throws {
+        private func validate() throws {
             let allowedIDCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-_")
             guard !id.isEmpty, id != "all", id.unicodeScalars.allSatisfy(allowedIDCharacters.contains) else {
                 throw FiniteGraphCaseError.invalidIdentifier("case ID")
@@ -302,7 +302,6 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
         var caseIDs = Set<String>()
         for finiteGraphCase in cases {
-            try finiteGraphCase.validate()
             guard caseIDs.insert(finiteGraphCase.id).inserted else {
                 throw EvidenceFormatError.duplicateID(
                     kind: "finite graph case",
