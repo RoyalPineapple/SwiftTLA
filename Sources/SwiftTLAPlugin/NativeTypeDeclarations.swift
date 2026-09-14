@@ -41,11 +41,12 @@ struct NativeTypeDeclarations: Sendable {
                 }
             }
             var expressions: Set<CompiledExpression> = []
-            var executionExpressions: [CompiledExpression] = []
             var functions: Set<ResolvedFunctionID> = []
+            types += variableTypes + bindingTypes
             while let expression = pending.popLast() {
                 guard expressions.insert(expression).inserted else { continue }
-                executionExpressions.append(expression)
+                types.append(expression.resultType)
+                if case .value(let value) = expression.operation { values.append(value) }
                 pending.append(contentsOf: expression.children)
                 if case .call(let id) = expression.operation, functions.insert(id).inserted {
                     let function = program[id]
@@ -53,18 +54,11 @@ struct NativeTypeDeclarations: Sendable {
                     if let guardExpression = function.domainGuard { pending.append(guardExpression) }
                 }
             }
-            let executionFunctions = program.functions.enumerated().filter {
-                functions.contains(.init(ordinal: $0.offset))
-            }.map(\.element)
-            let expressionTypes = executionExpressions.map(\.resultType)
-            let functionTypes = executionFunctions.flatMap { $0.parameters.map(\.type) + [$0.resultType] }
-            let literals = executionExpressions.compactMap { node -> CompiledValue? in
-                guard case .value(let value) = node.operation else { return nil }
-                return value
+            for id in functions.sorted(by: { $0.ordinal < $1.ordinal }) {
+                let function = program[id]
+                types += function.parameters.map(\.type) + [function.resultType]
             }
-            let parameterValues = program.behavior.actions.flatMap { $0.bindings.flatMap(\.values) }
-            types += variableTypes + bindingTypes + expressionTypes + functionTypes
-            values += literals + parameterValues
+            values += program.behavior.actions.flatMap { $0.bindings.flatMap(\.values) }
             pendingPrograms.append(contentsOf: program.refinements.map(\.abstract))
         }
         self.init(types: types, literals: values, namedDomains: program.enums.domains)
