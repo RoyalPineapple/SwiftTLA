@@ -8,6 +8,21 @@ import SwiftBasicFormat
 @testable import SwiftTLAPlugin
 
 struct NativeCodeGenerationTests {
+    @Test("Native bindings retain resolved declaration names")
+    func preservesBindingNames() throws {
+        let compilation = try TLASpec(name: "BindingNames", variables: [
+            .init(name: "count", initial: .int(0))
+        ], actions: [.init(name: "advance", body: .assign(.named("count"), .variable("amount")),
+            bindings: [.init(name: "amount", values: [.int(1)])])], invariants: []).compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let parameter = try #require(program.behavior.actions.first?.bindings.first?.binder)
+        let name = try #require(compilation.bindings.binderName(parameter))
+        #expect(program.binderNames[parameter] == name)
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "BindingNames", program: program))
+        let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
+        #expect(generated.contains("_\(name)_\(parameter.ordinal)"))
+    }
+
     @Test("Record construction preserves field names across execution and rendering")
     func recordFieldNames() throws {
         let record = StateRecordExpression([
@@ -353,7 +368,7 @@ struct NativeCodeGenerationTests {
             invariants: [], temporalProperties: [], fairness: compilation.semantics.behavior.fairness,
             constraint: nil, assume: nil)
         let program = CompiledProgram(identity: compilation.identity, layout: compilation.layout,
-            behavior: behavior, refinements: [], enums: .init(), projections: [], variableTypes: [:], bindingTypes: [:],
+            behavior: behavior, refinements: [], enums: .init(), projections: [], variableTypes: [:], bindingTypes: [:], binderNames: [:],
             functions: [])
         let model = try MacroCompilation(typeName: "SharedPredicates",
             program: program)

@@ -34,10 +34,12 @@ private final class ProgramResolver {
     var functionIDs: [CheckedOperatorSpecialization: ResolvedFunctionID] = [:]
     var functionCaptures: [[CaptureParameter]] = []
     var nextBinder: Int
+    var binderNames: [BinderID: String]
 
     init(checked: CompiledProgram, types: CompiledTypeContext, nextBinder: Int) {
         self.nextBinder = nextBinder
         self.checked = checked
+        binderNames = checked.binderNames
         self.types = types
     }
 
@@ -59,7 +61,7 @@ private final class ProgramResolver {
         }
         return .init(identity: checked.identity, layout: checked.layout,
             behavior: behavior, refinements: refinements, enums: checked.enums,
-            projections: projections, variableTypes: checked.variableTypes, bindingTypes: checked.bindingTypes,
+            projections: projections, variableTypes: checked.variableTypes, bindingTypes: checked.bindingTypes, binderNames: binderNames,
             functions: resolvedFunctions)
     }
 
@@ -156,7 +158,7 @@ private final class ProgramResolver {
         }
     }
 
-    private func captureParameters(_ call: CheckedOperatorCall) -> [CaptureParameter] {
+    private func captureParameters(_ call: CheckedOperatorCall) throws -> [CaptureParameter] {
         var captures = call.specialization.captures.sorted { $0.key.ordinal < $1.key.ordinal }.map {
             (CaptureKey(callbacks: [], binder: $0.key), $0.value)
         }
@@ -171,9 +173,11 @@ private final class ProgramResolver {
                 (path + [$0.key], $0.value)
             }
         }
-        return captures.map { key, type in
+        return try captures.map { key, type in
             defer { nextBinder += 1 }
-            return .init(key: key, binder: .init(ordinal: nextBinder), type: type)
+            let binder = BinderID(ordinal: nextBinder)
+            binderNames[binder] = try require(binderNames[key.binder])
+            return .init(key: key, binder: binder, type: type)
         }
     }
 
@@ -183,7 +187,7 @@ private final class ProgramResolver {
         let id = ResolvedFunctionID(ordinal: functions.count)
         functionIDs[key] = id
         functions.append(nil)
-        let parameters = captureParameters(call)
+        let parameters = try captureParameters(call)
         functionCaptures.append(parameters)
         let captures = Dictionary(uniqueKeysWithValues: parameters.map { ($0.key, $0.binder) })
         guard case .checked(let checkedBody, let checkedGuard) = call.implementation else {

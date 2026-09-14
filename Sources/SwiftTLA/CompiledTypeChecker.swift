@@ -411,7 +411,7 @@ package struct CompiledTypeChecker: Sendable {
             constraint: constraint,
             assume: assume)
         return CompiledProgram(identity: inputs.identity, layout: inputs.layout, behavior: behavior, refinements: refinements,
-            enums: inputs.types.enums, projections: [], variableTypes: variables, bindingTypes: bindingTypes,
+            enums: inputs.types.enums, projections: [], variableTypes: variables, bindingTypes: bindingTypes, binderNames: inputs.bindings.binders,
             functions: [])
     }
 

@@ -100,7 +100,7 @@ struct NativeSwiftEmitter {
         return prefix + "state." + field
     }
 
-    func binder(_ id: BinderID) -> String { "b\(id.ordinal)" }
+    func binder(_ id: BinderID) -> String { "_\(program.binderNames[id]!)_\(id.ordinal)" }
 
     private func cachedBinding(named name: String, type: CompiledValueType, value: String) throws -> String {
         let valueType = try swiftType(type)
