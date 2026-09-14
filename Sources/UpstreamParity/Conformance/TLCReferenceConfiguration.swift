@@ -49,3 +49,17 @@ package struct TLCReferenceConfiguration: Decodable, Sendable {
       declarations: declarations, in: original)
   }
 }
+
+extension TLCReferenceConfiguration {
+  private enum CodingKeys: String, CodingKey, CaseIterable {
+    case declarations, invariants, properties, checksDeadlock
+  }
+
+  package init(from decoder: Decoder) throws {
+    let fields = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    declarations = try fields.decode(String.self, forKey: .declarations)
+    invariants = try fields.decode([String].self, forKey: .invariants)
+    properties = try fields.decode([String].self, forKey: .properties)
+    checksDeadlock = try fields.decode(Bool.self, forKey: .checksDeadlock)
+  }
+}
