@@ -308,9 +308,9 @@ import SwiftTLAMacros
 
     @Test func macroAcceptsLocalEnumFiniteDomainsInOrderedBindings() throws {
         #expect(TypedFacadeEnumDomainMacro.spec.actions.first?.bindings == [
-            ActionBinding(name: "person", values: [.string("alice"), .string("bob")]),
-            ActionBinding(name: "car", values: [.string("carA"), .string("carB")]),
-            ActionBinding(name: "direction", values: [.string("up"), .string("down")])
+            ActionParameter("person", values: TypedFacadeEnumDomainMacro.PersonID.finiteValues).actionBinding,
+            ActionParameter("car", values: TypedFacadeEnumDomainMacro.CarID.finiteValues).actionBinding,
+            ActionParameter("direction", values: TypedFacadeEnumDomainMacro.Direction.finiteValues).actionBinding
         ])
     }
 

@@ -76,15 +76,6 @@ public struct ActionBinding: Sendable, Hashable {
     self.values = values
     self.generatedSwiftType = generatedSwiftType
   }
-
-  public static func == (lhs: Self, rhs: Self) -> Bool {
-    lhs.name == rhs.name && lhs.values == rhs.values
-  }
-
-  public func hash(into hasher: inout Hasher) {
-    hasher.combine(name)
-    hasher.combine(values)
-  }
 }
 public protocol ActionParameterDescriptor: Sendable {
   var actionBinding: ActionBinding { get }

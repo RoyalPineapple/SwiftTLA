@@ -199,6 +199,12 @@ struct CompilerPipelineCanonicalizationTests {
 
         #expect(try firstAction.render().tlaBundle.tla == secondAction.render().tlaBundle.tla)
         #expect((firstAction.identity == secondAction.identity) == false)
+
+        let firstBinding = ActionParameter("choice", values: FirstGeneratedSurfaceValue.finiteValues).actionBinding
+        let secondBinding = ActionParameter("choice", values: SecondGeneratedSurfaceValue.finiteValues).actionBinding
+        #expect(firstBinding != secondBinding)
+        #expect(Set([firstBinding, secondBinding]).count == 2)
+        #expect(firstBinding != ActionBinding(name: firstBinding.name, values: firstBinding.values))
     }
 
     @Test("equivalent source models retain stable binder names")
