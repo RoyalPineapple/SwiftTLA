@@ -25,7 +25,7 @@ func testReferencePin() throws -> TLCReferencePin {
     javaArchiveSHA256: try #require(arm64["sha256"] as? String),
     bridgeClass: try #require(bridge["class"] as? String),
     bridgeSourceSHA256: try #require(bridge["sourceSha256"] as? String),
-    bridgeBinarySHA256: try #require(bridge["binarySha256"] as? String)
+    bridgeBinarySHA256: SHA256.hex(Data("test bridge binary".utf8))
   )
 }
 

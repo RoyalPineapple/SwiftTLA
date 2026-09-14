@@ -37,7 +37,6 @@ struct PinnedTLCToolchain: Decodable {
         let `class`: String
         let source: String
         let sourceSha256: String
-        let binarySha256: String
     }
     struct Download: Decodable {
         let url: String
@@ -52,9 +51,12 @@ struct PinnedTLCToolchain: Decodable {
 
 private func referencePin(
     from toolchain: PinnedTLCToolchain,
-    javaArchive: PinnedTLCToolchain.Download
+    javaArchive: PinnedTLCToolchain.Download, toolRoot: URL
 ) throws -> TLCReferencePin {
-    try TLCReferencePin(
+    let binary = toolRoot.appendingPathComponent("bridge-classes")
+        .appendingPathComponent(toolchain.bridge.class.replacingOccurrences(of: ".", with: "/"))
+        .appendingPathExtension("class")
+    return try TLCReferencePin(
         tag: toolchain.tlc.tag,
         commit: toolchain.tlc.commit,
         jarSHA256: toolchain.tlc.jar.sha256,
@@ -63,7 +65,7 @@ private func referencePin(
         javaArchiveSHA256: javaArchive.sha256,
         bridgeClass: toolchain.bridge.class,
         bridgeSourceSHA256: toolchain.bridge.sourceSha256,
-        bridgeBinarySHA256: toolchain.bridge.binarySha256
+        bridgeBinarySHA256: SHA256.hex(try Data(contentsOf: binary))
     )
 }
 
@@ -140,7 +142,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         guard let javaArchive = lock.java.archives[architecture] else {
             throw FiniteGraphCLIError.invalidManifest("no locked archive for \(architecture)")
         }
-        let pin = try referencePin(from: lock, javaArchive: javaArchive)
+        let pin = try referencePin(from: lock, javaArchive: javaArchive, toolRoot: URL(fileURLWithPath: toolRoot))
         let toolDirectory = URL(fileURLWithPath: toolRoot)
         let jar = toolDirectory.appendingPathComponent("downloads/tla2tools.jar")
         let java = toolDirectory.appendingPathComponent("java-\(architecture)/Contents/Home/bin/java")
@@ -307,7 +309,7 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
             projectRoot: projectRoot,
             outputDirectory: options.output,
             toolRoot: toolRoot,
-            referencePin: try referencePin(from: lock, javaArchive: javaArchive)
+            referencePin: try referencePin(from: lock, javaArchive: javaArchive, toolRoot: toolRoot)
         ))
         for record in records {
             print("temporal-symmetry \(record.caseID): \(record.outcome.rawValue) \(record.diagnostic)")

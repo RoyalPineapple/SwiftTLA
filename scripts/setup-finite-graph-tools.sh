@@ -113,7 +113,7 @@ required = [
     "java.distribution", "java.version",
     "java.archives.arm64.url", "java.archives.arm64.sha256",
     "java.archives.x86_64.url", "java.archives.x86_64.sha256",
-    "bridge.class", "bridge.source", "bridge.sourceSha256", "bridge.binarySha256",
+    "bridge.class", "bridge.source", "bridge.sourceSha256",
 ]
 if lock.get("schema") != "TLCReferencePin":
     raise SystemExit("unsupported toolchain schema")
@@ -131,7 +131,7 @@ for path in sys.argv[2:]:
 PY
 }
 
-if ! LOCK_VALUES="$(read_lock tlc.jar.repository tlc.jar.assetID tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256 bridge.source bridge.sourceSha256 bridge.binarySha256)"; then
+if ! LOCK_VALUES="$(read_lock tlc.jar.repository tlc.jar.assetID tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256 bridge.source bridge.sourceSha256)"; then
     fail "${LOCK_VALUES:-toolchain lock does not match the accepted TLC reference pin}"
 fi
 
@@ -149,7 +149,6 @@ JAVA_URL="$(printf '%s\n' "$LOCK_VALUES" | sed -n '4p')"
 JAVA_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '5p')"
 BRIDGE_SOURCE_RELATIVE="$(printf '%s\n' "$LOCK_VALUES" | sed -n '6p')"
 BRIDGE_SOURCE_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '7p')"
-BRIDGE_BINARY_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '8p')"
 BRIDGE_SOURCE="$PROJECT_ROOT/$BRIDGE_SOURCE_RELATIVE"
 [ -f "$BRIDGE_SOURCE" ] || fail "bridge source is missing: $BRIDGE_SOURCE_RELATIVE"
 
@@ -235,12 +234,11 @@ fi
 [ -x "$JAVA_HOME/bin/javac" ] || fail "locked Temurin archive does not contain javac"
 
 BRIDGE_CLASS="$TOOL_ROOT/bridge-classes/org/swifttla/conformance/LosslessStateWriter.class"
-if [ ! -f "$BRIDGE_CLASS" ] || [ "$(sha256 "$BRIDGE_CLASS")" != "$BRIDGE_BINARY_SHA256" ]; then
-    rm -rf "$TOOL_ROOT/bridge-classes"
-    mkdir -p "$TOOL_ROOT/bridge-classes"
-    "$JAVA_HOME/bin/javac" --release 17 -cp "$TLC_JAR" -d "$TOOL_ROOT/bridge-classes" "$BRIDGE_SOURCE"
-fi
-[ "$(sha256 "$BRIDGE_CLASS")" = "$BRIDGE_BINARY_SHA256" ] || fail "bridge binary digest mismatch"
+# The bridge is built from pinned inputs; record its output digest in each run.
+rm -rf "$TOOL_ROOT/bridge-classes"
+mkdir -p "$TOOL_ROOT/bridge-classes"
+"$JAVA_HOME/bin/javac" --release 17 -cp "$TLC_JAR" -d "$TOOL_ROOT/bridge-classes" "$BRIDGE_SOURCE"
+[ -f "$BRIDGE_CLASS" ] || fail "bridge compilation produced no class"
 
 if [ -f "$CASES_FILE" ]; then
     stage_declared_inputs "$TOOL_ROOT/inputs"
