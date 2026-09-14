@@ -711,11 +711,29 @@ import SwiftTLAMacros
         ])
     }
 
+    @Test("Specification aliases accept typed member expressions")
+    func parsesDerivedMemberAlias() throws {
+        let source = """
+        { scope in
+            let start = 1
+            let x = scope.sharedVar("x", initial: 0)
+            let count = IntRange(start, through: x).filtering { value in
+                value.expr > 0
+            }.cardinality
+            Invariant("nonnegative") { count >= 0 }
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(named: "DerivedAlias", try parseSpecTestClosure(source))
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.invariants.count == 1)
+        #expect(try parsed.compile().render().tlaBundle.tla.contains("Cardinality"))
+    }
+
     @Test("Unsupported local source is diagnosed")
     func rejectsUnsupportedLocalSource() throws {
         let source = """
         {
-            let value = 1
+            let value = arbitrarySwiftFunction()
         }
         """
         let closure = try parseSpecTestClosure(source)

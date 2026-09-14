@@ -66,12 +66,24 @@ extension ParserSession {
     ) {
         for binding in declaration.bindings {
             guard let sourceName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-                  let call = binding.initializer?.value.as(FunctionCallExprSyntax.self)
+                  let initializer = binding.initializer?.value
             else {
                 components.diagnostics.append(.init(
                     message: "Specification body contains an unsupported local declaration.",
                     source: binding
                 ))
+                continue
+            }
+            guard let call = initializer.as(FunctionCallExprSyntax.self) else {
+                if let value = decodeTypedFacadeValue(initializer, scope: sourceScope) {
+                    sourceScope = sourceScope.extending(binding: sourceName, to: value,
+                        shape: typedFacadeValueType(initializer, scope: sourceScope))
+                } else {
+                    components.diagnostics.append(.init(
+                        message: "Specification body contains an unsupported local declaration.",
+                        source: binding
+                    ))
+                }
                 continue
             }
             if compilerGrammarName(in: call.calledExpression) == "ActionParameter" {
