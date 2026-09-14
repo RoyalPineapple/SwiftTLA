@@ -14,15 +14,29 @@ package enum TLCPropertySource: Sendable {
   case generated
   case reference(TLAModuleBundle, TLCReferenceConfiguration)
 
+  func checks(for native: NativeModelRun) throws -> ModelCheckResults {
+    switch self {
+    case .generated:
+      return native.checks
+    case .reference(_, let configuration):
+      try configuration.validateCoverage(native)
+      let names = Set(configuration.invariants + configuration.properties)
+      return ModelCheckResults(
+        properties: native.checks.properties.filter { names.contains($0.key) },
+        deadlock: configuration.checksDeadlock ? native.checks.deadlock : nil)
+    }
+  }
+
   func bundle(for native: NativeModelRun, checkingSatisfied: Bool) throws -> TLAModuleBundle {
-    let names = checkingSatisfied ? Set(native.checks.properties.filter { $0.value == .satisfied }.keys) : []
+    let selected = try checks(for: native)
+    let names = checkingSatisfied ? Set(selected.properties.filter { $0.value == .satisfied }.keys) : []
     switch self {
     case .generated:
       return try native.rendered.tlaBundle(checking: names,
-        checkDeadlock: checkingSatisfied && native.checks.deadlock == .satisfied)
+        checkDeadlock: checkingSatisfied && selected.deadlock == .satisfied)
     case .reference(let original, let configuration):
       return try configuration.bundle(from: original, native: native, checking: names,
-        checkDeadlock: checkingSatisfied && native.checks.deadlock == .satisfied)
+        checkDeadlock: checkingSatisfied && selected.deadlock == .satisfied)
     }
   }
 }
@@ -53,8 +67,9 @@ package struct TLCPropertyCheck: Sendable {
       if outcome == .deadlock {
         check = .deadlock
       } else {
-        guard let name = native.checks.properties.keys.sorted().first(where: {
-          native.checks.properties[$0] == .satisfied
+        let selected = try source.checks(for: native)
+        guard let name = selected.properties.keys.sorted().first(where: {
+          selected.properties[$0] == .satisfied
         }) else { throw TLCPropertyCheckError.requestMismatch }
         check = .property(name)
       }
@@ -73,10 +88,11 @@ package struct TLCPropertyCheck: Sendable {
     graphComparison: GraphComparison?,
     checks: [(check: ModelCheck, result: Result<PropertyComparison, Error>)]
   ) {
-    var selected = native.checks.properties.sorted { $0.key < $1.key }.map {
+    let configured = try source.checks(for: native)
+    var selected = configured.properties.sorted { $0.key < $1.key }.map {
       (check: ModelCheck.property($0.key), result: $0.value)
     }
-    if let deadlock = native.checks.deadlock { selected.append((.deadlock, deadlock)) }
+    if let deadlock = configured.deadlock { selected.append((.deadlock, deadlock)) }
     let passingChecks = selected.filter { $0.result == .satisfied }.map(\.check)
     let prepared = Result {
       let capture = try completeGraph.get()

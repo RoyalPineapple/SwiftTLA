@@ -355,9 +355,15 @@ struct FiniteGraphCheckTests {
 
 extension FiniteGraphCheckTests {
   private func fixtureConfiguration(_ request: TLCProcessRequest) -> TLCReferenceConfiguration {
-    TLCReferenceConfiguration(
-      declarations: request.bundle.cfg.replacingOccurrences(of: "CHECK_DEADLOCK FALSE\n", with: ""),
-      invariants: [], properties: [], checksDeadlock: false)
+    // These fixtures emit one declaration per line; production uses TLC's parser.
+    let lines = request.bundle.cfg.split(separator: "\n").map(String.init)
+    return TLCReferenceConfiguration(
+      declarations: lines.filter {
+        !$0.hasPrefix("INVARIANT ") && !$0.hasPrefix("PROPERTY ") && !$0.hasPrefix("CHECK_DEADLOCK ")
+      }.joined(separator: "\n") + "\n",
+      invariants: lines.filter { $0.hasPrefix("INVARIANT ") }.map { String($0.dropFirst("INVARIANT ".count)) },
+      properties: lines.filter { $0.hasPrefix("PROPERTY ") }.map { String($0.dropFirst("PROPERTY ".count)) },
+      checksDeadlock: !lines.contains("CHECK_DEADLOCK FALSE"))
   }
   @Test("failed TLC execution retains partial output and the graph stream", arguments: [true, false])
   func retainsFailedExecution(timedOut: Bool) throws {
@@ -493,6 +499,27 @@ extension FiniteGraphCheckTests {
     #expect(property.cfg.contains("CHECK_DEADLOCK FALSE"))
   }
 
+  @Test("reference check selection honors upstream properties and deadlock configuration", arguments: [false, true])
+  func honorsReferenceCheckSelection(deadlock: Bool) throws {
+    let native = try fixtureRun(checks: ["Selected": .satisfied, "Additional": .satisfied], deadlock: .satisfied)
+    let original = native.rendered.tlaBundle
+    let configuration = TLCReferenceConfiguration(declarations: "SPECIFICATION Spec\n",
+      invariants: ["Selected"], properties: [], checksDeadlock: deadlock)
+    let source = TLCPropertySource.reference(original, configuration)
+    let checks = try source.checks(for: native)
+    #expect(checks.properties == ["Selected": .satisfied])
+    #expect(checks.deadlock == (deadlock ? .satisfied : nil))
+    let checked = try source.bundle(for: native, checkingSatisfied: true)
+    #expect(checked.cfg.contains("INVARIANT Selected"))
+    #expect(!checked.cfg.contains("INVARIANT Additional"))
+    #expect(checked.cfg.contains("CHECK_DEADLOCK \(deadlock ? "TRUE" : "FALSE")"))
+    let graph = try source.bundle(for: native, checkingSatisfied: false)
+    #expect(!graph.cfg.contains("INVARIANT"))
+    #expect(graph.cfg.contains("CHECK_DEADLOCK FALSE"))
+    #expect(graph.tla == original.tla)
+    #expect(try TLCPropertySource.generated.checks(for: native) == native.checks)
+  }
+
   @Test("reference checks cannot disappear when native coverage is missing", arguments: [false, true])
   func rejectsUncoveredReferenceChecks(deadlock: Bool) throws {
     let native = try fixtureRun()
@@ -501,7 +528,7 @@ extension FiniteGraphCheckTests {
     let problems = deadlock ? ["Missing native deadlock result"]
       : ["Missing native result: Missing", "No matching native invariant: Missing"]
     #expect(throws: TLCPropertyCheckError.uncoveredReferenceChecks(problems)) {
-      try configuration.validateCoverage(native)
+      try TLCPropertySource.reference(native.rendered.tlaBundle, configuration).checks(for: native)
     }
   }
 
@@ -542,7 +569,7 @@ extension FiniteGraphCheckTests {
   private func temporaryRequest(in root: URL, checks: Set<String> = [], checkDeadlock: Bool = false) throws -> TLCProcessRequest {
     let module = root.appendingPathComponent("Fixture.tla")
     let configuration = root.appendingPathComponent("Fixture.cfg")
-    let bundle = try fixtureRendered(checks: checks, checkDeadlock: checkDeadlock).tlaBundle(checking: [], checkDeadlock: false)
+    let bundle = try fixtureRendered(checks: checks, checkDeadlock: checkDeadlock).tlaBundle
     let originalTLA = bundle.tla + "\n\\* Original reference fixture\n"
     try Data(originalTLA.utf8).write(to: module)
     try Data(bundle.cfg.utf8).write(to: configuration)
