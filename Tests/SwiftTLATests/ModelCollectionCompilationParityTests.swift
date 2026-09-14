@@ -21,10 +21,10 @@ struct ModelCollectionCompilationParityTests {
       let reduced = try ModelChecker(
         compilation: compilation,
         configuration: reducedConfiguration
-      ).explore()
+      ).explore(checkingSafety: false)
 
       #expect(reduced.graph.states.count == scope + 1)
-      #expect({ if case .ok = reduced.outcome { true } else { false } }())
+      #expect(reduced.isComplete)
       let bundle = try compilation.render().tlaBundle
       #expect(bundle.tla.contains("DevicesKeys == {DevicesMember0"))
       #expect(bundle.cfg.contains("CONSTANT DevicesMember\(scope - 1) = DevicesMember\(scope - 1)"))

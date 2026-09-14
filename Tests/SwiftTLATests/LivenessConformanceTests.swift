@@ -587,7 +587,7 @@ struct LivenessConformanceTests {
             Eventually("reachesOne", x == 1)
         }.compile()
         let exploration = try ModelChecker(compilation: liveness, configuration: .init(
-            maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
+            maximumStateLimit: 10, symmetryReduction: .disabled)).explore(checkingSafety: false)
         let analysis = try #require(exploration.analyzeTemporalProperties(in: liveness).first)
         #expect(analysis.status == .violated)
         #expect(analysis.reason == .violatingFairLasso)

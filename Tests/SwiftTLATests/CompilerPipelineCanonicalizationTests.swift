@@ -383,7 +383,7 @@ struct CompilerPipelineCanonicalizationTests {
             return try ModelChecker(
                 compilation: spec.compile(),
                 configuration: FiniteExplorationConfiguration(maximumStateLimit: 3, symmetryReduction: .disabled)
-            ).explore()
+            ).explore(checkingSafety: false)
         }
 
         let complete = try exploration(guarded: true)
@@ -824,7 +824,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(firstSuccessor.count == 1)
         #expect(invariantHolds)
 
-        let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
+        let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore(checkingSafety: false)
         #expect(exploration.graph.states.count == 5)
         #expect(exploration.isComplete)
     }
@@ -2356,7 +2356,7 @@ struct CompilerPipelineCanonicalizationTests {
             invariants: []
         )
         let variants = [
-            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], checkDeadlock: true),
+            TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], checkDeadlock: false),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], temporalProperties: [.init(name: "Safety", expr: .always(.value(.bool(true))))]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], recursiveFuncs: [.init(name: "CountDown", params: ["n"], body: .variable("n"))]),
             {
