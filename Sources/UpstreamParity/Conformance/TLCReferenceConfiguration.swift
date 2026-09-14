@@ -32,13 +32,21 @@ package struct TLCReferenceConfiguration: Decodable, Sendable {
   }
 
   func validateCoverage(_ native: NativeModelRun) throws {
-    let declared = Set(invariants + properties)
-    guard declared.count == invariants.count + properties.count,
-          declared.isSubset(of: Set(native.checks.properties.keys)),
-          Set(invariants).isSubset(of: native.rendered.invariantNames),
-          Set(properties).isSubset(of: native.rendered.checkNames.subtracting(native.rendered.invariantNames)),
-          !checksDeadlock || native.checks.deadlock != nil else {
-      throw TLCPropertyCheckError.uncoveredReferenceChecks
+    let declared = invariants + properties
+    let repeated = Dictionary(grouping: declared, by: { $0 }).filter { $0.value.count > 1 }.keys
+    let missingResults = Set(declared).subtracting(native.checks.properties.keys)
+    let unsupportedInvariants = Set(invariants).subtracting(native.rendered.invariantNames)
+    let temporalNames = native.rendered.checkNames.subtracting(native.rendered.invariantNames)
+    let unsupportedProperties = Set(properties).subtracting(temporalNames)
+    var problems = repeated.sorted().map { "Repeated reference check: \($0)" }
+    problems += missingResults.sorted().map { "Missing native result: \($0)" }
+    problems += unsupportedInvariants.sorted().map { "No matching native invariant: \($0)" }
+    problems += unsupportedProperties.sorted().map { "No matching native temporal property: \($0)" }
+    if checksDeadlock && native.checks.deadlock == nil {
+      problems.append("Missing native deadlock result")
+    }
+    if !problems.isEmpty {
+      throw TLCPropertyCheckError.uncoveredReferenceChecks(problems)
     }
   }
 

@@ -6,7 +6,7 @@ package enum TLCPropertyCheckError: Error, Equatable, Sendable {
   case requestMismatch
   case incompleteGraph
   case invalidNativeGraph
-  case uncoveredReferenceChecks
+  case uncoveredReferenceChecks([String])
   case inconsistentBatchResults
 }
 

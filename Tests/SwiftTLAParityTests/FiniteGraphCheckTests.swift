@@ -501,7 +501,9 @@ extension FiniteGraphCheckTests {
     let native = try fixtureRun()
     let configuration = TLCReferenceConfiguration(declarations: "SPECIFICATION Spec\n",
       invariants: deadlock ? [] : ["Missing"], properties: [], checksDeadlock: deadlock)
-    #expect(throws: TLCPropertyCheckError.uncoveredReferenceChecks) {
+    let problems = deadlock ? ["Missing native deadlock result"]
+      : ["Missing native result: Missing", "No matching native invariant: Missing"]
+    #expect(throws: TLCPropertyCheckError.uncoveredReferenceChecks(problems)) {
       try configuration.validateCoverage(native)
     }
   }
