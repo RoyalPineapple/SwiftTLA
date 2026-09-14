@@ -363,9 +363,7 @@ enum TLCValueParser {
         if value == "FALSE" { return .boolean(false) }
         if let integer = Int(value) { return .integer(integer) }
         if value.first == "\"", value.last == "\"" {
-            let wrapped = Data("[\(value)]".utf8)
-            if let object = try? JSONSerialization.jsonObject(with: wrapped),
-               let strings = object as? [String], let string = strings.first {
+            if let string = try? JSONDecoder().decode(String.self, from: Data(value.utf8)) {
                 return .string(string)
             }
             throw TLCGraphEventError.unsupportedValue(text)

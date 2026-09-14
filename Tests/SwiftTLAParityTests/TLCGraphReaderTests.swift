@@ -4,7 +4,19 @@ import Testing
 import SwiftTLA
 @testable import UpstreamParity
 @Suite(.serialized)
-struct TLCGraphReaderTests { @Test("frozen graph stream becomes complete canonical evidence")
+struct TLCGraphReaderTests {
+  @Test("scalar string decoding consumes exactly one value")
+  func rejectsExtraScalarStrings() throws {
+    #expect(try TLCValueParser.parse(#""first, second""#) == .string("first, second"))
+    #expect(throws: TLCGraphEventError.self) {
+      try TLCValueParser.parse(#""first", "second""#)
+    }
+    #expect(throws: TLCGraphEventError.self) {
+      try TLCValueParser.parse(#""first" "second""#)
+    }
+  }
+
+  @Test("frozen graph stream becomes complete canonical evidence")
   func parsesFrozenGraphIntoGraphRun() throws {
     let finiteGraphCase = try fixtureCase(try testReferencePin())
     let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
