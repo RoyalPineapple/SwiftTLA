@@ -131,7 +131,7 @@ private final class DSLRewriter: SyntaxRewriter {
               declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
               let name = binding.pattern.as(IdentifierPatternSyntax.self),
-              let initializer = binding.initializer?.value,
+              binding.initializer != nil,
               let location = context.location(of: sources[index])
         else {
             context.diagnose(Diagnostic(node: Syntax(sources[index]), message: StepBindingDiagnostic()))
@@ -140,20 +140,16 @@ private final class DSLRewriter: SyntaxRewriter {
         let rest = savingBindings(Array(items.dropFirst(index + 1)),
             original: Array(sources.dropFirst(index + 1)))
         var prefix = Array(items.prefix(index))
-        let value: ExprSyntax
-        if binding.typeAnnotation != nil {
-            // Keep Swift's explicit type check on the initializer before binding
-            // its value; the closure parameter represents the saved expression.
-            let temporary = context.makeUniqueName("savedValue")
-            var typedBinding = binding
-            typedBinding.pattern = PatternSyntax(IdentifierPatternSyntax(identifier: temporary))
-            var typedDeclaration = declaration
-            typedDeclaration.bindings = PatternBindingListSyntax([typedBinding])
-            prefix.append(CodeBlockItemSyntax(item: .decl(DeclSyntax(typedDeclaration))))
-            value = ExprSyntax(DeclReferenceExprSyntax(baseName: temporary))
-        } else {
-            value = initializer
-        }
+        // Keep each initializer as its own inference boundary. Inlining it into
+        // nested generic Let calls makes Swift solve the whole step at once.
+        let temporary = context.makeUniqueName("savedValue")
+        var savedBinding = binding
+        savedBinding.pattern = PatternSyntax(IdentifierPatternSyntax(identifier: temporary))
+        var savedDeclaration = declaration
+        savedDeclaration.bindings = PatternBindingListSyntax([savedBinding])
+        savedDeclaration.trailingTrivia = .newline
+        prefix.append(CodeBlockItemSyntax(item: .decl(DeclSyntax(savedDeclaration))))
+        let value = ExprSyntax(DeclReferenceExprSyntax(baseName: temporary))
         let saved: ExprSyntax = """
         Let(\(value), file: \(location.file), line: \(location.line), column: \(location.column)) { \(name) in
             \(rest)
