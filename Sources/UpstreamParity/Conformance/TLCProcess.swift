@@ -1,6 +1,5 @@
 import Darwin
 import Foundation
-import os
 import SwiftTLA
 
 package enum TLCInvocationKind: Equatable, Sendable {
@@ -525,22 +524,22 @@ func executeProcess(
   process.currentDirectoryURL = directory
   process.arguments = arguments
   process.environment = environment
-  let stdoutPipe = Pipe()
-  let stderrPipe = Pipe()
-  process.standardOutput = stdoutPipe
-  process.standardError = stderrPipe
-  let outputGroup = DispatchGroup()
-  let output = ProcessOutputBuffers()
-  outputGroup.enter()
-  DispatchQueue.global().async {
-    drain(stdoutPipe.fileHandleForReading, into: output.appendStdout)
-    outputGroup.leave()
-  }
-  outputGroup.enter()
-  DispatchQueue.global().async {
-    drain(stderrPipe.fileHandleForReading, into: output.appendStderr)
-    outputGroup.leave()
-  }
+  let outputDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  try FileManager.default.createDirectory(
+    at: outputDirectory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+  defer { try? FileManager.default.removeItem(at: outputDirectory) }
+  let stdoutURL = outputDirectory.appendingPathComponent("stdout")
+  let stderrURL = outputDirectory.appendingPathComponent("stderr")
+  try Data().write(to: stdoutURL)
+  try Data().write(to: stderrURL)
+  let stdout = try FileHandle(forWritingTo: stdoutURL)
+  defer { try? stdout.close() }
+  let stderr = try FileHandle(forWritingTo: stderrURL)
+  defer { try? stderr.close() }
+  // Files need no pipe-draining workers and cannot block waiting for an
+  // inherited descriptor to close after the launched process exits.
+  process.standardOutput = stdout
+  process.standardError = stderr
   let termination = DispatchSemaphore(value: 0)
   process.terminationHandler = { _ in termination.signal() }
   do {
@@ -554,41 +553,16 @@ func executeProcess(
       _ = Darwin.kill(process.processIdentifier, SIGKILL)
       _ = termination.wait(timeout: .now() + 0.5)
     }
-    try? stdoutPipe.fileHandleForReading.close()
-    try? stderrPipe.fileHandleForReading.close()
-    _ = outputGroup.wait(timeout: .now() + 0.5)
     throw TLCProcessError.timedOut(
-      partialStdout: String(data: output.stdout, encoding: .utf8) ?? "<non-UTF-8 output>",
-      partialStderr: String(data: output.stderr, encoding: .utf8) ?? "<non-UTF-8 output>"
+      partialStdout: try String(contentsOf: stdoutURL, encoding: .utf8),
+      partialStderr: try String(contentsOf: stderrURL, encoding: .utf8)
     )
   }
-  try? stdoutPipe.fileHandleForWriting.close()
-  try? stderrPipe.fileHandleForWriting.close()
-  _ = outputGroup.wait(timeout: .now() + 10)
   return TLCProcessResult(
     status: process.terminationStatus,
-    stdout: String(data: output.stdout, encoding: .utf8) ?? "<non-UTF-8 output>",
-    stderr: String(data: output.stderr, encoding: .utf8) ?? "<non-UTF-8 output>"
+    stdout: try String(contentsOf: stdoutURL, encoding: .utf8),
+    stderr: try String(contentsOf: stderrURL, encoding: .utf8)
   )
-}
-
-private func drain(_ handle: FileHandle, into append: (Data) -> Void) {
-  while true {
-    let data = handle.availableData
-    guard !data.isEmpty else { return }
-    append(data)
-  }
-}
-
-private final class ProcessOutputBuffers: Sendable {
-  private let stdoutBuffer = OSAllocatedUnfairLock(initialState: Data())
-  private let stderrBuffer = OSAllocatedUnfairLock(initialState: Data())
-
-  var stdout: Data { stdoutBuffer.withLock { $0 } }
-  var stderr: Data { stderrBuffer.withLock { $0 } }
-
-  func appendStdout(_ data: Data) { stdoutBuffer.withLock { $0.append(data) } }
-  func appendStderr(_ data: Data) { stderrBuffer.withLock { $0.append(data) } }
 }
 
 extension TLCProcessRequest {
