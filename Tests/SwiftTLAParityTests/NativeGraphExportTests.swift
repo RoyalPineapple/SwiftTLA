@@ -1,6 +1,5 @@
 import Testing
 import SwiftTLA
-import SwiftTLAMacros
 import UpstreamParity
 
 struct NativeGraphExportTests {
@@ -27,9 +26,9 @@ struct NativeGraphExportTests {
         for initial in try FailingExportModel.initialMachines() {
             let native = try ReachabilityGraph(initialMachines: [initial], maximumStates: 3)
             let exported = try NativeModelRun(native, description: compilation.description, rendered: rendered, checkingDeadlock: true)
-            let unchecked = try NativeModelRun(native, description: compilation.description, rendered: rendered)
-            #expect(unchecked.checks.deadlock == nil)
-            #expect(unchecked.graph == exported.graph)
+            let defaultChecks = try NativeModelRun(native, description: compilation.description, rendered: rendered)
+            #expect(defaultChecks.checks == exported.checks)
+            #expect(defaultChecks.graph == exported.graph)
             #expect(exported.graph.isComplete)
             #expect(try exported.graph.graph == CanonicalGraph(native))
             #expect(Set(exported.checks.properties.keys) == ["BelowTwo", "BelowThree", "ReachesThree"])
@@ -70,30 +69,5 @@ struct NativeGraphExportTests {
             throw EvidenceFormatError.invalidField(record: "test", field: "missing counterexample")
         }
         return trace
-    }
-}
-
-@TLAModel
-private struct FailingExportModel {
-    static var spec: TLASpec {
-        #spec("FailingExport") { scope in
-            let value = scope.sharedVar("value", in: 0...1)
-            SwiftTLA.Action("advance") { value == 1 && value.becomes(2) }
-            Invariant("BelowTwo") { value < 2 }
-            Invariant("BelowThree") { value < 3 }
-            Eventually("ReachesThree", value == 3)
-        }
-    }
-}
-
-@TLAModel
-private struct CyclicExportModel {
-    static var spec: TLASpec {
-        #spec("CyclicExport") { scope in
-            let value = scope.sharedVar("value", initial: 0)
-            SwiftTLA.Action("advance") { value.becomes(1 - value) }
-            WeakFairnessNext()
-            Eventually("ReachesTwo", value == 2)
-        }
     }
 }
