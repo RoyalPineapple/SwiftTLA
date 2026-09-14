@@ -15,8 +15,10 @@ struct TLCPropertyCheckTests {
       Invariant("IsTwo") { x == 2 }
     }.compile().render()
     let fixture = try Fixture(renderedOverride: rendered)
+    let deadlock = try TLCTraceParser().parseCounterexample(numberedInitialStateTrace(),
+      states: fixture.swiftRun.graph.states.values)
     let native = try NativeModelRun(rendered: rendered, graph: fixture.swiftRun,
-      checks: .init(properties: ["Positive": .satisfied, "IsTwo": .satisfied], deadlock: nil))
+      checks: .init(properties: ["Positive": .satisfied, "IsTwo": .satisfied], deadlock: .violated(deadlock)))
     let checker = TLCPropertyCheck(processAdapter: .init(executor: BatchExecutor(isTwoFails: isTwoFails)))
     let graphDirectory = fixture.root.appendingPathComponent("graph")
     let capture = try reuseGraph
@@ -24,7 +26,7 @@ struct TLCPropertyCheckTests {
       : fixture.captureGraph()
     let result = try checker.captureAll(native, completeGraph: .success(capture), source: .generated,
       in: fixture.directory)
-    #expect(result.checks.count == 2)
+    #expect(result.checks.map(\.check) == [.property("IsTwo"), .property("Positive"), .deadlock])
     for (check, comparison) in result.checks {
       let expected: PropertyComparisonStatus = isTwoFails && check == .property("IsTwo")
         ? .propertyOutcomeDifference : .exact
@@ -32,7 +34,7 @@ struct TLCPropertyCheckTests {
     }
     let files = try #require(FileManager.default.enumerator(atPath: fixture.directory.path))
       .allObjects.compactMap { $0 as? String }
-    let expectedPropertyRuns = isTwoFails ? 3 : (reuseGraph ? 0 : 1)
+    let expectedPropertyRuns = (isTwoFails ? 3 : (reuseGraph ? 0 : 1)) + 1
     #expect(files.filter { $0.hasSuffix("tlc-process.json") }.count == expectedPropertyRuns)
     let batchFile = reuseGraph && !isTwoFails
       ? graphDirectory.appendingPathComponent("checked-graph/tlc-process.json")
@@ -52,6 +54,10 @@ struct TLCPropertyCheckTests {
       if isTwoFails && request.bundle.cfg.contains("INVARIANT IsTwo") {
         try numberedInitialStateTrace().write(to: request.traceOutput)
         return Fixture.safetyViolation
+      }
+      if request.bundle.cfg.contains("CHECK_DEADLOCK TRUE") {
+        try numberedInitialStateTrace().write(to: request.traceOutput)
+        return .init(status: 11, stdout: "Deadlock reached.", stderr: "")
       }
       return Fixture.success
     }
@@ -622,7 +628,7 @@ struct TLCPropertyCheckTests {
     ) throws -> PropertyComparison {
       let result = swiftResult ?? .unavailable
       let checks: ModelCheckResults = switch check {
-      case .property(let name): .init(properties: [name: result], deadlock: nil)
+      case .property(let name): .init(properties: [name: result], deadlock: .unavailable)
       case .deadlock: .init(properties: [:], deadlock: result)
       }
       let native = try NativeModelRun(rendered: rendered, graph: swiftRun ?? self.swiftRun, checks: checks)
