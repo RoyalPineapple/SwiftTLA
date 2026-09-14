@@ -5,6 +5,47 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct TLCPropertyCheckTests {
+  @Test("passing checks share one TLC invocation and batch failures are isolated", arguments: [false, true])
+  func batchesPassingChecks(isTwoFails: Bool) throws {
+    let x = Var<Int>("x", 1)
+    let rendered = try TLASpec("TemporalFixture") {
+      Variable(x)
+      Invariant("Positive") { x > 0 }
+      Invariant("IsTwo") { x == 2 }
+    }.compile().render()
+    let fixture = try Fixture(renderedOverride: rendered)
+    let native = try NativeModelRun(rendered: rendered, graph: fixture.swiftRun,
+      checks: .init(properties: ["Positive": .satisfied, "IsTwo": .satisfied], deadlock: nil))
+    let result = try TLCPropertyCheck(processAdapter: .init(executor: BatchExecutor(isTwoFails: isTwoFails)))
+      .captureAll(native, completeGraph: .success(fixture.captureGraph()), source: .generated,
+        in: fixture.directory)
+    #expect(result.checks.count == 2)
+    for (check, comparison) in result.checks {
+      let expected: PropertyComparisonStatus = isTwoFails && check == .property("IsTwo")
+        ? .propertyOutcomeDifference : .exact
+      #expect(try comparison.get().status == expected)
+    }
+    let files = try #require(FileManager.default.enumerator(atPath: fixture.directory.path))
+      .allObjects.compactMap { $0 as? String }
+    #expect(files.filter { $0.hasSuffix("tlc-process.json") }.count == (isTwoFails ? 3 : 1))
+    let batch = try String(contentsOf: fixture.directory.appendingPathComponent("batch/tlc-process.json"), encoding: .utf8)
+    #expect(batch.contains("INVARIANT Positive"))
+    #expect(batch.contains("INVARIANT IsTwo"))
+  }
+
+  private struct BatchExecutor: TLCProcessExecuting {
+    let isTwoFails: Bool
+
+    func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
+      #expect(request.invocation == .propertyCheck)
+      if isTwoFails && request.bundle.cfg.contains("INVARIANT IsTwo") {
+        try numberedInitialStateTrace().write(to: request.traceOutput)
+        return Fixture.safetyViolation
+      }
+      return Fixture.success
+    }
+  }
+
   @Test("temporal trace membership requires the ordered labeled path")
   func temporalTraceMembershipRequiresOrderedLabeledPath() throws {
     let zero = CanonicalState(bindings: ["value": .integer(0)])
@@ -55,7 +96,7 @@ struct TLCPropertyCheckTests {
     }.compile().render()
     let configuration = "CONSTANT N = 4\nSPECIFICATION LiveSpec\nCHECK_DEADLOCK FALSE\nINVARIANT Existing\n"
     let reference = TLAModuleBundle.external(root: .init(name: "Original", tla: "original module bytes", cfg: configuration))
-    let selected = try rendered.referenceBundle(checking: name, in: reference)
+    let selected = try rendered.referenceBundle(checking: [name], in: reference)
     #expect(selected.root.name == "Original")
     #expect(selected.tla == reference.tla)
     #expect(selected.imports == reference.imports)
@@ -517,7 +558,7 @@ struct TLCPropertyCheckTests {
     let swiftRun: GraphRun
     let rendered: RenderedSpecification
 
-    init(check: ModelCheck = .property("AlwaysEventuallyP")) throws {
+    init(check: ModelCheck = .property("AlwaysEventuallyP"), renderedOverride: RenderedSpecification? = nil) throws {
       self.check = check
       root = FileManager.default.temporaryDirectory.appendingPathComponent("TLCPropertyCheckTests-\(UUID())")
       module = root.appendingPathComponent("TemporalFixture.tla")
@@ -525,7 +566,7 @@ struct TLCPropertyCheckTests {
       output = directory.appendingPathComponent(check.artifactPath)
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
       let x = Var<Int>("x")
-      rendered = try TLASpec("TemporalFixture") {
+      rendered = try renderedOverride ?? TLASpec("TemporalFixture") {
         Variable(x, 1)
         switch check {
         case .deadlock: DeadlockCheck()

@@ -279,10 +279,10 @@ public struct RenderedSpecification: Sendable {
         )
     }
 
-    /// Adds one named check to an original reference whose existing checks already passed.
+    /// Adds selected checks to an original reference whose existing checks already passed.
     /// Its specification, constants, constraints, and module closure remain authoritative.
-    package func referenceBundle(checking name: String, in reference: TLAModuleBundle) throws -> TLAModuleBundle {
-        let selected = try configuration.selecting([name], checkDeadlock: false)
+    package func referenceBundle(checking names: Set<String>, in reference: TLAModuleBundle) throws -> TLAModuleBundle {
+        let selected = try configuration.selecting(names, checkDeadlock: false)
         let directives = selected.invariants.map { "INVARIANT \($0)" }
             + selected.properties.map { "PROPERTY \($0)" }
         return TLAModuleBundle(

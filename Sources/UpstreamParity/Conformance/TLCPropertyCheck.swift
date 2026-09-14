@@ -6,6 +6,7 @@ package enum TLCPropertyCheckError: Error, Equatable, Sendable {
   case requestMismatch
   case incompleteGraph
   case invalidNativeGraph
+  case inconsistentBatchResults
 }
 
 package enum TLCPropertySource: Sendable {
@@ -53,6 +54,42 @@ package struct TLCPropertyCheck: Sendable {
       (check: ModelCheck.property($0.key), result: $0.value)
     }
     if case .generated = source, let deadlock = native.checks.deadlock { selected.append((.deadlock, deadlock)) }
+    let passingChecks = selected.filter { $0.result == .satisfied }.map(\.check)
+    let batch = Result {
+      guard passingChecks.count > 1 else { return false }
+      let (capture, _) = try prepared.get()
+      let work = capture.request.workingDirectory.appendingPathComponent(UUID().uuidString)
+      try RetainedFiles.createDirectory(work, beneath: capture.request.workingDirectory)
+      defer { try? FileManager.default.removeItem(at: work) }
+      let names = Set(passingChecks.compactMap { check -> String? in
+        if case .property(let name) = check { return name }
+        return nil
+      })
+      let bundle = switch source {
+      case .generated: try native.rendered.tlaBundle(checking: names,
+        checkDeadlock: passingChecks.contains(.deadlock))
+      case .reference: try native.rendered.referenceBundle(checking: names, in: capture.request.bundle)
+      }
+      let request = try capture.request.selecting(bundle: bundle,
+        work: work, runID: UUID(), invocation: .propertyCheck)
+      let output = directory.appendingPathComponent("batch")
+      guard !FileManager.default.fileExists(atPath: output.path) else {
+        throw TLCPropertyCheckError.outputAlreadyExists
+      }
+      let outcome = try processAdapter.run(request, retainingIn: output)
+      if outcome == .completed { return true }
+      // A failed batch establishes no individual verdict. Validate its trace,
+      // then isolate the checks to identify the disagreement with Swift.
+      guard let property = passingChecks.first(where: { $0 != .deadlock }) else {
+        throw TLCPropertyCheckError.requestMismatch
+      }
+      let check: ModelCheck = outcome == .deadlock ? .deadlock : property
+      guard case .violated = try propertyResult(check: check, outcome: outcome,
+        graph: capture.graph, outputDirectory: output) else {
+        throw TLCPropertyCheckError.incompleteGraph
+      }
+      return false
+    }
     var results: [(check: ModelCheck, result: Result<PropertyComparison, Error>)] = []
     for (check, nativeResult) in selected {
       let output = try RetainedFiles.resolve(directory.appendingPathComponent(check.artifactPath), beneath: directory)
@@ -61,22 +98,27 @@ package struct TLCPropertyCheck: Sendable {
       }
       do {
         let (capture, graphComparison) = try prepared.get()
-        let work = capture.request.workingDirectory.appendingPathComponent(UUID().uuidString)
-        try RetainedFiles.createDirectory(work, beneath: capture.request.workingDirectory)
-        defer { try? FileManager.default.removeItem(at: work) }
-        let bundle: TLAModuleBundle
-        switch source {
-        case .generated: bundle = try check.bundle(from: native.rendered)
-        case .reference:
-          guard case .property(let name) = check else { throw TLCPropertyCheckError.requestMismatch }
-          bundle = try native.rendered.referenceBundle(checking: name, in: capture.request.bundle)
+        let tlcResult: PropertyResult
+        if passingChecks.contains(check), try batch.get() {
+          tlcResult = .satisfied
+        } else {
+          let work = capture.request.workingDirectory.appendingPathComponent(UUID().uuidString)
+          try RetainedFiles.createDirectory(work, beneath: capture.request.workingDirectory)
+          defer { try? FileManager.default.removeItem(at: work) }
+          let bundle: TLAModuleBundle
+          switch source {
+          case .generated: bundle = try check.bundle(from: native.rendered)
+          case .reference:
+            guard case .property(let name) = check else { throw TLCPropertyCheckError.requestMismatch }
+            bundle = try native.rendered.referenceBundle(checking: [name], in: capture.request.bundle)
+          }
+          let request = try capture.request.selecting(bundle: bundle,
+            work: work, runID: UUID(), invocation: .propertyCheck)
+          try RetainedFiles.outputDirectory(output, beneath: output.deletingLastPathComponent())
+          let outcome = try processAdapter.run(request, retainingIn: output)
+          tlcResult = try propertyResult(check: check, outcome: outcome,
+            graph: capture.graph, outputDirectory: output)
         }
-        let request = try capture.request.selecting(bundle: bundle,
-          work: work, runID: UUID(), invocation: .propertyCheck)
-        try RetainedFiles.outputDirectory(output, beneath: output.deletingLastPathComponent())
-        let outcome = try processAdapter.run(request, retainingIn: output)
-        let tlcResult = try propertyResult(check: check, outcome: outcome,
-          graph: capture.graph, outputDirectory: output)
         let status: PropertyComparisonStatus
         switch (nativeResult, tlcResult) {
         case (.unavailable, _), (_, .unavailable): status = .unavailable
@@ -84,8 +126,9 @@ package struct TLCPropertyCheck: Sendable {
         case (.satisfied, .satisfied), (.violated, .violated):
           status = graphComparison.matches ? .exact : .graphDifference
         }
-        let comparison = PropertyComparison(caseID: request.caseID, check: check, status: status,
+        let comparison = PropertyComparison(caseID: capture.request.caseID, check: check, status: status,
           swiftResult: nativeResult, tlcResult: tlcResult)
+        try RetainedFiles.createDirectory(output, beneath: directory)
         try RetainedFiles.writeCanonical(comparison, to: output.appendingPathComponent("property-comparison.json"))
         results.append((check, .success(comparison)))
       } catch {
@@ -94,6 +137,14 @@ package struct TLCPropertyCheck: Sendable {
         try RetainedFiles.writeText(redactingSecrets(in: String(describing: error)),
           to: output.appendingPathComponent("check-error.txt"))
       }
+    }
+    if passingChecks.count > 1, (try? batch.get()) == false {
+      let reproducedFailure = results.contains { check, result in
+        guard passingChecks.contains(check), let comparison = try? result.get() else { return false }
+        if case .violated = comparison.tlcResult { return true }
+        return false
+      }
+      guard reproducedFailure else { throw TLCPropertyCheckError.inconsistentBatchResults }
     }
     return (try? prepared.get().1, results)
   }
