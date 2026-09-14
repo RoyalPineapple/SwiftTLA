@@ -24,7 +24,13 @@ public struct SpecExpressionMacro: ExpressionMacro {
             )
         }
 
-        let rewriter = DSLRewriter(context: context)
+        let parameterScope: String?
+        switch closure.signature?.parameterClause {
+        case .simpleInput(let list): parameterScope = list.first?.name.text
+        case .parameterClause(let clause): parameterScope = clause.parameters.first.map { $0.secondName?.text ?? $0.firstName.text }
+        case nil: parameterScope = nil
+        }
+        let rewriter = DSLRewriter(context: context, parameterScope: parameterScope)
         let rewritten = rewriter.rewrite(closure).as(ClosureExprSyntax.self) ?? closure
         return specCall(named: name, body: rewritten)
     }
@@ -66,14 +72,43 @@ public struct SpecExpressionMacro: ExpressionMacro {
 
 private final class DSLRewriter: SyntaxRewriter {
     private let context: any MacroExpansionContext
+    private let parameterScope: String?
     private static let helperNames: Set<String> = [
         "Choose", "Exists", "Fold", "ForAll", "Let", "LetRec", "Select", "Where", "With"
     ]
     private static let stepBuilders: Set<String> = ["Do", "While", "Macro", "If", "Either", "Choose", "With", "Let"]
     private static let memberHelperNames: Set<String> = ["filtering", "forAll", "mapping", "selecting"]
 
-    init(context: some MacroExpansionContext) {
+    init(context: some MacroExpansionContext, parameterScope: String?) {
         self.context = context
+        self.parameterScope = parameterScope
+    }
+
+    override func visit(_ node: VariableDeclSyntax) -> DeclSyntax {
+        var visited = super.visit(node).as(VariableDeclSyntax.self) ?? node
+        visited.bindings = PatternBindingListSyntax(zip(node.bindings, visited.bindings).map { source, binding in
+            var binding = binding
+            guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+                  var call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
+                  let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+                  member.declName.baseName.text == "parameter",
+                  member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == parameterScope else { return binding }
+            guard node.bindingSpecifier.text == "let" else {
+                context.diagnose(Diagnostic(node: Syntax(source), message: ParameterBindingDiagnostic()))
+                return binding
+            }
+            var arguments = Array(call.arguments)
+            if !arguments.isEmpty { arguments[arguments.count - 1].trailingComma = .commaToken() }
+            arguments.append(LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
+                expression: StringLiteralExprSyntax(content: name), trailingComma: .commaToken()))
+            arguments.append(argument("_sourceOffset", ExprSyntax(stringLiteral: String(source.positionAfterSkippingLeadingTrivia.utf8Offset)))
+                .with(\.trailingComma, .commaToken()))
+            arguments.append(argument("_sourceLength", ExprSyntax(stringLiteral: String(source.trimmedDescription.utf8.count))))
+            call.arguments = LabeledExprListSyntax(arguments)
+            binding.initializer?.value = ExprSyntax(call)
+            return binding
+        })
+        return DeclSyntax(visited)
     }
 
     override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
@@ -191,4 +226,10 @@ private struct StepBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-step-binding")
     let severity: DiagnosticSeverity = .error
     let message = "A step binding must be one named let with an initializer. Use Assign to update machine state."
+}
+
+private struct ParameterBindingDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-parameter-binding")
+    let severity: DiagnosticSeverity = .error
+    let message = "A model parameter must be an immutable named let binding in the specification scope."
 }

@@ -7,11 +7,12 @@ extension NativeSwiftEmitter {
     mutating func machineMembers(nested: Bool = false) throws -> [DeclSyntax] {
         let api = model.api
         let collections = api.collections
-        let collectionParameters = collections.map { "\($0.swiftIdentifier) \($0.membersIdentifier): [\($0.elementType).ID]" }.joined(separator: ", ")
-        let collectionArguments = collections.map { "\($0.swiftIdentifier): \($0.membersIdentifier)" }.joined(separator: ", ")
+        let collectionParameters = machineParameters
+        let collectionArguments = machineArguments
         let appendedParameters = collectionParameters.isEmpty ? "" : ", \(collectionParameters)"
         let appendedArguments = collectionArguments.isEmpty ? "" : ", \(collectionArguments)"
         var declarations: [DeclSyntax] = []
+        declarations += try configurationDeclarations()
         let fields = try program.layout.variables.filter { stateMemberNames[$0.id] == nil }.map { variable in
             "let \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: "\n")
@@ -28,10 +29,11 @@ extension NativeSwiftEmitter {
         declarations += try nativeDeclarations("""
         private init(execution: Snapshot\(appendedParameters)) {
             _execution = execution
+            \(program.layout.parameters.isEmpty ? "" : "self.configuration = configuration")
             \(collections.map { "self.\($0.membersIdentifier) = \($0.membersIdentifier)" }.joined(separator: "\n"))
         }
         """)
-        let configurationChecks = collections.map {
+        let configurationChecks = (program.layout.parameters.isEmpty ? [] : ["configuration == other.configuration"]) + collections.map {
             "\($0.membersIdentifier) == other.\($0.membersIdentifier)"
         }
         declarations += try nativeDeclarations("""
@@ -516,7 +518,7 @@ extension NativeSwiftEmitter {
     }
 
     mutating func propertyDeclarations(collectionParameters: String) throws -> [DeclSyntax] {
-        let arguments = model.api.collections.map { ", \($0.swiftIdentifier): \($0.membersIdentifier)" }.joined()
+        let arguments = machineArguments.isEmpty ? "" : ", " + machineArguments
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
         declarations += try nativeDeclarations("public static var checksDeadlock: Bool { \(program.behavior.checkDeadlock) }")
@@ -542,7 +544,7 @@ extension NativeSwiftEmitter {
         }
         """)
         var temporalProperties: [String] = []
-        let captures = model.api.collections.map(\.membersIdentifier).joined(separator: ", ")
+        let captures = machineCaptures.joined(separator: ", ")
         let captureList = captures.isEmpty ? "" : "[\(captures)] "
         for property in program.behavior.temporalProperties {
             var index = 0

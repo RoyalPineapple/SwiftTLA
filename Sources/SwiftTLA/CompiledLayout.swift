@@ -6,6 +6,12 @@ package struct BinderID: Hashable, Sendable {
     package let ordinal: Int
 }
 
+package struct CompiledParameterLayout: Hashable, Sendable {
+    package let binder: BinderID
+    package let reference: ParameterReference
+    package let swiftType: String
+}
+
 package struct ActionID: Hashable, Sendable {
     package let ordinal: Int
 }
@@ -160,6 +166,7 @@ struct CompiledModuleInstanceLayout: Hashable, Sendable {
 }
 
 package struct CompiledLayout: Hashable, Sendable {
+    package let parameters: [CompiledParameterLayout]
     package let variables: [CompiledVariableLayout]
     package let actions: [CompiledActionLayout]
     let stateProperties: [CompiledPropertyLayout]
@@ -170,6 +177,10 @@ package struct CompiledLayout: Hashable, Sendable {
     let declarations: [CompiledDeclaration]
 
     init(source spec: TLASpec) {
+        parameters = spec.parameters.enumerated().map {
+            .init(binder: BinderID(ordinal: $0.offset), reference: $0.element.reference,
+                swiftType: $0.element.swiftType)
+        }
         variables = spec.variables.enumerated().map { ordinal, variable in
             let collection = spec.collections.first { $0.name == variable.name }
             return CompiledVariableLayout(

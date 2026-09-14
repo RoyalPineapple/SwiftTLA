@@ -305,6 +305,55 @@ verdict. Neither choice permits a truncated graph to pass equivalence validation
 
 ### Declaration syntax
 
+#### Counter parameter contract
+
+The parameter surface for Counter is:
+
+```swift
+let limit = scope.parameter(as: Int.self, in: 0...100)
+let stopAtLimit = scope.parameter(as: Bool.self)
+```
+
+`parameter(as:in:)` declares an immutable, typed model parameter. The integer
+overload accepts a closed range as its legal domain. The generic overload accepts
+a typed set expression with the same element type as the parameter.
+`parameter(as: Bool.self)` uses the complete Boolean domain.
+Legal domains can depend on immutable parameters, but not on machine state or
+enabled actions. The compiler must reject these dependencies, including those
+inside helper functions.
+
+The Swift binding supplies the declaration name. The macro retains its source
+location and assigns a model-owned identity. A parameter reference retains this
+identity through lowering. A display label must not replace it.
+
+Every scenario must bind each required parameter exactly once. The value must
+have the declared Swift type and belong to the legal domain. A parameter is not
+a state variable and cannot be an assignment target. Parameter values remain
+configuration data, not substituted literals in the compiled transition program.
+
+The generated machine owns one immutable `Configuration` value. Its generated
+initializer accepts one typed argument per parameter and rejects values outside
+their legal domains. Application execution and exploration both receive this
+configuration. Every configuration uses the same generated `State`, `Action`,
+and `Snapshot` types.
+
+For the declarations above, the generated entry points are:
+
+```swift
+try Counter.Configuration(limit: 2, stopAtLimit: true)
+try Counter.initialMachines(configuration: configuration)
+try Counter.makeMachine(configuration: configuration)
+```
+
+The first expression succeeds. `Counter.Configuration(limit: 101,
+stopAtLimit: true)` throws a domain error. A string supplied for `limit` fails
+Swift type checking. A binding to a parameter from another model fails model
+validation, even when its name and type match.
+
+This contract settles scalar parameter declarations for Counter. Parameter-dependent
+collection domains and scenario declaration signatures still require the remaining
+B-01 decisions. They must use these same identities and configuration values.
+
 **API pending:** candidate syntax inside a model scope containing typed declarations:
 
 ```swift
@@ -332,10 +381,9 @@ registration side effects.
 
 `Validation`, `Bind`, and `.expect` are candidate names. Parameter handles have
 types, are immutable for an execution, and are distinct from state variables.
-For example, `scope.parameter("processCount", as: Int.self)` would declare a
-parameter whose value each scenario must bind. Bindings must be resolved data
-or supported expressions, not opaque closures evaluated differently by each
-backend. Exact parameter/domain syntax remains open.
+Scalar parameters use the Counter declaration contract. Bindings must be resolved
+data or supported expressions, not opaque closures that backends evaluate
+differently. Parameter-dependent structure and scenario binding syntax remain open.
 
 ### Same machine, different settings
 

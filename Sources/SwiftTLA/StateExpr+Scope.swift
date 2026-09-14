@@ -5,7 +5,7 @@ extension StateExpr {
     /// bound names. Substitution uses this set to avoid binder capture.
     var freeVariableNames: Set<String> {
         return switch self {
-        case .sourceIssue, .value, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
+        case .sourceIssue, .value, .parameter, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
             []
         case .variable(let name):
             [name]

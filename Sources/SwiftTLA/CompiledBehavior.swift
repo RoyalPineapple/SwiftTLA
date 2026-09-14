@@ -1,6 +1,7 @@
 /// The transition relation and its properties, shared by compiler stages and backends.
 package struct CompiledBehavior: Sendable {
     package let checkDeadlock: Bool
+    package let parameterDomains: [BinderID: CompiledExpression]
     package let initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)]
     package let actions: [CompiledAction]
     /// Indices into actions, with ENABLED dependencies before their users.
@@ -18,6 +19,7 @@ package struct CompiledBehavior: Sendable {
     ) rethrows -> CompiledBehavior {
         try .init(
             checkDeadlock: checkDeadlock,
+            parameterDomains: parameterDomains.mapValues(transform),
             initializations: initializations.map {
                 (variable: $0.variable, initialization: try $0.initialization.map(transform))
             },

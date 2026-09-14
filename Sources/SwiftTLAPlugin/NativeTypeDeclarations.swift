@@ -22,6 +22,7 @@ struct NativeTypeDeclarations: Sendable {
                 case .value(let expression), .memberOf(let expression): expression
                 }
             }
+            pending.append(contentsOf: program.layout.parameters.compactMap { program.behavior.parameterDomains[$0.binder] })
             pending.append(contentsOf: program.behavior.temporalProperties.flatMap { $0.expression.predicates.map(\.expression) })
             pending.append(contentsOf: program.refinements.flatMap { $0.variableMappings.map(\.expression) })
             pending.append(contentsOf: program.behavior.invariants.map { $0.predicate.expression })

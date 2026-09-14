@@ -262,6 +262,9 @@ package struct CompiledTypeChecker: Sendable {
     package init(inputs: CompiledTypeInputs) throws {
         self.inputs = inputs
         variables = inputs.variableTypes
+        for parameter in inputs.layout.parameters {
+            bindings[parameter.binder] = inputs.bindingTypes[parameter.binder]
+        }
         for action in inputs.semantics.behavior.actions {
             for binding in action.bindings {
                 actionBinders.insert(binding.binder)
@@ -274,6 +277,15 @@ package struct CompiledTypeChecker: Sendable {
     }
 
     package mutating func checkProgram() throws -> CompiledProgram {
+        var parameterDomains: [BinderID: CompiledExpression] = [:]
+        for parameter in inputs.layout.parameters {
+            guard let type = bindings[parameter.binder], type.resolved,
+                  let domain = inputs.semantics.behavior.parameterDomains[parameter.binder] else {
+                throw CompiledValueType.unresolvedDiagnostic(bindings[parameter.binder] ?? .unknown,
+                    at: "parameters.\(parameter.reference.name)")
+            }
+            parameterDomains[parameter.binder] = try checkOperand(domain, expected: .set(type))
+        }
         var initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)] = []
         var actions: [CompiledAction] = []
         var invariants: [CompiledInvariant] = []
@@ -349,7 +361,9 @@ package struct CompiledTypeChecker: Sendable {
                     at: "variables.\(variable.declaration.name)")
             }
         }
-        var bindingTypes: [BinderID: CompiledValueType] = [:]
+        var bindingTypes = Dictionary(uniqueKeysWithValues: inputs.layout.parameters.map {
+            ($0.binder, bindings[$0.binder]!)
+        })
         for binder in actionBinders.sorted(by: { $0.ordinal < $1.ordinal }) {
             let type = bindings[binder] ?? .unknown
             guard type.resolved else {
@@ -401,6 +415,7 @@ package struct CompiledTypeChecker: Sendable {
         }
         let behavior = CompiledBehavior(
             checkDeadlock: inputs.semantics.behavior.checkDeadlock,
+            parameterDomains: parameterDomains,
             initializations: initializations,
             actions: actions,
             enabledActionIndices: inputs.semantics.behavior.enabledActionIndices,

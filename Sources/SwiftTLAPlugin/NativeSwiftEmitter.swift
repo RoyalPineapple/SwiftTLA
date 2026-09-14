@@ -642,7 +642,11 @@ struct NativeSwiftEmitter {
         case .stateVariable(let id):
             return stateValue(id, prefix: state)
         case .boundValue(let id):
-            return substitutions[id] ?? binder(id)
+            if let substitution = substitutions[id] { return substitution }
+            if let parameter = program.layout.parameters.first(where: { $0.binder == id }) {
+                return "configuration.`\(parameter.reference.name)`"
+            }
+            return binder(id)
         case .controlLocation(let id): return "_ControlLocation.location\(id.ordinal)"
         case .enabledAction(let id): return "enabled.contains(\(id.ordinal))"
         case .convert:

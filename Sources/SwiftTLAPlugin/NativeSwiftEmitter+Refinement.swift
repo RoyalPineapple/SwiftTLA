@@ -4,7 +4,8 @@ import SwiftTLA
 extension NativeSwiftEmitter {
     func supportsNativeRefinement(_ refinement: CompiledRefinementProgram) -> Bool {
         let abstract = refinement.abstract
-        return abstract.layout.variables.allSatisfy { $0.declaration.origin == .source && $0.collection == nil }
+        return abstract.layout.parameters.isEmpty
+            && abstract.layout.variables.allSatisfy { $0.declaration.origin == .source && $0.collection == nil }
     }
 
     mutating func refinementDeclarations(nested: Bool) throws -> [DeclSyntax] {
@@ -25,7 +26,7 @@ extension NativeSwiftEmitter {
                     }
                 }
                 """)
-                let collectionArguments = model.api.collections.map { ", \($0.swiftIdentifier): \($0.membersIdentifier)" }.joined()
+                let collectionArguments = machineArguments.isEmpty ? "" : ", " + machineArguments
                 var values: [String] = []
                 for (offset, query) in refinement.variableMappings.enumerated() {
                     let enabled = enabledActionsCall(query.enabledActions, state: "state", collectionArguments: collectionArguments)

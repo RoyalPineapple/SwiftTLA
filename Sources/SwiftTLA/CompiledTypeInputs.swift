@@ -52,6 +52,9 @@ package final class CompiledTypeInputs: Sendable {
         self.variableTypes = variableTypes
         self.collectionDomains = collectionDomains
         var bindingTypes: [BinderID: CompiledValueType] = [:]
+        for parameter in layout.parameters {
+            bindingTypes[parameter.binder] = try resolveSourceType(parameter.swiftType)
+        }
         for action in semantics.behavior.actions {
             for binding in action.bindings {
                 if let variable = action.collection,

@@ -971,6 +971,12 @@ private struct CanonicalSpecificationEncoder {
             node("constant", [$0.name, canonicalValue($0.value)])
         }
         list("constants", constants) { $0 }
+        if !spec.parameters.isEmpty {
+            let parameters = spec.parameters.map {
+                node("parameter", [$0.reference.name, $0.swiftType, canonicalExpression($0.domain)])
+            }
+            list("parameters", parameters) { $0 }
+        }
         let formalParameters = spec.formalParameters.map {
             node("formal-parameter", [$0.name, $0.kind.rawValue])
         }
@@ -1166,6 +1172,13 @@ private struct CanonicalSpecificationEncoder {
 private extension CompiledModuleMetadata {
     func renderModule(_ module: CompiledModule) throws -> RenderedModule {
         let layout = module.layout
+        guard layout.parameters.isEmpty else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                path: "export.\(name).parameters",
+                expected: "configuration-aware export from the resolved typed program",
+                actual: "the legacy renderer has no model parameter bindings",
+                nextSafeAction: "Use native execution until configuration-aware TLA+ export is implemented.")
+        }
         let bindings = module.bindings
         let semantics = module.semantics
         let refinements = module.refinements

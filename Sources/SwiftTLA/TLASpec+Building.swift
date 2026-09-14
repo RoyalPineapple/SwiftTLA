@@ -14,6 +14,7 @@ extension TLASpec {
     let body = builder(scope)
     let components = scope.declarations + body
     self.init(name, components: components)
+    parameters = scope.parameters
   }
 
   private init(_ name: String, components: [SpecComponent]) {
@@ -162,6 +163,7 @@ extension TLASpec {
       sourceAlgorithms: sourceAlgorithms
     )
     lowered.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
+    lowered.parameters = parameters
     lowered.algorithmPhase = .lowered
     return lowered
   }

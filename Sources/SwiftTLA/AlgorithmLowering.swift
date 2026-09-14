@@ -946,7 +946,7 @@ enum AlgorithmLowerer {
     private static func rewrite(_ expression: StateExpr, localRoots: Set<String>) -> StateExpr {
         func rewritten(_ expression: StateExpr, localRoots: Set<String>) -> StateExpr {
             switch expression {
-            case .sourceIssue, .value, .programCounter, .procedureStack, .controlLocation:
+            case .sourceIssue, .value, .parameter, .programCounter, .procedureStack, .controlLocation:
                 return expression
             case .currentProcess:
                 return .variable(processBinding.rawValue)

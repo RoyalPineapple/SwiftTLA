@@ -232,6 +232,7 @@ public struct TLASpec: Sendable {
   package var name: String
   package var variables: [NamedVar]
   package var constants: [ConstantDecl]
+  package var parameters: [ModelParameterDeclaration] = []
   /// Parameters supplied by a named TLA+ `INSTANCE … WITH` declaration.
   package var formalParameters: [FormalModuleParameter]
   package var actions: [NamedAction]

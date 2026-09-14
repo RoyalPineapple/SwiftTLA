@@ -86,7 +86,37 @@ extension ParserSession {
                 }
                 continue
             }
-            if compilerGrammarName(in: call.calledExpression) == "ActionParameter" {
+            if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+               member.declName.baseName.text == "parameter",
+               member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == declarationScope {
+                guard declaration.bindingSpecifier.text == "let",
+                      let type = call.arguments.first(where: { $0.label?.text == "as" })?.expression.as(MemberAccessExprSyntax.self),
+                      type.declName.baseName.text == "self", let base = type.base else {
+                    components.diagnostics.append(.init(message: "A parameter requires a named let binding and an explicit value type.", source: binding))
+                    continue
+                }
+                let typeName = base.trimmedDescription
+                let domain: StateExpr?
+                if let argument = call.arguments.first(where: { $0.label?.text == "in" }) {
+                    domain = decodeTypedFacadeValue(argument.expression, scope: sourceScope)
+                } else if typeName == "Bool" || typeName == "Swift.Bool" {
+                    domain = .setLiteral([.value(.bool(false)), .value(.bool(true))])
+                } else { domain = nil }
+                guard let domain else {
+                    components.diagnostics.append(.init(message: "A parameter requires a supported typed legal domain.", source: binding))
+                    continue
+                }
+                do {
+                    let shape = try sourceTypeResolver.resolve(typeName)
+                    let reference = ParameterReference(name: sourceName,
+                        sourceOffset: binding.positionAfterSkippingLeadingTrivia.utf8Offset,
+                        sourceLength: binding.trimmedDescription.utf8.count)
+                    components.parameters.append(.init(reference: reference, swiftType: typeName, domain: domain))
+                    sourceScope = sourceScope.extending(binding: sourceName, to: .parameter(reference), shape: shape)
+                } catch {
+                    components.diagnostics.append(.init(message: "Invalid parameter type: \(error)", source: binding))
+                }
+            } else if compilerGrammarName(in: call.calledExpression) == "ActionParameter" {
                 guard declaration.bindingSpecifier.text == "let", specBindings.parameters[sourceName] == nil else {
                     components.diagnostics.append(.init(
                         message: "Action parameter binding '\(sourceName)' must be declared once with let.",

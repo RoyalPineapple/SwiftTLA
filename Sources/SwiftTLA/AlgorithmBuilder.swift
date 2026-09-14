@@ -369,8 +369,35 @@ private extension SharedVariable {
 
 public final class SpecificationScope {
     var declarations: [VarDecl] = []
+    var parameters: [ModelParameterDeclaration] = []
 
     init() {}
+
+    public func parameter<Value: TLAValueType>(
+        as: Value.Type, in domain: some TypedExpression<SetExpr<Value>>, _name: String = "",
+        _sourceOffset: Int? = nil, _sourceLength: Int = 0
+    ) -> ModelParameter<Value> {
+        declareParameter(_name, domain: domain.stateExpr, sourceOffset: _sourceOffset, sourceLength: _sourceLength)
+    }
+
+    public func parameter(as: Int.Type, in domain: ClosedRange<Int>, _name: String = "",
+        _sourceOffset: Int? = nil, _sourceLength: Int = 0) -> ModelParameter<Int> {
+        declareParameter(_name, domain: .integerRange(.int(domain.lowerBound), .int(domain.upperBound)),
+            sourceOffset: _sourceOffset, sourceLength: _sourceLength)
+    }
+
+    public func parameter(as: Bool.Type, _name: String = "",
+        _sourceOffset: Int? = nil, _sourceLength: Int = 0) -> ModelParameter<Bool> {
+        declareParameter(_name, domain: .setLiteral([.value(.bool(false)), .value(.bool(true))]),
+            sourceOffset: _sourceOffset, sourceLength: _sourceLength)
+    }
+
+    private func declareParameter<Value: TLAValueType>(_ name: String, domain: StateExpr,
+        sourceOffset: Int?, sourceLength: Int) -> ModelParameter<Value> {
+        let reference = ParameterReference(name: name, sourceOffset: sourceOffset, sourceLength: sourceLength)
+        parameters.append(.init(reference: reference, swiftType: swiftSurfaceTypeName(for: Value.self), domain: domain))
+        return ModelParameter(reference: reference)
+    }
 
     public func sharedVar<Value: TLAValueType>(
         _ name: String,

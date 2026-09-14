@@ -357,6 +357,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .sourceIssue(let issue): parts.append("sourceIssue(\(issue))")
             case .value(let value): parts.append("value(\(value))")
             case .variable(let name): parts.append("var(\(environment[name] ?? name))")
+            case .parameter(let reference): parts.append("parameter(\(reference.name))")
             case .processLocalFamily(let name): parts.append("processLocalFamily(\(environment[name] ?? name))")
             case .currentProcess: parts.append("currentProcess")
             case .programCounter: parts.append("programCounter")

@@ -79,6 +79,9 @@ struct CompiledLowerer {
     ) {
         self.closure = closure
         self.layout = layout
+        nextBinderOrdinal = layout.parameters.count
+        binderNames = Dictionary(uniqueKeysWithValues: layout.parameters.map { ($0.binder, $0.reference.name) })
+        knownBinderNames = Set(binderNames.values)
         constants = spec.constants
         formalParameters = Set(spec.formalParameters.map(\.name))
         self.incomingModuleParameters = incomingModuleParameters
@@ -123,6 +126,18 @@ struct CompiledLowerer {
     }
 
     mutating func lower(spec: TLASpec) throws -> CompiledSemantics {
+        guard spec.parameters.allSatisfy({ !$0.reference.name.isEmpty }),
+              Set(spec.parameters.map(\.reference)).count == spec.parameters.count,
+              Set(spec.parameters.map { $0.reference.name }).count == spec.parameters.count else {
+            throw CompilationDiagnostic(code: .unknownReference, stage: .binding, path: "parameters",
+                expected: "distinct parameter declarations and nonempty source names", actual: "duplicate or unnamed parameter declaration",
+                nextSafeAction: "Declare each model parameter once with a unique let binding inside #spec.")
+        }
+        var parameterDomains: [BinderID: CompiledExpression] = [:]
+        for (declaration, parameter) in zip(spec.parameters, layout.parameters) {
+            parameterDomains[parameter.binder] = try lower(declaration.domain,
+                at: "parameters.\(declaration.reference.name).domain", scope: rootScope)
+        }
         for constant in spec.constants {
             if let issue = constant.sourceIssue {
                 throw issue.compilationDiagnostic(stage: .lowering, path: "constants.\(constant.name)")
@@ -312,6 +327,7 @@ struct CompiledLowerer {
         return CompiledSemantics(
             behavior: .init(
                 checkDeadlock: spec.checkDeadlock,
+                parameterDomains: parameterDomains,
                 initializations: orderedInitializations,
                 actions: actions,
                 enabledActionIndices: enabledActions.indices,
@@ -943,6 +959,16 @@ struct CompiledLowerer {
                     if case .boundValue(let binder) = expression.operation { bindings = [binder] }
                     else { bindings = [] }
                     lowered.append(.init(expression: expression, operatorReferences: references, bindingReferences: bindings))
+                case .parameter(let reference):
+                    guard let parameter = layout.parameters.first(where: { $0.reference == reference }) else {
+                        throw CompilationDiagnostic(
+                            code: .unknownReference, stage: .binding, path: path,
+                            expected: "a parameter owned by this model",
+                            actual: "foreign or undeclared parameter '\(reference.name)'",
+                            nextSafeAction: "Use a parameter declared in this model's specification scope.")
+                    }
+                    lowered.append(.init(expression: .boundValue(parameter.binder), operatorReferences: [],
+                        bindingReferences: [parameter.binder]))
                 case .controlLocation(let reference):
                     let matches = layout.controlLocations.filter { location in
                         location.sourceName == reference.sourceName
