@@ -16,7 +16,7 @@ struct ReferenceConfigurationDecodingTests {
   @Test("reference configuration decoding rejects fields it cannot preserve")
   func rejectsUnknownFields() {
     let input = Data(#"{"declarations":"SPECIFICATION Spec\n","invariants":[],"properties":[],"checksDeadlock":false,"extraChecks":["MustHold"]}"#.utf8)
-    #expect(throws: EvidenceFormatError.self) {
+    #expect(throws: DecodingError.self) {
       try JSONDecoder().decode(TLCReferenceConfiguration.self, from: input)
     }
   }

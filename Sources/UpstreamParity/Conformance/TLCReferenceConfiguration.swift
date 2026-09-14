@@ -64,7 +64,7 @@ extension TLCReferenceConfiguration {
   }
 
   package init(from decoder: Decoder) throws {
-    let fields = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let fields = try decoder.container(validatingKeys: CodingKeys.self)
     declarations = try fields.decode(String.self, forKey: .declarations)
     invariants = try fields.decode([String].self, forKey: .invariants)
     properties = try fields.decode([String].self, forKey: .properties)

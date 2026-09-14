@@ -115,10 +115,7 @@ struct FiniteGraphCheckTests {
 
   @Test("finite graph manifests reject unknown dependency fields")
   func rejectsUnknownDependencyFields() {
-    #expect(throws: EvidenceFormatError.invalidField(
-      record: "decode",
-      field: "unknown field inferred"
-    )) {
+    #expect(throws: DecodingError.self) {
       try JSONDecoder().decode(FiniteGraphManifest.self, from: manifest(
         dependencies: """
           [{

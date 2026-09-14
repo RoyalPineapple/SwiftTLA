@@ -38,39 +38,13 @@ package struct FiniteExplorationConfiguration: Sendable, Equatable, Codable {
         case maximumPermutationCount
     }
 
-    private struct AnyCodingKey: CodingKey {
-        let stringValue: String
-        let intValue: Int?
-
-        init?(stringValue: String) {
-            self.stringValue = stringValue
-            intValue = nil
-        }
-
-        init?(intValue: Int) {
-            stringValue = String(intValue)
-            self.intValue = intValue
-        }
-    }
-
     private enum SymmetryReductionName: String, Codable {
         case disabled
         case enabled
     }
 
     package init(from decoder: Decoder) throws {
-        let actual = try decoder.container(keyedBy: AnyCodingKey.self)
-        let known = Set(CodingKeys.allCases.map(\.stringValue))
-        let unknown = Set(actual.allKeys.map(\.stringValue)).subtracting(known)
-        guard unknown.isEmpty else {
-            throw DecodingError.dataCorrupted(
-                .init(
-                    codingPath: decoder.codingPath,
-                    debugDescription: "Unknown exploration field: \(unknown.sorted().joined(separator: ", "))"
-                )
-            )
-        }
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let container = try decoder.container(validatingKeys: CodingKeys.self)
         let mode = try container.decode(SymmetryReductionName.self, forKey: .symmetryReduction)
         let symmetryReduction: SymmetryReduction
         switch mode {

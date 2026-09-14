@@ -1,3 +1,4 @@
+import SwiftTLA
 package enum PropertyExpectation: String, Codable, Sendable {
   case satisfied
   case violated
@@ -19,7 +20,7 @@ package enum PropertyResult: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case status, trace }
 
   package init(from decoder: Decoder) throws {
-    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try decoder.container(validatingKeys: CodingKeys.self)
     let trace = try container.decodeIfPresent(GraphTrace.self, forKey: .trace)
     switch try container.decode(Status.self, forKey: .status) {
     case .satisfied:

@@ -342,7 +342,7 @@ package struct GraphTraceStep: Hashable, Codable, Sendable {
     private enum CodingKeys: String, CodingKey, CaseIterable { case state, action }
 
     package init(from decoder: Decoder) throws {
-        let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+        let container = try decoder.container(validatingKeys: CodingKeys.self)
         self.init(state: try container.decode(CanonicalStateKey.self, forKey: .state),
             action: try container.decodeIfPresent(String.self, forKey: .action))
     }
@@ -382,7 +382,7 @@ package struct GraphTrace: Hashable, Codable, Sendable {
     private enum CodingKeys: String, CodingKey, CaseIterable { case id, steps, cycleStartIndex }
 
     package init(from decoder: Decoder) throws {
-        let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+        let container = try decoder.container(validatingKeys: CodingKeys.self)
         self.init(id: try container.decode(String.self, forKey: .id),
             steps: try container.decode([GraphTraceStep].self, forKey: .steps),
             cycleStartIndex: try container.decodeIfPresent(Int.self, forKey: .cycleStartIndex))

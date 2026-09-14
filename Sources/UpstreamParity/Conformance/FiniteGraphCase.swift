@@ -247,14 +247,14 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             }
 
             package init(from decoder: Decoder) throws {
-                let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+                let container = try decoder.container(validatingKeys: CodingKeys.self)
                 importingModule = try container.decode(String.self, forKey: .importingModule)
                 importedModule = try container.decode(String.self, forKey: .importedModule)
             }
         }
 
         package init(from decoder: Decoder) throws {
-            let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+            let container = try decoder.container(validatingKeys: CodingKeys.self)
             id = try container.decode(String.self, forKey: .id)
             sourceModel = try container.decode(FiniteGraphSourceModel.self, forKey: .sourceModel)
             module = try container.decode(String.self, forKey: .module)
@@ -302,7 +302,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey, CaseIterable { case schema, cases }
 
     package init(from decoder: Decoder) throws {
-        let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+        let container = try decoder.container(validatingKeys: CodingKeys.self)
         schema = try container.decode(String.self, forKey: .schema)
         cases = try container.decode([Case].self, forKey: .cases)
         try validate()

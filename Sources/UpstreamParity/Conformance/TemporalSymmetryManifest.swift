@@ -51,7 +51,7 @@ package struct TemporalCase: Equatable, Codable, Sendable {
   }
 
   package init(from decoder: Decoder) throws {
-    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try decoder.container(validatingKeys: CodingKeys.self)
     try self.init(
       id: try container.decode(String.self, forKey: .id),
       fairness: try container.decode(TemporalFairnessMode.self, forKey: .fairness),
@@ -88,7 +88,7 @@ package struct SymmetryCase: Equatable, Codable, Sendable {
   }
 
   package init(from decoder: Decoder) throws {
-    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try decoder.container(validatingKeys: CodingKeys.self)
     try self.init(
       id: try container.decode(String.self, forKey: .id),
       scope: try container.decode(Int.self, forKey: .scope),
@@ -134,7 +134,7 @@ package struct TemporalSymmetryManifest: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case schema, temporalCases, symmetryCases }
 
   package init(from decoder: Decoder) throws {
-    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try decoder.container(validatingKeys: CodingKeys.self)
     try self.init(
       schema: try container.decode(String.self, forKey: .schema),
       temporalCases: try container.decode([TemporalCase].self, forKey: .temporalCases),
