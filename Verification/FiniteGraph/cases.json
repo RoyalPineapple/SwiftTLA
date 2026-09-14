@@ -2,6 +2,7 @@
   "schema": "FiniteGraphCases",
   "cases": [
     {
+      "id": "hour-clock",
       "sourceModel": "hour-clock",
       "module": "hour-clock/HourClock.tla",
       "configuration": "hour-clock/HourClock.cfg",
@@ -16,6 +17,7 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "die-hard-type-ok",
       "sourceModel": "die-hard-type-ok",
       "module": "die-hard-type-ok/DieHard.tla",
       "configuration": "die-hard-type-ok/DieHard.cfg",
@@ -30,6 +32,7 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "multicar-elevator",
       "sourceModel": "multicar-elevator",
       "module": "multicar-elevator/MultiCarElevator.tla",
       "configuration": "multicar-elevator/MultiCarElevator.cfg",
@@ -44,6 +47,7 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "tlcmc-graph-1",
       "sourceModel": "tlcmc-graph-1",
       "module": "tlcmc-graph-1/TLCMC.tla",
       "configuration": "tlcmc-graph-1/TLCMC.cfg",
@@ -62,6 +66,7 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "n-queens-four",
       "sourceModel": "n-queens-four",
       "module": "n-queens-four/QueensPluscal.tla",
       "configuration": "n-queens-four/QueensPluscal.cfg",
@@ -80,6 +85,7 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "asynch-interface",
       "sourceModel": "asynch-interface",
       "module": "asynch-interface/AsynchInterface.tla",
       "configuration": "asynch-interface/AsynchInterface.cfg",
@@ -98,6 +104,7 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "channel",
       "sourceModel": "channel",
       "module": "channel/Channel.tla",
       "configuration": "channel/Channel.cfg",
@@ -116,6 +123,7 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "boulanger",
       "sourceModel": "boulanger",
       "module": "boulanger/Boulanger.tla",
       "configuration": "boulanger/Boulanger.cfg",
@@ -134,6 +142,7 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "voteproof",
       "sourceModel": "voteproof",
       "module": "voteproof/VoteProof.tla",
       "configuration": "voteproof/VoteProof.cfg",
@@ -159,6 +168,7 @@
       "timeoutSeconds": 600
     },
     {
+      "id": "majority",
       "sourceModel": "majority",
       "module": "majority/MCMajority.tla",
       "configuration": "majority/MCMajority.cfg",
@@ -184,6 +194,7 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "kvsnap",
       "sourceModel": "kvsnap",
       "module": "kvsnap/MCKVsnap.tla",
       "configuration": "kvsnap/MCKVsnap.cfg",

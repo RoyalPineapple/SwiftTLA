@@ -48,7 +48,7 @@ struct FiniteGraphCheckTests {
     }
   }
 
-  @Test("finite graph staging consumes declared source model identities")
+  @Test("finite graph staging consumes declared case identities")
   func stagesDeclaredSourceModels() throws {
     let output = Pipe()
     let process = Process()
@@ -102,12 +102,11 @@ struct FiniteGraphCheckTests {
     }
   }
 
-  @Test("declared finite graph cases resolve every source model exactly once")
-  func resolvesDeclaredSourceModelsExactlyOnce() throws {
+  @Test("declared finite graph cases cover registered source models")
+  func resolvesDeclaredSourceModels() throws {
     let data = try Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json"))
     let manifest = try JSONDecoder().decode(FiniteGraphManifest.self, from: data)
     let sources = manifest.cases.map(\.sourceModel)
-    #expect(sources.count == FiniteGraphSourceModel.allCases.count)
     #expect(Set(sources) == Set(FiniteGraphSourceModel.allCases))
     for source in sources {
       _ = source.spec
@@ -173,6 +172,7 @@ struct FiniteGraphCheckTests {
       {
         "schema": "FiniteGraphCases",
         "cases": [{
+          "id": "fixture",
           "sourceModel": "\(sourceModel)",
           "timeoutSeconds": \(timeoutSeconds),
           "module": "Fixture.tla",

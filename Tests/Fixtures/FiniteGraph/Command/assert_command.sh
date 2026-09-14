@@ -24,6 +24,7 @@ cat >"$TMP/local-fixtures.json" <<JSON
 {
   "schema": "FiniteGraphCases",
   "cases": [{
+    "id": "local-fixture-small",
     "sourceModel": "local-fixture",
     "module": "local/LocalFixture.tla",
     "configuration": "local/LocalFixture.cfg",

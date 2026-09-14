@@ -211,7 +211,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
 
     package struct Case: Decodable, Sendable {
         package let sourceModel: FiniteGraphSourceModel
-        package var id: String { sourceModel.rawValue }
+        package let id: String
         package let module: String
         package let configuration: String
         package let imports: [String]
@@ -223,7 +223,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package let timeoutSeconds: TimeInterval
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case sourceModel, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration, timeoutSeconds
+            case id, sourceModel, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration, timeoutSeconds
         }
 
         package struct Dependency: Decodable, Sendable {
@@ -243,6 +243,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
 
         package init(from decoder: Decoder) throws {
             let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
             sourceModel = try container.decode(FiniteGraphSourceModel.self, forKey: .sourceModel)
             module = try container.decode(String.self, forKey: .module)
             configuration = try container.decode(String.self, forKey: .configuration)
@@ -260,6 +261,10 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         package func validate() throws {
+            let allowedIDCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-_")
+            guard !id.isEmpty, id != "all", id.unicodeScalars.allSatisfy(allowedIDCharacters.contains) else {
+                throw FiniteGraphCaseError.invalidIdentifier("case ID")
+            }
             guard timeoutSeconds.isFinite, timeoutSeconds > 0 else {
                 throw EvidenceFormatError.invalidField(record: id, field: "timeoutSeconds")
             }
@@ -295,13 +300,13 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         guard schema == Self.schema, !cases.isEmpty else {
             throw EvidenceFormatError.invalidSchema(schema)
         }
-        var sourceModels = Set<FiniteGraphSourceModel>()
+        var caseIDs = Set<String>()
         for finiteGraphCase in cases {
             try finiteGraphCase.validate()
-            guard sourceModels.insert(finiteGraphCase.sourceModel).inserted else {
+            guard caseIDs.insert(finiteGraphCase.id).inserted else {
                 throw EvidenceFormatError.duplicateID(
-                    kind: "source model",
-                    id: finiteGraphCase.sourceModel.rawValue
+                    kind: "finite graph case",
+                    id: finiteGraphCase.id
                 )
             }
         }
