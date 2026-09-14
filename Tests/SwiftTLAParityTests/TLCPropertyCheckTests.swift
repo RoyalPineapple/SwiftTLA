@@ -264,6 +264,16 @@ struct TLCPropertyCheckTests {
     #expect(retained.steps.map { $0.state.canonicalEncoding } == [state])
   }
 
+  @Test("a safety violation cannot carry a repeating temporal counterexample")
+  func rejectsCyclicSafetyTrace() throws {
+    let fixture = try Fixture(check: .property("IsTwo"))
+    #expect(throws: GraphRunError.invalidLasso) {
+      try fixture.capture(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
+        propertyResult: Fixture.safetyViolation, trace: numberedStutteringTrace())),
+        swiftResult: .satisfied)
+    }
+  }
+
   @Test("deadlock checks retain finite counterexamples independently of named properties")
   func retainsDeadlock() throws {
     let fixture = try Fixture(check: .deadlock)

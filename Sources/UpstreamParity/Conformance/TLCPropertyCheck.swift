@@ -133,6 +133,9 @@ extension TLCPropertyCheck {
     requiresCycle: Bool
   ) throws -> GraphTrace {
     guard let first = trace.steps.first else { throw GraphRunError.emptyTrace }
+    guard requiresCycle || trace.cycleStartIndex == nil else {
+      throw GraphRunError.invalidLasso
+    }
     var steps = try [first] + zip(trace.steps, trace.steps.dropFirst()).map { source, target in
       guard let action = target.action else { return target }
       let edge = CanonicalEdge(source: source.state, action: action, target: target.state)
