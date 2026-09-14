@@ -295,7 +295,7 @@ struct CompiledTLARenderer {
 
     private func actionName(_ id: ActionID) throws -> String {
         guard layout.actions.indices.contains(id.ordinal) else { throw missing("action", id.ordinal) }
-        return layout.actions[id.ordinal].declaration.name
+        return layout.actions[id.ordinal].renderedName
     }
 
     func binderName(_ id: BinderID) throws -> String {

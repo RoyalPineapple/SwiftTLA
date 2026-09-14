@@ -4,6 +4,24 @@ import Testing
 
 @Suite("Compiled specification rendering")
 struct CompiledSpecificationRendererTests {
+    @Test("Enabledness references use the resolved action declaration name")
+    func rendersResolvedActionNames() throws {
+        let compilation = try TLASpec(name: "ResolvedActionNames", variables: [
+            .init(name: "count", initial: .int(0))
+        ], actions: [
+            .init(name: "advance-step", body: .unchanged(.named("count"))),
+            .init(name: "advance_step", body: .unchanged(.named("count")))
+        ], invariants: [
+            .init(name: "CanAdvance", body: .enabledAction("advance-step")),
+            .init(name: "CanAlsoAdvance", body: .enabledAction("advance_step"))
+        ]).compile()
+        let rendered = try compilation.render().tlaBundle.tla
+        #expect(rendered.contains("advance_step =="))
+        #expect(rendered.contains("advance_step__2 =="))
+        #expect(rendered.contains("CanAdvance == ENABLED advance_step\n"))
+        #expect(rendered.contains("CanAlsoAdvance == ENABLED advance_step__2\n"))
+    }
+
     @Test("Model values cannot alias module variables")
     func rejectsModelValueDeclarationCollision() throws {
         #expect(throws: CompilationDiagnostic.self) {
