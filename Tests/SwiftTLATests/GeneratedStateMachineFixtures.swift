@@ -32,18 +32,6 @@ struct InvocationNamedActionModel {
 }
 
 @TLAModel
-struct CounterNoInvs {
-    static var spec: TLASpec {
-        TLASpec("CounterNoInvs") {
-            let x = Var<Int>("x")
-            Variable(x, 0)
-            SwiftTLA.Action("inc") { x.becomes(x + 1).when(x < 3) }
-            SwiftTLA.Action("dec") { x.becomes(x - 1).when(x > 0) }
-        }
-    }
-}
-
-@TLAModel
 struct GeneratedAlgorithmCounter {
     enum Step: String, CaseIterable { case increment }
 
@@ -349,33 +337,6 @@ struct GeneratedDependentInitialAlgorithm {
 }
 
 @TLAModel
-struct CounterWithInv {
-    static var spec: TLASpec {
-        TLASpec("CounterWithInv") {
-            let x = Var<Int>("x")
-            Variable(x, 0)
-            SwiftTLA.Action("inc") { x.becomes(x + 1).when(x < 5) }
-            Invariant("nonNeg") { x >= 0 }
-        }
-    }
-}
-
-@TLAModel
-struct MultiVar {
-    static var spec: TLASpec {
-        TLASpec("MultiVar") {
-            let a = Var<Int>("a")
-            let b = Var<Int>("b")
-            Variable(a, 0)
-            Variable(b, 0)
-            SwiftTLA.Action("incA") { a.becomes(a + 1).when(a < 2) }
-            SwiftTLA.Action("incB") { b.becomes(b + 1).when(b < 2) }
-            Invariant("sumLE4") { (a + b) <= 4 }
-        }
-    }
-}
-
-@TLAModel
 struct GeneratedAlgorithmMachine {
     enum Step: String, CaseIterable { case tick }
 
@@ -444,23 +405,6 @@ struct EndToEndThreeParameterActionMachine {
             ]) {
                 value.becomes(source + destination + amount)
             }
-        }
-    }
-}
-
-@TLAModel
-struct NondeterministicConstrainedMachine {
-    static var spec: TLASpec {
-        TLASpec("NondeterministicConstrainedMachine") {
-            let value = Var<Int>("value")
-            Variable(value, 0)
-            SwiftTLA.Action("choose") {
-                ActionExpr.exists("selected", from: StateExpr.set([1, 2, 3])) { selected in
-                    value.becomes(Expr<Int>(selected))
-                }
-            }
-            Constraint(value <= 2)
-            Invariant("WithinBound") { value <= 3 }
         }
     }
 }
