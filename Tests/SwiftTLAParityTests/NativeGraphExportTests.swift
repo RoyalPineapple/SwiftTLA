@@ -26,7 +26,10 @@ struct NativeGraphExportTests {
         let rendered = try compilation.render()
         for initial in try FailingExportModel.initialMachines() {
             let native = try ReachabilityGraph(initialMachines: [initial], maximumStates: 3)
-            let exported = try NativeModelRun(native, description: compilation.description, rendered: rendered)
+            let exported = try NativeModelRun(native, description: compilation.description, rendered: rendered, checkingDeadlock: true)
+            let unchecked = try NativeModelRun(native, description: compilation.description, rendered: rendered)
+            #expect(unchecked.checks.deadlock == nil)
+            #expect(unchecked.graph == exported.graph)
             #expect(exported.graph.isComplete)
             #expect(try exported.graph.graph == CanonicalGraph(native))
             #expect(Set(exported.checks.properties.keys) == ["BelowTwo", "BelowThree", "ReachesThree"])
@@ -46,7 +49,7 @@ struct NativeGraphExportTests {
                 let namedCase = try fixtureCase(testReferencePin(), renderedActions: [
                     RenderedAction(sourceName: "advance", arguments: [], renderedName: "ConcreteAdvance")
                 ])
-                let named = try NativeModelRun(native, description: compilation.description, rendered: rendered, for: namedCase)
+                let named = try NativeModelRun(native, description: compilation.description, rendered: rendered, checkingDeadlock: true, for: namedCase)
                 #expect(try counterexample(named.checks.properties["BelowTwo"]).steps.map(\.action) == [nil, "ConcreteAdvance"])
                 #expect(Set(named.graph.graph.edges.map(\.action)) == ["ConcreteAdvance"])
             }
@@ -78,7 +81,6 @@ private struct FailingExportModel {
             SwiftTLA.Action("advance") { value == 1 && value.becomes(2) }
             Invariant("BelowTwo") { value < 2 }
             Invariant("BelowThree") { value < 3 }
-            DeadlockCheck()
             Eventually("ReachesThree", value == 3)
         }
     }

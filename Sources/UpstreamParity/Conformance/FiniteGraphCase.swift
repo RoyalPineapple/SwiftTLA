@@ -21,7 +21,7 @@ package struct TLCReferencePin: Equatable, Sendable {
     package let javaVersion: String
     package let javaArchiveSHA256: String
     package let bridgeClass: String
-    package let bridgeSourceSHA256: String
+    package let bridgeSourceHashes: [String: String]
     package let bridgeBinarySHA256: String
 
     package init(
@@ -32,7 +32,7 @@ package struct TLCReferencePin: Equatable, Sendable {
         javaVersion: String,
         javaArchiveSHA256: String,
         bridgeClass: String,
-        bridgeSourceSHA256: String,
+        bridgeSourceHashes: [String: String],
         bridgeBinarySHA256: String
     ) throws {
         guard !tag.isEmpty, Self.isRevision(commit) else {
@@ -46,9 +46,15 @@ package struct TLCReferencePin: Equatable, Sendable {
         }
         for (field, value) in [
             ("jarSHA256", jarSHA256), ("javaArchiveSHA256", javaArchiveSHA256),
-            ("bridgeSourceSHA256", bridgeSourceSHA256), ("bridgeBinarySHA256", bridgeBinarySHA256)
+            ("bridgeBinarySHA256", bridgeBinarySHA256)
         ] where !Self.isSHA256(value) {
             throw FiniteGraphCaseError.invalidSHA256(field: field)
+        }
+        guard !bridgeSourceHashes.isEmpty else { throw FiniteGraphCaseError.missingArtifact("bridge sources") }
+        for (path, hash) in bridgeSourceHashes {
+            guard !path.isEmpty, Self.isSHA256(hash) else {
+                throw FiniteGraphCaseError.invalidSHA256(field: "bridge source " + path)
+            }
         }
         self.tag = tag
         self.commit = commit
@@ -57,7 +63,7 @@ package struct TLCReferencePin: Equatable, Sendable {
         self.javaVersion = javaVersion
         self.javaArchiveSHA256 = javaArchiveSHA256
         self.bridgeClass = bridgeClass
-        self.bridgeSourceSHA256 = bridgeSourceSHA256
+        self.bridgeSourceHashes = bridgeSourceHashes
         self.bridgeBinarySHA256 = bridgeBinarySHA256
     }
 
@@ -84,7 +90,13 @@ package struct TLCReferencePin: Equatable, Sendable {
         }
         try Self.verify(artifacts.javaArchive, expected: javaArchiveSHA256, name: "Java archive")
         try Self.verify(artifacts.bridgeBinary, expected: bridgeBinarySHA256, name: "bridge binary")
-        try Self.verify(artifacts.bridgeSource, expected: bridgeSourceSHA256, name: "bridge source")
+        guard Set(artifacts.bridgeSources.keys) == Set(bridgeSourceHashes.keys) else {
+            throw FiniteGraphCaseError.pinMismatch("bridge source inventory")
+        }
+        for (path, hash) in bridgeSourceHashes {
+            guard let source = artifacts.bridgeSources[path] else { throw FiniteGraphCaseError.missingArtifact(path) }
+            try Self.verify(source, expected: hash, name: "bridge source " + path)
+        }
     }
 
     package func validateReportedTLCBanner(_ output: String) throws {
@@ -326,11 +338,11 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case tlcmcGraph1 = "tlcmc-graph-1"
     case nQueensFour = "n-queens-four"
 
-    package func nativeRun(description: CompilationDescription, rendered: RenderedSpecification, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {
+    package func nativeRun(description: CompilationDescription, rendered: RenderedSpecification, checkingDeadlock: Bool, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {
         func explore<Machine: StateMachine>(_ initial: [Machine]) throws -> NativeModelRun {
             try NativeModelRun(ReachabilityGraph(initialMachines: initial,
                 maximumStates: finiteGraphCase.exploration.maximumStateLimit),
-                description: description, rendered: rendered, for: finiteGraphCase)
+                description: description, rendered: rendered, checkingDeadlock: checkingDeadlock, for: finiteGraphCase)
         }
         switch self {
         case .boulanger: return try explore(BoulangerModel.initialMachines())
@@ -367,15 +379,15 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
 package struct TLCReferenceArtifacts: Equatable, Sendable {
     package let jar: URL
     package let javaArchive: URL
-    package let bridgeSource: URL
+    package let bridgeSources: [String: URL]
     package let bridgeBinary: URL
     package let jarManifest: String
     package let runtime: TLCJavaRuntimeIdentity
 
-    package init(jar: URL, javaArchive: URL, bridgeSource: URL, bridgeBinary: URL, jarManifest: String, runtime: TLCJavaRuntimeIdentity) {
+    package init(jar: URL, javaArchive: URL, bridgeSources: [String: URL], bridgeBinary: URL, jarManifest: String, runtime: TLCJavaRuntimeIdentity) {
         self.jar = jar
         self.javaArchive = javaArchive
-        self.bridgeSource = bridgeSource
+        self.bridgeSources = bridgeSources
         self.bridgeBinary = bridgeBinary
         self.jarManifest = jarManifest
         self.runtime = runtime

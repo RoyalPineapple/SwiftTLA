@@ -18,9 +18,9 @@ are validated against the launched files before TLC runs.
 
 `Verification/FiniteGraph/toolchain.json` locks the TLC source tag and commit,
 the immutable GitHub release asset ID and JAR SHA-256, the Temurin Java archive
-SHA-256 per architecture, and this bridge's source SHA-256. The setup script
+SHA-256 per architecture, and every bridge source's SHA-256. The setup script
 rebuilds the bridge against those verified inputs. Each validation run records
-the resulting binary hash and verifies it again before execution. Input digest
+the resulting bridge JAR hash and verifies it again before execution. Input digest
 mismatches and changes to the built binary are errors.
 
 `Tools/TLCGraphBridge/.tool-cache` may contain the exact locked JAR and Java

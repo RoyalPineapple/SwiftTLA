@@ -56,7 +56,7 @@ struct TLCGraphReaderTests {
     let request = TLCProcessRequest(
       javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
       jar: directory.appendingPathComponent("tla2tools.jar"),
-      bridgeClasses: directory.appendingPathComponent("bridge"),
+      bridgeJar: directory.appendingPathComponent("bridge"),
       bundle: try TLCProcessRequest.declaredBundle(root: root, configuration: cfg),
       graphEvents: directory.appendingPathComponent("events.jsonl"),
       traceOutput: directory.appendingPathComponent("trace.json"),
@@ -129,7 +129,7 @@ struct TLCGraphReaderTests {
     let request = TLCProcessRequest(
       javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
       jar: directory.appendingPathComponent("tla2tools.jar"),
-      bridgeClasses: directory.appendingPathComponent("bridge"),
+      bridgeJar: directory.appendingPathComponent("bridge"),
       bundle: try TLCProcessRequest.declaredBundle(
         root: root,
         configuration: configuration,
@@ -210,7 +210,7 @@ struct TLCGraphReaderTests {
         tag: pin.tag, commit: pin.commit, jarSHA256: String(repeating: "g", count: 64),
         javaDistribution: pin.javaDistribution, javaVersion: pin.javaVersion,
         javaArchiveSHA256: pin.javaArchiveSHA256, bridgeClass: pin.bridgeClass,
-        bridgeSourceSHA256: pin.bridgeSourceSHA256, bridgeBinarySHA256: pin.bridgeBinarySHA256
+        bridgeSourceHashes: pin.bridgeSourceHashes, bridgeBinarySHA256: pin.bridgeBinarySHA256
       )
     }
     #expect(throws: FiniteGraphCaseError.self) {
@@ -218,7 +218,7 @@ struct TLCGraphReaderTests {
         tag: pin.tag, commit: "not-a-revision", jarSHA256: pin.jarSHA256,
         javaDistribution: pin.javaDistribution, javaVersion: pin.javaVersion,
         javaArchiveSHA256: pin.javaArchiveSHA256, bridgeClass: pin.bridgeClass,
-        bridgeSourceSHA256: pin.bridgeSourceSHA256,
+        bridgeSourceHashes: pin.bridgeSourceHashes,
         bridgeBinarySHA256: pin.bridgeBinarySHA256
       )
     }
@@ -227,7 +227,7 @@ struct TLCGraphReaderTests {
         tag: pin.tag, commit: pin.commit, jarSHA256: pin.jarSHA256,
         javaDistribution: pin.javaDistribution, javaVersion: pin.javaVersion,
         javaArchiveSHA256: pin.javaArchiveSHA256, bridgeClass: "",
-        bridgeSourceSHA256: pin.bridgeSourceSHA256,
+        bridgeSourceHashes: pin.bridgeSourceHashes,
         bridgeBinarySHA256: pin.bridgeBinarySHA256
       )
     }
@@ -239,7 +239,7 @@ struct TLCGraphReaderTests {
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
     let bytes = Data("reference artifact fixture".utf8)
-    for name in ["tlc.jar", "java.tar.gz", "Bridge.java", "Bridge.class"] {
+    for name in ["tlc.jar", "java.tar.gz", "Bridge.java", "Selection.java", "Bridge.jar"] {
       try bytes.write(to: root.appendingPathComponent(name))
     }
     let hash = SHA256.hex(bytes)
@@ -248,12 +248,13 @@ struct TLCGraphReaderTests {
       tag: declared.tag, commit: declared.commit, jarSHA256: hash,
       javaDistribution: declared.javaDistribution, javaVersion: declared.javaVersion,
       javaArchiveSHA256: hash, bridgeClass: declared.bridgeClass,
-      bridgeSourceSHA256: hash, bridgeBinarySHA256: hash)
+      bridgeSourceHashes: ["Bridge.java": hash, "Selection.java": hash], bridgeBinarySHA256: hash)
     let artifacts = TLCReferenceArtifacts(
       jar: root.appendingPathComponent("tlc.jar"),
       javaArchive: root.appendingPathComponent("java.tar.gz"),
-      bridgeSource: root.appendingPathComponent("Bridge.java"),
-      bridgeBinary: root.appendingPathComponent("Bridge.class"),
+      bridgeSources: ["Bridge.java": root.appendingPathComponent("Bridge.java"),
+        "Selection.java": root.appendingPathComponent("Selection.java")],
+      bridgeBinary: root.appendingPathComponent("Bridge.jar"),
       jarManifest: "Implementation-Title: TLA+ Tools\nX-Git-Revision: \(pin.commit)\n",
       runtime: TLCJavaRuntimeIdentity(
         version: pin.javaVersion, vendor: "Eclipse Adoptium", architecture: "arm64",
@@ -262,14 +263,14 @@ struct TLCGraphReaderTests {
     )
     try pin.validate(artifacts)
     let emptyManifest = TLCReferenceArtifacts(
-      jar: artifacts.jar, javaArchive: artifacts.javaArchive, bridgeSource: artifacts.bridgeSource,
+      jar: artifacts.jar, javaArchive: artifacts.javaArchive, bridgeSources: artifacts.bridgeSources,
       bridgeBinary: artifacts.bridgeBinary, jarManifest: "", runtime: artifacts.runtime
     )
     #expect(throws: FiniteGraphCaseError.pinMismatch("TLC JAR manifest")) {
       try pin.validate(emptyManifest)
     }
     let mismatchedRuntime = TLCReferenceArtifacts(
-      jar: artifacts.jar, javaArchive: artifacts.javaArchive, bridgeSource: artifacts.bridgeSource,
+      jar: artifacts.jar, javaArchive: artifacts.javaArchive, bridgeSources: artifacts.bridgeSources,
       bridgeBinary: artifacts.bridgeBinary, jarManifest: artifacts.jarManifest,
       runtime: TLCJavaRuntimeIdentity(
         version: "17.0.19+11", vendor: artifacts.runtime.vendor,
@@ -283,6 +284,19 @@ struct TLCGraphReaderTests {
     #expect(throws: FiniteGraphCaseError.pinMismatch("Java runtime")) {
       try pin.validate(mismatchedRuntime)
     }
+    let selector = root.appendingPathComponent("Selection.java")
+    try Data("changed source".utf8).write(to: selector)
+    #expect(throws: FiniteGraphCaseError.pinMismatch("bridge source Selection.java")) {
+      try pin.validate(artifacts)
+    }
+    try bytes.write(to: selector)
+    let missingSource = TLCReferenceArtifacts(
+      jar: artifacts.jar, javaArchive: artifacts.javaArchive,
+      bridgeSources: ["Bridge.java": root.appendingPathComponent("Bridge.java")],
+      bridgeBinary: artifacts.bridgeBinary, jarManifest: artifacts.jarManifest, runtime: artifacts.runtime)
+    #expect(throws: FiniteGraphCaseError.pinMismatch("bridge source inventory")) {
+      try pin.validate(missingSource)
+    }
     try Data("changed binary".utf8).write(to: artifacts.bridgeBinary)
     #expect(throws: FiniteGraphCaseError.pinMismatch("bridge binary")) {
       try pin.validate(artifacts)
@@ -294,7 +308,7 @@ struct TLCGraphReaderTests {
     let request = TLCProcessRequest(
       javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
       jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
-      bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
+      bridgeJar: URL(fileURLWithPath: "/tmp/bridge.jar"),
       bundle: fixtureBundle(),
       graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
       traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
@@ -307,7 +321,7 @@ struct TLCGraphReaderTests {
     #expect(command.contains("-Dswifttla.tlc.graph.path=/tmp/events.jsonl"))
     #expect(command.contains("-Dswifttla.tlc.graph.run-id=00000000-0000-4000-8000-000000000001"))
     #expect(command.contains("-Dswifttla.tlc.graph.case-id=fixture"))
-    #expect(command.contains("/tmp/tla2tools.jar:/tmp/bridge-classes"))
+    #expect(command.contains("/tmp/tla2tools.jar:/tmp/bridge.jar"))
     #expect(command.contains("-dumpTrace"))
     #expect(command.contains("/tmp/trace.json"))
   }
@@ -318,24 +332,23 @@ struct TLCGraphReaderTests {
     let artifacts = TLCReferenceArtifacts(
       jar: URL(fileURLWithPath: "/tmp/validated-tla2tools.jar"),
       javaArchive: URL(fileURLWithPath: "/tmp/temurin.tar.gz"),
-      bridgeSource: URL(fileURLWithPath: "/tmp/LosslessStateWriter.java"),
-      bridgeBinary: root.appendingPathComponent(
-        "org/swifttla/conformance/LosslessStateWriter.class"),
+      bridgeSources: ["Bridge.java": URL(fileURLWithPath: "/tmp/LosslessStateWriter.java")],
+      bridgeBinary: root,
       jarManifest: "",
       runtime: TLCJavaRuntimeIdentity(version: "", vendor: "", architecture: "", properties: [:])
     )
     let substitutedJar = try requestWithReferenceArtifacts(
-      jar: URL(fileURLWithPath: "/tmp/substituted-tla2tools.jar"), bridgeClasses: root,
+      jar: URL(fileURLWithPath: "/tmp/substituted-tla2tools.jar"), bridgeJar: root,
       artifacts: artifacts
     )
     #expect(throws: FiniteGraphCaseError.pinMismatch("execution TLC JAR")) {
       try substitutedJar.validateReferenceBinding(artifacts: artifacts)
     }
     let substitutedBridge = try requestWithReferenceArtifacts(
-      jar: artifacts.jar, bridgeClasses: URL(fileURLWithPath: "/tmp/substituted-bridge"),
+      jar: artifacts.jar, bridgeJar: URL(fileURLWithPath: "/tmp/substituted-bridge"),
       artifacts: artifacts
     )
-    #expect(throws: FiniteGraphCaseError.pinMismatch("execution bridge class")) {
+    #expect(throws: FiniteGraphCaseError.pinMismatch("execution bridge JAR")) {
       try substitutedBridge.validateReferenceBinding(artifacts: artifacts)
     }
   }
@@ -473,7 +486,7 @@ extension TLCGraphReaderTests {
         tag: "v9.9.9", commit: "0", jarSHA256: pin.jarSHA256,
         javaDistribution: pin.javaDistribution, javaVersion: pin.javaVersion,
         javaArchiveSHA256: pin.javaArchiveSHA256, bridgeClass: pin.bridgeClass,
-        bridgeSourceSHA256: pin.bridgeSourceSHA256, bridgeBinarySHA256: pin.bridgeBinarySHA256
+        bridgeSourceHashes: pin.bridgeSourceHashes, bridgeBinarySHA256: pin.bridgeBinarySHA256
       )
     }
   }
@@ -791,7 +804,7 @@ extension TLCGraphReaderTests {
       root: TLAModuleFile(name: "Module", tla: "wrong module", cfg: "cfg bytes")
     )
     let wrongModuleRequest = TLCProcessRequest(
-      javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeClasses: valid.bridgeClasses,
+      javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeJar: valid.bridgeJar,
       bundle: wrongModule, graphEvents: valid.graphEvents, traceOutput: valid.traceOutput,
       workingDirectory: directory.appendingPathComponent("wrong-module"),
       finiteGraphCase: finiteGraphCase, runID: UUID(), invocation: .finiteGraph
@@ -804,7 +817,7 @@ extension TLCGraphReaderTests {
       root: TLAModuleFile(name: "Module", tla: "module bytes", cfg: "wrong cfg")
     )
     let wrongConfigurationRequest = TLCProcessRequest(
-      javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeClasses: valid.bridgeClasses,
+      javaExecutable: valid.javaExecutable, jar: valid.jar, bridgeJar: valid.bridgeJar,
       bundle: wrongConfiguration, graphEvents: valid.graphEvents, traceOutput: valid.traceOutput,
       workingDirectory: directory.appendingPathComponent("wrong-configuration"),
       finiteGraphCase: finiteGraphCase, runID: UUID(), invocation: .finiteGraph
@@ -828,7 +841,7 @@ private func retainedCaptureRequest(in directory: URL) throws -> TLCProcessReque
   return TLCProcessRequest(
     javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
     jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
-    bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
+    bridgeJar: URL(fileURLWithPath: "/tmp/bridge.jar"),
     bundle: fixtureBundle(),
     graphEvents: directory.appendingPathComponent("events.jsonl"),
     traceOutput: directory.appendingPathComponent("counterexample.json"),

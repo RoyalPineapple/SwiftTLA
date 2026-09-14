@@ -6,12 +6,13 @@ package enum TLCPropertyCheckError: Error, Equatable, Sendable {
   case requestMismatch
   case incompleteGraph
   case invalidNativeGraph
+  case uncoveredReferenceChecks
   case inconsistentBatchResults
 }
 
 package enum TLCPropertySource: Sendable {
   case generated
-  case reference(TLAModuleBundle)
+  case reference(TLAModuleBundle, TLCReferenceConfiguration)
 
   func bundle(for native: NativeModelRun, checkingSatisfied: Bool) throws -> TLAModuleBundle {
     let names = checkingSatisfied ? Set(native.checks.properties.filter { $0.value == .satisfied }.keys) : []
@@ -19,8 +20,9 @@ package enum TLCPropertySource: Sendable {
     case .generated:
       return try native.rendered.tlaBundle(checking: names,
         checkDeadlock: checkingSatisfied && native.checks.deadlock == .satisfied)
-    case .reference(let original):
-      return names.isEmpty ? original : try native.rendered.referenceBundle(checking: names, in: original)
+    case .reference(let original, let configuration):
+      return try configuration.bundle(from: original, native: native, checking: names,
+        checkDeadlock: checkingSatisfied && native.checks.deadlock == .satisfied)
     }
   }
 }
@@ -74,7 +76,7 @@ package struct TLCPropertyCheck: Sendable {
     var selected = native.checks.properties.sorted { $0.key < $1.key }.map {
       (check: ModelCheck.property($0.key), result: $0.value)
     }
-    if case .generated = source, let deadlock = native.checks.deadlock { selected.append((.deadlock, deadlock)) }
+    if let deadlock = native.checks.deadlock { selected.append((.deadlock, deadlock)) }
     let passingChecks = selected.filter { $0.result == .satisfied }.map(\.check)
     let prepared = Result {
       let capture = try completeGraph.get()
@@ -142,9 +144,14 @@ package struct TLCPropertyCheck: Sendable {
           let bundle: TLAModuleBundle
           switch source {
           case .generated: bundle = try check.bundle(from: native.rendered)
-          case .reference(let original):
-            guard case .property(let name) = check else { throw TLCPropertyCheckError.requestMismatch }
-            bundle = try native.rendered.referenceBundle(checking: [name], in: original)
+          case .reference(let original, let configuration):
+            let names: Set<String>
+            switch check {
+            case .property(let name): names = [name]
+            case .deadlock: names = []
+            }
+            bundle = try configuration.bundle(from: original, native: native,
+              checking: names, checkDeadlock: check == .deadlock)
           }
           let request = try capture.request.selecting(bundle: bundle,
             work: work, runID: UUID(), invocation: .propertyCheck)

@@ -35,8 +35,7 @@ struct PinnedTLCToolchain: Decodable {
     }
     struct Bridge: Decodable {
         let `class`: String
-        let source: String
-        let sourceSha256: String
+        let sources: [String: String]
     }
     struct Download: Decodable {
         let url: String
@@ -53,9 +52,7 @@ private func referencePin(
     from toolchain: PinnedTLCToolchain,
     javaArchive: PinnedTLCToolchain.Download, toolRoot: URL
 ) throws -> TLCReferencePin {
-    let binary = toolRoot.appendingPathComponent("bridge-classes")
-        .appendingPathComponent(toolchain.bridge.class.replacingOccurrences(of: ".", with: "/"))
-        .appendingPathExtension("class")
+    let binary = toolRoot.appendingPathComponent("bridge.jar")
     return try TLCReferencePin(
         tag: toolchain.tlc.tag,
         commit: toolchain.tlc.commit,
@@ -64,7 +61,7 @@ private func referencePin(
         javaVersion: toolchain.java.version,
         javaArchiveSHA256: javaArchive.sha256,
         bridgeClass: toolchain.bridge.class,
-        bridgeSourceSHA256: toolchain.bridge.sourceSha256,
+        bridgeSourceHashes: toolchain.bridge.sources,
         bridgeBinarySHA256: SHA256.hex(try Data(contentsOf: binary))
     )
 }
@@ -146,11 +143,11 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         let toolDirectory = URL(fileURLWithPath: toolRoot)
         let jar = toolDirectory.appendingPathComponent("downloads/tla2tools.jar")
         let java = toolDirectory.appendingPathComponent("java-\(architecture)/Contents/Home/bin/java")
-        let bridgeClasses = toolDirectory.appendingPathComponent("bridge-classes")
+        let bridgeJar = toolDirectory.appendingPathComponent("bridge.jar")
         let javaArchivePath = toolDirectory.appendingPathComponent(
             "downloads/temurin-\(architecture).tar.gz")
-        let bridgeSource = projectRoot.appendingPathComponent(lock.bridge.source)
-        for artifact in [jar, java, bridgeClasses, javaArchivePath, bridgeSource] where
+        let bridgeSources = Dictionary(uniqueKeysWithValues: lock.bridge.sources.keys.map { ($0, projectRoot.appendingPathComponent($0)) })
+        for artifact in [jar, java, bridgeJar, javaArchivePath] + Array(bridgeSources.values) where
             !FileManager.default.fileExists(atPath: artifact.path) {
             throw FiniteGraphCLIError.missingFile(artifact.path)
         }
@@ -158,10 +155,8 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             artifacts: TLCReferenceArtifacts(
                 jar: jar,
                 javaArchive: javaArchivePath,
-                bridgeSource: bridgeSource,
-                bridgeBinary: bridgeClasses
-                    .appendingPathComponent(pin.bridgeClass.replacingOccurrences(of: ".", with: "/"))
-                    .appendingPathExtension("class"),
+                bridgeSources: bridgeSources,
+                bridgeBinary: bridgeJar,
                 jarManifest: "",
                 runtime: TLCJavaRuntimeIdentity(
                     version: "", vendor: "", architecture: architecture, properties: [:]
@@ -209,7 +204,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             let request = TLCProcessRequest(
                 javaExecutable: java,
                 jar: jar,
-                bridgeClasses: bridgeClasses,
+                bridgeJar: bridgeJar,
                 bundle: bundle,
                 graphEvents: runRoot.appendingPathComponent("\(declaration.id).events.jsonl"),
                 traceOutput: runRoot.appendingPathComponent("\(declaration.id).counterexample.json"),
@@ -220,9 +215,11 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 invocation: .finiteGraph,
                 referenceArtifacts: referenceArtifacts
             )
+            let referenceConfiguration = try TLCReferenceConfiguration.parse(request)
             let check = FiniteGraphCheck().run(
-                nativeRun: { try declaration.sourceModel.nativeRun(description: description, rendered: rendered, for: finiteGraphCase) },
+                nativeRun: { try declaration.sourceModel.nativeRun(description: description, rendered: rendered, checkingDeadlock: referenceConfiguration.checksDeadlock, for: finiteGraphCase) },
                 tlcRequest: request,
+                referenceConfiguration: referenceConfiguration,
                 outputDirectory: caseOutput
             )
             let label = "finite-graph \(declaration.id)"

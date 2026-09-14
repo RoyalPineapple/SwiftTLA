@@ -24,7 +24,7 @@ func testReferencePin() throws -> TLCReferencePin {
     javaVersion: try #require(java["version"] as? String),
     javaArchiveSHA256: try #require(arm64["sha256"] as? String),
     bridgeClass: try #require(bridge["class"] as? String),
-    bridgeSourceSHA256: try #require(bridge["sourceSha256"] as? String),
+    bridgeSourceHashes: try #require(bridge["sources"] as? [String: String]),
     bridgeBinarySHA256: SHA256.hex(Data("test bridge binary".utf8))
   )
 }
@@ -290,7 +290,7 @@ func launchRequest(
   try TLCProcessRequest(
     javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
     jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
-    bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
+    bridgeJar: URL(fileURLWithPath: "/tmp/bridge.jar"),
     bundle: TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
@@ -300,11 +300,11 @@ func launchRequest(
 }
 func requestWithReferenceArtifacts(
   jar: URL,
-  bridgeClasses: URL,
+  bridgeJar: URL,
   artifacts: TLCReferenceArtifacts
 ) throws -> TLCProcessRequest {
   TLCProcessRequest(
-    javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: jar, bridgeClasses: bridgeClasses,
+    javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: jar, bridgeJar: bridgeJar,
     bundle: .external(root: TLAModuleFile(name: "Fixture", tla: "---- MODULE Fixture ----", cfg: "SPECIFICATION Spec")),
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),

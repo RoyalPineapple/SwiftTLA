@@ -72,7 +72,7 @@ package enum TLCProcessError: Error, Equatable, Sendable {
 package struct TLCProcessRequest: Equatable, Sendable {
   package let javaExecutable: URL
   package let jar: URL
-  package let bridgeClasses: URL
+  package let bridgeJar: URL
   /// The only TLA+ sources that this TLC invocation may receive.
   package let bundle: TLAModuleBundle
   package let graphEvents: URL
@@ -87,7 +87,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
   package init(
     javaExecutable: URL,
     jar: URL,
-    bridgeClasses: URL,
+    bridgeJar: URL,
     bundle: TLAModuleBundle,
     graphEvents: URL,
     traceOutput: URL,
@@ -100,7 +100,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
   ) {
     self.javaExecutable = javaExecutable
     self.jar = jar
-    self.bridgeClasses = bridgeClasses
+    self.bridgeJar = bridgeJar
     self.bundle = bundle
     self.graphEvents = graphEvents
     self.traceOutput = traceOutput
@@ -142,7 +142,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
       ? ["-dump", "class,org.swifttla.conformance.LosslessStateWriter"] : []
     let argumentGroups: [[String]] = [
       graphOptions,
-      ["-cp", "\(jar.path):\(bridgeClasses.path)", "tlc2.TLC"],
+      ["-cp", "\(jar.path):\(bridgeJar.path)", "tlc2.TLC"],
       graphDump,
       ["-dumpTrace", "json", traceOutput.path],
       finiteGraphCase.arguments,
@@ -250,16 +250,11 @@ package struct TLCProcessRequest: Equatable, Sendable {
   }
 
   package func validateReferenceBinding(artifacts: TLCReferenceArtifacts) throws {
-    let pin = finiteGraphCase.pin
     guard sameFile(jar, artifacts.jar) else {
       throw FiniteGraphCaseError.pinMismatch("execution TLC JAR")
     }
-    let bridgeClassFile =
-      bridgeClasses
-      .appendingPathComponent(pin.bridgeClass.replacingOccurrences(of: ".", with: "/"))
-      .appendingPathExtension("class")
-    guard sameFile(bridgeClassFile, artifacts.bridgeBinary) else {
-      throw FiniteGraphCaseError.pinMismatch("execution bridge class")
+    guard sameFile(bridgeJar, artifacts.bridgeBinary) else {
+      throw FiniteGraphCaseError.pinMismatch("execution bridge JAR")
     }
   }
 
@@ -367,7 +362,7 @@ package struct TLCProcessAdapter: Sendable {
     let root = request.workingDirectory.resolvingSymlinksInPath().standardizedFileURL
     let trace = try RetainedFiles.resolve(request.traceOutput, beneath: root)
     let retained = directory.resolvingSymlinksInPath().standardizedFileURL
-    let protected = [request.javaExecutable, request.jar, request.bridgeClasses, request.graphEvents]
+    let protected = [request.javaExecutable, request.jar, request.bridgeJar, request.graphEvents]
       .map { $0.resolvingSymlinksInPath().standardizedFileURL }
     guard trace != root, trace != retained, !trace.path.hasPrefix(retained.path + "/"),
           !protected.contains(trace) else {
@@ -448,7 +443,7 @@ private func bundleInputJSON(_ bundle: TLAModuleBundle) -> [[String: String]] {
   return inputs
 }
 
-private func pinJSON(_ pin: TLCReferencePin) -> [String: String] {
+private func pinJSON(_ pin: TLCReferencePin) -> [String: Any] {
   [
     "tag": pin.tag,
     "commit": pin.commit,
@@ -457,7 +452,7 @@ private func pinJSON(_ pin: TLCReferencePin) -> [String: String] {
     "javaVersion": pin.javaVersion,
     "javaArchiveSHA256": pin.javaArchiveSHA256,
     "bridgeClass": pin.bridgeClass,
-    "bridgeSourceSHA256": pin.bridgeSourceSHA256,
+    "bridgeSourceHashes": pin.bridgeSourceHashes,
     "bridgeBinarySHA256": pin.bridgeBinarySHA256
   ]
 }
@@ -494,7 +489,7 @@ package enum TLCReferenceInspector {
       throw FiniteGraphCaseError.pinMismatch("Java runtime properties")
     }
     return TLCReferenceArtifacts(
-      jar: artifacts.jar, javaArchive: artifacts.javaArchive, bridgeSource: artifacts.bridgeSource,
+      jar: artifacts.jar, javaArchive: artifacts.javaArchive, bridgeSources: artifacts.bridgeSources,
       bridgeBinary: artifacts.bridgeBinary,
       jarManifest: manifest.stdout,
       runtime: TLCJavaRuntimeIdentity(
@@ -576,7 +571,7 @@ extension TLCProcessRequest {
       arguments: configuration.arguments, environment: configuration.environment, pin: configuration.pin,
       renderedActions: configuration.renderedActions)
     return TLCProcessRequest(javaExecutable: javaExecutable, jar: jar,
-      bridgeClasses: bridgeClasses, bundle: bundle,
+      bridgeJar: bridgeJar, bundle: bundle,
       graphEvents: work.appendingPathComponent("events.jsonl"), traceOutput: work.appendingPathComponent("counterexample.json"),
       workingDirectory: work, finiteGraphCase: selected, runID: runID, timeout: timeout,
       invocation: invocation, referenceArtifacts: referenceArtifacts)

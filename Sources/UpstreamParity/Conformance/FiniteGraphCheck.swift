@@ -41,6 +41,7 @@ package struct FiniteGraphCheck: Sendable {
   package func run(
     nativeRun: () throws -> NativeModelRun,
     tlcRequest: TLCProcessRequest,
+    referenceConfiguration: TLCReferenceConfiguration,
     outputDirectory: URL
   ) -> FiniteGraphCheckOutput {
     let finiteGraphCase = tlcRequest.finiteGraphCase
@@ -96,8 +97,14 @@ package struct FiniteGraphCheck: Sendable {
       enter(.tlcExecution)
       try validateReference(tlcRequest)
       let propertyCheck = TLCPropertyCheck(processAdapter: tlcProcess)
-      let referenceSource = TLCPropertySource.reference(tlcRequest.bundle)
-      let tlcCapture = try propertyCheck.captureGraph(native, request: tlcRequest,
+      try RetainedFiles.writeText(tlcRequest.bundle.cfg,
+        to: directory.appendingPathComponent("reference-original.cfg"))
+      try referenceConfiguration.validateCoverage(native)
+      let referenceSource = TLCPropertySource.reference(tlcRequest.bundle, referenceConfiguration)
+      let referenceRequest = try tlcRequest.selecting(
+        bundle: referenceSource.bundle(for: native, checkingSatisfied: false),
+        work: tlcRequest.workingDirectory, runID: tlcRequest.runID, invocation: .finiteGraph)
+      let tlcCapture = try propertyCheck.captureGraph(native, request: referenceRequest,
         source: referenceSource, in: directory)
 
       enter(.tlcParsing)

@@ -168,7 +168,7 @@ package struct TemporalSymmetryCheck: Sendable {
       moduleSHA256: SHA256.hex(Data(bundle.tla.utf8)), cfgSHA256: SHA256.hex(Data(bundle.cfg.utf8)),
       arguments: ["-workers", "1", "-fp", "1"], environment: [:], pin: referencePin)
     return TLCProcessRequest(
-      javaExecutable: toolchain.java, jar: toolchain.jar, bridgeClasses: toolchain.bridgeClasses,
+      javaExecutable: toolchain.java, jar: toolchain.jar, bridgeJar: toolchain.bridgeJar,
       bundle: bundle, graphEvents: work.appendingPathComponent("events.jsonl"),
       traceOutput: work.appendingPathComponent("counterexample.json"), workingDirectory: work,
       finiteGraphCase: launch, runID: UUID(), invocation: invocation, referenceArtifacts: toolchain.artifacts)
@@ -301,7 +301,7 @@ extension TemporalSymmetryCheck {
   ) throws -> TLCProcessRequest {
     try RetainedFiles.createDirectory(work, beneath: projectRoot)
     return TLCProcessRequest(
-      javaExecutable: toolchain.java, jar: toolchain.jar, bridgeClasses: toolchain.bridgeClasses,
+      javaExecutable: toolchain.java, jar: toolchain.jar, bridgeJar: toolchain.bridgeJar,
       bundle: bundle,
       graphEvents: work.appendingPathComponent("events.jsonl"), traceOutput: work.appendingPathComponent("counterexample.json"),
       workingDirectory: work,
@@ -339,7 +339,7 @@ extension TemporalSymmetryCheck {
 private struct ResolvedTLCToolchain {
   let java: URL
   let jar: URL
-  let bridgeClasses: URL
+  let bridgeJar: URL
   let artifacts: TLCReferenceArtifacts
 
   init(toolRoot: URL, projectRoot: URL, pin: TLCReferencePin) throws {
@@ -347,13 +347,12 @@ private struct ResolvedTLCToolchain {
     let architecture = FileManager.default.fileExists(atPath: armJava.path) ? "arm64" : "x86_64"
     java = toolRoot.appendingPathComponent("java-\(architecture)/Contents/Home/bin/java")
     jar = toolRoot.appendingPathComponent("downloads/tla2tools.jar")
-    bridgeClasses = toolRoot.appendingPathComponent("bridge-classes")
+    bridgeJar = toolRoot.appendingPathComponent("bridge.jar")
     let archive = toolRoot.appendingPathComponent("downloads/temurin-\(architecture).tar.gz")
-    let source = projectRoot.appendingPathComponent("Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java")
-    let binary = bridgeClasses.appendingPathComponent(pin.bridgeClass.replacingOccurrences(of: ".", with: "/")).appendingPathExtension("class")
+    let sources = Dictionary(uniqueKeysWithValues: pin.bridgeSourceHashes.keys.map { ($0, projectRoot.appendingPathComponent($0)) })
     artifacts = try TLCReferenceInspector.inspect(
       artifacts: TLCReferenceArtifacts(
-        jar: jar, javaArchive: archive, bridgeSource: source, bridgeBinary: binary,
+        jar: jar, javaArchive: archive, bridgeSources: sources, bridgeBinary: bridgeJar,
         jarManifest: "", runtime: .init(version: "", vendor: "", architecture: architecture, properties: [:])),
       javaExecutable: java, directory: projectRoot)
     try pin.validate(artifacts)

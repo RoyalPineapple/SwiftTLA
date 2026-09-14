@@ -105,15 +105,15 @@ struct TLCPropertyCheckTests {
       Invariant("Safe") { x >= 0 }
       Eventually("Progress", x == 1)
     }.compile().render()
-    let configuration = "CONSTANT N = 4\nSPECIFICATION LiveSpec\nCHECK_DEADLOCK FALSE\nINVARIANT Existing\n"
+    let configuration = "CONSTANT N = 4\nSPECIFICATION LiveSpec\n"
     let reference = TLAModuleBundle.external(root: .init(name: "Original", tla: "original module bytes", cfg: configuration))
-    let selected = try rendered.referenceBundle(checking: [name], in: reference)
+    let selected = try rendered.referenceBundle(checking: [name], checkDeadlock: false, declarations: configuration, in: reference)
     #expect(selected.root.name == "Original")
     #expect(selected.tla == reference.tla)
     #expect(selected.imports == reference.imports)
     #expect(selected.provenance == reference.provenance)
     #expect(selected.cfg.hasPrefix(configuration))
-    #expect(selected.cfg.hasSuffix(directive + "\n"))
+    #expect(selected.cfg.hasSuffix(directive + "\nCHECK_DEADLOCK FALSE\n"))
     #expect(selected.cfg.components(separatedBy: "CHECK_DEADLOCK").count == 2)
     #expect(!selected.cfg.contains("SPECIFICATION Spec\n"))
   }
@@ -601,7 +601,7 @@ struct TLCPropertyCheckTests {
         environment: [:], pin: try testReferencePin())
       completeGraphRequest = TLCProcessRequest(
         javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: root.appendingPathComponent("tla2tools.jar"),
-        bridgeClasses: root.appendingPathComponent("bridge"),
+        bridgeJar: root.appendingPathComponent("bridge"),
         bundle: graphBundle,
         graphEvents: root.appendingPathComponent("complete-events.jsonl"),
         traceOutput: root.appendingPathComponent("complete-trace.json"),
@@ -652,7 +652,7 @@ struct TLCPropertyCheckTests {
       TLCProcessRequest(
         javaExecutable: completeGraphRequest.javaExecutable,
         jar: completeGraphRequest.jar,
-        bridgeClasses: completeGraphRequest.bridgeClasses,
+        bridgeJar: completeGraphRequest.bridgeJar,
         bundle: bundle ?? completeGraphRequest.bundle,
         graphEvents: completeGraphRequest.graphEvents,
         traceOutput: traceOutput ?? completeGraphRequest.traceOutput,

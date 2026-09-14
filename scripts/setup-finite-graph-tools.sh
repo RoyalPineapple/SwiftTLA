@@ -113,7 +113,7 @@ required = [
     "java.distribution", "java.version",
     "java.archives.arm64.url", "java.archives.arm64.sha256",
     "java.archives.x86_64.url", "java.archives.x86_64.sha256",
-    "bridge.class", "bridge.source", "bridge.sourceSha256",
+    "bridge.class",
 ]
 if lock.get("schema") != "TLCReferencePin":
     raise SystemExit("unsupported toolchain schema")
@@ -131,7 +131,7 @@ for path in sys.argv[2:]:
 PY
 }
 
-if ! LOCK_VALUES="$(read_lock tlc.jar.repository tlc.jar.assetID tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256 bridge.source bridge.sourceSha256)"; then
+if ! LOCK_VALUES="$(read_lock tlc.jar.repository tlc.jar.assetID tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256)"; then
     fail "${LOCK_VALUES:-toolchain lock does not match the accepted TLC reference pin}"
 fi
 
@@ -147,10 +147,6 @@ TLC_ASSET_URL="https://api.github.com/repos/$TLC_REPOSITORY/releases/assets/$TLC
 TLC_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '3p')"
 JAVA_URL="$(printf '%s\n' "$LOCK_VALUES" | sed -n '4p')"
 JAVA_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '5p')"
-BRIDGE_SOURCE_RELATIVE="$(printf '%s\n' "$LOCK_VALUES" | sed -n '6p')"
-BRIDGE_SOURCE_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '7p')"
-BRIDGE_SOURCE="$PROJECT_ROOT/$BRIDGE_SOURCE_RELATIVE"
-[ -f "$BRIDGE_SOURCE" ] || fail "bridge source is missing: $BRIDGE_SOURCE_RELATIVE"
 
 sha256() {
     shasum -a 256 "$1" | awk '{print $1}'
@@ -200,7 +196,31 @@ if [ -n "${FINITE_GRAPH_GITHUB_TOKEN:-}" ]; then
 fi
 download_locked "$TLC_ASSET_URL" "$TLC_SHA256" "$TLC_JAR" "${TLC_HEADERS[@]}"
 download_locked "$JAVA_URL" "$JAVA_SHA256" "$JAVA_ARCHIVE"
-[ "$(sha256 "$BRIDGE_SOURCE")" = "$BRIDGE_SOURCE_SHA256" ] || fail "bridge source digest mismatch"
+if ! BRIDGE_SOURCE_PATHS="$(python3 - "$PROJECT_ROOT" "$TOOLCHAIN" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1]).resolve()
+sources = json.loads(Path(sys.argv[2]).read_text())["bridge"]["sources"]
+if not isinstance(sources, dict) or not sources:
+    raise SystemExit("bridge source inventory is empty")
+for relative, digest in sorted(sources.items()):
+    source = (root / relative).resolve()
+    if not source.is_relative_to(root) or "\n" in str(source) or source.suffix != ".java":
+        raise SystemExit("invalid bridge source path: " + relative)
+    if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+        raise SystemExit("bridge source digest mismatch: " + relative)
+    print(source)
+PY
+)"; then
+    fail "bridge source validation failed"
+fi
+BRIDGE_SOURCES=()
+while IFS= read -r source; do
+    BRIDGE_SOURCES+=("$source")
+done <<< "$BRIDGE_SOURCE_PATHS"
 
 python3 - "$TLC_JAR" "$TOOLCHAIN" <<'PY'
 from email.parser import Parser
@@ -237,8 +257,11 @@ BRIDGE_CLASS="$TOOL_ROOT/bridge-classes/org/swifttla/conformance/LosslessStateWr
 # The bridge is built from pinned inputs; record its output digest in each run.
 rm -rf "$TOOL_ROOT/bridge-classes"
 mkdir -p "$TOOL_ROOT/bridge-classes"
-"$JAVA_HOME/bin/javac" --release 17 -cp "$TLC_JAR" -d "$TOOL_ROOT/bridge-classes" "$BRIDGE_SOURCE"
+"$JAVA_HOME/bin/javac" --release 17 -cp "$TLC_JAR" -d "$TOOL_ROOT/bridge-classes" "${BRIDGE_SOURCES[@]}"
 [ -f "$BRIDGE_CLASS" ] || fail "bridge compilation produced no class"
+"$JAVA_HOME/bin/jar" --create --file "$TOOL_ROOT/bridge.jar" -C "$TOOL_ROOT/bridge-classes" .
+python3 "$PROJECT_ROOT/Tools/TLCGraphBridge/check-configuration-parser.py" \
+    "$JAVA_HOME/bin/java" "$TLC_JAR" "$TOOL_ROOT/bridge.jar"
 
 if [ -f "$CASES_FILE" ]; then
     stage_declared_inputs "$TOOL_ROOT/inputs"

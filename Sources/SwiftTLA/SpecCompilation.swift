@@ -265,6 +265,7 @@ public struct RenderedSpecification: Sendable {
         }
     }
 
+    package var invariantNames: Set<String> { Set(configuration.invariants) }
     package var checkNames: Set<String> { Set(configuration.invariants + configuration.properties) }
     package var checksDeadlock: Bool { configuration.checkDeadlock }
 
@@ -279,15 +280,16 @@ public struct RenderedSpecification: Sendable {
         )
     }
 
-    /// Adds selected checks to an original reference whose existing checks already passed.
+    /// Adds selected checks to a reference model definition with check directives removed.
     /// Its specification, constants, constraints, and module closure remain authoritative.
-    package func referenceBundle(checking names: Set<String>, in reference: TLAModuleBundle) throws -> TLAModuleBundle {
-        let selected = try configuration.selecting(names, checkDeadlock: false)
+    package func referenceBundle(checking names: Set<String>, checkDeadlock: Bool, declarations: String, in reference: TLAModuleBundle) throws -> TLAModuleBundle {
+        let selected = try configuration.selecting(names, checkDeadlock: checkDeadlock)
         let directives = selected.invariants.map { "INVARIANT \($0)" }
             + selected.properties.map { "PROPERTY \($0)" }
+            + [checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
         return TLAModuleBundle(
             root: .init(name: reference.root.name, tla: reference.root.tla,
-                cfg: reference.cfg + "\n" + directives.joined(separator: "\n") + "\n"),
+                cfg: declarations + "\n" + directives.joined(separator: "\n") + "\n"),
             imports: reference.imports, provenance: reference.provenance)
     }
 

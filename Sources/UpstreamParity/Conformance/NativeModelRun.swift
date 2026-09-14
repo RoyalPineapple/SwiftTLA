@@ -2,7 +2,7 @@ import SwiftTLA
 
 package struct ModelCheckResults: Equatable, Encodable, Sendable {
   package let properties: [String: PropertyResult]
-  /// Nil means deadlock checking was not requested by the model.
+  /// Nil means neither the model nor the validation configuration requested deadlock checking.
   package let deadlock: PropertyResult?
 
   package init(properties: [String: PropertyResult], deadlock: PropertyResult?) {
@@ -22,7 +22,7 @@ package struct NativeModelRun: Sendable {
 
   package init(rendered: RenderedSpecification, graph: GraphRun, checks: ModelCheckResults) throws {
     guard Set(checks.properties.keys) == rendered.checkNames,
-          (checks.deadlock != nil) == rendered.checksDeadlock else {
+          (!rendered.checksDeadlock || checks.deadlock != nil) else {
       throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "native check coverage")
     }
     for result in checks.properties.values {
@@ -42,7 +42,7 @@ package struct NativeModelRun: Sendable {
 
   package init<Machine: StateMachine>(
     _ native: ReachabilityGraph<Machine>, description: CompilationDescription,
-    rendered: RenderedSpecification, for finiteGraphCase: FiniteGraphCase? = nil
+    rendered: RenderedSpecification, checkingDeadlock: Bool = false, for finiteGraphCase: FiniteGraphCase? = nil
   ) throws {
     let temporalNames = Set(description.temporalProperties)
     let invariantNames = Set(description.invariants)
@@ -75,7 +75,7 @@ package struct NativeModelRun: Sendable {
     }
     var properties = Dictionary(uniqueKeysWithValues:
       (invariantNames.union(refinementNames)).map { ($0, PropertyResult.satisfied) })
-    var deadlock: PropertyResult? = Machine.checksDeadlock ? .satisfied : nil
+    var deadlock: PropertyResult? = Machine.checksDeadlock || checkingDeadlock ? .satisfied : nil
     var paths: [Machine.Snapshot: GraphTrace] = [:]
     func trace(to snapshot: Machine.Snapshot) throws -> GraphTrace {
       if let cached = paths[snapshot] { return cached }
@@ -98,6 +98,13 @@ package struct NativeModelRun: Sendable {
           }
           if deadlock == .satisfied { deadlock = .violated(try trace(to: snapshot)) }
         }
+      }
+    }
+    if checkingDeadlock && !Machine.checksDeadlock {
+      // Exploration already computed every successor set; no machine is executed again.
+      let terminalStates = native.transitions.filter { $0.value.isEmpty }.keys
+      if let first = try terminalStates.min(by: { try stateKey($0) < stateKey($1) }) {
+        deadlock = .violated(try trace(to: first))
       }
     }
     for (name, failure) in native.refinementFailures {
