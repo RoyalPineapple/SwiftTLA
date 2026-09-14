@@ -422,6 +422,15 @@ not a universal proof of compiler correctness.
 
 ## 8. Types and compiler boundaries
 
+Lowering must preserve declaration identity, resolved types, parameter
+references, bindings, and source locations until the backend boundary. It must
+not replace scenario parameters with literals or replace typed references with
+display names. Both backends consume the same resolved model.
+
+Serialization and backend emission perform the final representation conversion.
+An unsupported conversion must produce a source-located diagnostic. Silent
+information loss and reconstruction from rendered text are not valid fallbacks.
+
 Use familiar Swift value types for model state: integers, booleans, structs,
 enums, arrays, and sets. Authors must not translate ordinary records and
 collections into parallel DSL schema/value types just to declare model state.
