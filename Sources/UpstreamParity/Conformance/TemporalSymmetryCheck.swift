@@ -67,7 +67,7 @@ package struct TemporalSymmetryCheck: Sendable {
         return try captureTemporalGraph(temporalCase: temporalCase, native: native,
           toolchain: toolchain, referencePin: input.referencePin, projectRoot: root, evidenceRoot: output)
       }
-      let validation = try TLCPropertyCheck().captureAll(native, completeGraph: shared, in: modelDirectory)
+      let validation = try TLCPropertyCheck().captureAll(native, completeGraph: shared, source: .generated, in: modelDirectory)
       return try validation.checks.map { check, result in
         let status = (try? result.get().status) ?? .unavailable
         let outcome: TemporalSymmetryOutcome = switch status {

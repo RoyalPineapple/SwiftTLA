@@ -44,6 +44,28 @@ struct TLCPropertyCheckTests {
     }
   }
 
+  @Test("reference checks preserve original configuration and use the declared property kind",
+    arguments: [("Safe", "INVARIANT Safe"), ("Progress", "PROPERTY Progress")])
+  func preservesReferenceConfiguration(name: String, directive: String) throws {
+    let x = Var<Int>("x", 0)
+    let rendered = try TLASpec("Generated") {
+      Variable(x)
+      Invariant("Safe") { x >= 0 }
+      Eventually("Progress", x == 1)
+    }.compile().render()
+    let configuration = "CONSTANT N = 4\nSPECIFICATION LiveSpec\nCHECK_DEADLOCK FALSE\nINVARIANT Existing\n"
+    let reference = TLAModuleBundle.external(root: .init(name: "Original", tla: "original module bytes", cfg: configuration))
+    let selected = try rendered.referenceBundle(checking: name, in: reference)
+    #expect(selected.root.name == "Original")
+    #expect(selected.tla == reference.tla)
+    #expect(selected.imports == reference.imports)
+    #expect(selected.provenance == reference.provenance)
+    #expect(selected.cfg.hasPrefix(configuration))
+    #expect(selected.cfg.hasSuffix(directive + "\n"))
+    #expect(selected.cfg.components(separatedBy: "CHECK_DEADLOCK").count == 2)
+    #expect(!selected.cfg.contains("SPECIFICATION Spec\n"))
+  }
+
   @Test("property counterexamples retain their cycle boundary and implicit stuttering")
   func retainsLassoAndRejectsInvalidCycles() throws {
     let first = CanonicalState(bindings: ["x": .integer(0)])
@@ -546,7 +568,7 @@ struct TLCPropertyCheckTests {
       let native = try NativeModelRun(rendered: rendered, graph: swiftRun ?? self.swiftRun, checks: checks)
       let graph = try completeGraph ?? captureGraph(request: completeGraphRequest)
       let batch = try TLCPropertyCheck(processAdapter: processAdapter).captureAll(
-        native, completeGraph: .success(graph), in: outputDirectory ?? directory)
+        native, completeGraph: .success(graph), source: .generated, in: outputDirectory ?? directory)
       return try #require(batch.checks.first { $0.check == check }).result.get()
     }
 

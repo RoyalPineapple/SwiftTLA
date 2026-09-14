@@ -8,6 +8,11 @@ package enum TLCPropertyCheckError: Error, Equatable, Sendable {
   case invalidNativeGraph
 }
 
+package enum TLCPropertySource: Sendable {
+  case generated
+  case reference
+}
+
 package struct TLCPropertyCheck: Sendable {
   private let processAdapter: TLCProcessAdapter
 
@@ -16,7 +21,8 @@ package struct TLCPropertyCheck: Sendable {
   }
 
   package func captureAll(
-    _ native: NativeModelRun, completeGraph: Result<TLCProcessCapture, Error>, in directory: URL
+    _ native: NativeModelRun, completeGraph: Result<TLCProcessCapture, Error>,
+    source: TLCPropertySource, in directory: URL
   ) throws -> (
     graphComparison: GraphComparison?,
     checks: [(check: ModelCheck, result: Result<PropertyComparison, Error>)]
@@ -27,16 +33,26 @@ package struct TLCPropertyCheck: Sendable {
       guard capture.outcome == .completed, capture.graph.isComparable else {
         throw TLCPropertyCheckError.incompleteGraph
       }
-      let expected = try native.rendered.tlaBundle(checking: [], checkDeadlock: false)
-      guard capture.request.invocation == .finiteGraph, capture.request.bundle == expected else {
-        throw TLCPropertyCheckError.requestMismatch
+      guard capture.request.invocation == .finiteGraph else { throw TLCPropertyCheckError.requestMismatch }
+      switch source {
+      case .generated:
+        guard try capture.request.bundle == native.rendered.tlaBundle(checking: [], checkDeadlock: false) else {
+          throw TLCPropertyCheckError.requestMismatch
+        }
+      case .reference:
+        let request = capture.request
+        try request.validateDeclaredBundle()
+        guard SHA256.hex(Data(request.bundle.tla.utf8)) == request.finiteGraphCase.moduleSHA256,
+              SHA256.hex(Data(request.bundle.cfg.utf8)) == request.finiteGraphCase.cfgSHA256 else {
+          throw TLCPropertyCheckError.requestMismatch
+        }
       }
       return (capture, compareFiniteGraphs(tlc: capture.graph, swift: native.graph))
     }
     var selected = native.checks.properties.sorted { $0.key < $1.key }.map {
       (check: ModelCheck.property($0.key), result: $0.value)
     }
-    if let deadlock = native.checks.deadlock { selected.append((.deadlock, deadlock)) }
+    if case .generated = source, let deadlock = native.checks.deadlock { selected.append((.deadlock, deadlock)) }
     var results: [(check: ModelCheck, result: Result<PropertyComparison, Error>)] = []
     for (check, nativeResult) in selected {
       let output = try RetainedFiles.resolve(directory.appendingPathComponent(check.artifactPath), beneath: directory)
@@ -48,7 +64,14 @@ package struct TLCPropertyCheck: Sendable {
         let work = capture.request.workingDirectory.appendingPathComponent(UUID().uuidString)
         try RetainedFiles.createDirectory(work, beneath: capture.request.workingDirectory)
         defer { try? FileManager.default.removeItem(at: work) }
-        let request = try capture.request.selecting(bundle: check.bundle(from: native.rendered),
+        let bundle: TLAModuleBundle
+        switch source {
+        case .generated: bundle = try check.bundle(from: native.rendered)
+        case .reference:
+          guard case .property(let name) = check else { throw TLCPropertyCheckError.requestMismatch }
+          bundle = try native.rendered.referenceBundle(checking: name, in: capture.request.bundle)
+        }
+        let request = try capture.request.selecting(bundle: bundle,
           work: work, runID: UUID(), invocation: .propertyCheck)
         try RetainedFiles.outputDirectory(output, beneath: output.deletingLastPathComponent())
         let outcome = try processAdapter.run(request, retainingIn: output)

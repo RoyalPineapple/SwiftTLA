@@ -105,8 +105,11 @@ package struct FiniteGraphCheck: Sendable {
       )
 
       enter(.comparison)
-      let comparison = compareFiniteGraphs(tlc: tlcRun, swift: swiftRun)
       guard tlcRun.isComparable, swiftRun.isComparable else { throw TLCPropertyCheckError.incompleteGraph }
+      let reference = try TLCPropertyCheck(processAdapter: tlcProcess).captureAll(
+        native, completeGraph: .success(tlcCapture), source: .reference,
+        in: directory.appendingPathComponent("reference"))
+      guard let comparison = reference.graphComparison else { throw TLCPropertyCheckError.incompleteGraph }
       let generatedDirectory = directory.appendingPathComponent("generated")
       let generatedWork = tlcRequest.workingDirectory.appendingPathComponent(UUID().uuidString)
       try RetainedFiles.createDirectory(generatedWork, beneath: tlcRequest.workingDirectory)
@@ -118,10 +121,12 @@ package struct FiniteGraphCheck: Sendable {
       try GraphRunRecords.write(generated.graph, to: generatedDirectory.appendingPathComponent("tlc-graph.jsonl"))
       guard generated.graph.isComparable else { throw TLCPropertyCheckError.incompleteGraph }
       let results = try TLCPropertyCheck(processAdapter: tlcProcess).captureAll(
-        native, completeGraph: .success(generated), in: directory)
+        native, completeGraph: .success(generated), source: .generated, in: directory)
       guard let generatedComparison = results.graphComparison else { throw TLCPropertyCheckError.incompleteGraph }
       let checks = Dictionary(uniqueKeysWithValues: results.checks.map {
         ($0.check.artifactPath, (try? $0.result.get().status) ?? .unavailable)
+      } + reference.checks.map {
+        ("reference/" + $0.check.artifactPath, (try? $0.result.get().status) ?? .unavailable)
       })
       let exitCode: FiniteGraphExitCode
       if checks.values.contains(.unavailable) {

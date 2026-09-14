@@ -399,12 +399,30 @@ extension FiniteGraphCheckTests {
     #expect(result.exitCode == (unavailable ? .failure : .exact))
     let comparison = try json(at: output.appendingPathComponent("comparison.json"))
     let checks = try #require(comparison["checks"] as? [String: String])
-    #expect(checks == ["properties/Failed": "exact", "properties/Unknown": unavailable ? "unavailable" : "exact", "deadlock": "exact"])
+    #expect(checks == ["properties/Failed": "exact", "properties/Unknown": unavailable ? "unavailable" : "exact", "deadlock": "exact", "reference/properties/Failed": "exact", "reference/properties/Unknown": unavailable ? "unavailable" : "exact"])
     #expect(comparison["result"] as? String == (unavailable ? "unavailable" : "exact"))
     for path in checks.keys {
       #expect(FileManager.default.fileExists(atPath: output.appendingPathComponent(path).appendingPathComponent("property-comparison.json").path))
       #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent(path).appendingPathComponent("swift-graph.jsonl").path))
     }
+  }
+
+  @Test("an original-reference property disagreement fails matching generated results")
+  func rejectsOriginalPropertyDisagreement() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let request = try temporaryRequest(in: root, checks: ["Unknown"])
+    let output = root.appendingPathComponent("checks")
+    let result = FiniteGraphCheck(tlcProcess: TLCProcessAdapter(
+      executor: PerCheckExecutor(referenceDisagrees: true))).run(
+        nativeRun: { try fixtureRun(action: "Next", checks: ["Unknown": .satisfied]) },
+        tlcRequest: request, outputDirectory: output)
+    #expect(result.exitCode == .semanticDifference)
+    let checks = try json(at: output.appendingPathComponent("comparison.json"))["checks"] as? [String: String]
+    #expect(checks == ["properties/Unknown": "exact", "reference/properties/Unknown": "propertyOutcomeDifference"])
+    let retained = try json(at: output.appendingPathComponent("reference/properties/Unknown/property-comparison.json"))
+    #expect((retained["tlcResult"] as? [String: Any])?["status"] as? String == "violated")
   }
 
   @Test("an unavailable property does not skip later checks")
@@ -419,7 +437,8 @@ extension FiniteGraphCheckTests {
         tlcRequest: request, outputDirectory: output)
     #expect(result.exitCode == .failure)
     let checks = try json(at: output.appendingPathComponent("comparison.json"))["checks"] as? [String: String]
-    #expect(checks == ["properties/Failed": "unavailable", "properties/Unknown": "exact"])
+    #expect(checks == ["properties/Failed": "unavailable", "properties/Unknown": "exact",
+      "reference/properties/Failed": "unavailable", "reference/properties/Unknown": "exact"])
     #expect(FileManager.default.fileExists(atPath: output.appendingPathComponent("properties/Failed/check-error.txt").path))
   }
 
@@ -487,13 +506,14 @@ extension FiniteGraphCheckTests {
   private func temporaryRequest(in root: URL, checks: Set<String> = [], checkDeadlock: Bool = false) throws -> TLCProcessRequest {
     let module = root.appendingPathComponent("Fixture.tla")
     let configuration = root.appendingPathComponent("Fixture.cfg")
-    let bundle = try fixtureRendered(checks: checks, checkDeadlock: checkDeadlock).tlaBundle
-    try Data(bundle.tla.utf8).write(to: module)
+    let bundle = try fixtureRendered(checks: checks, checkDeadlock: checkDeadlock).tlaBundle(checking: [], checkDeadlock: false)
+    let originalTLA = bundle.tla + "\n\\* Original reference fixture\n"
+    try Data(originalTLA.utf8).write(to: module)
     try Data(bundle.cfg.utf8).write(to: configuration)
     let finiteGraphCase = try FiniteGraphCase(
       id: "fixture",
       exploration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled),
-      moduleSHA256: SHA256.hex(Data(bundle.tla.utf8)),
+      moduleSHA256: SHA256.hex(Data(originalTLA.utf8)),
       cfgSHA256: SHA256.hex(Data(bundle.cfg.utf8)),
       arguments: ["-workers", "1"],
       environment: [:],
@@ -527,6 +547,7 @@ private func fixtureRendered(checks: Set<String>, checkDeadlock: Bool) throws ->
 
 private struct PerCheckExecutor: TLCProcessExecuting {
   var failFirst = false
+  var referenceDisagrees = false
 
   func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     if request.invocation == .finiteGraph {
@@ -538,7 +559,10 @@ private struct PerCheckExecutor: TLCProcessExecuting {
       let second: [Any] = [2, ["x": 2]]
       var states: [Any] = []
       var actions: [Any] = []
-      if request.bundle.cfg.contains("INVARIANT Failed") {
+      if referenceDisagrees && request.bundle.tla.contains("Original reference fixture") {
+        status = 12
+        states = [first]
+      } else if request.bundle.cfg.contains("INVARIANT Failed") {
         if failFirst { throw TLCProcessError.timedOut(partialStdout: "timed out", partialStderr: "") }
         status = 12
         states = [first]

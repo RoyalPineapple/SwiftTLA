@@ -279,6 +279,18 @@ public struct RenderedSpecification: Sendable {
         )
     }
 
+    /// Adds one named check to an original reference whose existing checks already passed.
+    /// Its specification, constants, constraints, and module closure remain authoritative.
+    package func referenceBundle(checking name: String, in reference: TLAModuleBundle) throws -> TLAModuleBundle {
+        let selected = try configuration.selecting([name], checkDeadlock: false)
+        let directives = selected.invariants.map { "INVARIANT \($0)" }
+            + selected.properties.map { "PROPERTY \($0)" }
+        return TLAModuleBundle(
+            root: .init(name: reference.root.name, tla: reference.root.tla,
+                cfg: reference.cfg + "\n" + directives.joined(separator: "\n") + "\n"),
+            imports: reference.imports, provenance: reference.provenance)
+    }
+
     /// Returns the source-faithful PlusCal bundle produced by rendering.
     public func plusCalBundle() throws -> TLAModuleBundle {
         guard let renderedPlusCalModuleBundle else {
