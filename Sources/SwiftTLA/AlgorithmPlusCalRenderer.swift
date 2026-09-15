@@ -95,7 +95,8 @@ internal struct AlgorithmPlusCalRenderer {
         }
         // The header identifier names the process set. `self` names its
         // current member inside the process body.
-        var lines = ["", "\(fairness)process (\(process.name) \\in \(try set(process.domain)))"]
+        let domain = try process.domain.literalSetMembers.map(set) ?? formalRenderer.state(process.domain)
+        var lines = ["", "\(fairness)process (\(process.name) \\in \(domain))"]
         if process.locals.isEmpty == false {
             lines.append("variables")
             lines += try declarations(process.locals, indent: "  ", terminator: ";")

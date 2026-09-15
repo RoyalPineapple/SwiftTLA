@@ -58,7 +58,7 @@ extension FiniteDomain {
     }
 }
 
-public struct ProcessIdentifier<Value: FiniteTLAValueDomain>: TypedExpression {
+public struct ProcessIdentifier<Value: TLAValueType>: TypedExpression {
     fileprivate let expression: StateExpr
 
     public var stateExpr: StateExpr {
@@ -676,41 +676,41 @@ public struct Algorithm: Sendable, SpecComponent {
 }
 
 /// Declares one independently scheduled process for every member of `domain`.
-public func Each<Value: FiniteTLAValueDomain>(
-    _ domain: FiniteDomain<Value>,
+public func Each<Domain: FormalSetValue>(
+    _ domain: some TypedExpression<Domain>,
     fairness: ProcessFairness = .none,
-    @AlgorithmBuilder _ body: (ProcessIdentifier<Value>) -> [AlgorithmElement]
+    @AlgorithmBuilder _ body: (ProcessIdentifier<Domain.Element>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
     process(domain, fairness: fairness.model, body)
 }
 
-public func Each<Value: FiniteTLAValueDomain>(
-    _ domain: FiniteDomain<Value>,
+public func Each<Domain: FormalSetValue>(
+    _ domain: some TypedExpression<Domain>,
     fairness: ProcessFairness = .none,
-    @AlgorithmBuilder scoped body: (ProcessIdentifier<Value>, ProcessScope) -> [AlgorithmElement]
+    @AlgorithmBuilder scoped body: (ProcessIdentifier<Domain.Element>, ProcessScope) -> [AlgorithmElement]
 ) -> AlgorithmElement {
     let scope = ProcessScope()
-    let identifier = ProcessIdentifier<Value>(expression: .currentProcess)
+    let identifier = ProcessIdentifier<Domain.Element>(expression: .currentProcess)
     let components = body(identifier, scope)
     return AlgorithmElement(model: .process(.init(
-        typeName: swiftSurfaceTypeName(for: Value.self),
-        domain: domain.values.map(\.tlaValue),
+        typeName: swiftSurfaceTypeName(for: Domain.Element.self),
+        domain: domain.stateExpr,
         fairness: fairness.model,
         components: scope.declarations.map(\.model) + components.map(\.model)
     )))
 }
 
-private func process<Value: FiniteTLAValueDomain>(
-    _ domain: FiniteDomain<Value>,
+private func process<Domain: FormalSetValue>(
+    _ domain: some TypedExpression<Domain>,
     fairness: AlgorithmFairness,
-    @AlgorithmBuilder _ body: (ProcessIdentifier<Value>) -> [AlgorithmElement]
+    @AlgorithmBuilder _ body: (ProcessIdentifier<Domain.Element>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
-    let identifier = ProcessIdentifier<Value>(expression: .currentProcess)
+    let identifier = ProcessIdentifier<Domain.Element>(expression: .currentProcess)
     return AlgorithmElement(
         model: .process(
             AlgorithmProcessModel(
-                typeName: swiftSurfaceTypeName(for: Value.self),
-                domain: domain.values.map(\.tlaValue),
+                typeName: swiftSurfaceTypeName(for: Domain.Element.self),
+                domain: domain.stateExpr,
                 fairness: fairness,
                 components: body(identifier).map(\.model)
             )
@@ -1391,7 +1391,11 @@ package enum AlgorithmValidator {
         diagnostics: inout [AlgorithmDiagnostic]
     ) {
         let processAnchor = AlgorithmDiagnosticAnchor.process(index)
-        validateDomain(process.domain, at: processAnchor, diagnostics: &diagnostics)
+        if let members = process.domain.literalSetMembers {
+            validateDomain(members, at: processAnchor, diagnostics: &diagnostics)
+        } else if case .sourceIssue(.finiteDomain(_, let problem)) = process.domain {
+            diagnostics.append(.init(problem == .empty ? .emptyDomain : .duplicateDomainMember, at: processAnchor))
+        }
 
         let steps = process.steps
         let labels = steps.map(\.label.name)

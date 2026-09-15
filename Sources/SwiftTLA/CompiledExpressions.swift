@@ -383,12 +383,18 @@ package struct CompiledActionBinding: Sendable {
     }
 
     package var literalMembers: [CompiledValue]? {
-        guard case .setLiteral = domain.operation else { return nil }
-        let members = domain.children.compactMap { child -> CompiledValue? in
+        domain.literalSetMembers
+    }
+}
+
+extension CompiledExpression {
+    package var literalSetMembers: [CompiledValue]? {
+        guard case .setLiteral = operation else { return nil }
+        let members = children.compactMap { child -> CompiledValue? in
             guard case .value(let value) = child.operation else { return nil }
             return value
         }
-        return members.count == domain.children.count ? members : nil
+        return members.count == children.count ? members : nil
     }
 }
 

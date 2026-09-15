@@ -82,7 +82,13 @@ public struct ActionBinding: Sendable, Hashable {
   }
 
   package var literalMembers: [TLAValue]? {
-    guard case .setLiteral(let expressions) = domain else { return nil }
+    domain.literalSetMembers
+  }
+}
+
+extension StateExpr {
+  package var literalSetMembers: [TLAValue]? {
+    guard case .setLiteral(let expressions) = self else { return nil }
     let members = expressions.compactMap { expression -> TLAValue? in
       guard case .value(let value) = expression else { return nil }
       return value

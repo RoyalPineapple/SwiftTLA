@@ -411,6 +411,42 @@ to one formal value. A set declaration does not imply symmetry.
 This support does not complete configurable `Each` populations or the replacement
 of fixed `ModelCollection` declarations. Those requirements remain part of B-01.
 
+#### Configured process populations
+
+`Each` accepts a typed set expression. Its element type supplies the process
+identifier type. Both existing closure forms retain their meaning:
+
+```swift
+Each(nodes) { member in
+    Do(Step.visit) {
+        Assign(selected, to: selected.inserting(member))
+    }
+}
+
+Each(nodes, scoped: { member, process in
+    let visited = process.localVar("visited", initial: false)
+    Do(Step.visit) {
+        Assign(visited, to: true)
+    }
+})
+```
+
+The population expression can depend on immutable parameters and supported
+helpers. It cannot depend on machine state or action enabledness. For example,
+`Each(selected)` is invalid when `selected` is mutable model state.
+
+Each configuration creates local-state and control entries for exactly its
+population. An empty configured population creates no process instances.
+Completion still follows the algorithm's control semantics. Different populations
+retain the same generated state fields and action cases.
+
+Process domains remain symbolic in TLA+ output. Action metadata contains the
+configured members and complete arguments. Explicit fairness applies separately
+to each process instance. A set does not declare fairness or symmetry.
+
+This settles the process-population part of B-01. Implementation and independent
+validation remain required. Collection composition remains open.
+
 The selected syntax inside a model scope containing typed declarations is:
 
 ```swift

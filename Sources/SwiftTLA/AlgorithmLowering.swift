@@ -66,7 +66,7 @@ enum AlgorithmLowerer {
                 guard case .local(let state) = component else { return nil }
                 return state.root
             })
-            let processDomain = StateExpr.setLiteral(process.domain.map(StateExpr.value))
+            let processDomain = process.domain
             return process.components.compactMap { component -> NamedStatePredicate? in
                 guard case .invariant(let invariant) = component else { return nil }
                 return NamedStatePredicate(
@@ -126,10 +126,10 @@ enum AlgorithmLowerer {
         if requiresProgramCounter {
             let controlBinding = "__pcal_initial_process"
             let controlDomain = processes
-                .map { StateExpr.setLiteral($0.domain.map(StateExpr.value)) }
+                .map(\.domain)
                 .dropFirst()
                 .reduce(
-                    StateExpr.setLiteral(processes.first?.domain.map(StateExpr.value) ?? [])
+                    processes.first?.domain ?? .setLiteral([])
                 ) { partial, domain in
                     .union(partial, domain)
                 }
@@ -142,7 +142,7 @@ enum AlgorithmLowerer {
                 return [
                     .in(
                         .variable(controlBinding),
-                        .setLiteral(process.domain.map(StateExpr.value))
+                        process.domain
                     ),
                     control.location(first.label.name)
                 ]
@@ -162,7 +162,7 @@ enum AlgorithmLowerer {
                 variables.append(NamedVar(
                     name: slot.root,
                     initialization: .expression(constantFunction(
-                        domain: controlDomainValues(processes),
+                        domain: controlDomain(processes),
                         value: slot.initial,
                         localRoots: []
                     )),
@@ -175,7 +175,7 @@ enum AlgorithmLowerer {
             variables.append(NamedVar(
                 name: CompilerControlSymbol.stack.rawValue,
                 initialization: .expression(constantFunction(
-                    domain: controlDomainValues(processes),
+                    domain: controlDomain(processes),
                     value: .tupleLiteral([]),
                     localRoots: []
                 )),
@@ -187,8 +187,8 @@ enum AlgorithmLowerer {
         let localRoots = Set(localStates.map(\.root) + procedureSlots(procedures).map(\.root))
         var generatedAssertionInvariants: [NamedStatePredicate] = []
         var fairness: [FairnessCondition] = []
-        var actions = processes.enumerated().flatMap { processIndex, process in
-            process.steps.enumerated().map { index, atomic in
+        var actions = try processes.enumerated().flatMap { processIndex, process in
+            try process.steps.enumerated().map { index, atomic in
                 let controlOwner = ControlOwner.process(
                     algorithm: algorithm.name,
                     ordinal: processIndex,
@@ -237,7 +237,7 @@ enum AlgorithmLowerer {
                     ),
                     bindings: [ActionBinding(
                         name: processBinding.rawValue,
-                        values: process.domain,
+                        domain: process.domain,
                         generatedSwiftType: process.typeName
                     )]
                 )
@@ -248,15 +248,10 @@ enum AlgorithmLowerer {
                     let enabled = atomic.loopCondition.map {
                         StateExpr.and(atStep, rewrite($0, localRoots: localRoots))
                     } ?? atStep
-                    generatedAssertionInvariants += process.domain.flatMap { member in
-                        loweredStatements.assertions.map { predicate in
-                            NamedStatePredicate(name: "__pcal_assert", body: StateExpr.substituteVariables(
-                                [processBinding.rawValue: .value(member)],
-                                in: .or(.not(enabled), predicate)))
-                        }
-                    }
+                    generatedAssertionInvariants += assertionInvariants(loweredStatements.assertions,
+                        enabled: enabled, domain: process.domain)
                 }
-                fairness += fairnessConditions(for: generatedAction, members: process.domain, policy: process.fairness)
+                fairness += try fairnessConditions(for: generatedAction, domain: process.domain, policy: process.fairness)
                 return generatedAction
             }
         }
@@ -287,19 +282,14 @@ enum AlgorithmLowerer {
                     control: control
                 )
                 let body = completingControl(loweredStatements.action, fallthrough: nextLabel)
-                generatedAssertionInvariants += controlDomainValues(processes).flatMap { member in
-                    loweredStatements.assertions.map { predicate in
-                        NamedStatePredicate(name: "__pcal_assert", body: StateExpr.substituteVariables(
-                            [processBinding.rawValue: .value(member)],
-                            in: .or(.not(guardExpression), predicate)))
-                    }
-                }
+                generatedAssertionInvariants += assertionInvariants(loweredStatements.assertions,
+                    enabled: guardExpression, domain: controlDomain(processes))
                 return NamedAction(
                     name: label,
                     body: ActionNormalization.complete(.and(.guard_(guardExpression), body), variables: variables),
                     bindings: [ActionBinding(
                         name: processBinding.rawValue,
-                        values: controlDomainValues(processes),
+                        domain: controlDomain(processes),
                         generatedSwiftType: procedureProcessType
                     )]
                 )
@@ -309,7 +299,7 @@ enum AlgorithmLowerer {
 
         if requiresProgramCounter {
             let allDone = processes.reduce(StateExpr.value(.bool(true))) { condition, process in
-                let members = StateExpr.setLiteral(process.domain.map(StateExpr.value))
+                let members = process.domain
                 let processDone = StateExpr.forAll(
                     members,
                     processBinding.rawValue,
@@ -343,7 +333,7 @@ enum AlgorithmLowerer {
     }
 
     private static func constantFunction(
-        domain: [TLAValue],
+        domain: StateExpr,
         value: StateExpr,
         localRoots: Set<String>
     ) -> StateExpr {
@@ -354,14 +344,35 @@ enum AlgorithmLowerer {
             in: rewrite(value, localRoots: localRoots)
         )
         return .functionLiteral(
-            .setLiteral(domain.map(StateExpr.value)),
+            domain,
             binding,
             initial
         )
     }
 
-    private static func controlDomainValues(_ processes: [AlgorithmProcessModel]) -> [TLAValue] {
-        Array(Set(processes.flatMap(\.domain))).sorted()
+    private static func controlDomain(_ processes: [AlgorithmProcessModel]) -> StateExpr {
+        let literals = processes.compactMap { $0.domain.literalSetMembers }
+        if literals.count == processes.count {
+            return .setLiteral(Array(Set(literals.flatMap { $0 })).sorted().map(StateExpr.value))
+        }
+        return processes.dropFirst().reduce(processes.first?.domain ?? .setLiteral([])) {
+            .union($0, $1.domain)
+        }
+    }
+
+    private static func assertionInvariants(_ assertions: [StateExpr], enabled: StateExpr, domain: StateExpr) -> [NamedStatePredicate] {
+        if let members = domain.literalSetMembers {
+            return members.flatMap { member in
+                assertions.map { predicate in
+                    NamedStatePredicate(name: "__pcal_assert", body: StateExpr.substituteVariables(
+                        [processBinding.rawValue: .value(member)], in: .or(.not(enabled), predicate)))
+                }
+            }
+        }
+        return assertions.map {
+            NamedStatePredicate(name: "__pcal_assert", body: .forAll(domain,
+                processBinding.rawValue, .or(.not(enabled), $0)))
+        }
     }
 
     /// A process machine with one unconditional control-free loop has no `pc`.
@@ -919,10 +930,17 @@ enum AlgorithmLowerer {
 
     private static func fairnessConditions(
         for action: NamedAction,
-        members: [TLAValue],
+        domain: StateExpr,
         policy: AlgorithmFairness
-    ) -> [FairnessCondition] {
-        switch policy {
+    ) throws -> [FairnessCondition] {
+        if case .none = policy { return [] }
+        guard let members = domain.literalSetMembers else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                path: "actions.\(action.name).fairness", expected: "per-instance fairness over a configured population",
+                actual: "symbolic process domain",
+                nextSafeAction: "Implement configured per-instance fairness before validating this model.")
+        }
+        return switch policy {
         case .none:
             []
         case .weak:

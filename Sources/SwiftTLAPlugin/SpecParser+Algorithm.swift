@@ -603,12 +603,25 @@ extension ParserSession {
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
         guard let domainSyntax = call.arguments.first?.expression,
-              let domain = finiteAlgorithmDomain(domainSyntax),
               let closure = algorithmBuilderClosure(in: call)
         else {
             let knownDomains = sourceTypes.enums.map(\.typeName).sorted()
             let known = knownDomains.isEmpty ? "none" : knownDomains.joined(separator: ", ")
             algorithmParseFailure = "Each could not resolve its finite domain. Known finite domains: \(known)."
+            return nil
+        }
+        let domain: StateExpr
+        let typeName: String
+        if let finite = finiteAlgorithmDomain(domainSyntax) {
+            domain = .setLiteral(finite.values.map(StateExpr.value))
+            typeName = finite.typeName
+        } else if case .set(let element)? = typedFacadeValueType(domainSyntax, scope: scope),
+                  element.resolved,
+                  let expression = decodeTypedFacadeValue(domainSyntax, scope: scope) {
+            domain = expression
+            typeName = element.swiftType
+        } else {
+            algorithmParseFailure = "Each requires a typed set with a resolved element type."
             return nil
         }
         let closureParameters = closureParameterNames(in: closure)
@@ -685,7 +698,7 @@ extension ParserSession {
         } else {
             fairness = .none
         }
-        return .process(.init(typeName: domain.typeName, domain: domain.values, fairness: fairness, components: components))
+        return .process(.init(typeName: typeName, domain: domain, fairness: fairness, components: components))
     }
 
     /// Parses one PlusCal-shaped state declaration into the source model.

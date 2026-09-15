@@ -474,9 +474,17 @@ struct CompiledLowerer {
                     in: scope,
                     at: "\(path).binders"
                 )
+                let domain = try lower(process.domain, at: "\(path).domain", scope: rootScope)
+                let requirements = domain.stateRequirements(operators: operators)
+                guard requirements.variables.isEmpty, !requirements.requiresCompleteState else {
+                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                        path: "\(path).domain", expected: "an immutable process population",
+                        actual: "a domain that reads state or action enabledness",
+                        nextSafeAction: "Declare the population with immutable parameters or values.")
+                }
                 return .init(
                     name: process.name,
-                    domain: process.domain.map(CompiledValue.init(formal:)),
+                    domain: domain,
                     fairness: process.fairness,
                     locals: try process.locals.enumerated().map {
                         try authoredPlusCalState($0.element, at: "\(path).locals[\($0.offset)]", scope: scope)
@@ -522,7 +530,7 @@ struct CompiledLowerer {
             }
             guard algorithm.processes.count == 1,
                   case .forAll(let domain, let binding, let predicate) = expression,
-                  domain == .setLiteral(algorithm.processes[0].domain.map(StateExpr.value))
+                  domain == algorithm.processes[0].domain
             else { return false }
             switch predicate {
             case .equal(.functionApply(.programCounter, .variable(let process)), .controlLocation(let location)),

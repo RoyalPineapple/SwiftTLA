@@ -178,13 +178,17 @@ public struct StateRecordExpression: Hashable, Sendable {
 
 /// An invalid construct retained in the typed source model until compilation.
 public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
+    public enum FiniteDomainProblem: String, Hashable, Sendable {
+        case empty = "no finite values"
+        case duplicate = "duplicate formal values"
+    }
     case recordField(schema: String)
     case recordLiteral(schema: String, duplicateFields: [String], missingFields: [String])
     case invalidRecordSchema(schema: String, problem: String)
     case functionLiteral(domain: String, duplicateValues: [String], missingValues: [String])
     case sequenceElementDomain(operation: String)
     case negativeSequenceLength(operation: String, lowerBound: Int)
-    case finiteDomain(type: String, problem: String)
+    case finiteDomain(type: String, problem: FiniteDomainProblem)
     case finiteDomainValue(type: String, value: String)
     case actionBinding(action: String, parameter: String?, problem: String)
     case formalDeclaration(kind: String, name: String?, problem: String)
@@ -219,7 +223,7 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
         case .negativeSequenceLength(let operation, let lowerBound):
             return (.invalidSequenceLength, "a non-negative lower sequence length for \(operation)", "\(lowerBound)", "Use only non-negative sequence lengths, then compile again.")
         case .finiteDomain(let type, let problem):
-            return (.invalidFiniteDomain, "a non-empty finite domain with distinct formal values for \(type)", problem, "Declare one or more distinct finite values, then compile again.")
+            return (.invalidFiniteDomain, "a non-empty finite domain with distinct formal values for \(type)", problem.rawValue, "Declare one or more distinct finite values, then compile again.")
         case .finiteDomainValue(let type, let value):
             return (.invalidFiniteDomainValue, "a value declared by \(type).finiteValues", value, "Use a declared finite-domain value, then compile again.")
         case .actionBinding(let action, let parameter, let problem):

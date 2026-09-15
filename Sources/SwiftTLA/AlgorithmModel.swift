@@ -243,7 +243,7 @@ package struct AlgorithmModel: Sendable {
                 return .process(
                     .init(
                         typeName: process.typeName,
-                        domain: process.domain,
+                        domain: expression(process.domain),
                         fairness: process.fairness,
                         components: process.components.map(component)
                     )
@@ -340,7 +340,7 @@ internal struct AuthoredPlusCalAlgorithmPlan: Sendable {
 internal struct AuthoredPlusCalProcessPlan: Sendable {
     let name: String
     let owner: ControlOwner
-    let domain: [TLAValue]
+    let domain: StateExpr
     let fairness: AlgorithmFairness
     let locals: [AlgorithmStateModel]
     let steps: [AlgorithmStepModel]
@@ -388,7 +388,7 @@ internal struct CompiledAuthoredPlusCalProcedure: Sendable {
 
 internal struct CompiledAuthoredPlusCalProcess: Sendable {
     let name: String
-    let domain: [CompiledValue]
+    let domain: CompiledExpression
     let fairness: AlgorithmFairness
     let locals: [CompiledAuthoredPlusCalState]
     let steps: [CompiledAuthoredPlusCalStep]
@@ -512,7 +512,7 @@ package struct AlgorithmProcedureParameterModel: Sendable {
 
 package struct AlgorithmProcessModel: Sendable {
     package let typeName: String
-    package let domain: [TLAValue]
+    package let domain: StateExpr
     package let fairness: AlgorithmFairness
     package let components: [AlgorithmComponentModel]
 
@@ -523,7 +523,7 @@ package struct AlgorithmProcessModel: Sendable {
         }
     }
 
-    package init(typeName: String, domain: [TLAValue], fairness: AlgorithmFairness, components: [AlgorithmComponentModel]) {
+    package init(typeName: String, domain: StateExpr, fairness: AlgorithmFairness, components: [AlgorithmComponentModel]) {
         self.typeName = typeName
         self.domain = domain
         self.fairness = fairness

@@ -10,10 +10,10 @@ extension FiniteTLAValueDomain {
     let values = finiteValues
     let tlaValues = values.map(\.tlaValue)
     guard !values.isEmpty else {
-      return .finiteDomain(type: String(reflecting: Self.self), problem: "no finite values")
+      return .finiteDomain(type: String(reflecting: Self.self), problem: .empty)
     }
     guard Set(tlaValues).count == tlaValues.count else {
-      return .finiteDomain(type: String(reflecting: Self.self), problem: "duplicate formal values")
+      return .finiteDomain(type: String(reflecting: Self.self), problem: .duplicate)
     }
     return nil
   }
