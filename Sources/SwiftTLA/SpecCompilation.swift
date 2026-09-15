@@ -965,6 +965,16 @@ private func directActionCalls(
                 nextSafeAction: "Compile the source model again."
             )
         }
+        let domains = try action.bindings.map { binding in
+            guard let members = binding.literalMembers else {
+                throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
+                    path: "actions.\(emittedName).\(binding.sourceName).domain",
+                    expected: "literal members for concrete action-call export",
+                    actual: binding.domain.operation.diagnosticName,
+                    nextSafeAction: "Render symbolic domains in Next before exporting this action.")
+            }
+            return members
+        }
         func addCalls(_ position: Int, arguments: [CompiledValue], indices: [Int]) {
             guard position < action.bindings.count else {
                 let suffix = indices.isEmpty ? "" : "__\(indices.map(String.init).joined(separator: "_"))"
@@ -974,7 +984,7 @@ private func directActionCalls(
                 ))
                 return
             }
-            for (index, value) in action.bindings[position].values.enumerated() {
+            for (index, value) in domains[position].enumerated() {
                 addCalls(position + 1, arguments: arguments + [value], indices: indices + [index])
             }
         }

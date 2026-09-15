@@ -24,6 +24,7 @@ struct NativeTypeDeclarations: Sendable {
             }
             pending.append(contentsOf: program.layout.parameters.compactMap { program.behavior.parameterDomains[$0.binder] })
             pending.append(contentsOf: program.behavior.validationScenarios.flatMap { $0.bindings.values })
+            pending.append(contentsOf: program.behavior.actions.flatMap { $0.bindings.map(\.domain) })
             pending.append(contentsOf: program.behavior.temporalProperties.flatMap { $0.expression.predicates.map(\.expression) })
             pending.append(contentsOf: program.refinements.flatMap { $0.variableMappings.map(\.expression) })
             pending.append(contentsOf: program.behavior.invariants.map { $0.predicate.expression })
@@ -61,7 +62,6 @@ struct NativeTypeDeclarations: Sendable {
                 let function = program[id]
                 types += function.parameters.map(\.type) + [function.resultType]
             }
-            values += program.behavior.actions.flatMap { $0.bindings.flatMap(\.values) }
             pendingPrograms.append(contentsOf: program.refinements.map(\.abstract))
         }
         self.init(types: types, literals: values, namedDomains: program.enums.domains)

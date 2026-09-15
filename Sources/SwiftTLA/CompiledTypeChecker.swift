@@ -269,8 +269,8 @@ package struct CompiledTypeChecker: Sendable {
             for binding in action.bindings {
                 actionBinders.insert(binding.binder)
                 let hint = inputs.bindingTypes[binding.binder] ?? .unknown
-                let inferred = try binding.values.reduce(hint) { try CompiledValueType.merge($0, literal($1, expected: hint)) }
-                bindingDomains[binding.binder] = Set(binding.values)
+                let inferred = try (binding.literalMembers ?? []).reduce(hint) { try CompiledValueType.merge($0, literal($1, expected: hint)) }
+                bindingDomains[binding.binder] = binding.literalMembers.map(Set.init)
                 bindings[binding.binder] = try CompiledValueType.merge(bindings[binding.binder] ?? .unknown, inferred)
             }
         }
@@ -337,7 +337,10 @@ package struct CompiledTypeChecker: Sendable {
         }
         for action in inputs.semantics.behavior.actions {
             do {
-                actions.append(.init(id: action.id, bindings: action.bindings,
+                let actionBindings = try action.bindings.map { binding in
+                    try binding.map { try checkOperand($0, expected: .set(bindings[binding.binder] ?? .unknown)) }
+                }
+                actions.append(.init(id: action.id, bindings: actionBindings,
                     body: try checkAction(action.body), collection: action.collection))
             }
             catch let diagnostic as CompilationDiagnostic {

@@ -348,7 +348,14 @@ extension NativeSwiftEmitter {
         return "try Self._enabledActions(in: \(state)\(collectionArguments), required: [\(identifiers)])"
     }
 
-    func enabledDeclarations(collectionParameters: String, collectionArguments: String) throws -> [DeclSyntax] {
+    mutating func actionDomain(_ binding: CompiledActionBinding, state: String) throws -> String {
+        if let members = binding.literalMembers {
+            return "[\(try members.map { try literal($0, as: program.bindingTypes[binding.binder]!) }.joined(separator: ", "))]"
+        }
+        return try expression(binding.domain, state: state)
+    }
+
+    mutating func enabledDeclarations(collectionParameters: String, collectionArguments: String) throws -> [DeclSyntax] {
         guard !enabledActionIDs.isEmpty else { return [] }
         var checks = ""
         for index in program.behavior.enabledActionIndices {
@@ -359,8 +366,8 @@ extension NativeSwiftEmitter {
             var arguments: [String] = []
             for binding in action.bindings {
                 let name = binder(binding.binder)
-                let domain = try binding.values.map { try literal($0, as: program.bindingTypes[binding.binder]!) }.joined(separator: ", ")
-                loops += "for \(name) in [\(domain)] {\n"
+                let domain = try actionDomain(binding, state: "state")
+                loops += "for \(name) in \(domain) {\n"
                 closing += "}\n"
                 arguments.append("\(name): \(name)")
             }
@@ -389,7 +396,7 @@ extension NativeSwiftEmitter {
         """)
     }
 
-    func dispatchDeclarations(collectionArguments: String) throws -> [DeclSyntax] {
+    mutating func dispatchDeclarations(collectionArguments: String) throws -> [DeclSyntax] {
         guard !model.api.actions.isEmpty else {
             return try nativeDeclarations("""
             public func enabledActions() throws -> [Action] { [] }
@@ -418,7 +425,7 @@ extension NativeSwiftEmitter {
                     pattern.append("member: let \(name)")
                     actionArguments.append("member: \(name)")
                 } else {
-                    domain = "[\(try binding.values.map { try literal($0, as: type) }.joined(separator: ", "))]"
+                    domain = try actionDomain(binding, state: "_execution")
                     if apiBinding.isPublic {
                         pattern.append("\(apiBinding.swiftIdentifier): let \(name)")
                         actionArguments.append("\(apiBinding.swiftIdentifier): \(name)")
@@ -428,7 +435,10 @@ extension NativeSwiftEmitter {
                 if apiBinding.isPublic || api.collection != nil {
                     argumentValue = name
                 } else {
-                    argumentValue = try literal(binding.values[0], as: type)
+                    guard let value = binding.literalMembers?.first else {
+                        throw unsupported("a hidden action argument requires a literal singleton domain")
+                    }
+                    argumentValue = try literal(value, as: type)
                 }
                 formalArguments.append(try formalValue(argumentValue, type: type))
                 if apiBinding.isPublic || api.collection != nil {
@@ -449,7 +459,7 @@ extension NativeSwiftEmitter {
                     loops += "for \(name) in \(domain) {\n"
                     closing += "}\n"
                 } else {
-                    invocation.append("\(name): \(try literal(binding.values[0], as: type))")
+                    invocation.append("\(name): \(argumentValue)")
                 }
             }
             let label = ".\(api.swiftIdentifier)" + (pattern.isEmpty ? "" : "(\(pattern.joined(separator: ", ")))")

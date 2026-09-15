@@ -2288,7 +2288,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(action.bindings.isEmpty)
         #expect(compiledAction.bindings.count == 1)
         #expect(
-            compiledAction.bindings[0].values
+            compiledAction.bindings[0].literalMembers
                 == declaration.metadata.members.map(CompiledValue.init(formal:))
         )
         #expect(compiledAction.collection == compilation.layout.testVariableID(named: "devices"))
@@ -2337,7 +2337,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(firstAction == secondAction)
         #expect(firstAction.bindings.isEmpty)
         #expect(
-            compiledAction.bindings[0].values
+            compiledAction.bindings[0].literalMembers
                 == specification.collections[0].metadata.members.map(CompiledValue.init(formal:))
         )
         guard case .existsAction = compiledAction.body else {

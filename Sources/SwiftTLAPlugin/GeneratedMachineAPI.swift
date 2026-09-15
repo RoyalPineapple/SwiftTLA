@@ -117,13 +117,13 @@ package struct GeneratedMachineAPI: Sendable, Equatable {
             }
             if let collection {
                 guard action.bindings.count == 1,
-                      action.bindings[0].values == collection.members else {
+                      action.bindings[0].literalMembers == collection.members else {
                     throw CompilationDiagnostic(
                         code: .compilationIdentityMismatch,
                         stage: .lowering,
                         path: "machineSurfacePlan.actions.\(layoutAction.declaration.name)",
                         expected: "one compiled member binding for model collection '\(collection.formalName)'",
-                        actual: "\(action.bindings.count) binding(s) with domains \(action.bindings.map(\.values))",
+                        actual: "\(action.bindings.count) binding(s) with domains \(action.bindings.map { $0.domain.operation.diagnosticName })",
                         nextSafeAction: "Compile the collection action from its declared model collection."
                     )
                 }
@@ -134,7 +134,7 @@ package struct GeneratedMachineAPI: Sendable, Equatable {
                 bindings: try action.bindings.map { binding in
                     try Binding(
                         formalName: collection == nil ? binding.sourceName : "member",
-                        isPublic: binding.values.count > 1
+                        isPublic: binding.literalMembers?.count != 1
                     )
                 },
                 collection: collection

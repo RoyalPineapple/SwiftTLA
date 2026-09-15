@@ -257,8 +257,8 @@ struct ModelCollectionGeneratedMachineTests {
     }
     #expect(collection == "phases")
     #expect(parsedCompilation.identity == builtCompilation.identity)
-    #expect(parsedCompilation.semantics.behavior.actions.first?.bindings.first?.values
-      == builtCompilation.semantics.behavior.actions.first?.bindings.first?.values)
+    #expect(parsedCompilation.semantics.behavior.actions.first?.bindings.first?.literalMembers
+      == builtCompilation.semantics.behavior.actions.first?.bindings.first?.literalMembers)
     for compilation in [parsedCompilation, builtCompilation] {
       let module = try compilation.render().tlaBundle.root.tla
       #expect(module.contains("VARIABLES phases"))

@@ -914,7 +914,8 @@ struct CompiledLowerer {
             return CompiledActionBinding(
                 binder: binder,
                 sourceName: $0.name,
-                values: $0.values.map(CompiledValue.init(formal:)),
+                domain: try lower(.setLiteral($0.values.map(StateExpr.value)),
+                    at: "actions.\(action.name).bindings.\($0.name).domain", scope: scope),
                 generatedSwiftType: $0.generatedSwiftType
             )
         }
@@ -931,7 +932,9 @@ struct CompiledLowerer {
                 bindings: [CompiledActionBinding(
                     binder: member,
                     sourceName: sourceMember,
-                    values: collection.members,
+                    domain: .init(operation: .setLiteral, children: collection.members.map {
+                        .init(operation: .value($0), children: [])
+                    }),
                     generatedSwiftType: collection.elementType.map { "\($0).ID" }
                 )],
                 body: memberBody,
@@ -949,7 +952,7 @@ struct CompiledLowerer {
     private func accepts(_ arguments: [CompiledValue], for action: CompiledAction) -> Bool {
         arguments.count == action.bindings.count
             && zip(arguments, action.bindings).allSatisfy { argument, binding in
-                binding.values.contains(argument)
+                binding.literalMembers?.contains(argument) == true
             }
     }
 

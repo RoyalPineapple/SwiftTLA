@@ -64,11 +64,15 @@ struct CompiledActionEnumerator {
         }
     }
 
-    private func actionBindings(_ bindings: [CompiledActionBinding]) -> [CompiledActionBindingValues] {
-        bindings.reduce([.init(values: .init(), arguments: [])]) { partial, binding in
-            partial.flatMap { current in
-                binding.values.map { value in
-                    .init(
+    private func actionBindings(_ bindings: [CompiledActionBinding]) throws -> [CompiledActionBindingValues] {
+        try bindings.reduce([.init(values: .init(), arguments: [])]) { partial, binding in
+            try partial.flatMap { current in
+                let domain = try evaluate(binding.domain, current.values)
+                guard case .set(let members) = domain else {
+                    throw EvalError.expected(.set, actual: [domain])
+                }
+                return (binding.literalMembers ?? CompiledValue.sorted(members)).map { value in
+                    CompiledActionBindingValues(
                         values: current.values.binding(value, to: binding.binder),
                         arguments: current.arguments + [value]
                     )

@@ -366,15 +366,30 @@ package struct CompiledAction: Sendable {
     package func map(
         _ transform: (CompiledExpression) throws -> CompiledExpression
     ) rethrows -> CompiledAction {
-        .init(id: id, bindings: bindings, body: try body.map(transform), collection: collection)
+        .init(id: id, bindings: try bindings.map { try $0.map(transform) },
+            body: try body.map(transform), collection: collection)
     }
 }
 
 package struct CompiledActionBinding: Sendable {
     package let binder: BinderID
     package let sourceName: String
-    package let values: [CompiledValue]
+    package let domain: CompiledExpression
     package let generatedSwiftType: String?
+
+    package func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> Self {
+        .init(binder: binder, sourceName: sourceName, domain: try transform(domain),
+            generatedSwiftType: generatedSwiftType)
+    }
+
+    package var literalMembers: [CompiledValue]? {
+        guard case .setLiteral = domain.operation else { return nil }
+        let members = domain.children.compactMap { child -> CompiledValue? in
+            guard case .value(let value) = child.operation else { return nil }
+            return value
+        }
+        return members.count == domain.children.count ? members : nil
+    }
 }
 
 /// A state expression and the action enabledness it requires, analyzed once.

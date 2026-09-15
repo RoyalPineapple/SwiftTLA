@@ -344,8 +344,9 @@ struct CompiledTLARenderer {
         guard !action.bindings.isEmpty else { return name }
         let parameters = try action.bindings.map { try binderName($0.binder) }
         let domains = try zip(parameters, action.bindings).map { parameter, binding in
-            let values = try CompiledValue.set(Set(binding.values)).rendered(using: layout)
-            return "\(parameter) \\in \(values)"
+            let domain = try binding.literalMembers.map { try CompiledValue.set(Set($0)).rendered(using: layout).description }
+                ?? state(binding.domain)
+            return "\(parameter) \\in \(domain)"
         }
         return "(\\E \(domains.joined(separator: ", ")): \(name)(\(parameters.joined(separator: ", "))))"
     }
