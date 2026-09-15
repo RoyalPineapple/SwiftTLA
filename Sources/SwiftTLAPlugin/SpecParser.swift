@@ -1198,6 +1198,18 @@ final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil
     ) -> StateExpr? {
+        if let call = expression.as(FunctionCallExprSyntax.self), isSwiftSetConstructor(call) {
+            guard call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
+            if call.arguments.isEmpty { return .setLiteral([]) }
+            guard call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil,
+                  let array = argument.expression.as(ArrayExprSyntax.self) else { return nil }
+            let elementType = typedFacadeValueType(expression, scope: scope)?.selectedElement
+            let elements = array.elements.compactMap {
+                decodeTypedFacadeValue($0.expression, scope: scope, expectedEnumType: elementType?.enumerationType)
+            }
+            guard elements.count == array.elements.count else { return nil }
+            return .setLiteral(elements)
+        }
         let formalMember = expression.as(MemberAccessExprSyntax.self)
             ?? expression.as(FunctionCallExprSyntax.self)?.calledExpression.as(MemberAccessExprSyntax.self)
         if terminalTypeName(in: formalMember?.base) == "StateExpr" {
@@ -1395,6 +1407,10 @@ final class ParserSession {
             }
         }
         guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
+        if isSwiftSetConstructor(call),
+           call.calledExpression.is(GenericSpecializationExprSyntax.self) {
+            return try? sourceTypeResolver.resolve(call.calledExpression.trimmedDescription)
+        }
         if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
             let members = call.arguments.first { $0.label?.text == "of" }?.expression
             let element = members.flatMap { typedFacadeValueType($0, scope: scope)?.selectedElement }
@@ -1446,6 +1462,12 @@ final class ParserSession {
     private func typedFacadeValueType(_ type: TypedFacadeType) -> CompiledValueType? {
         guard let source = type.renderedSourceName else { return nil }
         return try? sourceTypeResolver.resolve(source)
+    }
+
+    func isSwiftSetConstructor(_ call: FunctionCallExprSyntax) -> Bool {
+        let base = call.calledExpression.as(GenericSpecializationExprSyntax.self)?.expression ?? call.calledExpression
+        let path = Self.sourceTypePath(base)
+        return path == ["Set"] || path == ["Swift", "Set"]
     }
 
     func typedFacadeValueType(_ type: TypeSyntax) -> CompiledValueType? {

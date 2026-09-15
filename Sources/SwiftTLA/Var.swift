@@ -114,7 +114,7 @@ public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible, SpecCompo
   public var description: String { name }
   /// Type-safe assignment: `Var<Int>.becomes(5)` — only values matching T.
   @discardableResult
-  public func becomes(_ value: T) -> ActionExpr { .assign(.named(name), .value(value.tlaValue)) }
+  public func becomes(_ value: T) -> ActionExpr { .assign(.named(name), value.stateExpr) }
   /// Type-safe assignment: `Var<Int>.becomes(x + 1)` — an expression with value type T.
   @discardableResult
   public func becomes(_ expr: some TypedExpression<T>) -> ActionExpr { .assign(.named(name), expr.stateExpr) }

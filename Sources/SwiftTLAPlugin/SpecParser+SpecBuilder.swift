@@ -574,6 +574,10 @@ extension ParserSession {
               element.label == nil {
             expression = element.expression
         }
+        if let call = expression.as(FunctionCallExprSyntax.self), isSwiftSetConstructor(call),
+           call.calledExpression.is(GenericSpecializationExprSyntax.self) {
+            return call.calledExpression.trimmedDescription
+        }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            ["first", "second"].contains(member.declName.baseName.text),

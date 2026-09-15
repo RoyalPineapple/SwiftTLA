@@ -43,7 +43,7 @@ public struct ValidationBinding: Sendable {
 }
 
 public func Bind<Value: TLAValueType>(_ parameter: ModelParameter<Value>, to value: Value) -> ValidationBinding {
-    .init(parameter: parameter.reference, value: .value(value.tlaValue))
+    .init(parameter: parameter.reference, value: value.stateExpr)
 }
 
 @resultBuilder

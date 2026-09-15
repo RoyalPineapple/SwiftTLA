@@ -382,6 +382,35 @@ This contract settles scalar parameter declarations and scenario bindings for Co
 Parameter-dependent collection domains still require the remaining B-01 decisions.
 They must use these same identities and configuration values.
 
+#### Set-valued parameters
+
+Ordinary Swift sets can supply parameter values, legal domains, and model state:
+
+```swift
+let nodes = scope.parameter(as: Set<Int>.self,
+    in: Set<Set<Int>>([Set<Int>([1]), Set<Int>([1, 2, 3])]))
+let quorum = scope.parameter(as: Int.self, in: IntRange(1, through: nodes.cardinality))
+let selected = scope.sharedVar("selected", initial: Set<Int>([]))
+
+Validation("Three nodes") {
+    Bind(nodes, to: Set<Int>([1, 2, 3]))
+    Bind(quorum, to: 2)
+}
+```
+
+The generated configuration stores `Set<Int>`. Its initializer checks both the
+set domain and the dependent quorum domain. Scenario bindings use the same
+configuration initializer. Different populations retain the same generated
+state and action types. Export changes constant bindings, not the transition module.
+
+Set expressions support membership, cardinality, subset checks, union,
+intersection, difference, insertion, and removal. These operations preserve the
+declared element type. Compilation rejects distinct Swift members that collapse
+to one formal value. A set declaration does not imply symmetry.
+
+This support does not complete configurable `Each` populations or the replacement
+of fixed `ModelCollection` declarations. Those requirements remain part of B-01.
+
 The selected syntax inside a model scope containing typed declarations is:
 
 ```swift
@@ -406,12 +435,12 @@ The explicit `exclusion` expression contributes the
 declaration to the builder. Binding it with `let` alone must not secretly
 register it. The handle retains a model-owned identity through expectation binding.
 
-`Validation`, `Bind`, and `.expect` are the scalar scenario declarations. Parameter handles have
+`Validation`, `Bind`, and `.expect` declare model-owned scenarios. Parameter handles have
 types, are immutable for an execution, and are distinct from state variables.
-Scalar parameters use the Counter declaration contract. Bindings are closed typed
+Scalar and set-valued parameters use the contracts in this section. Bindings are closed typed
 values, not opaque closures that backends evaluate differently. State, parameter,
 and operator dependencies in scenario bindings currently produce explicit diagnostics.
-Parameter-dependent structure, collection bindings, and refinement expectation
+Parameter-dependent process populations, fixed `ModelCollection` bindings, and refinement expectation
 handles remain open. Generated scenarios reject these unsupported cases explicitly.
 
 `.expectDeadlock(.violated)` declares an expected deadlock without disabling its

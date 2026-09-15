@@ -221,7 +221,7 @@ public struct SharedVariable<Value: TLAValueType>: TypedExpression {
     fileprivate init(name: String, initial: Value) {
         self.init(
             name: name,
-            initialization: .value(initial.tlaValue)
+            initialization: initial.sourceIssue.map { .expression(.sourceIssue($0)) } ?? .value(initial.tlaValue)
         )
     }
 
@@ -250,7 +250,7 @@ public struct SharedVariable<Value: TLAValueType>: TypedExpression {
 
     @discardableResult
     public func becomes(_ value: Value) -> ActionExpr {
-        .assign(.named(name), .value(value.tlaValue))
+        .assign(.named(name), value.stateExpr)
     }
 
     @discardableResult
@@ -276,7 +276,7 @@ public struct LocalVariable<Value: TLAValueType>: TypedExpression {
     fileprivate init(name: String, initial: Value) {
         self.init(
             name: name,
-            initialization: .value(initial.tlaValue)
+            initialization: initial.sourceIssue.map { .expression(.sourceIssue($0)) } ?? .value(initial.tlaValue)
         )
     }
 
@@ -306,7 +306,7 @@ public struct LocalVariable<Value: TLAValueType>: TypedExpression {
 
     @discardableResult
     public func becomes(_ value: Value) -> ActionExpr {
-        .assign(.named(name), .value(value.tlaValue))
+        .assign(.named(name), value.stateExpr)
     }
 
     @discardableResult
@@ -373,10 +373,10 @@ public final class SpecificationScope {
 
     init() {}
 
-    public func parameter<Value: TLAValueType>(
-        as: Value.Type, in domain: some TypedExpression<SetExpr<Value>>, _name: String = "",
+    public func parameter<Value: TLAValueType, Domain: FormalSetValue>(
+        as: Value.Type, in domain: some TypedExpression<Domain>, _name: String = "",
         _sourceOffset: Int? = nil, _sourceLength: Int = 0
-    ) -> ModelParameter<Value> {
+    ) -> ModelParameter<Value> where Domain.Element == Value {
         declareParameter(_name, domain: domain.stateExpr, sourceOffset: _sourceOffset, sourceLength: _sourceLength)
     }
 
@@ -990,7 +990,7 @@ public func Let<Value: TLAValueType>(
     column: UInt = #column,
     @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
 ) -> StepStatement {
-    Let(Expr<Value>(.value(value.tlaValue)), file: file, line: line, column: column) { body($0) }
+    Let(Expr(value), file: file, line: line, column: column) { body($0) }
 }
 
 /// Tests whether a bounded formal set has a member that satisfies `predicate`.

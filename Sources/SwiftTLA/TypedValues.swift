@@ -470,13 +470,15 @@ public struct SetExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable {
   }
 }
 
-public protocol FormalSetValue: TLAValueType {}
+public protocol FormalSetValue: TLAValueType {
+  associatedtype Element: TLAValueType
+}
 extension SetExpr: FormalSetValue {}
 
 extension TypedExpression where ExpressionValue: FormalSetValue {
-  public func intersection<Element: TLAValueType>(
+  public func intersection(
     _ other: some TypedExpression<ExpressionValue>
-  ) -> Expr<SetExpr<Element>> where ExpressionValue == SetExpr<Element> {
+  ) -> Expr<ExpressionValue> {
     Expr(.intersection(stateExpr, other.stateExpr))
   }
 
@@ -771,45 +773,43 @@ package func formalIntegerSequenceIsSorted(_ expression: StateExpr) -> Bool {
     && zip(integers, integers.dropFirst()).allSatisfy { $0 <= $1 }
 }
 
-extension TypedExpression {
+extension TypedExpression where ExpressionValue: FormalSetValue {
   /// Returns the formal union of two typed sets.
-  public func union<Element: TLAValueType>(
-    _ other: some TypedExpression<SetExpr<Element>>
-  ) -> Expr<SetExpr<Element>> where ExpressionValue == SetExpr<Element> {
-    Expr<SetExpr<Element>>(.union(stateExpr, other.stateExpr))
+  public func union(
+    _ other: some TypedExpression<ExpressionValue>
+  ) -> Expr<ExpressionValue> {
+    Expr(.union(stateExpr, other.stateExpr))
   }
 
-  public func subtracting<Element: TLAValueType>(
-    _ other: some TypedExpression<SetExpr<Element>>
-  ) -> Expr<SetExpr<Element>> where ExpressionValue == SetExpr<Element> {
+  public func subtracting(
+    _ other: some TypedExpression<ExpressionValue>
+  ) -> Expr<ExpressionValue> {
     Expr(.setDifference(stateExpr, other.stateExpr))
   }
 
-  public func inserting<Element: TypedExpression>(_ element: Element) -> Expr<SetExpr<Element.ExpressionValue>>
-  where ExpressionValue == SetExpr<Element.ExpressionValue> {
-    Expr<SetExpr<Element.ExpressionValue>>(.union(stateExpr, .setLiteral([element.stateExpr])))
+  public func inserting(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<ExpressionValue> {
+    Expr(.union(stateExpr, .setLiteral([element.stateExpr])))
   }
 
-  public func inserting<Element: TLAValueType>(_ element: Element) -> Expr<SetExpr<Element>>
-  where ExpressionValue == SetExpr<Element> {
+  public func inserting(_ element: ExpressionValue.Element) -> Expr<ExpressionValue> {
     inserting(element.expr)
   }
 
-  public func removing<Element: TLAValueType>(_ element: some TypedExpression<Element>) -> Expr<SetExpr<Element>>
-  where ExpressionValue == SetExpr<Element> {
-    Expr<SetExpr<Element>>(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
+  public func removing(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<ExpressionValue> {
+    Expr(.setDifference(stateExpr, .setLiteral([element.stateExpr])))
   }
 
-  public func contains<Element: TypedExpression>(_ element: Element) -> Expr<Bool>
-  where ExpressionValue == SetExpr<Element.ExpressionValue> {
+  public func contains(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<Bool> {
     Expr(.in(element.stateExpr, stateExpr))
   }
 
-  public func contains<Element: TLAValueType>(_ element: Element) -> Expr<Bool>
-  where ExpressionValue == SetExpr<Element> {
+  public func contains(_ element: ExpressionValue.Element) -> Expr<Bool> {
     contains(element.expr)
   }
 
+}
+
+extension TypedExpression {
   public func appending<Element: TypedExpression>(_ element: Element) -> Expr<TupleExpr<Element.ExpressionValue>>
   where ExpressionValue == TupleExpr<Element.ExpressionValue> {
     Expr<TupleExpr<Element.ExpressionValue>>(.tupleAppend(stateExpr, element.stateExpr))
