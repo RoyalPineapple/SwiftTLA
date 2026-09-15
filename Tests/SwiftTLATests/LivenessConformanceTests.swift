@@ -40,18 +40,18 @@ struct LivenessConformanceTests {
             guard case .int(let value) = projection.value(for: x) else {
                 throw TLAStateProjectionDiagnostic.invalidValue(path: "x")
             }
-            return try CompiledState(values: [.integer(value)], compilation: compilation)
+            return try CompiledState(values: [.integer(value)], layout: compilation.layout, identity: compilation.identity)
         }
     }
 
     private func analyze(
         _ graph: StateGraph,
-        property: TemporalExpr,
+        property: TemporalCondition<StateExpr>,
         fairness: [FairnessCondition] = [],
         actions: [NamedAction] = [],
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true
-    ) throws -> TemporalAnalysis {
+    ) throws -> TemporalAnalysis<StateGraph.StateID, String?> {
         let spec = TLASpec(
             name: graph.specName,
             variables: [NamedVar(name: "x", initial: .int(0))],
@@ -77,17 +77,14 @@ struct LivenessConformanceTests {
                 )
             }
         }
-        let checker = LivenessChecker(
-            compilation: compilation,
+        return try #require(compilation.analyzeTemporalProperties(
             graph: .init(
                 specName: graph.specName,
                 variableNames: graph.variableNames,
                 transitions: transitions,
                 states: graph.states
             ),
-            states: try compiledStates(for: graph, compilation: compilation)
-        )
-        return try #require(checker.analyze(
+            states: try compiledStates(for: graph, compilation: compilation),
             initialStateIDs: initialStateIDs,
             isComplete: isComplete
         ).first)
@@ -145,7 +142,7 @@ struct LivenessConformanceTests {
         let graph = try graph(transitions: [:], values: [initial: 0])
         let falsePredicate = predicate(1)
         let truePredicate = predicate(0)
-        let cases: [(String, TemporalExpr)] = [
+        let cases: [(String, TemporalCondition<StateExpr>)] = [
             ("always", .always(falsePredicate)),
             ("eventually", .eventually(falsePredicate)),
             ("alwaysEventually", .alwaysEventually(falsePredicate)),
@@ -165,7 +162,7 @@ struct LivenessConformanceTests {
         let graph = try graph(transitions: [:], values: [initial: 0])
         let falsePredicate = predicate(1)
         let truePredicate = predicate(0)
-        let properties: [TemporalExpr] = [
+        let properties: [TemporalCondition<StateExpr>] = [
             .always(truePredicate),
             .eventually(truePredicate),
             .alwaysEventually(truePredicate),
@@ -369,7 +366,7 @@ struct LivenessConformanceTests {
             values: [initial: 0, disabled: 0, terminal: 1]
         )
         let actions = [action("A"), action("B"), action("C"), action("done")]
-        let property = TemporalExpr.alwaysEventually(predicate(1))
+        let property = TemporalCondition<StateExpr>.alwaysEventually(predicate(1))
         let cases: [(String, [FairnessCondition])] = [
             ("none", []),
             ("weak", [.weakFairness("A")]),
@@ -415,7 +412,7 @@ struct LivenessConformanceTests {
             transitions: [initial: [.init(label: .init(.init(name: "unknown")), target: initial)]],
             values: [initial: 0]
         )
-        let unavailable: [(String, TemporalAnalysis, TemporalDiagnosticReason)] = [
+        let unavailable: [(String, TemporalAnalysis<StateGraph.StateID, String?>, TemporalDiagnosticReason)] = [
             (
                 "unknown action",
                 try analyze(unknownActionGraph, property: .eventually(predicate(1)), actions: [action("known")], initialStateIDs: [initial]),
@@ -506,12 +503,11 @@ struct LivenessConformanceTests {
         )
         let compilation = try specification.compile()
         let outcome = try #require(
-            LivenessChecker(
-                compilation: compilation,
+            compilation.analyzeTemporalProperties(
                 graph: sourceGraph,
-                states: try compiledStates(for: sourceGraph, compilation: compilation)
+                states: try compiledStates(for: sourceGraph, compilation: compilation),
+                initialStateIDs: [initial]
             )
-                .analyze(initialStateIDs: [initial])
                 .first
         )
 
@@ -532,11 +528,9 @@ struct LivenessConformanceTests {
         let compilation = try specification.compile()
 
         do {
-            _ = try LivenessChecker(
-                compilation: compilation,
-                graph: sourceGraph,
-                states: [:]
-            ).analyze(initialStateIDs: [initial])
+            _ = try compilation.analyzeTemporalProperties(
+                graph: sourceGraph, states: [:], initialStateIDs: [initial]
+            )
             Issue.record("Expected the compiled state identity check to fail")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.code == .compilationIdentityMismatch)
@@ -578,38 +572,37 @@ struct LivenessConformanceTests {
         )
 
         let compilation = try spec.compile()
-        guard case .action(let action) = try #require(compilation.semantics.fairness.first).scope else {
+        guard case .action(let action) = try #require(compilation.semantics.behavior.fairness.first).scope else {
             Issue.record("Expected fairness to bind an action identity")
             return
         }
         #expect(action == compilation.layout.actions[0].id)
     }
 
-    @Test("ModelChecker reports liveness violations and bounded exploration separately")
+    @Test("temporal analysis distinguishes violations from incomplete exploration")
     func reportsDistinctLivenessAndBoundedOutcomes() throws {
         let x = Var<Int>("x")
-        let livenessSpec = TLASpec("liveness") {
+        let liveness = try TLASpec("liveness") {
             Variable(x, 0)
             Eventually("reachesOne", x == 1)
-        }
-        let liveness = try ModelChecker(compilation: try livenessSpec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).checkLiveness()
-        if case .livenessViolated(let property, let reason, let witness) = liveness {
-            #expect(property == "reachesOne")
-            #expect(reason == .violatingFairLasso)
-            #expect(witness.cycle.isEmpty == false)
-        } else {
-            Issue.record("Expected liveness violation, got \(liveness)")
-        }
+        }.compile()
+        let exploration = try ModelChecker(compilation: liveness, configuration: .init(
+            maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
+        let analysis = try #require(exploration.analyzeTemporalProperties(in: liveness).first)
+        #expect(analysis.status == .violated)
+        #expect(analysis.reason == .violatingFairLasso)
+        #expect(try #require(analysis.witness).cycle.isEmpty == false)
 
-        let completeSpec = TLASpec("incomplete") {
+        let bounded = try TLASpec("incomplete") {
             Variable(x, in: 0...2)
             Action("step") { x.becomes(x + 1).when(x < 2) }
             Eventually("reachesTwo", x == 2)
-        }
-        let incomplete = try ModelChecker(compilation: try completeSpec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1, symmetryReduction: .disabled)).checkLiveness()
-        if case .depthExceeded = incomplete {
-        } else {
-            Issue.record("Expected depth-exceeded outcome, got \(incomplete)")
-        }
+        }.compile()
+        let incomplete = try ModelChecker(compilation: bounded, configuration: .init(
+            maximumStateLimit: 1, symmetryReduction: .disabled)).explore()
+        let unavailable = try #require(incomplete.analyzeTemporalProperties(in: bounded).first)
+        #expect(unavailable.status == .unavailable)
+        #expect(unavailable.reason == .incompleteExploration)
+        #expect(unavailable.witness == nil)
     }
 }

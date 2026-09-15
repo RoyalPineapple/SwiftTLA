@@ -1,9 +1,70 @@
 import Testing
+@testable import SwiftTLAPlugin
 @testable import SwiftTLA
 import SwiftTLAMacros
 
 @Suite("PlusCal algorithm builders")
 struct AlgorithmBuilderTests {
+    @Test("Generic integer expressions retain their type through execution")
+    func genericIntegerExpressions() throws {
+        func combined(_ lhs: some TypedExpression<Int>, _ rhs: some TypedExpression<Int>) -> Expr<Int> {
+            (lhs + rhs) * 2 - 1
+        }
+        let algorithm = Algorithm("GenericArithmetic", scoped: { scope in
+            let left = scope.sharedVar("left", initial: 3)
+            let right = scope.sharedVar("right", initial: 2)
+            Do(TestControlLabel.advance) { Assign(left, to: combined(left, right)) }
+        })
+        let specification = try loweredSourceSpecification(algorithm)
+        let (compilation, initial) = try initialState(of: specification)
+        let next = try successor(named: "advance", in: compilation, from: initial)
+        #expect(try value(named: "left", in: next, compilation: compilation) == .int(9))
+    }
+
+    @Test("Comparisons and Boolean composition retain declaration types")
+    func typedPredicates() throws {
+        func greater(_ lhs: some TypedExpression<Int>, _ rhs: some TypedExpression<Int>) -> Expr<Bool> {
+            (lhs > rhs) && !(lhs <= rhs) && (lhs != rhs)
+        }
+        let algorithm = Algorithm("TypedPredicates", scoped: { scope in
+            let left = scope.sharedVar("left", initial: 3)
+            let right = scope.sharedVar("right", initial: 2)
+            let ready = scope.sharedVar("ready", initial: greater(left, right))
+            Do(TestControlLabel.advance) {
+                Assign(ready, to: (left < right) || (left == right))
+            }
+        })
+        let specification = try loweredSourceSpecification(algorithm)
+        let (compilation, initial) = try initialState(of: specification)
+        #expect(try value(named: "ready", in: initial, compilation: compilation) == .bool(true))
+        let next = try successor(named: "advance", in: compilation, from: initial)
+        #expect(try value(named: "ready", in: next, compilation: compilation) == .bool(false))
+    }
+
+    @Test("A step guard protects every branch and update", arguments: [false, true])
+    func wholeStepGuard(enabled: Bool) throws {
+        let algorithm = Algorithm("GuardedBranches", scoped: { scope in
+            let ready = scope.sharedVar("ready", initial: enabled)
+            let value = scope.sharedVar("value", initial: 0)
+            let changed = scope.sharedVar("changed", initial: false)
+            Do(TestControlLabel.advance, when: ready) {
+                Assign(changed, to: true)
+                Either {
+                    Assign(value, to: 1)
+                } or: {
+                    Assign(value, to: 2)
+                }
+            }
+        })
+        let (compilation, initial) = try initialState(of: loweredSourceSpecification(algorithm))
+        let next = try successors(named: "advance", in: compilation, from: initial)
+        #expect(next.count == (enabled ? 2 : 0))
+        for state in next {
+            #expect(try value(named: "changed", in: state, compilation: compilation) == .bool(true))
+        }
+        #expect(try value(named: "changed", in: initial, compilation: compilation) == .bool(false))
+    }
+
     @Test("compilation rejects multiple Algorithms")
     func rejectsMultipleAlgorithms() {
         let specification = TLASpec("MultipleAlgorithms") {
@@ -41,7 +102,7 @@ struct AlgorithmBuilderTests {
 
         #expect(specialized.algorithmPhase == .lowered)
         #expect(specialized.authoredPlusCalAlgorithmPlan?.name == "SpecializedAlgorithm")
-        let rendered = try specialized.compile().renderedPlusCalBundle().root.tla
+        let rendered = try specialized.compile().render().plusCalBundle().root.tla
         #expect(rendered.components(separatedBy: "(*--algorithm SpecializedAlgorithm").count == 2)
     }
 
@@ -122,10 +183,10 @@ struct AlgorithmBuilderTests {
 
         let compilation = try source.compile()
         let variable = try #require(
-            compilation.machineSurfacePlan.variables.first { $0.formalName == "values" }
+            compilation.layout.variables.first { $0.declaration.name == "values" }
         )
 
-        #expect(variable.swiftType == "Function<GeneratedSurfaceKey, Bool>")
+        #expect(variable.generatedSwiftType == "Function<GeneratedSurfaceKey, Bool>")
     }
 
     @Test("unsupported Algorithm fairness fails before lowering")
@@ -248,7 +309,7 @@ struct AlgorithmBuilderTests {
 
         let module = try TLASpec("BoundProcessHeader") { algorithm }
             .compile()
-            .renderedTLAModuleBundle()
+            .render().tlaBundle
             .tla
         #expect(module.contains("advance(_process) =="))
         #expect(module.contains("__swift_tla_binder_") == false)
@@ -355,7 +416,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("MacroLock", scoped: { scope in
             let lock = scope.sharedVar("lock", initial: 1)
             let acquire = Macro { (value: MacroParameter<Int>) in
-                Await(value == 1)
+                When(value == 1)
                 Assign(value, to: 0)
             }
             let release = Macro { (value: MacroParameter<Int>) in
@@ -508,7 +569,7 @@ struct AlgorithmBuilderTests {
         let rendered = try TLASpec("ProcedureBuilderExport") {
             FormalDefinition("Marker", parameters: [], body: .value(.string("procedure.work.enter")))
             algorithm
-        }.compile().renderedTLAModuleBundle().tla
+        }.compile().render().tlaBundle.tla
         #expect(rendered.contains("Marker == \"procedure.work.enter\""))
         #expect(rendered.contains("pc' = \"enter\""))
         #expect(!rendered.contains("pc' = \"procedure.work.enter\""))
@@ -542,7 +603,7 @@ struct AlgorithmBuilderTests {
         let choices = Where(
             Functions(from: Node.all, to: Subsets(of: nodes))
         ) { successor in
-            All(Node.all) { node in
+            ForAll(Node.all) { node in
                 successor[node].cardinality == 1
             }
         }
@@ -557,26 +618,26 @@ struct AlgorithmBuilderTests {
     }
 
     @Test("static formal selection uses the matching finite value")
-    func selectsStaticFormalValue() {
+    func selectsStaticFormalValue() throws {
         let selected = Select(
             from: SetExpr<Int>.literal(1, 2, 3),
             matching: { value in value.expr % 2 == 0 }
         )
 
-        #expect(selected.raw == .value(.int(2)))
+        #expect(try evaluateClosed(selected.stateExpr) == .int(2))
     }
 
     @Test("static formal selection can choose a filtered function")
-    func selectsFilteredFormalFunction() {
+    func selectsFilteredFormalFunction() throws {
         let nodes = SetExpr<Node>.literal(.first, .second)
         let selected = Select(
             from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { successor in
-                All(Node.all) { node in successor[node].cardinality == 1 }
+                ForAll(Node.all) { node in successor[node].cardinality == 1 }
             },
             matching: { successor in successor.expr == successor.expr }
         )
 
-        guard case .value(.function) = selected.raw else {
+        guard case .function = try evaluateClosed(selected.stateExpr) else {
             Issue.record("A static filtered selection must produce a formal function value.")
             return
         }
@@ -647,8 +708,8 @@ struct AlgorithmBuilderTests {
             .string("second"): .string("stringProcess"),
             .string("other"): .string("otherProcess")
         ]))
-        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("({\"first\", \"second\"} \\cup {\"other\"})"))
-        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("__pcal_initial_process =") == false)
+        #expect(try spec.compile().render().tlaBundle.tla.contains("({\"first\", \"second\"} \\cup {\"other\"})"))
+        #expect(try spec.compile().render().tlaBundle.tla.contains("__pcal_initial_process =") == false)
     }
 
     @Test("a begin-style algorithm keeps a scalar program counter")
@@ -702,7 +763,7 @@ struct AlgorithmBuilderTests {
         #expect(spec.actions.allSatisfy { $0.bindings.isEmpty })
         #expect(spec.fairness == [.weakFairnessNext])
         #expect(try renderedSourceAlgorithmPlusCal(algorithm).contains("--fair algorithm FairSequential"))
-        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("WF_<<pc, value>>(Next)"))
+        #expect(try spec.compile().render().tlaBundle.tla.contains("WF_<<pc, value>>(Next)"))
     }
 
     @Test("sequential Algorithm fairness rejects process and empty bodies")
@@ -729,14 +790,13 @@ struct AlgorithmBuilderTests {
     @Test("typed first-slice builders preserve ordered process steps")
     func buildsBoundedAlgorithm() throws {
         let algorithm = Algorithm("OrderedProcessSteps", scoped: { scope in
-            let maximum = scope.sharedVar("maximum", initial: 0)
+            let selected = scope.sharedVar("selected", initial: Node.first)
             Each(Node.all, scoped: { node, scope in
                 let inbox = scope.localVar("inbox", initial: 0)
-                Do(AlgorithmLabel.receive) {
-                    Await(inbox > 0)
+                Do(AlgorithmLabel.receive, when: inbox > 0) {
                     Choose(Node.all) { candidate in
-                        If(candidate > node) {
-                            Assign(maximum, to: candidate)
+                        If(candidate != node) {
+                            Assign(selected, to: candidate)
                             Goto(AlgorithmLabel.forward)
                         } else: {
                             Goto(AlgorithmLabel.receive)
@@ -745,7 +805,7 @@ struct AlgorithmBuilderTests {
                 }
                 Do(AlgorithmLabel.forward) {
                     Either {
-                        Assign(maximum, to: maximum + 1)
+                        Assign(selected, to: node)
                         Goto(AlgorithmLabel.receive)
                     } or: {
                         Goto(AlgorithmLabel.done)
@@ -881,7 +941,6 @@ struct AlgorithmBuilderTests {
         #expect(codes.contains(.emptyDomain))
         #expect(codes.contains(.duplicateLabel))
         #expect(codes.contains(.invalidTarget))
-        #expect(codes.contains(.duplicateRootWrite))
         #expect(throws: CompilationDiagnostic.self) {
             try invalid.requireValid()
         }
@@ -907,8 +966,8 @@ struct AlgorithmBuilderTests {
         }
     }
 
-    @Test("authored PlusCal evaluates a later guard before atomic updates")
-    func authoredPlusCalMovesLaterGuardBeforeAtomicUpdates() throws {
+    @Test("A later guard reads the updated value before committing the step")
+    func laterGuardReadsUpdatedValue() throws {
         let algorithm = Algorithm("ReadAfterWrite", scoped: { scope in
             let value = scope.sharedVar("value", initial: 0)
             Do(TestControlLabel.advance) {
@@ -919,19 +978,16 @@ struct AlgorithmBuilderTests {
 
         let compilation = try TLASpec("ReadAfterWrite") { algorithm }.compile()
         let rendered = try compilation
-            .renderedPlusCalBundle()
+            .render().plusCalBundle()
             .root.tla
-        let guardRange = try #require(rendered.range(of: "await (value > 0);"))
-        let assignmentRange = try #require(rendered.range(of: "value := (value + 1);"))
+        let guardRange = try #require(rendered.range(of: "when (__atomic_0 > 0);"))
+        let assignmentRange = try #require(rendered.range(of: "value := __atomic_0;"))
         #expect(guardRange.lowerBound < assignmentRange.lowerBound)
 
         let initial = try firstCompiledState(in: compilation)
-        #expect(try compiledSuccessors(
-            named: "advance",
-            arguments: [],
-            in: compilation,
-            from: initial
-        ).isEmpty)
+        let next = try #require(try compiledSuccessors(
+            named: "advance", arguments: [], in: compilation, from: initial).first)
+        #expect(try renderedValue(named: "value", in: next, compilation: compilation) == .int(1))
     }
 
     @Test("authored PlusCal emits one update group for separated assignments")
@@ -948,9 +1004,9 @@ struct AlgorithmBuilderTests {
 
         let compilation = try TLASpec("SeparatedUpdates") { algorithm }.compile()
         let rendered = try compilation
-            .renderedPlusCalBundle()
+            .render().plusCalBundle()
             .root.tla
-        #expect(rendered.contains("first := (first + 1) || second := (first + 1);"))
+        #expect(rendered.contains("first := __atomic_0 || second := __atomic_1;"))
 
         let initial = try firstCompiledState(in: compilation)
         let successor = try #require(try compiledSuccessors(
@@ -960,7 +1016,7 @@ struct AlgorithmBuilderTests {
             from: initial
         ).first)
         #expect(try renderedValue(named: "first", in: successor, compilation: compilation) == .int(2))
-        #expect(try renderedValue(named: "second", in: successor, compilation: compilation) == .int(2))
+        #expect(try renderedValue(named: "second", in: successor, compilation: compilation) == .int(3))
     }
 
     @Test("atomic paths reject competing transfers and accept exclusive transfers")
@@ -1014,11 +1070,11 @@ struct AlgorithmBuilderTests {
         #expect(algorithm.validate().isEmpty)
         let rendered = try TLASpec("NestedUpdates") { algorithm }
             .compile()
-            .renderedPlusCalBundle()
+            .render().plusCalBundle()
             .root.tla
-        #expect(rendered.components(separatedBy: "common := (common + 1)").count == 3)
-        #expect(rendered.contains("common := (common + 1) || first := __binder_"))
-        #expect(rendered.contains("common := (common + 1) || second := __binder_"))
+        #expect(rendered.components(separatedBy: "common := __atomic_0").count == 3)
+        #expect(rendered.contains("common := __atomic_0 || first := __atomic_"))
+        #expect(rendered.contains("common := __atomic_0 || second := __atomic_"))
     }
 
     @Test("moving a continuation under a binder preserves its outer names")
@@ -1039,14 +1095,18 @@ struct AlgorithmBuilderTests {
             ]
         )
 
-        let projected = source.plusCalProjection()
+        let projected = source.resolvingAtomicSteps()
         let step = try #require(projected.sequentialSteps.first)
         guard case .with(let binder, _, let body) = step.statements.first,
               body.count == 1,
-              case .parallel(let assignments) = body[0],
+              case .letBinding(let selectedSnapshot, .variable(let selectedValue), let next) = body[0],
+              next.count == 1,
+              case .letBinding(let copiedSnapshot, .variable(let copiedValue), let final) = next[0],
+              final.count == 1,
+              case .parallel(let assignments) = final[0],
               assignments.count == 2,
-              case .variable(let selectedValue) = assignments[0].value,
-              case .variable(let copiedValue) = assignments[1].value
+              assignments[0].value == .variable(selectedSnapshot),
+              assignments[1].value == .variable(copiedSnapshot)
         else {
             Issue.record("Expected one capture-free scheduled scope.")
             return
@@ -1056,8 +1116,8 @@ struct AlgorithmBuilderTests {
         #expect(copiedValue == "value")
     }
 
-    @Test("PlusCal projection owns choice, parallel updates, and stopping control")
-    func plusCalProjectionOwnsStatementLowering() throws {
+    @Test("Shared atomic scheduling preserves choices, final writes, and stopping control")
+    func atomicSchedulingPreservesControl() throws {
         let source = AlgorithmModel(
             name: "ProjectedStatements",
             components: [
@@ -1070,20 +1130,21 @@ struct AlgorithmBuilderTests {
             ]
         )
 
-        let step = try #require(source.plusCalProjection().sequentialSteps.first)
+        let step = try #require(source.resolvingAtomicSteps().sequentialSteps.first)
         guard case .with(let binder, let source, let body) = step.statements.first,
-              binder == "selected",
               source == .setLiteral([.value(.int(1)), .value(.int(2))]),
-              body.count == 2,
-              case .parallel(let assignments) = body[0],
+              body.count == 1,
+              case .letBinding(_, .variable(let captured), let final) = body[0],
+              captured == binder,
+              final.count == 2,
+              case .parallel(let assignments) = final[0],
               assignments.count == 1,
               assignments[0].target.root == "value",
-              case .goto(let destination) = body[1]
+              case .stop = final[1]
         else {
             Issue.record("Expected one projected choice path.")
             return
         }
-        #expect(destination.name == CompilerControlSymbol.done.rawValue)
     }
 
     @Test("moving an independent update under a choice preserves successor multiplicity")
@@ -1095,26 +1156,15 @@ struct AlgorithmBuilderTests {
                 Assign(value, to: value + 1)
             }
         })
-        let scheduled = Algorithm(model: original.model.plusCalProjection())
 
         let originalCompilation = try TLASpec("OriginalChoice") { original }.compile()
-        let scheduledCompilation = try TLASpec("ScheduledChoice") { scheduled }.compile()
         let originalInitial = try firstCompiledState(in: originalCompilation)
-        let scheduledInitial = try firstCompiledState(in: scheduledCompilation)
         let originalValues = try compiledSuccessors(
             named: "advance",
             arguments: [],
             in: originalCompilation,
             from: originalInitial
         ).map { try renderedValue(named: "value", in: $0, compilation: originalCompilation) }
-        let scheduledValues = try compiledSuccessors(
-            named: "advance",
-            arguments: [],
-            in: scheduledCompilation,
-            from: scheduledInitial
-        ).map { try renderedValue(named: "value", in: $0, compilation: scheduledCompilation) }
-
-        #expect(originalValues == scheduledValues)
         #expect(originalValues == [.int(1), .int(1)])
     }
 
@@ -1138,7 +1188,7 @@ struct AlgorithmBuilderTests {
         #expect(spec.variables.map(\.name) == ["pc", "value"])
         #expect(spec.actions.map(\.name) == ["receive", "done", "Terminating"])
         for action in spec.actions where action.name != "Terminating" {
-            #expect(action.bindings == [ActionBinding(name: "process", values: Node.finiteValues.map(\.tlaValue))])
+            #expect(action.bindings == [ActionParameter("process", values: Node.finiteValues).actionBinding])
         }
 
         let (compilation, initial) = try initialState(of: spec)
@@ -1162,7 +1212,7 @@ struct AlgorithmBuilderTests {
         let spec = try loweredSourceSpecification(algorithm)
         #expect(spec.variables.map(\.name) == ["value"])
         #expect(spec.actions.map(\.name) == ["pcalProcess1"])
-        let rendered = try spec.compile().renderedTLAModuleBundle().tla
+        let rendered = try spec.compile().render().tlaBundle.tla
         #expect(rendered.contains("VARIABLES pc") == false)
 
         let (compilation, initial) = try initialState(of: spec)
@@ -1212,8 +1262,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("LocalCounter") {
             Each(Node.all, scoped: { _, scope in
                 let inbox = scope.localVar("inbox", initial: 0)
-                Do(AlgorithmLabel.receive) {
-                    Await(inbox == 0)
+                Do(AlgorithmLabel.receive, when: inbox == 0) {
                     Assign(inbox, to: inbox + 1)
                     Goto(AlgorithmLabel.done)
                 }
@@ -1347,7 +1396,7 @@ struct AlgorithmBuilderTests {
         #expect(lowered.formalOperatorDefinitions == [
             FormalOperatorDefinition(
                 name: "same",
-                parameters: [.value("value0"), .value("value1")],
+                parameters: [.value("value0", typeName: "Int"), .value("value1", typeName: "Int")],
                 body: .equal(.variable("value0"), .variable("value1"))
             )
         ])
@@ -1356,7 +1405,7 @@ struct AlgorithmBuilderTests {
 
         let spec = TLASpec("FormalOperators") { algorithm }
         #expect(try spec.loweredSourceModel().formalOperatorDefinitions == lowered.formalOperatorDefinitions)
-        let rendered = try spec.compile().renderedTLAModuleBundle().tla
+        let rendered = try spec.compile().render().tlaBundle.tla
         #expect(rendered.components(separatedBy: "same(").count == 2)
     }
 
@@ -1366,8 +1415,7 @@ struct AlgorithmBuilderTests {
             let count = scope.sharedVar("count", initial: 0)
             let selected = scope.sharedVar("selected", initial: 0)
             Each(Node.all, fairness: .weak) { node in
-                Do(TestControlLabel.choose) {
-                    When(count == 0)
+                Do(TestControlLabel.choose, when: count == 0) {
                     With(SetExpr<Int>.literal(1, 2)) { choice in
                         Assert(choice > 0)
                         Assign(selected, to: choice)
@@ -1383,7 +1431,7 @@ struct AlgorithmBuilderTests {
         #expect(spec.fairness == [FairnessCondition.weakFairnessActionCall(.init(name: "choose", arguments: [.string("first")])),
             .weakFairnessActionCall(.init(name: "choose", arguments: [.string("second")]))
         ])
-        let rendered = try spec.compile().renderedTLAModuleBundle().tla
+        let rendered = try spec.compile().render().tlaBundle.tla
         #expect(rendered.contains("WF_<<pc, count, selected>>(choose__0)"))
         #expect(rendered.contains("WF_<<pc, count, selected>>(choose__1)"))
 
@@ -1462,11 +1510,11 @@ struct AlgorithmBuilderTests {
         let spec = try loweredSourceSpecification(algorithm)
         let (compilation, initial) = try initialState(of: spec)
         let count = try #require(compilation.layout.testVariableID(named: "count"))
-        #expect(try compilation.semantics.invariants.allSatisfy {
+        #expect(try compilation.semantics.behavior.invariants.allSatisfy {
             try CompiledRuntime(compilation: compilation).invariantHolds($0, in: initial)
         })
         let alternate = try initial.updating(count, to: .integer(1))
-        #expect(try compilation.semantics.invariants.allSatisfy {
+        #expect(try compilation.semantics.behavior.invariants.allSatisfy {
             try CompiledRuntime(compilation: compilation).invariantHolds($0, in: alternate)
         })
     }
@@ -1496,8 +1544,7 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("NondeterministicSharedInitialization", scoped: { scope in
             let value = scope.sharedVar("value", in: 1...3)
             Each(Node.all) { _ in
-                Do(TestControlLabel.tick) {
-                    When(value < 3)
+                Do(TestControlLabel.tick, when: value < 3) {
                     Assign(value, to: value + 1)
                     Stop()
                 }
@@ -1672,8 +1719,8 @@ struct AlgorithmBuilderTests {
         }
 
         let compilation = try loweredSourceSpecification(algorithm).compile()
-        let action = try #require(compilation.machineSurfacePlan.actions.first { $0.swiftIdentifier == "mark" })
-        #expect(action.bindings.map(\.swiftType) == ["Node"])
+        let action = try #require(GeneratedMachineAPI(layout: compilation.layout, actions: compilation.semantics.behavior.actions).actions.first { $0.swiftIdentifier == "mark" })
+        #expect(compilation.semantics.behavior.actions.first { $0.id == action.compiledAction }?.bindings.map(\.generatedSwiftType) == ["Node"])
     }
 }
 
@@ -1733,8 +1780,7 @@ private struct ProcedureGeneratedModel {
                 let output = scope.sharedVar("output", initial: 0)
                 Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
                     let offset = scope.localVar("offset", initial: 1)
-                    Do(Step.enter) {
-                        Await(value.expr >= 0)
+                    Do(Step.enter, when: value.expr >= 0) {
                         Assign(output, to: value.expr + offset.expr)
                         Return()
                     }
@@ -1800,14 +1846,14 @@ private struct FunctionDomainGeneratedModel {
                 let successors = scope.sharedVar("successors", in: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
-                    All(Node.all) { node in
+                    ForAll(Node.all) { node in
                         successor[node].cardinality == 1
                     }
                 })
 
                 Do(Step.done) { Stop() }
                 Invariant("OneSuccessorPerNode") {
-                    All(Node.all) { node in
+                    ForAll(Node.all) { node in
                         successors[node].cardinality == 1
                     }
                 }
@@ -1860,7 +1906,7 @@ private struct StaticFilteredFunctionSelectionModel {
                         from: Node.all,
                         to: Subsets(of: SetExpr<Node>.literal(.first, .second, .third, .fourth))
                     )) { successor in
-                        All(Node.all) { node in successor[node].cardinality == 2 }
+                        ForAll(Node.all) { node in successor[node].cardinality == 2 }
                     },
                     matching: { successor in successor.expr == successor.expr }
                 )

@@ -30,20 +30,18 @@ package struct FiniteGraphCheckOutput: Sendable {
 }
 
 package struct FiniteGraphCheck: Sendable {
-  private let swiftExporter: SwiftGraphExporter
   private let tlcProcess: TLCProcessAdapter
 
   package init(
-    swiftExporter: SwiftGraphExporter = SwiftGraphExporter(),
     tlcProcess: TLCProcessAdapter = TLCProcessAdapter()
   ) {
-    self.swiftExporter = swiftExporter
     self.tlcProcess = tlcProcess
   }
 
   package func run(
-    compilation: CompiledSpecification,
+    nativeRun: () throws -> NativeModelRun,
     tlcRequest: TLCProcessRequest,
+    referenceConfiguration: TLCReferenceConfiguration,
     outputDirectory: URL
   ) -> FiniteGraphCheckOutput {
     let finiteGraphCase = tlcRequest.finiteGraphCase
@@ -71,7 +69,13 @@ package struct FiniteGraphCheck: Sendable {
       return .init(exitCode: .failure, evidenceDirectory: nil, comparison: nil, diagnostic: failure)
     }
 
+    let started = ContinuousClock.now
     var phase: FiniteGraphPhase = .preflight
+    func enter(_ next: FiniteGraphPhase) {
+      phase = next
+      let elapsed = started.duration(to: .now)
+      FileHandle.standardError.write(Data("finite-graph \(finiteGraphCase.id): \(next.rawValue) at \(elapsed)\n".utf8))
+    }
     var staging: URL?
     do {
       let directory = try createStagingDirectory(
@@ -81,41 +85,80 @@ package struct FiniteGraphCheck: Sendable {
       )
       staging = directory
 
-      phase = .swiftExport
-      let exploration = try ModelChecker(
-        compilation: compilation,
-        configuration: finiteGraphCase.exploration
-      ).explore()
-      let swiftRun = try swiftExporter.export(exploration, for: finiteGraphCase)
-      try CompletedGraphRunRecords.write(
+      enter(.swiftExport)
+      let native = try nativeRun()
+      let swiftRun = native.graph
+      try RetainedFiles.writeCanonical(native.checks, to: directory.appendingPathComponent("native-checks.json"))
+      try GraphRunRecords.write(
         swiftRun,
         to: directory.appendingPathComponent("swift-graph.jsonl")
       )
 
-      phase = .tlcExecution
-      let tlcCapture = try tlcProcess.capture(tlcRequest, retainingIn: directory)
+      enter(.tlcExecution)
+      try validateReference(tlcRequest)
+      let propertyCheck = TLCPropertyCheck(processAdapter: tlcProcess)
+      try RetainedFiles.writeText(tlcRequest.bundle.cfg,
+        to: directory.appendingPathComponent("reference-original.cfg"))
+      try referenceConfiguration.validateCoverage(native)
+      let referenceSource = TLCPropertySource.reference(tlcRequest.bundle, referenceConfiguration)
+      let referenceRequest = try tlcRequest.selecting(
+        bundle: referenceSource.bundle(for: native, checkingSatisfied: false),
+        work: tlcRequest.workingDirectory, runID: tlcRequest.runID, invocation: .finiteGraph)
+      let tlcCapture = try propertyCheck.captureGraph(native, request: referenceRequest,
+        source: referenceSource, in: directory)
 
-      phase = .tlcParsing
+      enter(.tlcParsing)
       let tlcRun = tlcCapture.graph
-      try CompletedGraphRunRecords.write(
+      try GraphRunRecords.write(
         tlcRun,
         to: directory.appendingPathComponent("tlc-graph.jsonl")
       )
 
-      phase = .comparison
-      let comparison = compareFiniteGraphs(tlc: tlcRun, swift: swiftRun)
+      enter(.comparison)
+      guard tlcRun.isComparable, swiftRun.isComparable else { throw TLCPropertyCheckError.incompleteGraph }
+      let reference = try propertyCheck.captureAll(
+        native, completeGraph: .success(tlcCapture), source: referenceSource,
+        in: directory.appendingPathComponent("reference"))
+      guard let comparison = reference.graphComparison else { throw TLCPropertyCheckError.incompleteGraph }
+      let generatedDirectory = directory.appendingPathComponent("generated")
+      let generatedWork = tlcRequest.workingDirectory.appendingPathComponent(UUID().uuidString)
+      try RetainedFiles.createDirectory(generatedWork, beneath: tlcRequest.workingDirectory)
+      defer { try? FileManager.default.removeItem(at: generatedWork) }
+      let generatedRequest = try tlcRequest.selecting(
+        bundle: native.rendered.tlaBundle(checking: [], checkDeadlock: false),
+        work: generatedWork, runID: UUID(), invocation: .finiteGraph)
+      let generated = try propertyCheck.captureGraph(native, request: generatedRequest,
+        source: .generated, in: generatedDirectory)
+      try GraphRunRecords.write(generated.graph, to: generatedDirectory.appendingPathComponent("tlc-graph.jsonl"))
+      guard generated.graph.isComparable else { throw TLCPropertyCheckError.incompleteGraph }
+      let results = try propertyCheck.captureAll(
+        native, completeGraph: .success(generated), source: .generated, in: directory)
+      guard let generatedComparison = results.graphComparison else { throw TLCPropertyCheckError.incompleteGraph }
+      let checks = Dictionary(uniqueKeysWithValues: results.checks.map {
+        ($0.check.artifactPath, (try? $0.result.get().status) ?? .unavailable)
+      } + reference.checks.map {
+        ("reference/" + $0.check.artifactPath, (try? $0.result.get().status) ?? .unavailable)
+      })
+      let exitCode: FiniteGraphExitCode
+      if checks.values.contains(.unavailable) {
+        exitCode = .failure
+      } else if comparison.matches && generatedComparison.matches && checks.values.allSatisfy({ $0 == .exact }) {
+        exitCode = .exact
+      } else {
+        exitCode = .semanticDifference
+      }
       try writeComparison(
-        comparison,
+        comparison, generatedComparison: generatedComparison, checks: checks, exitCode: exitCode,
         caseID: finiteGraphCase.id,
         swiftRun: swiftRun,
         tlcRun: tlcRun,
         to: directory
       )
 
-      phase = .publication
+      enter(.publication)
       try publish(staging: directory, to: outputDirectory)
       return .init(
-        exitCode: comparison.matches ? .exact : .semanticDifference,
+        exitCode: exitCode,
         evidenceDirectory: outputDirectory,
         comparison: comparison,
         diagnostic: nil
@@ -156,22 +199,37 @@ package struct FiniteGraphCheck: Sendable {
     }
   }
 
+  private func validateReference(_ request: TLCProcessRequest) throws {
+    try request.validateDeclaredBundle()
+    guard SHA256.hex(Data(request.bundle.tla.utf8)) == request.finiteGraphCase.moduleSHA256 else {
+      throw FiniteGraphCaseError.moduleDigestMismatch
+    }
+    guard SHA256.hex(Data(request.bundle.cfg.utf8)) == request.finiteGraphCase.cfgSHA256 else {
+      throw FiniteGraphCaseError.cfgDigestMismatch
+    }
+  }
+
   private func writeComparison(
     _ comparison: GraphComparison,
+    generatedComparison: GraphComparison,
+    checks: [String: PropertyComparisonStatus],
+    exitCode: FiniteGraphExitCode,
     caseID: String,
-    swiftRun: CompletedGraphRun,
-    tlcRun: CompletedGraphRun,
+    swiftRun: GraphRun,
+    tlcRun: GraphRun,
     to directory: URL
   ) throws {
     try RetainedFiles.writeJSON(
       [
         "caseID": caseID,
-        "result": comparison.matches ? "exact" : "difference",
-        "swiftComplete": swiftRun.isPassEligible,
-        "tlcComplete": tlcRun.isPassEligible,
+        "result": exitCode == .exact ? "exact" : (exitCode == .failure ? "unavailable" : "difference"),
+        "checks": checks.mapValues(\.rawValue),
+        "swiftComplete": swiftRun.isComplete,
+        "tlcComplete": tlcRun.isComplete,
         "swift": graphSummary(swiftRun.graph),
         "tlc": graphSummary(tlcRun.graph),
-        "differences": graphDifferencesJSON(comparison)
+        "differences": graphDifferencesJSON(comparison),
+        "generatedDifferences": graphDifferencesJSON(generatedComparison)
       ],
       to: directory.appendingPathComponent("comparison.json")
     )
@@ -181,7 +239,7 @@ package struct FiniteGraphCheck: Sendable {
     [
       "initialStates": graph.initialStateKeys.count,
       "states": graph.states.count,
-      "edges": graph.edgeOccurrences.values.reduce(0, +)
+      "edges": graph.edges.count
     ]
   }
 

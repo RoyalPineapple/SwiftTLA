@@ -15,7 +15,7 @@ package struct ChannelModel: Sendable {
 
         package static var defaultValue: Self { .d1 }
         package static let finiteValues = allCases
-        package var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .constant(rawValue) }
     }
 
     package struct ChannelFields {
@@ -49,46 +49,29 @@ package struct ChannelModel: Sendable {
     package static var spec: TLASpec {
         #spec("Channel") { scope in
             Extends(.naturals)
-            let channel = scope.sharedVar("channel", in: SetExpr<Record<ChannelSchema>>.literal(
+            let channel = scope.sharedVar("chan", in: SetExpr<Record<ChannelSchema>>.literal(
                 Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 0)),
-                Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 1)),
-                Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 0)),
                 Record.literal(.init(ChannelSchema.value, .d1), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 1)),
                 Record.literal(.init(ChannelSchema.value, .d2), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 0)),
-                Record.literal(.init(ChannelSchema.value, .d2), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 1)),
-                Record.literal(.init(ChannelSchema.value, .d2), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 0)),
                 Record.literal(.init(ChannelSchema.value, .d2), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 1)),
                 Record.literal(.init(ChannelSchema.value, .d3), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 0)),
-                Record.literal(.init(ChannelSchema.value, .d3), .init(ChannelSchema.ready, 0), .init(ChannelSchema.acknowledgement, 1)),
-                Record.literal(.init(ChannelSchema.value, .d3), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 0)),
                 Record.literal(.init(ChannelSchema.value, .d3), .init(ChannelSchema.ready, 1), .init(ChannelSchema.acknowledgement, 1))
             ))
 
             Invariant("TypeInvariant") {
-                (channel[ChannelSchema.value] == .d1
-                    || channel[ChannelSchema.value] == .d2
-                    || channel[ChannelSchema.value] == .d3)
-                    && channel[ChannelSchema.ready] >= 0 && channel[ChannelSchema.ready] <= 1
-                    && channel[ChannelSchema.acknowledgement] >= 0 && channel[ChannelSchema.acknowledgement] <= 1
+                Data.all.contains(channel[ChannelSchema.value])
+                    && IntRange(0, through: 1).contains(channel[ChannelSchema.ready])
+                    && IntRange(0, through: 1).contains(channel[ChannelSchema.acknowledgement])
             }
 
-            SwiftTLA.Action("Send") {
+            let data = ActionParameter("d", values: Data.finiteValues)
+            SwiftTLA.Action("Send", parameters: [data]) {
                 channel[ChannelSchema.ready] == channel[ChannelSchema.acknowledgement]
-                    && (channel.becomes(Record<ChannelSchema>.literal(
-                        .init(ChannelSchema.value, Data.d1),
+                    && channel.becomes(Record<ChannelSchema>.literal(
+                        .init(ChannelSchema.value, data),
                         .init(ChannelSchema.ready, 1 - channel[ChannelSchema.ready]),
                         .init(ChannelSchema.acknowledgement, channel[ChannelSchema.acknowledgement])
                     ))
-                    || channel.becomes(Record<ChannelSchema>.literal(
-                        .init(ChannelSchema.value, Data.d2),
-                        .init(ChannelSchema.ready, 1 - channel[ChannelSchema.ready]),
-                        .init(ChannelSchema.acknowledgement, channel[ChannelSchema.acknowledgement])
-                    ))
-                    || channel.becomes(Record<ChannelSchema>.literal(
-                        .init(ChannelSchema.value, Data.d3),
-                        .init(ChannelSchema.ready, 1 - channel[ChannelSchema.ready]),
-                        .init(ChannelSchema.acknowledgement, channel[ChannelSchema.acknowledgement])
-                    )))
             }
 
             SwiftTLA.Action("Rcv") {

@@ -4,48 +4,35 @@ import Testing
 struct CanonicalCorpusEntryTests {
     @Test("each canonical corpus model owns its compiled module closure")
     func corpusEntriesOwnCompiledModuleClosure() throws {
-        let voteProof = try #require(
-            CanonicalCorpus.entries.first { $0.id == "voteproof-upstream-port" }
-        )
-        let compilation = try voteProof.specification().compile()
-        #expect(compilation.renderedTLAModuleBundle().imports.map(\.name) == ["Consensus"])
-        #expect(voteProof.swiftConfiguration.tlaText.contains("INVARIANTS TypeOK VInv1 VInv2 VInv3 VInv4"))
-        #expect(voteProof.plusCalConfiguration.tlaText.contains("PROPERTIES Refines"))
-        try voteProof.validateConfigurationReferences(in: compilation)
-        let kvsnap = try #require(
-            CanonicalCorpus.entries.first { $0.id == "kvsnap-upstream-port" }
-        )
-        #expect(kvsnap.swiftConfiguration.tlaText == kvsnap.plusCalConfiguration.tlaText)
+        let voteProof = try #require(CanonicalCorpus.entries.first { $0.id == "voteproof-upstream-port" })
+        let rendered = try voteProof.specification().compile().render()
+        #expect(rendered.tlaBundle.imports.map(\.name) == ["Consensus"])
+        #expect(rendered.tlaBundle.cfg.contains("PROPERTY Refines\n"))
         #expect(CanonicalCorpus.entries.map(\.id) == [
             "boulanger-upstream-port", "kvsnap-upstream-port", "tlcmc-graph-1", "voteproof-upstream-port"
         ])
     }
 
-    @Test("corpus configuration checks are compiled declarations")
-    func configurationChecksHaveOneDeclaredOwner() throws {
+    @Test("corpus exports retain every compiled check in both backends")
+    func configurationIncludesAllDeclaredChecks() throws {
         for entry in CanonicalCorpus.entries {
-            try entry.validateConfigurationReferences(in: entry.specification().compile())
-        }
-
-        let invalid = CanonicalCorpusEntry(
-            id: "invalid",
-            specification: { BoulangerModel.spec },
-            swiftConfiguration: .init(checks: [.init("Missing", kind: .invariant)]),
-            plusCalConfiguration: .init()
-        )
-        do {
-            try invalid.validateConfigurationReferences(in: BoulangerModel.spec.compile())
-            Issue.record("Expected the invalid corpus configuration to be rejected")
-        } catch let error as CanonicalCorpusConfigurationError {
-            guard case let .unresolvedCheck(entryID, name, kind) = error else {
-                Issue.record("Expected an unresolved corpus check, got \(error)")
-                return
+            let compiled = try entry.specification().compile()
+            let rendered = try compiled.render()
+            let configuration = rendered.tlaBundle.cfg
+            let directives = Set(configuration.split(separator: "\n").map(String.init))
+            for name in compiled.description.invariants {
+                #expect(directives.contains("INVARIANT \(name)"))
             }
-            #expect(entryID == "invalid")
-            #expect(name == "Missing")
-            #expect(kind.rawValue == CanonicalCorpusCheck.Kind.invariant.rawValue)
-        } catch {
-            Issue.record("Expected a corpus configuration error, got \(error)")
+            for name in compiled.description.temporalProperties + compiled.description.refinements {
+                #expect(directives.contains("PROPERTY \(name)"))
+            }
+            if let constraint = compiled.description.stateConstraint {
+                #expect(directives.contains("CONSTRAINT \(constraint)"))
+            }
+            if !compiled.description.temporalProperties.isEmpty || !compiled.description.refinements.isEmpty {
+                #expect(!directives.contains { $0.hasPrefix("SYMMETRY ") })
+            }
+            #expect(try rendered.plusCalBundle().cfg == configuration)
         }
     }
 }

@@ -6,9 +6,9 @@ and maximum state count. Each completed graph supplies its observable states
 and labeled actions.
 
 ```text
-CompiledSpecification → SwiftGraphExporter → CompletedGraphRun ─┐
-                                                                ├→ GraphComparison
-pinned TLC bundle → TLCGraphReader → CompletedGraphRun ─────────┘
+Generated Swift machine → ReachabilityGraph → NativeModelRun ─┐
+                                                            ├→ GraphComparison + check results
+pinned TLC bundle → TLCGraphReader → GraphRun ────────────────┘
 ```
 
 ## Exact relation
@@ -18,11 +18,35 @@ pinned TLC bundle → TLCGraphReader → CompletedGraphRun ───────
 - observable variable and action names.
 - initial states.
 - complete states.
-- labeled edges with multiplicity.
+- labeled edges.
 - exploration outcome.
 
 Both graph runs must report complete exploration. A different record produces
 one structured `GraphDifference`.
+
+Native export retains every declared invariant, refinement, and temporal result,
+plus the requested deadlock check. Each failed check owns a validated canonical
+counterexample. `native-checks.json` preserves all results; it does not select
+only the first failure. The runner validates that the native result names and
+requested deadlock check exactly cover the rendered model's declarations.
+
+The pinned upstream TLA+ fixture still runs as an independent reference, and its
+complete graph must match native execution. The runner separately explores the
+DSL-generated TLA+ with property and deadlock checks disabled, retaining that
+complete graph in `generated/tlc-graph.jsonl`. This graph must also match native
+execution. Each declared property and requested deadlock check then runs independently,
+reusing that captured graph without dumping or parsing another graph. Each check
+must use the same rendered module and exploration configuration, changing only
+the selected checks; its counterexample must belong to the shared graph. Reports in `properties/<name>/` and `deadlock/`
+compare both verdicts and retain their counterexamples. Matching violations can
+establish agreement; a violation need not hide other checks or stop validation.
+A check that cannot finish or produces an unavailable result cannot pass, and
+does not skip subsequent checks.
+
+The root `comparison.json` records upstream and generated graph differences and
+every check's status. An incomplete upstream reference run remains a failure.
+These comparisons cover the declared finite configurations, not the full upstream
+corpus or a universal proof of correctness.
 
 ## TLC boundary
 
@@ -31,7 +55,7 @@ declares each finite case. The toolchain lock declares the TLC source commit,
 JAR digest, Java archive, and graph bridge digests.
 
 `TLCProcessAdapter` validates and stages the declared bundle. `TLCGraphReader`
-decodes TLC graph events into `CompletedGraphRun`. TLC is the independent
+decodes TLC graph events into `GraphRun`. TLC is the independent
 bounded oracle for the declared case.
 
 ## Run the hosted comparison
@@ -46,7 +70,7 @@ gh workflow run finite-graph.yml \
 ```
 
 The workflow artifact contains both graph streams, the TLC process output, and
-`comparison.json`. Read the first `GraphDifference` when a case differs.
+`comparison.json` and `native-checks.json`. Inspect graph differences and every native check when a case differs.
 
 ## Hosted result
 
@@ -56,6 +80,6 @@ attempt.
 
 | Exit | Result |
 | ---: | --- |
-| `0` | Every declared graph matches exactly. |
-| `1` | At least one complete graph differs. |
+| `0` | Every declared graph and all property/deadlock verdicts match. |
+| `1` | A complete graph or a property/deadlock verdict differs. |
 | `2` | At least one case cannot produce a complete comparison. |

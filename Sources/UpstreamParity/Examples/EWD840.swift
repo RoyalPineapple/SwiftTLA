@@ -93,6 +93,19 @@ package struct EWD840Model: Sendable {
                     && color.stays && tpos.stays && tcolor.stays
             }
 
+            SwiftTLA.Action("Deactivate_0") {
+                active[.zero] == true && active.becomes(active.updating(.zero, to: false))
+                    && color.stays && tpos.stays && tcolor.stays
+            }
+            SwiftTLA.Action("Deactivate_1") {
+                active[.one] == true && active.becomes(active.updating(.one, to: false))
+                    && color.stays && tpos.stays && tcolor.stays
+            }
+            SwiftTLA.Action("Deactivate_2") {
+                active[.two] == true && active.becomes(active.updating(.two, to: false))
+                    && color.stays && tpos.stays && tcolor.stays
+            }
+
             Invariant("TypeOK") {
                 tpos >= 0 && tpos < 3 && (tcolor == Color.white || tcolor == Color.black)
             }
@@ -102,7 +115,7 @@ package struct EWD840Model: Sendable {
 
 extension Example {
     package static let ewd840 = FiniteModelFixture(
-        expectedDistinct: 258,
+        expectedDistinct: 302,
         maximumStateLimit: 50_000,
         spec: EWD840Model.spec,
     )

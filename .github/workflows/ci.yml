@@ -12,19 +12,66 @@ concurrency:
 
 env:
   DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+  SWIFT_TLA_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
 jobs:
-  swift-tests:
+  swift-test-suites:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: ordinary
+            selection: --skip 'FiniteGraphCheckTests|UpstreamParityTests'
+          - suite: finite-graphs
+            selection: --filter FiniteGraphCheckTests
+          - suite: upstream
+            selection: --filter UpstreamParityTests
     runs-on: macos-15
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
 
       - name: Validate local validation lock contract
         run: bash Tests/Fixtures/LocalValidation/assert_lock.sh
 
       - name: Run complete Swift test suite
-        run: swift test -j 1 --no-parallel
+        run: |
+          mkdir -p .build/test-diagnostics
+          git rev-parse HEAD > .build/test-diagnostics/source-sha.txt
+          test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          (
+            while sleep 300; do
+              ps -axo pid,ppid,etime,%cpu,rss,command > ".build/test-diagnostics/$(date +%s)-processes.txt"
+              for pid in $(pgrep -f '[/]swiftpm-testing([[:space:]]|$)' || true); do
+                sample "$pid" 1 -file ".build/test-diagnostics/$(date +%s)-$pid.txt" || true
+              done
+            done
+          ) &
+          sampler=$!
+          trap 'kill "$sampler" 2>/dev/null || true' EXIT
+          swift test -Xswiftc -warnings-as-errors -j 1 --no-parallel ${{ matrix.selection }}
+
+      - name: Retain Swift test stack samples
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: swift-test-diagnostics-${{ matrix.suite }}-${{ env.SWIFT_TLA_SHA }}
+          path: .build/test-diagnostics
+          if-no-files-found: error
+          retention-days: 14
+
+  swift-tests:
+    needs: swift-test-suites
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      SWIFT_TEST_RESULT: ${{ needs.swift-test-suites.result }}
+    steps:
+      - name: Require every Swift test suite to pass
+        run: test "$SWIFT_TEST_RESULT" = success
 
   apple-platform-examples:
     runs-on: macos-15
@@ -32,7 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.SWIFT_TLA_SHA }}
 
       - id: adoption-source
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -47,13 +94,13 @@ jobs:
         working-directory: Examples/ApplePlatformExamples
         run: |
           set -o pipefail
-          xcodebuild -scheme av-pipeline-example -destination 'platform=macOS' -jobs 1 build | tee .build/adoption-evidence/camera-executable-build.log
+          xcodebuild SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO -scheme av-pipeline-example -destination 'platform=macOS' -jobs 1 build | tee .build/adoption-evidence/camera-executable-build.log
 
       - name: Run camera adoption contracts
         working-directory: Examples/ApplePlatformExamples
         run: |
           set -o pipefail
-          xcodebuild test -scheme ApplePlatformExamples-Package -destination 'platform=macOS,arch=arm64' -only-testing:ApplePlatformExamplesTests/GeneratedAppleModelTests -only-testing:ApplePlatformExamplesTests/CameraAdoptionProofTests -parallel-testing-enabled NO -parallel-testing-worker-count 1 -jobs 1 -resultBundlePath .build/adoption-evidence/camera-adoption-contracts.xcresult | tee .build/adoption-evidence/camera-adoption-contracts.log
+          xcodebuild test SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO -scheme ApplePlatformExamples-Package -destination 'platform=macOS,arch=arm64' -only-testing:ApplePlatformExamplesTests/GeneratedAppleModelTests -only-testing:ApplePlatformExamplesTests/CameraAdoptionProofTests -parallel-testing-enabled NO -parallel-testing-worker-count 1 -jobs 1 -resultBundlePath .build/adoption-evidence/camera-adoption-contracts.xcresult | tee .build/adoption-evidence/camera-adoption-contracts.log
 
       - name: Verify complete Apple-platform adoption evidence
         working-directory: Examples/ApplePlatformExamples
@@ -86,7 +133,7 @@ jobs:
 
       - name: Build SwiftUI demo app
         working-directory: Examples/SwiftTLADemoApp
-        run: xcodebuild build -scheme SwiftTLADemoApp -destination 'platform=macOS,arch=arm64' -jobs 1
+        run: xcodebuild build SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO -scheme SwiftTLADemoApp -destination 'platform=macOS,arch=arm64' -jobs 1
 
   canonical-corpus-export:
     runs-on: macos-15
@@ -94,13 +141,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.SWIFT_TLA_SHA }}
 
       - id: corpus-source
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Build canonical corpus exporter
-        run: swift build --product canonical-corpus-export -j 1
+        run: swift build -Xswiftc -warnings-as-errors --product canonical-corpus-export -j 1
 
       - name: Export canonical upstream corpus
         run: |

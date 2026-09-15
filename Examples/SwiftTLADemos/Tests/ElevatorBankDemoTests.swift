@@ -6,29 +6,29 @@ struct ElevatorBankDemoTests {
     @Test("Elevator bank machine boards, moves, and exits one rider")
     func machineBoardsMovesAndExits() throws {
         var machine = try ElevatorBank.makeMachine()
-        #expect(machine.state.cars[.carA]?.value(for: ElevatorBank.CarSchema.floor) == .one)
-        #expect(machine.state.cars[.carA]?.value(for: ElevatorBank.CarSchema.door) == .closed)
-        #expect(machine.state.cars[.carA]?.value(for: ElevatorBank.CarSchema.rider) == ElevatorBank.Rider.none)
-        #expect(machine.state.riders[.alice]?.value(for: ElevatorBank.RiderSchema.phase) == .waiting)
+        #expect(machine.state.cars[.carA]?.floor == .one)
+        #expect(machine.state.cars[.carA]?.door == .closed)
+        #expect(machine.state.cars[.carA]?.rider == ElevatorBank.Rider.none)
+        #expect(machine.state.riders[.alice]?.phase == .waiting)
 
         _ = try machine.send(.operate(process: .carA))
-        #expect(machine.state.cars[.carA]?.value(for: ElevatorBank.CarSchema.door) == .open)
+        #expect(machine.state.cars[.carA]?.door == .open)
 
         _ = try machine.send(.operate(process: .carA))
-        #expect(machine.state.cars[.carA]?.value(for: ElevatorBank.CarSchema.door) == .closed)
-        #expect(machine.state.cars[.carA]?.value(for: ElevatorBank.CarSchema.rider) == .alice)
-        #expect(machine.state.riders[.alice]?.value(for: ElevatorBank.RiderSchema.phase) == .onboard)
+        #expect(machine.state.cars[.carA]?.door == .closed)
+        #expect(machine.state.cars[.carA]?.rider == .alice)
+        #expect(machine.state.riders[.alice]?.phase == .onboard)
 
         _ = try machine.send(.operate(process: .carA))
-        #expect(machine.state.cars[.carA]?.value(for: ElevatorBank.CarSchema.floor) == .two)
+        #expect(machine.state.cars[.carA]?.floor == .two)
         _ = try machine.send(.operate(process: .carA))
-        #expect(machine.state.cars[.carA]?.value(for: ElevatorBank.CarSchema.floor) == .three)
+        #expect(machine.state.cars[.carA]?.floor == .three)
 
         _ = try machine.send(.operate(process: .carA))
-        #expect(machine.state.cars[.carA]?.value(for: ElevatorBank.CarSchema.door) == .open)
+        #expect(machine.state.cars[.carA]?.door == .open)
         _ = try machine.send(.operate(process: .carA))
-        #expect(machine.state.cars[.carA]?.value(for: ElevatorBank.CarSchema.rider) == ElevatorBank.Rider.none)
-        #expect(machine.state.cars[.carA]?.value(for: ElevatorBank.CarSchema.door) == .closed)
-        #expect(machine.state.riders[.alice]?.value(for: ElevatorBank.RiderSchema.phase) == .arrived)
+        #expect(machine.state.cars[.carA]?.rider == ElevatorBank.Rider.none)
+        #expect(machine.state.cars[.carA]?.door == .closed)
+        #expect(machine.state.riders[.alice]?.phase == .arrived)
     }
 }

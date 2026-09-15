@@ -1,11 +1,13 @@
 /// One formal value that may have either of two declared shapes.
 ///
 /// `OneOf` preserves the underlying TLA+ value representation. Use
-/// `assumingFirst(_:)` or `assumingSecond(_:)` where the algorithm's control
+/// `assuming(_:)` where the algorithm's control
 /// flow establishes the expected shape.
 public enum OneOf<First: TLAValueType, Second: TLAValueType>: TLAValueType, Sendable {
     case first(First)
     case second(Second)
+
+    public static var formalValueShape: FormalValueShape { .union(First.formalValueShape, Second.formalValueShape) }
 
     public static var defaultValue: Self { .first(First.defaultValue) }
 
@@ -27,33 +29,22 @@ public enum OneOf<First: TLAValueType, Second: TLAValueType>: TLAValueType, Send
     }
 
     /// Lifts a symbolic value into the first formal alternative.
-    public static func first(_ value: Expr<First>) -> Expr<Self> {
-        Expr(value.raw)
+    public static func first(_ value: some TypedExpression<First>) -> Expr<Self> {
+        Expr(value.stateExpr)
     }
 
     /// Lifts a symbolic value into the second formal alternative.
-    public static func second(_ value: Expr<Second>) -> Expr<Self> {
-        Expr(value.raw)
+    public static func second(_ value: some TypedExpression<Second>) -> Expr<Self> {
+        Expr(value.stateExpr)
     }
 }
 
 extension OneOf: Equatable where First: Equatable, Second: Equatable {}
 
-extension Expr {
-    /// Views a formal union as a known alternative in this control path.
-    ///
-    /// The resulting expression retains the same TLA+ value. The surrounding
-    /// control region establishes the asserted formal shape.
-    public func assumingFirst<Value: TLAValueType, Other: TLAValueType>(
-        _ type: Value.Type
-    ) -> Expr<Value> where T == OneOf<Value, Other> {
-        Expr<Value>(raw)
-    }
-
-    /// Views a formal union as its second known alternative.
-    public func assumingSecond<First: TLAValueType, Value: TLAValueType>(
-        _ type: Value.Type
-    ) -> Expr<Value> where T == OneOf<First, Value> {
-        Expr<Value>(raw)
+extension TypedExpression {
+    /// Checks that the formal value has the requested shape before exposing it
+    /// through a typed expression. A mismatched value fails during execution.
+    public func assuming<Expected: TLAValueType>(_ type: Expected.Type) -> Expr<Expected> {
+        Expr<Expected>(.assertView(stateExpr, Expected.formalValueShape))
     }
 }

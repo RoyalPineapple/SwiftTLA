@@ -75,52 +75,53 @@ package struct DiningPhilosophersModel: Sendable {
                                     If(philosopher == Philosopher.four, then: Philosopher.three, else: Philosopher.four))))
                         let leftFork = forks[philosopher]
                         let rightFork = forks[right]
-                        let canEat = leftFork[Fork.holder] == philosopher
+                        Let(leftFork[Fork.holder] == philosopher
                             && rightFork[Fork.holder] == philosopher
                             && leftFork[Fork.clean] == true
-                            && rightFork[Fork.clean] == true
+                            && rightFork[Fork.clean] == true) { canEat in
 
-                        Either {
-                            When(leftFork[Fork.holder] == philosopher && leftFork[Fork.clean] == false)
-                            Assign(forks, to: forks.updating(
-                                philosopher,
-                                to: Record.literal(
-                                    .init(Fork.holder, left),
-                                    .init(Fork.clean, true)
-                                )
-                            ))
-                        } or: {
                             Either {
-                                When(
-                                    rightFork[Fork.holder] == philosopher
-                                        && rightFork[Fork.clean] == false
-                                        && !(leftFork[Fork.holder] == philosopher && leftFork[Fork.clean] == false)
-                                )
+                                When(leftFork[Fork.holder] == philosopher && leftFork[Fork.clean] == false)
                                 Assign(forks, to: forks.updating(
-                                    right,
+                                    philosopher,
                                     to: Record.literal(
-                                        .init(Fork.holder, right),
+                                        .init(Fork.holder, left),
                                         .init(Fork.clean, true)
                                     )
                                 ))
                             } or: {
-                                When(
-                                    !(leftFork[Fork.holder] == philosopher && leftFork[Fork.clean] == false)
-                                        && !(rightFork[Fork.holder] == philosopher && rightFork[Fork.clean] == false)
-                                )
+                                Either {
+                                    When(
+                                        rightFork[Fork.holder] == philosopher
+                                            && rightFork[Fork.clean] == false
+                                            && !(leftFork[Fork.holder] == philosopher && leftFork[Fork.clean] == false)
+                                    )
+                                    Assign(forks, to: forks.updating(
+                                        right,
+                                        to: Record.literal(
+                                            .init(Fork.holder, right),
+                                            .init(Fork.clean, true)
+                                        )
+                                    ))
+                                } or: {
+                                    When(
+                                        !(leftFork[Fork.holder] == philosopher && leftFork[Fork.clean] == false)
+                                            && !(rightFork[Fork.holder] == philosopher && rightFork[Fork.clean] == false)
+                                    )
+                                }
                             }
-                        }
 
-                        Either {
-                            When(canEat && hungry == true)
-                            Goto(Step.eat)
-                        } or: {
                             Either {
-                                When(!canEat && hungry == true)
-                                Goto(Step.loop)
+                                When(canEat && hungry == true)
+                                Goto(Step.eat)
                             } or: {
-                                When(hungry == false)
-                                Goto(Step.think)
+                                Either {
+                                    When(!canEat && hungry == true)
+                                    Goto(Step.loop)
+                                } or: {
+                                    When(hungry == false)
+                                    Goto(Step.think)
+                                }
                             }
                         }
                     }
@@ -157,8 +158,8 @@ package struct DiningPhilosophersModel: Sendable {
                 })
 
                 Invariant("ExclusiveAccess") {
-                    All(Philosopher.all) { first in
-                        All(Philosopher.all) { second in
+                    ForAll(Philosopher.all) { first in
+                        ForAll(Philosopher.all) { second in
                             first == second
                                 || !(At(Step.eat, first) && At(Step.eat, second)
                                     && ((first == Philosopher.one && second == Philosopher.two)

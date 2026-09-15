@@ -1,30 +1,94 @@
-import Foundation
-import SwiftParser
-import SwiftSyntax
+import os
 @testable import SwiftTLA
 import Testing
-import UpstreamParity
 
 @Suite(.serialized)
 struct LivenessCheckerTests {
-  @Test("SCC decomposition finds one twelve-state cycle")
-  func singleCycleSCC() throws {
-    let compilation = try Example.hourClock.spec.compile()
-    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
-    let sccs = lc.computeSCCs()
-    #expect(sccs.count == 1)
-    #expect(sccs[0].count == 12)
+  @Test("deep transition graphs do not consume the call stack")
+  func deepTransitionGraph() throws {
+    let count = 20_000
+    let states = Set(0...count)
+    let transitions = Dictionary(uniqueKeysWithValues: (0...count).map { state in
+      (state, [GraphEdge(source: state, action: 0, target: state == count ? 1 : state + 1)])
+    })
+    let checker = LivenessChecker<Int, Int, Int>(states: states, transitions: transitions,
+      fairness: [], matches: { $0 == $1 }, actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+    let result = try checker.analyze(.always { _ in true }, initialStates: [0], renderScope: { _ in "step" })
+    #expect(result.status == .satisfied)
+    #expect(result.witness == nil)
+    #expect(Set(result.fairComponents) == [Set([0]), Set(1...count)])
   }
 
-  @Test("Terminal SCC detection works")
-  func terminalSCC() throws {
-    let compilation = try Example.hourClock.spec.compile()
-    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let lc = LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
-    let sccs = lc.computeSCCs()
-    let terminals = lc.terminalSCCs(from: sccs)
-    #expect(terminals.count == 1)
+  @Test("impossible counterexamples retain fairness diagnostics without searching cycles")
+  func skipsImpossibleCounterexampleSearch() throws {
+    let matchCount = OSAllocatedUnfairLock(initialState: 0)
+    let checker = LivenessChecker<Int, Int, Int>(states: [0, 1], transitions: [
+      0: [.init(source: 0, action: 1, target: 1)],
+      1: [.init(source: 1, action: 1, target: 0)]
+    ], fairness: [(scope: 1, isStrong: false)], matches: { action, scope in
+      matchCount.withLock { $0 += 1 }
+      return action == scope
+    }, actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+    let properties: [TemporalCondition<@Sendable (Int) throws -> Bool>] = [
+      .always { _ in true },
+      .eventuallyAlways { _ in true },
+      .leadsTo({ _ in false }, { _ in false })
+    ]
+    for property in properties {
+      matchCount.withLock { $0 = 0 }
+      let result = try checker.analyze(property, initialStates: [0], renderScope: { _ in "step" })
+      #expect(result.status == .satisfied)
+      #expect(result.witness == nil)
+      #expect(result.fairComponents == [Set([0, 1])])
+      #expect(result.enabledActions == ["step": [0: true, 1: true]])
+      // One match establishes that the component is fair; no cycle search is needed.
+      #expect(matchCount.withLock { $0 } == 1)
+    }
+  }
+
+  @Test("fairness enabledness is computed once across property checks")
+  func sharesFairnessEnabledness() throws {
+    let first = "first"
+    let second = "second"
+    let matchCount = OSAllocatedUnfairLock(initialState: 0)
+    let checker = LivenessChecker<String, Int, Int>(states: [first, second], transitions: [
+      first: [GraphEdge(source: first, action: 1, target: second)],
+      second: [GraphEdge(source: second, action: 1, target: first)]
+    ], fairness: [(scope: 1, isStrong: false)], matches: { action, scope in
+      matchCount.withLock { $0 += 1 }
+      return action == scope
+    }, actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+    #expect(matchCount.withLock { $0 } == 2)
+    for _ in 0..<2 {
+      let result = try checker.analyze(.eventually { _ in true },
+        initialStates: [first], renderScope: { _ in "step" })
+      #expect(result.status == .satisfied)
+    }
+    #expect(matchCount.withLock { $0 } == 2)
+  }
+
+  @Test("refinement cycle filtering preserves concrete fairness and unrestricted prefixes", arguments: [false, true])
+  func refinementFairnessCycle(_ strongConcreteFairness: Bool) throws {
+    let checker = LivenessChecker<String, String, String>(states: ["start", "on", "off", "exit"], transitions: [
+      "start": [.init(source: "start", action: "enter", target: "on")],
+      "on": [.init(source: "on", action: "leave", target: "exit"),
+             .init(source: "on", action: "toggle", target: "off")],
+      "off": [.init(source: "off", action: "toggle", target: "on")],
+      "exit": []
+    ], fairness: [(scope: "leave", isStrong: strongConcreteFairness)], matches: { $0 == $1 },
+      actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+    for strongAbstractFairness in [false, true] {
+      let witness = checker.fairnessViolation(initialStates: ["start"],
+        isStrong: strongAbstractFairness, enabledStates: ["on"],
+        takesAction: { $0 == "start" || $1 == "exit" })
+      if strongAbstractFairness && !strongConcreteFairness {
+        let trace = try #require(witness)
+        #expect(trace.prefix.first == "start")
+        #expect(Set(trace.cycle) == ["on", "off"])
+      } else {
+        #expect(witness == nil)
+      }
+    }
   }
 
   @Test("Eventually holds when the target belongs to a fair cycle")
@@ -42,8 +106,7 @@ struct LivenessCheckerTests {
     }
     let compilation = try spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let results = try LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
-      .analyze(initialStateIDs: exploration.initialStateIDs)
+    let results = try exploration.analyzeTemporalProperties(in: compilation)
     #expect(results.map(\.status) == [.satisfied])
   }
 
@@ -60,8 +123,7 @@ struct LivenessCheckerTests {
     }
     let compilation = try spec.compile()
     let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let results = try LivenessChecker(compilation: compilation, graph: exploration.graph, states: exploration.compiledStates)
-      .analyze(initialStateIDs: exploration.initialStateIDs)
+    let results = try exploration.analyzeTemporalProperties(in: compilation)
     #expect(results.map(\.status) == [.violated])
   }
 
@@ -88,10 +150,8 @@ struct LivenessCheckerTests {
     }
     let weakCompilation = try weakSpec.compile()
     let exploration = try ModelChecker(compilation: weakCompilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
-    let initialStateIDs = exploration.initialStateIDs
     let weak = try #require(
-      LivenessChecker(compilation: weakCompilation, graph: exploration.graph, states: exploration.compiledStates)
-        .analyze(initialStateIDs: initialStateIDs).first
+      exploration.analyzeTemporalProperties(in: weakCompilation).first
     )
     let strongCompilation = try strongSpec.compile()
     let strongExploration = try ModelChecker(
@@ -99,11 +159,7 @@ struct LivenessCheckerTests {
       configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
     ).explore()
     let strong = try #require(
-      LivenessChecker(
-        compilation: strongCompilation,
-        graph: strongExploration.graph,
-        states: strongExploration.compiledStates
-      ).analyze(initialStateIDs: strongExploration.initialStateIDs).first
+      strongExploration.analyzeTemporalProperties(in: strongCompilation).first
     )
     let xToken = try #require(TLAStateProjection.Token(validating: "x"))
     let cycle = Set(exploration.graph.states.compactMap { id, projection in

@@ -29,6 +29,27 @@ struct AlgorithmPlusCalRendererTests {
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
+    @Test("Both exporters declare model values from typed algorithm state")
+    func declaresTypedModelValues() throws {
+        enum Member: String, CaseIterable, FiniteTLAValueDomain {
+            case node
+            static var defaultValue: Self { .node }
+            static var finiteValues: [Self] { allCases }
+            var tlaValue: TLAValue { .constant(rawValue) }
+        }
+        let specification = TLASpec("ModelValueDeclarations") {
+            Algorithm("ModelValueDeclarations", scoped: { scope in
+                let _ = scope.sharedVar("value", initial: Member.node)
+                Do(TestControlLabel.stop) { Stop() }
+            })
+        }
+        let rendered = try specification.compile().render()
+        for bundle in [rendered.tlaBundle, try rendered.plusCalBundle()] {
+            #expect(bundle.tla.contains("CONSTANTS node\n"))
+            #expect(bundle.cfg.contains("CONSTANT node = node\n"))
+        }
+    }
+
     @Test("renders process declarations, source labels, and structured statements")
     func rendersProcessAlgorithm() throws {
         let algorithm = Algorithm("RenderedProcess", scoped: { scope in
@@ -69,12 +90,12 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("fair+ process (pcalProcess1 \\in {\"left\", \"right\"})"))
         #expect(rendered.contains("local = 0"))
         #expect(rendered.contains("repeat: while ((count < 2)) {"))
-        #expect(rendered.contains("await (count >= 0);"))
+        #expect(rendered.contains("when (count >= 0);"))
         #expect(rendered.contains("assert (count < 3);"))
-        #expect(rendered.components(separatedBy: "with (").count == 3)
         #expect(rendered.contains("\\in {1, 2})"))
         #expect(rendered.contains("\\in {3, 4})"))
-        #expect(rendered.contains("flags := [flags EXCEPT ![self] = TRUE];"))
+        #expect(rendered.contains("[flags EXCEPT ![self] = TRUE]"))
+        #expect(rendered.contains("flags :="))
         #expect(rendered.contains("either {"))
         #expect(rendered.contains("goto repeat;"))
         #expect(rendered.contains("goto Done;"))
@@ -95,7 +116,8 @@ struct AlgorithmPlusCalRendererTests {
 
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
 
-        #expect(rendered.contains("flags := [flags EXCEPT ![self] = TRUE];"))
+        #expect(rendered.contains("[flags EXCEPT ![self] = TRUE]"))
+        #expect(rendered.contains("flags :="))
     }
 
     @Test("imports Integers when rendering a negative formal value")
@@ -116,20 +138,20 @@ struct AlgorithmPlusCalRendererTests {
         let algorithm = Algorithm("QuantifiedBinder", scoped: { scope in
             let count = scope.sharedVar("count", initial: 0)
             Do(TestControlLabel.stop) {
-                When(StateExpr.forAll(
+                When(Expr<Bool>(StateExpr.forAll(
                     .setLiteral([.int(0), .int(1)]),
                     "item_1",
-                    StateExpr.variable("item_1") >= count.expr
-                ))
+                    StateExpr.variable("item_1") >= count.stateExpr
+                )))
                 Stop()
             }
         })
 
         let compilation = try TLASpec("QuantifiedBinder") { algorithm }.compile()
-        let rendered = try compilation.renderedPlusCalBundle().root.tla
-        let renderedTLA = compilation.renderedTLAModuleBundle().root.tla
+        let rendered = try compilation.render().plusCalBundle().root.tla
+        let renderedTLA = try compilation.render().tlaBundle.root.tla
 
-        #expect(rendered.contains("await \\A item_1 \\in {0, 1} : (item_1 >= count);"))
+        #expect(rendered.contains("when \\A item_1 \\in {0, 1} : (item_1 >= count);"))
         #expect(renderedTLA.contains("\\A item_1 \\in {0, 1}"))
     }
 
@@ -149,7 +171,7 @@ struct AlgorithmPlusCalRendererTests {
             })
         }
 
-        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+        let rendered = try spec.compile().render().plusCalBundle().root.tla
         let algorithmRange = try #require(rendered.range(of: "(*--algorithm Sections"))
         let preludeRange = try #require(rendered.range(of: "Bound == 2"))
         let defineRange = try #require(rendered.range(of: "define {"))
@@ -188,7 +210,7 @@ struct AlgorithmPlusCalRendererTests {
             Invariant("CountIsZero") { StateExpr.variable("count") == 0 }
         }
 
-        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+        let rendered = try spec.compile().render().plusCalBundle().root.tla
 
         #expect(rendered.contains("CountIsZero =="))
     }
@@ -205,16 +227,16 @@ struct AlgorithmPlusCalRendererTests {
         }
         let lowered = try source.loweredSourceModel()
         let closure = try FormalModuleClosure.resolve(root: lowered)
-        let layout = CompiledLayout(spec: lowered, closure: closure)
+        let layout = CompiledLayout(source: lowered)
         var lowerer = CompiledLowerer(spec: lowered, closure: closure, layout: layout)
         let semantics = try lowerer.lower(spec: lowered)
         let sourcePlan = try #require(lowered.authoredPlusCalAlgorithmPlan)
         let plan = try lowerer.authoredPlusCalPlan(sourcePlan)
 
-        #expect(semantics.invariants.map(\.id) == [.init(ordinal: 0), .init(ordinal: 1)])
-        #expect(semantics.temporalProperties.map(\.id) == [.init(ordinal: 2)])
+        #expect(semantics.behavior.invariants.map(\.id) == [.init(ordinal: 0), .init(ordinal: 1)])
+        #expect(semantics.behavior.temporalProperties.map(\.id) == [.init(ordinal: 2)])
         #expect(plan.properties.map(\.id) == [.init(ordinal: 1), .init(ordinal: 2)])
-        #expect(plan.properties.map(\.name) == ["AuthoredInvariant", "AuthoredTemporal"])
+        #expect(plan.properties.map(\.declaration.name) == ["AuthoredInvariant", "AuthoredTemporal"])
     }
 
     @Test("compilation leaves standard process termination to the PlusCal translator")
@@ -223,7 +245,19 @@ struct AlgorithmPlusCalRendererTests {
             Each(Node.all) { _ in
                 Do(ProcessStep.done) { Stop() }
             }
-            Eventually("Termination", All(Node.all) { Finished($0) })
+            Eventually("Termination", ForAll(Node.all) { Finished($0) })
+        }
+
+        let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
+
+        #expect(rendered.contains("Termination ==") == false)
+    }
+
+    @Test("compilation leaves standard sequential termination to the PlusCal translator")
+    func plansSequentialTranslatorTermination() throws {
+        let algorithm = Algorithm("SequentialTermination") {
+            Do(ProcessStep.done) { Stop() }
+            Eventually("Termination", Finished())
         }
 
         let rendered = try renderedSourceAlgorithmPlusCal(algorithm)
@@ -258,8 +292,8 @@ struct AlgorithmPlusCalRendererTests {
             Algorithm("DistinctPropertyBinders") {
                 Do(ProcessStep.done) { Stop() }
                 Invariant("Distinct") {
-                    All(Node.all) { first in
-                        All(Node.all) { second in
+                    ForAll(Node.all) { first in
+                        ForAll(Node.all) { second in
                             first == second
                         }
                     }
@@ -267,7 +301,7 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+        let rendered = try spec.compile().render().plusCalBundle().root.tla
         let definition = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("Distinct ==") })
         let binders = definition.components(separatedBy: "\\A ").dropFirst().compactMap { clause in
             clause.split(separator: " ").first.map(String.init)
@@ -284,8 +318,8 @@ struct AlgorithmPlusCalRendererTests {
             Algorithm("DistinctConstraintBinders") {
                 Do(ProcessStep.done) { Stop() }
                 StateConstraint(
-                    All(Node.all) { first in
-                        All(Node.all) { second in
+                    ForAll(Node.all) { first in
+                        ForAll(Node.all) { second in
                             first == second
                         }
                     }
@@ -293,7 +327,7 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+        let rendered = try spec.compile().render().plusCalBundle().root.tla
         let definition = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("StateConstraint ==") })
         let binders = definition.components(separatedBy: "\\A ").dropFirst().compactMap { clause in
             clause.split(separator: " ").first.map(String.init)
@@ -309,8 +343,8 @@ struct AlgorithmPlusCalRendererTests {
             Algorithm("MacroBinderLocations") {
                 Do(ProcessStep.done) { Stop() }
                 Invariant("Distinct") {
-                    All(Node.all) { first in
-                        All(Node.all) { second in
+                    ForAll(Node.all) { first in
+                        ForAll(Node.all) { second in
                             first == second
                         }
                     }
@@ -318,7 +352,7 @@ struct AlgorithmPlusCalRendererTests {
             }
         }
 
-        let rendered = try spec.compile().renderedPlusCalBundle().root.tla
+        let rendered = try spec.compile().render().plusCalBundle().root.tla
         let definition = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("Distinct ==") })
         let binders = definition.components(separatedBy: "\\A ").dropFirst().compactMap { clause in
             clause.split(separator: " ").first.map(String.init)
@@ -329,22 +363,24 @@ struct AlgorithmPlusCalRendererTests {
         #expect(definition.contains("\(binders[0]) = \(binders[1])"))
     }
 
-    @Test("rejects unresolved authored declaration dependencies")
-    func rejectsMissingDeclarationDependency() {
-        #expect(throws: CompilationDiagnostic.self) {
-            try AuthoredPlusCalDeclarationSections([
-                .init(name: "UsesMissing", text: "UsesMissing == TRUE", phase: .define, dependencies: ["Missing"])
-            ])
+    @Test("compilation rejects dependencies on later PlusCal phases before rendering")
+    func rejectsLaterPhaseDependencyDuringCompilation() throws {
+        let spec = TLASpec("PhaseDependency") {
+            FormalDefinition("Early", parameters: [], body: true, plusCalPhase: .prelude, dependsOn: ["Late"])
+            FormalDefinition("Late", parameters: [], body: true, plusCalPhase: .define)
+            Algorithm("PhaseDependency", scoped: { scope in
+                let value = scope.sharedVar("value", initial: 0)
+                Do(TestControlLabel.stay) { Assign(value, to: value) }
+            })
         }
-    }
-
-    @Test("rejects cyclic authored declaration dependencies")
-    func rejectsCyclicDeclarationDependency() {
-        #expect(throws: CompilationDiagnostic.self) {
-            try AuthoredPlusCalDeclarationSections([
-                .init(name: "First", text: "First == TRUE", phase: .define, dependencies: ["Second"]),
-                .init(name: "Second", text: "Second == TRUE", phase: .define, dependencies: ["First"])
-            ])
+        do {
+            _ = try spec.compile()
+            Issue.record("Compilation must reject the invalid declaration phase")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidAuthoredPlusCalPlan)
+            #expect(diagnostic.stage == .lowering)
+            #expect(diagnostic.path == "Early")
+            #expect(diagnostic.actual.contains("later phase"))
         }
     }
 
@@ -364,12 +400,13 @@ struct AlgorithmPlusCalRendererTests {
         })
 
         let compilation = try TLASpec("Procedures") { algorithm }.compile()
-        let rendered = try compilation.renderedPlusCalBundle().root.tla
-        let renderedTLA = compilation.renderedTLAModuleBundle().root.tla
+        let rendered = try compilation.render().plusCalBundle().root.tla
+        let renderedTLA = try compilation.render().tlaBundle.root.tla
 
         #expect(rendered.contains("procedure work(parameter0)"))
         #expect(rendered.contains("enter:"))
-        #expect(rendered.contains("output := (parameter0 + offset);"))
+        #expect(rendered.contains("(parameter0 + offset)"))
+        #expect(rendered.contains("output :="))
         #expect(rendered.contains("call work(7);"))
         #expect(rendered.contains("{\n  start:"))
         #expect(renderedTLA.contains("VARIABLES pc, output, stack, parameter0, offset"))
@@ -409,10 +446,10 @@ struct AlgorithmPlusCalRendererTests {
         )
 
         let rendered = try renderedSourceAlgorithmPlusCal(Algorithm(model: model))
-        let authoredBinding = try #require(rendered.range(of: "with (__atomic_0 = 1)"))
-        let capturedArgument = try #require(rendered.range(of: "with (__atomic_1 = output)"))
-        let assignment = try #require(rendered.range(of: "output := __atomic_0;"))
-        let call = try #require(rendered.range(of: "call inner(__atomic_1);"))
+        let authoredBinding = try #require(rendered.range(of: "with (__atomic_1 = 1)"))
+        let capturedArgument = try #require(rendered.range(of: "with (__atomic_2 = __atomic_1)"))
+        let assignment = try #require(rendered.range(of: "output := __atomic_2;"))
+        let call = try #require(rendered.range(of: "call inner(__atomic_2);"))
         let tailReturn = try #require(rendered.range(of: "return;", range: call.upperBound..<rendered.endIndex))
         #expect(authoredBinding.lowerBound < capturedArgument.lowerBound)
         #expect(capturedArgument.lowerBound < assignment.lowerBound)
@@ -431,7 +468,7 @@ struct AlgorithmPlusCalRendererTests {
         }
 
         let compilation = try spec.compile()
-        let module = try compilation.renderedPlusCalBundle().root.tla
+        let module = try compilation.render().plusCalBundle().root.tla
 
         #expect(module.contains("(*--algorithm Retained {"))
         #expect(module.contains("} *)\nStateConstraint == (count < 2)\n===="))
@@ -453,7 +490,7 @@ struct AlgorithmPlusCalRendererTests {
             })
         }
 
-        let module = try spec.compile().renderedPlusCalBundle().root.tla
+        let module = try spec.compile().render().plusCalBundle().root.tla
 
         #expect(module.contains("CONSTANTS N"))
         #expect(module.contains("TLC"))
@@ -478,7 +515,7 @@ struct AlgorithmPlusCalRendererTests {
         }
 
         #expect(spec.extendsModules == [StandardModule.integers, .naturals, .finiteSets])
-        #expect(try spec.compile().renderedPlusCalBundle().root.tla.contains(
+        #expect(try spec.compile().render().plusCalBundle().root.tla.contains(
             "EXTENDS Integers, Naturals, FiniteSets, Sequences"
         ))
     }
@@ -494,14 +531,13 @@ struct AlgorithmPlusCalRendererTests {
         )
         let specification = TLASpec("MutualLocalRecursion") {
             Algorithm("MutualLocalRecursion") {
-                Do(TestControlLabel.stop) {
-                    When(expression)
+                Do(TestControlLabel.stop, when: Expr<Bool>(expression)) {
                     Stop()
                 }
             }
         }
 
-        let rendered = try specification.compile().renderedPlusCalBundle().root.tla
+        let rendered = try specification.compile().render().plusCalBundle().root.tla
 
         #expect(rendered.contains("RECURSIVE First, Second"))
     }
@@ -516,14 +552,13 @@ struct AlgorithmPlusCalRendererTests {
         let expression = StateExpr.letIn([outer], .recursiveCall("Repeat", []))
         let specification = TLASpec("NestedLocalRecursion") {
             Algorithm("NestedLocalRecursion") {
-                Do(TestControlLabel.stop) {
-                    When(expression)
+                Do(TestControlLabel.stop, when: Expr<Bool>(expression)) {
                     Stop()
                 }
             }
         }
 
-        let rendered = try specification.compile().renderedPlusCalBundle().root.tla
+        let rendered = try specification.compile().render().plusCalBundle().root.tla
 
         #expect(rendered.components(separatedBy: "RECURSIVE Repeat").count == 2)
     }

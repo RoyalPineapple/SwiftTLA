@@ -44,7 +44,7 @@ struct SymmetryCounterexampleTests {
             }).state
         }
         #expect(try failing == concrete.projection(using: compilation.layout))
-        let invariant = try #require(compilation.semantics.invariants.first)
+        let invariant = try #require(compilation.semantics.behavior.invariants.first)
         #expect(try !runtime.invariantHolds(invariant, in: concrete))
     }
 

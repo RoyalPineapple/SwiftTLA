@@ -18,22 +18,58 @@ public indirect enum ActionExpr: Hashable, Sendable {
 
 extension ActionExpr {
     package func substitutingVariable(_ name: String, with replacement: StateExpr) -> ActionExpr {
+        substitutingVariables([name: replacement])
+    }
+
+    package func substitutingVariables(_ replacements: [String: StateExpr]) -> ActionExpr {
+        guard !replacements.isEmpty else { return self }
         func state(_ expression: StateExpr) -> StateExpr {
-            StateExpr.substituteVariable(name, with: replacement, in: expression)
+            StateExpr.substituteVariables(replacements, in: expression)
         }
         func action(_ expression: ActionExpr) -> ActionExpr {
-            switch expression {
-            case .assign(let target, let value): return .assign(target, state(value))
-            case .unchanged: return expression
-            case .guard_(let condition): return .guard_(state(condition))
-            case .existsAction(let binder, let values, let body): return .existsAction(binder, state(values), binder == name ? body : action(body))
-            case .ifElse(let condition, let then, let otherwise): return .ifElse(state(condition), action(then), action(otherwise))
-            case .define(let binder, let value, let body): return .define(binder, state(value), binder == name ? body : action(body))
-            case .and(let lhs, let rhs): return .and(action(lhs), action(rhs))
-            case .or(let lhs, let rhs): return .or(action(lhs), action(rhs))
-            }
+            expression.substitutingVariables(replacements)
         }
-        return action(self)
+        func scope(_ binder: String, _ body: ActionExpr) -> (String, ActionExpr) {
+            let scoped = replacements.filter { $0.key != binder }
+            guard !scoped.isEmpty else { return (binder, body) }
+            let freeVariables = Set(scoped.values.flatMap(\.freeVariableNames))
+            guard freeVariables.contains(binder) else { return (binder, body.substitutingVariables(scoped)) }
+            let fresh = StateExpr.freshBoundName(binder, avoiding: body.scopeNames
+                .union(freeVariables).union(scoped.keys).union([binder]))
+            let renamed = body.substitutingVariable(binder, with: .variable(fresh))
+            return (fresh, renamed.substitutingVariables(scoped))
+        }
+        switch self {
+        case .assign(let target, let value): return .assign(target, state(value))
+        case .unchanged: return self
+        case .guard_(let condition): return .guard_(state(condition))
+        case .existsAction(let binder, let values, let body):
+            let (name, body) = scope(binder, body)
+            return .existsAction(name, state(values), body)
+        case .define(let binder, let value, let body):
+            let (name, body) = scope(binder, body)
+            return .define(name, state(value), body)
+        case .ifElse(let condition, let then, let otherwise): return .ifElse(state(condition), action(then), action(otherwise))
+        case .and(let lhs, let rhs): return .and(action(lhs), action(rhs))
+        case .or(let lhs, let rhs): return .or(action(lhs), action(rhs))
+        }
+    }
+
+    private var scopeNames: Set<String> {
+        switch self {
+        case .assign(let target, let value):
+            if case .named(let name) = target { return value.freeVariableNames.union([name]) }
+            return value.freeVariableNames
+        case .unchanged(let target):
+            if case .named(let name) = target { return [name] }
+            return []
+        case .guard_(let condition): return condition.freeVariableNames
+        case .existsAction(let binder, let value, let body), .define(let binder, let value, let body):
+            return value.freeVariableNames.union(body.scopeNames).union([binder])
+        case .ifElse(let condition, let then, let otherwise):
+            return condition.freeVariableNames.union(then.scopeNames).union(otherwise.scopeNames)
+        case .and(let lhs, let rhs), .or(let lhs, let rhs): return lhs.scopeNames.union(rhs.scopeNames)
+        }
     }
 }
 
@@ -47,6 +83,28 @@ extension ActionExpr {
     @discardableResult public static func && (lhs: StateExpr, rhs: ActionExpr) -> ActionExpr { .and(.guard_(lhs), rhs) }
     @discardableResult public static func || (lhs: ActionExpr, rhs: StateExpr) -> ActionExpr { .or(lhs, .guard_(rhs)) }
     @discardableResult public static func || (lhs: StateExpr, rhs: ActionExpr) -> ActionExpr { .or(.guard_(lhs), rhs) }
+}
+
+extension ActionExpr {
+    @discardableResult
+    public static func && (lhs: some TypedExpression<Bool>, rhs: ActionExpr) -> ActionExpr {
+        .and(.guard_(lhs.stateExpr), rhs)
+    }
+
+    @discardableResult
+    public static func && (lhs: ActionExpr, rhs: some TypedExpression<Bool>) -> ActionExpr {
+        .and(lhs, .guard_(rhs.stateExpr))
+    }
+
+    @discardableResult
+    public static func || (lhs: some TypedExpression<Bool>, rhs: ActionExpr) -> ActionExpr {
+        .or(.guard_(lhs.stateExpr), rhs)
+    }
+
+    @discardableResult
+    public static func || (lhs: ActionExpr, rhs: some TypedExpression<Bool>) -> ActionExpr {
+        .or(lhs, .guard_(rhs.stateExpr))
+    }
 }
 
 package func renameVar(_ from: String, to: String, in action: ActionExpr) -> ActionExpr {

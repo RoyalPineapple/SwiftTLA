@@ -1,0 +1,61 @@
+name: TLC Reference Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/native-compiler]
+    paths:
+      - .github/workflows/tlc-reference-build.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - id: pin
+        name: Read immutable TLC source revision
+        shell: bash
+        run: |
+          source_sha="$(jq -r '.tlc.commit' Verification/FiniteGraph/toolchain.json)"
+          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        with:
+          repository: tlaplus/tlaplus
+          ref: ${{ steps.pin.outputs.sha }}
+          path: reference-source
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17.0.19+10
+      - name: Build the pinned source without changing the accepted JAR pin
+        shell: bash
+        env:
+          TLC_SOURCE_SHA: ${{ steps.pin.outputs.sha }}
+        run: |
+          mkdir -p reference-build
+          [ "$(git -C reference-source rev-parse HEAD)" = "$TLC_SOURCE_SHA" ]
+          git -C reference-source rev-parse HEAD > reference-build/source-revision.txt
+          java -version > reference-build/java-version.txt 2>&1
+          ant -version > reference-build/ant-version.txt
+          cd reference-source
+          ant -f tlatools/org.lamport.tlatools/customBuild.xml info compile compile-test dist \
+            > ../reference-build/build.log 2>&1
+          cp tlatools/org.lamport.tlatools/dist/tla2tools.jar ../reference-build/
+          cd ../reference-build
+          sha256sum tla2tools.jar > SHA256SUMS
+          unzip -p tla2tools.jar META-INF/MANIFEST.MF > MANIFEST.MF
+          grep -Fx "X-Git-Revision: $TLC_SOURCE_SHA" <(tr -d '\r' < MANIFEST.MF)
+      - name: Retain candidate binary and build provenance
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: tlc-reference-build-${{ steps.pin.outputs.sha }}-${{ github.run_id }}
+          path: reference-build
+          if-no-files-found: error
+          retention-days: 90

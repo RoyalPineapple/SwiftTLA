@@ -6,14 +6,15 @@ import SwiftTLAMacros
 /// The three nodes own a generated program counter. `initiator` is the only
 /// nondeterministic initial value; `processState` is derived from it in the
 /// formal initial state. Every message is explicitly delivered clockwise.
+@TLAModel
 package struct ChangRobertsModel: Sendable {
-    package enum Node: Int, FiniteTLAValueDomain {
+    package enum Node: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
         case three = 3
 
         package static var defaultValue: Self { .one }
-        package static let finiteValues: [Self] = [.one, .two, .three]
+        package static let finiteValues = allCases
 
         package var tlaValue: TLAValue { .int(rawValue) }
     }
@@ -86,7 +87,7 @@ package struct ChangRobertsModel: Sendable {
                             } or: {
                                 Either {
                                     When(
-                                        processState[node] == .candidate
+                                        processState[node] != .lost
                                             && candidate < node
                                     )
                                     Assign(messages, to: messages
@@ -99,7 +100,7 @@ package struct ChangRobertsModel: Sendable {
                                 } or: {
                                     Either {
                                     When(
-                                        processState[node] == .candidate
+                                        processState[node] != .lost
                                             && candidate > node
                                     )
                                     Assign(messages, to: messages.updating(
@@ -108,7 +109,7 @@ package struct ChangRobertsModel: Sendable {
                                     ))
                                     } or: {
                                         When(
-                                            processState[node] == .candidate
+                                            processState[node] != .lost
                                                 && candidate == node
                                         )
                                         Assign(messages, to: messages.updating(
@@ -124,10 +125,17 @@ package struct ChangRobertsModel: Sendable {
                     }
                 }
 
-                Invariant("NoFalseWinner") {
-                    processState[.one] != .won || initiator[.one] == true
-                    processState[.two] != .won || initiator[.two] == true
-                    processState[.three] != .won || initiator[.three] == true
+                Invariant("Correctness") {
+                    ForAll(Node.all) { winner in
+                        processState[winner] != .won || (
+                            initiator[winner] == true && ForAll(Node.all) { other in
+                                other == winner || (
+                                    processState[other] == .lost
+                                        && (initiator[other] == false || other > winner)
+                                )
+                            }
+                        )
+                    }
                 }
                 LeadsTo(
                     "Liveness",

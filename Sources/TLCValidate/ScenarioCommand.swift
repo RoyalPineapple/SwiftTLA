@@ -1,0 +1,52 @@
+import Foundation
+import SwiftTLA
+import UpstreamParity
+
+func runScenarios(arguments: [String]) -> Never {
+    do {
+        guard arguments.count == 3, arguments[0] == "run", arguments[1] == "--output", !arguments[2].isEmpty else {
+            throw EvidenceFormatError.invalidField(record: "scenarios", field: "usage: scenarios run --output <directory>")
+        }
+        let root = try RetainedFiles.projectRoot(URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+        let output = try RetainedFiles.outputDirectory(URL(fileURLWithPath: arguments[2]), beneath: root)
+        let toolRoot = URL(fileURLWithPath: try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", ProcessInfo.processInfo.environment))
+        let lock = try decode(PinnedTLCToolchain.self, at: root.appendingPathComponent("Verification/FiniteGraph/toolchain.json"))
+        guard lock.schema == "TLCReferencePin", let archive = lock.java.archives[try normalizedArchitecture()] else {
+            throw FiniteGraphCLIError.invalidManifest("unsupported toolchain or architecture")
+        }
+        let pin = try referencePin(from: lock, javaArchive: archive, toolRoot: toolRoot)
+        let tools = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: root, pin: pin)
+        let scenarios = try ConfiguredCounter.validationScenarios()
+        guard !scenarios.isEmpty else { throw EvidenceFormatError.invalidField(record: "Counter", field: "no scenarios") }
+        var failed = false
+        for (index, scenario) in scenarios.enumerated() {
+            let directory = output.appendingPathComponent("counter-\(index)")
+            do {
+                let run = try NativeScenarioRun(scenario, maximumStates: 1000)
+                let bundle = try run.native.rendered.tlaBundle(checking: [], checkDeadlock: false)
+                let work = try RetainedFiles.createDirectory(output.appendingPathComponent("work-\(index)"), beneath: output)
+                let launch = try FiniteGraphCase(id: scenario.name,
+                    exploration: .init(maximumStateLimit: 1000, symmetryReduction: .disabled),
+                    moduleSHA256: SHA256.hex(Data(bundle.tla.utf8)), cfgSHA256: SHA256.hex(Data(bundle.cfg.utf8)),
+                    arguments: ["-workers", "1", "-fp", "1"], environment: [:], pin: pin,
+                    renderedActions: run.native.rendered.actions)
+                let request = TLCProcessRequest(javaExecutable: tools.java, jar: tools.jar, bridgeJar: tools.bridgeJar,
+                    bundle: bundle, graphEvents: work.appendingPathComponent("events.jsonl"),
+                    traceOutput: work.appendingPathComponent("counterexample.json"), workingDirectory: work,
+                    finiteGraphCase: launch, runID: UUID(), timeout: 120, invocation: .finiteGraph,
+                    referenceArtifacts: tools.artifacts)
+                try TLCScenarioCheck().run(run, request: request, in: directory)
+                print("scenario \(scenario.name): exact")
+            } catch {
+                failed = true
+                try RetainedFiles.createDirectory(directory, beneath: output)
+                try RetainedFiles.writeText(String(describing: error), to: directory.appendingPathComponent("scenario-error.txt"))
+                fputs("scenario \(scenario.name): \(error)\n", stderr)
+            }
+        }
+        exit(failed ? 2 : 0)
+    } catch {
+        fputs("scenarios: \(error)\n", stderr)
+        exit(2)
+    }
+}

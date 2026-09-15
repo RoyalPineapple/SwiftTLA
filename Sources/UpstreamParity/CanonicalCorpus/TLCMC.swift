@@ -31,9 +31,7 @@ package struct TLCMCModel: Sendable {
 
     package static let corpusEntry = CanonicalCorpusEntry(
         id: "tlcmc-graph-1",
-        specification: { TLCMCModel.spec },
-        swiftConfiguration: .init(),
-        plusCalConfiguration: .init()
+        specification: { TLCMCModel.spec }
     )
 
     package static var spec: TLASpec {
@@ -107,7 +105,7 @@ package struct TLCMCModel: Sendable {
                         Goto(Step.dequeue)
                     } else: {
                         With(successors) { successor in
-                            let current = currentState.expr.assumingFirst(Node.self)
+                            let current = currentState.expr.assuming(Node.self)
                             Assign(successors, to: successors.removing(successor.expr))
                             Assign(closed, to: closed.inserting(successor.expr))
                             Assign(frontier, to: frontier.expr.appending(successor.expr))

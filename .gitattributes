@@ -1,0 +1,2 @@
+# Preserve the pinned upstream module byte for byte, including its whitespace.
+Verification/FiniteGraph/fixtures/n-queens-four/QueensPluscal.tla whitespace=-blank-at-eol

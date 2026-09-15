@@ -9,69 +9,8 @@ func alphaKey(_ action: ActionExpr, bindingNames: [String]) -> String {
         let (_, extended) = fresh(name, environment: environment, next: &next)
         environment = extended
     }
-    let branches = semanticBranches(action)
+    let branches = ActionNormalization.branches(of: action) { semanticStateBranches($0).map(ActionExpr.guard_) }
     return "or[\(branches.map { actionKey($0, environment: environment, next: &next) }.joined(separator: ","))]"
-}
-
-/// Gives action disjunction one canonical representation. In particular,
-/// `(a \/ b) /\ c` and `(a /\ c) \/ (b /\ c)` are the same transition
-/// relation, whether the disjunction originated as a Swift boolean guard or
-/// as an `ActionBuilder` branch.
-private enum SemanticActionBranchTask {
-    case expression(ActionExpr)
-    case concatenate
-    case conjoin
-    case wrapExistential(String, StateExpr)
-    case wrapDefinition(String, StateExpr)
-}
-
-private func semanticBranches(_ action: ActionExpr) -> [ActionExpr] {
-    var tasks = [SemanticActionBranchTask.expression(action)]
-    var branches: [[ActionExpr]] = []
-    while let task = tasks.popLast() {
-        switch task {
-        case .expression(let expression):
-            switch expression {
-            case .or(let left, let right):
-                tasks.append(.concatenate)
-                tasks.append(.expression(right))
-                tasks.append(.expression(left))
-            case .guard_(let condition):
-                branches.append(semanticStateBranches(condition).map(ActionExpr.guard_))
-            case .and(let left, let right):
-                tasks.append(.conjoin)
-                tasks.append(.expression(right))
-                tasks.append(.expression(left))
-            case .ifElse(let condition, let then, let otherwise):
-                tasks.append(.concatenate)
-                tasks.append(.expression(.and(.guard_(.not(condition)), otherwise)))
-                tasks.append(.expression(.and(.guard_(condition), then)))
-            case .existsAction(let variable, let set, let body):
-                tasks.append(.wrapExistential(variable, set))
-                tasks.append(.expression(body))
-            case .define(let variable, let value, let body):
-                tasks.append(.wrapDefinition(variable, value))
-                tasks.append(.expression(body))
-            default:
-                branches.append([expression])
-            }
-        case .concatenate:
-            let right = branches.removeLast()
-            let left = branches.removeLast()
-            branches.append(left + right)
-        case .conjoin:
-            let right = branches.removeLast()
-            let left = branches.removeLast()
-            branches.append(left.flatMap { leftBranch in
-                right.map { rightBranch in .and(leftBranch, rightBranch) }
-            })
-        case .wrapExistential(let variable, let set):
-            branches.append(branches.removeLast().map { .existsAction(variable, set, $0) })
-        case .wrapDefinition(let variable, let value):
-            branches.append(branches.removeLast().map { .define(variable, value, $0) })
-        }
-    }
-    return branches[0]
 }
 
 /// Splits only disjunctions that occur inside a Boolean guard. Swift can group
@@ -122,7 +61,7 @@ func alphaKey(_ expression: StateExpr) -> String {
     return stateKey(expression, environment: [:], next: &next)
 }
 
-func alphaKey(_ expression: TemporalExpr) -> String {
+func alphaKey(_ expression: TemporalCondition<StateExpr>) -> String {
     switch expression {
     case .always(let state): return "always(\(alphaKey(state)))"
     case .eventually(let state): return "eventually(\(alphaKey(state)))"
@@ -387,6 +326,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .functionApply(let lhs, let rhs): schedule("apply", [lhs, rhs], environment: environment)
             case .setSum(let lhs, let rhs): schedule("sum", [lhs, rhs], environment: environment)
             case .functionSet(let lhs, let rhs): schedule("functionSet", [lhs, rhs], environment: environment)
+            case .assertView(let value, let shape): schedule("assertView[\(shape)]", [value], environment: environment)
             case .negate(let value): schedule("negate", [value], environment: environment)
             case .not(let value): schedule("not", [value], environment: environment)
             case .cardinality(let value): schedule("cardinality", [value], environment: environment)
@@ -417,6 +357,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .sourceIssue(let issue): parts.append("sourceIssue(\(issue))")
             case .value(let value): parts.append("value(\(value))")
             case .variable(let name): parts.append("var(\(environment[name] ?? name))")
+            case .parameter(let reference): parts.append("parameter(\(reference.name))")
             case .processLocalFamily(let name): parts.append("processLocalFamily(\(environment[name] ?? name))")
             case .currentProcess: parts.append("currentProcess")
             case .programCounter: parts.append("programCounter")

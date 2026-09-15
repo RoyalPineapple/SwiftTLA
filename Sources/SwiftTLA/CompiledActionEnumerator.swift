@@ -1,20 +1,6 @@
 struct CompiledActionEnumerator {
     let state: CompiledState
-    let semantics: CompiledSemantics
-    let layout: CompiledLayout
-    let enabledActions: Set<ActionID>
-
-    init(
-        state: CompiledState,
-        semantics: CompiledSemantics,
-        layout: CompiledLayout,
-        enabledActions: Set<ActionID> = []
-    ) {
-        self.state = state
-        self.semantics = semantics
-        self.layout = layout
-        self.enabledActions = enabledActions
-    }
+    let evaluate: (CompiledExpression, CompiledBindings) throws -> CompiledValue
 
     func enumerate(_ action: CompiledAction) throws -> [CompiledState] {
         try enumerateSuccessors(action).map(\.state)
@@ -36,26 +22,19 @@ struct CompiledActionEnumerator {
         _ action: CompiledActionExpr,
         bindings: CompiledBindings
     ) throws -> [CompiledActionDelta] {
-        let evaluator = CompiledEvaluator(
-            state: state,
-            semantics: semantics,
-            layout: layout,
-            bindings: bindings,
-            enabledActions: enabledActions
-        )
         switch action {
         case .assign(let variable, let expression):
-            return [.init(assignments: [variable: try evaluator.evaluate(expression)])]
+            return [.init(assignments: [variable: try evaluate(expression, bindings)])]
         case .unchanged(let variable):
             return [.init(assignments: [variable: try state.value(for: variable)])]
         case .guard_(let expression):
-            let value = try evaluator.evaluate(expression)
+            let value = try evaluate(expression, bindings)
             guard case .boolean(let enabled) = value else {
                 throw EvalError.expected(.boolean, actual: [value])
             }
             return enabled ? [.init()] : []
         case .existsAction(let binder, let set, let body):
-            let domain = try evaluator.evaluate(set)
+            let domain = try evaluate(set, bindings)
             guard case .set(let values) = domain else {
                 throw EvalError.expected(.set, actual: [domain])
             }
@@ -65,10 +44,10 @@ struct CompiledActionEnumerator {
         case .define(let binder, let value, let body):
             return try execute(
                 body,
-                bindings: bindings.binding(try evaluator.evaluate(value), to: binder)
+                bindings: bindings.binding(try evaluate(value, bindings), to: binder)
             )
         case .ifElse(let condition, let then, let otherwise):
-            let value = try evaluator.evaluate(condition)
+            let value = try evaluate(condition, bindings)
             guard case .boolean(let conditionHolds) = value else {
                 throw EvalError.expected(.boolean, actual: [value])
             }

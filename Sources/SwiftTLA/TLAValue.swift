@@ -53,7 +53,20 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
         switch self {
         case .int(let n): return "\(n)"
         case .bool(let b): return b ? "TRUE" : "FALSE"
-        case .string(let s): return "\"\(s)\""
+        case .string(let value):
+            var literal = "\""
+            for scalar in value.unicodeScalars {
+                switch scalar {
+                case "\"": literal += "\\\""
+                case "\\": literal += "\\\\"
+                case "\n": literal += "\\n"
+                case "\r": literal += "\\r"
+                case "\t": literal += "\\t"
+                case "\u{c}": literal += "\\f"
+                default: literal.unicodeScalars.append(scalar)
+                }
+            }
+            return literal + "\""
         case .set(let s):
             return "{\(s.map { $0._tlaForm(depth) }.sorted().joined(separator: ", "))}"
         case .tuple(let t):

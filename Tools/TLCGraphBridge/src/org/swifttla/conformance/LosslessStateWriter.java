@@ -12,6 +12,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import tla2sany.semantic.SemanticNode;
+import tla2sany.semantic.OpApplNode;
+import tla2sany.semantic.OpDefNode;
+import tla2sany.semantic.SubstInNode;
 import tlc2.tool.Action;
 import tlc2.tool.TLCState;
 import tlc2.util.BitVector;
@@ -134,12 +137,14 @@ public final class LosslessStateWriter implements IStateWriter {
 
     private void transition(String callback, TLCState source, TLCState target, short flags, Action action,
                             String predicateLocation, String reachable) {
-        if (action == null || !action.isNamed() || action.getName() == null || action.getName().toString().isBlank()) {
-            unsupported(callback, "callback lacks a stable named Action");
+        String name = actionName(action);
+        if (name == null || name.isBlank()) {
+            unsupported(callback, "callback lacks a stable named Action"
+                    + (action == null ? "" : ": " + action.getLocation()));
             return;
         }
-        String actionJson = "{\"name\":" + quote(action.getName().toString())
-                + ",\"location\":" + quote(action.getLocation()) + ",\"named\":true}";
+        String actionJson = "{\"name\":" + quote(name)
+                + ",\"location\":" + quote(action.getLocation(name)) + ",\"named\":true}";
         String flagsJson = "{\"raw\":" + Integer.toUnsignedString(Short.toUnsignedInt(flags))
                 + ",\"seen\":" + ((flags & IStateWriter.IsSeen) == IStateWriter.IsSeen)
                 + ",\"notInModel\":" + ((flags & IStateWriter.IsNotInModel) == IStateWriter.IsNotInModel) + "}";
@@ -150,6 +155,26 @@ public final class LosslessStateWriter implements IStateWriter {
                 + ",\"visualization\":\"none\""
                 + ",\"predicateLocation\":" + predicateLocation
                 + ",\"reachable\":" + quote(reachable));
+    }
+
+    private static String actionName(Action action) {
+        if (action == null) {
+            return null;
+        }
+        if (action.isNamed()) {
+            return action.getName().toString();
+        }
+        // TLC stops decomposing INSTANCE substitutions before naming the enclosed call.
+        // Only a direct, parameterless declared call has an identity we can recover here.
+        SemanticNode predicate = action.getPred();
+        while (predicate instanceof SubstInNode substitution) {
+            predicate = substitution.getBody();
+        }
+        if (predicate instanceof OpApplNode call && call.getArgs().length == 0
+                && call.getOperator() instanceof OpDefNode definition && definition.getArity() == 0) {
+            return definition.getName().toString();
+        }
+        return null;
     }
 
     private void unsupported(String callback, String reason) {

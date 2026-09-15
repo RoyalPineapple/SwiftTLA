@@ -39,4 +39,30 @@ import Testing
         #expect(try compiledValue(.functionSet(.setLiteral([]), .setLiteral([]))) == .set([.function([:])]))
         #expect(try compiledValue(.functionSet(.setLiteral([.int(1)]), .setLiteral([]))) == .set([]))
     }
+
+    @Test("function-space membership validates the space before evaluating its candidate")
+    func membershipFailureOrder() {
+        let candidate = StateExpr.functionLiteral(.setLiteral([.int(0)]), "key", .divide(.int(1), .int(0)))
+        let count = Int.bitWidth - 1
+        let largeDomain = StateExpr.setLiteral((0..<count).map { .int($0) })
+        #expect(throws: EvalError.collectionCardinalityOverflow(.functionSet, operands: [count, 2])) {
+            try compiledValue(.in(candidate, .functionSet(largeDomain, .setLiteral([.int(0), .int(1)]))))
+        }
+        #expect(throws: EvalError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            try compiledValue(.in(candidate, .functionSet(
+                .setLiteral([.add(.int(Int.max), .int(1))]),
+                .setLiteral([.divide(.int(1), .int(0))]))))
+        }
+        #expect(throws: EvalError.divisionByZero) {
+            try compiledValue(.in(candidate, .functionSet(.setLiteral([.int(0)]), .setLiteral([]))))
+        }
+    }
+
+    @Test("an empty function domain still evaluates its range")
+    func emptyDomainDoesNotSkipRange() {
+        #expect(throws: EvalError.divisionByZero) {
+            try compiledValue(.in(.value(.function([:])), .functionSet(
+                .setLiteral([]), .setLiteral([.divide(.int(1), .int(0))]))))
+        }
+    }
 }

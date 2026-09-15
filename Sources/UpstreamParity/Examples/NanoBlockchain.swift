@@ -257,15 +257,13 @@ package struct NanoBlockchainModel: Sendable {
 
             for (node, privateKey) in zip(Node.finiteValues, PrivateKey.finiteValues) {
                 SwiftTLA.Action("CreateSend_\(node.rawValue)") {
-                    StateExpr.not(lastHash == HashReference.none)
+                    lastHash != HashReference.none
                         && ActionExpr.exists(
                             "prev",
                             from: SetExpr<BlockHash>.literal(.h1, .h2, .h3)
                         ) { formalPrevious in
                             let previous = Expr<BlockHash>(formalPrevious)
-                            return StateExpr.not(
-                                distributedLedger[node][previous] == SignedBlock.defaultValue
-                            )
+                            return distributedLedger[node][previous] != SignedBlock.defaultValue
                                 && ActionExpr.exists(
                                     "dest",
                                     from: SetExpr<PublicKey>.literal(.pub1, .pub2)

@@ -11,31 +11,7 @@ import SwiftTLAMacros
 package struct KVsnapModel: Sendable {
     package static let corpusEntry = CanonicalCorpusEntry(
         id: "kvsnap-upstream-port",
-        specification: { KVsnapModel.spec },
-        swiftConfiguration: .init(
-            checks: [
-                .init("TypeOK", kind: .invariant),
-                .init("SnapshotIsolation", kind: .invariant),
-                .init("Termination", kind: .property)
-            ],
-            constants: [
-                .init("k1", "k1"), .init("k2", "k2"),
-                .init("t1", "t1"), .init("t2", "t2"), .init("t3", "t3"),
-                .init("NoVal", "NoVal")
-            ]
-        ),
-        plusCalConfiguration: .init(
-            checks: [
-                .init("TypeOK", kind: .invariant),
-                .init("SnapshotIsolation", kind: .invariant),
-                .init("Termination", kind: .property)
-            ],
-            constants: [
-                .init("k1", "k1"), .init("k2", "k2"),
-                .init("t1", "t1"), .init("t2", "t2"), .init("t3", "t3"),
-                .init("NoVal", "NoVal")
-            ]
-        )
+        specification: { KVsnapModel.spec }
     )
 
     package enum Key: String, CaseIterable, FiniteTLAValueDomain {
@@ -146,8 +122,8 @@ package struct KVsnapModel: Sendable {
                 Each(Transaction.all, fairness: .weak, scoped: { selfID, scope in
                     let snapshotStore: LocalVariable<Function<Key, Value>> = scope.localVar("snapshotStore", initial: FormalCall("InitialState")
                     )
-                    let readKeys: LocalVariable<SetExpr<Key>> = scope.localVar("readKeys", initial: SetExpr<Key>())
-                    let writeKeys: LocalVariable<SetExpr<Key>> = scope.localVar("writeKeys", initial: SetExpr<Key>())
+                    let readKeys: LocalVariable<SetExpr<Key>> = scope.localVar("read_keys", initial: SetExpr<Key>())
+                    let writeKeys: LocalVariable<SetExpr<Key>> = scope.localVar("write_keys", initial: SetExpr<Key>())
                     let ops: LocalVariable<TupleExpr<Record<OperationSchema>>> = scope.localVar("ops", initial: TupleExpr<Record<OperationSchema>>())
 
                     Do(Step.start) {
@@ -234,7 +210,7 @@ package struct KVsnapModel: Sendable {
                             to: Subsets(of: SetExpr<Key>.literal(.k1, .k2))
                         ).contains(missed.expr)
                 }
-                Eventually("Termination", All(Transaction.all) { Finished($0) })
+                Eventually("Termination", ForAll(Transaction.all) { Finished($0) })
             })
         }
     }

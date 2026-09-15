@@ -57,24 +57,24 @@ package enum LeastCircularSubstringModel {
     private static func character(
         in sequence: SharedVariable<ZeroBasedSequence<Int>>,
         length: SharedVariable<Int>,
-        at index: StateExpr
-    ) -> StateExpr {
-        .functionApply(sequence.stateExpr, .modulo(index, length.stateExpr))
+        at index: Expr<Int>
+    ) -> Expr<Int> {
+        Expr(.functionApply(sequence.stateExpr, .modulo(index.raw, length.stateExpr)))
     }
 
     private static func failure(
         in table: SharedVariable<FailureTable>,
-        at index: StateExpr
-    ) -> StateExpr {
-        .functionApply(table.stateExpr, index)
+        at index: Expr<Int>
+    ) -> Expr<Int> {
+        Expr(.functionApply(table.stateExpr, index.raw))
     }
 
     private static func updatingFailure(
         in table: SharedVariable<FailureTable>,
-        at index: StateExpr,
-        to value: StateExpr
+        at index: Expr<Int>,
+        to value: Expr<Int>
     ) -> Expr<FailureTable> {
-        Expr(.except(table.stateExpr, index, value))
+        Expr(.except(table.stateExpr, index.raw, value.raw))
     }
 
     private static func mismatch(
@@ -83,36 +83,26 @@ package enum LeastCircularSubstringModel {
         offset: SharedVariable<Int>,
         prefix: SharedVariable<Int>,
         position: SharedVariable<Int>
-    ) -> StateExpr {
-        .notEqual(
-            character(in: sequence, length: length, at: position.stateExpr),
+    ) -> Expr<Bool> {
+        character(in: sequence, length: length, at: position.expr) !=
             character(
                 in: sequence,
                 length: length,
-                at: .add(.add(offset.stateExpr, prefix.stateExpr), .int(1))
+                at: offset + prefix + 1
             )
-        )
     }
 
     private static func correctness(
         sequence: SharedVariable<ZeroBasedSequence<Int>>,
         shift: SharedVariable<Int>
-    ) -> StateExpr {
+    ) -> Expr<Bool> {
         let candidate = ZSequences.rotation(of: sequence.expr, leftBy: shift.expr)
-        return .or(
-            .not(Finished()),
-            All(in: ZSequences.rotations(of: sequence.expr)) { other in
-                let otherSequence = other[ZSequences.Rotation<Int>.sequence]
-                let otherShift = other[ZSequences.Rotation<Int>.shift]
-                return StateExpr.and(
-                    ZSequences.lexicographicallyPrecedesOrEquals(candidate, otherSequence),
-                    StateExpr.or(
-                        .notEqual(candidate.raw, otherSequence.raw),
-                        .lessOrEqual(shift.stateExpr, otherShift.raw)
-                    )
-                )
-            }
-        )
+        return !Finished() || ForAll(in: ZSequences.rotations(of: sequence.expr)) { other in
+            let otherSequence = other[ZSequences.Rotation<Int>.sequence]
+            let otherShift = other[ZSequences.Rotation<Int>.shift]
+            let precedes = Expr<Bool>(ZSequences.lexicographicallyPrecedesOrEquals(candidate, otherSequence))
+            return precedes && (candidate != otherSequence || shift <= otherShift)
+        }
     }
 
     package static let spec = TLASpec("MCLeastCircularSubstring") {
@@ -144,7 +134,7 @@ package enum LeastCircularSubstringModel {
                 }
             }
             Do(Step.l5) {
-                Assign(i, to: failure(in: f, at: .subtract(.subtract(j.stateExpr, k.stateExpr), .int(1))))
+                Assign(i, to: failure(in: f, at: j.expr - k.expr - 1))
             }
             Do(Step.l6) {
                 If(mismatch(sequence: b, length: n, offset: k, prefix: i, position: j) && i != -1) {
@@ -155,8 +145,8 @@ package enum LeastCircularSubstringModel {
             }
             Do(Step.l7) {
                 If(
-                    character(in: b, length: n, at: j.stateExpr) <
-                        character(in: b, length: n, at: .add(.add(k.stateExpr, i.stateExpr), .int(1)))
+                    character(in: b, length: n, at: j.expr) <
+                        character(in: b, length: n, at: k + i + 1)
                 ) {
                     Goto(Step.l8)
                 } else: {
@@ -167,7 +157,7 @@ package enum LeastCircularSubstringModel {
                 Assign(k, to: j - i - 1)
             }
             Do(Step.l9) {
-                Assign(i, to: failure(in: f, at: i.stateExpr))
+                Assign(i, to: failure(in: f, at: i.expr))
                 Goto(Step.l6)
             }
             Do(Step.l10) {
@@ -179,8 +169,8 @@ package enum LeastCircularSubstringModel {
             }
             Do(Step.l11) {
                 If(
-                    character(in: b, length: n, at: j.stateExpr) <
-                        character(in: b, length: n, at: .add(.add(k.stateExpr, i.stateExpr), .int(1)))
+                    character(in: b, length: n, at: j.expr) <
+                        character(in: b, length: n, at: k + i + 1)
                 ) {
                     Goto(Step.l12)
                 } else: {
@@ -193,16 +183,16 @@ package enum LeastCircularSubstringModel {
             Do(Step.l13) {
                 Assign(f, to: updatingFailure(
                     in: f,
-                    at: .subtract(j.stateExpr, k.stateExpr),
-                    to: .int(-1)
+                    at: j.expr - k.expr,
+                    to: Expr(-1)
                 ))
                 Goto(Step.loopReturn)
             }
             Do(Step.l14) {
                 Assign(f, to: updatingFailure(
                     in: f,
-                    at: .subtract(j.stateExpr, k.stateExpr),
-                    to: .add(i.stateExpr, .int(1))
+                    at: j.expr - k.expr,
+                    to: i + 1
                 ))
             }
             Do(Step.loopReturn) {

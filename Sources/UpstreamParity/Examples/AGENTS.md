@@ -52,16 +52,17 @@ formal transition. Do not put an ordinary Swift side effect in a `Do` block.
 
 ## Compilation and validation
 
-For an `@TLAModel` port, macro expansion compiles the parsed builder syntax and
-records its `CompilationIdentity`. `makeMachine()` compiles `Self.spec` and
-requires the same identity before it creates the generated machine.
+For an `@TLAModel` port, macro expansion resolves the parsed builder syntax and
+generates native Swift execution. `makeMachine()` evaluates generated initial
+state code; it must not compile `Self.spec` or invoke the formal interpreter.
 
 After a port:
 
 1. Add or preserve the `Example.FiniteModelFixture` and its declared finite outcome.
 2. Compile the source model and run its focused bounded-exploration test.
-3. For an `@TLAModel` port, exercise `makeMachine()` so its compilation-identity
-   contract runs.
+3. For an `@TLAModel` port, compare native initial states, enabled actions,
+   successors, and failures against the formal engine. Compare complete bounded
+   graphs where the configuration permits exhaustive exploration.
 4. When a pinned reference fixture exists, declare or update its
    `FiniteGraphCase` and run the hosted finite-graph workflow.
 

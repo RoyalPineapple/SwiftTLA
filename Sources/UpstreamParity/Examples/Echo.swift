@@ -83,7 +83,6 @@ package struct EchoModel: Sendable {
                     While(Step.n1, received.expr < SetExpr<Node>.literal(.a, .b, .c).removing(selfID).cardinality) {
                         With(inbox[selfID]) { message in
                             Let(inbox.updating(selfID, to: inbox[selfID].removing(message))) { networkAfterReceive in
-                                Assign(received, to: received.expr + 1)
                                 If(selfID != .a && received.expr == 0) {
                                     Assert(message[MessageSchema.kind] == .message)
                                     Assign(parent, to: message[MessageSchema.sender])
@@ -98,6 +97,7 @@ package struct EchoModel: Sendable {
                                 } else: {
                                     Assign(inbox, to: networkAfterReceive.expr)
                                 }
+                                Assign(received, to: received.expr + 1)
                                 If(message[MessageSchema.kind] == .acknowledgement) {
                                     Assign(children, to: children.expr.inserting(message[MessageSchema.sender]))
                                 }

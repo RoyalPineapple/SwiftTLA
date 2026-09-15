@@ -5,7 +5,6 @@ package enum AlgorithmDiagnosticCode: String, Sendable, Hashable {
     case duplicateDomainMember
     case duplicateLabel
     case invalidTarget
-    case duplicateRootWrite
     case invalidAtomicControlFlow
     case missingStop
     case invalidAlgorithmComponent

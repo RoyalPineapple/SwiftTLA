@@ -30,9 +30,9 @@ package struct SingleLaneBridgeModel: Sendable {
             }
             FormalDefinition("NextLocation", taking: Car.self, Int.self) { car, position in
                 If(
-                    FormalCall("IsRight", car) == true,
-                    then: If(position > 1, then: Expr<Int>(position - 1), else: Expr<Int>(8)),
-                    else: If(position < 8, then: Expr<Int>(position + 1), else: Expr<Int>(1))
+                    FormalCall(as: Bool.self, "IsRight", car),
+                    then: If(position > 1, then: position - 1, else: Expr<Int>(8)),
+                    else: If(position < 8, then: position + 1, else: Expr<Int>(1))
                 )
             }
             FormalDefinition("LocationAt", taking: Function<Car, Int>.self, Car.self) { locations, car in
@@ -40,7 +40,7 @@ package struct SingleLaneBridgeModel: Sendable {
             }
             FormalDefinition("CarsOnBridge", taking: Function<Car, Int>.self) { locations in
                 SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo).filtering { car in
-                    FormalCall(as: Bool.self, "InBridge", locations[car]).raw
+                    FormalCall(as: Bool.self, "InBridge", locations[car])
                 }
             }
             FormalDefinition("IsLeaving", taking: Car.self, Function<Car, Int>.self) { car, locations in
@@ -64,8 +64,8 @@ package struct SingleLaneBridgeModel: Sendable {
             Variable(waiting, Expr(TupleExpr<Car>()))
 
             Invariant("Invariants") {
-                All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { first in
-                    All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { second in
+                ForAll(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { first in
+                    ForAll(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { second in
                         first == second
                             || !(FormalCall(
                                 as: Bool.self,
@@ -76,8 +76,8 @@ package struct SingleLaneBridgeModel: Sendable {
                     }
                 }
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).cardinality < 3
-                All(in: SetExpr<Car>.literal(.rightOne, .rightTwo)) { right in
-                    All(in: SetExpr<Car>.literal(.leftOne, .leftTwo)) { left in
+                ForAll(in: SetExpr<Car>.literal(.rightOne, .rightTwo)) { right in
+                    ForAll(in: SetExpr<Car>.literal(.leftOne, .leftTwo)) { left in
                         !(FormalCall(
                             as: Bool.self,
                             "InBridge",
@@ -110,7 +110,7 @@ package struct SingleLaneBridgeModel: Sendable {
             }
             SwiftTLA.Action("MoveInside_r1") {
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(.rightOne)
-                    && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
+                    && ForAll(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                         FormalCall(as: Int.self, "LocationAt", location, car.expr)
                             != FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
                     }
@@ -131,11 +131,11 @@ package struct SingleLaneBridgeModel: Sendable {
                 waitingQueue.count > 0 && nextCar == Car.rightOne
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
                     || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(nextCar)
-                        && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
+                        && ForAll(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
                             FormalCall(as: Bool.self, "IsRight", car.expr)
                                 == FormalCall(as: Bool.self, "IsRight", Car.rightOne)
                         }
-                        && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
+                        && ForAll(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                             FormalCall(as: Int.self, "LocationAt", location, car.expr)
                                 != FormalCall(as: Int.self, "NextLocation", Car.rightOne, location[.rightOne])
                         })
@@ -165,7 +165,7 @@ package struct SingleLaneBridgeModel: Sendable {
             }
             SwiftTLA.Action("MoveInside_r2") {
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(.rightTwo)
-                    && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
+                    && ForAll(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                         FormalCall(as: Int.self, "LocationAt", location, car.expr)
                             != FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
                     }
@@ -186,11 +186,11 @@ package struct SingleLaneBridgeModel: Sendable {
                 waitingQueue.count > 0 && nextCar == Car.rightTwo
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
                     || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(nextCar)
-                        && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
+                        && ForAll(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
                             FormalCall(as: Bool.self, "IsRight", car.expr)
                                 == FormalCall(as: Bool.self, "IsRight", Car.rightTwo)
                         }
-                        && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
+                        && ForAll(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                             FormalCall(as: Int.self, "LocationAt", location, car.expr)
                                 != FormalCall(as: Int.self, "NextLocation", Car.rightTwo, location[.rightTwo])
                         })
@@ -217,7 +217,7 @@ package struct SingleLaneBridgeModel: Sendable {
             }
             SwiftTLA.Action("MoveInside_l1") {
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(.leftOne)
-                    && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
+                    && ForAll(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                         FormalCall(as: Int.self, "LocationAt", location, car.expr)
                             != FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
                     }
@@ -238,11 +238,11 @@ package struct SingleLaneBridgeModel: Sendable {
                 waitingQueue.count > 0 && nextCar == Car.leftOne
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
                     || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(nextCar)
-                        && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
+                        && ForAll(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
                             FormalCall(as: Bool.self, "IsRight", car.expr)
                                 == FormalCall(as: Bool.self, "IsRight", Car.leftOne)
                         }
-                        && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
+                        && ForAll(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                             FormalCall(as: Int.self, "LocationAt", location, car.expr)
                                 != FormalCall(as: Int.self, "NextLocation", Car.leftOne, location[.leftOne])
                         })
@@ -269,7 +269,7 @@ package struct SingleLaneBridgeModel: Sendable {
             }
             SwiftTLA.Action("MoveInside_l2") {
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(.leftTwo)
-                    && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
+                    && ForAll(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                         FormalCall(as: Int.self, "LocationAt", location, car.expr)
                             != FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
                     }
@@ -290,11 +290,11 @@ package struct SingleLaneBridgeModel: Sendable {
                 waitingQueue.count > 0 && nextCar == Car.leftTwo
                 FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).isEmpty
                     || (!FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location).contains(nextCar)
-                        && All(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
+                        && ForAll(in: FormalCall(as: SetExpr<Car>.self, "CarsOnBridge", location)) { car in
                             FormalCall(as: Bool.self, "IsRight", car.expr)
                                 == FormalCall(as: Bool.self, "IsRight", Car.leftTwo)
                         }
-                        && All(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
+                        && ForAll(in: SetExpr<Car>.literal(.rightOne, .rightTwo, .leftOne, .leftTwo)) { car in
                             FormalCall(as: Int.self, "LocationAt", location, car.expr)
                                 != FormalCall(as: Int.self, "NextLocation", Car.leftTwo, location[.leftTwo])
                         })

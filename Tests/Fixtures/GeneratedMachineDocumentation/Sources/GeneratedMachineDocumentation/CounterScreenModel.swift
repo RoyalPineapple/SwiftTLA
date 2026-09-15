@@ -18,8 +18,7 @@ struct CounterScreenModel {
             Algorithm("CounterScreenModel", scoped: { scope in
                 let value = scope.sharedVar("value", initial: 0)
                 Each(Process.all) { _ in
-                    Do(Step.advance) {
-                        When(value < 1)
+                    Do(Step.advance, when: value < 1) {
                         Assign(value, to: value + 1)
                         Stop()
                     }

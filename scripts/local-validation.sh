@@ -168,10 +168,11 @@ run_guarded() {
     fi
 
     scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
+    export SWIFTTLA_VALIDATION_SCRATCH_PATH="$scratch_dir"
     set -m
     case "$mode" in
         swiftpm-test)
-            swift test --filter "$selector" -j 1 --scratch-path "$scratch_dir/.build" &
+            swift test -Xswiftc -warnings-as-errors --filter "$selector" -j 1 --scratch-path "$scratch_dir/.build" &
             ;;
         xcode-test)
             package_dir="$PWD"
@@ -183,7 +184,7 @@ run_guarded() {
             package_scheme="$(basename "$package_dir")-Package"
             (
                 cd "$package_dir"
-                xcodebuild test -scheme "$package_scheme" -destination 'platform=macOS' \
+                xcodebuild test SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO -scheme "$package_scheme" -destination 'platform=macOS' \
                     "-only-testing:$selector" -parallel-testing-enabled NO \
                     -parallel-testing-worker-count 1 -jobs 1 \
                     -derivedDataPath "$scratch_dir/DerivedData"

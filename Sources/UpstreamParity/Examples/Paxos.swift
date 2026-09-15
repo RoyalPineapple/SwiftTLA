@@ -163,11 +163,7 @@ package struct PaxosModel: Sendable {
             }
 
             Invariant("Inv") {
-                StateExpr.ifThenElse(
-                    maxVBal[.only] == -1,
-                    maxVal[.only] == PaxosValue.none,
-                    .value(.bool(true))
-                )
+                maxVBal[.only] != -1 || maxVal[.only] == PaxosValue.none
             }
 
             SwiftTLA.Action("Phase1a_0") {
@@ -191,12 +187,12 @@ package struct PaxosModel: Sendable {
             }
 
             SwiftTLA.Action("Phase2a_0_v1") {
-                StateExpr.not(messages.contains(Message.phase2a(0)))
+                !messages.contains(Message.phase2a(0))
                     && addMessage(Message.phase2a(0))
                     && maxBal.stays && maxVBal.stays && maxVal.stays
             }
             SwiftTLA.Action("Phase2a_1_v1") {
-                StateExpr.not(messages.contains(Message.phase2a(1)))
+                !messages.contains(Message.phase2a(1))
                     && addMessage(Message.phase2a(1))
                     && maxBal.stays && maxVBal.stays && maxVal.stays
             }

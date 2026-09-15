@@ -56,7 +56,7 @@ def staged_path(value, field, case_id):
     return destination
 
 for case in manifest.get("cases", []):
-    case_id = case.get("sourceModel")
+    case_id = case.get("id")
     if not isinstance(case_id, str) or not case_id:
         raise SystemExit("case identifier is incomplete")
     for field in ("module", "configuration"):
@@ -97,6 +97,7 @@ fi
 read_lock() {
     python3 - "$TOOLCHAIN" "$@" <<'PY'
 import json
+import re
 import sys
 
 with open(sys.argv[1], encoding="utf-8") as source:
@@ -109,11 +110,11 @@ def get(path):
     return value
 
 required = [
-    "tlc.tag", "tlc.commit", "tlc.jar.repository", "tlc.jar.sha256",
+    "tlc.tag", "tlc.commit", "tlc.jar.repository", "tlc.jar.sha256", "tlc.jar.archiveSHA256", "tlc.jar.buildRevision",
     "java.distribution", "java.version",
     "java.archives.arm64.url", "java.archives.arm64.sha256",
     "java.archives.x86_64.url", "java.archives.x86_64.sha256",
-    "bridge.class", "bridge.source", "bridge.sourceSha256", "bridge.binarySha256",
+    "bridge.class",
 ]
 if lock.get("schema") != "TLCReferencePin":
     raise SystemExit("unsupported toolchain schema")
@@ -122,16 +123,21 @@ for path in required:
     if not isinstance(value, str) or not value:
         raise SystemExit("toolchain lock has an invalid value: " + path)
 
-asset_id = get("tlc.jar.assetID")
-if not isinstance(asset_id, int) or asset_id <= 0:
-    raise SystemExit("toolchain lock has an invalid value: tlc.jar.assetID")
+for path in ["tlc.jar.artifactID", "tlc.jar.buildRunID"]:
+    value = get(path)
+    if type(value) is not int or value <= 0:
+        raise SystemExit("toolchain lock has an invalid value: " + path)
+for path, length in [("tlc.commit", 40), ("tlc.jar.buildRevision", 40),
+                     ("tlc.jar.sha256", 64), ("tlc.jar.archiveSHA256", 64)]:
+    if not re.fullmatch("[0-9a-f]{" + str(length) + "}", get(path)):
+        raise SystemExit("toolchain lock has an invalid value: " + path)
 
 for path in sys.argv[2:]:
     print(get(path))
 PY
 }
 
-if ! LOCK_VALUES="$(read_lock tlc.jar.repository tlc.jar.assetID tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256 bridge.source bridge.sourceSha256 bridge.binarySha256)"; then
+if ! LOCK_VALUES="$(read_lock tlc.jar.repository tlc.jar.artifactID tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256 tlc.jar.archiveSHA256 tlc.commit)"; then
     fail "${LOCK_VALUES:-toolchain lock does not match the accepted TLC reference pin}"
 fi
 
@@ -142,16 +148,13 @@ case "$ARCHITECTURE" in
 esac
 
 TLC_REPOSITORY="$(printf '%s\n' "$LOCK_VALUES" | sed -n '1p')"
-TLC_ASSET_ID="$(printf '%s\n' "$LOCK_VALUES" | sed -n '2p')"
-TLC_ASSET_URL="https://api.github.com/repos/$TLC_REPOSITORY/releases/assets/$TLC_ASSET_ID"
+TLC_ARTIFACT_ID="$(printf '%s\n' "$LOCK_VALUES" | sed -n '2p')"
+TLC_ARTIFACT_URL="https://api.github.com/repos/$TLC_REPOSITORY/actions/artifacts/$TLC_ARTIFACT_ID/zip"
 TLC_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '3p')"
 JAVA_URL="$(printf '%s\n' "$LOCK_VALUES" | sed -n '4p')"
 JAVA_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '5p')"
-BRIDGE_SOURCE_RELATIVE="$(printf '%s\n' "$LOCK_VALUES" | sed -n '6p')"
-BRIDGE_SOURCE_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '7p')"
-BRIDGE_BINARY_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '8p')"
-BRIDGE_SOURCE="$PROJECT_ROOT/$BRIDGE_SOURCE_RELATIVE"
-[ -f "$BRIDGE_SOURCE" ] || fail "bridge source is missing: $BRIDGE_SOURCE_RELATIVE"
+TLC_ARCHIVE_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '6p')"
+TLC_SOURCE_REVISION="$(printf '%s\n' "$LOCK_VALUES" | sed -n '7p')"
 
 sha256() {
     shasum -a 256 "$1" | awk '{print $1}'
@@ -190,28 +193,76 @@ mkdir -p "$TOOL_ROOT/downloads" "$TOOL_ROOT/bridge-classes"
 TLC_JAR="$TOOL_ROOT/downloads/tla2tools.jar"
 JAVA_ARCHIVE="$TOOL_ROOT/downloads/temurin-${ARCHITECTURE}.tar.gz"
 CACHE_ROOT="$PROJECT_ROOT/Tools/TLCGraphBridge/.tool-cache"
-seed_from_cache "$CACHE_ROOT/tla2tools-1.8.0.jar" "$TLC_SHA256" "$TLC_JAR"
 seed_from_cache "$CACHE_ROOT/OpenJDK17U-jdk_${ARCHITECTURE}_mac_hotspot_17.0.19_10.tar.gz" "$JAVA_SHA256" "$JAVA_ARCHIVE"
 TLC_HEADERS=(
-    --header 'Accept: application/octet-stream'
+    --header 'Accept: application/vnd.github+json'
     --header 'X-GitHub-Api-Version: 2022-11-28'
 )
 if [ -n "${FINITE_GRAPH_GITHUB_TOKEN:-}" ]; then
     TLC_HEADERS+=(--header "Authorization: Bearer $FINITE_GRAPH_GITHUB_TOKEN")
 fi
-download_locked "$TLC_ASSET_URL" "$TLC_SHA256" "$TLC_JAR" "${TLC_HEADERS[@]}"
+# ponytail: retained artifacts expire; rebuild and explicitly repin instead of using a moving release.
+TLC_ARCHIVE="$TOOL_ROOT/downloads/tlc-reference-build.zip"
+download_locked "$TLC_ARTIFACT_URL" "$TLC_ARCHIVE_SHA256" "$TLC_ARCHIVE" "${TLC_HEADERS[@]}"
+python3 - "$TLC_ARCHIVE" "$TLC_JAR" "$TLC_SHA256" "$TLC_SOURCE_REVISION" <<'PY'
+import hashlib
+import sys
+import zipfile
+
+archive_path, jar_path, expected_digest, expected_revision = sys.argv[1:]
+with zipfile.ZipFile(archive_path) as archive:
+    for name in ["tla2tools.jar", "source-revision.txt"]:
+        if archive.namelist().count(name) != 1:
+            raise SystemExit("TLC build archive requires exactly one " + name)
+    if archive.read("source-revision.txt").decode("utf-8").strip() != expected_revision:
+        raise SystemExit("TLC build archive source revision differs from the toolchain lock")
+    jar = archive.read("tla2tools.jar")
+if hashlib.sha256(jar).hexdigest() != expected_digest:
+    raise SystemExit("TLC build archive JAR digest differs from the toolchain lock")
+with open(jar_path, "wb") as destination:
+    destination.write(jar)
+PY
 download_locked "$JAVA_URL" "$JAVA_SHA256" "$JAVA_ARCHIVE"
-[ "$(sha256 "$BRIDGE_SOURCE")" = "$BRIDGE_SOURCE_SHA256" ] || fail "bridge source digest mismatch"
+if ! BRIDGE_SOURCE_PATHS="$(python3 - "$PROJECT_ROOT" "$TOOLCHAIN" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1]).resolve()
+sources = json.loads(Path(sys.argv[2]).read_text())["bridge"]["sources"]
+if not isinstance(sources, dict) or not sources:
+    raise SystemExit("bridge source inventory is empty")
+for relative, digest in sorted(sources.items()):
+    source = (root / relative).resolve()
+    if not source.is_relative_to(root) or "\n" in str(source) or source.suffix != ".java":
+        raise SystemExit("invalid bridge source path: " + relative)
+    if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+        raise SystemExit("bridge source digest mismatch: " + relative)
+    print(source)
+PY
+)"; then
+    fail "bridge source validation failed"
+fi
+BRIDGE_SOURCES=()
+while IFS= read -r source; do
+    BRIDGE_SOURCES+=("$source")
+done <<< "$BRIDGE_SOURCE_PATHS"
 
 python3 - "$TLC_JAR" "$TOOLCHAIN" <<'PY'
+from email.parser import Parser
 import json
 import sys
 import zipfile
 
 jar_path, toolchain_path = sys.argv[1:]
 with open(toolchain_path, encoding="utf-8") as source:
-    modules = json.load(source)["tlc"]["standardModules"]
+    reference = json.load(source)["tlc"]
+    modules = reference["standardModules"]
 with zipfile.ZipFile(jar_path) as jar:
+    manifest = Parser().parsestr(jar.read("META-INF/MANIFEST.MF").decode("utf-8"))
+    if manifest["X-Git-Revision"] != reference["commit"]:
+        raise SystemExit("TLC JAR source revision differs from the toolchain lock")
     actual = sorted(
         name.removeprefix("tla2sany/StandardModules/").removesuffix(".tla")
         for name in jar.namelist()
@@ -230,12 +281,14 @@ fi
 [ -x "$JAVA_HOME/bin/javac" ] || fail "locked Temurin archive does not contain javac"
 
 BRIDGE_CLASS="$TOOL_ROOT/bridge-classes/org/swifttla/conformance/LosslessStateWriter.class"
-if [ ! -f "$BRIDGE_CLASS" ] || [ "$(sha256 "$BRIDGE_CLASS")" != "$BRIDGE_BINARY_SHA256" ]; then
-    rm -rf "$TOOL_ROOT/bridge-classes"
-    mkdir -p "$TOOL_ROOT/bridge-classes"
-    "$JAVA_HOME/bin/javac" --release 17 -cp "$TLC_JAR" -d "$TOOL_ROOT/bridge-classes" "$BRIDGE_SOURCE"
-fi
-[ "$(sha256 "$BRIDGE_CLASS")" = "$BRIDGE_BINARY_SHA256" ] || fail "bridge binary digest mismatch"
+# The bridge is built from pinned inputs; record its output digest in each run.
+rm -rf "$TOOL_ROOT/bridge-classes"
+mkdir -p "$TOOL_ROOT/bridge-classes"
+"$JAVA_HOME/bin/javac" --release 17 -cp "$TLC_JAR" -d "$TOOL_ROOT/bridge-classes" "${BRIDGE_SOURCES[@]}"
+[ -f "$BRIDGE_CLASS" ] || fail "bridge compilation produced no class"
+"$JAVA_HOME/bin/jar" --create --file "$TOOL_ROOT/bridge.jar" -C "$TOOL_ROOT/bridge-classes" .
+python3 "$PROJECT_ROOT/Tools/TLCGraphBridge/check-configuration-parser.py" \
+    "$JAVA_HOME/bin/java" "$TLC_JAR" "$TOOL_ROOT/bridge.jar"
 
 if [ -f "$CASES_FILE" ]; then
     stage_declared_inputs "$TOOL_ROOT/inputs"

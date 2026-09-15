@@ -1,10 +1,17 @@
-import SwiftSyntaxMacros
-
-public protocol TLAValueType: TLAValueConvertible, StateExprConvertible, Sendable {
+/// A modeled value is also a constant typed expression of itself.
+public protocol TLAValueType: TLAValueConvertible, TypedExpression, Sendable where ExpressionValue == Self {
   static var defaultValue: Self { get }
+  static var formalValueShape: FormalValueShape { get }
   init?(formalValue: TLAValue)
 }
+extension TLAValueType {
+  public var expr: Expr<Self> { Expr(self) }
+  public var stateExpr: StateExpr { expr.stateExpr }
+  public static var formalValueShape: FormalValueShape { .unsupported(String(reflecting: Self.self)) }
+}
+
 extension Int: TLAValueType {
+  public static var formalValueShape: FormalValueShape { .integer }
   public static var defaultValue: Int { 0 }
   public init?(formalValue: TLAValue) {
     guard case .int(let value) = formalValue else { return nil }
@@ -12,6 +19,7 @@ extension Int: TLAValueType {
   }
 }
 extension Bool: TLAValueType {
+  public static var formalValueShape: FormalValueShape { .boolean }
   public static var defaultValue: Bool { false }
   public init?(formalValue: TLAValue) {
     guard case .bool(let value) = formalValue else { return nil }
@@ -19,6 +27,7 @@ extension Bool: TLAValueType {
   }
 }
 extension String: TLAValueType {
+  public static var formalValueShape: FormalValueShape { .string }
   public static var defaultValue: String { "" }
   public init?(formalValue: TLAValue) {
     guard case .string(let value) = formalValue else { return nil }
@@ -29,22 +38,24 @@ extension String: TLAValueType {
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == Int {
   public var tlaValue: TLAValue { .int(rawValue) }
   public init?(formalValue: TLAValue) {
-    guard case .int(let value) = formalValue else { return nil }
-    self.init(rawValue: value)
+    guard case .int(let rawValue) = formalValue,
+          let value = Self(rawValue: rawValue),
+          value.sourceIssue == nil, value.tlaValue == formalValue else { return nil }
+    self = value
   }
-}
-
-extension TLAValueType
-where Self: RawRepresentable, Self.RawValue == Int, Self: CustomStringConvertible {
-  public var tlaValue: TLAValue { .string(description) }
-  public var description: String { String(describing: self) }
 }
 
 extension TLAValueType where Self: RawRepresentable, Self.RawValue == String {
   public var tlaValue: TLAValue { .string(rawValue) }
   public init?(formalValue: TLAValue) {
-    guard case .string(let value) = formalValue else { return nil }
-    self.init(rawValue: value)
+    let rawValue: String
+    switch formalValue {
+    case .string(let value), .constant(let value): rawValue = value
+    default: return nil
+    }
+    guard let value = Self(rawValue: rawValue),
+          value.sourceIssue == nil, value.tlaValue == formalValue else { return nil }
+    self = value
   }
 }
 
@@ -62,36 +73,27 @@ extension TLARecord: TLAValueType {
   public var tlaValue: TLAValue { .record(self) }
 }
 
-extension StateExprConvertible where Self: TLAValueType {
-  public var stateExpr: StateExpr { .value(tlaValue) }
-}
-
 // MARK: - Expr<T>
 
+/// A formal expression whose value type is known to Swift.
+public protocol TypedExpression<ExpressionValue>: StateExprConvertible, Sendable {
+  associatedtype ExpressionValue: TLAValueType
+  var expr: Expr<ExpressionValue> { get }
+}
+
 /// Phantom-typed expression: `Expr<Int>` can only be assigned to `Var<Int>`.
-public struct Expr<T: TLAValueType>: StateExprConvertible, Sendable {
+public struct Expr<T: TLAValueType>: TypedExpression {
+  public var expr: Self { self }
   public let raw: StateExpr
   public init(_ raw: StateExpr) { self.raw = raw }
   public init(_ value: T) { raw = value.sourceIssue.map(StateExpr.sourceIssue) ?? .value(value.tlaValue) }
   public var stateExpr: StateExpr { raw }
 
-  /// Typed equality keeps enum literals contextual in formal expressions:
-  /// `car[Car.door] == .closed`.
-  public static func == (lhs: Expr<T>, rhs: T) -> StateExpr {
-    .equal(lhs.raw, .value(rhs.tlaValue))
-  }
 
-  public static func == (lhs: T, rhs: Expr<T>) -> StateExpr {
-    .equal(.value(lhs.tlaValue), rhs.raw)
-  }
+}
 
-  public static func != (lhs: Expr<T>, rhs: T) -> StateExpr {
-    .notEqual(lhs.raw, .value(rhs.tlaValue))
-  }
-
-  public static func != (lhs: T, rhs: Expr<T>) -> StateExpr {
-    .notEqual(.value(lhs.tlaValue), rhs.raw)
-  }
+extension Expr: ExpressibleByBooleanLiteral where T == Bool {
+  public init(booleanLiteral value: Bool) { self.init(value) }
 }
 
 public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible, SpecComponent {
@@ -113,33 +115,30 @@ public struct Var<T: TLAValueType>: Sendable, CustomStringConvertible, SpecCompo
   /// Type-safe assignment: `Var<Int>.becomes(5)` — only values matching T.
   @discardableResult
   public func becomes(_ value: T) -> ActionExpr { .assign(.named(name), .value(value.tlaValue)) }
-  /// Type-safe assignment: `Var<Int>.becomes(x + 1)` — only Expr<T>.
+  /// Type-safe assignment: `Var<Int>.becomes(x + 1)` — an expression with value type T.
   @discardableResult
-  public func becomes(_ expr: Expr<T>) -> ActionExpr { .assign(.named(name), expr.raw) }
-  /// Assign the value of another Var: `y0.becomes(x1)`.
-  @discardableResult
-  public func becomes(_ other: Var<T>) -> ActionExpr { .assign(.named(name), other.stateExpr) }
+  public func becomes(_ expr: some TypedExpression<T>) -> ActionExpr { .assign(.named(name), expr.stateExpr) }
   /// Returns `UNCHANGED x` — the variable stays the same in the next state.
   public var stays: ActionExpr { .unchanged(.named(name)) }
 
+}
+
+extension Var: TypedExpression {
+  public var expr: Expr<T> { Expr(stateExpr) }
 }
 
 /// Attaches a guard condition to an action.
 /// `x.becomes(1).when(x == 0)` produces `(x == 0) /\ x' = 1`.
 extension ActionExpr {
   @discardableResult
-  public func when(_ condition: some StateExprConvertible) -> ActionExpr {
+  public func when(_ condition: some TypedExpression<Bool>) -> ActionExpr {
     .and(.guard_(condition.stateExpr), self)
   }
 }
 
 public protocol StateExprConvertible { var stateExpr: StateExpr { get } }
 extension StateExpr: StateExprConvertible { public var stateExpr: StateExpr { self } }
-extension Int: StateExprConvertible { public var stateExpr: StateExpr { .value(.int(self)) } }
-extension Bool: StateExprConvertible { public var stateExpr: StateExpr { .value(.bool(self)) } }
-extension String: StateExprConvertible { public var stateExpr: StateExpr { .value(.string(self)) } }
 extension Var: StateExprConvertible { public var stateExpr: StateExpr { .variable(name) } }
-extension TLAValue: StateExprConvertible { public var stateExpr: StateExpr { .value(self) } }
 
 public protocol TLAValueConvertible {
   var tlaValue: TLAValue { get }
@@ -157,71 +156,23 @@ extension String: TLAValueConvertible { public var tlaValue: TLAValue { .string(
 
 // MARK: - Arithmetic (Var<Int> only)
 
-// MARK: - Generic operators (StateExprConvertible level)
-
-public func + <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .add(lhs.stateExpr, rhs.stateExpr)
-}
-public func - <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .subtract(lhs.stateExpr, rhs.stateExpr)
-}
-public func * <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .multiply(lhs.stateExpr, rhs.stateExpr)
-}
-public func / <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .divide(lhs.stateExpr, rhs.stateExpr)
-}
-public func % <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .modulo(lhs.stateExpr, rhs.stateExpr)
-}
-
-// MARK: - StateExpr-level operators (for direct StateExpr use)
-
+// Raw operators are confined to explicit formal expressions.
 extension StateExpr {
-  public static func - (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .subtract(lhs, rhs) }
-  public static func * (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .multiply(lhs, rhs) }
-  public static func / (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .divide(lhs, rhs) }
-  public static func % (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .modulo(lhs, rhs) }
-  public static func && (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .and(lhs, rhs) }
-  public static func || (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .or(lhs, rhs) }
-}
-
-public prefix func - <E: StateExprConvertible>(expression: E) -> StateExpr {
-  .negate(expression.stateExpr)
-}
-public prefix func ! <E: StateExprConvertible>(expression: E) -> StateExpr {
-  .not(expression.stateExpr)
-}
-
-public func == <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .equal(lhs.stateExpr, rhs.stateExpr)
-}
-
-extension StateExpr {
-  public static func == (lhs: StateExpr, rhs: StateExpr) -> StateExpr { .equal(lhs, rhs) }
-}
-public func != <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .notEqual(lhs.stateExpr, rhs.stateExpr)
-}
-
-public func < <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .lessThan(lhs.stateExpr, rhs.stateExpr)
-}
-public func <= <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .lessOrEqual(lhs.stateExpr, rhs.stateExpr)
-}
-public func > <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .greaterThan(lhs.stateExpr, rhs.stateExpr)
-}
-public func >= <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .greaterOrEqual(lhs.stateExpr, rhs.stateExpr)
-}
-
-public func && <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .and(lhs.stateExpr, rhs.stateExpr)
-}
-public func || <L: StateExprConvertible, R: StateExprConvertible>(lhs: L, rhs: R) -> StateExpr {
-  .or(lhs.stateExpr, rhs.stateExpr)
+  public static func +(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .add(lhs, rhs) }
+  public static func -(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .subtract(lhs, rhs) }
+  public static func *(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .multiply(lhs, rhs) }
+  public static func /(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .divide(lhs, rhs) }
+  public static func %(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .modulo(lhs, rhs) }
+  public static func ==(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .equal(lhs, rhs) }
+  public static func !=(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .notEqual(lhs, rhs) }
+  public static func <(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .lessThan(lhs, rhs) }
+  public static func <=(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .lessOrEqual(lhs, rhs) }
+  public static func >(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .greaterThan(lhs, rhs) }
+  public static func >=(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .greaterOrEqual(lhs, rhs) }
+  public static func &&(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .and(lhs, rhs) }
+  public static func ||(lhs: StateExpr, rhs: StateExpr) -> StateExpr { .or(lhs, rhs) }
+  public static prefix func -(value: StateExpr) -> StateExpr { .negate(value) }
+  public static prefix func !(value: StateExpr) -> StateExpr { .not(value) }
 }
 
 extension StateExpr {
@@ -301,9 +252,13 @@ extension StateExpr {
 
   // MARK: - Closure-based with InvariantBuilder context
 
-  public static func forAll(_ set: StateExpr, @InvariantBuilder _ body: (StateExpr) -> StateExpr)
+  public static func forAll(
+    _ set: StateExpr,
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    @InvariantBuilder _ body: (StateExpr) -> StateExpr
+  )
     -> StateExpr {
-    let qv = generatedBinderName()
+    let qv = generatedBinderName(file: file, line: line, column: column)
     return .forAll(set, qv, body(.variable(qv)))
   }
 }

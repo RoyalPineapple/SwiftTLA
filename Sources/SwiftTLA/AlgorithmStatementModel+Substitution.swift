@@ -63,8 +63,8 @@ extension AlgorithmStatementModel {
         return switch self {
         case .rejected, .goto, .return, .stop, .skip:
             self
-        case .await(let value):
-            .await(expression(value))
+        case .when(let value):
+            .when(expression(value))
         case .assert(let value):
             .assert(expression(value))
         case .set(let originalTarget, let value):
@@ -107,13 +107,21 @@ extension AlgorithmStatementModel {
         with replacement: StateExpr,
         assignmentTargets: AlgorithmAssignmentTargetPolicy
     ) -> AlgorithmStatementModel {
+        substitutingVariables([name: replacement], assignmentTargets: assignmentTargets)
+    }
+
+    func substitutingVariables(
+        _ replacements: [String: StateExpr],
+        assignmentTargets: AlgorithmAssignmentTargetPolicy
+    ) -> AlgorithmStatementModel {
+        guard !replacements.isEmpty else { return self }
         func expression(_ value: StateExpr) -> StateExpr {
-            StateExpr.substituteVariable(name, with: replacement, in: value)
+            StateExpr.substituteVariables(replacements, in: value)
         }
 
         func target(_ value: AlgorithmLValueModel) -> AlgorithmLValueModel? {
             func substitutedRoot(_ root: String) -> String? {
-                guard root == name else { return root }
+                guard let replacement = replacements[root] else { return root }
                 switch assignmentTargets {
                 case .preserve:
                     return root
@@ -138,50 +146,25 @@ extension AlgorithmStatementModel {
             variable: String,
             body: [AlgorithmStatementModel]
         ) -> (variable: String, body: [AlgorithmStatementModel]) {
-            guard variable != name else { return (variable, body) }
-            guard replacement.freeVariableNames.contains(variable) else {
-                return (
-                    variable,
-                    body.map {
-                        $0.substitutingVariable(
-                            name,
-                            with: replacement,
-                            assignmentTargets: assignmentTargets
-                        )
-                    }
-                )
+            let scoped = replacements.filter { $0.key != variable }
+            guard !scoped.isEmpty else { return (variable, body) }
+            let freeVariables = Set(scoped.values.flatMap(\.freeVariableNames))
+            guard freeVariables.contains(variable) else {
+                return (variable, body.map { $0.substitutingVariables(scoped, assignmentTargets: assignmentTargets) })
             }
-
-            let fresh = StateExpr.freshBoundName(
-                variable,
-                avoiding: body.algorithmScopeNames
-                    .union(replacement.freeVariableNames)
-                    .union([name, variable])
-            )
+            let fresh = StateExpr.freshBoundName(variable, avoiding: body.algorithmScopeNames
+                .union(freeVariables).union(scoped.keys).union([variable]))
             let renamed = body.map {
-                $0.substitutingVariable(
-                    variable,
-                    with: .variable(fresh),
-                    assignmentTargets: .replaceWhenVariable
-                )
+                $0.substitutingVariable(variable, with: .variable(fresh), assignmentTargets: .replaceWhenVariable)
             }
-            return (
-                fresh,
-                renamed.map {
-                    $0.substitutingVariable(
-                        name,
-                        with: replacement,
-                        assignmentTargets: assignmentTargets
-                    )
-                }
-            )
+            return (fresh, renamed.map { $0.substitutingVariables(scoped, assignmentTargets: assignmentTargets) })
         }
 
         switch self {
         case .rejected, .goto, .return, .stop, .skip:
             return self
-        case .await(let value):
-            return .await(expression(value))
+        case .when(let value):
+            return .when(expression(value))
         case .assert(let value):
             return .assert(expression(value))
         case .set(let originalTarget, let value):
@@ -211,13 +194,13 @@ extension AlgorithmStatementModel {
         case .ifElse(let condition, let then, let otherwise):
             return .ifElse(
                 expression(condition),
-                then.map { $0.substitutingVariable(name, with: replacement, assignmentTargets: assignmentTargets) },
-                otherwise.map { $0.substitutingVariable(name, with: replacement, assignmentTargets: assignmentTargets) }
+                then.map { $0.substitutingVariables(replacements, assignmentTargets: assignmentTargets) },
+                otherwise.map { $0.substitutingVariables(replacements, assignmentTargets: assignmentTargets) }
             )
         case .either(let first, let second):
             return .either(
-                first.map { $0.substitutingVariable(name, with: replacement, assignmentTargets: assignmentTargets) },
-                second.map { $0.substitutingVariable(name, with: replacement, assignmentTargets: assignmentTargets) }
+                first.map { $0.substitutingVariables(replacements, assignmentTargets: assignmentTargets) },
+                second.map { $0.substitutingVariables(replacements, assignmentTargets: assignmentTargets) }
             )
         case .choose(let variable, let domain, let body):
             let scoped = scopedBody(variable: variable, body: body)
@@ -232,7 +215,7 @@ extension Array where Element == AlgorithmStatementModel {
     var algorithmScopeNames: Set<String> {
         reduce(into: []) { names, statement in
             switch statement {
-            case .await(let value), .assert(let value):
+            case .when(let value), .assert(let value):
                 names.formUnion(value.freeVariableNames)
             case .set(let target, let value):
                 names.insert(target.root)

@@ -50,8 +50,8 @@ package struct SimpleAllocatorModel: Sendable {
             (.c2, SetExpr<Resource>()),
             (.c3, SetExpr<Resource>())
         )
-        let available = SetExpr<Resource>.literal(.r1, .r2).raw.subtracting(
-            alloc[.c1].raw.union(alloc[.c2]).union(alloc[.c3])
+        let available = SetExpr<Resource>.literal(.r1, .r2).subtracting(
+            alloc[.c1].union(alloc[.c2]).union(alloc[.c3])
         )
 
         return #spec("SimpleAllocator") {

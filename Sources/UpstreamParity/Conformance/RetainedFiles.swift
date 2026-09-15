@@ -31,7 +31,7 @@ package enum RetainedFiles {
   }
 
   @discardableResult
-  static func outputDirectory(_ url: URL, beneath root: URL) throws -> URL {
+  package static func outputDirectory(_ url: URL, beneath root: URL) throws -> URL {
     let directory = try resolve(url, beneath: root)
     guard !FileManager.default.fileExists(atPath: directory.path) else {
       throw EvidenceFormatError.invalidField(record: directory.path, field: "output already exists")
@@ -41,7 +41,7 @@ package enum RetainedFiles {
   }
 
   @discardableResult
-  static func createDirectory(_ url: URL, beneath root: URL) throws -> URL {
+  package static func createDirectory(_ url: URL, beneath root: URL) throws -> URL {
     let directory = try resolve(url, beneath: root)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     return directory
@@ -51,7 +51,7 @@ package enum RetainedFiles {
     try data.write(to: url, options: .atomic)
   }
 
-  static func writeText(_ text: String, to url: URL) throws {
+  package static func writeText(_ text: String, to url: URL) throws {
     try write(Data(text.utf8), to: url)
   }
 

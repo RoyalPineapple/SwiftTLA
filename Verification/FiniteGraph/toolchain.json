@@ -2,7 +2,7 @@
   "schema": "TLCReferencePin",
   "tlc": {
     "tag": "v1.8.0",
-    "commit": "b123b22654942bd7f8b1bcadcc47da4ee2cf4c0e",
+    "commit": "867aefb69ffc2452031292587b389d1fc3eb43ff",
     "standardModules": [
       "Bags", "FiniteSets", "Integers", "Json", "Naturals", "Randomization", "RealTime",
       "Reals", "Sequences", "TLC", "TLCExt", "Toolbox", "_DotTrace", "_JsonTrace",
@@ -10,9 +10,12 @@
       "_TLCTracePlain"
     ],
     "jar": {
-      "repository": "tlaplus/tlaplus",
-      "assetID": 544648411,
-      "sha256": "b658b4e504fdf0b721caf7066320f6b6fe5805f4dd2f717d0e47baba4097205e"
+      "repository": "RoyalPineapple/SwiftTLA",
+      "artifactID": 10402680455,
+      "archiveSHA256": "008db0c23893cd152f3e75acdff7caace1c94b6e3051bf4dd1652d5a928d2959",
+      "buildRunID": 34982844008,
+      "buildRevision": "e49581d1751d08a2a397e8730cc8e7655da87bc3",
+      "sha256": "d0245f8253beed96bb27b56803e73253fab956beb13d3983e40ee4e7efbcd39e"
     }
   },
   "java": {
@@ -31,8 +34,9 @@
   },
   "bridge": {
     "class": "org.swifttla.conformance.LosslessStateWriter",
-    "source": "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java",
-    "sourceSha256": "0bdc542fc5058c152c3a3d9efd2df39fd7f6281645c0f54db41d146772a51929",
-    "binarySha256": "723cfa84460279ccdc8770e2e3c7301585b32e7fa652de18b1eb37974c0fe061"
+    "sources": {
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/ConfigurationParser.java": "7afa755bb4bb512519ff4bdb518619f3390683b7f2da9ff5033cfe8b660061be",
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java": "2f9783f125662e77e7a230a826231d369a61ad998a524b8ca9193c1994646774"
+    }
   }
 }

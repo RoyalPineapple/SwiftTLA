@@ -62,7 +62,7 @@ let package = Package(
       dependencies: [.product(name: "SwiftTLA", package: "SwiftTLA")]
     ),
     .executableTarget(
-      name: "ReadmeSymmetricCollectionMacro",
+      name: "ReadmeModelCollectionMacro",
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(

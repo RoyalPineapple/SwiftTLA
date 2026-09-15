@@ -5,7 +5,7 @@ struct BoulangerCorpusRenderingTests {
     @Test("Boulanger preserves its Algorithm source through parser and builder")
     func parserBuilderFidelity() throws {
 
-        let module = try BoulangerModel.spec.compile().renderedPlusCalBundle().root.tla
+        let module = try BoulangerModel.spec.compile().render().plusCalBundle().root.tla
         #expect(module.contains("fair process"))
         #expect(module.contains("StateConstraint =="))
         #expect(module.contains("MutualExclusion =="))

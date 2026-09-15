@@ -56,11 +56,11 @@ package struct TeachingSimpleRegularN8Model: Sendable {
                 }
 
                 Invariant("PCorrect") {
-                    !All(Process.all) { process in Finished(process) }
-                        || !All(Process.all) { process in y[process] != 1 }
+                    !ForAll(Process.all) { process in Finished(process) }
+                        || !ForAll(Process.all) { process in y[process] != 1 }
                 }
                 Invariant("TypeOK") {
-                    All(Process.all) { process in y[process] == 0 || y[process] == 1 }
+                    ForAll(Process.all) { process in y[process] == 0 || y[process] == 1 }
                 }
             })
         }
