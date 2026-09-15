@@ -28,6 +28,7 @@ extension NativeSwiftEmitter {
                 invariants: \(String(reflecting: module.configuration.invariants)),
                 reachabilityProperties: \(String(reflecting: module.configuration.reachabilityProperties)),
                 properties: \(String(reflecting: module.configuration.properties)),
+                refinements: \(String(reflecting: module.configuration.refinements)),
                 symmetry: \(String(reflecting: module.configuration.symmetry)),
                 actions: [\(actions.joined(separator: ", "))])
             """

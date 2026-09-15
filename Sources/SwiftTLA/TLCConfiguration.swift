@@ -5,20 +5,22 @@ package struct TLCConfiguration: Equatable, Sendable {
     package let invariants: [String]
     package let reachabilityProperties: [String]
     package let properties: [String]
+    package let refinements: [String]
     package let symmetry: [String]
 
     package init(declarations: [String], checkDeadlock: Bool, invariants: [String],
-        reachabilityProperties: [String] = [], properties: [String], symmetry: [String]) {
+        reachabilityProperties: [String] = [], properties: [String], refinements: [String] = [], symmetry: [String]) {
         self.declarations = declarations
         self.checkDeadlock = checkDeadlock
         self.invariants = invariants
         self.reachabilityProperties = reachabilityProperties
         self.properties = properties
+        self.refinements = refinements
         self.symmetry = symmetry
     }
 
     func selecting(_ checks: Set<String>, checkDeadlock: Bool) throws -> Self {
-        let unknown = checks.subtracting(invariants + reachabilityProperties + properties)
+        let unknown = checks.subtracting(invariants + reachabilityProperties + properties + refinements)
         guard unknown.isEmpty else {
             throw CompilationDiagnostic(
                 code: .unknownReference, stage: .rendering, path: "TLC configuration",
@@ -31,14 +33,15 @@ package struct TLCConfiguration: Equatable, Sendable {
             invariants: invariants.filter(checks.contains),
             reachabilityProperties: reachabilityProperties.filter(checks.contains),
             properties: properties.filter(checks.contains),
+            refinements: refinements.filter(checks.contains),
             symmetry: symmetry)
     }
 
     func render(usesSymmetryReduction: Bool) -> String {
         let header = ["SPECIFICATION Spec", checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
-        let checks = (invariants + reachabilityProperties).map { "INVARIANT \($0)" } + properties.map { "PROPERTY \($0)" }
+        let checks = (invariants + reachabilityProperties).map { "INVARIANT \($0)" } + (properties + refinements).map { "PROPERTY \($0)" }
         // TLC cannot soundly check liveness on a symmetry-reduced graph.
-        let reduction = usesSymmetryReduction && properties.isEmpty ? symmetry.map { "SYMMETRY \($0)" } : []
+        let reduction = usesSymmetryReduction && properties.isEmpty && refinements.isEmpty ? symmetry.map { "SYMMETRY \($0)" } : []
         return (header + declarations + checks + reduction).joined(separator: "\n") + "\n"
     }
 }

@@ -25,7 +25,7 @@ struct FiniteGraphCheckTests {
       let finiteGraphCase = try FiniteGraphCase(id: declaration.id, exploration: declaration.exploration,
         moduleSHA256: declaration.moduleSHA256, cfgSHA256: declaration.cfgSHA256,
         arguments: [], environment: [:], pin: testReferencePin(), renderedActions: rendered.actions)
-      let native = try declaration.sourceModel.nativeRun(description: compilation.description, rendered: rendered, checkingDeadlock: false, for: finiteGraphCase)
+      let native = try declaration.sourceModel.nativeRun(rendered: rendered, checkingDeadlock: false, for: finiteGraphCase)
       let renderedNames = Set(finiteGraphCase.renderedActions.map(\.renderedName))
       #expect(Set(native.graph.graph.edges.map(\.action)).isSubset(of: renderedNames))
       #expect(native.graph.isComplete, "\(declaration.id)")

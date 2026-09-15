@@ -19,7 +19,7 @@ struct MajorityCorpusStateGraphTests {
             configuration: .init(maximumStateLimit: 10_000, symmetryReduction: .disabled))
             .explore()
         #expect(formal.isComplete)
-        let run = try NativeModelRun(native, description: compilation.description, rendered: compilation.render())
+        let run = try NativeModelRun(native, rendered: compilation.render())
         let reference = try FormalGraphExporter().export(formal)
         #expect(try CanonicalGraph(native) == reference.graph)
         #expect(run.checks.properties == ["TypeOK": .satisfied, "Correct": .satisfied, "Inv": .satisfied])

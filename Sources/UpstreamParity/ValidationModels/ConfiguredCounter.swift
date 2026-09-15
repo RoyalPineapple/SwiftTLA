@@ -2,11 +2,11 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-struct ConfiguredCounter {
-    enum Process: String, FiniteTLAValueDomain { case only }
-    enum Step: String, CaseIterable { case advance }
+package struct ConfiguredCounter {
+    package enum Process: String, FiniteTLAValueDomain { case only }
+    package enum Step: String, CaseIterable { case advance }
 
-    static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("ConfiguredCounter") { scope in
             let limit = scope.parameter(as: Int.self, in: 1...100)
             let stopAtLimit = scope.parameter(as: Bool.self)

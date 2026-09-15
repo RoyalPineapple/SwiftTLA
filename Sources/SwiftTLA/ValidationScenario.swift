@@ -16,6 +16,23 @@ public enum ValidationExpectation: String, Sendable, Codable {
     case violated
 }
 
+public protocol ModelValidationScenario: Sendable {
+    associatedtype Machine: StateMachine
+    associatedtype Property: Hashable, Sendable
+    var name: String { get }
+    var expectations: [Property: ValidationExpectation] { get }
+    var deadlockExpectation: ValidationExpectation? { get }
+    func initialMachines() throws -> [Machine]
+    func render() throws -> RenderedSpecification
+    var formalPropertyNames: [Property: String] { get }
+}
+
+extension ModelValidationScenario {
+    public func explore(maximumStates: Int) throws -> ReachabilityGraph<Machine> {
+        try ReachabilityGraph(initialMachines: initialMachines(), maximumStates: maximumStates)
+    }
+}
+
 public struct ValidationBinding: Sendable {
     package let parameter: ParameterReference
     package let value: StateExpr

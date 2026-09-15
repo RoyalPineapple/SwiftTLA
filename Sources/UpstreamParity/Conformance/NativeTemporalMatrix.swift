@@ -70,22 +70,22 @@ package func temporalConformanceRun(
   switch fairness {
   case .none:
     try exportTemporalRun(UnfairTemporalMatrix.initialMachines(),
-      compilation: UnfairTemporalMatrix.spec.compile(),
+      rendered: UnfairTemporalMatrix.render(),
       maximumStates: maximumStates)
   case .weak:
     try exportTemporalRun(WeaklyFairTemporalMatrix.initialMachines(),
-      compilation: WeaklyFairTemporalMatrix.spec.compile(),
+      rendered: WeaklyFairTemporalMatrix.render(),
       maximumStates: maximumStates)
   case .strong:
     try exportTemporalRun(StronglyFairTemporalMatrix.initialMachines(),
-      compilation: StronglyFairTemporalMatrix.spec.compile(),
+      rendered: StronglyFairTemporalMatrix.render(),
       maximumStates: maximumStates)
   }
 }
 
 private func exportTemporalRun<Machine: StateMachine>(
-  _ initialMachines: [Machine], compilation: CompiledSpecification, maximumStates: Int
+  _ initialMachines: [Machine], rendered: RenderedSpecification, maximumStates: Int
 ) throws -> NativeModelRun {
   try NativeModelRun(ReachabilityGraph(initialMachines: initialMachines, maximumStates: maximumStates),
-    description: compilation.description, rendered: compilation.render())
+    rendered: rendered)
 }

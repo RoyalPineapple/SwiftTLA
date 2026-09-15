@@ -80,22 +80,22 @@ package struct NativeModelRun: Sendable {
   }
 
   package init<Machine: StateMachine>(
-    _ native: ReachabilityGraph<Machine>, description: CompilationDescription,
+    _ native: ReachabilityGraph<Machine>,
     rendered: RenderedSpecification, checkingDeadlock: Bool = false, for finiteGraphCase: FiniteGraphCase? = nil
   ) throws {
     let retainedStates = Set(native.transitions.keys)
     guard Set(native.safetyViolations.keys).isSubset(of: retainedStates),
           native.reachabilityTargets.values.allSatisfy({ $0.isSubset(of: retainedStates) }) else {
-      throw EvidenceFormatError.invalidField(record: description.name,
+      throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name,
         field: "constraint-boundary counterexamples require evidence beyond the constrained graph")
     }
-    let temporalNames = Set(description.temporalProperties)
-    let invariantNames = Set(description.invariants)
-    let refinementNames = Set(description.refinements)
+    let temporalNames = rendered.temporalNames
+    let invariantNames = rendered.invariantNames
+    let refinementNames = rendered.refinementNames
     guard temporalNames == Set(native.temporalResults.keys),
-          Set(description.reachabilityProperties) == Set(native.reachabilityResults.keys),
+          rendered.reachabilityNames == Set(native.reachabilityResults.keys),
           Set(native.refinementFailures.keys).isSubset(of: refinementNames) else {
-      throw EvidenceFormatError.invalidField(record: description.name, field: "native property declarations")
+      throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "native property declarations")
     }
     let renderedNames = Dictionary(uniqueKeysWithValues: (finiteGraphCase?.renderedActions ?? rendered.actions).map {
       ($0.sourceInvocationName, $0.renderedName)
@@ -147,7 +147,7 @@ package struct NativeModelRun: Sendable {
           if properties[name] == .satisfied { properties[name] = .violated(try trace(to: snapshot)) }
         case .deadlock:
           guard Machine.checksDeadlock else {
-            throw EvidenceFormatError.invalidField(record: description.name, field: "unexpected deadlock check")
+            throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "unexpected deadlock check")
           }
           if deadlock == .satisfied { deadlock = .violated(try trace(to: snapshot)) }
         }

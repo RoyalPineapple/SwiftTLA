@@ -64,6 +64,7 @@ let package = Package(
             "SwiftTLA",
             "SwiftTLAMacros",
             "SwiftTLAPlugin",
+            "UpstreamParity",
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftSyntax", package: "swift-syntax")
         ], swiftSettings: settings),

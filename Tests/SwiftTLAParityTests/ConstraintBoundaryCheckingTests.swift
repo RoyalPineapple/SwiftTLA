@@ -52,7 +52,7 @@ struct ConstraintBoundaryCheckingTests {
         #expect(formal.safetyViolations.map { $0.diagnostic?.kind } == [.invariantViolated])
         #expect(formal.outcome.diagnostic?.trace.count == 1)
         #expect(throws: EvidenceFormatError.self) {
-            try NativeModelRun(graph, description: compilation.description, rendered: compilation.render())
+            try NativeModelRun(graph, rendered: compilation.render())
         }
     }
 }

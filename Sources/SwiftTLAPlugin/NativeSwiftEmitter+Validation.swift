@@ -33,24 +33,26 @@ extension NativeSwiftEmitter {
             scenarios.append("""
             ValidationScenario(name: \(String(reflecting: scenario.name)),
                 \(hasConfiguration ? "configuration: try Configuration(\(bindings))," : "")
-                \(properties.isEmpty ? "" : "expectations: [\(expectations)],")
+                expectations: [\(properties.isEmpty ? ":" : expectations)],
                 deadlockExpectation: \(deadlock))
             """)
         }
         let arguments = hasConfiguration ? "configuration: configuration" : ""
         return try nativeDeclarations("""
-        \(properties.isEmpty ? "" : "public enum Property: String, CaseIterable, Sendable {\n\(propertyCases)\n}")
-        public struct ValidationScenario: Sendable {
+        \(properties.isEmpty ? "public enum Property: Hashable, Sendable {}" : "public enum Property: String, CaseIterable, Sendable {\n\(propertyCases)\n}")
+        public struct ValidationScenario: ModelValidationScenario {
+            public typealias Machine = \(model.typeName)
+            public typealias Property = \(model.typeName).Property
             public let name: String
             \(hasConfiguration ? "public let configuration: Configuration" : "")
-            \(properties.isEmpty ? "" : "public let expectations: [Property: ValidationExpectation]")
+            public let expectations: [Property: ValidationExpectation]
             public let deadlockExpectation: ValidationExpectation?
 
             public func initialMachines() throws -> [\(model.typeName)] {
                 try \(model.typeName).initialMachines(\(arguments))
             }
-            public func explore(maximumStates: Int) throws -> ReachabilityGraph<\(model.typeName)> {
-                try ReachabilityGraph(initialMachines: initialMachines(), maximumStates: maximumStates)
+            public var formalPropertyNames: [Property: String] {
+                \(properties.isEmpty ? "[:]" : "Dictionary(uniqueKeysWithValues: Property.allCases.map { ($0, $0.rawValue) })")
             }
             public func render() throws -> RenderedSpecification {
                 try \(model.typeName).render(\(arguments))

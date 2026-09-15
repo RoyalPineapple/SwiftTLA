@@ -6,8 +6,7 @@ struct NativeGraphExportTests {
     @Test("native export retains all reachability targets and a shortest witness without truncation")
     func exportsPositiveOutcomes() throws {
         let graph = try ReachabilityGraph(initialMachines: ReachabilityExportModel.initialMachines(), maximumStates: 3)
-        let compiled = try ReachabilityExportModel.spec.compile()
-        let native = try NativeModelRun(graph, description: compiled.description, rendered: ReachabilityExportModel.render())
+        let native = try NativeModelRun(graph, rendered: ReachabilityExportModel.render())
         #expect(native.graph.graph.states.count == 3)
         #expect(native.graph.graph.edges.count == 2)
         #expect(native.reachabilityTargets["Positive"]?.count == 2)
@@ -31,7 +30,7 @@ struct NativeGraphExportTests {
     func rejectsUnreportedReachability() throws {
         let native = try ReachabilityGraph(initialMachines: CyclicExportModel.initialMachines(), maximumStates: 2)
         let original = try CyclicExportModel.spec.compile()
-        let exported = try NativeModelRun(native, description: original.description, rendered: original.render())
+        let exported = try NativeModelRun(native, rendered: original.render())
         var specification = CyclicExportModel.spec
         specification.reachabilityProperties = [.init(name: "ReachGoal", body: .value(.bool(true)))]
         let rendered = try specification.compile().render()
@@ -48,8 +47,7 @@ struct NativeGraphExportTests {
         let namedCase = try fixtureCase(testReferencePin(), renderedActions: [
             RenderedAction(sourceName: "advance", arguments: [], renderedName: "ConcreteAdvance")
         ])
-        let exported = try NativeModelRun(native, description: compilation.description,
-            rendered: compilation.render(), for: namedCase)
+        let exported = try NativeModelRun(native, rendered: compilation.render(), for: namedCase)
         let trace = try counterexample(exported.checks.properties["ReachesTwo"])
         let start = try #require(trace.cycleStartIndex)
         #expect(trace.steps[start].state == trace.steps.last?.state)
@@ -63,8 +61,8 @@ struct NativeGraphExportTests {
         let rendered = try compilation.render()
         for initial in try FailingExportModel.initialMachines() {
             let native = try ReachabilityGraph(initialMachines: [initial], maximumStates: 3)
-            let exported = try NativeModelRun(native, description: compilation.description, rendered: rendered, checkingDeadlock: true)
-            let defaultChecks = try NativeModelRun(native, description: compilation.description, rendered: rendered)
+            let exported = try NativeModelRun(native, rendered: rendered, checkingDeadlock: true)
+            let defaultChecks = try NativeModelRun(native, rendered: rendered)
             #expect(defaultChecks.checks == exported.checks)
             #expect(defaultChecks.graph == exported.graph)
             #expect(exported.graph.isComplete)
@@ -86,7 +84,7 @@ struct NativeGraphExportTests {
                 let namedCase = try fixtureCase(testReferencePin(), renderedActions: [
                     RenderedAction(sourceName: "advance", arguments: [], renderedName: "ConcreteAdvance")
                 ])
-                let named = try NativeModelRun(native, description: compilation.description, rendered: rendered, checkingDeadlock: true, for: namedCase)
+                let named = try NativeModelRun(native, rendered: rendered, checkingDeadlock: true, for: namedCase)
                 #expect(try counterexample(named.checks.properties["BelowTwo"]).steps.map(\.action) == [nil, "ConcreteAdvance"])
                 #expect(Set(named.graph.graph.edges.map(\.action)) == ["ConcreteAdvance"])
             }
@@ -98,7 +96,7 @@ struct NativeGraphExportTests {
         let native = try ReachabilityGraph(initialMachines: CyclicExportModel.initialMachines(), maximumStates: 2)
         let other = try FailingExportModel.spec.compile()
         #expect(throws: EvidenceFormatError.self) {
-            try NativeModelRun(native, description: other.description, rendered: other.render())
+            try NativeModelRun(native, rendered: other.render())
         }
     }
 

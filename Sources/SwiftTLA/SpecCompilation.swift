@@ -263,10 +263,10 @@ public struct RenderedSpecification: Sendable {
     /// Final artifact boundary used by generated machines; this does not compile or interpret a model.
     @_documentation(visibility: internal)
     public init(_generatedModule name: String, source: String, compilationIdentity: String,
-        declarations: [String], checkDeadlock: Bool, invariants: [String], reachabilityProperties: [String], properties: [String],
+        declarations: [String], checkDeadlock: Bool, invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
         symmetry: [String], actions: [RenderedAction]) throws {
         let configuration = TLCConfiguration(declarations: declarations, checkDeadlock: checkDeadlock,
-            invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, symmetry: symmetry)
+            invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements, symmetry: symmetry)
         let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
             cfg: configuration.render(usesSymmetryReduction: true)), provenance: .compiled(
                 identity: .init(value: compilationIdentity),
@@ -296,7 +296,9 @@ public struct RenderedSpecification: Sendable {
 
     package var invariantNames: Set<String> { Set(configuration.invariants) }
     package var reachabilityNames: Set<String> { Set(configuration.reachabilityProperties) }
-    package var checkNames: Set<String> { Set(configuration.invariants + configuration.reachabilityProperties + configuration.properties) }
+    package var temporalNames: Set<String> { Set(configuration.properties) }
+    package var refinementNames: Set<String> { Set(configuration.refinements) }
+    package var checkNames: Set<String> { Set(configuration.invariants + configuration.reachabilityProperties + configuration.properties + configuration.refinements) }
     package var checksDeadlock: Bool { configuration.checkDeadlock }
 
     /// Selects declared checks for an independent validation pass without rendering the model again.
@@ -315,7 +317,7 @@ public struct RenderedSpecification: Sendable {
     package func referenceBundle(checking names: Set<String>, checkDeadlock: Bool, declarations: String, in reference: TLAModuleBundle) throws -> TLAModuleBundle {
         let selected = try configuration.selecting(names, checkDeadlock: checkDeadlock)
         let directives = (selected.invariants + selected.reachabilityProperties).map { "INVARIANT \($0)" }
-            + selected.properties.map { "PROPERTY \($0)" }
+            + (selected.properties + selected.refinements).map { "PROPERTY \($0)" }
             + [checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
         return TLAModuleBundle(
             root: .init(name: reference.root.name, tla: reference.root.tla,
@@ -1559,7 +1561,8 @@ private extension CompiledModuleMetadata {
             checkDeadlock: behavior.checkDeadlock,
             invariants: behavior.invariants.map(\.name),
             reachabilityProperties: behavior.reachabilityProperties.map(\.name),
-            properties: behavior.temporalProperties.map(\.name) + refinementNames,
+            properties: behavior.temporalProperties.map(\.name),
+            refinements: refinementNames,
             symmetry: symmetrySets.map { "Symm\($0.variableName)" }
         )
     }

@@ -10,8 +10,10 @@ struct NativeRefinementCheckingTests {
         #expect(graph.transitions.count == 5)
         #expect(graph.refinementFailures.isEmpty)
         let compilation = try NativeRefinementCounter.spec.compile()
-        let exported = try NativeModelRun(graph, description: compilation.description, rendered: compilation.render())
+        let exported = try NativeModelRun(graph, rendered: compilation.render())
         #expect(exported.checks.properties["Refines"] == .satisfied)
+        #expect(exported.rendered.refinementNames == ["Refines"])
+        #expect(!exported.rendered.temporalNames.contains("Refines"))
         #expect(exported.rendered.tlaBundle.cfg.contains("PROPERTY Refines\n"))
         #expect(try exported.rendered.tlaBundle(checking: ["Refines"], checkDeadlock: false).cfg.contains("PROPERTY Refines\n"))
         let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
@@ -32,7 +34,7 @@ struct NativeRefinementCheckingTests {
             let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 4)
             let failure = try #require(graph.refinementFailures["Refines"])
             let compilation = try InvalidNativeRefinement.spec.compile()
-            let exported = try NativeModelRun(graph, description: compilation.description, rendered: compilation.render())
+            let exported = try NativeModelRun(graph, rendered: compilation.render())
             guard case .violated(let trace) = exported.checks.properties["Refines"],
                   case .violated = exported.checks.properties["BelowTwo"],
                   case .violated = exported.checks.properties["ReachesFour"] else {
@@ -64,7 +66,7 @@ struct NativeRefinementCheckingTests {
         #expect(witness.cycle.first == witness.cycle.last)
         #expect(witness.cycleActions == [nil])
         let compilation = try FairNativeRefinement.spec.compile()
-        let exported = try NativeModelRun(graph, description: compilation.description, rendered: compilation.render())
+        let exported = try NativeModelRun(graph, rendered: compilation.render())
         guard case .violated(let trace) = exported.checks.properties["Refines"] else {
             Issue.record("Expected a retained refinement counterexample")
             return

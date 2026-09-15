@@ -421,8 +421,15 @@ check. Duplicate overrides and expectations for disabled checks are errors.
 Each scenario provides `initialMachines()`, `explore(maximumStates:)`, and `render()`.
 These methods use the same generated machine and symbolic transition module.
 
-Hosted scenario execution and automatic comparison verdicts remain implementation
-work. Generated scenario methods do not establish independent TLC agreement.
+Generated scenarios conform to `ModelValidationScenario`. The repository runner
+derives canonical graphs and all native property results from that interface.
+It validates expected outcomes after complete exploration. An expected violation
+cannot excuse an unavailable result or incomplete graph.
+
+The runner uses rendered check metadata without compiling the specification again.
+Temporal and refinement declarations remain distinct until TLC configuration output.
+Hosted scenario execution and independent comparison verdicts remain implementation
+work. Native scenario validation does not establish independent TLC agreement.
 
 ### Same machine, different settings
 

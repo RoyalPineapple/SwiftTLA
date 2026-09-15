@@ -340,11 +340,11 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case stringLiterals = "string-literals"
     case actionReferences = "action-references"
 
-    package func nativeRun(description: CompilationDescription, rendered: RenderedSpecification, checkingDeadlock: Bool, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {
+    package func nativeRun(rendered: RenderedSpecification, checkingDeadlock: Bool, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {
         func explore<Machine: StateMachine>(_ initial: [Machine]) throws -> NativeModelRun {
             try NativeModelRun(ReachabilityGraph(initialMachines: initial,
                 maximumStates: finiteGraphCase.exploration.maximumStateLimit),
-                description: description, rendered: rendered, checkingDeadlock: checkingDeadlock, for: finiteGraphCase)
+                rendered: rendered, checkingDeadlock: checkingDeadlock, for: finiteGraphCase)
         }
         switch self {
         case .boulanger: return try explore(BoulangerModel.initialMachines())

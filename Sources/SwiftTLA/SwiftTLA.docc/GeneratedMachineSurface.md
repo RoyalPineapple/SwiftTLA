@@ -60,6 +60,8 @@ changes the expected deadlock outcome without disabling its check.
 
 `Model.validationScenarios()` returns immutable generated scenario values.
 Each scenario provides `initialMachines()`, `explore(maximumStates:)`, and `render()`.
+Generated scenarios conform to `ModelValidationScenario`, which supplies shared
+exploration through the generated machine.
 Its typed `expectations` include every named property, with `.satisfied` as the
 default. `.expect(propertyHandle, .violated)` overrides one expectation.
 The property handle must appear in the specification body to register its declaration.
@@ -67,6 +69,11 @@ The property handle must appear in the specification body to register its declar
 Scalar scenario bindings retain parameter identities and checked value types.
 Missing, duplicate, and foreign bindings fail explicitly. Collection bindings,
 refinement expectations, and automatic hosted scenario verdicts remain unfinished.
+
+Repository validation derives canonical graphs and native results directly from
+scenarios. It validates expected outcomes only after complete exploration.
+The adapter reads rendered check metadata without compiling the specification again.
+This native result does not establish independent TLC agreement.
 
 ## Positive reachability
 
