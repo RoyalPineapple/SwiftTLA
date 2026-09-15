@@ -97,6 +97,33 @@ struct TemporalSymmetryCheckTests {
       #expect(try compilation.render().tlaBundle(
         symmetryReduction: symmetryCase.reducedExploration.symmetryReduction
       ).cfg.contains("SYMMETRY"))
+      let rendered = try compilation.render()
+      let graphBundle = try rendered.tlaBundle(checking: [], checkDeadlock: false,
+        symmetryReduction: symmetryCase.reducedExploration.symmetryReduction)
+      #expect(graphBundle.cfg.contains("SYMMETRY"))
+      #expect(graphBundle.cfg.contains("CHECK_DEADLOCK FALSE"))
+      #expect(rendered.tlaBundle.cfg.contains("CHECK_DEADLOCK TRUE"))
+      let names: [String] = try members.map { member in
+        guard case .constant(let name) = try member.rendered(using: compilation.layout) else {
+          throw EvidenceFormatError.invalidField(record: symmetryCase.id, field: "constant member")
+        }
+        return name
+      }
+      let generator = try SymmetryPermutation(constantMapping: Dictionary(uniqueKeysWithValues:
+        names.enumerated().map { ($0.element, names[($0.offset + 1) % names.count]) }))
+      let finite = try FiniteGraphCase(id: symmetryCase.id, exploration: symmetryCase.reducedExploration,
+        moduleSHA256: SHA256.hex(Data(graphBundle.tla.utf8)), cfgSHA256: SHA256.hex(Data(graphBundle.cfg.utf8)),
+        arguments: ["-workers", "1"], environment: [:], pin: testReferencePin(),
+        renderedActions: rendered.actions, symmetryGenerators: [generator])
+      let root = FileManager.default.temporaryDirectory
+      let request = TLCProcessRequest(javaExecutable: root.appendingPathComponent("java"),
+        jar: root.appendingPathComponent("tlc.jar"), bridgeJar: root.appendingPathComponent("bridge"),
+        bundle: graphBundle, graphEvents: root.appendingPathComponent("events.jsonl"),
+        traceOutput: root.appendingPathComponent("trace.json"), workingDirectory: root,
+        finiteGraphCase: finite, runID: UUID(), invocation: .finiteGraph)
+      let selected = try request.selecting(bundle: graphBundle, work: root,
+        runID: UUID(), invocation: .propertyCheck)
+      #expect(selected.finiteGraphCase == finite)
     }
   }
 

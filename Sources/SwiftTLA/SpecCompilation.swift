@@ -302,12 +302,14 @@ public struct RenderedSpecification: Sendable {
     package var checksDeadlock: Bool { configuration.checkDeadlock }
 
     /// Selects declared checks for an independent validation pass without rendering the model again.
-    /// Symmetry is disabled so the pass retains the complete, unreduced graph.
-    package func tlaBundle(checking checks: Set<String>, checkDeadlock: Bool) throws -> TLAModuleBundle {
+    /// Symmetry defaults to disabled so the pass retains the complete, unreduced graph.
+    package func tlaBundle(checking checks: Set<String>, checkDeadlock: Bool,
+        symmetryReduction: SymmetryReduction = .disabled) throws -> TLAModuleBundle {
         let selected = try configuration.selecting(checks, checkDeadlock: checkDeadlock)
+        let usesSymmetryReduction = if case .enabled = symmetryReduction { true } else { false }
         return TLAModuleBundle(
             root: .init(name: tlaBundle.root.name, tla: tlaBundle.root.tla,
-                cfg: selected.render(usesSymmetryReduction: false)),
+                cfg: selected.render(usesSymmetryReduction: usesSymmetryReduction)),
             imports: tlaBundle.imports, provenance: tlaBundle.provenance
         )
     }

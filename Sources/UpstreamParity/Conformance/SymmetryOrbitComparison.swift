@@ -94,6 +94,7 @@ package enum SymmetryOrbitDifferenceKind: String, Encodable, Sendable {
   case undeclaredAction
   case reducedInitialStates
   case quotientTransition
+  case checkOutcome
 }
 
 package struct SymmetryOrbitDifference: Equatable, Encodable, Sendable {
@@ -146,11 +147,27 @@ package func compareSymmetryOrbits(
   _ input: SymmetryOrbitComparisonInput
 ) throws -> SymmetryOrbitComparisonResult {
   let runs = [input.swiftRaw, input.swiftReduced, input.tlcRaw, input.tlcReduced]
-  guard runs.allSatisfy({ $0.isComplete && $0.outcome == .noViolation }) else {
+  guard runs.allSatisfy({ run in
+    guard run.isComplete else { return false }
+    switch run.outcome {
+    case .noViolation: return true
+    case .deadlock(let state): return !run.graph.edges.contains { $0.source == state }
+    default: return false
+    }
+  }) else {
     return .difference([SymmetryOrbitDifference(
       kind: .incompleteRun,
       detail: "Every raw and reduced SwiftTLA and TLC exploration must complete exhaustively"
     )])
+  }
+
+  let deadlocks = runs.map { run in
+    if case .deadlock = run.outcome { return true }
+    return false
+  }
+  guard deadlocks.allSatisfy({ $0 == deadlocks[0] }) else {
+    return .difference([SymmetryOrbitDifference(kind: .checkOutcome,
+      detail: "Raw and reduced SwiftTLA and TLC deadlock results differ")])
   }
 
   let rawComparison = compareFiniteGraphs(tlc: input.tlcRaw, swift: input.swiftRaw)

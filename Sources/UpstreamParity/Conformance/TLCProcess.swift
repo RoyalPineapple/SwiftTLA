@@ -569,7 +569,7 @@ extension TLCProcessRequest {
     let selected = try FiniteGraphCase(id: configuration.id, exploration: configuration.exploration,
       moduleSHA256: SHA256.hex(Data(bundle.tla.utf8)), cfgSHA256: SHA256.hex(Data(bundle.cfg.utf8)),
       arguments: configuration.arguments, environment: configuration.environment, pin: configuration.pin,
-      renderedActions: configuration.renderedActions)
+      renderedActions: configuration.renderedActions, symmetryGenerators: configuration.symmetryGroup)
     return TLCProcessRequest(javaExecutable: javaExecutable, jar: jar,
       bridgeJar: bridgeJar, bundle: bundle,
       graphEvents: work.appendingPathComponent("events.jsonl"), traceOutput: work.appendingPathComponent("counterexample.json"),

@@ -219,7 +219,7 @@ package struct TLCPropertyCheck: Sendable {
 }
 
 extension TLCPropertyCheck {
-  private func propertyResult(
+  package func propertyResult(
     check: ModelCheck, outcome: TLCExecutionOutcome,
     graph: GraphRun, renderedActions: [RenderedAction],
     outputDirectory: URL

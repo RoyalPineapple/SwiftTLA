@@ -3,6 +3,32 @@ import SwiftTLA
 import UpstreamParity
 
 struct SymmetryOrbitConformanceTests {
+  @Test("Complete symmetry graphs retain deadlock findings without treating them as truncation")
+  func completeDeadlockGraphsAgree() throws {
+    let states = [state("A"), state("B")]
+    let raw = try run(states: states, edges: [], outcome: .deadlock(states[0].key))
+    let swift = try run(states: [states[0]], edges: [], outcome: .deadlock(states[0].key))
+    let tlc = try run(states: [states[1]], edges: [], outcome: .deadlock(states[1].key))
+    if case .exact = try compareSymmetryOrbits(comparisonInput(
+      swiftRaw: raw, swiftReduced: swift, tlcRaw: raw, tlcReduced: tlc)) {} else {
+      Issue.record("Expected complete graph and deadlock agreement")
+    }
+    let unchecked = try run(states: [states[1]], edges: [])
+    guard case .difference(let differences) = try compareSymmetryOrbits(comparisonInput(
+      swiftRaw: raw, swiftReduced: swift, tlcRaw: raw, tlcReduced: unchecked)) else {
+      Issue.record("A missing deadlock result must differ")
+      return
+    }
+    #expect(differences.map(\.kind) == [.checkOutcome])
+    let falseDeadlock = try run(states: [states[0]], outcome: .deadlock(states[0].key))
+    guard case .difference(let invalid) = try compareSymmetryOrbits(comparisonInput(
+      swiftRaw: raw, swiftReduced: falseDeadlock, tlcRaw: raw, tlcReduced: tlc)) else {
+      Issue.record("A state with an outgoing edge cannot witness a deadlock")
+      return
+    }
+    #expect(invalid.map(\.kind) == [.incompleteRun])
+  }
+
   @Test("A reduced representative outside its declared orbit is rejected")
   func reducedRepresentativeOutsideOrbitIsRejected() throws {
     let input = try fixture(reducedStates: [state("C")])

@@ -5,6 +5,27 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct TLCPropertyCheckTests {
+  @Test("symmetry graph capture completes before an independent deadlock witness is checked", arguments: [true, false])
+  func symmetryCaptureSeparatesDeadlock(includeWitness: Bool) throws {
+    let fixture = try Fixture(check: .deadlock)
+    let capture = {
+      try TemporalSymmetryCheck().captureSymmetryGraph(fixture.completeGraphRequest,
+        checking: fixture.rendered.tlaBundle, in: fixture.directory,
+        processAdapter: TLCProcessAdapter(executor: SymmetryExecutor(includeWitness: includeWitness)))
+    }
+    if includeWitness {
+      let result = try capture()
+      #expect(result.isComplete)
+      #expect(result.graph == fixture.swiftRun.graph)
+      let state = try #require(result.graph.initialStateKeys.first)
+      #expect(result.outcome == .deadlock(state))
+      try #require(result.trace).validate(in: result.graph)
+      #expect(FileManager.default.fileExists(atPath: fixture.directory.appendingPathComponent("deadlock-result.json").path))
+    } else {
+      #expect(throws: TLCPropertyCheckError.incompleteGraph) { try capture() }
+    }
+  }
+
   @Test("positive reachability compares complete graphs and finite matching witnesses", arguments: [false, true])
   func comparesPositiveReachability(reached: Bool) throws {
     let x = Var<Int>("x", 1)
@@ -576,6 +597,21 @@ struct TLCPropertyCheckTests {
     func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
       if let stream { try stream.write(to: request.graphEvents, options: .atomic) }
       return processResult
+    }
+  }
+
+  private struct SymmetryExecutor: TLCProcessExecuting {
+    let includeWitness: Bool
+
+    func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
+      if request.invocation == .finiteGraph {
+        #expect(request.bundle.cfg.contains("CHECK_DEADLOCK FALSE"))
+        try graphStream(case: request.finiteGraphCase, runID: request.runID).write(to: request.graphEvents)
+        return Fixture.success
+      }
+      #expect(request.bundle.cfg.contains("CHECK_DEADLOCK TRUE"))
+      if includeWitness { try numberedInitialStateTrace().write(to: request.traceOutput) }
+      return TLCProcessResult(status: 11, stdout: "Error: Deadlock reached.", stderr: "")
     }
   }
 

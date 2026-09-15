@@ -204,9 +204,12 @@ package struct TemporalSymmetryCheck: Sendable {
     let rawRunID = UUID()
     let reducedRunID = UUID()
     let rendered = try compilation.render()
-    let rawBundle = rendered.tlaBundle(
+    guard rendered.checkNames.isEmpty, rendered.checksDeadlock else {
+      throw EvidenceFormatError.invalidField(record: symmetryCase.id, field: "symmetry check coverage")
+    }
+    let rawBundle = try rendered.tlaBundle(checking: [], checkDeadlock: false,
       symmetryReduction: symmetryCase.rawExploration.symmetryReduction)
-    let reducedBundle = rendered.tlaBundle(
+    let reducedBundle = try rendered.tlaBundle(checking: [], checkDeadlock: false,
       symmetryReduction: symmetryCase.reducedExploration.symmetryReduction)
     let renderedActions = rendered.actions
     let work = evidenceRoot.appendingPathComponent("work", isDirectory: true).appendingPathComponent(symmetryCase.id, isDirectory: true)
@@ -227,13 +230,12 @@ package struct TemporalSymmetryCheck: Sendable {
       toolchain: toolchain, bundle: reducedBundle, work: work.appendingPathComponent("reduced"),
       finiteGraphCase: reducedCase, runID: reducedRunID,
       projectRoot: projectRoot)
-    let processAdapter = TLCProcessAdapter()
-    let rawTLC = try processAdapter.capture(
-      rawRequest,
-      retainingIn: outputDirectory.appendingPathComponent("tlc-raw", isDirectory: true)).graph
-    let reducedTLC = try processAdapter.capture(
-      reducedRequest,
-      retainingIn: outputDirectory.appendingPathComponent("tlc-reduced", isDirectory: true)).graph
+    let rawTLC = try captureSymmetryGraph(rawRequest,
+      checking: rendered.tlaBundle(symmetryReduction: symmetryCase.rawExploration.symmetryReduction),
+      in: outputDirectory.appendingPathComponent("tlc-raw", isDirectory: true))
+    let reducedTLC = try captureSymmetryGraph(reducedRequest,
+      checking: rendered.tlaBundle(symmetryReduction: symmetryCase.reducedExploration.symmetryReduction),
+      in: outputDirectory.appendingPathComponent("tlc-reduced", isDirectory: true))
     let swiftRaw = try FormalGraphExporter().export(ModelChecker(
       compilation: compilation,
       configuration: symmetryCase.rawExploration
@@ -274,6 +276,40 @@ package struct TemporalSymmetryCheck: Sendable {
         differences, to: outputDirectory.appendingPathComponent("symmetry-differences.json"))
       return .difference
     }
+  }
+
+  package func captureSymmetryGraph(
+    _ request: TLCProcessRequest, checking bundle: TLAModuleBundle, in output: URL,
+    processAdapter: TLCProcessAdapter = TLCProcessAdapter()
+  ) throws -> GraphRun {
+    let capture = try processAdapter.capture(request, retainingIn: output)
+    guard capture.outcome == .completed, capture.graph.isComparable else {
+      throw TLCPropertyCheckError.incompleteGraph
+    }
+    let work = try RetainedFiles.createDirectory(request.workingDirectory.appendingPathComponent("deadlock"),
+      beneath: request.workingDirectory)
+    let checked = try request.selecting(bundle: bundle, work: work,
+      runID: UUID(), invocation: .propertyCheck)
+    let checkOutput = output.appendingPathComponent("deadlock")
+    let outcome = try processAdapter.run(checked, retainingIn: checkOutput)
+    let result = try TLCPropertyCheck().propertyResult(check: .deadlock, outcome: outcome,
+      graph: capture.graph, renderedActions: request.finiteGraphCase.renderedActions, outputDirectory: checkOutput)
+    try RetainedFiles.writeCanonical(result, to: output.appendingPathComponent("deadlock-result.json"))
+    let graphOutcome: GraphRunOutcome
+    let trace: GraphTrace?
+    switch result {
+    case .satisfied:
+      graphOutcome = .noViolation
+      trace = nil
+    case .violated(let witness):
+      guard let final = witness.steps.last else { throw GraphRunError.emptyTrace }
+      graphOutcome = .deadlock(final.state)
+      trace = witness
+    case .unavailable, .reached, .unreachable:
+      throw TLCPropertyCheckError.incompleteGraph
+    }
+    return try GraphRun(isComplete: true, graph: capture.graph.graph,
+      observableActions: capture.graph.observableActions, outcome: graphOutcome, trace: trace)
   }
 
 }
