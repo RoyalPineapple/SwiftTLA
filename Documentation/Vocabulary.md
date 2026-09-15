@@ -35,6 +35,8 @@ SwiftTLA uses one term for each compiler concept.
 | bundle | Tool-ready files, configuration, ownership, and provenance. |
 | render | Convert resolved expressions to output text. Generated export does not compile the model at runtime. |
 | exploration | Traverse generated transitions. A resource limit cannot turn an incomplete traversal into a completed validation result. |
+| state constraint | A predicate that selects states for exploration. It does not disable executable transitions or suppress invariant checks on excluded candidates. |
+| constraint-boundary counterexample | An invariant witness whose initial or final state falls outside the retained graph. Graph equivalence and witness validation must preserve that distinction. |
 | canonical graph | Deterministic initial states, states, labeled edges, and outcome. |
 | completed graph run | One canonical graph with explicit completion status. |
 | graph comparison | Exact comparison of two completed graph runs. |

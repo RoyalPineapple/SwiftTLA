@@ -377,19 +377,10 @@ extension NativeSwiftEmitter {
             "\(binder(binding.binder)): \(try swiftType(program.bindingTypes[binding.binder]!))"
         }.joined(separator: ", ")
         let arguments = action.bindings.map { "\(binder($0.binder)): \(binder($0.binder))" }.joined(separator: ", ")
-        let filtering: String
-        if let constraint = program.behavior.constraint {
-            let dependencies = constraint.enabledActions
-            let enabled = dependencies.isEmpty ? "" : "let enabled = \(enabledActionsCall(dependencies, state: "state", collectionArguments: collectionArguments))\n"
-            let enabledArgument = dependencies.isEmpty ? "[]" : "enabled"
-            filtering = "let candidates = try updates.map { $0.applying(to: state) }.filter { state in\n\(enabled)return try Self._constraintHolds(in: state\(collectionArguments), enabled: \(enabledArgument))\n}"
-        } else {
-            filtering = "let candidates = updates.map { $0.applying(to: state) }"
-        }
         return DeclSyntax(stringLiteral: """
         private static func _successors\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters), enabled: Set<Int>) throws -> [Snapshot] {
             let updates = try _updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(collectionArguments), enabled: enabled)
-            \(filtering)
+            let candidates = updates.map { $0.applying(to: state) }
             return candidates.reduce(into: [Snapshot]()) { states, state in
                 if !states.contains(state) { states.append(state) }
             }
@@ -524,11 +515,17 @@ extension NativeSwiftEmitter {
         var checks: [String] = []
         declarations += try nativeDeclarations("public static var checksDeadlock: Bool { \(program.behavior.checkDeadlock) }")
         if let constraint = program.behavior.constraint {
+            let enabled = enabledActionsCall(constraint.enabledActions, state: "_execution", collectionArguments: arguments)
             declarations += try nativeDeclarations("""
             private static func _constraintHolds(in state: Snapshot\(collectionParameters), enabled: Set<Int>) throws -> Bool {
                 \(try expression(constraint.expression))
             }
+            public func satisfiesStateConstraint() throws -> Bool {
+                try Self._constraintHolds(in: _execution\(arguments), enabled: \(enabled))
+            }
             """)
+        } else {
+            declarations += try nativeDeclarations("public func satisfiesStateConstraint() throws -> Bool { true }")
         }
         for invariant in program.behavior.invariants {
             declarations += try nativeDeclarations("""

@@ -269,7 +269,29 @@ private func compiledBFS(
         try symmetry.canonicalState(state)
     }
 
+    func checkInvariants(in state: CompiledState, witness: () throws -> (state: CompiledState, steps: [TraceStep])) throws {
+        for invariant in runtime.behavior.invariants where !safetyViolations.contains(where: {
+            if case .invariantViolated(let name, _, _) = $0 { name == invariant.name } else { false }
+        }) {
+            if try !runtime.invariantHolds(invariant, in: state) {
+                let counterexample = try witness()
+                guard try !runtime.invariantHolds(invariant, in: counterexample.state) else {
+                    throw replayFailure("the concrete replay does not violate invariant '\(invariant.name)'")
+                }
+                safetyViolations.append(.invariantViolated(
+                    invariant: invariant.name,
+                    state: try counterexample.state.projection(using: layout),
+                    trace: counterexample.steps
+                ))
+            }
+        }
+    }
+
     for seed in seeds {
+        guard try runtime.constraintHolds(in: seed) else {
+            try checkInvariants(in: seed) { (seed, [try TraceStep(state: seed.projection(using: layout), action: "init")]) }
+            continue
+        }
         let key = try representative(seed)
         guard stateToID[key] == nil else { continue }
         guard stateToID.count < configuration.maximumStateLimit else {
@@ -290,22 +312,7 @@ private func compiledBFS(
         let key = try representative(current)
         guard let currentID = stateToID[key] else { continue }
 
-        for invariant in runtime.behavior.invariants where !safetyViolations.contains(where: {
-            if case .invariantViolated(let name, _, _) = $0 { name == invariant.name } else { false }
-        }) {
-            guard try runtime.invariantHolds(invariant, in: current) else {
-                let counterexample = try trace(to: current)
-                guard try !runtime.invariantHolds(invariant, in: counterexample.state) else {
-                    throw replayFailure("the concrete replay does not violate invariant '\(invariant.name)'")
-                }
-                safetyViolations.append(.invariantViolated(
-                    invariant: invariant.name,
-                    state: try counterexample.state.projection(using: layout),
-                    trace: counterexample.steps
-                ))
-                continue
-            }
-        }
+        try checkInvariants(in: current) { try trace(to: current) }
 
         let successors = try runtime.successors(from: current)
         if checkDeadlock && successors.isEmpty && !safetyViolations.contains(where: {
@@ -315,6 +322,20 @@ private func compiledBFS(
         }
 
         for successor in successors {
+            guard try runtime.constraintHolds(in: successor.state) else {
+                try checkInvariants(in: successor.state) {
+                    let source = try trace(to: current)
+                    let target = try representative(successor.state)
+                    guard let concrete = try runtime.successors(from: source.state).first(where: {
+                        try $0.action == successor.action && representative($0.state) == target
+                    }) else { throw replayFailure("no concrete transition reaches the excluded successor orbit") }
+                    let arguments = try concrete.arguments.map { try $0.rendered(using: layout) }
+                    let step = try TraceStep(state: concrete.state.projection(using: layout),
+                        action: formalActionCall(named: layout.actions[concrete.action.ordinal].declaration.name, arguments: arguments))
+                    return (concrete.state, source.steps + [step])
+                }
+                continue
+            }
             let successorKey = try symmetry.canonicalState(successor.state)
             let formalArguments = try successor.arguments.map { try $0.rendered(using: layout) }
             let targetID: StateGraph.StateID
@@ -352,7 +373,7 @@ private func compiledBFS(
     return .init(
         graph: try graph(),
         initialStateIDs: initialStateIDs,
-        completion: .ok(statesCount: stateToID.count),
+        completion: initialStateIDs.isEmpty ? .noInitialStates : .ok(statesCount: stateToID.count),
         safetyViolations: safetyViolations,
         compilationIdentity: runtime.identity,
         configuration: configuration,

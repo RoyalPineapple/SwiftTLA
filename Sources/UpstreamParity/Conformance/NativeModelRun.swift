@@ -44,6 +44,10 @@ package struct NativeModelRun: Sendable {
     _ native: ReachabilityGraph<Machine>, description: CompilationDescription,
     rendered: RenderedSpecification, checkingDeadlock: Bool = false, for finiteGraphCase: FiniteGraphCase? = nil
   ) throws {
+    guard Set(native.safetyViolations.keys).isSubset(of: Set(native.transitions.keys)) else {
+      throw EvidenceFormatError.invalidField(record: description.name,
+        field: "constraint-boundary counterexamples require evidence beyond the constrained graph")
+    }
     let temporalNames = Set(description.temporalProperties)
     let invariantNames = Set(description.invariants)
     let refinementNames = Set(description.refinements)
@@ -101,9 +105,7 @@ package struct NativeModelRun: Sendable {
       }
     }
     if checkingDeadlock && !Machine.checksDeadlock {
-      // Exploration already computed every successor set; no machine is executed again.
-      let terminalStates = native.transitions.filter { $0.value.isEmpty }.keys
-      if let first = try terminalStates.min(by: { try stateKey($0) < stateKey($1) }) {
+      if let first = try native.deadlockedStates.min(by: { try stateKey($0) < stateKey($1) }) {
         deadlock = .violated(try trace(to: first))
       }
     }

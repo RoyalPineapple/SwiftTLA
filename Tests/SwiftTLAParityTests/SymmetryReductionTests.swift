@@ -72,12 +72,10 @@ struct SymmetryReductionTests {
       Invariant("TypeOK") { x >= 1 && x <= 3 }
     }
     let mc = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled))
-    let checkOutcome = try mc.check()
-    guard case .ok(let count) = checkOutcome else {
-      #expect(Bool(false))
-      return
-    }
-    #expect(count == 3)
+    let exploration = try mc.explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.graph.states.count == 3)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
   }
 
   @Test("Symmetry reduction requires a declared symmetry domain")

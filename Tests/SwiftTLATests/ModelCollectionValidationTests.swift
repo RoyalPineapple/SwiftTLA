@@ -191,11 +191,10 @@ struct ModelCollectionValidationTests {
     let unreduced = try ModelChecker(
       compilation: compilation,
       configuration: unreducedConfiguration
-    ).check()
-    guard case .ok = unreduced else {
-      Issue.record("Expected unreduced exploration to ignore the permutation limit, got \(unreduced)")
-      return
-    }
+    ).explore()
+    #expect(unreduced.isComplete)
+    #expect(unreduced.graph.states.count == 1)
+    #expect(unreduced.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
 
     let reducedConfiguration = try FiniteExplorationConfiguration(
       maximumStateLimit: 100_000,

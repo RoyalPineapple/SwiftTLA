@@ -201,10 +201,11 @@ struct RefinementDeclarationTests {
       Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
-    guard case .ok = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check() else {
-      Issue.record("Expected the mapped concrete model to refine the abstract model.")
-      return
-    }
+    let compilation = try concrete.compile()
+    let exploration = try ModelChecker(compilation: compilation, configuration: .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
+    #expect(try RefinementChecker(compilation: compilation).check(exploration) == nil)
   }
 
   @Test("refinement mappings use compiled action enabledness")
@@ -249,13 +250,13 @@ struct RefinementDeclarationTests {
     let advanced = try #require(try runtime.successors(from: initial).first { $0.state != initial })
     #expect(try runtime.evaluate(refinement.variableMappings, in: advanced.state) == [.boolean(false)])
 
-    guard case .ok = try ModelChecker(
+    let exploration = try ModelChecker(
       compilation: compilation,
       configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled)
-    ).check() else {
-      Issue.record("Expected action enabledness to preserve the abstract transition.")
-      return
-    }
+    ).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
+    #expect(try RefinementChecker(compilation: compilation).check(exploration) == nil)
   }
 
   @Test("bounded refinement reports a concrete edge outside the abstract relation")
@@ -370,14 +371,14 @@ struct RefinementDeclarationTests {
         instance
         Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
       }
-      let outcome = try ModelChecker(
-        compilation: concrete.compile(), configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)
-      ).check()
+      let compilation = try concrete.compile()
+      let checker = ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled))
+      let outcome = try checker.check()
       if assumption {
-        guard case .ok = outcome else {
-          Issue.record("Expected valid abstract assumptions to permit refinement.")
-          continue
-        }
+        #expect(outcome.diagnostic?.kind == .deadlock)
+        let exploration = try checker.explore()
+        #expect(exploration.isComplete)
+        #expect(try RefinementChecker(compilation: compilation).check(exploration) == nil)
       } else {
         #expect(outcome.diagnostic?.kind == .assumption)
       }

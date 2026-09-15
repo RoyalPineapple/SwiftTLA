@@ -15,10 +15,15 @@ struct NativeRefinementCheckingTests {
         #expect(exported.rendered.tlaBundle.cfg.contains("PROPERTY Refines\n"))
         #expect(try exported.rendered.tlaBundle(checking: ["Refines"], checkDeadlock: false).cfg.contains("PROPERTY Refines\n"))
         let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
-        guard case .ok = try ModelChecker(compilation: compilation, configuration: configuration).check() else {
-            Issue.record("Abstract exploration constraints must not restrict the refinement relation")
+        let formal = try ModelChecker(compilation: compilation, configuration: configuration).explore()
+        #expect(formal.isComplete)
+        #expect(formal.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
+        #expect(try RefinementChecker(compilation: compilation).check(formal) == nil)
+        guard case .violated(let trace) = exported.checks.deadlock else {
+            Issue.record("Expected the terminal deadlock independently of the satisfied refinement")
             return
         }
+        try trace.validate(in: exported.graph.graph)
     }
 
     @Test("native refinement failures retain the actual initial state or violating edge")

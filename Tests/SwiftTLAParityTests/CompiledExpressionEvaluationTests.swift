@@ -120,11 +120,10 @@ import UpstreamParity
           .when(phases[process] == FunctionPhase.initial)
       }
     }
-    if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 50, symmetryReduction: .disabled)).check() {
-      #expect(count >= 2)
-    } else {
-      #expect(Bool(false))
-    }
+    let exploration = try ModelChecker(compilation: spec.compile(), configuration: .init(maximumStateLimit: 50, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.graph.states.count == 4)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
   }
 
   @Test("compiled execution handles function-typed variables")

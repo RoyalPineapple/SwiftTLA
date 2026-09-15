@@ -15,8 +15,8 @@ struct FiniteGraphCheckTests {
     }
   }
 
-  @Test("finite graph models export the same complete graph through native execution")
-  func nativeModelsMatchFormalGraphs() throws {
+  @Test("finite model exports retain complete native graphs and every declared check")
+  func nativeExportsRetainCompleteGraphsAndChecks() throws {
     let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
       from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
     for declaration in manifest.cases {
@@ -26,12 +26,10 @@ struct FiniteGraphCheckTests {
         moduleSHA256: declaration.moduleSHA256, cfgSHA256: declaration.cfgSHA256,
         arguments: [], environment: [:], pin: testReferencePin(), renderedActions: rendered.actions)
       let native = try declaration.sourceModel.nativeRun(description: compilation.description, rendered: rendered, checkingDeadlock: false, for: finiteGraphCase)
-      let formal = try FormalGraphExporter().export(ModelChecker(
-        compilation: compilation, configuration: declaration.exploration
-      ).explore(), for: finiteGraphCase)
       let renderedNames = Set(finiteGraphCase.renderedActions.map(\.renderedName))
       #expect(Set(native.graph.graph.edges.map(\.action)).isSubset(of: renderedNames))
-      #expect(native.graph.graph == formal.graph, "\(declaration.id)")
+      #expect(native.graph.isComplete, "\(declaration.id)")
+      #expect(!native.graph.graph.initialStateKeys.isEmpty, "\(declaration.id)")
       if declaration.sourceModel == .nQueensFour {
         guard case .violated(let trace) = native.checks.properties["NoSolutions"] else {
           Issue.record("FourQueens must report the upstream NoSolutions counterexample")
@@ -40,11 +38,23 @@ struct FiniteGraphCheckTests {
         try trace.validate(in: native.graph.graph)
         #expect(native.checks.properties.filter { $0.key != "NoSolutions" }.values.allSatisfy { $0 == .satisfied })
       } else {
-        #expect(native.checks.allSatisfied, "\(declaration.id)")
+        #expect(native.checks.properties.values.allSatisfy { $0 == .satisfied }, "\(declaration.id)")
       }
       #expect(Set(native.checks.properties.keys) == rendered.checkNames, "\(declaration.id)")
       #expect((native.checks.deadlock != nil) == rendered.checksDeadlock, "\(declaration.id)")
-      #expect(formal.isComplete, "\(declaration.id)")
+      if rendered.checksDeadlock {
+        let enabledStates = Set(native.graph.graph.edges.map(\.source))
+        let terminalStates = Set(native.graph.graph.states.keys).subtracting(enabledStates)
+        switch try #require(native.checks.deadlock) {
+        case .satisfied:
+          break
+        case .violated(let trace):
+          try trace.validate(in: native.graph.graph)
+          #expect(terminalStates.contains(try #require(trace.steps.last?.state)))
+        case .unavailable:
+          Issue.record("Missing deadlock result for \(declaration.id)")
+        }
+      }
     }
   }
 

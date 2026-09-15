@@ -88,7 +88,6 @@ struct CompiledRuntime {
         }
         return try actionEnumerator(in: state, enabledActions: enabledActions)
             .enumerateSuccessors(action)
-            .filter { successor in try constraintHolds(in: successor.state) }
     }
 
     func assumeHolds(in state: CompiledState) throws -> Bool {
@@ -119,7 +118,8 @@ struct CompiledRuntime {
         return try queries.map { try evaluator.evaluate($0.expression) }
     }
 
-    private func constraintHolds(in state: CompiledState) throws -> Bool {
+    func constraintHolds(in state: CompiledState) throws -> Bool {
+        try state.requireIdentity(identity)
         guard let constraint = behavior.constraint else { return true }
         return try boolean(constraint, in: state)
     }

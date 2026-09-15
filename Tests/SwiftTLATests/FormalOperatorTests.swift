@@ -276,8 +276,14 @@ struct FormalOperatorTests {
     let initial = try firstCompiledState(in: compilation)
     let successor = try #require(try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial).first)
     #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(2))
-    let outcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
-    #expect({ if case .ok = outcome { true } else { false } }())
+    let exploration = try ModelChecker(compilation: compilation, configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.graph.states.count == 2)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.invariantViolated])
+    #expect(exploration.outcome.diagnostic?.subject == "bounded")
+    let boundary = try #require(exploration.outcome.diagnostic?.state)
+    #expect(try value("counter", in: boundary) == .int(4))
+    #expect(try exploration.outcome.diagnostic?.trace.map { try value("counter", in: $0.state) } == [.int(0), .int(2), .int(4)])
   }
 
   @Test("an imported module exports executable formal operators")
@@ -325,8 +331,10 @@ struct FormalOperatorTests {
     let initial = try firstCompiledState(in: compilation)
     let successor = try #require(try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial).first)
     #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(2))
-    let outcome = try ModelChecker(compilation: try consumer.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
-    #expect({ if case .ok = outcome { true } else { false } }())
+    let exploration = try ModelChecker(compilation: compilation, configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.graph.states.count == 2)
+    #expect(exploration.safetyViolations.isEmpty)
   }
 
   @Test("Folds is executable after import, not only emitted source")

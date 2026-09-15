@@ -17,16 +17,13 @@ import UpstreamParity
       Action("inc") { sv.becomes(sv + 1).when(sv < 5) }
       Invariant("ok") { sv >= 0 && sv <= 5 }
     }
-    let graph1 = try ModelChecker(compilation: try spec1.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
-    let graph2 = try ModelChecker(compilation: try spec2.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
-    #expect(graph1.states.count == graph2.states.count)
-    #expect(graph1.states.count == 6)
-    let result1 = try ModelChecker(compilation: try spec1.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
-    let result2 = try ModelChecker(compilation: try spec2.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
-    if case .ok(let c1) = result1, case .ok(let c2) = result2 {
-      #expect(c1 == c2)
-    } else {
-      #expect(Bool(false), "Invariants should hold in both specs")
+    let first = try ModelChecker(compilation: spec1.compile(), configuration: .init(maximumStateLimit: 100, symmetryReduction: .disabled)).explore()
+    let second = try ModelChecker(compilation: spec2.compile(), configuration: .init(maximumStateLimit: 100, symmetryReduction: .disabled)).explore()
+    #expect(try FormalGraphExporter().export(first).graph == FormalGraphExporter().export(second).graph)
+    for exploration in [first, second] {
+      #expect(exploration.isComplete)
+      #expect(exploration.graph.states.count == 6)
+      #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
     }
   }
 }

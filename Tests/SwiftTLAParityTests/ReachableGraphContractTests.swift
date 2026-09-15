@@ -105,10 +105,10 @@ import UpstreamParity
             || cnt != 0 && cand != i && cnt.becomes(cnt - 1))
       }
     }
-    let count = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph().states.count
-    #expect(count >= 1)
-    let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
-    #expect({ if case .ok = checkOutcome { true } else { false } }())
+    let exploration = try ModelChecker(compilation: spec.compile(), configuration: .init(maximumStateLimit: 100, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.graph.states.count >= 1)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
   }
 
   @Test("Multi-choose is Cartesian product")

@@ -60,12 +60,10 @@ struct TypedFormalCollectionTests {
   }
 
   @Test func typedTupleLowersAndChecksThroughBothPaths() throws {
-    let outcome = try ModelChecker(compilation: try TypedTupleAlgorithm.spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .ok(let count) = outcome else {
-      Issue.record("Expected successful tuple proof, got \(outcome)")
-      return
-    }
-    #expect(count == 3)
+    let exploration = try ModelChecker(compilation: TypedTupleAlgorithm.spec.compile(), configuration: .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.graph.states.count == 3)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
     #expect(try TypedTupleAlgorithm.spec.compile().render().tlaBundle.tla.contains("values' = Append(values, 1)"))
   }
 
@@ -80,11 +78,9 @@ struct TypedFormalCollectionTests {
   }
 
   @Test func typedFiniteInitialDomainChecksThroughBothPaths() throws {
-    let outcome = try ModelChecker(compilation: try TypedFiniteInitialAlgorithm.spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .ok(let count) = outcome else {
-      Issue.record("Expected successful finite-domain proof, got \(outcome)")
-      return
-    }
-    #expect(count == 2)
+    let exploration = try ModelChecker(compilation: TypedFiniteInitialAlgorithm.spec.compile(), configuration: .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.graph.states.count == 2)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
   }
 }

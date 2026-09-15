@@ -218,11 +218,12 @@ import UpstreamParity
           }
       }
     }
-    if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).check() {
-      #expect(count > 0)
-    } else {
-      #expect(Bool(false))
-    }
+    let exploration = try ModelChecker(compilation: spec.compile(), configuration: .init(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.graph.states.count > 0)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
+    let terminal = try #require(exploration.outcome.diagnostic?.state)
+    #expect(try value("source", in: terminal) == .set([]))
   }
 
   @Test("SpecParser preserves explicit choice binders")

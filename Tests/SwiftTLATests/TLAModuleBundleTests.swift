@@ -195,11 +195,9 @@ struct TLAModuleBundleTests {
     #expect(importedModule.tla.contains("Rotation("))
     #expect(importedModule.tla.contains("VARIABLES") == false)
     #expect(importedModule.tla.contains("Spec ==") == false)
-    let check = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .ok = check else {
-      Issue.record("The imported ZSequences operators did not evaluate successfully.")
-      return
-    }
+    let exploration = try ModelChecker(compilation: consumer.compile(), configuration: .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
   }
 
   @Test("an imported module keeps its source boundary while receiving a typed TLC replacement")
@@ -255,11 +253,9 @@ struct TLAModuleBundleTests {
     let bundle = try consumer.compile().render().tlaBundle
     #expect(bundle.imports.map { $0.name } == ["FormalArithmetic"])
     #expect(bundle.imports.first?.tla.contains("Twice(") == true)
-    let check = try ModelChecker(compilation: try consumer.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .ok = check else {
-      Issue.record("The imported operator did not evaluate successfully.")
-      return
-    }
+    let exploration = try ModelChecker(compilation: consumer.compile(), configuration: .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
   }
 
   @Test("a named instance stays a separate source module")
