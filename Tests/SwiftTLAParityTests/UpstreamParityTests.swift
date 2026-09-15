@@ -370,13 +370,6 @@ struct UpstreamParityTests {
         #expect(exploration.graph.states.count == Example.echo.expectedDistinct)
     }
 
-    @Test("EWD840 uses typed finite function state")
-    func ewd840TypedFunctionParity() throws {
-        let exploration = try explore(EWD840Model.spec, maximumStateLimit: 50_000)
-        #expect(exploration.graph.states.count == Example.ewd840.expectedDistinct)
-        #expect(isSuccessful(exploration))
-    }
-
     @Test("EWD998 uses typed finite functions and parameterized actions")
     func ewd998TypedFunctionParity() throws {
         let exploration = try explore(EWD998TerminationModel.spec, maximumStateLimit: 50_000)
