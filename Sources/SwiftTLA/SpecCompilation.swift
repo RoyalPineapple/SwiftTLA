@@ -214,7 +214,10 @@ public struct CompiledSpecification: Sendable {
             provenance: provenance
         )
         try renderedBundle.validateDeclaredClosure()
-        let renderer = CompiledTLARenderer(layout: module.layout, bindings: module.bindings, semantics: module.semantics)
+        let renderer = CompiledTLARenderer(moduleName: metadata.name,
+            reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)).union(metadata.formalParameters.map(\.name)),
+            layout: module.layout, bindings: module.bindings,
+            operators: module.semantics.operators, actions: module.semantics.behavior.actions, functions: [])
         let algorithm = try module.authoredAlgorithm.map { authored in
             try metadata.authoredPlusCalModule(
                 algorithm: authored.plan, declarationOrder: authored.declarations,
@@ -1183,7 +1186,10 @@ private extension CompiledModuleMetadata {
         let semantics = module.semantics
         let refinements = module.refinements
         let requiredStandardModules = module.requiredStandardModules
-        let renderer = CompiledTLARenderer(layout: layout, bindings: bindings, semantics: semantics)
+        let renderer = CompiledTLARenderer(moduleName: name,
+            reservedNames: modelValueNames.union(constants.map(\.name)).union(formalParameters.map(\.name)),
+            layout: layout, bindings: bindings,
+            operators: semantics.operators, actions: semantics.behavior.actions, functions: [])
         let definitions = try semantics.operators.formalDefinitionIDs.prefix(formalDefinitionCount).map(renderer.formalDefinition)
         let instances = try semantics.moduleInstances.map(renderer.moduleInstance)
         let invariants = try semantics.behavior.invariants.map { ($0.id, "\($0.name) == \(try renderer.state($0.predicate.expression))") }

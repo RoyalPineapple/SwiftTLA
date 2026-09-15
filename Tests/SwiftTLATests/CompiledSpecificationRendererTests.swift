@@ -135,9 +135,9 @@ struct CompiledSpecificationRendererTests {
         let variable = try #require(compilation.layout.variables.first?.id)
         let selected = BinderID(ordinal: 0)
         let saved = BinderID(ordinal: 1)
-        let renderer = CompiledTLARenderer(layout: compilation.layout,
+        let renderer = CompiledTLARenderer(moduleName: "ResolvedRendering", reservedNames: [], layout: compilation.layout,
             bindings: .init(binders: [selected: "selected", saved: "saved"]),
-            semantics: compilation.semantics)
+            operators: compilation.semantics.operators, actions: compilation.semantics.behavior.actions, functions: [])
         func literal(_ value: CompiledValue, type: CompiledValueType) -> CompiledExpression {
             .init(operation: .value(value), resultType: type, children: [])
         }
@@ -171,8 +171,9 @@ struct CompiledSpecificationRendererTests {
             .init(name: "_checkedValue", initial: .int(1))
         ], actions: [], invariants: []).compile()
         let variable = try #require(compilation.layout.variables.first?.id)
-        let renderer = CompiledTLARenderer(layout: compilation.layout,
-            bindings: .init(), semantics: compilation.semantics)
+        let renderer = CompiledTLARenderer(moduleName: "CheckedViews", reservedNames: [], layout: compilation.layout,
+            bindings: .init(), operators: compilation.semantics.operators,
+            actions: compilation.semantics.behavior.actions, functions: [])
         let source = CompiledExpression.stateVariable(variable)
         #expect(try renderer.state(.assertView(source, .integer))
             == "(LET _checkedValue_ == _checkedValue IN CASE _checkedValue_ \\in Int -> _checkedValue_)")

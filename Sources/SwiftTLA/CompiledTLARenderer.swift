@@ -13,10 +13,38 @@ private enum ActionRenderingTask {
 }
 
 struct CompiledTLARenderer {
+    let moduleName: String
+    let reservedNames: Set<String>
     let layout: CompiledLayout
     let bindings: CompiledBindingTable
-    let semantics: CompiledSemantics
-    var operators: CompiledOperators { semantics.operators }
+    let operators: CompiledOperators
+    let actions: [CompiledAction]
+    let functions: [ResolvedFunction]
+
+    func resolvedFunctionDefinitions() throws -> [String] {
+        guard !functions.isEmpty else { return [] }
+        let signatures = try functions.enumerated().map { index, function in
+            let name = try resolvedFunctionName(.init(ordinal: index))
+            let slots = function.parameters.map { _ in "_" }.joined(separator: ", ")
+            return name + (slots.isEmpty ? "" : "(\(slots))")
+        }
+        return try ["RECURSIVE " + signatures.joined(separator: ", ")] + functions.enumerated().map { index, function in
+            let name = try resolvedFunctionName(.init(ordinal: index))
+            let parameters = try function.parameters.map { try binderName($0.binder) }.joined(separator: ", ")
+            let body = try state(function.body)
+            let value = try function.domainGuard.map { "CASE \(try state($0)) -> (\(body))" } ?? body
+            return name + (parameters.isEmpty ? "" : "(\(parameters))") + " == " + value
+        }
+    }
+
+    private func resolvedFunctionName(_ id: ResolvedFunctionID) throws -> String {
+        guard functions.indices.contains(id.ordinal) else { throw missing("resolved function", id.ordinal) }
+        let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
+            .union(layout.variables.map(\.declaration.name)).union(layout.actions.map(\.renderedName))
+        var name = "__\(moduleName)_resolvedFunction\(id.ordinal)"
+        while occupied.contains(name) { name += "_" }
+        return name
+    }
 
     func action(
         _ expression: CompiledActionExpr
@@ -211,7 +239,23 @@ struct CompiledTLARenderer {
                 case .enabledAction(let action): parts.append("ENABLED \(try actionReference(action))")
                 case .convert:
                     tasks.append(.expression(expression.children[0]))
-                case .call, .checkedCall:
+                case .call(let id):
+                    let name = try resolvedFunctionName(id)
+                    guard expression.children.count == functions[id.ordinal].parameters.count else {
+                        throw missing("resolved function arguments", id.ordinal)
+                    }
+                    parts.append(name)
+                    if !expression.children.isEmpty {
+                        parts.append("(")
+                        var arguments: [StateRenderingTask] = []
+                        for (index, child) in expression.children.enumerated() {
+                            if index > 0 { arguments.append(.text(", ")) }
+                            arguments.append(.expression(child))
+                        }
+                        arguments.append(.text(")"))
+                        schedule(arguments)
+                    }
+                case .checkedCall:
                     throw missing("resolved function", 0)
                 case .operatorApplication(.lambda(let id, _), let arguments):
                     guard let lambda = operators[id] else { throw missing("lambda", id.ordinal) }
@@ -294,9 +338,9 @@ struct CompiledTLARenderer {
 
     private func actionReference(_ id: ActionID) throws -> String {
         guard layout.actions.indices.contains(id.ordinal),
-              semantics.behavior.actions.indices.contains(id.ordinal) else { throw missing("action", id.ordinal) }
+              actions.indices.contains(id.ordinal) else { throw missing("action", id.ordinal) }
         let name = layout.actions[id.ordinal].renderedName
-        let action = semantics.behavior.actions[id.ordinal]
+        let action = actions[id.ordinal]
         guard !action.bindings.isEmpty else { return name }
         let parameters = try action.bindings.map { try binderName($0.binder) }
         let domains = try zip(parameters, action.bindings).map { parameter, binding in
