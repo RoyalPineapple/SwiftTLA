@@ -20,6 +20,7 @@ package struct ConfiguredCounter {
                         Assign(value, to: value + 1)
                         Assign(previous, to: saved)
                         Assign(copied, to: value)
+                        Assert(previous == saved && copied == saved + 1)
                         If(stopAtLimit && value == limit) {
                             Stop()
                         } else: {

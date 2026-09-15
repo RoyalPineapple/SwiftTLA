@@ -32,6 +32,8 @@ struct ScenarioValidationTests {
             #expect(run.native.graph.isComparable)
             #expect(run.native.graph.graph.states.count == scenario.configuration.limit + 1)
             #expect(Set(run.native.checks.properties.keys) == run.native.rendered.checkNames)
+            #expect(run.expectations["__pcal_assert_0"] == .satisfied)
+            #expect(run.native.checks.properties["__pcal_assert_0"] == .satisfied)
             guard case .reached(let witness) = run.native.checks.properties["AtLimit"] else {
                 Issue.record("Missing Counter reachability witness")
                 continue

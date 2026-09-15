@@ -14,7 +14,8 @@ struct ConfiguredCounterExecutionTests {
         #expect(four.tlaBundle.cfg.contains("CONSTANT limit = 4"))
         #expect(two.tlaBundle.cfg.contains("CONSTANT stopAtLimit = TRUE"))
         #expect(four.tlaBundle.cfg.contains("CONSTANT stopAtLimit = FALSE"))
-        #expect(two.checkNames == ["OrderedCopy", "Bounded", "AtLimit"])
+        #expect(two.checkNames == ["OrderedCopy", "Bounded", "AtLimit", "__pcal_assert_0"])
+        #expect(two.tlaBundle.cfg.contains("INVARIANT __pcal_assert_0"))
         #expect(two.reachabilityNames == ["AtLimit"])
         #expect(two.checksDeadlock && four.checksDeadlock)
         #expect(two.actions.contains { $0.sourceName == "advance" })
@@ -27,6 +28,9 @@ struct ConfiguredCounterExecutionTests {
         for limit in [2, 4] {
             let configuration = try ConfiguredCounter.Configuration(limit: limit, stopAtLimit: true)
             var machine = try ConfiguredCounter.makeMachine(configuration: configuration)
+            #expect(machine.state.value == 0)
+            #expect(machine.state.previous == 0)
+            #expect(machine.state.copied == 0)
             for value in 1...limit {
                 _ = try machine.send(.advance)
                 #expect(machine.state.value == value)
