@@ -279,6 +279,12 @@ struct TLCPropertyCheckTests {
       ), swiftRun: swiftGraph, swiftResult: swiftResult)
 
     #expect(comparison.status == .graphDifference)
+    let traces = try JSONDecoder().decode([GraphTrace].self, from: Data(contentsOf:
+      fixture.directory.appendingPathComponent("graph-mismatch-traces.json")))
+    #expect(traces.map(\.id) == ["swift-mismatch"])
+    let witness = try #require(traces.first)
+    #expect(witness.steps.map(\.action) == [nil, "A"])
+    try witness.validate(in: swiftGraph.graph)
   }
 
   @Test("TLC property checker rejects an incomplete Swift graph")

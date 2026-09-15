@@ -509,6 +509,12 @@ Different valid counterexamples need not be byte-for-byte identical. Validate
 each witness against the corresponding semantics and compare the underlying
 graphs and outcomes.
 
+For topology differences, `graph-mismatch-traces.json` retains up to one rooted,
+labeled witness per side. Each witness reaches a differing initial state,
+transition, or reachable state and is valid in its own complete graph.
+The full graphs and difference reports remain available. Metadata-only
+differences remain in the structured difference report.
+
 Capture complete graphs independently of early-stopping property checks. Then
 run selected property checks separately using the same model and scenario.
 Symmetry reduction must not invalidate temporal analysis or conceal differences

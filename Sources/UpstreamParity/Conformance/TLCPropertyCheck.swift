@@ -111,8 +111,13 @@ package struct TLCPropertyCheck: Sendable {
             SHA256.hex(Data(capture.request.bundle.cfg.utf8)) == capture.request.finiteGraphCase.cfgSHA256 else {
         throw TLCPropertyCheckError.requestMismatch
       }
-      return (capture, compareFiniteGraphs(tlc: capture.graph, swift: native.graph),
-        checked == capture.request.bundle)
+      let comparison = compareFiniteGraphs(tlc: capture.graph, swift: native.graph)
+      if !comparison.matches {
+        let traces = try graphMismatchTraces(tlc: capture.graph, swift: native.graph)
+        try RetainedFiles.createDirectory(directory, beneath: directory.deletingLastPathComponent())
+        try RetainedFiles.writeCanonical(traces, to: directory.appendingPathComponent("graph-mismatch-traces.json"))
+      }
+      return (capture, comparison, checked == capture.request.bundle)
     }
     let batch = Result {
       let (capture, _, alreadyChecked) = try prepared.get()

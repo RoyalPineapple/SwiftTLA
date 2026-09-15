@@ -59,6 +59,51 @@ package func compareFiniteGraphs(
     return GraphComparison(differences: differences)
 }
 
+package func graphMismatchTraces(tlc: GraphRun, swift: GraphRun) throws -> [GraphTrace] {
+    guard tlc.isComparable, swift.isComparable else {
+        throw EvidenceFormatError.invalidField(record: "graph comparison", field: "complete graphs")
+    }
+    return try [("tlc-mismatch", tlc.graph, swift.graph), ("swift-mismatch", swift.graph, tlc.graph)].compactMap { id, graph, other in
+        let initial = graph.initialStateKeys.subtracting(other.initialStateKeys).min()
+        let edge = initial == nil ? graph.edges.subtracting(other.edges).min() : nil
+        guard let target = initial ?? edge?.source ?? Set(graph.states.keys).subtracting(other.states.keys).min() else {
+            return nil
+        }
+        var steps = try graphPath(to: target, in: graph)
+        if let edge { steps.append(.init(state: edge.target, action: edge.action)) }
+        let trace = GraphTrace(id: id, steps: steps)
+        try trace.validate(in: graph)
+        return trace
+    }
+}
+
+private func graphPath(to target: CanonicalStateKey, in graph: CanonicalGraph) throws -> [GraphTraceStep] {
+    let outgoing = Dictionary(grouping: graph.edges.sorted(), by: \.source)
+    var frontier = graph.initialStateKeys.sorted()
+    var visited = graph.initialStateKeys
+    var previous: [CanonicalStateKey: CanonicalEdge] = [:]
+    var index = 0
+    while index < frontier.count && !visited.contains(target) {
+        let source = frontier[index]
+        index += 1
+        for edge in outgoing[source] ?? [] where visited.insert(edge.target).inserted {
+            previous[edge.target] = edge
+            frontier.append(edge.target)
+        }
+    }
+    guard visited.contains(target) else {
+        throw EvidenceFormatError.invalidField(record: target.canonicalEncoding, field: "reachable mismatch state")
+    }
+    var state = target
+    var reversed: [GraphTraceStep] = []
+    while let edge = previous[state] {
+        reversed.append(.init(state: state, action: edge.action))
+        state = edge.source
+    }
+    reversed.append(.init(state: state, action: nil))
+    return Array(reversed.reversed())
+}
+
 func graphDifferencesJSON(_ comparison: GraphComparison) -> [[String: Any]] {
     comparison.differences.map { difference in
         switch difference {
