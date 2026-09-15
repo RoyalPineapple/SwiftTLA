@@ -82,4 +82,18 @@ struct ParameterResolutionTests {
         let compilation = try ConfiguredCounter.spec.compile()
         #expect(throws: CompilationDiagnostic.self) { try compilation.render() }
     }
+
+    @Test("formal parameter names cannot capture state declarations")
+    func separatesParameterAndStateNames() throws {
+        var spec = TLASpec(name: "ParameterNames", variables: [.init(name: "limit", initial: .int(0))],
+            actions: [.init(name: "advance", body: .assign(.named("limit"), .int(1)))], invariants: [])
+        spec.parameters = [.init(reference: .init(name: "limit"), swiftType: "Int", domain: .integerRange(.int(1), .int(3)))]
+        let compilation = try spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let parameter = try #require(program.layout.parameters.first)
+        #expect(program.binderNames[parameter.binder] != "limit")
+        let module = try program.renderModule()
+        #expect(module.renderedModuleSource.contains("VARIABLES limit"))
+        #expect(!module.renderedModuleSource.contains("CONSTANTS limit\n"))
+    }
 }

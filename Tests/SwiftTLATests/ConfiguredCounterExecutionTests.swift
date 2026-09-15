@@ -2,6 +2,24 @@ import Testing
 @testable import SwiftTLA
 
 struct ConfiguredCounterExecutionTests {
+    @Test("configuration changes TLC bindings without rewriting the transition module")
+    func exportsConfigurations() throws {
+        let two = try ConfiguredCounter.render(configuration: .init(limit: 2, stopAtLimit: true))
+        let four = try ConfiguredCounter.render(configuration: .init(limit: 4, stopAtLimit: false))
+        #expect(two.tlaBundle.tla == four.tlaBundle.tla)
+        #expect(two.tlaBundle.tla.contains("CONSTANTS limit, stopAtLimit"))
+        #expect(two.tlaBundle.tla.contains("ASSUME limit \\in 1..100"))
+        #expect(two.tlaBundle.cfg.contains("CONSTANT limit = 2"))
+        #expect(four.tlaBundle.cfg.contains("CONSTANT limit = 4"))
+        #expect(two.tlaBundle.cfg.contains("CONSTANT stopAtLimit = TRUE"))
+        #expect(four.tlaBundle.cfg.contains("CONSTANT stopAtLimit = FALSE"))
+        #expect(two.checkNames == ["OrderedCopy", "Bounded"])
+        #expect(two.checksDeadlock && four.checksDeadlock)
+        #expect(two.actions.contains { $0.sourceName == "advance" })
+        try two.tlaBundle.validateDeclaredClosure()
+        try four.tlaBundle.validateDeclaredClosure()
+    }
+
     @Test("configurations share generated types and preserve ordered execution")
     func executesConfigurations() throws {
         for limit in [2, 4] {

@@ -1,10 +1,10 @@
 /// TLC directives retained separately so validation can select checks without reparsing output.
-struct TLCConfiguration: Equatable, Sendable {
-    let declarations: [String]
-    let checkDeadlock: Bool
-    let invariants: [String]
-    let properties: [String]
-    let symmetry: [String]
+package struct TLCConfiguration: Equatable, Sendable {
+    package let declarations: [String]
+    package let checkDeadlock: Bool
+    package let invariants: [String]
+    package let properties: [String]
+    package let symmetry: [String]
 
     func selecting(_ checks: Set<String>, checkDeadlock: Bool) throws -> Self {
         let unknown = checks.subtracting(invariants + properties)

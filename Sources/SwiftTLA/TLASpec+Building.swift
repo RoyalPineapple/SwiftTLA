@@ -224,7 +224,7 @@ extension CompiledModuleMetadata {
     let module = AuthoredPlusCalModule(
       name: name,
       extendsModules: authoredPlusCalExtends,
-      constants: constantDeclaration.map { [$0] } ?? [],
+      constants: constantDeclaration(including: []).map { [$0] } ?? [],
       preludeDeclarations: declarationSections.prelude,
       algorithm: plusCalAlgorithm,
       defineDeclarations: declarationSections.define,

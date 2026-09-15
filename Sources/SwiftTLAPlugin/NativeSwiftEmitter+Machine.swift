@@ -82,6 +82,7 @@ extension NativeSwiftEmitter {
         declarations += try propertyDeclarations(collectionParameters: appendedParameters)
         declarations += try refinementDeclarations(nested: nested)
         if nested { return declarations }
+        declarations += try exportDeclarations()
         declarations += actorMembers()
         if !program.layout.controlLocations.isEmpty {
             declarations += try nativeDeclarations("""

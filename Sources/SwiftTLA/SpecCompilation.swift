@@ -99,10 +99,10 @@ public struct ModuleDescription: Sendable, Equatable {
 }
 
 /// TLA+ output and declaration text shared with authored PlusCal rendering.
-struct RenderedModule: Sendable, Equatable {
-    let renderedModuleSource: String
-    let configuration: TLCConfiguration
-    let renderedActions: [RenderedAction]
+package struct RenderedModule: Sendable, Equatable {
+    package let renderedModuleSource: String
+    package let configuration: TLCConfiguration
+    package let renderedActions: [RenderedAction]
     let definitions: [String]
     let instances: [String]
     let refinements: [String]
@@ -110,12 +110,12 @@ struct RenderedModule: Sendable, Equatable {
     let constraint: String?
 }
 
-package struct RenderedAction: Sendable, Equatable {
-    package let sourceName: String
-    package let arguments: [TLAValue]
-    package let renderedName: String
+public struct RenderedAction: Sendable, Equatable {
+    public let sourceName: String
+    public let arguments: [TLAValue]
+    public let renderedName: String
 
-    package init(sourceName: String, arguments: [TLAValue], renderedName: String) {
+    public init(sourceName: String, arguments: [TLAValue], renderedName: String) {
         self.sourceName = sourceName
         self.arguments = arguments
         self.renderedName = renderedName
@@ -156,9 +156,9 @@ struct CompiledModuleMetadata: Sendable {
     let formalDefinitionCount: Int
     let recursiveFunctionCount: Int
 
-    var constantDeclaration: String? {
+    func constantDeclaration(including additionalNames: [String]) -> String? {
         let formalConstants = formalParameters.filter { $0.kind == .constant }.map(\.name)
-        let names = Set(constants.map(\.name) + formalConstants).union(modelValueNames).sorted()
+        let names = Set(constants.map(\.name) + formalConstants + additionalNames).union(modelValueNames).sorted()
         return names.isEmpty ? nil : "CONSTANTS \(names.joined(separator: ", "))"
     }
 
@@ -193,6 +193,8 @@ fileprivate struct CompiledModule: Sendable {
 public struct CompiledSpecification: Sendable {
     public let description: CompilationDescription
     public var identity: CompilationIdentity { description.identity }
+    var moduleMetadata: CompiledModuleMetadata { module.metadata }
+    var requiredStandardModules: Set<StandardModule> { module.requiredStandardModules }
     package var layout: CompiledLayout { module.layout }
     package var semantics: CompiledSemantics { module.semantics }
     var bindings: CompiledBindingTable { module.bindings }
@@ -248,6 +250,29 @@ public struct RenderedSpecification: Sendable {
     fileprivate let configuration: TLCConfiguration
     package let actions: [RenderedAction]
     fileprivate let renderedPlusCalModuleBundle: TLAModuleBundle?
+
+    init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration, actions: [RenderedAction],
+        renderedPlusCalModuleBundle: TLAModuleBundle?) {
+        self.tlaBundle = tlaBundle
+        self.configuration = configuration
+        self.actions = actions
+        self.renderedPlusCalModuleBundle = renderedPlusCalModuleBundle
+    }
+
+    /// Final artifact boundary used by generated machines; this does not compile or interpret a model.
+    @_documentation(visibility: internal)
+    public init(_generatedModule name: String, source: String, compilationIdentity: String,
+        declarations: [String], checkDeadlock: Bool, invariants: [String], properties: [String],
+        symmetry: [String], actions: [RenderedAction]) throws {
+        let configuration = TLCConfiguration(declarations: declarations, checkDeadlock: checkDeadlock,
+            invariants: invariants, properties: properties, symmetry: symmetry)
+        let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
+            cfg: configuration.render(usesSymmetryReduction: true)), provenance: .compiled(
+                identity: .init(value: compilationIdentity),
+                ownership: [.init(moduleName: name, owningRoot: name, structuralPath: [])], dependencies: []))
+        try bundle.validateDeclaredClosure()
+        self.init(tlaBundle: bundle, configuration: configuration, actions: actions, renderedPlusCalModuleBundle: nil)
+    }
 
     package func tlaBundle(
         symmetryReduction: SymmetryReduction
@@ -1172,6 +1197,27 @@ private struct CanonicalSpecificationEncoder {
     }
 }
 
+extension CompiledProgram {
+    package func renderModule() throws -> RenderedModule {
+        guard moduleMetadata.imports.isEmpty, moduleMetadata.formalParameters.isEmpty, refinements.isEmpty else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
+                path: "export.\(moduleMetadata.name)", expected: "a resolved standalone module",
+                actual: "module imports, formal parameters, or refinement exports need a resolved module closure",
+                nextSafeAction: "Resolve the complete module closure before typed export.")
+        }
+        let renderer = CompiledTLARenderer(moduleName: moduleMetadata.name,
+            reservedNames: moduleMetadata.modelValueNames.union(moduleMetadata.constants.map(\.name)),
+            layout: layout, bindings: .init(binders: binderNames), operators: .init(),
+            actions: behavior.actions, functions: functions)
+        return try moduleMetadata.assembleModule(behavior: behavior, renderer: renderer,
+            definitions: [], definitionsBeforeInstances: [], definitionsAfterInstances: [], instances: [],
+            recursiveFunctions: renderer.resolvedFunctionDefinitions(), renderedRefinements: [],
+            renderedFormalModuleReplacements: [],
+            configuration: moduleMetadata.tlcConfiguration(behavior: behavior, replacements: [], refinementNames: []),
+            requiredStandardModules: requiredStandardModules, importedNames: [])
+    }
+}
+
 private extension CompiledModuleMetadata {
     func renderModule(_ module: CompiledModule) throws -> RenderedModule {
         let layout = module.layout
@@ -1192,16 +1238,40 @@ private extension CompiledModuleMetadata {
             operators: semantics.operators, actions: semantics.behavior.actions, functions: [])
         let definitions = try semantics.operators.formalDefinitionIDs.prefix(formalDefinitionCount).map(renderer.formalDefinition)
         let instances = try semantics.moduleInstances.map(renderer.moduleInstance)
-        let invariants = try semantics.behavior.invariants.map { ($0.id, "\($0.name) == \(try renderer.state($0.predicate.expression))") }
-        let temporalProperties = try semantics.behavior.temporalProperties.map { ($0.id, "\($0.name) == \(try renderer.temporal($0.expression))") }
-        let constraint = try semantics.behavior.constraint.map { "StateConstraint == \(try renderer.state($0.expression))" }
         let renderedRefinements = try refinements.map(renderer.refinement)
         let renderedFormalModuleReplacements = try semantics.formalModuleReplacements.map(renderer.formalModuleReplacement)
+        let recursiveFunctions = try semantics.operators.recursiveFunctionIDs.prefix(recursiveFunctionCount).flatMap { id in
+            let function = try renderer.recursiveFunction(id)
+            return [function.declaration, function.body]
+        }
+        return try assembleModule(behavior: semantics.behavior, renderer: renderer,
+            definitions: definitions,
+            definitionsBeforeInstances: module.definitionsBeforeInstances.map { definitions[$0] },
+            definitionsAfterInstances: module.definitionsAfterInstances.map { definitions[$0] },
+            instances: instances, recursiveFunctions: recursiveFunctions,
+            renderedRefinements: renderedRefinements,
+            renderedFormalModuleReplacements: renderedFormalModuleReplacements,
+            configuration: tlcConfiguration(behavior: semantics.behavior,
+                replacements: semantics.formalModuleReplacements, refinementNames: refinements.map(\.name)),
+            requiredStandardModules: requiredStandardModules, importedNames: imports)
+    }
+
+    func assembleModule(
+        behavior: CompiledBehavior, renderer: CompiledTLARenderer,
+        definitions: [String], definitionsBeforeInstances: [String], definitionsAfterInstances: [String],
+        instances: [String], recursiveFunctions: [String], renderedRefinements: [String],
+        renderedFormalModuleReplacements: [String], configuration: TLCConfiguration,
+        requiredStandardModules: Set<StandardModule>, importedNames: [String]
+    ) throws -> RenderedModule {
+        let layout = renderer.layout
+        let invariants = try behavior.invariants.map { ($0.id, "\($0.name) == \(try renderer.state($0.predicate.expression))") }
+        let temporalProperties = try behavior.temporalProperties.map { ($0.id, "\($0.name) == \(try renderer.temporal($0.expression))") }
+        let constraint = try behavior.constraint.map { "StateConstraint == \(try renderer.state($0.expression))" }
         let emittedActionNamesByID = Dictionary(
             uniqueKeysWithValues: layout.actions.map { ($0.id, $0.renderedName) }
         )
         let emittedActionCalls = try directActionCalls(
-            semantics.behavior.actions,
+            behavior.actions,
             emittedActionNames: emittedActionNamesByID
         )
         let emittedActionCallNames = Dictionary(
@@ -1209,7 +1279,7 @@ private extension CompiledModuleMetadata {
         )
         let callsByAction = Dictionary(grouping: emittedActionCalls, by: { $0.call.action })
         let directModuleActions: [DirectModuleAction] = try layout.actions.enumerated().map { index, declaration in
-            let compiled = semantics.behavior.actions[index]
+            let compiled = behavior.actions[index]
             guard let renderedName = emittedActionNamesByID[compiled.id] else {
                 throw CompilationDiagnostic(
                     code: .compilationIdentityMismatch,
@@ -1236,9 +1306,10 @@ private extension CompiledModuleMetadata {
         }
         return RenderedModule(
             renderedModuleSource: try renderedDirectModuleSource(
-                definitionsBeforeInstances: module.definitionsBeforeInstances.map { definitions[$0] },
-                definitionsAfterInstances: module.definitionsAfterInstances.map { definitions[$0] },
+                definitionsBeforeInstances: definitionsBeforeInstances,
+                definitionsAfterInstances: definitionsAfterInstances,
                 renderedInstances: instances,
+                recursiveFunctions: recursiveFunctions,
                 renderedInvariants: invariants.map(\.1),
                 renderedTemporalProperties: temporalProperties.map(\.1),
                 renderedConstraint: constraint,
@@ -1248,10 +1319,11 @@ private extension CompiledModuleMetadata {
                 renderedFormalModuleReplacements: renderedFormalModuleReplacements,
                 renderer: renderer,
                 layout: layout,
-                semantics: semantics,
-                requiredStandardModules: requiredStandardModules
+                behavior: behavior,
+                requiredStandardModules: requiredStandardModules,
+                importedNames: importedNames
             ),
-            configuration: tlcConfiguration(semantics: semantics, refinements: refinements),
+            configuration: configuration,
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
             definitions: definitions, instances: instances, refinements: renderedRefinements,
             properties: Dictionary(uniqueKeysWithValues: invariants + temporalProperties), constraint: constraint
@@ -1262,6 +1334,7 @@ private extension CompiledModuleMetadata {
         definitionsBeforeInstances: [String],
         definitionsAfterInstances: [String],
         renderedInstances: [String],
+        recursiveFunctions: [String],
         renderedInvariants: [String],
         renderedTemporalProperties: [String],
         renderedConstraint: String?,
@@ -1271,8 +1344,9 @@ private extension CompiledModuleMetadata {
         renderedFormalModuleReplacements: [String],
         renderer: CompiledTLARenderer,
         layout: CompiledLayout,
-        semantics: CompiledSemantics,
-        requiredStandardModules: Set<StandardModule>
+        behavior: CompiledBehavior,
+        requiredStandardModules: Set<StandardModule>,
+        importedNames: [String]
     ) throws -> String {
         let varNames = layout.variables.map(\.declaration.name)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
@@ -1282,7 +1356,6 @@ private extension CompiledModuleMetadata {
         lines.append("---- MODULE \(name) ----")
 
         let symmetryModule: [StandardModule] = symmetrySets.isEmpty ? [] : [.tlc]
-        let importedNames = imports
         let modules = ((extendsModules + [.finiteSets, .sequences] + requiredStandardModules.sorted { $0.rawValue < $1.rawValue } + symmetryModule)
             .map(\.rawValue)
             + importedNames)
@@ -1295,7 +1368,7 @@ private extension CompiledModuleMetadata {
         let formalVariableSymbols = formalParameters
             .filter { $0.kind == .variable }
             .map(\.name)
-        if let declaration = constantDeclaration {
+        if let declaration = constantDeclaration(including: try layout.parameters.map { try renderer.binderName($0.binder) }) {
             lines.append(declaration)
             for constant in constants.sorted(by: { $0.name < $1.name }) {
                 lines.append("ASSUME \(constant.name) = \(constant.value)")
@@ -1312,11 +1385,6 @@ private extension CompiledModuleMetadata {
         }
         if !collections.isEmpty || !symmetrySets.isEmpty { lines.append("") }
 
-        if let assume = semantics.behavior.assume {
-            lines.append("ASSUME \(try renderer.state(assume.expression))")
-            lines.append("")
-        }
-
         if !isLibraryModule || !formalVariableSymbols.isEmpty {
             lines.append("VARIABLES \((varNames + formalVariableSymbols).joined(separator: ", "))")
             lines.append("")
@@ -1330,12 +1398,8 @@ private extension CompiledModuleMetadata {
             lines.append(definition)
             lines.append("")
         }
-        for function in semantics.operators.recursiveFunctionIDs.prefix(recursiveFunctionCount) {
-            let rendered = try renderer.recursiveFunction(function)
-            lines.append(rendered.declaration)
-            lines.append(rendered.body)
-            lines.append("")
-        }
+        lines.append(contentsOf: recursiveFunctions)
+        if !recursiveFunctions.isEmpty { lines.append("") }
         for instance in renderedInstances {
             lines.append(instance)
             lines.append("")
@@ -1349,11 +1413,24 @@ private extension CompiledModuleMetadata {
             lines.append("")
         }
 
+        for parameter in layout.parameters {
+            guard let domain = behavior.parameterDomains[parameter.binder] else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
+                    path: "parameters.\(parameter.reference.name).domain", expected: "a resolved domain", actual: "missing domain",
+                    nextSafeAction: "Resolve the parameter domain before export.")
+            }
+            lines.append("ASSUME \(try renderer.binderName(parameter.binder)) \\in \(try renderer.state(domain))")
+        }
+        if let assume = behavior.assume {
+            lines.append("ASSUME \(try renderer.state(assume.expression))")
+            lines.append("")
+        }
+
         if !isLibraryModule, varNames.count > 1 {
             lines.append("vars == \(varsTuple)")
             lines.append("")
         }
-        for index in semantics.behavior.enabledActionIndices {
+        for index in behavior.enabledActionIndices {
             let renderedAction = renderedActions[index]
             guard !renderedAction.sourceName.isEmpty else { continue }
             let parameters = renderedAction.renderedParameters.joined(separator: ", ")
@@ -1378,7 +1455,7 @@ private extension CompiledModuleMetadata {
         }
 
         let initializations = Dictionary(
-            uniqueKeysWithValues: semantics.behavior.initializations.map {
+            uniqueKeysWithValues: behavior.initializations.map {
                 ($0.variable, $0.initialization)
             }
         )
@@ -1414,7 +1491,9 @@ private extension CompiledModuleMetadata {
             .flatMap(\.calls)
             .map(\.renderedName)
         if invocations.count != 1 || invocations[0] != "Next" {
-            if invocations.count == 1 {
+            if invocations.isEmpty {
+                lines.append("Next == FALSE")
+            } else if invocations.count == 1 {
                 lines.append("Next == \(invocations[0])")
             } else {
                 lines.append("Next ==")
@@ -1426,7 +1505,7 @@ private extension CompiledModuleMetadata {
         lines.append("Spec ==")
         lines.append("  /\\ Init")
         lines.append("  /\\ [][Next]_\(varsTuple)")
-        for condition in semantics.behavior.fairness {
+        for condition in behavior.fairness {
             lines.append("  /\\ \(try renderer.fairness(condition, vars: varsTuple, actionCalls: emittedActionCallNames))")
         }
         lines.append("")
@@ -1436,12 +1515,13 @@ private extension CompiledModuleMetadata {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    private func tlcConfiguration(semantics: CompiledSemantics, refinements: [CompiledRefinement]) -> TLCConfiguration {
+    func tlcConfiguration(behavior: CompiledBehavior, replacements: [CompiledFormalModuleReplacement],
+        refinementNames: [String]) -> TLCConfiguration {
         var lines: [String] = []
         for constant in constants.sorted(by: { $0.name < $1.name }) {
             lines.append("CONSTANT \(constant.name) = \(constant.value)")
         }
-        for replacement in semantics.formalModuleReplacements {
+        for replacement in replacements {
             lines.append(
                 "CONSTANT \(replacement.operatorName) <- [\(replacement.moduleName)]\(replacement.definitionName)"
             )
@@ -1449,12 +1529,12 @@ private extension CompiledModuleMetadata {
         for name in modelValueNames.subtracting(constants.map(\.name)).sorted() {
             lines.append("CONSTANT \(name) = \(name)")
         }
-        if semantics.behavior.constraint != nil { lines.append("CONSTRAINT StateConstraint") }
+        if behavior.constraint != nil { lines.append("CONSTRAINT StateConstraint") }
         return TLCConfiguration(
             declarations: lines,
-            checkDeadlock: semantics.behavior.checkDeadlock,
-            invariants: semantics.behavior.invariants.map(\.name),
-            properties: semantics.behavior.temporalProperties.map(\.name) + refinements.map(\.name),
+            checkDeadlock: behavior.checkDeadlock,
+            invariants: behavior.invariants.map(\.name),
+            properties: behavior.temporalProperties.map(\.name) + refinementNames,
             symmetry: symmetrySets.map { "Symm\($0.variableName)" }
         )
     }

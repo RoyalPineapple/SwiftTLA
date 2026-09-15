@@ -3,6 +3,39 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct ResolvedFunctionRenderingTests {
+    @Test("an empty transition relation exports FALSE and retains deadlock checking")
+    func rendersEmptyNext() throws {
+        let compilation = try TLASpec(name: "Stuck", variables: [.init(name: "count", initial: .int(0))],
+            actions: [], invariants: []).compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let module = try program.renderModule()
+        #expect(module.renderedModuleSource.contains("Next == FALSE\n"))
+        #expect(module.configuration.checkDeadlock)
+        let formal = try compilation.render()
+        #expect(formal.tlaBundle.tla.contains("Next == FALSE\n"))
+        #expect(formal.checksDeadlock)
+    }
+
+    @Test("unsupported typed module closures fail explicitly without a source-rendering fallback")
+    func rejectsUnsupportedClosure() throws {
+        let compilation = try TLASpec(name: "UnsupportedClosure",
+            variables: [.init(name: "count", initial: .int(0))], formalParameters: [.init("Base")],
+            actions: [], invariants: []).compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        do {
+            _ = try program.renderModule()
+            Issue.record("Export accepted an unresolved module closure")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unsupportedGeneratedValueShape)
+            #expect(diagnostic.path == "export.UnsupportedClosure")
+        }
+        var native = NativeSwiftEmitter(model: try MacroCompilation(typeName: "UnsupportedClosure", program: program))
+        let members = try native.machineMembers().map(\.description).joined(separator: "\n")
+        #expect(members.contains("public static func render()"))
+        #expect(members.contains("Resolve the complete module closure before typed export."))
+        #expect(!members.contains(".compile("))
+    }
+
     @Test("native and TLA generation consume the same resolved call and binders")
     func rendersResolvedProgram() throws {
         let increment = FormalOperatorDefinition(name: "Increment", parameters: [.value("input", typeName: "Int")],
@@ -23,8 +56,14 @@ struct ResolvedFunctionRenderingTests {
             "__ResolvedCalls_resolvedFunction0(\(parameter)) == (\(parameter) + 1)"
         ])
         #expect(try renderer.action(#require(program.behavior.actions.first).body) == "count' = __ResolvedCalls_resolvedFunction0(count)")
+        let module = try program.renderModule()
+        #expect(module.renderedModuleSource.contains("advance == count' = __ResolvedCalls_resolvedFunction0(count)"))
+        #expect(module.renderedModuleSource.contains("__ResolvedCalls_resolvedFunction0(\(parameter)) == (\(parameter) + 1)"))
+        #expect(!module.renderedModuleSource.contains("Increment("))
         var native = NativeSwiftEmitter(model: try MacroCompilation(typeName: "ResolvedCalls", program: program))
-        #expect(try !native.machineMembers().isEmpty)
+        let members = try native.machineMembers().map(\.description).joined(separator: "\n")
+        #expect(members.contains("public static func render()"))
+        #expect(!members.contains(".compile("))
     }
 
     @Test("recursive calls remain references and function domain guards remain explicit")

@@ -87,6 +87,10 @@ extension NativeSwiftEmitter {
     }
 
     private func formalLiteral(_ value: CompiledValue) throws -> String {
+        renderedLiteral(try value.rendered(using: program.layout))
+    }
+
+    func renderedLiteral(_ value: TLAValue) -> String {
         func emit(_ value: TLAValue) -> String {
             switch value {
             case .int(let value): return "TLAValue.int(\(value == Int.min ? "Int.min" : String(value)))"
@@ -101,6 +105,6 @@ extension NativeSwiftEmitter {
                 return "TLAValue.function([\(entries.isEmpty ? ":" : entries.joined(separator: ", "))])"
             }
         }
-        return emit(try value.rendered(using: program.layout))
+        return emit(value)
     }
 }

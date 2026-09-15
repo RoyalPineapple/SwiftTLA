@@ -13,6 +13,8 @@ package struct CompiledEnums: Sendable {
 package final class CompiledTypeInputs: Sendable {
     let refinements: [CompiledRefinementProgram]
     let identity: CompilationIdentity
+    let moduleMetadata: CompiledModuleMetadata
+    let requiredStandardModules: Set<StandardModule>
     let layout: CompiledLayout
     let semantics: CompiledSemantics
     let bindings: CompiledBindingTable
@@ -33,6 +35,8 @@ package final class CompiledTypeInputs: Sendable {
                 variableMappings: refinement.variableMappings)
         }
         identity = compilation.identity
+        moduleMetadata = compilation.moduleMetadata
+        requiredStandardModules = compilation.requiredStandardModules
         layout = compilation.layout
         semantics = compilation.semantics
         bindings = compilation.bindings

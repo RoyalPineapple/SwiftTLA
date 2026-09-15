@@ -18,6 +18,9 @@ package struct ResolvedProjectionPair: Hashable, Sendable {
 
 package struct CompiledProgram: Sendable {
     package let identity: CompilationIdentity
+    let moduleMetadata: CompiledModuleMetadata
+    let requiredStandardModules: Set<StandardModule>
+    package var moduleName: String { moduleMetadata.name }
     package let layout: CompiledLayout
     package let behavior: CompiledBehavior
     package let refinements: [CompiledRefinementProgram]

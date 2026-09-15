@@ -343,12 +343,28 @@ For the declarations above, the generated entry points are:
 try Counter.Configuration(limit: 2, stopAtLimit: true)
 try Counter.initialMachines(configuration: configuration)
 try Counter.makeMachine(configuration: configuration)
+try Counter.render(configuration: configuration)
 ```
 
 The first expression succeeds. `Counter.Configuration(limit: 101,
 stopAtLimit: true)` throws a domain error. A string supplied for `limit` fails
 Swift type checking. A binding to a parameter from another model fails model
 validation, even when its name and type match.
+
+`render(configuration:)` returns `RenderedSpecification`. The macro renders the
+resolved typed program once. The generated method combines that module with the
+supplied configuration at the serialization boundary. It must not compile the
+specification again or interpret expressions at runtime.
+
+Parameters remain symbolic constants in the TLA+ module. Different configurations
+change the TLC constant bindings, not the transition module. Legal domains remain
+explicit module assumptions. Export retains every declared check and the model's
+deadlock selection. It does not turn an expected failure into a different model.
+
+For example, valid limits of 2 and 4 produce identical transition modules and
+different constant bindings. An invalid limit fails `Configuration` construction
+before export. Unsupported module closures must fail explicitly, without partial
+output or a fallback to an earlier compiler representation.
 
 This contract settles scalar parameter declarations for Counter. Parameter-dependent
 collection domains and scenario declaration signatures still require the remaining

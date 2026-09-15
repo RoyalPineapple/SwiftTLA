@@ -112,8 +112,9 @@ struct CompiledLowerer {
         var names = binderNames
         var unavailable = reservedRenderedNames.union(modelValueNames)
             .union(binderNames.values).union(operatorNames.values)
+        let parameterIDs = Set(layout.parameters.map(\.binder))
         for (binder, name) in binderNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
-            where modelValueNames.contains(name) {
+            where modelValueNames.contains(name) || (parameterIDs.contains(binder) && reservedRenderedNames.contains(name)) {
             let renamed = StateExpr.freshBoundName(name, avoiding: unavailable)
             names[binder] = renamed
             unavailable.insert(renamed)

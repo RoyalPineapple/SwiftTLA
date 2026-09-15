@@ -80,7 +80,8 @@ private final class ProgramResolver {
                 throw CompiledValueType.unresolvedDiagnostic(function.resultType, at: "function[\(index)].result")
             }
         }
-        return .init(identity: checked.identity, layout: checked.layout,
+        return .init(identity: checked.identity, moduleMetadata: checked.moduleMetadata,
+            requiredStandardModules: checked.requiredStandardModules, layout: checked.layout,
             behavior: behavior, refinements: refinements, enums: checked.enums,
             projections: projections, variableTypes: checked.variableTypes, bindingTypes: checked.bindingTypes, binderNames: binderNames,
             functions: resolvedFunctions)

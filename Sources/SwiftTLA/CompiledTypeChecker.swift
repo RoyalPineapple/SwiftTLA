@@ -425,7 +425,8 @@ package struct CompiledTypeChecker: Sendable {
             fairness: inputs.semantics.behavior.fairness,
             constraint: constraint,
             assume: assume)
-        return CompiledProgram(identity: inputs.identity, layout: inputs.layout, behavior: behavior, refinements: refinements,
+        return CompiledProgram(identity: inputs.identity, moduleMetadata: inputs.moduleMetadata,
+            requiredStandardModules: inputs.requiredStandardModules, layout: inputs.layout, behavior: behavior, refinements: refinements,
             enums: inputs.types.enums, projections: [], variableTypes: variables, bindingTypes: bindingTypes, binderNames: inputs.bindings.binders,
             functions: [])
     }

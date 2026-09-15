@@ -40,7 +40,7 @@ struct CompiledTLARenderer {
     private func resolvedFunctionName(_ id: ResolvedFunctionID) throws -> String {
         guard functions.indices.contains(id.ordinal) else { throw missing("resolved function", id.ordinal) }
         let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
-            .union(layout.variables.map(\.declaration.name)).union(layout.actions.map(\.renderedName))
+            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
         var name = "__\(moduleName)_resolvedFunction\(id.ordinal)"
         while occupied.contains(name) { name += "_" }
         return name
