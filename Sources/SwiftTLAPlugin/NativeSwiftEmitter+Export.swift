@@ -2,7 +2,7 @@ import SwiftSyntax
 import SwiftTLA
 
 extension NativeSwiftEmitter {
-    func exportDeclarations() throws -> [DeclSyntax] {
+    mutating func exportDeclarations() throws -> [DeclSyntax] {
         let parameters = program.layout.parameters.isEmpty ? "" : "configuration: Configuration"
         let body: String
         do {
@@ -19,7 +19,26 @@ extension NativeSwiftEmitter {
             let actions = module.renderedActions.map { action in
                 "RenderedAction(sourceName: \(String(reflecting: action.sourceName)), arguments: [\(action.arguments.map(renderedLiteral).joined(separator: ", "))], renderedName: \(String(reflecting: action.renderedName)))"
             }
+            var actionMetadata = "\(module.symbolicActions.isEmpty ? "let" : "var") _actions: [RenderedAction] = [\(actions.joined(separator: ", "))]"
+            for id in module.symbolicActions {
+                let action = program[id]
+                var loops: [String] = []
+                var arguments: [String] = []
+                for binding in action.bindings {
+                    try program.requireImmutableDomain(binding.domain,
+                        path: "export.actions.\(program.layout.actions[id.ordinal].renderedName).\(binding.sourceName).domain")
+                    loops.append("for \(binder(binding.binder)) in \(try actionDomain(binding, state: "")) {")
+                    arguments.append(try formalValue(binder(binding.binder), type: program.bindingTypes[binding.binder]!))
+                }
+                let name = String(reflecting: program.layout.actions[id.ordinal].renderedName)
+                actionMetadata += "\n" + loops.joined(separator: "\n") + "\n" + """
+                let _arguments: [TLAValue] = [\(arguments.joined(separator: ", "))]
+                _actions.append(RenderedAction(sourceName: \(name), arguments: _arguments,
+                    renderedName: FormalActionCall(name: \(name), arguments: _arguments).description))
+                """ + String(repeating: "\n}", count: loops.count)
+            }
             body = """
+            \(actionMetadata)
             return try RenderedSpecification(_generatedModule: \(String(reflecting: program.moduleName)),
                 source: \(String(reflecting: module.renderedModuleSource)),
                 compilationIdentity: \(String(reflecting: program.identity.value)),
@@ -30,7 +49,7 @@ extension NativeSwiftEmitter {
                 properties: \(String(reflecting: module.configuration.properties)),
                 refinements: \(String(reflecting: module.configuration.refinements)),
                 symmetry: \(String(reflecting: module.configuration.symmetry)),
-                actions: [\(actions.joined(separator: ", "))])
+                actions: _actions)
             """
         } catch let diagnostic as CompilationDiagnostic {
             body = """

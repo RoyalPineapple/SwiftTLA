@@ -51,27 +51,6 @@ private final class ProgramResolver {
         }
         let projections = Set(projectionChecks.compactMap { pair, allowed in allowed ? pair : nil })
         let resolvedFunctions = try functions.map { try require($0) }
-        for parameter in checked.layout.parameters {
-            var pending = [try require(behavior.parameterDomains[parameter.binder])]
-            var visited: Set<CompiledExpression> = []
-            var visitedFunctions: Set<ResolvedFunctionID> = []
-            while let expression = pending.popLast() {
-                guard visited.insert(expression).inserted else { continue }
-                switch expression.operation {
-                case .stateVariable, .enabledAction, .controlLocation:
-                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
-                        path: "parameters.\(parameter.reference.name).domain",
-                        expected: "an immutable domain independent of machine state",
-                        actual: "\(expression.operation.diagnosticName) at \(parameter.reference.sourceSpan)",
-                        nextSafeAction: "Define the legal domain using values or model parameters, not state or enabled actions.")
-                case .call(let id) where visitedFunctions.insert(id).inserted:
-                    pending.append(resolvedFunctions[id.ordinal].body)
-                    if let guardExpression = resolvedFunctions[id.ordinal].domainGuard { pending.append(guardExpression) }
-                default: break
-                }
-                pending.append(contentsOf: expression.children)
-            }
-        }
         for (index, function) in resolvedFunctions.enumerated() {
             for (offset, parameter) in function.parameters.enumerated() where !parameter.type.resolved {
                 throw CompiledValueType.unresolvedDiagnostic(parameter.type, at: "function[\(index)].parameter[\(offset)]")
@@ -80,11 +59,16 @@ private final class ProgramResolver {
                 throw CompiledValueType.unresolvedDiagnostic(function.resultType, at: "function[\(index)].result")
             }
         }
-        return .init(identity: checked.identity, moduleMetadata: checked.moduleMetadata,
+        let program = CompiledProgram(identity: checked.identity, moduleMetadata: checked.moduleMetadata,
             requiredStandardModules: checked.requiredStandardModules, layout: checked.layout,
             behavior: behavior, refinements: refinements, enums: checked.enums,
             projections: projections, variableTypes: checked.variableTypes, bindingTypes: checked.bindingTypes, binderNames: binderNames,
             functions: resolvedFunctions)
+        for parameter in checked.layout.parameters {
+            try program.requireImmutableDomain(try require(behavior.parameterDomains[parameter.binder]),
+                path: "parameters.\(parameter.reference.name).domain at \(parameter.reference.sourceSpan)")
+        }
+        return program
     }
 
     func require<Value>(_ value: Value?) throws -> Value {

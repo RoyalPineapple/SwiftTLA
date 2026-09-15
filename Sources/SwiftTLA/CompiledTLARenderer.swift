@@ -336,7 +336,7 @@ struct CompiledTLARenderer {
         return layout.variables[id.ordinal].declaration.name
     }
 
-    private func actionReference(_ id: ActionID) throws -> String {
+    func actionReference(_ id: ActionID) throws -> String {
         guard layout.actions.indices.contains(id.ordinal),
               actions.indices.contains(id.ordinal) else { throw missing("action", id.ordinal) }
         let name = layout.actions[id.ordinal].renderedName
@@ -347,6 +347,11 @@ struct CompiledTLARenderer {
             let domain = try binding.literalMembers.map { try CompiledValue.set(Set($0)).rendered(using: layout).description }
                 ?? state(binding.domain)
             return "\(parameter) \\in \(domain)"
+        }
+        if action.bindings.contains(where: { $0.literalMembers == nil }) {
+            return domains.reversed().reduce("\(name)(\(parameters.joined(separator: ", ")))") {
+                "(\\E \($1): \($0))"
+            }
         }
         return "(\\E \(domains.joined(separator: ", ")): \(name)(\(parameters.joined(separator: ", "))))"
     }

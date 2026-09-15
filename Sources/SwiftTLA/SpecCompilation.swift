@@ -104,6 +104,7 @@ package struct RenderedModule: Sendable, Equatable {
     package let renderedModuleSource: String
     package let configuration: TLCConfiguration
     package let renderedActions: [RenderedAction]
+    package let symbolicActions: [ActionID]
     let definitions: [String]
     let instances: [String]
     let refinements: [String]
@@ -134,6 +135,7 @@ struct DirectModuleAction: Sendable, Equatable {
     let renderedParameters: [String]
     let renderedBody: String
     let calls: [RenderedAction]
+    let symbolicInvocation: String?
 }
 
 struct CompiledRefinement: Sendable {
@@ -208,6 +210,12 @@ public struct CompiledSpecification: Sendable {
     public func render() throws -> RenderedSpecification {
         let metadata = module.metadata
         let rootModule = try metadata.renderModule(module)
+        guard rootModule.symbolicActions.isEmpty else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
+                path: "export.\(metadata.name).actions",
+                expected: "configured action invocation metadata", actual: "symbolic action domains",
+                nextSafeAction: "Export through the generated model with its typed configuration.")
+        }
         let renderedBundle = TLAModuleBundle(
             root: .init(name: metadata.name, tla: rootModule.renderedModuleSource, cfg: rootModule.configuration.render(usesSymmetryReduction: true)),
             imports: try imports.map { imported in
@@ -954,7 +962,7 @@ private func directActionCalls(
     emittedActionNames: [ActionID: String]
 ) throws -> [(call: CompiledActionCall, renderedName: String)] {
     var calls: [(call: CompiledActionCall, renderedName: String)] = []
-    for action in actions {
+    for action in actions where action.bindings.allSatisfy({ $0.literalMembers != nil }) {
         guard let emittedName = emittedActionNames[action.id] else {
             throw CompilationDiagnostic(
                 code: .compilationIdentityMismatch,
@@ -965,16 +973,7 @@ private func directActionCalls(
                 nextSafeAction: "Compile the source model again."
             )
         }
-        let domains = try action.bindings.map { binding in
-            guard let members = binding.literalMembers else {
-                throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
-                    path: "actions.\(emittedName).\(binding.sourceName).domain",
-                    expected: "literal members for concrete action-call export",
-                    actual: binding.domain.operation.diagnosticName,
-                    nextSafeAction: "Render symbolic domains in Next before exporting this action.")
-            }
-            return members
-        }
+        let domains = action.bindings.compactMap(\.literalMembers)
         func addCalls(_ position: Int, arguments: [CompiledValue], indices: [Int]) {
             guard position < action.bindings.count else {
                 let suffix = indices.isEmpty ? "" : "__\(indices.map(String.init).joined(separator: "_"))"
@@ -1340,7 +1339,9 @@ private extension CompiledModuleMetadata {
                         arguments: try emitted.call.arguments.map { try $0.rendered(using: layout) },
                         renderedName: emitted.renderedName
                     )
-                }
+                },
+                symbolicInvocation: compiled.bindings.contains { $0.literalMembers == nil }
+                    ? try renderer.actionReference(compiled.id) : nil
             )
         }
         return RenderedModule(
@@ -1364,6 +1365,7 @@ private extension CompiledModuleMetadata {
             ),
             configuration: configuration,
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
+            symbolicActions: behavior.actions.filter { $0.bindings.contains { $0.literalMembers == nil } }.map(\.id),
             definitions: definitions, instances: instances, refinements: renderedRefinements,
             properties: Dictionary(uniqueKeysWithValues: invariants + temporalProperties), constraint: constraint
         )
@@ -1527,8 +1529,7 @@ private extension CompiledModuleMetadata {
 
         let invocations = renderedActions
             .filter { $0.sourceName.isEmpty == false }
-            .flatMap(\.calls)
-            .map(\.renderedName)
+            .flatMap { $0.symbolicInvocation.map { [$0] } ?? $0.calls.map(\.renderedName) }
         if invocations.count != 1 || invocations[0] != "Next" {
             if invocations.isEmpty {
                 lines.append("Next == FALSE")

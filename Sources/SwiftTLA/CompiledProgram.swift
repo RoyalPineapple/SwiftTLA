@@ -37,6 +37,27 @@ package struct CompiledProgram: Sendable {
     package let functions: [ResolvedFunction]
     package subscript(_ id: ResolvedFunctionID) -> ResolvedFunction { functions[id.ordinal] }
     package subscript(_ id: ActionID) -> CompiledAction { behavior.actions[id.ordinal] }
+
+    package func requireImmutableDomain(_ domain: CompiledExpression, path: String) throws {
+        var pending = [domain]
+        var visited: Set<CompiledExpression> = []
+        var visitedFunctions: Set<ResolvedFunctionID> = []
+        while let expression = pending.popLast() {
+            guard visited.insert(expression).inserted else { continue }
+            switch expression.operation {
+            case .stateVariable, .enabledAction, .controlLocation:
+                throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                    path: path, expected: "an immutable domain independent of machine state",
+                    actual: expression.operation.diagnosticName,
+                    nextSafeAction: "Define the legal domain using values or model parameters, not state or enabled actions.")
+            case .call(let id) where visitedFunctions.insert(id).inserted:
+                pending.append(self[id].body)
+                if let guardExpression = self[id].domainGuard { pending.append(guardExpression) }
+            default: break
+            }
+            pending.append(contentsOf: expression.children)
+        }
+    }
 }
 
 /// An abstract native program and its state mapping, checked in the concrete program's scope.
