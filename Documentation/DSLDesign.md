@@ -432,8 +432,9 @@ The hosted `tlc-validate scenarios run --output <directory>` command derives Cou
 runs from those declarations. It retains complete native and TLC graphs, property
 results, expectations, and comparison failures. Missing or disagreeing results fail
 the run. The finite-graph workflow includes this command.
-Independent TLC agreement still requires successful hosted evidence. The pinned
-TLC JAR is unavailable, so the implemented command does not establish that agreement.
+Independent TLC agreement still requires successful hosted evidence. The toolchain
+pins a hosted rebuild of the original TLC source revision. Restored tool setup
+does not itself establish model agreement.
 
 ### Same machine, different settings
 

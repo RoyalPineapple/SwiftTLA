@@ -75,8 +75,8 @@ scenarios. It validates expected outcomes only after complete exploration.
 The adapter reads rendered check metadata without compiling the specification again.
 The hosted scenario command compares complete native and TLC graphs and every
 declared result. Expected failures change the verdict, not the model or checks.
-Independent agreement still requires successful hosted evidence. The unavailable
-pinned TLC JAR currently prevents that evidence.
+Independent agreement still requires successful hosted evidence. The toolchain
+pins a hosted rebuild of the original TLC source revision.
 
 ## Positive reachability
 

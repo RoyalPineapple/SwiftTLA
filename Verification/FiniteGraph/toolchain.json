@@ -10,9 +10,12 @@
       "_TLCTracePlain"
     ],
     "jar": {
-      "repository": "tlaplus/tlaplus",
-      "assetID": 558485860,
-      "sha256": "db131ddb48e7004d823bef4493df7b35694babe37505b9d9fa5685e7a331f1f1"
+      "repository": "RoyalPineapple/SwiftTLA",
+      "artifactID": 10402680455,
+      "archiveSHA256": "008db0c23893cd152f3e75acdff7caace1c94b6e3051bf4dd1652d5a928d2959",
+      "buildRunID": 34982844008,
+      "buildRevision": "e49581d1751d08a2a397e8730cc8e7655da87bc3",
+      "sha256": "d0245f8253beed96bb27b56803e73253fab956beb13d3983e40ee4e7efbcd39e"
     }
   },
   "java": {

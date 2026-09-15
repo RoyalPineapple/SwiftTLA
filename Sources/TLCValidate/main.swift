@@ -30,7 +30,7 @@ struct PinnedTLCToolchain: Decodable {
     struct TLC: Decodable {
         let tag: String
         let commit: String
-        let jar: GitHubAsset
+        let jar: GitHubBuildArtifact
     }
     struct Java: Decodable {
         let distribution: String
@@ -45,9 +45,12 @@ struct PinnedTLCToolchain: Decodable {
         let url: String
         let sha256: String
     }
-    struct GitHubAsset: Decodable {
+    struct GitHubBuildArtifact: Decodable {
         let repository: String
-        let assetID: Int
+        let artifactID: Int
+        let archiveSHA256: String
+        let buildRunID: Int
+        let buildRevision: String
         let sha256: String
     }
 }

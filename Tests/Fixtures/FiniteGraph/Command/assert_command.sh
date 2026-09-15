@@ -61,24 +61,31 @@ import sys
 
 with open(sys.argv[1], encoding="utf-8") as source:
     toolchain = json.load(source)
-toolchain["tlc"]["jar"]["assetID"] = 0
+toolchain["tlc"]["jar"]["artifactID"] = 0
 with open(sys.argv[1], "w", encoding="utf-8") as destination:
     json.dump(toolchain, destination)
 PY
-expect_failure "invalid value: tlc.jar.assetID" \
+expect_failure "invalid value: tlc.jar.artifactID" \
     "$SETUP" --toolchain "$TMP/invalid-toolchain.json" --tool-root "$TMP/invalid-tools"
 
 mkdir -p "$TMP/option-url-tools/downloads" "$TMP/bin"
 : >"$TMP/empty-download"
 cp "$ROOT/Verification/FiniteGraph/toolchain.json" "$TMP/option-url-toolchain.json"
 python3 - "$TMP/option-url-toolchain.json" "$(uname -m)" \
-    "$(shasum -a 256 "$TMP/empty-download" | awk '{print $1}')" <<'PY'
+    "$(shasum -a 256 "$TMP/empty-download" | awk '{print $1}')" "$TMP/build.zip" <<'PY'
+import hashlib
 import json
 import sys
+import zipfile
 
 with open(sys.argv[1], encoding="utf-8") as source:
     toolchain = json.load(source)
 toolchain["tlc"]["jar"]["sha256"] = sys.argv[3]
+with zipfile.ZipFile(sys.argv[4], "w") as archive:
+    archive.writestr("tla2tools.jar", b"")
+    archive.writestr("source-revision.txt", toolchain["tlc"]["commit"] + "\n")
+with open(sys.argv[4], "rb") as archive:
+    toolchain["tlc"]["jar"]["archiveSHA256"] = hashlib.sha256(archive.read()).hexdigest()
 toolchain["java"]["archives"][sys.argv[2]]["url"] = "-K"
 toolchain["java"]["archives"][sys.argv[2]]["sha256"] = sys.argv[3]
 with open(sys.argv[1], "w", encoding="utf-8") as destination:
@@ -104,7 +111,7 @@ done
 case "$url" in
     https://api.github.com/*)
         [ "$authorization" = "Authorization: Bearer fixture-token" ] || exit 3
-        : >"$destination"
+        cp "$FIXTURE_TLC_ARCHIVE" "$destination"
         ;;
     -K)
         [ -z "$authorization" ] || exit 4
@@ -116,7 +123,7 @@ esac
 SH
 chmod +x "$TMP/bin/curl"
 expect_failure "token stayed on the TLC request and option-shaped URL remained a URL value" \
-    env PATH="$TMP/bin:$PATH" FINITE_GRAPH_GITHUB_TOKEN=fixture-token \
+    env PATH="$TMP/bin:$PATH" FINITE_GRAPH_GITHUB_TOKEN=fixture-token FIXTURE_TLC_ARCHIVE="$TMP/build.zip" \
         "$SETUP" --toolchain "$TMP/option-url-toolchain.json" \
         --tool-root "$TMP/option-url-tools"
 

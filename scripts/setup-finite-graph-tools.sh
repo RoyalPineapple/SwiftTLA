@@ -97,6 +97,7 @@ fi
 read_lock() {
     python3 - "$TOOLCHAIN" "$@" <<'PY'
 import json
+import re
 import sys
 
 with open(sys.argv[1], encoding="utf-8") as source:
@@ -109,7 +110,7 @@ def get(path):
     return value
 
 required = [
-    "tlc.tag", "tlc.commit", "tlc.jar.repository", "tlc.jar.sha256",
+    "tlc.tag", "tlc.commit", "tlc.jar.repository", "tlc.jar.sha256", "tlc.jar.archiveSHA256", "tlc.jar.buildRevision",
     "java.distribution", "java.version",
     "java.archives.arm64.url", "java.archives.arm64.sha256",
     "java.archives.x86_64.url", "java.archives.x86_64.sha256",
@@ -122,16 +123,21 @@ for path in required:
     if not isinstance(value, str) or not value:
         raise SystemExit("toolchain lock has an invalid value: " + path)
 
-asset_id = get("tlc.jar.assetID")
-if not isinstance(asset_id, int) or asset_id <= 0:
-    raise SystemExit("toolchain lock has an invalid value: tlc.jar.assetID")
+for path in ["tlc.jar.artifactID", "tlc.jar.buildRunID"]:
+    value = get(path)
+    if type(value) is not int or value <= 0:
+        raise SystemExit("toolchain lock has an invalid value: " + path)
+for path, length in [("tlc.commit", 40), ("tlc.jar.buildRevision", 40),
+                     ("tlc.jar.sha256", 64), ("tlc.jar.archiveSHA256", 64)]:
+    if not re.fullmatch("[0-9a-f]{" + str(length) + "}", get(path)):
+        raise SystemExit("toolchain lock has an invalid value: " + path)
 
 for path in sys.argv[2:]:
     print(get(path))
 PY
 }
 
-if ! LOCK_VALUES="$(read_lock tlc.jar.repository tlc.jar.assetID tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256)"; then
+if ! LOCK_VALUES="$(read_lock tlc.jar.repository tlc.jar.artifactID tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256 tlc.jar.archiveSHA256 tlc.commit)"; then
     fail "${LOCK_VALUES:-toolchain lock does not match the accepted TLC reference pin}"
 fi
 
@@ -142,11 +148,13 @@ case "$ARCHITECTURE" in
 esac
 
 TLC_REPOSITORY="$(printf '%s\n' "$LOCK_VALUES" | sed -n '1p')"
-TLC_ASSET_ID="$(printf '%s\n' "$LOCK_VALUES" | sed -n '2p')"
-TLC_ASSET_URL="https://api.github.com/repos/$TLC_REPOSITORY/releases/assets/$TLC_ASSET_ID"
+TLC_ARTIFACT_ID="$(printf '%s\n' "$LOCK_VALUES" | sed -n '2p')"
+TLC_ARTIFACT_URL="https://api.github.com/repos/$TLC_REPOSITORY/actions/artifacts/$TLC_ARTIFACT_ID/zip"
 TLC_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '3p')"
 JAVA_URL="$(printf '%s\n' "$LOCK_VALUES" | sed -n '4p')"
 JAVA_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '5p')"
+TLC_ARCHIVE_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '6p')"
+TLC_SOURCE_REVISION="$(printf '%s\n' "$LOCK_VALUES" | sed -n '7p')"
 
 sha256() {
     shasum -a 256 "$1" | awk '{print $1}'
@@ -185,7 +193,6 @@ mkdir -p "$TOOL_ROOT/downloads" "$TOOL_ROOT/bridge-classes"
 TLC_JAR="$TOOL_ROOT/downloads/tla2tools.jar"
 JAVA_ARCHIVE="$TOOL_ROOT/downloads/temurin-${ARCHITECTURE}.tar.gz"
 CACHE_ROOT="$PROJECT_ROOT/Tools/TLCGraphBridge/.tool-cache"
-seed_from_cache "$CACHE_ROOT/tla2tools-1.8.0.jar" "$TLC_SHA256" "$TLC_JAR"
 seed_from_cache "$CACHE_ROOT/OpenJDK17U-jdk_${ARCHITECTURE}_mac_hotspot_17.0.19_10.tar.gz" "$JAVA_SHA256" "$JAVA_ARCHIVE"
 TLC_HEADERS=(
     --header 'Accept: application/octet-stream'
@@ -194,7 +201,27 @@ TLC_HEADERS=(
 if [ -n "${FINITE_GRAPH_GITHUB_TOKEN:-}" ]; then
     TLC_HEADERS+=(--header "Authorization: Bearer $FINITE_GRAPH_GITHUB_TOKEN")
 fi
-download_locked "$TLC_ASSET_URL" "$TLC_SHA256" "$TLC_JAR" "${TLC_HEADERS[@]}"
+# ponytail: retained artifacts expire; rebuild and explicitly repin instead of using a moving release.
+TLC_ARCHIVE="$TOOL_ROOT/downloads/tlc-reference-build.zip"
+download_locked "$TLC_ARTIFACT_URL" "$TLC_ARCHIVE_SHA256" "$TLC_ARCHIVE" "${TLC_HEADERS[@]}"
+python3 - "$TLC_ARCHIVE" "$TLC_JAR" "$TLC_SHA256" "$TLC_SOURCE_REVISION" <<'PY'
+import hashlib
+import sys
+import zipfile
+
+archive_path, jar_path, expected_digest, expected_revision = sys.argv[1:]
+with zipfile.ZipFile(archive_path) as archive:
+    for name in ["tla2tools.jar", "source-revision.txt"]:
+        if archive.namelist().count(name) != 1:
+            raise SystemExit("TLC build archive requires exactly one " + name)
+    if archive.read("source-revision.txt").decode("utf-8").strip() != expected_revision:
+        raise SystemExit("TLC build archive source revision differs from the toolchain lock")
+    jar = archive.read("tla2tools.jar")
+if hashlib.sha256(jar).hexdigest() != expected_digest:
+    raise SystemExit("TLC build archive JAR digest differs from the toolchain lock")
+with open(jar_path, "wb") as destination:
+    destination.write(jar)
+PY
 download_locked "$JAVA_URL" "$JAVA_SHA256" "$JAVA_ARCHIVE"
 if ! BRIDGE_SOURCE_PATHS="$(python3 - "$PROJECT_ROOT" "$TOOLCHAIN" <<'PY'
 import hashlib

@@ -74,15 +74,19 @@ struct FiniteGraphCheckTests {
     #expect(process.terminationStatus == 0, "\(message)")
   }
 
-  @Test("TLC setup uses an immutable GitHub asset coordinate")
-  func usesImmutableTLCAsset() throws {
+  @Test("TLC setup pins the rebuilt binary and its hosted provenance")
+  func usesImmutableTLCBuild() throws {
     let data = try Data(contentsOf: projectURL("Verification/FiniteGraph/toolchain.json"))
     let lock = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     let tlc = try #require(lock["tlc"] as? [String: Any])
     let jar = try #require(tlc["jar"] as? [String: Any])
 
-    #expect(jar["repository"] as? String == "tlaplus/tlaplus")
-    #expect(try #require(jar["assetID"] as? Int) > 0)
+    #expect(jar["repository"] as? String == "RoyalPineapple/SwiftTLA")
+    #expect(try #require(jar["artifactID"] as? Int) > 0)
+    #expect(try #require(jar["buildRunID"] as? Int) > 0)
+    #expect(try #require(jar["archiveSHA256"] as? String).count == 64)
+    #expect(try #require(jar["buildRevision"] as? String).count == 40)
+    #expect(jar["assetID"] == nil)
     #expect(jar["url"] == nil)
   }
 
