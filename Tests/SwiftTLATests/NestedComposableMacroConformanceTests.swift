@@ -4,7 +4,7 @@ import Testing
 
 @Suite(.serialized)
 struct NestedComposableMacroConformanceTests {
-    @Test("Runtime successor relation preserves parameterized nondeterministic checked edges")
+    @Test("Parameterized execution retains every choice while exploration applies constraints")
     func runtimeSuccessorsPreserveEveryCheckedParameterizedSuccessor() throws {
         let value = Var<Int>("value")
         let spec = TLASpec("ConstrainedParameterizedChoice") {
@@ -22,6 +22,9 @@ struct NestedComposableMacroConformanceTests {
             configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)
         ).explore()
         let graph = exploration.graph
+        #expect(exploration.isComplete)
+        #expect(exploration.safetyViolations.isEmpty)
+        let runtime = CompiledRuntime(compilation: compilation)
 
         for sourceID in graph.states.keys {
             let checked = try (graph.transitions[sourceID] ?? []).compactMap { transition -> (action: String, arguments: [TLAValue], state: TLAStateProjection)? in
@@ -33,19 +36,22 @@ struct NestedComposableMacroConformanceTests {
                 )
             }
             let state = try #require(exploration.compiledStates[sourceID])
-            let runtimeSuccessors = try CompiledRuntime(compilation: compilation)
-                .successors(from: state)
-                .map { successor in
-                    (
-                        action: compilation.layout.actions[successor.action.ordinal].declaration.name,
-                        arguments: try successor.arguments.map { try $0.rendered(using: compilation.layout) },
-                        state: try successor.state.projection(using: compilation.layout)
-                    )
-                }
-
-            #expect(multiset(runtimeSuccessors) == multiset(checked))
+            let raw = try runtime.successors(from: state)
+            let runtimeSuccessors = try raw.map { successor in
+                (
+                    action: compilation.layout.actions[successor.action.ordinal].declaration.name,
+                    arguments: try successor.arguments.map { try $0.rendered(using: compilation.layout) },
+                    state: try successor.state.projection(using: compilation.layout)
+                )
+            }
+            #expect(raw.count == 6)
+            let retained = try zip(raw, runtimeSuccessors).filter {
+                try runtime.constraintHolds(in: $0.0.state)
+            }.map(\.1)
+            #expect(retained.count == 4)
+            #expect(multiset(retained) == multiset(checked))
             let value = try #require(TLAStateProjection.Token(validating: "value"))
-            #expect(runtimeSuccessors.contains { $0.state.value(for: value) == .int(3) } == false)
+            #expect(runtimeSuccessors.filter { $0.state.value(for: value) == .int(3) }.count == 2)
         }
     }
 

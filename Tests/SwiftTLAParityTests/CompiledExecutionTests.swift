@@ -84,7 +84,7 @@ import UpstreamParity
     #expect(available.contains("increment"))
   }
 
-  @Test("compiled successor relation matches checked transitions from every reachable state")
+  @Test("constraint-retained successors match every checked transition without changing execution")
   func runtimeSuccessorsMatchCheckedTransitions() throws {
     let counter = Var<Int>("counter")
     let step = Var<Int>("step")
@@ -101,6 +101,10 @@ import UpstreamParity
       configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)
     ).explore()
     let graph = exploration.graph
+    #expect(exploration.isComplete)
+    #expect(graph.states.count == 3)
+    #expect(exploration.safetyViolations.isEmpty)
+    let runtime = CompiledRuntime(compilation: compilation)
 
     for sourceID in graph.states.keys {
       let checked = try (graph.transitions[sourceID] ?? []).compactMap { transition -> (action: String, arguments: [TLAValue], state: TLAStateProjection)? in
@@ -112,9 +116,18 @@ import UpstreamParity
         )
       }
       let runtimeState = try #require(exploration.compiledStates[sourceID])
-      let runtimeSuccessors = try successors(compilation, from: runtimeState)
-
-      #expect(multiset(runtimeSuccessors) == multiset(checked))
+      let raw = try runtime.successors(from: runtimeState)
+      let runtimeSuccessors = try raw.map { successor in
+        (action: compilation.layout.actions[successor.action.ordinal].declaration.name,
+         arguments: try successor.arguments.map { try $0.rendered(using: compilation.layout) },
+         state: try successor.state.projection(using: compilation.layout))
+      }
+      #expect(raw.count == 2)
+      #expect(Set(raw.map(\.arguments)) == [[.integer(1)], [.integer(2)]])
+      let retained = try zip(raw, runtimeSuccessors).filter {
+        try runtime.constraintHolds(in: $0.0.state)
+      }.map(\.1)
+      #expect(multiset(retained) == multiset(checked))
     }
   }
 

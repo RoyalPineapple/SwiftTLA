@@ -177,19 +177,28 @@ struct NativeMachineExecutionTests {
         #expect(machine.state.right == 2)
     }
 
-    @Test("Target constraints resolve choice before generated ambiguity checks")
+    @Test("State constraints do not resolve executable choice ambiguity")
     func constrainedChoiceMatchesFormalSuccessors() throws {
         let compilation = try ConstrainedExecutionChoice.spec.compile()
         let runtime = CompiledRuntime(compilation: compilation)
         let initial = try #require(try runtime.initialStates().only)
         let select = try #require(compilation.layout.testActionID(named: "select"))
         let selected = try #require(compilation.layout.testVariableID(named: "selected"))
-        let successor = try #require(try runtime.successors(for: select, from: initial).only)
+        let successors = try runtime.successors(for: select, from: initial)
+        #expect(try Set(successors.map { try $0.state.value(for: selected) }) == [.integer(1), .integer(2), .integer(3)])
         var machine = try ConstrainedExecutionChoice.makeMachine()
         #expect(try machine.enabledActions() == [.select])
-        _ = try machine.send(.select)
-        #expect(machine.state.selected == 1)
-        #expect(try successor.state.value(for: selected) == .integer(machine.state.selected))
+        #expect(try Set(machine.successors(for: .select).map { $0.state.selected }) == [1, 2, 3])
+        do {
+            _ = try machine.send(.select)
+            Issue.record("All three executable choices must remain ambiguous")
+        } catch GeneratedMachineError.ambiguousAction {}
+        #expect(machine.state.selected == 0)
+        let graph = try ReachabilityGraph(initialMachines: ConstrainedExecutionChoice.initialMachines(), maximumStates: 4)
+        #expect(Set(graph.transitions.keys.map { $0.state.selected }) == [0, 1])
+        #expect(graph.transitions.values.flatMap { $0 }.allSatisfy { $0.target.state.selected == 1 })
+        #expect(graph.transitions.values.flatMap { $0 }.count == 2)
+        #expect(graph.safetyViolations.isEmpty)
     }
 
     @Test("Every initial state and branching edge agrees, including disabled actions and invariant failures")
@@ -255,10 +264,19 @@ struct NativeMachineExecutionTests {
                 pending.append((successor.state, try #require(nativeNext.first { $0.state.selected == target })))
             }
         }
-        #expect(try Set(visited.map(value)) == [0, 1, 2])
-        #expect(edges == [[0, 1], [0, 2], [1, 1], [1, 2]])
-        #expect(disabled == [2])
-        #expect(violations == [2])
+        #expect(try Set(visited.map(value)) == [0, 1, 2, 3])
+        #expect(edges == [[0, 1], [0, 2], [0, 3], [1, 1], [1, 2], [1, 3]])
+        #expect(disabled == [2, 3])
+        #expect(violations == [2, 3])
+        let graph = try ReachabilityGraph(initialMachines: nativeInitial, maximumStates: 4)
+        #expect(Set(graph.transitions.keys.map { $0.state.selected }) == [0, 1, 2])
+        #expect(graph.transitions.values.flatMap { $0 }.count == 4)
+        #expect(Set(graph.deadlockedStates.map { $0.state.selected }) == [2])
+        #expect(Set(graph.safetyViolations.keys.map { $0.state.selected }) == [2, 3])
+        let excluded = try #require(graph.safetyViolations.keys.first { $0.state.selected == 3 })
+        #expect(graph.transitions[excluded] == nil)
+        #expect(graph.safetyViolations[excluded] == [.invariant("BelowTwo")])
+        #expect(try graph.trace(to: excluded).count == 2)
     }
 
 }
