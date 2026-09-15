@@ -96,12 +96,16 @@ cat >"$TMP/bin/curl" <<'SH'
 destination=""
 url=""
 authorization=""
+accept=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --output) destination="$2"; shift 2 ;;
         --url) url="$2"; shift 2 ;;
         --header)
-            case "$2" in Authorization:*) authorization="$2" ;; esac
+            case "$2" in
+                Authorization:*) authorization="$2" ;;
+                Accept:*) accept="$2" ;;
+            esac
             shift 2
             ;;
         --proto) shift 2 ;;
@@ -111,6 +115,7 @@ done
 case "$url" in
     https://api.github.com/*)
         [ "$authorization" = "Authorization: Bearer fixture-token" ] || exit 3
+        [ "$accept" = "Accept: application/vnd.github+json" ] || exit 6
         cp "$FIXTURE_TLC_ARCHIVE" "$destination"
         ;;
     -K)

@@ -195,7 +195,7 @@ JAVA_ARCHIVE="$TOOL_ROOT/downloads/temurin-${ARCHITECTURE}.tar.gz"
 CACHE_ROOT="$PROJECT_ROOT/Tools/TLCGraphBridge/.tool-cache"
 seed_from_cache "$CACHE_ROOT/OpenJDK17U-jdk_${ARCHITECTURE}_mac_hotspot_17.0.19_10.tar.gz" "$JAVA_SHA256" "$JAVA_ARCHIVE"
 TLC_HEADERS=(
-    --header 'Accept: application/octet-stream'
+    --header 'Accept: application/vnd.github+json'
     --header 'X-GitHub-Api-Version: 2022-11-28'
 )
 if [ -n "${FINITE_GRAPH_GITHUB_TOKEN:-}" ]; then
