@@ -64,7 +64,7 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
 }
 public struct ActionBinding: Sendable, Hashable {
   public let name: String
-  public let values: [TLAValue]
+  public let domain: StateExpr
   package let generatedSwiftType: String?
 
   public init(name: String, values: [TLAValue]) {
@@ -72,9 +72,22 @@ public struct ActionBinding: Sendable, Hashable {
   }
 
   package init(name: String, values: [TLAValue], generatedSwiftType: String?) {
+    self.init(name: name, domain: .setLiteral(values.map(StateExpr.value)), generatedSwiftType: generatedSwiftType)
+  }
+
+  package init(name: String, domain: StateExpr, generatedSwiftType: String?) {
     self.name = name
-    self.values = values
+    self.domain = domain
     self.generatedSwiftType = generatedSwiftType
+  }
+
+  package var literalMembers: [TLAValue]? {
+    guard case .setLiteral(let expressions) = domain else { return nil }
+    let members = expressions.compactMap { expression -> TLAValue? in
+      guard case .value(let value) = expression else { return nil }
+      return value
+    }
+    return members.count == expressions.count ? members : nil
   }
 }
 public protocol ActionParameterDescriptor: Sendable {
@@ -147,11 +160,13 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
       guard !binding.name.isEmpty else {
         return .actionBinding(action: action, parameter: nil, problem: "a parameter has no name")
       }
-      guard !binding.values.isEmpty else {
-        return .actionBinding(action: action, parameter: binding.name, problem: "the domain is empty")
-      }
-      guard Set(binding.values).count == binding.values.count else {
-        return .actionBinding(action: action, parameter: binding.name, problem: "the domain contains duplicate values")
+      if let members = binding.literalMembers {
+        guard !members.isEmpty else {
+          return .actionBinding(action: action, parameter: binding.name, problem: "the domain is empty")
+        }
+        guard Set(members).count == members.count else {
+          return .actionBinding(action: action, parameter: binding.name, problem: "the domain contains duplicate values")
+        }
       }
       guard names.insert(binding.name).inserted else {
         return .actionBinding(action: action, parameter: binding.name, problem: "the name is declared more than once")
@@ -163,24 +178,6 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
     let parameters = bindings.map(\.name).joined(separator: ", ")
     return "\(name)\(parameters.isEmpty ? "" : "(\(parameters))"): \(body)"
   }
-}
-func actionVariants(_ action: NamedAction) -> [(
-  arguments: [TLAValue], body: ActionExpr, indices: [Int]
-)] {
-  func expand(_ position: Int, _ arguments: [TLAValue], _ indices: [Int], _ body: ActionExpr) -> [(
-    [TLAValue], ActionExpr, [Int]
-  )] {
-    guard position < action.bindings.count else {
-      return [(arguments, body, indices)]
-    }
-    let binding = action.bindings[position]
-    return binding.values.enumerated().flatMap { index, value in
-      expand(
-        position + 1, arguments + [value], indices + [index],
-        body.substitutingVariable(binding.name, with: .value(value)))
-    }
-  }
-  return expand(0, [], [], action.body)
 }
 public struct NamedTemporal: Sendable, CustomStringConvertible, Equatable {
   public let name: String

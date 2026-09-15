@@ -69,7 +69,7 @@ import UpstreamParity
     }
 
     #expect(spec.actions[0].bindings.map(\.name) == ["choice"])
-    #expect(spec.actions[0].bindings[0].values == [.int(1), .int(2)])
+    #expect(spec.actions[0].bindings[0].literalMembers == [.int(1), .int(2)])
     let compilation = try spec.compile()
     let graph = try ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
     let transitions = try #require(graph.transitions[.init(0)])

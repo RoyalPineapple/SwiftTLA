@@ -1152,7 +1152,8 @@ private struct CanonicalSpecificationEncoder {
             canonicalList(action.bindings.map {
                 node("action-binding", [
                     $0.name,
-                    canonicalList($0.values.map(canonicalValue)),
+                    $0.literalMembers.map { canonicalList($0.map(canonicalValue)) }
+                        ?? node("domain", [canonicalExpression($0.domain)]),
                     canonicalOptional($0.generatedSwiftType)
                 ])
             })

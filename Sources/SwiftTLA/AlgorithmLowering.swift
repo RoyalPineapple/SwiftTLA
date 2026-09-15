@@ -256,7 +256,7 @@ enum AlgorithmLowerer {
                         }
                     }
                 }
-                fairness += fairnessConditions(for: generatedAction, policy: process.fairness)
+                fairness += fairnessConditions(for: generatedAction, members: process.domain, policy: process.fairness)
                 return generatedAction
             }
         }
@@ -919,18 +919,19 @@ enum AlgorithmLowerer {
 
     private static func fairnessConditions(
         for action: NamedAction,
+        members: [TLAValue],
         policy: AlgorithmFairness
     ) -> [FairnessCondition] {
         switch policy {
         case .none:
             []
         case .weak:
-            actionVariants(action).map {
-                .weakFairnessActionCall(.init(name: action.name, arguments: $0.arguments))
+            members.map {
+                .weakFairnessActionCall(.init(name: action.name, arguments: [$0]))
             }
         case .strong:
-            actionVariants(action).map {
-                .strongFairnessActionCall(.init(name: action.name, arguments: $0.arguments))
+            members.map {
+                .strongFairnessActionCall(.init(name: action.name, arguments: [$0]))
             }
         }
     }

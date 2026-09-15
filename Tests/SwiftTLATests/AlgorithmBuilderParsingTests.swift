@@ -111,7 +111,7 @@ import SwiftTLAMacros
         #expect(specification.variables.map(\.name) == ["pc", "count"])
         #expect(specification.actions.map(\.name) == ["increment", "Terminating"])
         #expect(specification.actions.first?.bindings.map(\.name) == ["process"])
-        #expect(specification.actions.first?.bindings.map(\.values) == [[.string("left"), .string("right")]])
+        #expect(specification.actions.first?.bindings.map(\.literalMembers) == [[.string("left"), .string("right")]])
         let increment = try #require(GeneratedMachineAPI(layout: compilation.layout, actions: compilation.semantics.behavior.actions).actions.first {
             $0.swiftIdentifier == "increment"
         })

@@ -115,7 +115,7 @@ struct UpstreamParityTests {
     func simpleAllocatorUsesParameterizedActions() throws {
         let specification = SimpleAllocatorModel.spec
         #expect(specification.actions.map(\.name) == ["Request", "Allocate", "Return"])
-        #expect(specification.actions.allSatisfy { $0.bindings.map(\.values.count) == [3, 3] })
+        #expect(specification.actions.allSatisfy { $0.bindings.map { $0.literalMembers?.count } == [3, 3] })
         _ = try specification.compile()
     }
 

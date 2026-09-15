@@ -204,7 +204,7 @@ struct CompilerPipelineCanonicalizationTests {
         let secondBinding = ActionParameter("choice", values: SecondGeneratedSurfaceValue.finiteValues).actionBinding
         #expect(firstBinding != secondBinding)
         #expect(Set([firstBinding, secondBinding]).count == 2)
-        #expect(firstBinding != ActionBinding(name: firstBinding.name, values: firstBinding.values))
+        #expect(firstBinding != ActionBinding(name: firstBinding.name, domain: firstBinding.domain, generatedSwiftType: nil))
     }
 
     @Test("equivalent source models retain stable binder names")

@@ -732,7 +732,9 @@ struct CompiledLowerer {
         operators: CompiledOperators
     ) throws -> (indices: [Int], dependencies: [ActionID: Set<ActionID>]) {
         let dependencies = actions.map {
-            $0.body.enabledActionDependencies(operators: operators)
+            $0.bindings.reduce(into: $0.body.enabledActionDependencies(operators: operators)) {
+                $0.formUnion($1.domain.stateRequirements(operators: operators).enabledActions)
+            }
         }
         var remaining = Array(actions.indices)
         var resolved: Set<ActionID> = []
@@ -902,9 +904,8 @@ struct CompiledLowerer {
         }
         var scope = rootScope
         let bindings = try action.bindings.map {
-            for (index, value) in $0.values.enumerated() {
-                try validateValue(value, at: "actions.\(action.name).bindings.\($0.name)[\(index)]")
-            }
+            let domain = try lower($0.domain,
+                at: "actions.\(action.name).bindings.\($0.name).domain", scope: scope)
             let binder = try allocateBinder(
                 $0.name,
                 in: scope,
@@ -914,8 +915,7 @@ struct CompiledLowerer {
             return CompiledActionBinding(
                 binder: binder,
                 sourceName: $0.name,
-                domain: try lower(.setLiteral($0.values.map(StateExpr.value)),
-                    at: "actions.\(action.name).bindings.\($0.name).domain", scope: scope),
+                domain: domain,
                 generatedSwiftType: $0.generatedSwiftType
             )
         }

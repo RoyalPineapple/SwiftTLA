@@ -86,7 +86,7 @@ import SwiftTLAMacros
         #expect(parsed.actions.count == 1)
         let action = try #require(parsed.actions.first)
         #expect(action.bindings.map(\.name) == ["source", "destination", "amount"])
-        #expect(action.bindings.map(\.values) == [
+        #expect(action.bindings.map(\.literalMembers) == [
             [.int(1), .int(2)], [.int(10), .int(20)], [.int(100), .int(200)]
         ])
         #expect(action.bindings.map(\.generatedSwiftType) == ["Int", "Int", "Int"])
@@ -282,7 +282,7 @@ import SwiftTLAMacros
             #expect(parsedAction.name == builtAction.0)
             #expect(parsedAction.body == builtAction.1)
             #expect(parsedAction.bindings.map(\.name) == builtAction.2.map(\.name))
-            #expect(parsedAction.bindings.map(\.values) == builtAction.2.map(\.values))
+            #expect(parsedAction.bindings.map(\.domain) == builtAction.2.map(\.domain))
         }
     }
 
