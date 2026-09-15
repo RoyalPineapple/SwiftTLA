@@ -13,6 +13,7 @@ extension NativeSwiftEmitter {
         let appendedArguments = collectionArguments.isEmpty ? "" : ", \(collectionArguments)"
         var declarations: [DeclSyntax] = []
         declarations += try configurationDeclarations()
+        declarations += try validationDeclarations()
         let fields = try program.layout.variables.filter { stateMemberNames[$0.id] == nil }.map { variable in
             "let \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: "\n")

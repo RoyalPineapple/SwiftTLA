@@ -75,7 +75,7 @@ package struct TemporalSymmetryCheck: Sendable {
       return try validation.checks.map { check, result in
         let comparison = try? result.get()
         let status = comparison?.status ?? .unavailable
-        let expected: PropertyExpectation
+        let expected: ValidationExpectation
         switch check {
         case .property(let name):
           guard let expectation = temporalCase.expectedProperties[name] else {

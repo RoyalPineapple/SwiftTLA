@@ -52,6 +52,22 @@ state. `assumptionsHold()` checks assumptions. State constraints select states
 for exploration. They do not change application transitions or action enabledness.
 Invariant checks include excluded initial states and successor candidates.
 
+## Model-owned validation scenarios
+
+`Validation("Completes at two") { Bind(limit, to: 2); Bind(stopAtLimit, to: true) }`
+declares a finite configuration beside the algorithm. `.expectDeadlock(.violated)`
+changes the expected deadlock outcome without disabling its check.
+
+`Model.validationScenarios()` returns immutable generated scenario values.
+Each scenario provides `initialMachines()`, `explore(maximumStates:)`, and `render()`.
+Its typed `expectations` include every named property, with `.satisfied` as the
+default. `.expect(propertyHandle, .violated)` overrides one expectation.
+The property handle must appear in the specification body to register its declaration.
+
+Scalar scenario bindings retain parameter identities and checked value types.
+Missing, duplicate, and foreign bindings fail explicitly. Collection bindings,
+refinement expectations, and automatic hosted scenario verdicts remain unfinished.
+
 ## Positive reachability
 
 `Reachable("AtLimit") { value == limit }` declares a positive goal beside the

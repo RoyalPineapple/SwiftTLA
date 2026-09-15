@@ -112,6 +112,7 @@ final class ParserSession {
     var sourceScope = TypedFacadeScope.empty
     var allowsUnboundValueNames = true
     struct SpecBindings {
+        var properties: [String: any ModelProperty] = [:]
         var parameters: [String: ActionBinding] = [:]
         var actions: [String: NamedAction] = [:]
         var instances: [String: FormalModuleInstance] = [:]

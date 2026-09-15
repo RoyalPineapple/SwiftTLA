@@ -23,13 +23,13 @@ package struct TemporalCase: Equatable, Codable, Sendable {
   package let id: String
   package let fairness: TemporalFairnessMode
   package let exploration: FiniteExplorationConfiguration
-  package let expectedProperties: [String: PropertyExpectation]
+  package let expectedProperties: [String: ValidationExpectation]
 
   package init(
     id: String,
     fairness: TemporalFairnessMode,
     exploration: FiniteExplorationConfiguration,
-    expectedProperties: [String: PropertyExpectation]
+    expectedProperties: [String: ValidationExpectation]
   ) throws {
     self.id = id
     self.fairness = fairness
@@ -56,7 +56,7 @@ package struct TemporalCase: Equatable, Codable, Sendable {
       id: try container.decode(String.self, forKey: .id),
       fairness: try container.decode(TemporalFairnessMode.self, forKey: .fairness),
       exploration: try container.decode(FiniteExplorationConfiguration.self, forKey: .exploration),
-      expectedProperties: try container.decode([String: PropertyExpectation].self, forKey: .expectedProperties))
+      expectedProperties: try container.decode([String: ValidationExpectation].self, forKey: .expectedProperties))
   }
 }
 

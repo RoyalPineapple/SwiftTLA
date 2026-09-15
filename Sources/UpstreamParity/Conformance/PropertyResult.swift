@@ -1,8 +1,5 @@
 import SwiftTLA
-package enum PropertyExpectation: String, Codable, Sendable {
-  case satisfied
-  case violated
-
+extension ValidationExpectation {
   package func accepts(_ result: PropertyResult) -> Bool {
     switch (self, result) {
     case (.satisfied, .satisfied), (.satisfied, .reached),

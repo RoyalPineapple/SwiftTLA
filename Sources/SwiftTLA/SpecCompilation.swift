@@ -1016,6 +1016,15 @@ private struct CanonicalSpecificationEncoder {
         let formalParameters = spec.formalParameters.map {
             node("formal-parameter", [$0.name, $0.kind.rawValue])
         }
+        if !spec.validationScenarios.isEmpty {
+            let scenarios = spec.validationScenarios.map { scenario in
+                node("scenario", [scenario.name,
+                    canonicalList(scenario.bindings.map { node("binding", [$0.parameter.name, canonicalExpression($0.value)]) }),
+                    canonicalList(scenario.expectations.map { node("expect", [$0.property.name, $0.expected.rawValue]) }),
+                    canonicalList(scenario.deadlockExpectations.map(\.rawValue))])
+            }
+            list("validation", scenarios) { $0 }
+        }
         list("formalParameters", formalParameters) { $0 }
         list("actions", spec.actions, canonicalAction)
         let invariants = spec.invariants.map {

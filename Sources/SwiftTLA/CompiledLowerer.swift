@@ -326,10 +326,12 @@ struct CompiledLowerer {
         let temporalProperties = temporalBodies.map { $0.map(predicate) }
         let constraintExpression = try lowerOptional(spec.constraint, at: "constraint", scope: rootScope)
         let constraint = constraintExpression.map(predicate)
+        let scenarios = try lowerValidationScenarios(spec)
         return CompiledSemantics(
             behavior: .init(
                 checkDeadlock: spec.checkDeadlock,
                 parameterDomains: parameterDomains,
+                validationScenarios: scenarios,
                 initializations: orderedInitializations,
                 actions: actions,
                 enabledActionIndices: enabledActions.indices,
@@ -347,6 +349,60 @@ struct CompiledLowerer {
                 .init(values: Set(symmetry.values.map(CompiledValue.init(formal:))))
             }
         )
+    }
+
+    private mutating func lowerValidationScenarios(_ spec: TLASpec) throws -> [CompiledValidationScenario] {
+        func invalid(_ name: String, _ actual: String) -> CompilationDiagnostic {
+            .init(code: .unknownReference, stage: .binding, path: "validation.\(name)",
+                expected: "complete, unique model-owned bindings and property expectations", actual: actual,
+                nextSafeAction: "Bind every parameter once and reference only properties registered in this model.")
+        }
+        let names = spec.validationScenarios.map(\.name)
+        guard names.allSatisfy({ !$0.isEmpty }), Set(names).count == names.count else {
+            throw invalid("declarations", "duplicate or empty scenario name")
+        }
+        let parameters = Set(spec.parameters.map(\.reference))
+        let properties = layout.stateProperties + layout.temporalProperties
+        var scenarios: [CompiledValidationScenario] = []
+        for scenario in spec.validationScenarios {
+            let references = scenario.bindings.map(\.parameter)
+            guard Set(references) == parameters, references.count == parameters.count else {
+                throw invalid(scenario.name, "missing, duplicate, or foreign parameter binding")
+            }
+            let expectedProperties = scenario.expectations.map(\.property)
+            guard Set(expectedProperties).count == expectedProperties.count,
+                  Set(expectedProperties).isSubset(of: Set(spec.propertyReferences)),
+                  scenario.deadlockExpectations.count <= 1,
+                  scenario.deadlockExpectations.isEmpty || spec.checkDeadlock else {
+                throw invalid(scenario.name, "duplicate, unregistered, or disabled check expectation")
+            }
+            var bindings: [BinderID: CompiledExpression] = [:]
+            for binding in scenario.bindings {
+                guard let parameter = layout.parameters.first(where: { $0.reference == binding.parameter }) else {
+                    throw invalid(scenario.name, "foreign parameter binding")
+                }
+                let value = try lower(binding.value, at: "validation.\(scenario.name).\(binding.parameter.name)", scope: rootScope)
+                var pending = [value]
+                while let expression = pending.popLast() {
+                    switch expression.operation {
+                    case .stateVariable, .boundValue, .operatorReference, .enabledAction, .call:
+                        throw invalid(scenario.name, "scenario bindings require closed values without state, parameter, or operator dependencies")
+                    default: pending.append(contentsOf: expression.children)
+                    }
+                }
+                bindings[parameter.binder] = value
+            }
+            var expectations: [PropertyID: ValidationExpectation] = [:]
+            for expectation in scenario.expectations {
+                guard let property = properties.first(where: { $0.declaration.name == expectation.property.name }) else {
+                    throw invalid(scenario.name, "unresolved property expectation")
+                }
+                expectations[property.id] = expectation.expected
+            }
+            scenarios.append(.init(name: scenario.name, bindings: bindings, expectations: expectations,
+                deadlockExpectation: scenario.deadlockExpectations.first))
+        }
+        return scenarios
     }
 
     mutating func refinementExpression(_ expression: StateExpr, at path: String) throws -> CompiledExpression {

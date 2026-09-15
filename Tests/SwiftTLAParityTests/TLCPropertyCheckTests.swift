@@ -22,8 +22,8 @@ struct TLCPropertyCheckTests {
       swiftResult: reached ? .reached(witness) : .unreachable, reachabilityTargets: ["Target": targets])
     #expect(comparison.status == .exact)
     #expect(comparison.tlcResult.isSatisfied == reached)
-    #expect(PropertyExpectation.satisfied.accepts(comparison.tlcResult) == reached)
-    #expect(PropertyExpectation.violated.accepts(comparison.tlcResult) == !reached)
+    #expect(ValidationExpectation.satisfied.accepts(comparison.tlcResult) == reached)
+    #expect(ValidationExpectation.violated.accepts(comparison.tlcResult) == !reached)
   }
 
   @Test("a graph-valid TLC witness must end at a native matching state")

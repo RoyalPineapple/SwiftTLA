@@ -287,6 +287,17 @@ package struct CompiledTypeChecker: Sendable {
             parameterDomains[parameter.binder] = try checkOperand(domain, expected: .set(type))
         }
         var initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)] = []
+        let scenarios = try inputs.semantics.behavior.validationScenarios.map { scenario in
+            var values: [BinderID: CompiledExpression] = [:]
+            for (binder, value) in scenario.bindings {
+                guard let type = bindings[binder] else {
+                    throw CompiledValueType.unresolvedDiagnostic(.unknown, at: "validation.\(scenario.name)")
+                }
+                values[binder] = try checkOperand(value, expected: type)
+            }
+            return CompiledValidationScenario(name: scenario.name, bindings: values,
+                expectations: scenario.expectations, deadlockExpectation: scenario.deadlockExpectation)
+        }
         var actions: [CompiledAction] = []
         var invariants: [CompiledStatePredicate] = []
         var reachabilityProperties: [CompiledStatePredicate] = []
@@ -423,6 +434,7 @@ package struct CompiledTypeChecker: Sendable {
         let behavior = CompiledBehavior(
             checkDeadlock: inputs.semantics.behavior.checkDeadlock,
             parameterDomains: parameterDomains,
+            validationScenarios: scenarios,
             initializations: initializations,
             actions: actions,
             enabledActionIndices: inputs.semantics.behavior.enabledActionIndices,

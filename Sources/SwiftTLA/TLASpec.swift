@@ -233,6 +233,8 @@ public struct TLASpec: Sendable {
   package var variables: [NamedVar]
   package var constants: [ConstantDecl]
   package var parameters: [ModelParameterDeclaration] = []
+  package var propertyReferences: [PropertyReference] = []
+  package var validationScenarios: [ValidationDeclaration] = []
   /// Parameters supplied by a named TLA+ `INSTANCE … WITH` declaration.
   package var formalParameters: [FormalModuleParameter]
   package var actions: [NamedAction]
@@ -360,26 +362,32 @@ public struct ActionDecl: SpecComponent, Sendable {
     self.bindings = bindings
   }
 }
-public struct InvDecl: SpecComponent {
+public struct InvDecl: ModelProperty {
+  public let reference: PropertyReference
   public let name: String
   public let body: StateExpr
   package init(_ name: String, _ body: StateExpr) {
+    reference = .init(name: name)
     self.name = name
     self.body = body
   }
 }
-public struct ReachableDecl: SpecComponent {
+public struct ReachableDecl: ModelProperty {
+  public let reference: PropertyReference
   public let name: String
   public let body: StateExpr
   package init(_ name: String, _ body: StateExpr) {
+    reference = .init(name: name)
     self.name = name
     self.body = body
   }
 }
-public struct TemporalDecl: SpecComponent {
+public struct TemporalDecl: ModelProperty {
+  public let reference: PropertyReference
   public let name: String
   public let expr: TemporalCondition<StateExpr>
   package init(_ name: String, _ expr: TemporalCondition<StateExpr>) {
+    reference = .init(name: name)
     self.name = name
     self.expr = expr
   }
@@ -611,6 +619,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ActionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: InvDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ReachableDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: ValidationDeclaration) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FairnessDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }

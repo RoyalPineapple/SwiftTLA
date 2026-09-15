@@ -31,6 +31,14 @@ struct ConfiguredCounter {
             Invariant("OrderedCopy") { copied == value }
             Invariant("Bounded") { value <= limit }
             Reachable("AtLimit") { value == limit }
+            Validation("Completes at two") {
+                Bind(limit, to: 2)
+                Bind(stopAtLimit, to: true)
+            }
+            Validation("Deadlocks at four") {
+                Bind(limit, to: 4)
+                Bind(stopAtLimit, to: false)
+            }.expectDeadlock(.violated)
         }
     }
 }

@@ -27,6 +27,10 @@ extension ParserSession {
                 parseBuilderCall(fc, into: &components, collectionTypes: collectionTypes)
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
+                      let property = specBindings.properties[reference.baseName.text] {
+                registerProperty(property, into: &components)
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
                       specBindings.instances[reference.baseName.text] != nil {
                 continue
             } else if case .expr(let expression) = statement.item,
@@ -115,6 +119,21 @@ extension ParserSession {
                     sourceScope = sourceScope.extending(binding: sourceName, to: .parameter(reference), shape: shape)
                 } catch {
                     components.diagnostics.append(.init(message: "Invalid parameter type: \(error)", source: binding))
+                }
+            } else if ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo"].contains(compilerGrammarName(in: call.calledExpression) ?? "") {
+                guard declaration.bindingSpecifier.text == "let", specBindings.properties[sourceName] == nil else {
+                    components.diagnostics.append(.init(message: "A property handle requires a unique let binding.", source: binding))
+                    continue
+                }
+                var parsed = TLASpec(name: components.name, variables: [], actions: [], invariants: [])
+                parseBuilderCall(call, into: &parsed, collectionTypes: [:])
+                components.diagnostics.append(contentsOf: parsed.diagnostics)
+                if let property = parsed.invariants.first {
+                    specBindings.properties[sourceName] = InvDecl(property.name, property.body)
+                } else if let property = parsed.reachabilityProperties.first {
+                    specBindings.properties[sourceName] = ReachableDecl(property.name, property.body)
+                } else if let property = parsed.temporalProperties.first {
+                    specBindings.properties[sourceName] = TemporalDecl(property.name, property.expr)
                 }
             } else if compilerGrammarName(in: call.calledExpression) == "ActionParameter" {
                 guard declaration.bindingSpecifier.text == "let", specBindings.parameters[sourceName] == nil else {
@@ -654,6 +673,7 @@ extension ParserSession {
         loopValue: Int? = nil,
         collectionTypes: [String: ModelCollectionSourceTypes] = [:]
     ) {
+        if parseValidation(call, into: &components) { return }
         guard let name = builderCallName(call.calledExpression) else {
             components.diagnostics.append(.init(
                 message: "Specification body contains an unsupported call.",
@@ -1446,6 +1466,17 @@ extension ParserSession {
             }
         } catch {
             components.diagnostics.append(error)
+        }
+    }
+
+    func registerProperty(_ property: any ModelProperty, into components: inout TLASpec) {
+        components.propertyReferences.append(property.reference)
+        if let property = property as? InvDecl {
+            components.invariants.append(.init(name: property.name, body: property.body))
+        } else if let property = property as? ReachableDecl {
+            components.reachabilityProperties.append(.init(name: property.name, body: property.body))
+        } else if let property = property as? TemporalDecl {
+            components.temporalProperties.append(.init(name: property.name, expr: property.expr))
         }
     }
 

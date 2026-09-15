@@ -365,6 +365,7 @@ struct NativeCodeGenerationTests {
         let behavior = CompiledBehavior(
             checkDeadlock: compilation.semantics.behavior.checkDeadlock,
             parameterDomains: [:],
+            validationScenarios: [],
             initializations: [], actions: [], enabledActionIndices: [], enabledActionDependencies: [:],
             invariants: [], reachabilityProperties: [], temporalProperties: [], fairness: compilation.semantics.behavior.fairness,
             constraint: nil, assume: nil)

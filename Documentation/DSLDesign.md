@@ -378,11 +378,11 @@ different constant bindings. An invalid limit fails `Configuration` construction
 before export. Unsupported module closures must fail explicitly, without partial
 output or a fallback to an earlier compiler representation.
 
-This contract settles scalar parameter declarations for Counter. Parameter-dependent
-collection domains and scenario declaration signatures still require the remaining
-B-01 decisions. They must use these same identities and configuration values.
+This contract settles scalar parameter declarations and scenario bindings for Counter.
+Parameter-dependent collection domains still require the remaining B-01 decisions.
+They must use these same identities and configuration values.
 
-**API pending:** candidate syntax inside a model scope containing typed declarations:
+The selected syntax inside a model scope containing typed declarations is:
 
 ```swift
 let exclusion = Invariant("MutualExclusion") {
@@ -402,16 +402,27 @@ Validation("Missing lock") {
 .expect(exclusion, .violated)
 ```
 
-In this candidate syntax, the explicit `exclusion` expression contributes the
+The explicit `exclusion` expression contributes the
 declaration to the builder. Binding it with `let` alone must not secretly
-register it. Section 11 must settle the final reference syntax without hidden
-registration side effects.
+register it. The handle retains a model-owned identity through expectation binding.
 
-`Validation`, `Bind`, and `.expect` are candidate names. Parameter handles have
+`Validation`, `Bind`, and `.expect` are the scalar scenario declarations. Parameter handles have
 types, are immutable for an execution, and are distinct from state variables.
-Scalar parameters use the Counter declaration contract. Bindings must be resolved
-data or supported expressions, not opaque closures that backends evaluate
-differently. Parameter-dependent structure and scenario binding syntax remain open.
+Scalar parameters use the Counter declaration contract. Bindings are closed typed
+values, not opaque closures that backends evaluate differently. State, parameter,
+and operator dependencies in scenario bindings currently produce explicit diagnostics.
+Parameter-dependent structure, collection bindings, and refinement expectation
+handles remain open. Generated scenarios reject these unsupported cases explicitly.
+
+`.expectDeadlock(.violated)` declares an expected deadlock without disabling its
+check. Duplicate overrides and expectations for disabled checks are errors.
+`Model.validationScenarios()` returns generated scenario values with immutable
+`Configuration` values, typed property expectations, and a deadlock expectation.
+Each scenario provides `initialMachines()`, `explore(maximumStates:)`, and `render()`.
+These methods use the same generated machine and symbolic transition module.
+
+Hosted scenario execution and automatic comparison verdicts remain implementation
+work. Generated scenario methods do not establish independent TLC agreement.
 
 ### Same machine, different settings
 

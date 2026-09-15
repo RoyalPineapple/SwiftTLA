@@ -20,6 +20,7 @@ extension TLASpec {
   private init(_ name: String, components: [SpecComponent]) {
     self.init(name: name, variables: [], actions: [], invariants: [])
     for comp in components {
+      if let property = comp as? any ModelProperty { propertyReferences.append(property.reference) }
       if let v = comp as? VarDecl {
         variables.append(
           NamedVar(
@@ -36,6 +37,8 @@ extension TLASpec {
         ))
       } else if let algorithm = comp as? Algorithm {
         sourceAlgorithms.append(algorithm)
+      } else if let scenario = comp as? ValidationDeclaration {
+        validationScenarios.append(scenario)
       } else if let i = comp as? InvDecl {
         invariants.append(NamedStatePredicate(name: i.name, body: i.body))
       } else if let property = comp as? ReachableDecl {
@@ -167,6 +170,8 @@ extension TLASpec {
     )
     lowered.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
     lowered.parameters = parameters
+    lowered.propertyReferences = propertyReferences
+    lowered.validationScenarios = validationScenarios
     lowered.algorithmPhase = .lowered
     return lowered
   }

@@ -8,12 +8,12 @@ struct TemporalSymmetryCheckTests {
   func expectedVerdictsRejectMissingAndOppositeResults() throws {
     let model = try temporalConformanceRun(fairness: .none, maximumStates: 10)
     let violation = try #require(model.checks.properties["AlwaysP"])
-    #expect(PropertyExpectation.violated.accepts(violation))
-    #expect(!PropertyExpectation.satisfied.accepts(violation))
-    #expect(PropertyExpectation.satisfied.accepts(.satisfied))
-    #expect(!PropertyExpectation.violated.accepts(.satisfied))
-    #expect(!PropertyExpectation.satisfied.accepts(.unavailable))
-    #expect(!PropertyExpectation.violated.accepts(.unavailable))
+    #expect(ValidationExpectation.violated.accepts(violation))
+    #expect(!ValidationExpectation.satisfied.accepts(violation))
+    #expect(ValidationExpectation.satisfied.accepts(.satisfied))
+    #expect(!ValidationExpectation.violated.accepts(.satisfied))
+    #expect(!ValidationExpectation.satisfied.accepts(.unavailable))
+    #expect(!ValidationExpectation.violated.accepts(.unavailable))
   }
 
   @Test("Temporal cases preserve bounded fairness outcomes")

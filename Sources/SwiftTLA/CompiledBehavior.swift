@@ -2,6 +2,7 @@
 package struct CompiledBehavior: Sendable {
     package let checkDeadlock: Bool
     package let parameterDomains: [BinderID: CompiledExpression]
+    package let validationScenarios: [CompiledValidationScenario]
     package let initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)]
     package let actions: [CompiledAction]
     /// Indices into actions, with ENABLED dependencies before their users.
@@ -21,6 +22,10 @@ package struct CompiledBehavior: Sendable {
         try .init(
             checkDeadlock: checkDeadlock,
             parameterDomains: parameterDomains.mapValues(transform),
+            validationScenarios: validationScenarios.map {
+                try .init(name: $0.name, bindings: $0.bindings.mapValues(transform),
+                    expectations: $0.expectations, deadlockExpectation: $0.deadlockExpectation)
+            },
             initializations: initializations.map {
                 (variable: $0.variable, initialization: try $0.initialization.map(transform))
             },
@@ -37,4 +42,11 @@ package struct CompiledBehavior: Sendable {
             assume: assume.map { try $0.map(transform) })
     }
 
+}
+
+package struct CompiledValidationScenario: Sendable {
+    package let name: String
+    package let bindings: [BinderID: CompiledExpression]
+    package let expectations: [PropertyID: ValidationExpectation]
+    package let deadlockExpectation: ValidationExpectation?
 }
