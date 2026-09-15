@@ -67,13 +67,16 @@ default. `.expect(propertyHandle, .violated)` overrides one expectation.
 The property handle must appear in the specification body to register its declaration.
 
 Scalar scenario bindings retain parameter identities and checked value types.
-Missing, duplicate, and foreign bindings fail explicitly. Collection bindings,
-refinement expectations, and automatic hosted scenario verdicts remain unfinished.
+Missing, duplicate, and foreign bindings fail explicitly. Collection bindings
+and refinement expectations remain unfinished.
 
 Repository validation derives canonical graphs and native results directly from
 scenarios. It validates expected outcomes only after complete exploration.
 The adapter reads rendered check metadata without compiling the specification again.
-This native result does not establish independent TLC agreement.
+The hosted scenario command compares complete native and TLC graphs and every
+declared result. Expected failures change the verdict, not the model or checks.
+Independent agreement still requires successful hosted evidence. The unavailable
+pinned TLC JAR currently prevents that evidence.
 
 ## Positive reachability
 

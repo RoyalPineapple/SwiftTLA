@@ -1,8 +1,45 @@
 import Testing
 import SwiftTLA
-import UpstreamParity
+@testable import UpstreamParity
 
 struct ScenarioValidationTests {
+    @Test("scenario admission requires complete agreeing checks and declared expectations")
+    func validatesIndependentResults() throws {
+        for scenario in try ConfiguredCounter.validationScenarios() {
+            let run = try NativeScenarioRun(scenario, maximumStates: 10)
+            var checks = run.native.checks.properties.map { name, result in
+                PropertyComparison(caseID: scenario.name, check: .property(name), status: .exact,
+                    swiftResult: result, tlcResult: result)
+            }
+            let deadlock = try #require(run.native.checks.deadlock)
+            checks.append(.init(caseID: scenario.name, check: .deadlock, status: .exact,
+                swiftResult: deadlock, tlcResult: deadlock))
+            try run.validateComparison(.init(differences: []), checks: checks)
+            #expect(throws: EvidenceFormatError.self) {
+                try run.validateComparison(.init(differences: []), checks: Array(checks.dropLast()))
+            }
+            #expect(throws: EvidenceFormatError.self) {
+                try run.validateComparison(.init(differences: []), checks: checks + [checks[0]])
+            }
+            #expect(throws: ScenarioExpectationError.self) {
+                try run.validateComparison(.init(differences: [.completion(tlc: false, swift: true)]), checks: checks)
+            }
+            for status in [PropertyComparisonStatus.unavailable, .propertyOutcomeDifference, .graphDifference] {
+                var changed = checks
+                changed[0] = .init(caseID: scenario.name, check: checks[0].check, status: status,
+                    swiftResult: checks[0].swiftResult, tlcResult: checks[0].tlcResult)
+                #expect(throws: ScenarioExpectationError.self) {
+                    try run.validateComparison(.init(differences: []), checks: changed)
+                }
+            }
+            checks[checks.count - 1] = .init(caseID: scenario.name, check: .deadlock, status: .exact,
+                swiftResult: deadlock, tlcResult: .unavailable)
+            #expect(throws: ScenarioExpectationError.self) {
+                try run.validateComparison(.init(differences: []), checks: checks)
+            }
+        }
+    }
+
     @Test("expected failures change only the validation verdict")
     func distinguishesExpectedDeadlock() throws {
         let scenarios = try DeadlockScenarios.validationScenarios()

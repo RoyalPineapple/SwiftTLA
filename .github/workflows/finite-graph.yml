@@ -52,6 +52,14 @@ jobs:
           fi
           echo "sha=$resolved_sha" >> "$GITHUB_OUTPUT"
 
+      - name: Validate model-owned Counter scenarios
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT"
+          unset FINITE_GRAPH_GITHUB_TOKEN
+          swift run --configuration release -Xswiftc -warnings-as-errors -j 1 tlc-validate scenarios run --output .build/scenario-evidence
+
       - name: Run exact finite graph comparison
         env:
           FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
@@ -64,5 +72,6 @@ jobs:
           name: finite-graph-${{ env.ADMISSION_MODE }}-${{ steps.revision.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             .build/finite-graph-evidence
+            .build/scenario-evidence
           include-hidden-files: true
           if-no-files-found: error

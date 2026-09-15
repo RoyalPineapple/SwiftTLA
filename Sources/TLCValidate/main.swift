@@ -2,6 +2,9 @@ import SwiftTLA
 import UpstreamParity
 import Foundation
 let args = Array(CommandLine.arguments.dropFirst())
+if args.first == "scenarios" {
+    runScenarios(arguments: Array(args.dropFirst()))
+}
 if args.first == "finite-graph" {
     runFiniteGraphCheck(arguments: Array(args.dropFirst()))
 }
@@ -13,6 +16,7 @@ guard let name = args.first else {
     Usage: tlc-validate <command>
       finite-graph run ...
       temporal-symmetry run ...
+      scenarios run --output <directory>
     """, stderr)
     exit(1)
 }
@@ -48,7 +52,7 @@ struct PinnedTLCToolchain: Decodable {
     }
 }
 
-private func referencePin(
+func referencePin(
     from toolchain: PinnedTLCToolchain,
     javaArchive: PinnedTLCToolchain.Download, toolRoot: URL
 ) throws -> TLCReferencePin {

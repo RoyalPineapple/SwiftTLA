@@ -428,8 +428,12 @@ cannot excuse an unavailable result or incomplete graph.
 
 The runner uses rendered check metadata without compiling the specification again.
 Temporal and refinement declarations remain distinct until TLC configuration output.
-Hosted scenario execution and independent comparison verdicts remain implementation
-work. Native scenario validation does not establish independent TLC agreement.
+The hosted `tlc-validate scenarios run --output <directory>` command derives Counter
+runs from those declarations. It retains complete native and TLC graphs, property
+results, expectations, and comparison failures. Missing or disagreeing results fail
+the run. The finite-graph workflow includes this command.
+Independent TLC agreement still requires successful hosted evidence. The pinned
+TLC JAR is unavailable, so the implemented command does not establish that agreement.
 
 ### Same machine, different settings
 
