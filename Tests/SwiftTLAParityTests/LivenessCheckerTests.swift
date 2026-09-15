@@ -149,7 +149,7 @@ struct LivenessCheckerTests {
       StrongFairness(a)
     }
     let weakCompilation = try weakSpec.compile()
-    let exploration = try ModelChecker(compilation: weakCompilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore(checkingSafety: false)
+    let exploration = try ModelChecker(compilation: weakCompilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
     let weak = try #require(
       exploration.analyzeTemporalProperties(in: weakCompilation).first
     )
@@ -157,7 +157,7 @@ struct LivenessCheckerTests {
     let strongExploration = try ModelChecker(
       compilation: strongCompilation,
       configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
-    ).explore(checkingSafety: false)
+    ).explore()
     let strong = try #require(
       strongExploration.analyzeTemporalProperties(in: strongCompilation).first
     )

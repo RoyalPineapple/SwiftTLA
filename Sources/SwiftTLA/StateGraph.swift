@@ -69,27 +69,35 @@ package struct StateGraph: Sendable {
 package struct FiniteExploration {
     public let graph: StateGraph
     public let initialStateIDs: [StateGraph.StateID]
-    public let outcome: ModelCheckOutcome
+    public let completion: ModelCheckOutcome
+    /// One concrete witness per violated safety check; graph traversal continues after discovery.
+    public let safetyViolations: [ModelCheckOutcome]
+    public var outcome: ModelCheckOutcome {
+        safetyViolations.first { if case .invariantViolated = $0 { true } else { false } }
+            ?? safetyViolations.first ?? completion
+    }
     package let compilationIdentity: CompilationIdentity
     package let configuration: FiniteExplorationConfiguration
     let compiledStates: [StateGraph.StateID: CompiledState]
 
     public var isComplete: Bool {
-        if case .ok = outcome { return true }
+        if case .ok = completion { return true }
         return false
     }
 
     init(
         graph: StateGraph,
         initialStateIDs: [StateGraph.StateID],
-        outcome: ModelCheckOutcome,
+        completion: ModelCheckOutcome,
+        safetyViolations: [ModelCheckOutcome] = [],
         compilationIdentity: CompilationIdentity,
         configuration: FiniteExplorationConfiguration,
         compiledStates: [StateGraph.StateID: CompiledState]
     ) {
         self.graph = graph
         self.initialStateIDs = initialStateIDs
-        self.outcome = outcome
+        self.completion = completion
+        self.safetyViolations = safetyViolations
         self.compilationIdentity = compilationIdentity
         self.configuration = configuration
         self.compiledStates = compiledStates

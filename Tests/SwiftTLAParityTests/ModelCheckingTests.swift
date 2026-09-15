@@ -152,11 +152,11 @@ import UpstreamParity
       Action("inc") { x.becomes(x + 1).when(x < 5) }
       Invariant("nonNeg") { x >= 0 }
     }
-    if case .ok(let count) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check() {
-      #expect(count == 6)
-    } else {
-      #expect(Bool(false))
-    }
+    let exploration = try ModelChecker(compilation: spec.compile(), configuration: .init(maximumStateLimit: 100, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.graph.states.count == 6)
+    #expect(exploration.safetyViolations.count == 1)
+    #expect(exploration.outcome.diagnostic?.kind == .deadlock)
   }
 
   @Test func invariantViolated() throws {
@@ -213,10 +213,11 @@ import UpstreamParity
 
   @Test func deadlockNotDetectedWhenFlagFalse() throws {
     let x = Var<Int>("x")
-    let spec = TLASpec("Test") {
+    var spec = TLASpec("Test") {
       Variable(x, 0)
       Action("once") { x.becomes(1).when(x == 0) }
     }
+    spec.checkDeadlock = false
     if case .ok(let c) = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check() {
       #expect(c == 2)
     } else {

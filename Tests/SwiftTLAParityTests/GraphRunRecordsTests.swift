@@ -76,7 +76,7 @@ struct GraphRunRecordsTests {
     for (outcome, expected) in outcomes {
       let failed = FiniteExploration(
         graph: exploration.graph, initialStateIDs: exploration.initialStateIDs,
-        outcome: outcome, compilationIdentity: exploration.compilationIdentity,
+        completion: outcome, compilationIdentity: exploration.compilationIdentity,
         configuration: exploration.configuration, compiledStates: exploration.compiledStates
       )
       let run = try FormalGraphExporter().export(failed)

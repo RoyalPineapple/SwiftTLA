@@ -28,7 +28,7 @@ struct FiniteGraphCheckTests {
       let native = try declaration.sourceModel.nativeRun(description: compilation.description, rendered: rendered, checkingDeadlock: false, for: finiteGraphCase)
       let formal = try FormalGraphExporter().export(ModelChecker(
         compilation: compilation, configuration: declaration.exploration
-      ).explore(checkingSafety: false), for: finiteGraphCase)
+      ).explore(), for: finiteGraphCase)
       let renderedNames = Set(finiteGraphCase.renderedActions.map(\.renderedName))
       #expect(Set(native.graph.graph.edges.map(\.action)).isSubset(of: renderedNames))
       #expect(native.graph.graph == formal.graph, "\(declaration.id)")

@@ -33,7 +33,8 @@ struct ConcreteVerificationGraphTests {
         #expect(try exploration.analyzeTemporalProperties(in: compilation).first?.status == .satisfied)
         let reductionEvidence = FiniteExploration(
             graph: exploration.graph, initialStateIDs: exploration.initialStateIDs,
-            outcome: exploration.outcome, compilationIdentity: compilation.identity,
+            completion: exploration.completion, safetyViolations: exploration.safetyViolations,
+            compilationIdentity: compilation.identity,
             configuration: reduced.configuration, compiledStates: exploration.compiledStates
         )
         #expect(throws: FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly) {

@@ -106,6 +106,7 @@ package struct ModelChecker {
 
     func check() throws -> ModelCheckOutcome {
         let exploration = try explore()
+        if case .invariantViolated = exploration.outcome { return exploration.outcome }
         if let refinementOutcome = try RefinementChecker(compilation: compilation).check(exploration) {
             return refinementOutcome
         }
@@ -113,12 +114,8 @@ package struct ModelChecker {
     }
     func exploreGraph() throws -> StateGraph { try explore().graph }
 
-    /// Graph comparisons can defer safety checks so an expected violation does not truncate exploration.
-    package func explore(checkingSafety: Bool = true) throws -> FiniteExploration {
-        try runExploration(checkingSafety: checkingSafety)
-    }
-
-    private func runExploration(checkingSafety: Bool) throws -> FiniteExploration {
+    /// Safety violations are retained without truncating the reachable graph.
+    package func explore() throws -> FiniteExploration {
         try configuration.validatePropertySupport(in: compilation)
         let symmetry = try SymmetryPlan(
             compilation: compilation,
@@ -142,8 +139,7 @@ package struct ModelChecker {
             runtime: runtime,
             seeds: initialStates,
             layout: compilation.layout,
-            checkingSafety: checkingSafety,
-            checkDeadlock: checkingSafety && compilation.semantics.behavior.checkDeadlock,
+            checkDeadlock: compilation.semantics.behavior.checkDeadlock,
             specificationName: compilation.description.name,
             configuration: configuration,
             symmetry: symmetry
@@ -151,7 +147,8 @@ package struct ModelChecker {
         return FiniteExploration(
             graph: exploration.graph,
             initialStateIDs: exploration.initialStateIDs,
-            outcome: exploration.outcome,
+            completion: exploration.completion,
+            safetyViolations: exploration.safetyViolations,
             compilationIdentity: compilation.identity,
             configuration: configuration,
             compiledStates: exploration.compiledStates
@@ -170,7 +167,7 @@ package struct ModelChecker {
                 states: [:]
             ),
             initialStateIDs: [],
-            outcome: outcome,
+            completion: outcome,
             compilationIdentity: compilation.identity,
             configuration: configuration,
             compiledStates: [:]
@@ -183,7 +180,6 @@ private func compiledBFS(
     runtime: CompiledRuntime,
     seeds: [CompiledState],
     layout: CompiledLayout,
-    checkingSafety: Bool,
     checkDeadlock: Bool,
     specificationName: String,
     configuration: FiniteExplorationConfiguration,
@@ -196,6 +192,7 @@ private func compiledBFS(
     var transitions: [StateGraph.StateID: [StateGraph.Transition]] = [:]
     var predecessors: [CompiledState: (CompiledState, ActionID)] = [:]
     var nextID = 0
+    var safetyViolations: [ModelCheckOutcome] = []
 
     func stateProjection(_ state: CompiledState) throws -> TLAStateProjection {
         try state.projection(using: layout)
@@ -218,10 +215,11 @@ private func compiledBFS(
         .init(
             graph: try graph(),
             initialStateIDs: initialStateIDs,
-            outcome: .depthExceeded(
+            completion: .depthExceeded(
                 statesCount: stateToID.count,
                 limit: configuration.maximumStateLimit
             ),
+            safetyViolations: safetyViolations,
             compilationIdentity: runtime.identity,
             configuration: configuration,
             compiledStates: idToState
@@ -292,37 +290,28 @@ private func compiledBFS(
         let key = try representative(current)
         guard let currentID = stateToID[key] else { continue }
 
-        for invariant in runtime.behavior.invariants where checkingSafety {
+        for invariant in runtime.behavior.invariants where !safetyViolations.contains(where: {
+            if case .invariantViolated(let name, _, _) = $0 { name == invariant.name } else { false }
+        }) {
             guard try runtime.invariantHolds(invariant, in: current) else {
                 let counterexample = try trace(to: current)
                 guard try !runtime.invariantHolds(invariant, in: counterexample.state) else {
                     throw replayFailure("the concrete replay does not violate invariant '\(invariant.name)'")
                 }
-                return .init(
-                    graph: try graph(),
-                    initialStateIDs: initialStateIDs,
-                    outcome: .invariantViolated(
-                        invariant: invariant.name,
-                        state: try counterexample.state.projection(using: layout),
-                        trace: counterexample.steps
-                    ),
-                    compilationIdentity: runtime.identity,
-                    configuration: configuration,
-                    compiledStates: idToState
-                )
+                safetyViolations.append(.invariantViolated(
+                    invariant: invariant.name,
+                    state: try counterexample.state.projection(using: layout),
+                    trace: counterexample.steps
+                ))
+                continue
             }
         }
 
         let successors = try runtime.successors(from: current)
-        if checkDeadlock && successors.isEmpty {
-            return .init(
-                graph: try graph(),
-                initialStateIDs: initialStateIDs,
-                outcome: .deadlocked(state: try current.projection(using: layout)),
-                compilationIdentity: runtime.identity,
-                configuration: configuration,
-                compiledStates: idToState
-            )
+        if checkDeadlock && successors.isEmpty && !safetyViolations.contains(where: {
+            if case .deadlocked = $0 { true } else { false }
+        }) {
+            safetyViolations.append(.deadlocked(state: try current.projection(using: layout)))
         }
 
         for successor in successors {
@@ -363,7 +352,8 @@ private func compiledBFS(
     return .init(
         graph: try graph(),
         initialStateIDs: initialStateIDs,
-        outcome: .ok(statesCount: stateToID.count),
+        completion: .ok(statesCount: stateToID.count),
+        safetyViolations: safetyViolations,
         compilationIdentity: runtime.identity,
         configuration: configuration,
         compiledStates: idToState

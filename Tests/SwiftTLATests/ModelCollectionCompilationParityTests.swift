@@ -21,7 +21,7 @@ struct ModelCollectionCompilationParityTests {
       let reduced = try ModelChecker(
         compilation: compilation,
         configuration: reducedConfiguration
-      ).explore(checkingSafety: false)
+      ).explore()
 
       #expect(reduced.graph.states.count == scope + 1)
       #expect(reduced.isComplete)

@@ -32,7 +32,8 @@ struct ExplorationValidationTests {
         ]
         for (initials, identity, states) in cases {
             let invalid = FiniteExploration(
-                graph: explored.graph, initialStateIDs: initials, outcome: explored.outcome,
+                graph: explored.graph, initialStateIDs: initials, completion: explored.completion,
+                safetyViolations: explored.safetyViolations,
                 compilationIdentity: identity, configuration: configuration, compiledStates: states
             )
             do {
@@ -54,7 +55,8 @@ struct ExplorationValidationTests {
                 transitions: [initial: [.init(label: try #require(explored.graph.transitions[initial]?.first?.label), target: missing)]],
                 states: explored.graph.states
             ),
-            initialStateIDs: [initial], outcome: explored.outcome,
+            initialStateIDs: [initial], completion: explored.completion,
+            safetyViolations: explored.safetyViolations,
             compilationIdentity: compilation.identity, configuration: configuration, compiledStates: explored.compiledStates
         )
         #expect(throws: CompilationDiagnostic.self) {

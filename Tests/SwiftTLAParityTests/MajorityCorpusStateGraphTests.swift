@@ -17,7 +17,7 @@ struct MajorityCorpusStateGraphTests {
         let compilation = try MajorityModel.spec.compile()
         let formal = try ModelChecker(compilation: compilation,
             configuration: .init(maximumStateLimit: 10_000, symmetryReduction: .disabled))
-            .explore(checkingSafety: false)
+            .explore()
         #expect(formal.isComplete)
         let run = try NativeModelRun(native, description: compilation.description, rendered: compilation.render())
         let reference = try FormalGraphExporter().export(formal)

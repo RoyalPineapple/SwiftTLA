@@ -214,7 +214,7 @@ struct CanonicalGraphTests {
                 ]
             ),
             initialStateIDs: [first],
-            outcome: .ok(statesCount: 2),
+            completion: .ok(statesCount: 2),
             compilationIdentity: compilation.identity,
             configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled),
             compiledStates: [

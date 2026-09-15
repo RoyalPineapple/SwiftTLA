@@ -383,7 +383,7 @@ struct CompilerPipelineCanonicalizationTests {
             return try ModelChecker(
                 compilation: spec.compile(),
                 configuration: FiniteExplorationConfiguration(maximumStateLimit: 3, symmetryReduction: .disabled)
-            ).explore(checkingSafety: false)
+            ).explore()
         }
 
         let complete = try exploration(guarded: true)
@@ -824,7 +824,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(firstSuccessor.count == 1)
         #expect(invariantHolds)
 
-        let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore(checkingSafety: false)
+        let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
         #expect(exploration.graph.states.count == 5)
         #expect(exploration.isComplete)
     }

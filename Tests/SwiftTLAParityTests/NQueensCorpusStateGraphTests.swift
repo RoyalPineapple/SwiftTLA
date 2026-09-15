@@ -26,7 +26,7 @@ struct NQueensCorpusStateGraphTests {
         let exploration = try ModelChecker(
             compilation: compilation,
             configuration: try FiniteExplorationConfiguration(maximumStateLimit: 5_000, symmetryReduction: .disabled)
-        ).explore(checkingSafety: false)
+        ).explore()
         try #require(exploration.isComplete)
         #expect(compilation.semantics.behavior.temporalProperties.map(\.name) == ["Termination"])
         let temporal = try exploration.analyzeTemporalProperties(in: compilation)

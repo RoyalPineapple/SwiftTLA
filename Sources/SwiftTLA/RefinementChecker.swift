@@ -20,9 +20,9 @@ struct RefinementChecker {
         guard !compilation.refinements.isEmpty else { return nil }
         try exploration.validate(for: compilation)
         guard exploration.isComplete else {
-            guard case .depthExceeded = exploration.outcome else { return nil }
+            guard case .depthExceeded = exploration.completion else { return nil }
             return compilation.refinements.first.map {
-                .refinementUnproven(refinement: $0.name, exploration: exploration.outcome)
+                .refinementUnproven(refinement: $0.name, exploration: exploration.completion)
             }
         }
         for refinement in compilation.refinements {
