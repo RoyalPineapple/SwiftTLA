@@ -70,6 +70,12 @@ A witness can end outside the constrained graph. Its state and trace remain
 available without adding that state to the graph.
 
 TLA+ export negates the predicate only at the final rendering boundary and
-retains metadata that identifies the positive claim. Independent comparison of
-positive outcomes is not yet implemented. The parity adapter rejects these
-declarations explicitly.
+retains metadata that identifies the positive claim. The parity adapter converts
+a finite TLC counterexample into a positive witness. It validates the complete
+path and requires an endpoint that satisfies the native predicate. Different
+valid witnesses can establish the same outcome. Complete graph comparison remains
+independent of property outcomes.
+
+Reference checks require an explicit property-kind match. Constraint-boundary
+witness export remains unsupported and fails explicitly. Hosted TLC evidence
+is still required to establish independent agreement.

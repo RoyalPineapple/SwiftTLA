@@ -150,7 +150,7 @@ package struct TLCPropertyCheck: Sendable {
       }
       do {
         let (capture, graphComparison, _) = try prepared.get()
-        let tlcResult: PropertyResult
+        var tlcResult: PropertyResult
         if passingChecks.contains(check), try batch.get() {
           tlcResult = .satisfied
         } else {
@@ -176,12 +176,23 @@ package struct TLCPropertyCheck: Sendable {
           tlcResult = try propertyResult(check: check, outcome: outcome,
             graph: capture.graph, outputDirectory: output)
         }
+        if case .property(let name) = check, native.rendered.reachabilityNames.contains(name) {
+          switch tlcResult {
+          case .satisfied: tlcResult = .unreachable
+          case .violated(let trace):
+            try native.validateReachabilityWitness(trace, for: name)
+            tlcResult = .reached(trace)
+          case .unavailable: break
+          case .reached, .unreachable:
+            throw EvidenceFormatError.invalidField(record: name, field: "unexpected TLC reachability outcome")
+          }
+        }
         let status: PropertyComparisonStatus
         switch (nativeResult, tlcResult) {
         case (.unavailable, _), (_, .unavailable): status = .unavailable
-        case (.satisfied, .violated), (.violated, .satisfied): status = .propertyOutcomeDifference
-        case (.satisfied, .satisfied), (.violated, .violated):
+        case (.satisfied, .satisfied), (.violated, .violated), (.reached, .reached), (.unreachable, .unreachable):
           status = graphComparison.matches ? .exact : .graphDifference
+        default: status = .propertyOutcomeDifference
         }
         let comparison = PropertyComparison(caseID: capture.request.caseID, check: check, status: status,
           swiftResult: nativeResult, tlcResult: tlcResult)

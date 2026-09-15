@@ -37,6 +37,7 @@ package struct TLCReferenceConfiguration: Decodable, Sendable {
     let missingResults = Set(declared).subtracting(native.checks.properties.keys)
     let unsupportedInvariants = Set(invariants).subtracting(native.rendered.invariantNames)
     let temporalNames = native.rendered.checkNames.subtracting(native.rendered.invariantNames)
+      .subtracting(native.rendered.reachabilityNames)
     let unsupportedProperties = Set(properties).subtracting(temporalNames)
     var problems = repeated.sorted().map { "Repeated reference check: \($0)" }
     problems += missingResults.sorted().map { "Missing native result: \($0)" }

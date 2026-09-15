@@ -3,7 +3,31 @@ import SwiftTLA
 import UpstreamParity
 
 struct NativeGraphExportTests {
-    @Test("positive reachability cannot pass through an adapter without witness-aware outcomes")
+    @Test("native export retains all reachability targets and a shortest witness without truncation")
+    func exportsPositiveOutcomes() throws {
+        let graph = try ReachabilityGraph(initialMachines: ReachabilityExportModel.initialMachines(), maximumStates: 3)
+        let compiled = try ReachabilityExportModel.spec.compile()
+        let native = try NativeModelRun(graph, description: compiled.description, rendered: ReachabilityExportModel.render())
+        #expect(native.graph.graph.states.count == 3)
+        #expect(native.graph.graph.edges.count == 2)
+        #expect(native.reachabilityTargets["Positive"]?.count == 2)
+        #expect(native.reachabilityTargets["BeyondLimit"] == [])
+        #expect(native.checks.properties["BeyondLimit"] == .unreachable)
+        guard case .reached(let witness) = native.checks.properties["Positive"] else {
+            Issue.record("Missing positive witness")
+            return
+        }
+        #expect(witness.steps.count == 2)
+        try native.validateReachabilityWitness(witness, for: "Positive")
+        let last = try #require(graph.transitions.keys.first { $0.state.value == 2 })
+        let alternate = GraphTrace(id: "alternate", steps: try graph.trace(to: last).map {
+            .init(state: try CanonicalState(graph.formalProjection(of: $0.state)).key,
+                action: try $0.action.map { try graph.formalCall(for: $0).description })
+        })
+        try native.validateReachabilityWitness(alternate, for: "Positive")
+    }
+
+    @Test("positive reachability requires matching native result coverage")
     func rejectsUnreportedReachability() throws {
         let native = try ReachabilityGraph(initialMachines: CyclicExportModel.initialMachines(), maximumStates: 2)
         let original = try CyclicExportModel.spec.compile()
@@ -12,7 +36,7 @@ struct NativeGraphExportTests {
         specification.reachabilityProperties = [.init(name: "ReachGoal", body: .value(.bool(true)))]
         let rendered = try specification.compile().render()
         #expect(throws: EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name,
-            field: "positive reachability requires witness-aware property comparison")) {
+            field: "native check coverage")) {
             try NativeModelRun(rendered: rendered, graph: exported.graph, checks: exported.checks)
         }
     }

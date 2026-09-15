@@ -53,6 +53,8 @@ struct FiniteGraphCheckTests {
           #expect(terminalStates.contains(try #require(trace.steps.last?.state)))
         case .unavailable:
           Issue.record("Missing deadlock result for \(declaration.id)")
+        case .reached, .unreachable:
+          Issue.record("Unexpected reachability result for deadlock in \(declaration.id)")
         }
       }
     }

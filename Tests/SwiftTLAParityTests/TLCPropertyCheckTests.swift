@@ -5,6 +5,59 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct TLCPropertyCheckTests {
+  @Test("positive reachability compares complete graphs and finite matching witnesses", arguments: [false, true])
+  func comparesPositiveReachability(reached: Bool) throws {
+    let x = Var<Int>("x", 1)
+    let rendered = try TLASpec("TemporalFixture") {
+      Variable(x)
+      Reachable("Target") { x == (reached ? 1 : 2) }
+    }.compile().render()
+    let fixture = try Fixture(check: .property("Target"), renderedOverride: rendered)
+    let witness = try TLCTraceParser().parseCounterexample(numberedInitialStateTrace(),
+      states: fixture.swiftRun.graph.states.values)
+    let targets: Set<CanonicalStateKey> = reached ? Set(fixture.swiftRun.graph.states.keys) : []
+    let comparison = try fixture.capture(processAdapter: .init(executor: PropertyExecutor(
+      propertyResult: reached ? Fixture.safetyViolation : Fixture.success,
+      trace: reached ? numberedInitialStateTrace() : nil)),
+      swiftResult: reached ? .reached(witness) : .unreachable, reachabilityTargets: ["Target": targets])
+    #expect(comparison.status == .exact)
+    #expect(comparison.tlcResult.isSatisfied == reached)
+    #expect(PropertyExpectation.satisfied.accepts(comparison.tlcResult) == reached)
+    #expect(PropertyExpectation.violated.accepts(comparison.tlcResult) == !reached)
+  }
+
+  @Test("a graph-valid TLC witness must end at a native matching state")
+  func rejectsFalseReachabilityEndpoint() throws {
+    let x = Var<Int>("x", 1)
+    let rendered = try TLASpec("TemporalFixture") {
+      Variable(x)
+      Reachable("Target") { x == 2 }
+    }.compile().render()
+    let fixture = try Fixture(check: .property("Target"), renderedOverride: rendered)
+    #expect(throws: EvidenceFormatError.invalidField(record: "Target", field: "reachability witness endpoint")) {
+      try fixture.capture(processAdapter: .init(executor: PropertyExecutor(
+        propertyResult: Fixture.safetyViolation, trace: numberedInitialStateTrace())),
+        swiftResult: .unreachable, reachabilityTargets: ["Target": []])
+    }
+  }
+
+  @Test("reachability evidence rejects missing witnesses, cycles, and impossible traces")
+  func reachabilityResultIsClosed() throws {
+    let witness = GraphTrace(id: "goal", steps: [.init(state: .init(canonicalEncoding: "s"), action: nil)])
+    for result in [PropertyResult.reached(witness), .unreachable] {
+      #expect(try JSONDecoder().decode(PropertyResult.self, from: JSONEncoder().encode(result)) == result)
+    }
+    for json in [#"{"status":"reached"}"#,
+      #"{"status":"unreachable","trace":{"id":"bad","steps":[{"state":"s"}]}}"#] {
+      #expect(throws: EvidenceFormatError.self) {
+        try JSONDecoder().decode(PropertyResult.self, from: Data(json.utf8))
+      }
+    }
+    #expect(throws: EvidenceFormatError.self) {
+      try JSONEncoder().encode(PropertyResult.reached(testCycle(["s", "s"])))
+    }
+  }
+
   @Test("passing checks share TLC graph capture and batch failures are isolated",
     arguments: [(false, false), (true, false), (false, true), (true, true)])
   func batchesPassingChecks(isTwoFails: Bool, reuseGraph: Bool) throws {
@@ -623,6 +676,7 @@ struct TLCPropertyCheckTests {
       completeGraph: TLCProcessCapture? = nil,
       swiftRun: GraphRun? = nil,
       swiftResult: PropertyResult? = nil,
+      reachabilityTargets: [String: Set<CanonicalStateKey>] = [:],
       completeGraphRequest: TLCProcessRequest? = nil,
       outputDirectory: URL? = nil
     ) throws -> PropertyComparison {
@@ -631,7 +685,8 @@ struct TLCPropertyCheckTests {
       case .property(let name): .init(properties: [name: result], deadlock: .unavailable)
       case .deadlock: .init(properties: [:], deadlock: result)
       }
-      let native = try NativeModelRun(rendered: rendered, graph: swiftRun ?? self.swiftRun, checks: checks)
+      let native = try NativeModelRun(rendered: rendered, graph: swiftRun ?? self.swiftRun, checks: checks,
+        reachabilityTargets: reachabilityTargets)
       let graph = try completeGraph ?? captureGraph(request: completeGraphRequest)
       let batch = try TLCPropertyCheck(processAdapter: processAdapter).captureAll(
         native, completeGraph: .success(graph), source: .generated, in: outputDirectory ?? directory)

@@ -50,6 +50,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     /// States with no executable successor, before constraint filtering or check selection.
     public let deadlockedStates: Set<Machine.Snapshot>
     public let reachabilityResults: [String: ReachabilityOutcome<Machine.Snapshot>]
+    package let reachabilityTargets: [String: Set<Machine.Snapshot>]
     public private(set) var refinementFailures: [String: RefinementFailure<Machine.Snapshot, Machine.Action>] = [:]
     public private(set) var temporalResults: [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] = [:]
     private var checker: LivenessChecker<Machine.Snapshot, Machine.Action, Int>?
@@ -68,10 +69,12 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         var deadlockedStates: Set<Machine.Snapshot> = []
         var reachabilityWitnesses: [String: Machine.Snapshot] = [:]
         let reachabilityNames = Set(Machine.reachabilityPropertyNames)
+        var reachabilityTargets = Dictionary(uniqueKeysWithValues: reachabilityNames.map { ($0, Set<Machine.Snapshot>()) })
         let initialRoots = Set(initialMachines.map(\.snapshot))
         func recordReachability(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
             for name in try machine.matchedReachabilityProperties() {
                 guard reachabilityNames.contains(name) else { throw ExplorationError.undeclaredReachabilityProperty(name) }
+                reachabilityTargets[name, default: []].insert(machine.snapshot)
                 guard reachabilityWitnesses[name] == nil else { continue }
                 reachabilityWitnesses[name] = machine.snapshot
                 if !initialRoots.contains(machine.snapshot), predecessors[machine.snapshot] == nil {
@@ -133,6 +136,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         self.predecessors = predecessors
         safetyViolations = violations
         self.deadlockedStates = deadlockedStates
+        self.reachabilityTargets = reachabilityTargets
         reachabilityResults = Dictionary(uniqueKeysWithValues: reachabilityNames.map { name in
             (name, reachabilityWitnesses[name].map(ReachabilityOutcome.reached) ?? .unreachable)
         })

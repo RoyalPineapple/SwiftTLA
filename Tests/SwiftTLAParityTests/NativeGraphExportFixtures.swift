@@ -2,6 +2,25 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
+struct ReachabilityExportModel {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("ReachabilityExport") { scope in
+            let value = scope.sharedVar("value", initial: 0)
+            Algorithm("Counter") {
+                Do(Step.advance, when: value < 2) {
+                    Assign(value, to: value + 1)
+                    Goto(Step.advance)
+                }
+            }
+            Reachable("Positive") { value > 0 }
+            Reachable("BeyondLimit") { value > 2 }
+        }
+    }
+}
+
+@TLAModel
 struct FailingExportModel {
     static var spec: TLASpec {
         #spec("FailingExport") { scope in

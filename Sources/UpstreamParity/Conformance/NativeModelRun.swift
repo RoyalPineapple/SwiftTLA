@@ -11,7 +11,7 @@ package struct ModelCheckResults: Equatable, Encodable, Sendable {
   }
 
   package var allSatisfied: Bool {
-    properties.values.allSatisfy { $0 == .satisfied } && (deadlock == nil || deadlock == .satisfied)
+    properties.values.allSatisfy(\.isSatisfied) && (deadlock == nil || deadlock == .satisfied)
   }
 }
 
@@ -19,19 +19,38 @@ package struct NativeModelRun: Sendable {
   package let rendered: RenderedSpecification
   package let graph: GraphRun
   package let checks: ModelCheckResults
+  package let reachabilityTargets: [String: Set<CanonicalStateKey>]
 
-  package init(rendered: RenderedSpecification, graph: GraphRun, checks: ModelCheckResults) throws {
-    guard rendered.reachabilityNames.isEmpty else {
-      throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name,
-        field: "positive reachability requires witness-aware property comparison")
-    }
+  package init(rendered: RenderedSpecification, graph: GraphRun, checks: ModelCheckResults,
+    reachabilityTargets: [String: Set<CanonicalStateKey>] = [:]) throws {
     guard Set(checks.properties.keys) == rendered.checkNames,
+          Set(reachabilityTargets.keys) == rendered.reachabilityNames,
           (!rendered.checksDeadlock || checks.deadlock != nil) else {
       throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "native check coverage")
     }
-    for result in checks.properties.values {
-      if case .violated(let trace) = result { try trace.validate(in: graph.graph) }
+    for (name, result) in checks.properties {
+      if let targets = reachabilityTargets[name] {
+        guard graph.isComparable, targets.isSubset(of: Set(graph.graph.states.keys)) else {
+          throw EvidenceFormatError.invalidField(record: name, field: "reachability graph")
+        }
+        switch result {
+        case .reached(let trace):
+          try Self.validateReachabilityWitness(trace, name: name, targets: targets, graph: graph.graph)
+        case .unreachable where targets.isEmpty: break
+        case .unavailable: break
+        default: throw EvidenceFormatError.invalidField(record: name, field: "reachability outcome")
+        }
+      } else {
+        switch result {
+        case .violated(let trace): try trace.validate(in: graph.graph)
+        case .satisfied, .unavailable: break
+        case .reached, .unreachable:
+          throw EvidenceFormatError.invalidField(record: name, field: "unexpected reachability outcome")
+        }
+      }
     }
+    if case .reached? = checks.deadlock { throw EvidenceFormatError.invalidField(record: "deadlock", field: "reachability outcome") }
+    if case .unreachable? = checks.deadlock { throw EvidenceFormatError.invalidField(record: "deadlock", field: "reachability outcome") }
     if case .violated(let trace)? = checks.deadlock {
       try trace.validate(in: graph.graph)
       guard trace.cycleStartIndex == nil, let final = trace.steps.last,
@@ -42,13 +61,31 @@ package struct NativeModelRun: Sendable {
     self.rendered = rendered
     self.graph = graph
     self.checks = checks
+    self.reachabilityTargets = reachabilityTargets
+  }
+
+  package func validateReachabilityWitness(_ trace: GraphTrace, for name: String) throws {
+    guard let targets = reachabilityTargets[name] else {
+      throw EvidenceFormatError.invalidField(record: name, field: "undeclared reachability property")
+    }
+    try Self.validateReachabilityWitness(trace, name: name, targets: targets, graph: graph.graph)
+  }
+
+  private static func validateReachabilityWitness(_ trace: GraphTrace, name: String,
+    targets: Set<CanonicalStateKey>, graph: CanonicalGraph) throws {
+    try trace.validate(in: graph)
+    guard trace.cycleStartIndex == nil, let final = trace.steps.last, targets.contains(final.state) else {
+      throw EvidenceFormatError.invalidField(record: name, field: "reachability witness endpoint")
+    }
   }
 
   package init<Machine: StateMachine>(
     _ native: ReachabilityGraph<Machine>, description: CompilationDescription,
     rendered: RenderedSpecification, checkingDeadlock: Bool = false, for finiteGraphCase: FiniteGraphCase? = nil
   ) throws {
-    guard Set(native.safetyViolations.keys).isSubset(of: Set(native.transitions.keys)) else {
+    let retainedStates = Set(native.transitions.keys)
+    guard Set(native.safetyViolations.keys).isSubset(of: retainedStates),
+          native.reachabilityTargets.values.allSatisfy({ $0.isSubset(of: retainedStates) }) else {
       throw EvidenceFormatError.invalidField(record: description.name,
         field: "constraint-boundary counterexamples require evidence beyond the constrained graph")
     }
@@ -56,6 +93,7 @@ package struct NativeModelRun: Sendable {
     let invariantNames = Set(description.invariants)
     let refinementNames = Set(description.refinements)
     guard temporalNames == Set(native.temporalResults.keys),
+          Set(description.reachabilityProperties) == Set(native.reachabilityResults.keys),
           Set(native.refinementFailures.keys).isSubset(of: refinementNames) else {
       throw EvidenceFormatError.invalidField(record: description.name, field: "native property declarations")
     }
@@ -90,6 +128,13 @@ package struct NativeModelRun: Sendable {
       let result = try path(native.trace(to: snapshot))
       paths[snapshot] = result
       return result
+    }
+    let reachabilityTargets = try native.reachabilityTargets.mapValues { try Set($0.map(stateKey)) }
+    for (name, result) in native.reachabilityResults {
+      switch result {
+      case .reached(let snapshot): properties[name] = .reached(try trace(to: snapshot))
+      case .unreachable: properties[name] = .unreachable
+      }
     }
     let failures = try native.safetyViolations.sorted { try stateKey($0.key) < stateKey($1.key) }
     for (snapshot, violations) in failures {
@@ -137,6 +182,7 @@ package struct NativeModelRun: Sendable {
     let canonical = try CanonicalGraph(native, states: states, renderedActionNames: renderedNames)
     let graph = try GraphRun(isComplete: true, graph: canonical,
       observableActions: Set(canonical.edges.map(\.action)), outcome: .noViolation)
-    try self.init(rendered: rendered, graph: graph, checks: .init(properties: properties, deadlock: deadlock))
+    try self.init(rendered: rendered, graph: graph, checks: .init(properties: properties, deadlock: deadlock),
+      reachabilityTargets: reachabilityTargets)
   }
 }
