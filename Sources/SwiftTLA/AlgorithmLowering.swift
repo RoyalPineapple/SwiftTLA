@@ -57,19 +57,19 @@ enum AlgorithmLowerer {
             }
         }
         let procedures = algorithm.procedures
-        let declaredInvariants = algorithm.components.compactMap { component -> NamedInvariant? in
+        let declaredInvariants = algorithm.components.compactMap { component -> NamedStatePredicate? in
             guard case .invariant(let invariant) = component else { return nil }
             return invariant
         }
-        let processInvariants = processes.flatMap { process -> [NamedInvariant] in
+        let processInvariants = processes.flatMap { process -> [NamedStatePredicate] in
             let localRoots = Set(process.components.compactMap { component -> String? in
                 guard case .local(let state) = component else { return nil }
                 return state.root
             })
             let processDomain = StateExpr.setLiteral(process.domain.map(StateExpr.value))
-            return process.components.compactMap { component -> NamedInvariant? in
+            return process.components.compactMap { component -> NamedStatePredicate? in
                 guard case .invariant(let invariant) = component else { return nil }
-                return NamedInvariant(
+                return NamedStatePredicate(
                     name: invariant.name,
                     body: .forAll(
                         processDomain,
@@ -185,7 +185,7 @@ enum AlgorithmLowerer {
 
         let variableNames = variables.map(\.name)
         let localRoots = Set(localStates.map(\.root) + procedureSlots(procedures).map(\.root))
-        var generatedAssertionInvariants: [NamedInvariant] = []
+        var generatedAssertionInvariants: [NamedStatePredicate] = []
         var fairness: [FairnessCondition] = []
         var actions = processes.enumerated().flatMap { processIndex, process in
             process.steps.enumerated().map { index, atomic in
@@ -250,7 +250,7 @@ enum AlgorithmLowerer {
                     } ?? atStep
                     generatedAssertionInvariants += process.domain.flatMap { member in
                         loweredStatements.assertions.map { predicate in
-                            NamedInvariant(name: "__pcal_assert", body: StateExpr.substituteVariables(
+                            NamedStatePredicate(name: "__pcal_assert", body: StateExpr.substituteVariables(
                                 [processBinding.rawValue: .value(member)],
                                 in: .or(.not(enabled), predicate)))
                         }
@@ -289,7 +289,7 @@ enum AlgorithmLowerer {
                 let body = completingControl(loweredStatements.action, fallthrough: nextLabel)
                 generatedAssertionInvariants += controlDomainValues(processes).flatMap { member in
                     loweredStatements.assertions.map { predicate in
-                        NamedInvariant(name: "__pcal_assert", body: StateExpr.substituteVariables(
+                        NamedStatePredicate(name: "__pcal_assert", body: StateExpr.substituteVariables(
                             [processBinding.rawValue: .value(member)],
                             in: .or(.not(guardExpression), predicate)))
                     }
@@ -411,7 +411,7 @@ enum AlgorithmLowerer {
             guard case .shared(let state) = component else { return nil }
             return state
         }
-        let declaredInvariants = algorithm.components.compactMap { component -> NamedInvariant? in
+        let declaredInvariants = algorithm.components.compactMap { component -> NamedStatePredicate? in
             guard case .invariant(let invariant) = component else { return nil }
             return invariant
         }
@@ -492,7 +492,7 @@ enum AlgorithmLowerer {
         let variableNames = variables.map(\.name)
 
         var actions: [NamedAction] = []
-        var generatedAssertionInvariants: [NamedInvariant] = []
+        var generatedAssertionInvariants: [NamedStatePredicate] = []
         let actionSources = [(steps, Optional<AlgorithmProcedureModel>.none)]
             + procedures.map { ($0.steps, Optional($0)) }
         for (sourceSteps, owner) in actionSources {
@@ -537,7 +537,7 @@ enum AlgorithmLowerer {
             let atStep = StateExpr.equal(.programCounter, control.location(atomic.label.name))
             let enabled = atomic.loopCondition.map { StateExpr.and(atStep, $0) } ?? atStep
             generatedAssertionInvariants += statements.assertions.map {
-                NamedInvariant(name: "__pcal_assert", body: .or(.not(enabled), $0))
+                NamedStatePredicate(name: "__pcal_assert", body: .or(.not(enabled), $0))
             }
             }
         }
@@ -936,10 +936,10 @@ enum AlgorithmLowerer {
     }
 
     private static func compilerOwnedAssertionInvariants(
-        _ invariants: [NamedInvariant]
-    ) -> [NamedInvariant] {
+        _ invariants: [NamedStatePredicate]
+    ) -> [NamedStatePredicate] {
         invariants.enumerated().map { ordinal, invariant in
-            NamedInvariant(name: "__pcal_assert_\(ordinal)", body: invariant.body)
+            NamedStatePredicate(name: "__pcal_assert_\(ordinal)", body: invariant.body)
         }
     }
 

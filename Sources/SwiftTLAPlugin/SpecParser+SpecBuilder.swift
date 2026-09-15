@@ -682,7 +682,9 @@ extension ParserSession {
                 components.actions.append(action)
             }
         case "Invariant":
-            parseInvariant(call, into: &components)
+            parseStateProperty(call, into: &components)
+        case "Reachable":
+            parseStateProperty(call, into: &components, reachability: true)
         case "Constraint", "Assume":
             if call.arguments.count == 1, let argument = call.arguments.first,
                let expression = decodeStateExpr(argument.expression) {
@@ -1423,20 +1425,25 @@ extension ParserSession {
         return enumDefinition(named: type)?.finiteValues
     }
 
-    func parseInvariant(
+    func parseStateProperty(
         _ call: FunctionCallExprSyntax,
-        into components: inout TLASpec
+        into components: inout TLASpec,
+        reachability: Bool = false
     ) {
         guard let name = extractStringArg(call, index: 0), let closure = call.trailingClosure else {
             components.diagnostics.append(.init(
-                message: "Invariant declaration requires a name and a supported invariant expression.",
+                message: "State property declaration requires a name and a supported predicate.",
                 source: call
             ))
             return
         }
         do {
             let body = try parseInvariantBody(closure, named: name)
-            components.invariants.append(.init(name: name, body: body))
+            if reachability {
+                components.reachabilityProperties.append(.init(name: name, body: body))
+            } else {
+                components.invariants.append(.init(name: name, body: body))
+            }
         } catch {
             components.diagnostics.append(error)
         }

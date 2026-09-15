@@ -541,6 +541,22 @@ extension NativeSwiftEmitter {
             \(checks.isEmpty ? "return []" : "var result: [String] = []\n" + checks.joined(separator: "\n") + "\nreturn result")
         }
         """)
+        var reachabilityChecks: [String] = []
+        for property in program.behavior.reachabilityProperties {
+            declarations += try nativeDeclarations("""
+            private static func _reachable\(property.id.ordinal)(in state: Snapshot\(collectionParameters), enabled: Set<Int>) throws -> Bool {
+                \(try expression(property.predicate.expression))
+            }
+            """)
+            let enabled = enabledActionsCall(property.predicate.enabledActions, state: "_execution", collectionArguments: arguments)
+            reachabilityChecks.append("if try Self._reachable\(property.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(\(String(reflecting: property.name))) }")
+        }
+        declarations += try nativeDeclarations("""
+        public static var reachabilityPropertyNames: [String] { \(String(reflecting: program.behavior.reachabilityProperties.map(\.name))) }
+        public func matchedReachabilityProperties() throws -> [String] {
+            \(reachabilityChecks.isEmpty ? "return []" : "var result: [String] = []\n" + reachabilityChecks.joined(separator: "\n") + "\nreturn result")
+        }
+        """)
         var temporalProperties: [String] = []
         let captures = machineCaptures.joined(separator: ", ")
         let captureList = captures.isEmpty ? "" : "[\(captures)] "

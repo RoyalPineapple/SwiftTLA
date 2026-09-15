@@ -37,7 +37,9 @@ extension TLASpec {
       } else if let algorithm = comp as? Algorithm {
         sourceAlgorithms.append(algorithm)
       } else if let i = comp as? InvDecl {
-        invariants.append(NamedInvariant(name: i.name, body: i.body))
+        invariants.append(NamedStatePredicate(name: i.name, body: i.body))
+      } else if let property = comp as? ReachableDecl {
+        reachabilityProperties.append(.init(name: property.name, body: property.body))
       } else if let t = comp as? TemporalDecl {
         temporalProperties.append(NamedTemporal(name: t.name, expr: t.expr))
       } else if let f = comp as? FairnessDecl {
@@ -146,6 +148,7 @@ extension TLASpec {
       formalParameters: formalParameters,
       actions: actions,
       invariants: invariants,
+      reachabilityProperties: reachabilityProperties,
       temporalProperties: temporalProperties,
       fairness: fairness,
       assume: assume,
@@ -180,7 +183,7 @@ extension TLASpec {
     let sourcePropertyIDs = Set(sourceProperties.map(\.id))
     let topLevelPropertyNames = layout.stateProperties.filter { !sourcePropertyIDs.contains($0.id) }.map { $0.declaration.name }
     let sourcePropertyNames = sourceProperties.map(\.declaration.name)
-    let loweredPropertyNames = invariants.map(\.name) + temporalProperties.map(\.name)
+    let loweredPropertyNames = invariants.map(\.name) + reachabilityProperties.map(\.name) + temporalProperties.map(\.name)
     guard Set(sourcePropertyNames).count == sourcePropertyNames.count,
           Set(topLevelPropertyNames).count == topLevelPropertyNames.count,
           Set(loweredPropertyNames).count == loweredPropertyNames.count,

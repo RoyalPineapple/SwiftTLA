@@ -429,7 +429,7 @@ package indirect enum AlgorithmComponentModel: Sendable {
     case shared(AlgorithmStateModel)
     case process(AlgorithmProcessModel)
     case procedure(AlgorithmProcedureModel)
-    case invariant(NamedInvariant)
+    case invariant(NamedStatePredicate)
     case temporal(NamedTemporal)
     case formalOperator(FormalOperatorDefinition)
     /// A TLC state-space bound whose excluded states are omitted from exploration.

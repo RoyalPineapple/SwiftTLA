@@ -297,7 +297,7 @@ State constraints select the initial states and successors that exploration
 retains. They do not change the executable transition relation. Deadlock checks
 use successors before constraint filtering. Invariant checks include all initial
 states and generated successors, including excluded candidates. These rules
-match the [pinned TLC checker](https://github.com/tlaplus/tlaplus/blob/b123b22654942bd7f8b1bcadcc47da4ee2cf4c0e/tlatools/org.lamport.tlatools/src/tlc2/tool/ModelChecker.java#L406-L451).
+match the [pinned TLC checker](https://github.com/tlaplus/tlaplus/blob/867aefb69ffc2452031292587b389d1fc3eb43ff/tlatools/org.lamport.tlatools/src/tlc2/tool/ModelChecker.java#L406-L451).
 
 A constrained graph can omit the final state of a valid invariant counterexample.
 The result must retain that state and its incoming transition separately from

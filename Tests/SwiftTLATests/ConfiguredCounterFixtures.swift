@@ -30,6 +30,7 @@ struct ConfiguredCounter {
             }
             Invariant("OrderedCopy") { copied == value }
             Invariant("Bounded") { value <= limit }
+            Reachable("AtLimit") { value == limit }
         }
     }
 }

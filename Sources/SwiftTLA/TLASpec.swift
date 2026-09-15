@@ -191,7 +191,7 @@ public struct NamedTemporal: Sendable, CustomStringConvertible, Equatable {
   }
   public var description: String { "\(name): \(expr)" }
 }
-public struct NamedInvariant: Sendable, CustomStringConvertible, Equatable {
+public struct NamedStatePredicate: Sendable, CustomStringConvertible, Equatable {
   public let name: String
   public let body: StateExpr
   public init(name: String, body: StateExpr) {
@@ -236,7 +236,8 @@ public struct TLASpec: Sendable {
   /// Parameters supplied by a named TLA+ `INSTANCE … WITH` declaration.
   package var formalParameters: [FormalModuleParameter]
   package var actions: [NamedAction]
-  package var invariants: [NamedInvariant]
+  package var invariants: [NamedStatePredicate]
+  package var reachabilityProperties: [NamedStatePredicate]
   package var temporalProperties: [NamedTemporal]
   package var fairness: [FairnessCondition]
   package var assume: StateExpr?
@@ -264,7 +265,7 @@ public struct TLASpec: Sendable {
   package init(
     name: String, variables: [NamedVar], constants: [ConstantDecl] = [],
     formalParameters: [FormalModuleParameter] = [],
-    actions: [NamedAction], invariants: [NamedInvariant], temporalProperties: [NamedTemporal] = [],
+    actions: [NamedAction], invariants: [NamedStatePredicate], reachabilityProperties: [NamedStatePredicate] = [], temporalProperties: [NamedTemporal] = [],
     fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = true,
     extendsModules: [StandardModule] = [.integers],
     constraint: StateExpr? = nil,
@@ -281,6 +282,7 @@ public struct TLASpec: Sendable {
     self.formalParameters = formalParameters
     self.actions = actions
     self.invariants = invariants
+    self.reachabilityProperties = reachabilityProperties
     self.temporalProperties = temporalProperties
     self.fairness = fairness
     self.assume = assume
@@ -359,6 +361,14 @@ public struct ActionDecl: SpecComponent, Sendable {
   }
 }
 public struct InvDecl: SpecComponent {
+  public let name: String
+  public let body: StateExpr
+  package init(_ name: String, _ body: StateExpr) {
+    self.name = name
+    self.body = body
+  }
+}
+public struct ReachableDecl: SpecComponent {
   public let name: String
   public let body: StateExpr
   package init(_ name: String, _ body: StateExpr) {
@@ -600,6 +610,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: VarDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ActionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: InvDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: ReachableDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FairnessDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }
@@ -778,6 +789,9 @@ public func Action(
 }
 public func Invariant(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
   InvDecl(name, body())
+}
+public func Reachable(_ name: String, @InvariantBuilder _ body: () -> StateExpr) -> ReachableDecl {
+  ReachableDecl(name, body())
 }
 public func LeadsTo(_ name: String, _ from: some TypedExpression<Bool>, _ to: some TypedExpression<Bool>) -> TemporalDecl {
   TemporalDecl(name, .leadsTo(from.stateExpr, to.stateExpr))

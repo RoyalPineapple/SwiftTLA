@@ -45,6 +45,7 @@ extension TLASpec {
         + formalParameters.map(\.name)
         + actions.map(\.name)
         + invariants.map(\.name)
+        + reachabilityProperties.map(\.name)
         + temporalProperties.map(\.name)
         + recursiveFuncs.map(\.name)
         + formalOperatorDefinitions.map(\.name)

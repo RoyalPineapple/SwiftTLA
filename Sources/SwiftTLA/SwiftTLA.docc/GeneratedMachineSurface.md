@@ -48,5 +48,28 @@ initial states.
 ## Property checks
 
 `violatedInvariants()` reports the names of false invariants without changing
-state. `assumptionsHold()` checks assumptions. State constraints filter
-successors; invariant violations remain observable for verification.
+state. `assumptionsHold()` checks assumptions. State constraints select states
+for exploration. They do not change application transitions or action enabledness.
+Invariant checks include excluded initial states and successor candidates.
+
+## Positive reachability
+
+`Reachable("AtLimit") { value == limit }` declares a positive goal beside the
+algorithm. The predicate and its resolved bindings remain positive through
+native generation. `matchedReachabilityProperties()` reports matching goals
+in the current execution state.
+
+`ReachabilityGraph.reachabilityResults` contains a result for every declared goal.
+`.reached(snapshot)` identifies a witness. `trace(to:)` returns its complete
+execution trace. `.unreachable` requires complete exploration without a match.
+A state limit throws instead of producing an unreachable result. A match does
+not stop graph capture or suppress safety checks.
+
+Reachability checks include excluded candidates, as TLC invariant checks do.
+A witness can end outside the constrained graph. Its state and trace remain
+available without adding that state to the graph.
+
+TLA+ export negates the predicate only at the final rendering boundary and
+retains metadata that identifies the positive claim. Independent comparison of
+positive outcomes is not yet implemented. The parity adapter rejects these
+declarations explicitly.

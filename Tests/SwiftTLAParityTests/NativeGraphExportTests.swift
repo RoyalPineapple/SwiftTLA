@@ -3,6 +3,20 @@ import SwiftTLA
 import UpstreamParity
 
 struct NativeGraphExportTests {
+    @Test("positive reachability cannot pass through an adapter without witness-aware outcomes")
+    func rejectsUnreportedReachability() throws {
+        let native = try ReachabilityGraph(initialMachines: CyclicExportModel.initialMachines(), maximumStates: 2)
+        let original = try CyclicExportModel.spec.compile()
+        let exported = try NativeModelRun(native, description: original.description, rendered: original.render())
+        var specification = CyclicExportModel.spec
+        specification.reachabilityProperties = [.init(name: "ReachGoal", body: .value(.bool(true)))]
+        let rendered = try specification.compile().render()
+        #expect(throws: EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name,
+            field: "positive reachability requires witness-aware property comparison")) {
+            try NativeModelRun(rendered: rendered, graph: exported.graph, checks: exported.checks)
+        }
+    }
+
     @Test("native lasso export retains named transitions and their rendered names")
     func retainsNamedCycleTransitions() throws {
         let native = try ReachabilityGraph(initialMachines: CyclicExportModel.initialMachines(), maximumStates: 2)

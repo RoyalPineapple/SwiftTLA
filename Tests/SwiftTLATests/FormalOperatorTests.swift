@@ -264,7 +264,7 @@ struct FormalOperatorTests {
           )
         )
       )],
-      invariants: [NamedInvariant(
+      invariants: [NamedStatePredicate(
         name: "bounded",
         body: .lessOrEqual(.variable("counter"), .int(2))
       )],

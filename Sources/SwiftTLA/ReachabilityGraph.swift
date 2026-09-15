@@ -15,6 +15,8 @@ public protocol StateMachine: Sendable {
     func fairnessConditions() -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)]
     func temporalProperties() throws -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
     func violatedInvariants() throws -> [String]
+    static var reachabilityPropertyNames: [String] { get }
+    func matchedReachabilityProperties() throws -> [String]
     func refinementFailures(in graph: inout ReachabilityGraph<Self>) throws -> [String: RefinementFailure<Snapshot, Action>]
     func successors() throws -> [(action: Action, machine: Self)]
 }
@@ -27,6 +29,12 @@ public enum ExplorationError: Error, Equatable, Sendable {
     case configurationMismatch
     case traceTargetNotReachable
     case unsupportedRefinement(String)
+    case undeclaredReachabilityProperty(String)
+}
+
+public enum ReachabilityOutcome<Snapshot: Hashable & Sendable>: Equatable, Sendable {
+    case reached(Snapshot)
+    case unreachable
 }
 
 public enum SafetyViolation: Hashable, Sendable {
@@ -41,6 +49,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     public let safetyViolations: [Machine.Snapshot: [SafetyViolation]]
     /// States with no executable successor, before constraint filtering or check selection.
     public let deadlockedStates: Set<Machine.Snapshot>
+    public let reachabilityResults: [String: ReachabilityOutcome<Machine.Snapshot>]
     public private(set) var refinementFailures: [String: RefinementFailure<Machine.Snapshot, Machine.Action>] = [:]
     public private(set) var temporalResults: [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] = [:]
     private var checker: LivenessChecker<Machine.Snapshot, Machine.Action, Int>?
@@ -57,13 +66,26 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         var predecessors: [Machine.Snapshot: (source: Machine.Snapshot, action: Machine.Action)] = [:]
         var violations: [Machine.Snapshot: [SafetyViolation]] = [:]
         var deadlockedStates: Set<Machine.Snapshot> = []
+        var reachabilityWitnesses: [String: Machine.Snapshot] = [:]
+        let reachabilityNames = Set(Machine.reachabilityPropertyNames)
         let initialRoots = Set(initialMachines.map(\.snapshot))
+        func recordReachability(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
+            for name in try machine.matchedReachabilityProperties() {
+                guard reachabilityNames.contains(name) else { throw ExplorationError.undeclaredReachabilityProperty(name) }
+                guard reachabilityWitnesses[name] == nil else { continue }
+                reachabilityWitnesses[name] = machine.snapshot
+                if !initialRoots.contains(machine.snapshot), predecessors[machine.snapshot] == nil {
+                    predecessors[machine.snapshot] = predecessor
+                }
+            }
+        }
         func recordBoundaryViolations(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
             guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
+            try recordReachability(machine, from: predecessor)
             let failures = try machine.violatedInvariants().map(SafetyViolation.invariant)
             guard !failures.isEmpty, violations[machine.snapshot] == nil else { return }
             violations[machine.snapshot] = failures
-            if !initialRoots.contains(machine.snapshot) { predecessors[machine.snapshot] = predecessor }
+            if !initialRoots.contains(machine.snapshot), predecessors[machine.snapshot] == nil { predecessors[machine.snapshot] = predecessor }
         }
         func discover(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
             guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
@@ -71,6 +93,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             guard transitions.count < maximumStates else { throw ExplorationError.stateLimitExceeded(maximumStates) }
             transitions[machine.snapshot] = []
             predecessors[machine.snapshot] = predecessor
+            try recordReachability(machine)
             pending.append(machine)
         }
         for machine in initialMachines {
@@ -110,6 +133,9 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         self.predecessors = predecessors
         safetyViolations = violations
         self.deadlockedStates = deadlockedStates
+        reachabilityResults = Dictionary(uniqueKeysWithValues: reachabilityNames.map { name in
+            (name, reachabilityWitnesses[name].map(ReachabilityOutcome.reached) ?? .unreachable)
+        })
         if !properties.isEmpty {
             let checker = temporalChecker()
             let fairness = initialMachine.fairnessConditions()
@@ -123,7 +149,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
 
     /// A shortest native execution trace, including its initial state.
     public func trace(to target: Machine.Snapshot) throws -> [(action: Machine.Action?, state: Machine.Snapshot)] {
-        guard transitions[target] != nil || safetyViolations[target] != nil else { throw ExplorationError.traceTargetNotReachable }
+        guard transitions[target] != nil || safetyViolations[target] != nil || reachabilityResults.values.contains(.reached(target)) else { throw ExplorationError.traceTargetNotReachable }
         var path: [(action: Machine.Action?, state: Machine.Snapshot)] = []
         var current = target
         while let previous = predecessors[current] {
@@ -137,7 +163,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
 
 extension ReachabilityGraph {
     package func formalProjection(of snapshot: Machine.Snapshot) throws -> TLAStateProjection {
-        guard transitions[snapshot] != nil || safetyViolations[snapshot] != nil else { throw ExplorationError.traceTargetNotReachable }
+        guard transitions[snapshot] != nil || safetyViolations[snapshot] != nil || reachabilityResults.values.contains(.reached(snapshot)) else { throw ExplorationError.traceTargetNotReachable }
         return try machine.formalProjection(of: snapshot)
     }
 

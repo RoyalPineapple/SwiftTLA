@@ -96,7 +96,7 @@ struct CompiledRuntime {
         return try boolean(assume, in: state)
     }
 
-    func invariantHolds(_ invariant: CompiledInvariant, in state: CompiledState) throws -> Bool {
+    func invariantHolds(_ invariant: CompiledStatePredicate, in state: CompiledState) throws -> Bool {
         try state.requireIdentity(identity)
         return try boolean(invariant.predicate, in: state)
     }

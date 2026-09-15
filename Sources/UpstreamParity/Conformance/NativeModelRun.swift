@@ -21,6 +21,10 @@ package struct NativeModelRun: Sendable {
   package let checks: ModelCheckResults
 
   package init(rendered: RenderedSpecification, graph: GraphRun, checks: ModelCheckResults) throws {
+    guard rendered.reachabilityNames.isEmpty else {
+      throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name,
+        field: "positive reachability requires witness-aware property comparison")
+    }
     guard Set(checks.properties.keys) == rendered.checkNames,
           (!rendered.checksDeadlock || checks.deadlock != nil) else {
       throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "native check coverage")

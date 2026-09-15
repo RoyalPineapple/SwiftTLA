@@ -329,7 +329,7 @@ struct RefinementDeclarationTests {
       instance
       Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
-    let failures: [(ModelCheckingFailureKind, [NamedInvariant], StateExpr?, Bool, VariableInitialization)] = [
+    let failures: [(ModelCheckingFailureKind, [NamedStatePredicate], StateExpr?, Bool, VariableInitialization)] = [
       (.invariantViolated, [.init(name: "safe", body: false)], nil, false, .value(.int(0))),
       (.deadlock, [], nil, true, .value(.int(0))),
       (.assumption, [], false, false, .value(.int(0))),

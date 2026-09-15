@@ -24,7 +24,7 @@ struct NativeSwiftEmitter {
         for action in model.api.actions {
             enabledActionIDs.formUnion(program.behavior.enabledActionDependencies[action.compiledAction] ?? [])
         }
-        for invariant in program.behavior.invariants {
+        for invariant in program.behavior.invariants + program.behavior.reachabilityProperties {
             enabledActionIDs.formUnion(invariant.predicate.enabledActions)
         }
         for predicate in program.behavior.temporalProperties.flatMap({ $0.expression.predicates }) {

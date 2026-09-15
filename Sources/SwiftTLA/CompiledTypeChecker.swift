@@ -288,7 +288,8 @@ package struct CompiledTypeChecker: Sendable {
         }
         var initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)] = []
         var actions: [CompiledAction] = []
-        var invariants: [CompiledInvariant] = []
+        var invariants: [CompiledStatePredicate] = []
+        var reachabilityProperties: [CompiledStatePredicate] = []
         var temporalProperties: [CompiledTemporal<CompiledStateQuery>] = []
         var constraint: CompiledStateQuery?
         var assume: CompiledStateQuery?
@@ -337,6 +338,12 @@ package struct CompiledTypeChecker: Sendable {
             do { invariants.append(try invariant.map { try checkOperand($0, expected: .bool) }) }
             catch let diagnostic as CompilationDiagnostic {
                 throw Self.contextualDiagnostic("invariants.\(invariant.name)", causedBy: diagnostic)
+            }
+        }
+        for property in inputs.semantics.behavior.reachabilityProperties {
+            do { reachabilityProperties.append(try property.map { try checkOperand($0, expected: .bool) }) }
+            catch let diagnostic as CompilationDiagnostic {
+                throw Self.contextualDiagnostic("reachabilityProperties.\(property.name)", causedBy: diagnostic)
             }
         }
         for property in inputs.semantics.behavior.temporalProperties {
@@ -421,6 +428,7 @@ package struct CompiledTypeChecker: Sendable {
             enabledActionIndices: inputs.semantics.behavior.enabledActionIndices,
             enabledActionDependencies: inputs.semantics.behavior.enabledActionDependencies,
             invariants: invariants,
+            reachabilityProperties: reachabilityProperties,
             temporalProperties: temporalProperties,
             fairness: inputs.semantics.behavior.fairness,
             constraint: constraint,

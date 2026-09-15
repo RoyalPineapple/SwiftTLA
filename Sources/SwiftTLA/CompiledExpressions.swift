@@ -389,14 +389,14 @@ package struct CompiledStateQuery: Sendable {
     }
 }
 
-package struct CompiledInvariant: Sendable {
+package struct CompiledStatePredicate: Sendable {
     package let id: PropertyID
     package let name: String
     package let predicate: CompiledStateQuery
 
     package func map(
         _ transform: (CompiledExpression) throws -> CompiledExpression
-    ) rethrows -> CompiledInvariant {
+    ) rethrows -> CompiledStatePredicate {
         .init(id: id, name: name, predicate: try predicate.map(transform))
     }
 }

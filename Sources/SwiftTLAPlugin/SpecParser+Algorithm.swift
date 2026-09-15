@@ -559,7 +559,7 @@ extension ParserSession {
     private func parseAlgorithmInvariant(
         _ call: FunctionCallExprSyntax,
         scope: TypedFacadeScope
-    ) -> NamedInvariant? {
+    ) -> NamedStatePredicate? {
         guard let name = extractStringArg(call, index: 0),
               let closure = call.trailingClosure
         else { return nil }

@@ -116,6 +116,12 @@ package struct ModelChecker {
 
     /// Safety violations are retained without truncating the reachable graph.
     package func explore() throws -> FiniteExploration {
+        guard compilation.semantics.behavior.reachabilityProperties.isEmpty else {
+            throw CompilationDiagnostic(code: .unsupportedReachabilityEvaluation, stage: .validation,
+                path: "reachabilityProperties", expected: "generated native exploration for positive reachability",
+                actual: "the formal parity explorer does not report positive reachability outcomes",
+                nextSafeAction: "Explore the generated machine with ReachabilityGraph.")
+        }
         try configuration.validatePropertySupport(in: compilation)
         let symmetry = try SymmetryPlan(
             compilation: compilation,

@@ -43,6 +43,7 @@ package struct CompiledDeclaration: Hashable, Sendable {
         case variable
         case action
         case invariant
+        case reachability
         case temporalProperty
     }
 
@@ -210,13 +211,13 @@ package struct CompiledLayout: Hashable, Sendable {
             spec.actions,
             controlLocations: controlLocations
         )
-        stateProperties = spec.invariants.enumerated().map { ordinal, invariant in
+        stateProperties = (spec.invariants + spec.reachabilityProperties).enumerated().map { ordinal, invariant in
             .init(
                 id: .init(ordinal: ordinal),
-                declaration: .init(kind: .invariant, name: invariant.name, sourceOffset: nil)
+                declaration: .init(kind: ordinal < spec.invariants.count ? .invariant : .reachability, name: invariant.name, sourceOffset: nil)
             )
         }
-        let statePropertyCount = spec.invariants.count
+        let statePropertyCount = stateProperties.count
         temporalProperties = spec.temporalProperties.enumerated().map { ordinal, temporal in
             .init(
                 id: .init(ordinal: statePropertyCount + ordinal),

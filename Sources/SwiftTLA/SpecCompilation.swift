@@ -53,6 +53,7 @@ public struct CompilationDescription: Sendable, Equatable {
     public let variables: [VariableDescription]
     public let actions: [ActionDescription]
     public let invariants: [String]
+    public let reachabilityProperties: [String]
     public let temporalProperties: [String]
     public let refinements: [String]
     public let stateConstraint: String?
@@ -262,10 +263,10 @@ public struct RenderedSpecification: Sendable {
     /// Final artifact boundary used by generated machines; this does not compile or interpret a model.
     @_documentation(visibility: internal)
     public init(_generatedModule name: String, source: String, compilationIdentity: String,
-        declarations: [String], checkDeadlock: Bool, invariants: [String], properties: [String],
+        declarations: [String], checkDeadlock: Bool, invariants: [String], reachabilityProperties: [String], properties: [String],
         symmetry: [String], actions: [RenderedAction]) throws {
         let configuration = TLCConfiguration(declarations: declarations, checkDeadlock: checkDeadlock,
-            invariants: invariants, properties: properties, symmetry: symmetry)
+            invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, symmetry: symmetry)
         let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
             cfg: configuration.render(usesSymmetryReduction: true)), provenance: .compiled(
                 identity: .init(value: compilationIdentity),
@@ -294,7 +295,8 @@ public struct RenderedSpecification: Sendable {
     }
 
     package var invariantNames: Set<String> { Set(configuration.invariants) }
-    package var checkNames: Set<String> { Set(configuration.invariants + configuration.properties) }
+    package var reachabilityNames: Set<String> { Set(configuration.reachabilityProperties) }
+    package var checkNames: Set<String> { Set(configuration.invariants + configuration.reachabilityProperties + configuration.properties) }
     package var checksDeadlock: Bool { configuration.checkDeadlock }
 
     /// Selects declared checks for an independent validation pass without rendering the model again.
@@ -312,7 +314,7 @@ public struct RenderedSpecification: Sendable {
     /// Its specification, constants, constraints, and module closure remain authoritative.
     package func referenceBundle(checking names: Set<String>, checkDeadlock: Bool, declarations: String, in reference: TLAModuleBundle) throws -> TLAModuleBundle {
         let selected = try configuration.selecting(names, checkDeadlock: checkDeadlock)
-        let directives = selected.invariants.map { "INVARIANT \($0)" }
+        let directives = (selected.invariants + selected.reachabilityProperties).map { "INVARIANT \($0)" }
             + selected.properties.map { "PROPERTY \($0)" }
             + [checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
         return TLAModuleBundle(
@@ -381,6 +383,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateRecordField
         case compilationIdentityMismatch
         case unsupportedGeneratedValueShape
+        case unsupportedReachabilityEvaluation
         case unresolvedGeneratedValueShape
         case emptyFormalModuleClosure
         case cyclicFormalModule
@@ -490,6 +493,7 @@ private extension TLASpec {
             (variables.filter { collectionNames.contains($0.name) == false }.map(\.name), "variable", "variables"),
             (constants.map(\.name), "constant", "constants"),
             (invariants.map(\.name), "invariant", "invariants"),
+            (reachabilityProperties.map(\.name), "reachability property", "reachabilityProperties"),
             (temporalProperties.map(\.name), "temporal property", "temporalProperties"),
             (recursiveFuncs.map(\.name), "recursive operator", "recursiveFunctions"),
             (formalOperatorDefinitions.map(\.name), "formal operator", "formalOperators"),
@@ -568,6 +572,7 @@ public extension TLASpec {
                 )
             },
             invariants: semantics.behavior.invariants.map(\.name),
+            reachabilityProperties: semantics.behavior.reachabilityProperties.map(\.name),
             temporalProperties: semantics.behavior.temporalProperties.map(\.name),
             refinements: compiledRefinements.map(\.name),
             stateConstraint: semantics.behavior.constraint.map { _ in "StateConstraint" },
@@ -604,6 +609,8 @@ public extension TLASpec {
         try validateUnique(variables.map(\.name), code: .duplicateVariable, path: "variables")
         try validateUnique(actions.map(\.name), code: .duplicateAction, path: "actions")
         try validateUnique(invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
+        try validateUnique((invariants + reachabilityProperties).map(\.name) + temporalProperties.map(\.name),
+            code: .duplicateInvariant, path: "properties")
         try validateModelCollectionDeclarations()
         try validateSymmetryDeclarations()
         try validateRefinements()
@@ -717,6 +724,7 @@ public extension TLASpec {
         var linkedInstances: Set<String> = []
         let declarationNames = Set(formalOperatorDefinitions.map(\.name))
             .union(invariants.map(\.name))
+            .union(reachabilityProperties.map(\.name))
             .union(temporalProperties.map(\.name))
             .union(recursiveFuncs.map(\.name))
         for refinement in refinements {
@@ -1014,6 +1022,12 @@ private struct CanonicalSpecificationEncoder {
             node("invariant", [$0.name, canonicalExpression($0.body)])
         }
         list("invariants", invariants) { $0 }
+        if !spec.reachabilityProperties.isEmpty {
+            let reachability = spec.reachabilityProperties.map {
+                node("reachable", [$0.name, canonicalExpression($0.body)])
+            }
+            list("reachability", reachability) { $0 }
+        }
         let temporalProperties = spec.temporalProperties.map {
             node("temporal", [$0.name, canonicalTemporal($0.expr)])
         }
@@ -1265,6 +1279,7 @@ private extension CompiledModuleMetadata {
     ) throws -> RenderedModule {
         let layout = renderer.layout
         let invariants = try behavior.invariants.map { ($0.id, "\($0.name) == \(try renderer.state($0.predicate.expression))") }
+            + behavior.reachabilityProperties.map { ($0.id, "\($0.name) == ~(\(try renderer.state($0.predicate.expression)))") }
         let temporalProperties = try behavior.temporalProperties.map { ($0.id, "\($0.name) == \(try renderer.temporal($0.expression))") }
         let constraint = try behavior.constraint.map { "StateConstraint == \(try renderer.state($0.expression))" }
         let emittedActionNamesByID = Dictionary(
@@ -1534,6 +1549,7 @@ private extension CompiledModuleMetadata {
             declarations: lines,
             checkDeadlock: behavior.checkDeadlock,
             invariants: behavior.invariants.map(\.name),
+            reachabilityProperties: behavior.reachabilityProperties.map(\.name),
             properties: behavior.temporalProperties.map(\.name) + refinementNames,
             symmetry: symmetrySets.map { "Symm\($0.variableName)" }
         )

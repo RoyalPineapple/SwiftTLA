@@ -660,6 +660,7 @@ package struct FormalModuleClosure: Sendable {
       freeNames.formUnion(actionFreeNames(action.body).subtracting(Set(action.bindings.map(\.name))))
     }
     module.invariants.forEach { freeNames.formUnion($0.body.freeVariableNames) }
+    module.reachabilityProperties.forEach { freeNames.formUnion($0.body.freeVariableNames) }
     for temporal in module.temporalProperties {
       switch temporal.expr {
       case .always(let expression), .eventually(let expression), .alwaysEventually(let expression),

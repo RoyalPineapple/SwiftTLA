@@ -147,15 +147,15 @@ struct CompiledLowerer {
         }
         guard spec.variables.count == layout.variables.count,
               spec.actions.count == layout.actions.count,
-              spec.invariants.count == layout.stateProperties.count,
+              spec.invariants.count + spec.reachabilityProperties.count == layout.stateProperties.count,
               spec.temporalProperties.count == layout.temporalProperties.count
         else {
             throw CompilationDiagnostic(
                 code: .compilationIdentityMismatch,
                 stage: .lowering,
                 path: "layout.declarations",
-                expected: "layout counts matching variables \(spec.variables.count), actions \(spec.actions.count), invariants \(spec.invariants.count), and temporal properties \(spec.temporalProperties.count)",
-                actual: "variables \(layout.variables.count), actions \(layout.actions.count), invariants \(layout.stateProperties.count), and temporal properties \(layout.temporalProperties.count)",
+                expected: "layout counts matching variables \(spec.variables.count), actions \(spec.actions.count), state properties \(spec.invariants.count + spec.reachabilityProperties.count), and temporal properties \(spec.temporalProperties.count)",
+                actual: "variables \(layout.variables.count), actions \(layout.actions.count), state properties \(layout.stateProperties.count), and temporal properties \(layout.temporalProperties.count)",
                 nextSafeAction: "Compile the model again from its current source."
             )
         }
@@ -176,11 +176,12 @@ struct CompiledLowerer {
             try lower($0.0, id: $0.1.id)
         }
         let actionsByID = Dictionary(uniqueKeysWithValues: actions.map { ($0.id, $0) })
-        let invariantBodies = try zip(spec.invariants, layout.stateProperties).map {
+        let statePropertyBodies = try zip(spec.invariants + spec.reachabilityProperties, layout.stateProperties).map {
             (
                 id: $0.1.id,
                 name: $0.0.name,
-                body: try lower($0.0.body, at: "invariants.\($0.0.name).body", scope: rootScope)
+                body: try lower($0.0.body,
+                    at: "\($0.1.declaration.kind == .invariant ? "invariants" : "reachabilityProperties").\($0.0.name).body", scope: rootScope)
             )
         }
         let temporalBodies = try zip(spec.temporalProperties, layout.temporalProperties).map {
@@ -319,8 +320,8 @@ struct CompiledLowerer {
             .init(expression: expression, operators: operators,
                 actionDependencies: enabledActions.dependencies)
         }
-        let invariants = invariantBodies.map { invariant in
-            CompiledInvariant(id: invariant.id, name: invariant.name, predicate: predicate(invariant.body))
+        let stateProperties = statePropertyBodies.map { property in
+            CompiledStatePredicate(id: property.id, name: property.name, predicate: predicate(property.body))
         }
         let temporalProperties = temporalBodies.map { $0.map(predicate) }
         let constraintExpression = try lowerOptional(spec.constraint, at: "constraint", scope: rootScope)
@@ -333,7 +334,8 @@ struct CompiledLowerer {
                 actions: actions,
                 enabledActionIndices: enabledActions.indices,
                 enabledActionDependencies: enabledActions.dependencies,
-                invariants: invariants,
+                invariants: Array(stateProperties.prefix(spec.invariants.count)),
+                reachabilityProperties: Array(stateProperties.dropFirst(spec.invariants.count)),
                 temporalProperties: temporalProperties,
                 fairness: fairness,
                 constraint: constraint,

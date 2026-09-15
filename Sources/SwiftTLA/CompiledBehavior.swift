@@ -8,7 +8,8 @@ package struct CompiledBehavior: Sendable {
     package let enabledActionIndices: [Int]
     /// Transitive ENABLED dependencies, excluding the action itself.
     package let enabledActionDependencies: [ActionID: Set<ActionID>]
-    package let invariants: [CompiledInvariant]
+    package let invariants: [CompiledStatePredicate]
+    package let reachabilityProperties: [CompiledStatePredicate]
     package let temporalProperties: [CompiledTemporal<CompiledStateQuery>]
     package let fairness: [CompiledFairnessCondition]
     package let constraint: CompiledStateQuery?
@@ -27,6 +28,7 @@ package struct CompiledBehavior: Sendable {
             enabledActionIndices: enabledActionIndices,
             enabledActionDependencies: enabledActionDependencies,
             invariants: invariants.map { try $0.map(transform) },
+            reachabilityProperties: reachabilityProperties.map { try $0.map(transform) },
             temporalProperties: temporalProperties.map { property in
                 try property.map { try $0.map(transform) }
             },

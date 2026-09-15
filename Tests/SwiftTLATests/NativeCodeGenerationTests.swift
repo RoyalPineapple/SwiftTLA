@@ -366,7 +366,7 @@ struct NativeCodeGenerationTests {
             checkDeadlock: compilation.semantics.behavior.checkDeadlock,
             parameterDomains: [:],
             initializations: [], actions: [], enabledActionIndices: [], enabledActionDependencies: [:],
-            invariants: [], temporalProperties: [], fairness: compilation.semantics.behavior.fairness,
+            invariants: [], reachabilityProperties: [], temporalProperties: [], fairness: compilation.semantics.behavior.fairness,
             constraint: nil, assume: nil)
         let program = CompiledProgram(identity: compilation.identity, moduleMetadata: compilation.moduleMetadata,
             requiredStandardModules: compilation.requiredStandardModules, layout: compilation.layout,

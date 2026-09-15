@@ -26,6 +26,7 @@ extension NativeSwiftEmitter {
                 declarations: [\(declarations.joined(separator: ", "))],
                 checkDeadlock: \(module.configuration.checkDeadlock),
                 invariants: \(String(reflecting: module.configuration.invariants)),
+                reachabilityProperties: \(String(reflecting: module.configuration.reachabilityProperties)),
                 properties: \(String(reflecting: module.configuration.properties)),
                 symmetry: \(String(reflecting: module.configuration.symmetry)),
                 actions: [\(actions.joined(separator: ", "))])
