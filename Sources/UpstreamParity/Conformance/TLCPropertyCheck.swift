@@ -74,7 +74,7 @@ package struct TLCPropertyCheck: Sendable {
         check = .property(name)
       }
       guard case .violated = try propertyResult(check: check, outcome: outcome,
-        graph: native.graph, outputDirectory: output) else {
+        graph: native.graph, renderedActions: request.finiteGraphCase.renderedActions, outputDirectory: output) else {
         throw TLCPropertyCheckError.incompleteGraph
       }
     }
@@ -137,7 +137,7 @@ package struct TLCPropertyCheck: Sendable {
       }
       let check: ModelCheck = outcome == .deadlock ? .deadlock : property
       guard case .violated = try propertyResult(check: check, outcome: outcome,
-        graph: capture.graph, outputDirectory: output) else {
+        graph: capture.graph, renderedActions: capture.request.finiteGraphCase.renderedActions, outputDirectory: output) else {
         throw TLCPropertyCheckError.incompleteGraph
       }
       return false
@@ -174,7 +174,7 @@ package struct TLCPropertyCheck: Sendable {
           try RetainedFiles.outputDirectory(output, beneath: output.deletingLastPathComponent())
           let outcome = try processAdapter.run(request, retainingIn: output)
           tlcResult = try propertyResult(check: check, outcome: outcome,
-            graph: capture.graph, outputDirectory: output)
+            graph: capture.graph, renderedActions: request.finiteGraphCase.renderedActions, outputDirectory: output)
         }
         if case .property(let name) = check, native.rendered.reachabilityNames.contains(name) {
           switch tlcResult {
@@ -221,7 +221,7 @@ package struct TLCPropertyCheck: Sendable {
 extension TLCPropertyCheck {
   private func propertyResult(
     check: ModelCheck, outcome: TLCExecutionOutcome,
-    graph: GraphRun,
+    graph: GraphRun, renderedActions: [RenderedAction],
     outputDirectory: URL
   ) throws -> PropertyResult {
     if outcome == .completed {
@@ -236,7 +236,8 @@ extension TLCPropertyCheck {
       return .unavailable
     }
     let trace = try TLCTraceParser().parseCounterexample(
-      Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json")), states: graph.graph.states.values)
+      Data(contentsOf: outputDirectory.appendingPathComponent("counterexample.json")), states: graph.graph.states.values,
+      renderedActions: renderedActions)
     let bound = try boundTrace(trace, to: graph.graph, requiresCycle: outcome == .livenessViolation)
     if check == .deadlock {
       guard bound.cycleStartIndex == nil, let final = bound.steps.last,

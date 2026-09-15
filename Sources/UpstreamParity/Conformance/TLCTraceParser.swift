@@ -1,5 +1,6 @@
 import CoreFoundation
 import Foundation
+import SwiftTLA
 
 package enum TLCTraceError: Error, Equatable, Sendable {
     case dotIsNotTraceEvidence
@@ -9,12 +10,14 @@ package enum TLCTraceError: Error, Equatable, Sendable {
     case invalidState(Int)
     case ambiguousState(Int)
     case invalidAction(Int)
+    case ambiguousAction(Int)
 }
 
 package struct TLCTraceParser: Sendable {
     package init() {}
 
-    package func parseCounterexample(_ data: Data, states knownStates: some Collection<CanonicalState>) throws -> GraphTrace {
+    package func parseCounterexample(_ data: Data, states knownStates: some Collection<CanonicalState>,
+        renderedActions: [RenderedAction] = []) throws -> GraphTrace {
         guard let source = String(data: data, encoding: .utf8) else { throw TLCTraceError.invalidUTF8 }
         let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.hasPrefix("digraph"), !trimmed.hasPrefix("strict graph") else {
@@ -45,7 +48,7 @@ package struct TLCTraceParser: Sendable {
             throw TLCTraceError.invalidAction(rawActions.count)
         }
         let actions = try rawActions.enumerated().map { index, action in
-            try parseAction(action, variables: variables, index: index, states: states)
+            try parseAction(action, variables: variables, index: index, states: states, renderedActions: renderedActions)
         }
         for (index, action) in actions.enumerated() where index < states.count - 1 {
             guard action.targetIndex == index + 1 else { throw TLCTraceError.invalidAction(index) }
@@ -66,7 +69,7 @@ package struct TLCTraceParser: Sendable {
     }
 
     private func parseAction(
-        _ raw: Any, variables: [String], index: Int, states: [CanonicalState]
+        _ raw: Any, variables: [String], index: Int, states: [CanonicalState], renderedActions: [RenderedAction]
     ) throws -> (targetIndex: Int, step: GraphTraceStep) {
         guard let triple = raw as? [Any], triple.count == 3,
               let metadata = triple[1] as? [String: Any], let name = metadata["name"] as? String, !name.isEmpty
@@ -99,7 +102,36 @@ package struct TLCTraceParser: Sendable {
             }
             return (targetIndex, GraphTraceStep(state: states[targetIndex].key, action: nil))
         }
-        return (targetIndex, GraphTraceStep(state: states[targetIndex].key, action: name))
+        let parameters: [String]
+        let context: [String: Any]
+        if metadata["parameters"] == nil && metadata["context"] == nil {
+            parameters = []
+            context = [:]
+        } else {
+            guard let names = metadata["parameters"] as? [String], Set(names).count == names.count,
+                  names.allSatisfy({ !$0.isEmpty }), let values = metadata["context"] as? [String: Any],
+                  names.allSatisfy({ values[$0] != nil }) else { throw TLCTraceError.invalidAction(index) }
+            parameters = names
+            context = values
+        }
+        let action: String
+        if renderedActions.isEmpty {
+            guard parameters.isEmpty else { throw TLCTraceError.invalidAction(index) }
+            action = name
+        } else {
+            let arguments = parameters.map { context[$0]! }
+            let matches = try renderedActions.filter { candidate in
+                guard candidate.sourceName.utf8.elementsEqual(name.utf8),
+                      candidate.arguments.count == arguments.count else { return false }
+                return try zip(arguments, candidate.arguments).allSatisfy { raw, value in
+                    matchesJSON(raw, value: try CanonicalValue(value))
+                }
+            }
+            guard let match = matches.first else { throw TLCTraceError.invalidAction(index) }
+            guard matches.count == 1 else { throw TLCTraceError.ambiguousAction(index) }
+            action = match.renderedName
+        }
+        return (targetIndex, GraphTraceStep(state: states[targetIndex].key, action: action))
     }
 
     private func matchesJSON(_ raw: Any, value: CanonicalValue) -> Bool {

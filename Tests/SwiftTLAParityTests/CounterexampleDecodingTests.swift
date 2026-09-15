@@ -1,8 +1,64 @@
 import Foundation
 import Testing
+import SwiftTLA
 import UpstreamParity
 
 struct CounterexampleDecodingTests {
+    @Test("parameterized TLC witnesses retain invocation identity through graph binding")
+    func bindsParameterizedActions() throws {
+        let states = [0, 1].map { CanonicalState(bindings: ["x": .integer($0)]) }
+        let actions = [
+            RenderedAction(sourceName: "advance", arguments: [.string("only"), .int(1)], renderedName: "advance__0"),
+            RenderedAction(sourceName: "advance", arguments: [.string("other"), .int(1)], renderedName: "advance__1")
+        ]
+        let data = try actionTrace(["name": "advance", "parameters": ["_process", "amount"],
+            "context": ["amount": 1, "_process": "only"]])
+        let trace = try TLCTraceParser().parseCounterexample(data, states: states, renderedActions: actions)
+        #expect(trace.steps.map(\.action) == [nil, "advance__0"])
+        let graph = try CanonicalGraph(initialStates: [states[0]], states: states,
+            edges: [CanonicalEdge(source: states[0].key, action: "advance__0", target: states[1].key)])
+        try trace.validate(in: graph)
+        #expect(throws: TLCTraceError.invalidAction(0)) {
+            try TLCTraceParser().parseCounterexample(data, states: states)
+        }
+        for context: [String: Any] in [["amount": true, "_process": "only"],
+            ["amount": 1, "_process": "unknown"], ["amount": 1]] {
+            #expect(throws: TLCTraceError.invalidAction(0)) {
+                try TLCTraceParser().parseCounterexample(actionTrace(["name": "advance",
+                    "parameters": ["_process", "amount"], "context": context]), states: states, renderedActions: actions)
+            }
+        }
+    }
+
+    @Test("erased or malformed action arguments never select an arbitrary invocation")
+    func rejectsAmbiguousActions() throws {
+        let states = [0, 1].map { CanonicalState(bindings: ["x": .integer($0)]) }
+        let actions = [
+            RenderedAction(sourceName: "advance", arguments: [.string("only")], renderedName: "stringAction"),
+            RenderedAction(sourceName: "advance", arguments: [.constant("only")], renderedName: "modelAction")
+        ]
+        #expect(throws: TLCTraceError.ambiguousAction(0)) {
+            try TLCTraceParser().parseCounterexample(actionTrace(["name": "advance", "parameters": ["p"],
+                "context": ["p": "only"]]), states: states, renderedActions: actions)
+        }
+        for metadata: [String: Any] in [
+            ["name": "advance", "parameters": ["p", "p"], "context": ["p": "only"]],
+            ["name": "advance", "parameters": ["p"]],
+            ["name": "advance", "parameters": "p", "context": ["p": "only"]]
+        ] {
+            #expect(throws: TLCTraceError.invalidAction(0)) {
+                try TLCTraceParser().parseCounterexample(actionTrace(metadata), states: states, renderedActions: actions)
+            }
+        }
+    }
+
+    private func actionTrace(_ metadata: [String: Any]) throws -> Data {
+        let first: [Any] = [1, ["x": 0]]
+        let second: [Any] = [2, ["x": 1]]
+        return try JSONSerialization.data(withJSONObject: ["vars": ["x"], "counterexample": [
+            "state": [first, second], "action": [[first, metadata, second]]]])
+    }
+
     @Test("counterexample strings and record keys bind by their exact encoding")
     func bindsExactUnicodeValues() throws {
         let composed = "é"
