@@ -12,9 +12,10 @@ concurrency:
 
 env:
   DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+  SWIFT_TLA_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
 jobs:
-  swift-tests:
+  swift-test-suites:
     strategy:
       fail-fast: false
       matrix:
@@ -29,6 +30,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
 
       - name: Validate local validation lock contract
         run: bash Tests/Fixtures/LocalValidation/assert_lock.sh
@@ -37,6 +40,7 @@ jobs:
         run: |
           mkdir -p .build/test-diagnostics
           git rev-parse HEAD > .build/test-diagnostics/source-sha.txt
+          test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
           (
             while sleep 300; do
               ps -axo pid,ppid,etime,%cpu,rss,command > ".build/test-diagnostics/$(date +%s)-processes.txt"
@@ -53,10 +57,21 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: swift-test-diagnostics-${{ matrix.suite }}-${{ github.sha }}
+          name: swift-test-diagnostics-${{ matrix.suite }}-${{ env.SWIFT_TLA_SHA }}
           path: .build/test-diagnostics
           if-no-files-found: error
           retention-days: 14
+
+  swift-tests:
+    needs: swift-test-suites
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      SWIFT_TEST_RESULT: ${{ needs.swift-test-suites.result }}
+    steps:
+      - name: Require every Swift test suite to pass
+        run: test "$SWIFT_TEST_RESULT" = success
 
   apple-platform-examples:
     runs-on: macos-15
@@ -64,7 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.SWIFT_TLA_SHA }}
 
       - id: adoption-source
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -126,7 +141,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.SWIFT_TLA_SHA }}
 
       - id: corpus-source
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
