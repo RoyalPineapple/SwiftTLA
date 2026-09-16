@@ -1,8 +1,61 @@
 import Testing
+import SwiftSyntax
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
 
 struct ImportedModuleConfigurationTests {
+    @Test("imported sequence calls retain lexical bindings and reject malformed arguments")
+    func parsesScopedSequenceCalls() throws {
+        let parser = ParserSession()
+        parser.allowsUnboundValueNames = false
+        let scope = ParserSession.TypedFacadeScope.empty.extending(binding: "input",
+            to: .variable("resolvedInput"), shape: .dictionary(.int, .int))
+        #expect(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral:
+            "SwiftTLA.ZSequences.rotation(of: input, leftBy: 1)"), scope: scope) ==
+            .recursiveCall("Rotation", [.variable("resolvedInput"), .int(1)]))
+        for source in ["ZSequences.rotation(of: input)",
+                       "ZSequences.rotation(of: input, leftBy: 1, extra: 2)",
+                       "ZSequences.sequences(of: input)",
+                       "ZSequences.length(of: missing)"] {
+            #expect(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral: source), scope: scope) == nil)
+        }
+    }
+
+    @Test("only an empty formal tuple admits a contextual function representation")
+    func contextualEmptyFunctions() throws {
+        let target = Var<ZeroBasedSequence<Int>>("target")
+        for expression in [StateExpr.tupleLiteral([]), StateExpr.value(.tuple([])),
+                           StateExpr.tupleLiteral([.int(1)]), StateExpr.value(.tuple([.int(1)]))] {
+            let specification = TLASpec("ContextualFunction") {
+                Variable(target, Expr<ZeroBasedSequence<Int>>(expression))
+            }
+            let compilation = try specification.compile()
+            if expression == .tupleLiteral([]) || expression == .value(.tuple([])) {
+                let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+                #expect(try program.renderModule().renderedModuleSource.contains("<<>>"))
+            } else {
+                #expect(throws: CompilationDiagnostic.self) {
+                    try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+                }
+            }
+        }
+    }
+
+    @Test("parameter-bound imported sequence domains execute as generated Swift")
+    func executesConfiguredSequenceDomains() throws {
+        let scenarios = try ConfiguredSequenceMachine.validationScenarios()
+        for (scenario, expectedCount) in zip(scenarios, [1, 7]) {
+            let machines = try scenario.initialMachines()
+            #expect(machines.count == expectedCount)
+            for machine in machines {
+                #expect(machine.state.sequence.count == machine.state.length)
+                let successor = try #require(machine.successors().first)
+                #expect(successor.machine.state.sequence.count == machine.state.length)
+            }
+            #expect(try scenario.render().tlaBundle.imports.map(\.name) == ["ZSequences"])
+        }
+    }
+
     @Test("refinement instances retain independent imported module configurations")
     func isolatesRefinementConfigurations() throws {
         let value = Var<Int>("value", 0)

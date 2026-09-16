@@ -661,6 +661,10 @@ final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String?
     ) -> StateExpr? {
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           let value = decodeZSequencesCall(call, decode: { decodeTypedFacadeValue($0, scope: scope) }) {
+            return value
+        }
         if let sequences = decodeBoundedSequenceDomain(expression, scope: scope) {
             return sequences
         }
@@ -1699,6 +1703,28 @@ final class ParserSession {
         return .processLocalFamily(local)
     }
 
+    private func decodeZSequencesCall(
+        _ call: FunctionCallExprSyntax, decode: (ExprSyntax) -> StateExpr?
+    ) -> StateExpr? {
+        guard let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+              compilerGrammarName(in: member.base) == "ZSequences",
+              call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
+        let signature: (name: String, labels: [String?])
+        switch member.declName.baseName.sourceIdentifierName {
+        case "sequences": signature = ("ZSeq", ["over"])
+        case "indices": signature = ("ZIndices", ["of"])
+        case "length": signature = ("ZLen", ["of"])
+        case "rotation": signature = ("Rotation", ["of", "leftBy"])
+        case "rotations": signature = ("Rotations", ["of"])
+        case "lexicographicallyPrecedesOrEquals": signature = ("LexicographicallyPrecedesOrEquals", [nil, nil])
+        default: return nil
+        }
+        guard call.arguments.map({ $0.label?.text }) == signature.labels else { return nil }
+        let arguments = call.arguments.compactMap { decode($0.expression) }
+        guard arguments.count == signature.labels.count else { return nil }
+        return .recursiveCall(signature.name, arguments)
+    }
+
     func decodeMethodCall(_ memberAccess: MemberAccessExprSyntax, _ call: FunctionCallExprSyntax) -> StateExpr? {
         if let family = decodeProcessLocalFamily(call) {
             return family
@@ -1706,29 +1732,8 @@ final class ParserSession {
         let methodName = memberAccess.declName.baseName.sourceIdentifierName
         let args = Array(call.arguments)
         let base = memberAccess.base
-        if let sourceType = base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
-           FormalModuleProvider(sourceType: sourceType) == .zeroBasedSequences {
-            switch methodName {
-            case "indices":
-                guard let sequence = args.first(where: { $0.label?.text == "of" }).flatMap({ decodeStateExpr($0.expression) }) else { return nil }
-                return .recursiveCall("ZIndices", [sequence])
-            case "length":
-                guard let sequence = args.first(where: { $0.label?.text == "of" }).flatMap({ decodeStateExpr($0.expression) }) else { return nil }
-                return .recursiveCall("ZLen", [sequence])
-            case "rotation":
-                guard let sequence = args.first(where: { $0.label?.text == "of" }).flatMap({ decodeStateExpr($0.expression) }),
-                      let shift = args.first(where: { $0.label?.text == "leftBy" }).flatMap({ decodeStateExpr($0.expression) })
-                else { return nil }
-                return .recursiveCall("Rotation", [sequence, shift])
-            case "lexicographicallyPrecedesOrEquals":
-                guard args.count == 2,
-                      let left = decodeStateExpr(args[0].expression),
-                      let right = decodeStateExpr(args[1].expression)
-                else { return nil }
-                return .recursiveCall("LexicographicallyPrecedesOrEquals", [left, right])
-            default:
-                return nil
-            }
+        if compilerGrammarName(in: base) == "ZSequences" {
+            return decodeZSequencesCall(call, decode: decodeStateExpr)
         }
         let selfExpr = base.flatMap { decodeStateExpr($0) }
         switch methodName {

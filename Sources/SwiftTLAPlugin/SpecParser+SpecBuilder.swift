@@ -520,6 +520,15 @@ extension ParserSession {
     func setExpressionElementTypeName(_ expression: ExprSyntax) -> String? {
         if let domain = finiteAlgorithmDomain(expression) { return domain.typeName }
         if let call = expression.as(FunctionCallExprSyntax.self),
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           compilerGrammarName(in: member.base) == "ZSequences",
+           member.declName.baseName.sourceIdentifierName == "sequences",
+           call.arguments.count == 1, call.arguments.first?.label?.text == "over",
+           let members = call.arguments.first?.expression,
+           let element = setExpressionElementTypeName(members) {
+            return "ZeroBasedSequence<\(element)>"
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Where",
            let candidates = call.arguments.first?.expression {
             return setExpressionElementTypeName(candidates)
