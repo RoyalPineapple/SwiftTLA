@@ -183,7 +183,7 @@ struct ProcedureLoweringTests {
                     name: "inner",
                     parameters: [.init(root: "innerValue", initial: .int(0), swiftTypeName: "Int")],
                     components: [.step(.init(label: .init(name: "enter"), statements: [
-                        .set(target: .function(root: "seen", key: .variable("innerValue")), value: .variable("innerValue")),
+                        .set(target: .function(base: .root("seen"), key: .variable("innerValue")), value: .variable("innerValue")),
                         .return
                     ]))]
                 ))

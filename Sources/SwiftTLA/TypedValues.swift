@@ -1128,7 +1128,7 @@ extension Var {
   }
 }
 
-private func finiteDomainIndex<Domain: FiniteTLAValueDomain>(_ index: Domain) -> StateExpr {
+func finiteDomainIndex<Domain: FiniteTLAValueDomain>(_ index: Domain) -> StateExpr {
   if let issue = Domain.sourceIssue {
     return .sourceIssue(issue)
   }

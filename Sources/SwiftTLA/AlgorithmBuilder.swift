@@ -1152,6 +1152,20 @@ extension SharedVariable: AssignmentTarget {}
 extension LocalVariable: AssignmentTarget {}
 extension MacroParameter: AssignmentTarget {}
 
+extension TypedExpression where Self: AssignmentTarget, Value == ExpressionValue {
+    public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> AlgorithmLValue<Range>
+    where Value == Function<Domain, Range> {
+        let base = algorithmLValue
+        return AlgorithmLValue(model: .function(base: base.model, key: finiteDomainIndex(index)), sourceIssue: base.sourceIssue)
+    }
+
+    public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: some TypedExpression<Domain>) -> AlgorithmLValue<Range>
+    where Value == Function<Domain, Range> {
+        let base = algorithmLValue
+        return AlgorithmLValue(model: .function(base: base.model, key: index.stateExpr), sourceIssue: base.sourceIssue)
+    }
+}
+
 extension TypedExpression where Self: AssignmentTarget, Value == ExpressionValue, Value: _GeneratedRecordValue {
     public subscript<Field: TLAValueType>(dynamicMember keyPath: KeyPath<Value, Field>) -> AlgorithmLValue<Field> {
         let base = algorithmLValue

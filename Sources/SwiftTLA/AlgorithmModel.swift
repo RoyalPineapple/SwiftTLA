@@ -407,14 +407,22 @@ internal struct CompiledAuthoredPlusCalAssignment: Sendable {
 
 internal indirect enum CompiledAuthoredPlusCalLValue: Sendable {
     case root(VariableID)
-    case function(root: VariableID, key: CompiledExpression)
+    case function(base: CompiledAuthoredPlusCalLValue, key: CompiledExpression)
     case field(CompiledAuthoredPlusCalLValue, String)
 
     var expression: CompiledExpression {
         switch self {
         case .root(let root): .stateVariable(root)
-        case .function(let root, let key): .init(operation: .functionApply, children: [.stateVariable(root), key])
+        case .function(let base, let key): .init(operation: .functionApply, children: [base.expression, key])
         case .field(let base, let name): .recordAccess(base.expression, name)
+        }
+    }
+
+    func resolvingRead(_ expression: CompiledExpression) -> Self {
+        switch self {
+        case .root: self
+        case .function(let base, _): .function(base: base.resolvingRead(expression.children[0]), key: expression.children[1])
+        case .field(let base, let name): .field(base.resolvingRead(expression.children[0]), name)
         }
     }
 }
@@ -586,21 +594,20 @@ package struct AlgorithmLabelModel: Sendable, Hashable {
 
 package indirect enum AlgorithmLValueModel: Sendable, Equatable {
     case root(String)
-    case function(root: String, key: StateExpr)
+    case function(base: AlgorithmLValueModel, key: StateExpr)
     case field(AlgorithmLValueModel, String)
 
     package var root: String {
         switch self {
-        case .root(let root), .function(let root, _):
-            return root
-        case .field(let base, _): return base.root
+        case .root(let root): return root
+        case .function(let base, _), .field(let base, _): return base.root
         }
     }
 
     var expression: StateExpr {
         switch self {
         case .root(let root): .variable(root)
-        case .function(let root, let key): .functionApply(.variable(root), key)
+        case .function(let base, let key): .functionApply(base.expression, key)
         case .field(let base, let name): .recordAccess(base.expression, name)
         }
     }
@@ -608,7 +615,7 @@ package indirect enum AlgorithmLValueModel: Sendable, Equatable {
     func assigning(_ value: StateExpr) -> StateExpr {
         switch self {
         case .root: value
-        case .function(let root, let key): .except(.variable(root), key, value)
+        case .function(let base, let key): base.assigning(.except(base.expression, key, value))
         case .field(let base, let name): base.assigning(.except(base.expression, .value(.string(name)), value))
         }
     }

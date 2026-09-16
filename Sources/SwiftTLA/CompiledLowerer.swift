@@ -727,9 +727,9 @@ struct CompiledLowerer {
         case .root(let name): return .root(try variable(named: name, at: "\(path).root"))
         case .field(let base, let name):
             return .field(try authoredPlusCalLValue(base, at: "\(path).base", scope: scope), name)
-        case .function(let name, let key):
+        case .function(let base, let key):
             return .function(
-                root: try variable(named: name, at: "\(path).root"),
+                base: try authoredPlusCalLValue(base, at: "\(path).base", scope: scope),
                 key: try lower(key, at: "\(path).key", scope: scope)
             )
         }

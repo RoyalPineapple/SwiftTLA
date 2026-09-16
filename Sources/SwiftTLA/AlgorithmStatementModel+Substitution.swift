@@ -32,8 +32,8 @@ extension AlgorithmStatementModel {
             switch value {
             case .root:
                 value
-            case .function(let root, let key):
-                .function(root: root, key: expression(key))
+            case .function(let base, let key):
+                .function(base: target(base), key: expression(key))
             case .field(let base, let name): .field(target(base), name)
             }
         }
@@ -138,8 +138,8 @@ extension AlgorithmStatementModel {
             switch value {
             case .root(let targetRoot):
                 return substitutedRoot(targetRoot).map(AlgorithmLValueModel.root)
-            case .function(let targetRoot, let key):
-                return substitutedRoot(targetRoot).map { .function(root: $0, key: expression(key)) }
+            case .function(let base, let key):
+                return target(base).map { .function(base: $0, key: expression(key)) }
             case .field(let base, let name): return target(base).map { .field($0, name) }
             }
         }

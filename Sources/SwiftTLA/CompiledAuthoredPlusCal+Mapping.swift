@@ -11,7 +11,7 @@ extension CompiledAuthoredPlusCalAlgorithmPlan {
         func target(_ value: CompiledAuthoredPlusCalLValue) throws -> CompiledAuthoredPlusCalLValue {
             switch value {
             case .root: return value
-            case .function(let root, let key): return .function(root: root, key: try transform(key))
+            case .function(let base, let key): return .function(base: try target(base), key: try transform(key))
             case .field(let base, let name): return .field(try target(base), name)
             }
         }

@@ -1338,6 +1338,12 @@ extension ParserSession {
         scope: TypedFacadeScope
     ) -> AlgorithmLValueModel? {
         guard let expression else { return nil }
+        if let subscriptCall = expression.as(SubscriptCallExprSyntax.self),
+           case .dictionary = typedFacadeValueType(subscriptCall.calledExpression, scope: scope),
+           let base = algorithmTarget(subscriptCall.calledExpression, scope: scope),
+           case .functionApply(_, let key) = decodeTypedFacadeValue(expression, scope: scope) {
+            return .function(base: base, key: key)
+        }
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
             if let bound = scope.value(for: reference) {
                 guard case .variable(let root) = bound else { return nil }

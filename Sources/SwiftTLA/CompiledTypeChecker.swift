@@ -520,16 +520,8 @@ package struct CompiledTypeChecker: Sendable {
 
     private mutating func checkAuthoredAssignment(_ target: CompiledAuthoredPlusCalLValue,
                                                 value: CompiledExpression) throws -> CompiledAuthoredPlusCalAssignment {
-        switch target {
-        case .field(let base, let name):
-            let field = try checkOperand(.recordAccess(base.expression, name))
-            return .init(target: target, value: try checkOperand(value, expected: field.resultType))
-        case .root(let variable):
-            return .init(target: target, value: try checkOperand(value, expected: variables[variable] ?? .unknown))
-        case .function(let variable, let key):
-            let update = try checkOperand(.except(.stateVariable(variable), key, value), expected: variables[variable] ?? .unknown)
-            return .init(target: .function(root: variable, key: update.children[1]), value: update.children[2])
-        }
+        let read = try checkOperand(target.expression)
+        return .init(target: target.resolvingRead(read), value: try checkOperand(value, expected: read.resultType))
     }
 
     private mutating func checkAuthoredStatement(_ statement: CompiledAuthoredPlusCalStatement,
