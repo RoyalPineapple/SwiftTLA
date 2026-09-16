@@ -847,16 +847,6 @@ extension TypedExpression {
     Expr<Element>(.tupleAccess(stateExpr, index))
   }
 
-  public func first<First: TLAValueType, Second: TLAValueType>() -> Expr<First>
-  where ExpressionValue == Pair<First, Second> {
-    Expr<First>(.tupleAccess(stateExpr, 1))
-  }
-
-  public func second<First: TLAValueType, Second: TLAValueType>() -> Expr<Second>
-  where ExpressionValue == Pair<First, Second> {
-    Expr<Second>(.tupleAccess(stateExpr, 2))
-  }
-
   /// Reads a formal sequence at a one-based formal index.
   public subscript<Element: TLAValueType>(_ index: some TypedExpression<Int>) -> Expr<Element>
   where ExpressionValue == TupleExpr<Element> {
@@ -1022,9 +1012,29 @@ extension TypedExpression {
     let element = WithValue<Element>(expression: .variable(binding))
     return Expr<SetExpr<Result.ExpressionValue>>(.setMap(transform(element).stateExpr, binding, stateExpr))
   }
+
+  /// Unions the formal sets produced by a typed expression for each member.
+  public func flatMapping<Element: TLAValueType, Output: TLAValueType, Result: TypedExpression<SetExpr<Output>>>(
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    _ transform: (WithValue<Element>) -> Result
+  ) -> Expr<SetExpr<Output>> where ExpressionValue == SetExpr<Element> {
+    let binding = generatedBinderName(file: file, line: line, column: column)
+    let element = WithValue<Element>(expression: .variable(binding))
+    return Expr<SetExpr<Output>>(.unionAll(.setMap(transform(element).stateExpr, binding, stateExpr)))
+  }
 }
 
 extension TypedExpression where ExpressionValue: FormalTupleValue {
+  public func first<First: TLAValueType, Second: TLAValueType>() -> Expr<First>
+  where ExpressionValue == Pair<First, Second> {
+    Expr<First>(.tupleAccess(stateExpr, 1))
+  }
+
+  public func second<First: TLAValueType, Second: TLAValueType>() -> Expr<Second>
+  where ExpressionValue == Pair<First, Second> {
+    Expr<Second>(.tupleAccess(stateExpr, 2))
+  }
+
   public var count: Expr<Int> {
     Expr<Int>(.tupleLength(stateExpr))
   }

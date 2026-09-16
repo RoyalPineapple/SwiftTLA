@@ -1195,7 +1195,7 @@ final class ParserSession {
                   let value = decodeTypedFacadeValue(valueSyntax, scope: scope, expectedEnumType: selection.type?.enumerationType)
             else { return nil }
             return .partialFunctionOverriding(base, key: selection.selector, value: value)
-        case "filtering", "mapping":
+        case "filtering", "mapping", "flatMapping":
             guard let closure = call.trailingClosure,
                   closure.statements.count == 1,
                   case .expr(let body) = closure.statements.first?.item,
@@ -1207,9 +1207,11 @@ final class ParserSession {
                         shape: typedFacadeValueType(baseSyntax, scope: scope)?.selectedElement)
                   )
             else { return nil }
-            return access.declName.baseName.sourceIdentifierName == "filtering"
-                ? .setFilter(base, parameter, expression)
-                : .setMap(expression, parameter, base)
+            switch access.declName.baseName.sourceIdentifierName {
+            case "filtering": return .setFilter(base, parameter, expression)
+            case "flatMapping": return .unionAll(.setMap(expression, parameter, base))
+            default: return .setMap(expression, parameter, base)
+            }
         case "at":
             guard let indexSyntax = call.arguments.first?.expression,
                   let index = decodeTypedFacadeValue(indexSyntax, scope: scope)
@@ -1524,7 +1526,7 @@ final class ParserSession {
             return typedFacadeValueType(type)
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.sourceIdentifierName == "mapping",
+           ["mapping", "flatMapping"].contains(member.declName.baseName.sourceIdentifierName),
            let base = member.base,
            let closure = call.trailingClosure,
            closure.statements.count == 1,
@@ -1533,7 +1535,12 @@ final class ParserSession {
            let parameter = closureParameterNames(in: closure).first {
             let bodyScope = scope.extending(binding: parameter, to: .variable(parameter),
                 shape: typedFacadeValueType(base, scope: scope)?.selectedElement)
-            return typedFacadeValueType(body, scope: bodyScope).map(CompiledValueType.set)
+            let bodyType = typedFacadeValueType(body, scope: bodyScope)
+            if member.declName.baseName.sourceIdentifierName == "flatMapping" {
+                guard case .set = bodyType else { return nil }
+                return bodyType
+            }
+            return bodyType.map(CompiledValueType.set)
         }
         return nil
     }

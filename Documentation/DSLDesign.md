@@ -925,6 +925,12 @@ Nested records and model parameters remain typed expressions until native or for
 Native execution constructs the original Swift record, not a parallel schema.
 Literal `RecordType(...)` remains ordinary Swift construction.
 
+Formal set expressions support `mapping`, `filtering`, and `flatMapping`.
+The `flatMapping` closure returns a typed set expression for each member.
+The result is the union of those sets, with no duplicate members.
+Nested closures can use outer members and model parameters to construct dependent record domains.
+These domains remain symbolic until execution or export.
+
 The compiler must report extra modeling requirements as clear errors attached
 to the relevant declaration or operation. A Swift type compiling in isolation
 does not establish that every operation on it can be exported; supported member
