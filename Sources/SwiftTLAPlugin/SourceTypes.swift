@@ -51,10 +51,13 @@ package struct SourceRecordField: Sendable {
 package struct SourceTypeMetadata: Sendable {
     package let aliases: [String: TypeSyntax]
     package let records: [String: [SourceRecordField]]
+    package let structs: [String: StructDeclSyntax]
     package let enums: [SourceEnum]
-    package init(aliases: [String: TypeSyntax] = [:], records: [String: [SourceRecordField]] = [:], enums: [SourceEnum] = []) {
+    package init(aliases: [String: TypeSyntax] = [:], records: [String: [SourceRecordField]] = [:],
+                 structs: [String: StructDeclSyntax] = [:], enums: [SourceEnum] = []) {
         self.aliases = aliases
         self.records = records
+        self.structs = structs
         self.enums = enums
     }
 }
@@ -79,8 +82,24 @@ final class SourceTypeResolver {
             (declaration.typeName, declaration.cases.map { (name: $0.name, value: CompiledValue(formal: $0.value)) })
         }))
         self.metadata = metadata
-        let names = Set(metadata.enums.map(\.typeName)).union(metadata.records.keys)
-        nominalNames = Dictionary(grouping: names) { TokenSyntax.identifier($0).sourceIdentifierName }
+        let names = Set(metadata.enums.map(\.typeName)).union(metadata.records.keys).union(metadata.structs.keys)
+        var nominalNames = Dictionary(grouping: names) { TokenSyntax.identifier($0).sourceIdentifierName }
+        for (name, declaration) in metadata.structs {
+            let qualified = Self.qualifiedName(of: declaration)
+            if qualified != name { nominalNames[qualified, default: []].append(name) }
+        }
+        self.nominalNames = nominalNames
+    }
+
+    private static func qualifiedName(of declaration: StructDeclSyntax) -> String {
+        var names = [declaration.name.text]
+        var ancestor = declaration.parent
+        while let node = ancestor {
+            if let owner = node.as(StructDeclSyntax.self) { names.append(owner.name.text) }
+            else if let owner = node.as(EnumDeclSyntax.self) { names.append(owner.name.text) }
+            ancestor = node.parent
+        }
+        return names.reversed().joined(separator: ".")
     }
 
     func resolve(_ source: String) throws -> CompiledValueType {
@@ -145,14 +164,14 @@ final class SourceTypeResolver {
                 guard arguments == nil else {
                     throw CompiledValueType.diagnostic("types.\(name)", "declared nominal type does not accept generic arguments")
                 }
-                return try named(source)
+                return try named(source, resolving: resolving)
             }
         } else if let member = type.as(MemberTypeSyntax.self),
                   ["Swift", "SwiftTLA"].contains(member.baseType.trimmedDescription) {
             name = member.name.sourceIdentifierName
             arguments = member.genericArgumentClause
         } else if type.is(MemberTypeSyntax.self) {
-            return try named(source)
+            return try named(source, resolving: resolving)
         } else {
             throw CompiledValueType.diagnostic("type", "unsupported Swift type syntax: \(source)")
         }
@@ -217,17 +236,56 @@ final class SourceTypeResolver {
             return .init(type: try CompiledValueType.normalizedUnion(parts.map(\.type), namedDomains: namedDomains),
                 view: .union(parts[0].view, parts[1].view))
         default:
-            return try named(source)
+            return try named(source, resolving: resolving)
         }
     }
 
-    private func named(_ source: String) throws -> ResolvedSourceType {
+    private func named(_ source: String, resolving: Set<String>) throws -> ResolvedSourceType {
         let identity = TokenSyntax.identifier(source).sourceIdentifierName
         let declarations = nominalNames[identity, default: []]
         guard declarations.count <= 1 else {
             throw CompiledValueType.diagnostic("types.\(identity)", "multiple declarations have the same Swift identifier")
         }
         let name = declarations.first ?? source
+        if let declaration = metadata.structs[name] {
+            let identity = "struct:\(name)"
+            guard !resolving.contains(identity) else {
+                throw CompiledValueType.diagnostic("types.\(name)", "recursive Swift record requires a finite nonrecursive field shape")
+            }
+            guard declaration.genericParameterClause == nil else {
+                throw CompiledValueType.diagnostic("types.\(name)", "generic Swift records require resolved type arguments")
+            }
+            var fields: [CompiledFieldType] = []
+            var views: [FormalValueShape.Field] = []
+            for member in declaration.memberBlock.members {
+                guard let variable = member.decl.as(VariableDeclSyntax.self),
+                      !variable.modifiers.contains(where: { $0.name.text == "static" || $0.name.text == "class" }) else { continue }
+                for binding in variable.bindings {
+                    guard let field = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
+                          let annotation = binding.typeAnnotation?.type,
+                          binding.accessorBlock == nil else {
+                        throw CompiledValueType.diagnostic("types.\(name)", "model record fields must be stored properties with explicit Swift types")
+                    }
+                    guard !fields.contains(where: { $0.name == field }) else {
+                        throw CompiledValueType.diagnostic("types.\(name).\(field)", "duplicate Swift record field")
+                    }
+                    let value = try resolveType(annotation, resolving: resolving.union([identity]))
+                    var pending = [value.type]
+                    while let component = pending.popLast() {
+                        if case .named(let typeName) = component, enums.cases[typeName] == nil {
+                            throw CompiledValueType.diagnostic("types.\(name).\(field)", "unresolved Swift field type \(typeName)")
+                        }
+                        guard component != .unknown else {
+                            throw CompiledValueType.unresolvedDiagnostic(component, at: "types.\(name).\(field)")
+                        }
+                        pending.append(contentsOf: component.components)
+                    }
+                    fields.append(.init(name: field, type: value.type))
+                    views.append(.init(name: field, shape: value.view))
+                }
+            }
+            return .init(type: .nominalRecord(Self.qualifiedName(of: declaration), fields), view: .record(views))
+        }
         let view: FormalValueShape
         if let declaration = metadata.enums.first(where: { $0.typeName == name && $0.isFiniteDomain }) {
             view = .finite(typeName: identity, values: declaration.finiteValues)

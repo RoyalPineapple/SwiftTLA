@@ -67,7 +67,7 @@ extension NativeSwiftEmitter {
                 try formalValue(value + "." + fieldName(type, index: $0.offset), type: $0.element)
             }
             return "TLAValue.tuple([\(values.joined(separator: ", "))])"
-        case .record(let fields):
+        case .record(let fields), .nominalRecord(_, let fields):
             let values = try fields.enumerated().map {
                 ".init(\(String(reflecting: $0.element.name)), \(try formalValue(value + "." + fieldName(type, index: $0.offset), type: $0.element.type)))"
             }

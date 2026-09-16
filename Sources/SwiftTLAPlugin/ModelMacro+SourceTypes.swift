@@ -101,6 +101,7 @@ extension TLASpecVerifier {
                 SourceRecordField(sourceName: field.selector, name: names[field.property]!, swiftType: properties.first { $0.name == field.property }!.swiftType)
             }
         }
-        return SourceTypeMetadata(aliases: aliases, records: records, enums: enums)
+        return SourceTypeMetadata(aliases: aliases, records: records,
+            structs: Dictionary(uniqueKeysWithValues: structs.map { ($0.name.text, $0) }), enums: enums)
     }
 }

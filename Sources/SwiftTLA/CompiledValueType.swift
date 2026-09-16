@@ -20,13 +20,14 @@ package indirect enum CompiledValueType: Hashable, Sendable {
     case array(CompiledValueType)
     case dictionary(CompiledValueType, CompiledValueType)
     case record([CompiledFieldType])
+    case nominalRecord(String, [CompiledFieldType])
     case tuple([CompiledValueType])
 
     package var components: [CompiledValueType] {
         switch self {
         case .set(let value), .array(let value): [value]
         case .dictionary(let key, let value): [key, value]
-        case .record(let fields): fields.map(\.type)
+        case .record(let fields), .nominalRecord(_, let fields): fields.map(\.type)
         case .tuple(let values), .union(let values): values
         default: []
         }
@@ -43,6 +44,9 @@ package indirect enum CompiledValueType: Hashable, Sendable {
             return a.count == b.count && zip(a, b).allSatisfy { $0.embeds($1) }
         case (.record(let a), .record(let b)) where a.map(\.name) == b.map(\.name):
             return zip(a, b).allSatisfy { $0.type.embeds($1.type) }
+        case (.nominalRecord(let aName, let a), .nominalRecord(let bName, let b))
+            where aName == bName && a.map(\.name) == b.map(\.name):
+            return zip(a, b).allSatisfy { $0.type.embeds($1.type) }
         default: return false
         }
     }
@@ -58,6 +62,7 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         case .modelValue: "_ModelValue"
         case .controlLocation: "_ControlLocation"
         case .named(let name): name
+        case .nominalRecord(let name, _): name
         case .finite: "FiniteValue"
         case .union: "UnionValue"
         case .collectionMember(_, let name): name
@@ -74,7 +79,7 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         case .unknown: false
         case .set(let element), .array(let element): element.resolved
         case .dictionary(let key, let value): key.resolved && value.resolved
-        case .record(let fields): fields.allSatisfy { $0.type.resolved }
+        case .record(let fields), .nominalRecord(_, let fields): fields.allSatisfy { $0.type.resolved }
         case .tuple(let elements), .union(let elements): elements.allSatisfy(\.resolved)
         default: true
         }
@@ -88,7 +93,7 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         case .dictionary(let key, let value):
             return key.missingTypePaths(from: path + ".key")
                 + value.missingTypePaths(from: path + ".value")
-        case .record(let fields):
+        case .record(let fields), .nominalRecord(_, let fields):
             return fields.flatMap { $0.type.missingTypePaths(from: path + "." + $0.name) }
         case .tuple(let elements), .union(let elements):
             return elements.enumerated().flatMap {
@@ -126,6 +131,9 @@ extension CompiledValueType {
             return .tuple(try zip(a, b).map { try merge($0, $1) })
         case (.record(let a), .record(let b)) where a.map(\.name) == b.map(\.name):
             return .record(try zip(a, b).map { .init(name: $0.name, type: try merge($0.type, $1.type)) })
+        case (.nominalRecord(let aName, let a), .nominalRecord(let bName, let b))
+            where aName == bName && a.map(\.name) == b.map(\.name):
+            return .nominalRecord(aName, try zip(a, b).map { .init(name: $0.name, type: try merge($0.type, $1.type)) })
         default: throw CompiledValueType.diagnostic("type", "incompatible shapes \(lhs.swiftType) and \(rhs.swiftType)")
         }
     }

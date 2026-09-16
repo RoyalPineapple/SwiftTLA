@@ -81,6 +81,7 @@ struct NativeSwiftEmitter {
         case .modelValue: return "_ModelValue"
         case .controlLocation: return "_ControlLocation"
         case .named(let name): return name
+        case .nominalRecord(let name, _): return name
         case .collectionMember(_, let name): return name
         case .finite, .union, .record, .tuple:
             guard let name = typeDeclarations.names[type] else {
@@ -117,7 +118,7 @@ struct NativeSwiftEmitter {
 
     func fieldName(_ type: CompiledValueType, index: Int, escaped: Bool = true) -> String {
         switch type {
-        case .record(let fields): return escaped ? "`\(fields[index].name)`" : fields[index].name
+        case .record(let fields), .nominalRecord(_, let fields): return escaped ? "`\(fields[index].name)`" : fields[index].name
         case .tuple(let elements): return elements.count == 2 ? (index == 0 ? "first" : "second") : "element\(index + 1)"
         default: preconditionFailure("Field naming requires resolved record or tuple types")
         }
@@ -187,7 +188,7 @@ struct NativeSwiftEmitter {
         case (.function(let values), .dictionary(let key, let element)):
             if values.isEmpty { return "[\(try swiftType(key)): \(try swiftType(element))]()" }
             return "[\(try values.keys.sorted().map { "\(try literal($0, as: key)): \(try literal(values[$0]!, as: element))" }.joined(separator: ", "))]"
-        case (.record(let value), .record(let fields)):
+        case (.record(let value), .record(let fields)), (.record(let value), .nominalRecord(_, let fields)):
             let name = try swiftType(type)
             let arguments = try fields.enumerated().map { index, field in
                 guard let value = value.fields.first(where: { $0.key == .string(field.name) })?.value else {
@@ -292,9 +293,9 @@ struct NativeSwiftEmitter {
                 a.key == b.key ? valueOrder(a.value, b.value) : keyOrder(a.key, b.key)
             }
             """
-        case .record(let fields):
-            body = try fields.enumerated().map { index, field in
-                "if lhs.\(fieldName(type, index: index)) != rhs.\(fieldName(type, index: index)) { return (\(try ordering(field.type)))(lhs.\(fieldName(type, index: index)), rhs.\(fieldName(type, index: index))) }"
+        case .record(let fields), .nominalRecord(_, let fields):
+            body = try fields.sorted { $0.name < $1.name }.map { field in
+                "if lhs.`\(field.name)` != rhs.`\(field.name)` { return (\(try ordering(field.type)))(lhs.`\(field.name)`, rhs.`\(field.name)`) }"
             }.joined(separator: "\n") + "\nreturn false"
         case .tuple(let elements):
             body = try elements.enumerated().map { index, element in
