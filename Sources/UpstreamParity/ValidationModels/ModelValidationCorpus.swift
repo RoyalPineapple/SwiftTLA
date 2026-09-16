@@ -13,6 +13,7 @@ package func modelValidationScenarios() throws -> [(id: String, scenario: any Mo
         ("labelled-property-claims", try LabelledPropertyClaims.validationScenarios()),
         ("dining-philosophers", try DiningPhilosophersModel.validationScenarios()),
         ("hour-clock", try HourClockModel.validationScenarios()),
+        ("hour-clock-2", try HourClock2Model.validationScenarios()),
         ("selected-checks", try SelectedChecksModel.validationScenarios()),
         ("unselected-predicates", try UnselectedPredicateModel.validationScenarios())
     ]

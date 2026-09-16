@@ -281,6 +281,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
                 scenarios = try DiningPhilosophersModel.validationScenarios()
             case .hourClock:
                 scenarios = try HourClockModel.validationScenarios()
+            case .hourClock2:
+                scenarios = try HourClock2Model.validationScenarios()
             default:
                 guard scenario == nil else {
                     throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
@@ -355,6 +357,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case kvsnap
     case asynchInterface = "asynch-interface"
     case hourClock = "hour-clock"
+    case hourClock2 = "hour-clock-2"
     case dieHardTypeOK = "die-hard-type-ok"
     case multiCarElevator = "multicar-elevator"
     case tlcmcGraph1 = "tlcmc-graph-1"
@@ -386,7 +389,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
         case .nQueensFour: return try explore(NQueensModel.initialMachines())
-        case .diningPhilosophers, .hourClock:
+        case .diningPhilosophers, .hourClock, .hourClock2:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
@@ -402,6 +405,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .channel: ChannelModel.spec
         case .asynchInterface: AsynchInterfaceModel.spec
         case .hourClock: Example.hourClock.spec
+        case .hourClock2: HourClock2Model.spec
         case .dieHardTypeOK: Example.dieHardTypeOK.spec
         case .multiCarElevator: MultiCarElevator.spec
         case .tlcmcGraph1: TLCMCModel.spec

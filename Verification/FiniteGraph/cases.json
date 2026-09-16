@@ -86,6 +86,29 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "ap-hour-clock-2",
+      "sourceModel": "hour-clock-2",
+      "scenario": "AP Upstream",
+      "module": "hour-clock/APHourClock2.tla",
+      "configuration": "hour-clock/APHourClock2.cfg",
+      "imports": ["hour-clock/HourClock2.tla", "hour-clock/HourClock.tla"],
+      "dependencies": [
+        {"importingModule": "APHourClock2", "importedModule": "HourClock2"},
+        {"importingModule": "HourClock2", "importedModule": "HourClock"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/HourClock/APHourClock2.tla",
+        "sha256": "82cb76c07c1f66c617c1bd3879837734e234b326d1bd8a8f50b5ec4ec376f291"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "82cb76c07c1f66c617c1bd3879837734e234b326d1bd8a8f50b5ec4ec376f291",
+      "cfgSHA256": "ef16201d92578edab67cf499cfe8627e14b23687019cc3bc1b3a2d33cda88084",
+      "timeoutSeconds": 60
+    },
+    {
       "id": "die-hard-type-ok",
       "sourceModel": "die-hard-type-ok",
       "module": "die-hard-type-ok/DieHard.tla",
