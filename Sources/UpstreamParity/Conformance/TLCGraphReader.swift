@@ -107,7 +107,7 @@ package struct TLCGraphReader: Sendable {
                 case "transition":
                     try exactKeys(object, [
                         "schema", "version", "type", "callback", "seq", "runId", "caseId", "source",
-                        "target", "action", "stateFlags", "visualization", "predicateLocation", "reachable"
+                        "target", "action", "resolvedActions", "stateFlags", "visualization", "predicateLocation", "reachable"
                     ], line)
                     let callback = try string(object, "callback", line)
                     guard callback == "writeState.action" || callback == "writeState.actionPredicate",
@@ -115,13 +115,28 @@ package struct TLCGraphReader: Sendable {
                     else { throw TLCGraphEventError.invalidRecord(line: line, reason: "unsupported transition transport") }
                     let action = try dictionary(object, "action", line)
                     try exactKeys(action, ["name", "location", "named"], line)
-                    let actionName = try string(action, "name", line)
-                    let actionLocation = try string(action, "location", line)
-                    guard try bool(action, "named", line), !actionName.isEmpty else {
-                        throw TLCGraphEventError.invalidRecord(line: line, reason: "unnamed action")
+                    _ = try string(action, "name", line)
+                    _ = try string(action, "location", line)
+                    _ = try bool(action, "named", line)
+                    let resolvedActions = try array(object, "resolvedActions", line).map { raw -> String in
+                        guard let resolved = raw as? [String: Any] else {
+                            throw TLCGraphEventError.invalidRecord(line: line, reason: "resolved action")
+                        }
+                        try exactKeys(resolved, ["name", "location", "named"], line)
+                        let name = try string(resolved, "name", line)
+                        let location = try string(resolved, "location", line)
+                        guard try bool(resolved, "named", line), !name.isEmpty else {
+                            throw TLCGraphEventError.invalidRecord(line: line, reason: "unnamed action")
+                        }
+                        if callback == "writeState.actionPredicate",
+                           !location.hasPrefix("<\(name)("), !location.hasPrefix("<\(name) line ") {
+                            throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid excluded predicate transition")
+                        }
+                        return try resolvedAction(name: name, location: location, line: line)
                     }
-                    let resolvedAction = try resolvedAction(
-                        name: actionName, location: actionLocation, line: line)
+                    guard !resolvedActions.isEmpty, Set(resolvedActions).count == resolvedActions.count else {
+                        throw TLCGraphEventError.invalidRecord(line: line, reason: "empty or duplicate resolved actions")
+                    }
                     let flags = try dictionary(object, "stateFlags", line)
                     try exactKeys(flags, ["raw", "seen", "notInModel"], line)
                     let rawFlags = try int(flags, "raw", line)
@@ -133,8 +148,7 @@ package struct TLCGraphReader: Sendable {
                         guard try string(object, "reachable", line) == "excluded",
                               rawFlags == 2, !seen, notInModel,
                               let predicateLocation = object["predicateLocation"] as? String,
-                              predicateLocation.hasPrefix("line "), predicateLocation.contains(" of module "),
-                              actionLocation.hasPrefix("<\(actionName)(")
+                              predicateLocation.hasPrefix("line "), predicateLocation.contains(" of module ")
                         else { throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid excluded predicate transition") }
                         _ = try canonicalState(source)
                         if source.bindings != target.bindings {
@@ -151,9 +165,11 @@ package struct TLCGraphReader: Sendable {
                         } else {
                             try registerRepresentative(target, in: &representatives, line: line)
                         }
-                        transitions.insert(TLCGraphTransition(
-                            source: source.fingerprint, target: target.fingerprint, action: resolvedAction
-                        ))
+                        for resolvedAction in resolvedActions {
+                            transitions.insert(TLCGraphTransition(
+                                source: source.fingerprint, target: target.fingerprint, action: resolvedAction
+                            ))
+                        }
                     }
                 case "unsupported":
                     try exactKeys(object, ["schema", "version", "type", "callback", "seq", "runId", "caseId", "reason"], line)
@@ -253,7 +269,7 @@ package struct TLCGraphReader: Sendable {
     }
 
     private func validateCommon(_ object: [String: Any], line: Int, expectedSequence: Int, runID: inout UUID?) throws {
-        guard try string(object, "schema", line) == "swifttla.tlc.graph-events", try int(object, "version", line) == 2 else {
+        guard try string(object, "schema", line) == "swifttla.tlc.graph-events", try int(object, "version", line) == 3 else {
             throw TLCGraphEventError.invalidRecord(line: line, reason: "schema")
         }
         guard try int(object, "seq", line) == expectedSequence else { throw TLCGraphEventError.invalidRecord(line: line, reason: "sequence gap") }

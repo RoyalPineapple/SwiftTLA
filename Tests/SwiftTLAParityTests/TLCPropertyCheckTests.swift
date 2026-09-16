@@ -908,6 +908,7 @@ private func graphTransition(
   common.merging([
     "type": "transition", "callback": "writeState.action", "seq": sequence, "source": source, "target": target,
     "action": ["name": action, "location": "TemporalFixture:1", "named": true],
+    "resolvedActions": [["name": action, "location": "TemporalFixture:1", "named": true]],
     "stateFlags": ["raw": 0, "seen": false, "notInModel": false], "visualization": "none",
     "predicateLocation": NSNull(), "reachable": "reachable"
   ]) { $1 }
@@ -915,7 +916,7 @@ private func graphTransition(
 
 private func graphCommon(case finiteGraphCase: FiniteGraphCase, runID: UUID) -> [String: Any] {
   [
-    "schema": "swifttla.tlc.graph-events", "version": 2,
+    "schema": "swifttla.tlc.graph-events", "version": 3,
     "runId": runID.uuidString.lowercased(), "caseId": finiteGraphCase.id
   ]
 }

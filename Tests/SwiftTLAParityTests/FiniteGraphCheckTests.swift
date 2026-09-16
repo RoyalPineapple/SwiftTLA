@@ -719,7 +719,7 @@ private func graphStream(for finiteGraphCase: FiniteGraphCase, runID: UUID) thro
   let second = state(fingerprint: "2", value: "2")
   let common: [String: Any] = [
     "schema": "swifttla.tlc.graph-events",
-    "version": 2,
+    "version": 3,
     "runId": runID.uuidString.lowercased(),
     "caseId": finiteGraphCase.id
   ]
@@ -730,6 +730,7 @@ private func graphStream(for finiteGraphCase: FiniteGraphCase, runID: UUID) thro
       "type": "transition", "callback": "writeState.action", "seq": 2,
       "source": first, "target": second,
       "action": ["name": "Next", "location": "Fixture:1", "named": true],
+      "resolvedActions": [["name": "Next", "location": "Fixture:1", "named": true]],
       "stateFlags": ["raw": 0, "seen": false, "notInModel": false],
       "visualization": "none", "predicateLocation": NSNull(), "reachable": "reachable"
     ]) { $1 }

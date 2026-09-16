@@ -36,7 +36,8 @@
     "class": "org.swifttla.conformance.LosslessStateWriter",
     "sources": {
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/ConfigurationParser.java": "7afa755bb4bb512519ff4bdb518619f3390683b7f2da9ff5033cfe8b660061be",
-      "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java": "2f9783f125662e77e7a230a826231d369a61ad998a524b8ca9193c1994646774"
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/InstanceActions.java": "1197df262b61e26cdd062bab4f549f66c78dc26df23210a84f95ad18957e9dbc",
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java": "01fd23da047716bb09c77512aa4c41745bd713286636e5be7c410c1e011cb479"
     }
   }
 }

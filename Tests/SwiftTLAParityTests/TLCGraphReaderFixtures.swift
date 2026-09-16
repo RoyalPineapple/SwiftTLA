@@ -29,14 +29,14 @@ func testReferencePin() throws -> TLCReferencePin {
   )
 }
 
-func completeGraphStream(_ finiteGraphCase: FiniteGraphCase) throws -> Data {
+func completeGraphStream(_ finiteGraphCase: FiniteGraphCase, resolvedActions: [[String: Any]]? = nil) throws -> Data {
   let runID = "00000000-0000-4000-8000-000000000001"
   let state0: [String: Any] = ["fingerprint": "1", "level": 1, "bindings": [binding(0, "x", "0")]]
   let state1: [String: Any] = ["fingerprint": "2", "level": 2, "bindings": [binding(0, "x", "1")]]
   let headerData = Data((try header(finiteGraphCase)).utf8)
   let initial: [String: Any] = record(
     "initial", 1, runID, finiteGraphCase.id, ["callback": "writeState.initial", "state": state0])
-  let transition: [String: Any] = record(
+  var transition: [String: Any] = record(
     "transition", 2, runID, finiteGraphCase.id,
     [
       "callback": "writeState.action", "source": state0, "target": state1,
@@ -44,6 +44,7 @@ func completeGraphStream(_ finiteGraphCase: FiniteGraphCase) throws -> Data {
       "stateFlags": ["raw": 0, "seen": false, "notInModel": false],
       "visualization": "none", "predicateLocation": NSNull(), "reachable": "reachable"
     ])
+  if let resolvedActions { transition["resolvedActions"] = resolvedActions }
   let records = try [headerData, jsonLine(initial), jsonLine(transition)]
   let body = records.reduce(into: Data()) {
     $0.append($1)
@@ -172,8 +173,12 @@ func binding(_ ordinal: Int, _ name: String, _ tla: String) -> [String: Any] {
 func record(
   _ type: String, _ sequence: Int, _ runID: String, _ caseID: String, _ fields: [String: Any]
 ) -> [String: Any] {
-  fields.merging([
-    "schema": "swifttla.tlc.graph-events", "version": 2, "type": type, "seq": sequence,
+  var fields = fields
+  if type == "transition", fields["resolvedActions"] == nil, let action = fields["action"] {
+    fields["resolvedActions"] = [action]
+  }
+  return fields.merging([
+    "schema": "swifttla.tlc.graph-events", "version": 3, "type": type, "seq": sequence,
     "runId": runID, "caseId": caseID
   ]) { _, new in new }
 }
@@ -315,7 +320,7 @@ func requestWithReferenceArtifacts(
 }
 func header(_ finiteGraphCase: FiniteGraphCase) throws -> String {
   let record: [String: Any] = [
-    "schema": "swifttla.tlc.graph-events", "version": 2, "type": "header",
+    "schema": "swifttla.tlc.graph-events", "version": 3, "type": "header",
     "callback": "writer.header",
     "seq": 0, "runId": "00000000-0000-4000-8000-000000000001", "caseId": finiteGraphCase.id
   ]

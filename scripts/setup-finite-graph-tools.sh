@@ -289,6 +289,10 @@ mkdir -p "$TOOL_ROOT/bridge-classes"
 "$JAVA_HOME/bin/jar" --create --file "$TOOL_ROOT/bridge.jar" -C "$TOOL_ROOT/bridge-classes" .
 python3 "$PROJECT_ROOT/Tools/TLCGraphBridge/check-configuration-parser.py" \
     "$JAVA_HOME/bin/java" "$TLC_JAR" "$TOOL_ROOT/bridge.jar"
+if [ "${GITHUB_ACTIONS:-}" = true ]; then
+    python3 "$PROJECT_ROOT/Tools/TLCGraphBridge/check-instance-actions.py" \
+        "$JAVA_HOME/bin/java" "$TLC_JAR" "$TOOL_ROOT/bridge.jar"
+fi
 
 if [ -f "$CASES_FILE" ]; then
     stage_declared_inputs "$TOOL_ROOT/inputs"

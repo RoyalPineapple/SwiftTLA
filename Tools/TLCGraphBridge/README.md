@@ -6,13 +6,30 @@ records the complete `IStateWriter` callback surface as append-only
 the event stream and constructs the TLC graph. The graph comparator decides
 formal equality.
 
-The supported schema is `swifttla.tlc.graph-events` version 2. It has a
+The supported schema is `swifttla.tlc.graph-events` version 3. It has a
 header, state and transition callback records, and a footer whose SHA-256
 covers the exact body bytes. The consumer validates
 strict UTF-8, exact record schemas, sequence/order rules, the footer digest,
 and closure counts before it turns the stream into TLC graph evidence. Unknown
 or malformed fields are rejected. Tool, bridge, module, and configuration pins
 are validated against the launched files before TLC runs.
+
+Each transition retains the original callback action and a `resolvedActions` array.
+Ordinary actions retain their original identity in that array.
+For an `INSTANCE` substitution, the bridge resolves the disjunction and finite existential prefix through TLC's semantic nodes and contexts.
+It preserves substitutions, then asks TLC which leaf predicates admit the original source and target states.
+Every matching named invocation becomes an edge, including distinct invocations with the same source and target.
+No native predicate or native action list participates in this resolution.
+
+The reader rejects missing, duplicate, unnamed, and undeclared resolved invocations.
+The original callback remains in the retained stream, with its original sequence and completion digest.
+Unsupported decomposition produces an explicit failure, not a coarse `Next` edge or a guessed label.
+Named instance namespaces, recursive action prefixes, and state-dependent invocation arguments still require additional identity support.
+These cases remain required corpus work and cannot pass through a fallback.
+
+Hosted setup runs `check-instance-actions.py` against the locked TLC build.
+The regression covers nested variable and constant substitutions, complete graphs, and multiple matching action identities.
+Local diagnostics do not run this TLC regression.
 
 ## Build lock
 

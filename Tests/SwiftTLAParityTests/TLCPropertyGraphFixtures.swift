@@ -7,7 +7,7 @@ func graphStream(case finiteGraphCase: FiniteGraphCase, runID: UUID) throws -> D
     "bindings": [["ordinal": 0, "name": "x", "tla": "1"]]
   ]
   let common: [String: Any] = [
-    "schema": "swifttla.tlc.graph-events", "version": 2, "runId": runID.uuidString.lowercased(), "caseId": finiteGraphCase.id
+    "schema": "swifttla.tlc.graph-events", "version": 3, "runId": runID.uuidString.lowercased(), "caseId": finiteGraphCase.id
   ]
   let records = [
     common.merging(["type": "header", "callback": "writer.header", "seq": 0]) { $1 },

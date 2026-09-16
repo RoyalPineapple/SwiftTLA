@@ -464,7 +464,7 @@ extension TLCGraphReaderTests {
     }
     let invalidInitial = [
       "\(try header(finiteGraphCase))\n",
-      "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":2,\"type\":\"initial\",",
+      "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":3,\"type\":\"initial\",",
       "\"callback\":\"writeState.initial\",\"seq\":2,",
       "\"runId\":\"00000000-0000-4000-8000-000000000001\",\"caseId\":\"fixture\",\"state\":{}}\n"
     ].joined()
@@ -473,7 +473,7 @@ extension TLCGraphReaderTests {
     }
     let unsupportedCallback = [
       "\(try header(finiteGraphCase))\n",
-      "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":2,\"type\":\"unsupported\",",
+      "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":3,\"type\":\"unsupported\",",
       "\"callback\":\"writeState.flags\",\"seq\":1,",
       "\"runId\":\"00000000-0000-4000-8000-000000000001\",\"caseId\":\"fixture\",",
       "\"reason\":\"missing action\"}\n"
@@ -625,6 +625,39 @@ extension TLCGraphReaderTests {
     #expect(parsed.transitions.map(\.action) == [renderedName])
   }
 
+  @Test("one INSTANCE callback retains every distinct resolved invocation")
+  func retainsResolvedInstanceActions() throws {
+    let actions = (1...2).map { RenderedAction(sourceName: "Step", arguments: [.int($0)], renderedName: "Step__\($0)") }
+    let finiteGraphCase = try fixtureCase(try testReferencePin(), renderedActions: actions)
+    let resolved: [[String: Any]] = (1...2).map {
+      ["name": "Step", "location": "<Step(\($0)) line 1, col 1 to line 1, col 2 of module Original>", "named": true]
+    }
+    let data = try completeGraphStream(finiteGraphCase, resolvedActions: resolved)
+    let run = try completedGraph(data, with: TLCGraphReader(finiteGraphCase: finiteGraphCase), outcome: .completed)
+    #expect(run.observableActions == ["Step__1", "Step__2"])
+    #expect(run.graph.edges.count == 2)
+    #expect(Set(run.graph.edges.map(\.source)).count == 1)
+    #expect(Set(run.graph.edges.map(\.target)).count == 1)
+    let record = try #require(try JSONSerialization.jsonObject(with: Data(data.split(separator: 10)[2])) as? [String: Any])
+    let original = try #require(record["action"] as? [String: Any])
+    #expect(original["name"] as? String == "Next")
+
+    for invalid in [[], [resolved[0], resolved[0]],
+                    [["name": "Foreign", "location": "", "named": true]],
+                    [["name": "Step", "location": "", "named": false]],
+                    [["name": "Step", "named": true]]] {
+      #expect(throws: TLCGraphEventError.self) {
+        try TLCGraphReader(finiteGraphCase: finiteGraphCase).parse(
+          completeGraphStream(finiteGraphCase, resolvedActions: invalid))
+      }
+    }
+    let obsolete = try refreshedFooterDigest(Data(String(decoding: data, as: UTF8.self)
+      .replacingOccurrences(of: "\"version\":3", with: "\"version\":2").utf8))
+    #expect(throws: TLCGraphEventError.self) {
+      try TLCGraphReader(finiteGraphCase: finiteGraphCase).parse(obsolete)
+    }
+  }
+
   @Test("fingerprint matching preserves exact Unicode value bytes", arguments: [false, true])
   func rejectsUnicodeFingerprintAlias(_ seen: Bool) throws {
     let finiteGraphCase = try fixtureCase(try testReferencePin())
@@ -767,7 +800,7 @@ extension TLCGraphReaderTests {
     let finiteGraphCase = try fixtureCase(try testReferencePin())
     let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
     let mutations = [
-      { (line: String) in line.replacingOccurrences(of: "\"version\":2", with: "\"version\":true")
+      { (line: String) in line.replacingOccurrences(of: "\"version\":3", with: "\"version\":true")
       },
       { (line: String) in line.replacingOccurrences(of: "\"seen\":false", with: "\"seen\":0") },
       { (line: String) in
