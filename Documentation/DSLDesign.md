@@ -359,9 +359,11 @@ For example, a handle from `LeadsTo()` cannot accept one predicate, and a handle
 These forms do not limit the temporal composition required by the corpus.
 
 `Temporal() -> TemporalPropertyHandle` declares a handle for a composed temporal claim.
-Its definition accepts `TemporalCondition<StateExpr>` with typed Boolean predicates.
+Its definition accepts `TemporalCondition<Expr<Bool>>` with typed Boolean predicates.
+Swift rejects integer predicates and raw `TemporalCondition<StateExpr>` values at this handle.
 The supported compositions include `.all([...])` and `.conditional(predicate, then: condition, else: condition)`.
 Both branches can contain further compositions or the temporal forms in the table.
+The member form `premise.leadsTo(consequence)` returns the same typed condition and can appear inside either composition.
 
 ```swift
 let hypothesis = Temporal()

@@ -97,4 +97,48 @@ struct ConditionalTemporalTests {
             _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
         }
     }
+
+    @Test("composed temporal handles require exactly one registered definition", arguments: [
+        "claim",
+        "claim(.always(true))\nclaim(.always(true))",
+        "Validation(\"Selected\") {}.checking(only: [claim])",
+        "Validation(\"Expected\") {}.expect(claim, .satisfied)"
+    ])
+    func rejectsInvalidRegistration(_ registration: String) throws {
+        let spec = SpecParser.parseSpecClosure(named: "Invalid", try parseSpecTestClosure("""
+        {
+            let claim = Temporal()
+            \(registration)
+        }
+        """))
+        #expect(throws: (any Error).self) { try spec.compile() }
+    }
+
+    @Test("Swift rejects a bare composed handle and non-Boolean temporal predicates")
+    func rejectsInvalidSwiftUsage() throws {
+        let build = try buildExternalConsumer("InvalidModelProperty")
+        #expect(build.status != 0)
+        let errors = build.output.split(separator: "\n").filter { $0.contains(": error:") }
+        for line in [56, 57, 58, 59, 60] {
+            #expect(errors.contains { $0.contains("InvalidModelProperty.swift:\(line):") },
+                "Missing composed temporal rejection: \(errors.joined(separator: "\n"))")
+        }
+    }
+
+    @Test("every composed temporal constructor accepts typed Boolean handles")
+    func typedConstructors() {
+        let predicate = Var<Bool>("ready")
+        let conditions: [TemporalCondition<Expr<Bool>>] = [
+            .always(predicate), .eventually(predicate), .alwaysEventually(predicate),
+            .eventuallyAlways(predicate), .leadsTo(predicate, true),
+            .conditional(predicate, then: .always(true), else: .eventually(false))
+        ]
+        let expected: [TemporalCondition<StateExpr>] = [
+            .always(.variable("ready")), .eventually(.variable("ready")),
+            .alwaysEventually(.variable("ready")), .eventuallyAlways(.variable("ready")),
+            .leadsTo(.variable("ready"), .bool(true)),
+            .conditional(.variable("ready"), then: .always(.bool(true)), else: .eventually(.bool(false)))
+        ]
+        #expect(conditions.map { $0.map(\.stateExpr) } == expected)
+    }
 }

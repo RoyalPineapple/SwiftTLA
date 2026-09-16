@@ -2444,9 +2444,14 @@ extension ParserSession {
 
     func decodeTemporalCondition(_ expression: ExprSyntax, scope: TypedFacadeScope) -> TemporalCondition<StateExpr>? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              let member = call.calledExpression.as(MemberAccessExprSyntax.self), member.base == nil,
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self),
               call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
         let arguments = Array(call.arguments)
+        if member.base != nil {
+            guard member.declName.baseName.sourceIdentifierName == "leadsTo",
+                  arguments.count == 1, arguments[0].label == nil else { return nil }
+            return decodeTemporal(call, scope: scope)
+        }
         switch member.declName.baseName.sourceIdentifierName {
         case "conditional":
             guard arguments.map({ $0.label?.text }) == [nil, "then", "else"],

@@ -28,7 +28,7 @@ extension ParserSession {
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let property = specBindings.properties[reference.baseName.sourceIdentifierName] {
-                if property is InvariantHandle || property is ReachableHandle || property is TemporalHandle || property is LeadsToHandle {
+                if property is InvariantHandle || property is ReachableHandle || property is TemporalHandle || property is LeadsToHandle || property is TemporalPropertyHandle {
                     components.diagnostics.append(.init(message: "A property handle requires a predicate definition before registration.", source: reference))
                 } else {
                     registerProperty(property, into: &components)

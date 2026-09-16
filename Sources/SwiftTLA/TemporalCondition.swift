@@ -34,16 +34,22 @@ public enum TemporalCondition<Expression: Sendable>: Sendable {
 }
 
 extension TemporalCondition: Equatable where Expression: Equatable {}
-extension TemporalCondition where Expression == StateExpr {
-    public static func always(_ predicate: some TypedExpression<Bool>) -> Self { .always(predicate.stateExpr) }
-    public static func eventually(_ predicate: some TypedExpression<Bool>) -> Self { .eventually(predicate.stateExpr) }
-    public static func alwaysEventually(_ predicate: some TypedExpression<Bool>) -> Self { .alwaysEventually(predicate.stateExpr) }
-    public static func eventuallyAlways(_ predicate: some TypedExpression<Bool>) -> Self { .eventuallyAlways(predicate.stateExpr) }
+extension TemporalCondition where Expression == Expr<Bool> {
+    @_disfavoredOverload
+    public static func always(_ predicate: some TypedExpression<Bool>) -> Self { .always(predicate.expr) }
+    @_disfavoredOverload
+    public static func eventually(_ predicate: some TypedExpression<Bool>) -> Self { .eventually(predicate.expr) }
+    @_disfavoredOverload
+    public static func alwaysEventually(_ predicate: some TypedExpression<Bool>) -> Self { .alwaysEventually(predicate.expr) }
+    @_disfavoredOverload
+    public static func eventuallyAlways(_ predicate: some TypedExpression<Bool>) -> Self { .eventuallyAlways(predicate.expr) }
+    @_disfavoredOverload
     public static func leadsTo(_ source: some TypedExpression<Bool>, _ target: some TypedExpression<Bool>) -> Self {
-        .leadsTo(source.stateExpr, target.stateExpr)
+        .leadsTo(source.expr, target.expr)
     }
+    @_disfavoredOverload
     public static func conditional(_ predicate: some TypedExpression<Bool>, then yes: Self, else no: Self) -> Self {
-        .conditional(predicate.stateExpr, then: yes, else: no)
+        .conditional(predicate.expr, then: yes, else: no)
     }
 }
 extension TemporalCondition: Hashable where Expression: Hashable {}
@@ -63,7 +69,7 @@ extension TemporalCondition: CustomStringConvertible where Expression: CustomStr
 }
 
 extension TypedExpression where ExpressionValue == Bool {
-    public func leadsTo(_ target: some TypedExpression<Bool>) -> TemporalCondition<StateExpr> {
-        .leadsTo(stateExpr, target.stateExpr)
+    public func leadsTo(_ target: some TypedExpression<Bool>) -> TemporalCondition<Expr<Bool>> {
+        .leadsTo(expr, target.expr)
     }
 }

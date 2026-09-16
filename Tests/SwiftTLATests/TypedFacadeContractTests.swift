@@ -20,9 +20,9 @@ struct TypedFacadeContractTests {
   func typedTemporalImplications() {
     let ready = Var<Bool>("ready")
     let completed = Expr<Bool>(true)
-    #expect(ready.leadsTo(completed) == .leadsTo(.variable("ready"), .value(.bool(true))))
-    #expect(completed.leadsTo(false) == .leadsTo(.value(.bool(true)), .value(.bool(false))))
-    #expect(true.leadsTo(ready) == .leadsTo(.value(.bool(true)), .variable("ready")))
+    #expect(ready.leadsTo(completed).map(\.stateExpr) == .leadsTo(.variable("ready"), .value(.bool(true))))
+    #expect(completed.leadsTo(false).map(\.stateExpr) == .leadsTo(.value(.bool(true)), .value(.bool(false))))
+    #expect(true.leadsTo(ready).map(\.stateExpr) == .leadsTo(.value(.bool(true)), .variable("ready")))
   }
 
   @Test("Boolean literals compose on either side of typed comparisons", arguments: [false, true])

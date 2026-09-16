@@ -16,7 +16,8 @@ package struct ConditionalTemporalClaims {
                     Goto(Step.converge)
                 }
                 startsHere(.conditional(value == 0,
-                    then: .all([.eventually(value == 0), .eventuallyAlways(value == 2)]),
+                    then: .all([.eventually(value == 0), .eventuallyAlways(value == 2),
+                        (value == 0).leadsTo(value == 2)]),
                     else: .conditional(value == 1,
                         then: .eventually(value == 1), else: .always(false))))
                 missesOtherInitial(.conditional(value == 0,

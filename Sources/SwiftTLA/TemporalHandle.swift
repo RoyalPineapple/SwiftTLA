@@ -5,7 +5,11 @@ public struct TemporalPropertyHandle: ModelProperty {
         reference = .init(name: name, displayLabel: label)
     }
 
-    public func callAsFunction(_ condition: TemporalCondition<StateExpr>) -> TemporalDecl {
+    public func callAsFunction(_ condition: TemporalCondition<Expr<Bool>>) -> TemporalDecl {
+        declaration(condition.map(\.stateExpr))
+    }
+
+    package func declaration(_ condition: TemporalCondition<StateExpr>) -> TemporalDecl {
         .init(reference: reference, expr: condition)
     }
 }

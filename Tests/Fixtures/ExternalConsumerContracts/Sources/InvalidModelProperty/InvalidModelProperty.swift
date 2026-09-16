@@ -51,3 +51,10 @@ let invalidRefinementLabels = #spec("InvalidRefinementLabels") {
     empty
     interpolated
 }
+
+let composed = Temporal()
+let undefinedComposedProperty = TLASpec("Undefined") { composed }
+let wrongConditionalGuard = composed(.conditional(1, then: .always(true), else: .always(false)))
+let wrongConditionalBranch = composed(.conditional(true, then: .eventually(1), else: .always(false)))
+let wrongComposedArity = composed(.always(true), .always(false))
+let rawComposedPredicate = composed(TemporalCondition<StateExpr>.always(.bool(true)))

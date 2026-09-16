@@ -573,7 +573,7 @@ extension ParserSession {
         if let handle = specBindings.properties[name] as? TemporalPropertyHandle,
            arguments.count == 1,
            let condition = decodeTemporalCondition(arguments[0].expression, scope: scope) {
-            return handle(condition)
+            return handle.declaration(condition)
         }
         if let handle = specBindings.properties[name] as? TemporalHandle,
            arguments.count == 1,
