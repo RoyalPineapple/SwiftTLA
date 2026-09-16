@@ -630,6 +630,26 @@ to one formal value. A set declaration does not imply symmetry.
 The next section defines configurable `Each` populations.
 Replacement of fixed `ModelCollection` declarations remains part of B-01.
 
+#### Parameter-dependent function domains
+
+`Functions(from:to:)` accepts typed finite set expressions, including parameter-dependent ranges.
+Each member is a total function over exactly the supplied domain.
+Generated Swift stores these values as typed dictionaries.
+Function-space membership rejects missing keys, extra keys, and values outside the supplied range.
+
+```swift
+let values = algorithm.sharedVar(in: Functions(
+    from: IntRange(0, through: size - 1), to: Set<Int>([0, 1])))
+```
+
+An empty domain has one function: the empty function, even when the range is empty.
+A nonempty domain with an empty range has no functions.
+The compiler preserves parameter identities through native generation and TLA+ export.
+Dictionary projections reject invalid keys, invalid values, and collisions between Swift and formal key identities.
+
+`Functions(from: 1, to: Set<Int>([0, 1]))` is invalid because its domain is not a set.
+Finite enum domains retain the existing `Functions(from: Key.all, to: ...)` contract.
+
 #### Configured process populations
 
 `Each` accepts a typed set expression. Its element type supplies the process

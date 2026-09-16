@@ -3,6 +3,33 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct FunctionSpaceMembershipTests {
+    @Test("parameter-bound function domains retain every total assignment")
+    func configuredDomains() throws {
+        let scenarios = try ConfiguredFunctionDomainModel.validationScenarios()
+        let expected: [Set<[Int: Int]>] = [[[:]], [[0: 0, 1: 0], [0: 0, 1: 1], [0: 1, 1: 0], [0: 1, 1: 1]]]
+        for (scenario, assignments) in zip(scenarios, expected) {
+            let machines = try scenario.initialMachines()
+            #expect(Set(machines.map { $0.state.values }) == assignments)
+            for machine in machines {
+                #expect(try machine.successors().first?.machine.state.values == machine.state.values)
+            }
+            let bundle = try scenario.render().tlaBundle
+            #expect(bundle.tla.contains("size"))
+            #expect(bundle.tla.contains("->"))
+        }
+    }
+
+    @Test("dictionary projections validate keys, values, and formal identity")
+    func validatesDictionaryBoundary() throws {
+        let value: [Int: Int] = [0: 1, 1: 0]
+        #expect([Int: Int](formalValue: value.tlaValue) == value)
+        #expect([Int: Int](formalValue: .function([.string("bad"): .int(1)])) == nil)
+        #expect([Int: Int](formalValue: .function([.int(0): .bool(true)])) == nil)
+        #expect([Int: Int](formalValue: .int(0)) == nil)
+        let colliding: [CollidingFunctionKey: Int] = [.first: 0, .second: 1]
+        #expect(colliding.sourceIssue != nil)
+    }
+
     @Test("Membership agrees with enumeration for empty, missing, extra, and invalid entries")
     func agreesWithEnumeration() throws {
         let domains: [Set<Int>] = [[], [0], [0, 1]]

@@ -509,8 +509,10 @@ extension ParserSession {
                 elementType: "Int"
             )
         }
+        let resolvedElement = typedFacadeValueType(expression, scope: scope)?.selectedElement
         guard let decoded = decodeTypedFacadeValue(expression, scope: scope),
               let elementType = declaredElementType ?? setExpressionElementTypeName(expression)
+                ?? resolvedElement.flatMap({ $0.resolved ? $0.swiftType : nil })
         else { return nil }
         return (expression: decoded, elementType: elementType)
     }

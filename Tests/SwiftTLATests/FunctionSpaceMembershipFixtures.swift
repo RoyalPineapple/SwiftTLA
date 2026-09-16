@@ -1,6 +1,36 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+@TLAModel
+struct ConfiguredFunctionDomainModel {
+    enum Step: String, CaseIterable { case keep }
+
+    static var spec: TLASpec {
+        #spec("ConfiguredFunctionDomainModel") { scope in
+            let size = scope.parameter(as: Int.self, in: 0...2)
+            let total = Invariant()
+            Algorithm("Worker", scoped: { algorithm in
+                let values = algorithm.sharedVar(in: Functions(
+                    from: IntRange(0, through: size - 1), to: Set<Int>([0, 1])))
+                Do(Step.keep) { Assign(values, to: values) }
+                total { Functions(from: IntRange(0, through: size - 1), to: Set<Int>([0, 1])).contains(values) }
+            })
+            Validation("Empty") { Bind(size, to: 0) }
+            Validation("Two keys") { Bind(size, to: 2) }
+        }
+    }
+}
+
+enum CollidingFunctionKey: Hashable, TLAValueType {
+    case first, second
+    static var defaultValue: Self { .first }
+    var tlaValue: TLAValue { .int(0) }
+    init?(formalValue: TLAValue) {
+        guard formalValue == .int(0) else { return nil }
+        self = .first
+    }
+}
+
 // Independent formal actions exercise generated failures without advancing process control.
 @TLAModel
 struct FunctionSpaceMembershipModel {

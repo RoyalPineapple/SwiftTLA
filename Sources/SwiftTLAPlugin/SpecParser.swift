@@ -500,12 +500,14 @@ final class ParserSession {
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Functions"
+              compilerGrammarName(in: call.calledExpression) == "Functions"
         else { return nil }
+        guard call.arguments.map({ $0.label?.text }) == ["from", "to"],
+              call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
         guard let domainSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
-              let domain = finiteAlgorithmDomain(domainSyntax)
+              let domain = decodeTypedFacadeValue(domainSyntax, scope: scope)
         else {
-            algorithmParseFailure = "Functions requires a finite enum domain, for example Functions(from: Node.all, ...)."
+            algorithmParseFailure = "Functions requires a typed finite set domain."
             return nil
         }
         guard let rangeSyntax = call.arguments.first(where: { $0.label?.text == "to" })?.expression,
@@ -514,7 +516,7 @@ final class ParserSession {
             algorithmParseFailure = "Functions could not decode its formal result domain."
             return nil
         }
-        return .functionSet(.setLiteral(domain.values.map(StateExpr.value)), range)
+        return .functionSet(domain, range)
     }
 
     private func decodeFormalChoice(_ expression: ExprSyntax, scope: TypedFacadeScope = .empty) -> StateExpr? {
@@ -1447,6 +1449,16 @@ final class ParserSession {
             }
         }
         guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
+        if compilerGrammarName(in: call.calledExpression) == "IntRange" { return .set(.int) }
+        if compilerGrammarName(in: call.calledExpression) == "Functions",
+           let domain = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
+           let range = call.arguments.first(where: { $0.label?.text == "to" })?.expression {
+            let key = finiteAlgorithmDomain(domain).flatMap { try? sourceTypeResolver.resolve($0.typeName) }
+                ?? typedFacadeValueType(domain, scope: scope)?.selectedElement
+            let value = finiteAlgorithmDomain(range).flatMap { try? sourceTypeResolver.resolve($0.typeName) }
+                ?? typedFacadeValueType(range, scope: scope)?.selectedElement
+            if let key, let value { return .set(.dictionary(key, value)) }
+        }
         if let record = nominalRecordType(call.calledExpression) { return record }
         if isSwiftSetConstructor(call),
            call.calledExpression.is(GenericSpecializationExprSyntax.self) {

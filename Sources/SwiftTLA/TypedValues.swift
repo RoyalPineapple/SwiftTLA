@@ -367,6 +367,14 @@ public func Functions<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
   Expr(.functionSet(.setLiteral(domain.members.map(\.stateExpr)), values.stateExpr))
 }
 
+/// All total functions over the supplied finite domain, including parameter-bound domains.
+public func Functions<Domain: FormalSetValue, Range: FormalSetValue>(
+  from domain: some TypedExpression<Domain>,
+  to values: some TypedExpression<Range>
+) -> Expr<SetExpr<[Domain.Element: Range.Element]>> where Domain.Element: Hashable {
+  Expr(.functionSet(domain.stateExpr, values.stateExpr))
+}
+
 /// All subsets of a finite formal set.
 public func Subsets<Element: TLAValueType>(
   of values: some TypedExpression<SetExpr<Element>>
