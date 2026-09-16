@@ -4,6 +4,18 @@ import Testing
 
 @Suite("Typed facade contracts")
 struct TypedFacadeContractTests {
+  @Test("indexed writable locations remain readable through their assignment-target contract")
+  func indexedAssignmentTargets() {
+    func read<Target: AssignmentTarget>(_ target: Target) -> Expr<Target.Value> {
+      target.expr
+    }
+    let cars = Var<Function<CarID, Int>>("cars")
+    let concrete = cars[CarID.carA]
+    let symbolic = cars[Expr(CarID.carB)]
+    #expect(read(concrete).stateExpr == cars.expr[CarID.carA].stateExpr)
+    #expect(read(symbolic).stateExpr == cars.expr[Expr(CarID.carB)].stateExpr)
+  }
+
   @Test("Boolean expressions and literals compose temporal implications")
   func typedTemporalImplications() {
     let ready = Var<Bool>("ready")

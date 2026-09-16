@@ -1139,7 +1139,7 @@ public func At<Label: CaseIterable & RawRepresentable & Sendable, Value: FiniteT
 
 
 /// A writable model location with a statically known value type.
-public protocol AssignmentTarget<Value>: Sendable {
+public protocol AssignmentTarget<Value>: TypedExpression where ExpressionValue == Value {
     associatedtype Value: TLAValueType
     var algorithmLValue: AlgorithmLValue<Value> { get }
 }
@@ -1152,7 +1152,7 @@ extension SharedVariable: AssignmentTarget {}
 extension LocalVariable: AssignmentTarget {}
 extension MacroParameter: AssignmentTarget {}
 
-extension TypedExpression where Self: AssignmentTarget, Value == ExpressionValue {
+extension AssignmentTarget {
     public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> AlgorithmLValue<Range>
     where Value == Function<Domain, Range> {
         let base = algorithmLValue
@@ -1166,7 +1166,7 @@ extension TypedExpression where Self: AssignmentTarget, Value == ExpressionValue
     }
 }
 
-extension TypedExpression where Self: AssignmentTarget, Value == ExpressionValue, Value: _GeneratedRecordValue {
+extension AssignmentTarget where Value: _GeneratedRecordValue {
     public subscript<Field: TLAValueType>(dynamicMember keyPath: KeyPath<Value, Field>) -> AlgorithmLValue<Field> {
         let base = algorithmLValue
         guard let name = Value._formalRecordFieldName(keyPath) else {
