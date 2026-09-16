@@ -13,10 +13,21 @@ package enum TLCExecutionOutcome: Equatable, Sendable {
   case deadlock
   case safetyViolation
   case livenessViolation
+  case temporalTautology
   case assertionViolation
   case failed(exitStatus: Int32)
 
-  fileprivate init(exitStatus: Int32, invocation: TLCInvocationKind) {
+  fileprivate init(process: TLCProcessResult, invocation: TLCInvocationKind) {
+    let exitStatus = process.status
+    // The pinned TLC maps EC.TLC_LIVE_FORMULA_TAUTOLOGY (2253) to status 77.
+    // This proves a temporal claim, not completion of state-space exploration.
+    if exitStatus == 77, process.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      let errors = process.stdout.split(whereSeparator: \.isNewline).filter { $0.hasPrefix("Error:") }
+      if errors == ["Error: Temporal formula is a tautology (its negation is unsatisfiable)."] {
+        self = .temporalTautology
+        return
+      }
+    }
     switch (exitStatus, invocation) {
     case (0, _): self = .completed
     case (10, _): self = .assumptionViolation
@@ -355,7 +366,7 @@ package struct TLCProcessAdapter: Sendable {
       throw error
     }
     try retain(request, process: process, in: directory)
-    return TLCExecutionOutcome(exitStatus: process.status, invocation: request.invocation)
+    return TLCExecutionOutcome(process: process, invocation: request.invocation)
   }
 
   private func clearTraceOutput(for request: TLCProcessRequest, retainingIn directory: URL) throws {

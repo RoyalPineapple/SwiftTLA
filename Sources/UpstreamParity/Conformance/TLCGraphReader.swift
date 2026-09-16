@@ -243,6 +243,8 @@ package struct TLCGraphReader: Sendable {
             return .invariantViolation("TLC safety property violation")
         case .livenessViolation:
             return .executionError("TLC liveness violation during finite graph exploration")
+        case .temporalTautology:
+            return .executionError("TLC proved temporal tautology before graph exploration")
         case .assertionViolation:
             return .executionError("TLC assertion violation")
         case .failed(let exitStatus):

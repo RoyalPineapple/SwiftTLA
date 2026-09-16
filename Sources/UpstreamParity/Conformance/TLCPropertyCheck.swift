@@ -42,6 +42,7 @@ package enum TLCPropertySource: Sendable {
 }
 
 package struct TLCPropertyCheck: Sendable {
+  private enum BatchOutcome { case satisfied, violated, temporalTautology, notRun }
   private let processAdapter: TLCProcessAdapter
 
   package init(processAdapter: TLCProcessAdapter = TLCProcessAdapter()) {
@@ -61,6 +62,9 @@ package struct TLCPropertyCheck: Sendable {
       let output = directory.appendingPathComponent("checked-graph")
       let capture = try processAdapter.capture(batch, retainingIn: output)
       if capture.outcome == .completed { return capture }
+      if capture.outcome == .temporalTautology {
+        return try processAdapter.capture(request, retainingIn: directory)
+      }
       let outcome: TLCExecutionOutcome = capture.outcome == .failed(exitStatus: 13)
         ? .livenessViolation : capture.outcome
       let check: ModelCheck
@@ -119,10 +123,10 @@ package struct TLCPropertyCheck: Sendable {
       }
       return (capture, comparison, checked == capture.request.bundle)
     }
-    let batch = Result {
+    let batch = Result<BatchOutcome, Error> {
       let (capture, _, alreadyChecked) = try prepared.get()
-      if alreadyChecked { return true }
-      guard passingChecks.count > 1 else { return false }
+      if alreadyChecked { return .satisfied }
+      guard passingChecks.count > 1 else { return .notRun }
       let work = capture.request.workingDirectory.appendingPathComponent(UUID().uuidString)
       try RetainedFiles.createDirectory(work, beneath: capture.request.workingDirectory)
       defer { try? FileManager.default.removeItem(at: work) }
@@ -134,7 +138,8 @@ package struct TLCPropertyCheck: Sendable {
         throw TLCPropertyCheckError.outputAlreadyExists
       }
       let outcome = try processAdapter.run(request, retainingIn: output)
-      if outcome == .completed { return true }
+      if outcome == .completed { return .satisfied }
+      if outcome == .temporalTautology { return .temporalTautology }
       // A failed batch establishes no individual verdict. Validate its trace,
       // then isolate the checks to identify the disagreement with Swift.
       guard let property = passingChecks.first(where: { $0 != .deadlock }) else {
@@ -145,7 +150,7 @@ package struct TLCPropertyCheck: Sendable {
         graph: capture.graph, renderedActions: capture.request.finiteGraphCase.renderedActions, outputDirectory: output) else {
         throw TLCPropertyCheckError.incompleteGraph
       }
-      return false
+      return .violated
     }
     var results: [(check: ModelCheck, result: Result<PropertyComparison, Error>)] = []
     for (check, nativeResult) in selected {
@@ -156,7 +161,7 @@ package struct TLCPropertyCheck: Sendable {
       do {
         let (capture, graphComparison, _) = try prepared.get()
         var tlcResult: PropertyResult
-        if passingChecks.contains(check), try batch.get() {
+        if passingChecks.contains(check), try batch.get() == .satisfied {
           tlcResult = .satisfied
         } else {
           let work = capture.request.workingDirectory.appendingPathComponent(UUID().uuidString)
@@ -178,8 +183,13 @@ package struct TLCPropertyCheck: Sendable {
             work: work, runID: UUID(), invocation: .propertyCheck)
           try RetainedFiles.outputDirectory(output, beneath: output.deletingLastPathComponent())
           let outcome = try processAdapter.run(request, retainingIn: output)
-          tlcResult = try propertyResult(check: check, outcome: outcome,
-            graph: capture.graph, renderedActions: request.finiteGraphCase.renderedActions, outputDirectory: output)
+          if outcome == .temporalTautology, case .property(let name) = check,
+             native.rendered.temporalNames.contains(name) {
+            tlcResult = .satisfied
+          } else {
+            tlcResult = try propertyResult(check: check, outcome: outcome,
+              graph: capture.graph, renderedActions: request.finiteGraphCase.renderedActions, outputDirectory: output)
+          }
         }
         if case .property(let name) = check, native.rendered.reachabilityNames.contains(name) {
           switch tlcResult {
@@ -211,7 +221,7 @@ package struct TLCPropertyCheck: Sendable {
           to: output.appendingPathComponent("check-error.txt"))
       }
     }
-    if passingChecks.count > 1, (try? batch.get()) == false {
+    if (try? batch.get()) == .violated {
       let reproducedFailure = results.contains { check, result in
         guard passingChecks.contains(check), let comparison = try? result.get() else { return false }
         if case .violated = comparison.tlcResult { return true }

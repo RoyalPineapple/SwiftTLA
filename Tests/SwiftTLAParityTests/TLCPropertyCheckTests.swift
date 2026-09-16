@@ -5,6 +5,70 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct TLCPropertyCheckTests {
+  @Test("a temporal tautology never replaces graph capture or the other batch checks", arguments: [false, true])
+  func isolatesTautology(failingSafety: Bool) throws {
+    let x = Var<Int>("x", 1)
+    let rendered = try TLASpec("TemporalFixture") {
+      Variable(x)
+      Invariant("Positive") { x > 0 }
+      AlwaysEventually("Progress", x == 1)
+    }.compile().render()
+    let fixture = try Fixture(renderedOverride: rendered)
+    let deadlock = try TLCTraceParser().parseCounterexample(numberedInitialStateTrace(), states: fixture.swiftRun.graph.states.values)
+    let native = try NativeModelRun(rendered: rendered, graph: fixture.swiftRun,
+      checks: .init(properties: ["Positive": .satisfied, "Progress": .satisfied], deadlock: .violated(deadlock)))
+    let checker = TLCPropertyCheck(processAdapter: .init(executor: TLCTautologyExecutor(failingSafety: failingSafety)))
+    let graph = try checker.captureGraph(native, request: fixture.completeGraphRequest, source: .generated,
+      in: fixture.root.appendingPathComponent("graph"))
+    #expect(graph.outcome == .completed)
+    #expect(graph.graph.isComparable)
+    #expect(graph.request.bundle == fixture.completeGraphRequest.bundle)
+    let result = try checker.captureAll(native, completeGraph: .success(graph), source: .generated, in: fixture.directory)
+    #expect(result.graphComparison?.matches == true)
+    #expect(result.checks.count == 3)
+    for (check, comparison) in result.checks {
+      let expected: PropertyComparisonStatus = check == .property("Positive") && failingSafety ? .propertyOutcomeDifference : .exact
+      #expect(try comparison.get().status == expected)
+    }
+    for check in [ModelCheck.property("Positive"), .property("Progress"), .deadlock] {
+      #expect(FileManager.default.fileExists(atPath: fixture.directory.appendingPathComponent(check.artifactPath)
+        .appendingPathComponent("tlc-process.json").path))
+    }
+  }
+
+  @Test("only an isolated temporal check can accept the pinned tautology outcome",
+    arguments: [ModelCheck.property("AlwaysEventuallyP"), .property("Positive"), .deadlock])
+  func limitsTautologyVerdict(check: ModelCheck) throws {
+    let fixture = try Fixture(check: check)
+    let comparison = try fixture.capture(processAdapter: .init(executor: PropertyExecutor(
+      propertyResult: TLCTautologyExecutor.tautology)), swiftResult: .satisfied)
+    #expect(comparison.tlcResult == (check == .property("AlwaysEventuallyP") ? .satisfied : .unavailable))
+  }
+
+  @Test("tautology classification rejects other errors and incomplete graph evidence")
+  func rejectsUnprovenTautology() throws {
+    let message = TLCTautologyExecutor.tautology.stdout
+    for process in [
+      TLCProcessResult(status: 75, stdout: message, stderr: ""),
+      .init(status: 77, stdout: "", stderr: ""),
+      .init(status: 77, stdout: "prefix " + message, stderr: ""),
+      .init(status: 77, stdout: message + "\nError: another evaluation failed", stderr: ""),
+      .init(status: 77, stdout: message, stderr: "unexpected failure")
+    ] {
+      let fixture = try Fixture()
+      let result = try fixture.capture(processAdapter: .init(executor: PropertyExecutor(propertyResult: process)), swiftResult: .satisfied)
+      #expect(result.tlcResult == .unavailable)
+    }
+    let fixture = try Fixture()
+    let incomplete = try fixture.captureGraph(result: TLCTautologyExecutor.tautology)
+    #expect(incomplete.outcome == .temporalTautology)
+    #expect(!incomplete.graph.isComparable)
+    #expect(throws: TLCPropertyCheckError.incompleteGraph) {
+      try fixture.capture(processAdapter: .init(executor: PropertyExecutor(propertyResult: TLCTautologyExecutor.tautology)),
+        completeGraph: incomplete, swiftResult: .satisfied)
+    }
+  }
+
   @Test("symmetry graph capture completes before an independent deadlock witness is checked", arguments: [true, false])
   func symmetryCaptureSeparatesDeadlock(includeWitness: Bool) throws {
     let fixture = try Fixture(check: .deadlock)
@@ -771,30 +835,6 @@ struct TLCPropertyCheckTests {
   }
 }
 
-private func graphStream(case finiteGraphCase: FiniteGraphCase, runID: UUID) throws -> Data {
-  let state: [String: Any] = [
-    "fingerprint": "1", "level": 1,
-    "bindings": [["ordinal": 0, "name": "x", "tla": "1"]]
-  ]
-  let common: [String: Any] = [
-    "schema": "swifttla.tlc.graph-events", "version": 2, "runId": runID.uuidString.lowercased(), "caseId": finiteGraphCase.id
-  ]
-  let records = [
-    common.merging(["type": "header", "callback": "writer.header", "seq": 0]) { $1 },
-    common.merging(["type": "initial", "callback": "writeState.initial", "seq": 1, "state": state]) { $1 }
-  ]
-  let body = try records.reduce(into: Data()) { payload, record in
-    payload.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
-    payload.append(10)
-  }
-  let footer = common.merging([
-    "type": "footer", "callback": "writer.footer", "seq": 2, "status": "closed",
-    "counts": ["header": 1, "initial": 1], "lastBodySeq": 1, "bodySha256": SHA256.hex(body)
-  ]) { $1 }
-  let footerData = try JSONSerialization.data(withJSONObject: footer, options: [.sortedKeys])
-  return body + footerData + Data([10])
-}
-
 private func completedGraph(
   _ stream: Data,
   for finiteGraphCase: FiniteGraphCase,
@@ -852,14 +892,6 @@ private func numberedStutteringTrace() throws -> Data {
         "module": "--TLA+ BUILTINS--", "beginLine": 0, "beginColumn": 0, "endLine": 0, "endColumn": 0
       ]], state]]
     ]
-  ], options: [.sortedKeys])
-}
-
-private func numberedInitialStateTrace() throws -> Data {
-  let state: [Any] = [1, ["x": 1]]
-  return try JSONSerialization.data(withJSONObject: [
-    "vars": ["x"],
-    "counterexample": ["state": [state], "action": []]
   ], options: [.sortedKeys])
 }
 
