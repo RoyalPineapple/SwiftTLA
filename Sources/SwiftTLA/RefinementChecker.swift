@@ -127,9 +127,6 @@ extension TLASpec {
         func state(_ expression: StateExpr) -> StateExpr {
             StateExpr.substituteVariables(parameters, in: expression)
         }
-        func action(_ expression: ActionExpr) -> ActionExpr {
-            expression.substitutingVariables(parameters)
-        }
         func initialization(_ value: VariableInitialization) -> VariableInitialization {
             switch value {
             case .value: return value
@@ -140,7 +137,7 @@ extension TLASpec {
         var specialized = TLASpec(
             name: name,
             variables: variables.map { .init(name: $0.name, initialization: initialization($0.initialization), collectionType: $0.collectionType, generatedSwiftType: $0.generatedSwiftType, origin: $0.origin) },
-            actions: actions.map { .init(name: $0.name, body: action($0.body), bindings: $0.bindings, isTermination: $0.isTermination) },
+            actions: actions.map { $0.substitutingVariables(parameters) },
             invariants: invariants.map { .init(name: $0.name, body: state($0.body)) },
             reachabilityProperties: reachabilityProperties.map { .init(name: $0.name, body: state($0.body)) },
             temporalProperties: temporalProperties.map { .init(name: $0.name, expr: $0.expr.map(state)) },

@@ -3,12 +3,51 @@ import Testing
 
 @Suite("Scoped substitution")
 struct ScopedSubstitutionTests {
+    @Test("Specialization rewrites dependent action domains without replacing bound members")
+    func specializesActionDomains() throws {
+        let spec = canonicalTestSpec(variables: [("value", .value(.int(0)))], actions: [
+            ("select", .assign(.named("value"), .variable("other")), [
+                ActionBinding(name: "member", domain: .integerRange(.int(1), .variable("limit")), generatedSwiftType: "Int"),
+                ActionBinding(name: "other", domain: .integerRange(.int(1), .variable("member")), generatedSwiftType: "Int")
+            ])
+        ])
+        let specialized = spec.specializing(parameters: ["limit": .int(3), "member": .int(99), "other": .int(99)])
+        let action = try #require(specialized.actions.first)
+        #expect(action.bindings[0].domain == .integerRange(.int(1), .int(3)))
+        #expect(action.bindings[1].domain == .integerRange(.int(1), .variable("member")))
+        #expect(action.body == spec.actions[0].body)
+        #expect(action.bindings.map(\.generatedSwiftType) == ["Int", "Int"])
+        #expect(spec.actions[0].bindings[0].domain == .integerRange(.int(1), .variable("limit")))
+        _ = try specialized.compile()
+    }
+
+    @Test("Action specialization avoids capture across dependent domains and preserves metadata")
+    func specializesActionScopes() {
+        let action = NamedAction(name: "select", body: .guard_(.equal(.variable("target"), .variable("member"))), bindings: [
+            ActionBinding(name: "member", domain: .variable("member"), generatedSwiftType: "Int"),
+            ActionBinding(name: "other", domain: .setLiteral([.variable("member")]), generatedSwiftType: "Int")
+        ], isTermination: true)
+        let result = action.substitutingVariables(["target": .variable("member"), "member": .setLiteral([.int(3)])])
+        #expect(result.name == action.name)
+        #expect(result.isTermination)
+        #expect(result.bindings[0].name == "member_1")
+        #expect(result.bindings[0].domain == .setLiteral([.int(3)]))
+        #expect(result.bindings[1].domain == .setLiteral([.variable("member_1")]))
+        #expect(result.body == .guard_(.equal(.variable("member"), .variable("member_1"))))
+        #expect(result.bindings.map(\.generatedSwiftType) == ["Int", "Int"])
+    }
+
     @Test("Substitution preserves malformed signatures for diagnostics")
     func malformedSignaturesRemainInvalid() {
         let body = StateExpr.add(.variable("number"), .variable("Base"))
         let values: [String: StateExpr] = ["Base": .variable("number")]
         let definition = FormalOperatorDefinition(name: "Invalid", parameters: [.value("number"), .value("number")], body: body)
         #expect(definition.substitutingVariables(values) == definition)
+        let invalidAction = NamedAction(name: "Invalid", body: .guard_(body), bindings: [
+            ActionBinding(name: "number", values: [.int(1)]),
+            ActionBinding(name: "number", values: [.int(2)])
+        ])
+        #expect(invalidAction.substitutingVariables(values) == invalidAction)
         let recursive = RecursiveFunc(name: "Invalid", params: ["number", "number"], body: body)
         #expect(recursive.substitutingVariables(values) == recursive)
         let lambda = FormalLambda(parameters: ["number", "number"], body: body)

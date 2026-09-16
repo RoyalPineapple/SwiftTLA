@@ -16,6 +16,24 @@ public indirect enum ActionExpr: Hashable, Sendable {
 
 }
 
+extension NamedAction {
+    package func substitutingVariables(_ replacements: [String: StateExpr]) -> NamedAction {
+        guard sourceIssue == nil, !replacements.isEmpty else { return self }
+        let scoped = bindings.reversed().reduce(body) { body, binding in
+            .existsAction(binding.name, binding.domain, body)
+        }
+        var substituted = scoped.substitutingVariables(replacements)
+        let bindings = bindings.map { binding -> ActionBinding in
+            guard case .existsAction(let name, let domain, let body) = substituted else {
+                preconditionFailure("Substitution must preserve action binding scopes")
+            }
+            substituted = body
+            return ActionBinding(name: name, domain: domain, generatedSwiftType: binding.generatedSwiftType)
+        }
+        return NamedAction(name: name, body: substituted, bindings: bindings, isTermination: isTermination)
+    }
+}
+
 extension ActionExpr {
     package func substitutingVariable(_ name: String, with replacement: StateExpr) -> ActionExpr {
         substitutingVariables([name: replacement])
