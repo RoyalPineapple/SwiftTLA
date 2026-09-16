@@ -961,6 +961,9 @@ final class ParserSession {
             case "subsets": return .powerSet(base)
             default: break
             }
+            if typedFacadeValueType(baseSyntax, scope: scope) == nil {
+                return .recordAccess(base, member.declName.baseName.sourceIdentifierName)
+            }
         }
         if let member = expression.as(MemberAccessExprSyntax.self),
            member.declName.baseName.sourceIdentifierName == "empty",

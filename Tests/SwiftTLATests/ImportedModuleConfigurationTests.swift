@@ -1,9 +1,54 @@
 import Testing
 import SwiftSyntax
+import SwiftTLAMacros
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
 
 struct ImportedModuleConfigurationTests {
+    @Test("imported record fields resolve from operator results and reject unknown fields")
+    func resolvesImportedRecordFields() throws {
+        let parser = ParserSession()
+        parser.allowsUnboundValueNames = false
+        let scope = ParserSession.TypedFacadeScope.empty.extending(binding: "input",
+            to: .variable("input"), shape: .dictionary(.int, .int))
+        for field in ["shift", "missing"] {
+            let expression = try #require(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral:
+                "ForAll(in: ZSequences.rotations(of: input)) { rotation in rotation.\(field) >= 0 }"), scope: scope))
+            let input = Var<ZeroBasedSequence<Int>>("input")
+            let result = Var<Bool>("result")
+            let spec = TLASpec("ImportedFields") {
+                Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 2))
+                Variable(input, ZeroBasedSequence<Int>.literal(0, 1))
+                Variable(result, Expr<Bool>(expression))
+            }
+            let compilation = try spec.compile()
+            if field == "shift" {
+                _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+            } else {
+                #expect(throws: CompilationDiagnostic.self) {
+                    try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+                }
+            }
+        }
+    }
+
+    @Test("rotation records use generated validated projections")
+    func projectsRotationRecords() throws {
+        let raw = TLAValue.record(TLARecord([
+            .init("shift", .int(1)), .init("seq", .function([.int(0): .int(7)]))
+        ]))
+        let rotation = try #require(ZSequences.Rotation<Int>(formalValue: raw))
+        #expect(rotation.shift == 1)
+        #expect(rotation.seq.tlaValue == .function([.int(0): .int(7)]))
+        #expect(rotation.tlaValue == raw)
+        #expect(ZSequences.Rotation<Int>(formalValue: .record(TLARecord([
+            .init("shift", .int(1)), .init("seq", .bool(false))
+        ]))) == nil)
+        #expect(ZSequences.Rotation<Int>(formalValue: .record(TLARecord([
+            .init("shift", .int(1))
+        ]))) == nil)
+    }
+
     @Test("imported sequence calls retain lexical bindings and reject malformed arguments")
     func parsesScopedSequenceCalls() throws {
         let parser = ParserSession()

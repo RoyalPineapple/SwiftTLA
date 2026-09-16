@@ -27,6 +27,7 @@ struct ConfiguredSequenceMachine {
         #spec("ConfiguredSequenceMachine") { scope in
             let maximum = scope.parameter(as: Int.self, in: 0...2)
             let lengthPreserved = Invariant()
+            let rotationsPreserveLength = Invariant()
             Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: maximum))
             Algorithm("Worker", scoped: { algorithm in
                 let sequence = algorithm.sharedVar(in: ZSequences.sequences(over: SetExpr<Int>.literal(0, 1)))
@@ -35,6 +36,11 @@ struct ConfiguredSequenceMachine {
                     Assign(sequence, to: ZSequences.rotation(of: sequence, leftBy: 1))
                 }
                 lengthPreserved { ZSequences.length(of: sequence) == length }
+                rotationsPreserveLength {
+                    ForAll(in: ZSequences.rotations(of: sequence)) { rotation in
+                        ZSequences.length(of: rotation.seq) == length && rotation.shift >= 0
+                    }
+                }
             })
             Validation("Empty") { Bind(maximum, to: 0) }
             Validation("Pairs") { Bind(maximum, to: 2) }

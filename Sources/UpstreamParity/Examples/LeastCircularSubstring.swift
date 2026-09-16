@@ -1,4 +1,5 @@
 import SwiftTLA
+import SwiftTLAMacros
 
 private struct FailureTable: TLAValueType {
     private let values: [Int: Int]
@@ -98,8 +99,8 @@ package enum LeastCircularSubstringModel {
     ) -> Expr<Bool> {
         let candidate = ZSequences.rotation(of: sequence.expr, leftBy: shift.expr)
         return !Finished() || ForAll(in: ZSequences.rotations(of: sequence.expr)) { other in
-            let otherSequence = other[ZSequences.Rotation<Int>.sequence]
-            let otherShift = other[ZSequences.Rotation<Int>.shift]
+            let otherSequence = other.seq
+            let otherShift = other.shift
             let precedes = Expr<Bool>(ZSequences.lexicographicallyPrecedesOrEquals(candidate, otherSequence))
             return precedes && (candidate != otherSequence || shift <= otherShift)
         }
