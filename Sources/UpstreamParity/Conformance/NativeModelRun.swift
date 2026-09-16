@@ -101,7 +101,8 @@ package struct NativeModelRun: Sendable {
     }
     guard Set(propertyNames.keys) == Set(Machine.Property.allCases),
           Set(propertyNames.values).count == propertyNames.count,
-          Set(propertyNames.values) == rendered.checkNames,
+          Set(try native.checking.properties.map(propertyName)) == rendered.checkNames,
+          native.checking.checkDeadlock == rendered.checksDeadlock,
           temporalNames == Set(try native.temporalResults.keys.map(propertyName)),
           rendered.reachabilityNames == Set(try native.reachabilityResults.keys.map(propertyName)),
           Set(try native.refinementFailures.keys.map(propertyName)).isSubset(of: refinementNames) else {
@@ -131,7 +132,7 @@ package struct NativeModelRun: Sendable {
     }
     var properties = Dictionary(uniqueKeysWithValues:
       (invariantNames.union(refinementNames)).map { ($0, PropertyResult.satisfied) })
-    var deadlock: PropertyResult? = Machine.checksDeadlock || checkingDeadlock ? .satisfied : nil
+    var deadlock: PropertyResult? = native.checking.checkDeadlock || checkingDeadlock ? .satisfied : nil
     var paths: [Machine.Snapshot: GraphTrace] = [:]
     func trace(to snapshot: Machine.Snapshot) throws -> GraphTrace {
       if let cached = paths[snapshot] { return cached }
@@ -160,14 +161,14 @@ package struct NativeModelRun: Sendable {
           }
           if properties[name] == .satisfied { properties[name] = .violated(try trace(to: snapshot)) }
         case .deadlock:
-          guard Machine.checksDeadlock else {
+          guard native.checking.checkDeadlock else {
             throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "unexpected deadlock check")
           }
           if deadlock == .satisfied { deadlock = .violated(try trace(to: snapshot)) }
         }
       }
     }
-    if checkingDeadlock && !Machine.checksDeadlock {
+    if checkingDeadlock && !native.checking.checkDeadlock {
       if let first = try native.deadlockedStates.min(by: { try stateKey($0) < stateKey($1) }) {
         deadlock = .violated(try trace(to: first))
       }

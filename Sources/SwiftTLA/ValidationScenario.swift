@@ -16,10 +16,21 @@ public enum ValidationExpectation: String, Sendable, Codable {
     case violated
 }
 
+public struct ModelChecks<Property: Hashable & Sendable>: Equatable, Sendable {
+    public let properties: Set<Property>
+    public let checkDeadlock: Bool
+
+    public init(properties: Set<Property>, checkDeadlock: Bool = true) {
+        self.properties = properties
+        self.checkDeadlock = checkDeadlock
+    }
+}
+
 public protocol ModelValidationScenario: Sendable {
     associatedtype Machine: StateMachine
     associatedtype Property: Hashable, Sendable where Property == Machine.Property
     var name: String { get }
+    var checking: ModelChecks<Property> { get }
     var expectations: [Property: ValidationExpectation] { get }
     var deadlockExpectation: ValidationExpectation? { get }
     func initialMachines() throws -> [Machine]
@@ -29,7 +40,7 @@ public protocol ModelValidationScenario: Sendable {
 
 extension ModelValidationScenario {
     public func explore(maximumStates: Int) throws -> ReachabilityGraph<Machine> {
-        try ReachabilityGraph(initialMachines: initialMachines(), maximumStates: maximumStates)
+        try ReachabilityGraph(initialMachines: initialMachines(), maximumStates: maximumStates, checking: checking)
     }
 }
 
@@ -56,6 +67,8 @@ public struct ValidationDeclaration: SpecComponent {
     package let bindings: [ValidationBinding]
     package var expectations: [(property: PropertyReference, expected: ValidationExpectation)] = []
     package var deadlockExpectations: [ValidationExpectation] = []
+    package var propertySelections: [[PropertyReference]] = []
+    package var deadlockSelections: [Bool] = []
 
     package init(name: String, bindings: [ValidationBinding]) {
         self.name = name
@@ -71,6 +84,18 @@ public struct ValidationDeclaration: SpecComponent {
     public func expectDeadlock(_ expected: ValidationExpectation) -> Self {
         var copy = self
         copy.deadlockExpectations.append(expected)
+        return copy
+    }
+
+    public func checking(only properties: [any ModelProperty]) -> Self {
+        var copy = self
+        copy.propertySelections.append(properties.map(\.reference))
+        return copy
+    }
+
+    public func checkingDeadlock(_ enabled: Bool) -> Self {
+        var copy = self
+        copy.deadlockSelections.append(enabled)
         return copy
     }
 }

@@ -15,6 +15,7 @@ package struct TLCScenarioCheck: Sendable {
             try RetainedFiles.writeCanonical(scenario.native.checks, to: directory.appendingPathComponent("native-checks.json"))
             try RetainedFiles.writeCanonical(scenario.expectations, to: directory.appendingPathComponent("expectations.json"))
             try RetainedFiles.writeCanonical(scenario.deadlockExpectation, to: directory.appendingPathComponent("deadlock-expectation.json"))
+            try RetainedFiles.writeCanonical(scenario.coverage, to: directory.appendingPathComponent("check-coverage.json"))
             let capture = try properties.captureGraph(scenario.native, request: request, source: .generated,
                 in: directory.appendingPathComponent("complete-graph"))
             guard capture.outcome == .completed, capture.graph.isComparable else {

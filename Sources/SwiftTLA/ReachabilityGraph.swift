@@ -15,11 +15,11 @@ public protocol StateMachine: Sendable {
     func assumptionsHold() throws -> Bool
     func satisfiesStateConstraint() throws -> Bool
     func fairnessConditions() throws -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)]
-    func temporalProperties() throws -> [Property: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
-    func violatedInvariants() throws -> [Property]
+    func temporalProperties(checking: Set<Property>) throws -> [Property: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
+    func violatedInvariants(checking: Set<Property>) throws -> [Property]
     static var reachabilityProperties: [Property] { get }
-    func matchedReachabilityProperties() throws -> [Property]
-    func refinementFailures(in graph: inout ReachabilityGraph<Self>) throws -> [Property: RefinementFailure<Snapshot, Action>]
+    func matchedReachabilityProperties(checking: Set<Property>) throws -> [Property]
+    func refinementFailures(in graph: inout ReachabilityGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>]
     func successors() throws -> [(action: Action, machine: Self)]
 }
 
@@ -58,11 +58,14 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     private var checker: LivenessChecker<Machine.Snapshot, Machine.Action, Int>?
     public let initialStates: Set<Machine.Snapshot>
     public let transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]]
+    public let checking: ModelChecks<Machine.Property>
 
-    public init(initialMachines: [Machine], maximumStates: Int) throws {
+    public init(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Machine.Property>? = nil) throws {
         guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
         guard let initialMachine = initialMachines.first else { throw ExplorationError.noInitialStates }
-        let properties = try initialMachine.temporalProperties()
+        let checking = checking ?? ModelChecks(properties: Set(Machine.Property.allCases), checkDeadlock: Machine.checksDeadlock)
+        self.checking = checking
+        let properties = try initialMachine.temporalProperties(checking: checking.properties)
         machine = initialMachine
         var transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]] = [:]
         var pending: ArraySlice<Machine> = []
@@ -70,11 +73,11 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         var violations: [Machine.Snapshot: [SafetyViolation<Machine.Property>]] = [:]
         var deadlockedStates: Set<Machine.Snapshot> = []
         var reachabilityWitnesses: [Machine.Property: Machine.Snapshot] = [:]
-        let reachabilityProperties = Set(Machine.reachabilityProperties)
+        let reachabilityProperties = Set(Machine.reachabilityProperties).intersection(checking.properties)
         var reachabilityTargets = Dictionary(uniqueKeysWithValues: reachabilityProperties.map { ($0, Set<Machine.Snapshot>()) })
         let initialRoots = Set(initialMachines.map(\.snapshot))
         func recordReachability(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
-            for property in try machine.matchedReachabilityProperties() {
+            for property in try machine.matchedReachabilityProperties(checking: checking.properties) {
                 guard reachabilityProperties.contains(property) else {
                     throw ExplorationError.undeclaredReachabilityProperty(String(reflecting: property))
                 }
@@ -89,7 +92,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         func recordBoundaryViolations(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
             guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
             try recordReachability(machine, from: predecessor)
-            let failures = try machine.violatedInvariants().map(SafetyViolation.invariant)
+            let failures = try machine.violatedInvariants(checking: checking.properties).map(SafetyViolation.invariant)
             guard !failures.isEmpty, violations[machine.snapshot] == nil else { return }
             violations[machine.snapshot] = failures
             if !initialRoots.contains(machine.snapshot), predecessors[machine.snapshot] == nil { predecessors[machine.snapshot] = predecessor }
@@ -118,10 +121,10 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         while let machine = pending.popFirst() {
             try Task.checkCancellation()
             let successors = try machine.successors()
-            var failures = try machine.violatedInvariants().map(SafetyViolation.invariant)
+            var failures = try machine.violatedInvariants(checking: checking.properties).map(SafetyViolation.invariant)
             if successors.isEmpty {
                 deadlockedStates.insert(machine.snapshot)
-                if Machine.checksDeadlock { failures.append(.deadlock) }
+                if checking.checkDeadlock { failures.append(.deadlock) }
             }
             if !failures.isEmpty { violations[machine.snapshot] = failures }
             let retained = try successors.filter { successor in
@@ -151,7 +154,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
                 try checker.analyze($0, initialStates: Array(initialStates), renderScope: { fairness[$0].name })
             }
         }
-        refinementFailures = try initialMachine.refinementFailures(in: &self)
+        refinementFailures = try initialMachine.refinementFailures(in: &self, checking: checking.properties)
         checker = nil
     }
 

@@ -546,10 +546,10 @@ extension NativeSwiftEmitter {
             }
             """)
             let enabled = enabledActionsCall(invariant.predicate.enabledActions, state: "_execution", collectionArguments: arguments)
-            checks.append("if try !Self._invariant\(invariant.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(.\(propertyCases[invariant.id]!)) }")
+            checks.append("if checking.contains(.\(propertyCases[invariant.id]!)), try !Self._invariant\(invariant.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(.\(propertyCases[invariant.id]!)) }")
         }
         declarations += try nativeDeclarations("""
-        public func violatedInvariants() throws -> [Property] {
+        public func violatedInvariants(checking: Set<Property> = Set(Property.allCases)) throws -> [Property] {
             \(checks.isEmpty ? "return []" : "var result: [Property] = []\n" + checks.joined(separator: "\n") + "\nreturn result")
         }
         """)
@@ -561,16 +561,15 @@ extension NativeSwiftEmitter {
             }
             """)
             let enabled = enabledActionsCall(property.predicate.enabledActions, state: "_execution", collectionArguments: arguments)
-            reachabilityChecks.append("if try Self._reachable\(property.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(.\(propertyCases[property.id]!)) }")
+            reachabilityChecks.append("if checking.contains(.\(propertyCases[property.id]!)), try Self._reachable\(property.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(.\(propertyCases[property.id]!)) }")
         }
         declarations += try nativeDeclarations("""
         public static var reachabilityProperties: [Property] { [\(program.behavior.reachabilityProperties.map { ".\(propertyCases[$0.id]!)" }.joined(separator: ", "))] }
-        public func matchedReachabilityProperties() throws -> [Property] {
+        public func matchedReachabilityProperties(checking: Set<Property> = Set(Property.allCases)) throws -> [Property] {
             \(reachabilityChecks.isEmpty ? "return []" : "var result: [Property] = []\n" + reachabilityChecks.joined(separator: "\n") + "\nreturn result")
         }
         """)
         var temporalProperties: [String] = []
-        var temporalDomains: [String] = []
         let captures = machineCaptures.joined(separator: ", ")
         let captureList = captures.isEmpty ? "" : "[\(captures)] "
         for property in program.behavior.temporalProperties {
@@ -604,29 +603,30 @@ extension NativeSwiftEmitter {
                 }
             }
             if property.bindings.isEmpty {
-                temporalProperties.append(".\(propertyCases[property.id]!): \(condition(predicates))")
+                temporalProperties.append("if checking.contains(.\(propertyCases[property.id]!)) { result[.\(propertyCases[property.id]!)] = \(condition(predicates)) }")
             } else {
                 let name = "_temporalMembers\(property.id.ordinal)"
                 let loops = try property.bindings.map { binding in
                     "for \(binder(binding.binder)) in \(try actionDomain(binding, state: "")) {"
                 }.joined(separator: "\n")
-                temporalDomains.append("""
+                temporalProperties.append("""
+                if checking.contains(.\(propertyCases[property.id]!)) {
                 var \(name): [TemporalCondition<@Sendable (Snapshot) throws -> Bool>] = []
                 \(loops)
                 \(name).append(\(condition(predicates)))
                 \(String(repeating: "}\n", count: property.bindings.count))
+                result[.\(propertyCases[property.id]!)] = .all(\(name))
+                }
                 """)
-                temporalProperties.append(".\(propertyCases[property.id]!): .all(\(name))")
             }
         }
-        let propertyBody: String
-        if let refinement = program.refinements.first(where: { !supportsNativeRefinement($0) })?.name {
-            propertyBody = "throw ExplorationError.unsupportedRefinement(\(String(reflecting: refinement)))"
-        } else {
-            propertyBody = temporalDomains.joined(separator: "\n") + "\nreturn [\(temporalProperties.isEmpty ? ":" : temporalProperties.joined(separator: ",\n"))]"
-        }
+        let unsupportedRefinements = program.refinements.enumerated().filter { !supportsNativeRefinement($0.element) }.map {
+            "if checking.contains(.\(refinementPropertyCases[$0.offset])) { throw ExplorationError.unsupportedRefinement(\(String(reflecting: $0.element.name))) }"
+        }.joined(separator: "\n")
+        let propertyBody = unsupportedRefinements + "\n" + (temporalProperties.isEmpty ? "return [:]" :
+            "var result: [Property: TemporalCondition<@Sendable (Snapshot) throws -> Bool>] = [:]\n" + temporalProperties.joined(separator: "\n") + "\nreturn result")
         declarations += try nativeDeclarations("""
-        public func temporalProperties() throws -> [Property: TemporalCondition<@Sendable (Snapshot) throws -> Bool>] {
+        public func temporalProperties(checking: Set<Property> = Set(Property.allCases)) throws -> [Property: TemporalCondition<@Sendable (Snapshot) throws -> Bool>] {
             \(propertyBody)
         }
         """)

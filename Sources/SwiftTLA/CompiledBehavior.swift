@@ -24,7 +24,8 @@ package struct CompiledBehavior: Sendable {
             parameterDomains: parameterDomains.mapValues(transform),
             validationScenarios: validationScenarios.map {
                 try .init(name: $0.name, bindings: $0.bindings.mapValues(transform),
-                    expectations: $0.expectations, deadlockExpectation: $0.deadlockExpectation)
+                    expectations: $0.expectations, deadlockExpectation: $0.deadlockExpectation,
+                    checks: $0.checks, checkDeadlock: $0.checkDeadlock)
             },
             initializations: initializations.map {
                 (variable: $0.variable, initialization: try $0.initialization.map(transform))
@@ -51,4 +52,6 @@ package struct CompiledValidationScenario: Sendable {
     package let bindings: [BinderID: CompiledExpression]
     package let expectations: [PropertyID: ValidationExpectation]
     package let deadlockExpectation: ValidationExpectation?
+    package let checks: Set<PropertyID>
+    package let checkDeadlock: Bool
 }

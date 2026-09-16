@@ -41,15 +41,17 @@ extension NativeSwiftEmitter {
                 }
                 return "\(parameter.reference.name): \(try expression(value, state: ""))"
             }.joined(separator: ", ")
-            let expectations = zip(properties, identifiers).map { property, identifier in
+            let selected = zip(properties, identifiers).filter { scenario.checks.contains($0.0.id) }
+            let expectations = selected.map { property, identifier in
                 ".\(identifier): .\((scenario.expectations[property.id] ?? .satisfied).rawValue)"
             }.joined(separator: ", ")
-            let deadlock = program.behavior.checkDeadlock
+            let deadlock = scenario.checkDeadlock
                 ? ".\((scenario.deadlockExpectation ?? .satisfied).rawValue)" : "nil"
             scenarios.append("""
             ValidationScenario(name: \(String(reflecting: scenario.name)),
                 \(hasConfiguration ? "configuration: try Configuration(\(bindings))," : "")
-                expectations: [\(properties.isEmpty ? ":" : expectations)],
+                checking: ModelChecks(properties: [\(selected.map { ".\($0.1)" }.joined(separator: ", "))], checkDeadlock: \(scenario.checkDeadlock)),
+                expectations: [\(selected.isEmpty ? ":" : expectations)],
                 deadlockExpectation: \(deadlock))
             """)
         }
@@ -60,6 +62,7 @@ extension NativeSwiftEmitter {
             public typealias Property = \(model.typeName).Property
             public let name: String
             \(hasConfiguration ? "public let configuration: Configuration" : "")
+            public let checking: ModelChecks<Property>
             public let expectations: [Property: ValidationExpectation]
             public let deadlockExpectation: ValidationExpectation?
 
@@ -70,7 +73,7 @@ extension NativeSwiftEmitter {
                 Machine.formalPropertyNames
             }
             public func render() throws -> RenderedSpecification {
-                try \(model.typeName).render(\(arguments))
+                try \(model.typeName).render(\(arguments)).selectingChecks(checking, formalPropertyNames: Machine.formalPropertyNames)
             }
         }
         public static func validationScenarios() throws -> [ValidationScenario] {

@@ -68,9 +68,19 @@ changes the expected deadlock outcome without disabling its check.
 Each scenario provides `initialMachines()`, `explore(maximumStates:)`, and `render()`.
 Generated scenarios conform to `ModelValidationScenario`, which supplies shared
 exploration through the generated machine.
-Its typed `expectations` include every named property, with `.satisfied` as the
-default. `.expect(propertyHandle, .violated)` overrides one expectation.
+By default, typed `expectations` include every property, with `.satisfied` as the
+expected outcome. `.expect(propertyHandle, .violated)` overrides one expectation.
 The property handle must appear in the specification body to register its declaration.
+
+`.checking(only: [propertyHandle])` selects specific registered properties.
+An empty array selects no properties. `.checkingDeadlock(false)` disables the
+deadlock check without asserting an expected outcome. Duplicate selections and
+expectations for unselected checks fail compilation.
+
+The generated `checking` value has type `ModelChecks<Property>`.
+Native exploration and formal export consume this same selection.
+Unselected predicates do not run. Selection does not change application transitions
+or truncate the reachable graph.
 
 Scalar scenario bindings retain parameter identities and checked value types.
 Missing, duplicate, and foreign bindings fail explicitly. Collection bindings
@@ -80,7 +90,9 @@ Repository validation derives canonical graphs and native results directly from
 scenarios. It validates expected outcomes only after complete exploration.
 The adapter reads rendered check metadata without compiling the specification again.
 The hosted scenario command compares complete native and TLC graphs and every
-declared result. Expected failures change the verdict, not the model or checks.
+selected result. Its check-coverage artifact lists selected properties, omitted
+properties, and deadlock selection. Agreement for a subset does not establish
+outcomes for omitted properties. Expected failures change the verdict, not the model or checks.
 Independent agreement still requires successful hosted evidence. The toolchain
 pins a hosted rebuild of the original TLC source revision.
 
@@ -91,7 +103,8 @@ algorithm. The predicate and its resolved bindings remain positive through
 native generation. `matchedReachabilityProperties()` reports matching goals
 in the current execution state.
 
-`ReachabilityGraph.reachabilityResults` contains a result for every declared goal.
+`ReachabilityGraph.reachabilityResults` contains a result for every selected goal.
+The default selection includes every declared goal.
 `.reached(snapshot)` identifies a witness. `trace(to:)` returns its complete
 execution trace. `.unreachable` requires complete exploration without a match.
 A state limit throws instead of producing an unreachable result. A match does

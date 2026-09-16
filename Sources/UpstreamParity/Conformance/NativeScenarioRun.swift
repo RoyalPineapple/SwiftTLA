@@ -7,15 +7,24 @@ package enum ScenarioExpectationError: Error, Equatable, Sendable {
 }
 
 package struct NativeScenarioRun: Sendable {
+    package struct CheckCoverage: Encodable, Sendable {
+        package let selectedProperties: [String]
+        package let omittedProperties: [String]
+        package let checksDeadlock: Bool
+        package let coversCompleteScenario: Bool
+    }
     package let name: String
     package let native: NativeModelRun
     package let expectations: [String: ValidationExpectation]
     package let deadlockExpectation: ValidationExpectation?
+    package let coverage: CheckCoverage
 
-    package init(_ scenario: some ModelValidationScenario, maximumStates: Int) throws {
+    package init<Scenario: ModelValidationScenario>(_ scenario: Scenario, maximumStates: Int) throws {
         let rendered = try scenario.render()
         let names = scenario.formalPropertyNames
-        guard Set(names.keys) == Set(scenario.expectations.keys) else {
+        guard names == Scenario.Machine.formalPropertyNames,
+              scenario.checking.properties.isSubset(of: Set(names.keys)),
+              scenario.checking.properties == Set(scenario.expectations.keys) else {
             throw EvidenceFormatError.invalidField(record: scenario.name, field: "scenario check coverage")
         }
         let bindings = scenario.expectations.map { (names[$0.key]!, $0.value) }
@@ -28,6 +37,10 @@ package struct NativeScenarioRun: Sendable {
         expectations = Dictionary(uniqueKeysWithValues: bindings)
         deadlockExpectation = scenario.deadlockExpectation
         native = try NativeModelRun(scenario.explore(maximumStates: maximumStates), rendered: rendered)
+        let omitted = Set(names.keys).subtracting(scenario.checking.properties)
+        coverage = .init(selectedProperties: rendered.checkNames.sorted(),
+            omittedProperties: omitted.map { names[$0]! }.sorted(), checksDeadlock: rendered.checksDeadlock,
+            coversCompleteScenario: omitted.isEmpty && (rendered.checksDeadlock || !Scenario.Machine.checksDeadlock))
     }
 
     package func validateExpectations() throws {

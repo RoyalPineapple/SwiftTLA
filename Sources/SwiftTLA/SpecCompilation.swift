@@ -320,6 +320,30 @@ public struct RenderedSpecification: Sendable {
     package var checkNames: Set<String> { Set(configuration.invariants + configuration.reachabilityProperties + configuration.properties + configuration.refinements) }
     package var checksDeadlock: Bool { configuration.checkDeadlock }
 
+    /// Converts model-owned check identities at the formal export boundary.
+    public func selectingChecks<Property: Hashable & Sendable>(_ checks: ModelChecks<Property>, formalPropertyNames: [Property: String]) throws -> Self {
+        let names = try Set(checks.properties.map { property in
+            guard let name = formalPropertyNames[property] else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "check selection",
+                    expected: "a formal name for each selected property", actual: "missing property projection",
+                    nextSafeAction: "Use the generated model's formal property names.")
+            }
+            return name
+        })
+        guard names.count == checks.properties.count else {
+            throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "check selection",
+                expected: "distinct formal names for selected properties", actual: "duplicate property projection",
+                nextSafeAction: "Use the generated model's formal property names.")
+        }
+        let selected = try configuration.selecting(names, checkDeadlock: checks.checkDeadlock)
+        func bundle(_ original: TLAModuleBundle) -> TLAModuleBundle {
+            .init(root: .init(name: original.root.name, tla: original.root.tla,
+                cfg: selected.render(usesSymmetryReduction: true)), imports: original.imports, provenance: original.provenance)
+        }
+        return .init(tlaBundle: bundle(tlaBundle), configuration: selected, actions: actions,
+            renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map { $0.map(bundle) })
+    }
+
     /// Selects declared checks for an independent validation pass without rendering the model again.
     /// Symmetry defaults to disabled so the pass retains the complete, unreduced graph.
     package func tlaBundle(checking checks: Set<String>, checkDeadlock: Bool,
@@ -1050,7 +1074,13 @@ private struct CanonicalSpecificationEncoder {
                         let property = properties.first { $0.reference == expectation.property }
                         return node("expect", [canonicalOptional(property.map { String($0.id.ordinal) }), expectation.expected.rawValue])
                     }),
-                    canonicalList(scenario.deadlockExpectations.map(\.rawValue))])
+                    canonicalList(scenario.deadlockExpectations.map(\.rawValue)),
+                    canonicalList(scenario.propertySelections.map { selected in
+                        canonicalList(selected.map { reference in
+                            canonicalOptional(properties.first { $0.reference == reference }.map { String($0.id.ordinal) })
+                        })
+                    }),
+                    canonicalList(scenario.deadlockSelections.map { String($0) })])
             }
             list("validation", scenarios) { $0 }
         }

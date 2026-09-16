@@ -376,15 +376,29 @@ struct CompiledLowerer {
         }
         var scenarios: [CompiledValidationScenario] = []
         for scenario in spec.validationScenarios {
+            guard scenario.propertySelections.count <= 1, scenario.deadlockSelections.count <= 1 else {
+                throw invalid(scenario.name, "duplicate check selection")
+            }
+            let selectedReferences = scenario.propertySelections.first
+            if let selectedReferences {
+                guard Set(selectedReferences).count == selectedReferences.count,
+                      Set(selectedReferences).isSubset(of: Set(propertyReferences)) else {
+                    throw invalid(scenario.name, "duplicate or foreign selected property")
+                }
+            }
+            let checks = Set(properties.filter { property in
+                selectedReferences.map { selected in property.reference.map(selected.contains) ?? false } ?? true
+            }.map(\.id))
+            let checkDeadlock = scenario.deadlockSelections.first ?? spec.checkDeadlock
             let references = scenario.bindings.map(\.parameter)
             guard Set(references) == parameters, references.count == parameters.count else {
                 throw invalid(scenario.name, "missing, duplicate, or foreign parameter binding")
             }
             let expectedProperties = scenario.expectations.map(\.property)
             guard Set(expectedProperties).count == expectedProperties.count,
-                  Set(expectedProperties).isSubset(of: Set(propertyReferences)),
+                  Set(expectedProperties).isSubset(of: Set(selectedReferences ?? propertyReferences)),
                   scenario.deadlockExpectations.count <= 1,
-                  scenario.deadlockExpectations.isEmpty || spec.checkDeadlock else {
+                  scenario.deadlockExpectations.isEmpty || checkDeadlock else {
                 throw invalid(scenario.name, "duplicate, unregistered, or disabled check expectation")
             }
             var bindings: [BinderID: CompiledExpression] = [:]
@@ -411,7 +425,7 @@ struct CompiledLowerer {
                 expectations[property.id] = expectation.expected
             }
             scenarios.append(.init(name: scenario.name, bindings: bindings, expectations: expectations,
-                deadlockExpectation: scenario.deadlockExpectations.first))
+                deadlockExpectation: scenario.deadlockExpectations.first, checks: checks, checkDeadlock: checkDeadlock))
         }
         return scenarios
     }

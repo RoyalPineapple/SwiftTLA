@@ -352,6 +352,31 @@ An expected deadlock differs from a disabled deadlock check. The former requires
 a deadlock result and a valid witness. The latter establishes no deadlock
 verdict. Neither choice permits a truncated graph to pass equivalence validation.
 
+The check-selection syntax is:
+
+```swift
+Validation("Upstream selection") {
+    Bind(processCount, to: 3)
+}
+.checking(only: [exclusion])
+.checkingDeadlock(false)
+```
+
+`checking(only:)` accepts registered property handles from the same model.
+An empty array selects no properties. Without this modifier, the scenario selects
+every declared property. `checkingDeadlock(_:)` accepts a Boolean literal and overrides
+the model's deadlock selection for this scenario.
+
+Duplicate selection modifiers, duplicate handles, foreign handles, and expectations
+for unselected checks produce diagnostics. Modifier order does not change these rules.
+Selected properties default to an expected satisfied outcome. Unselected properties
+have no outcome or expectation. The native checker must not evaluate their predicates.
+
+Generated scenarios expose a typed `ModelChecks<Property>` value through `checking`.
+Native exploration and export consume this same value. Selection does not change
+application transitions, graph completeness, or resource limits. Evidence reports
+selected and omitted checks separately from complete scenario validation.
+
 ### Declaration syntax
 
 #### Counter parameter contract

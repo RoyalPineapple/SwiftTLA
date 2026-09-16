@@ -23,6 +23,7 @@ struct IncompleteCounterScenario: ModelValidationScenario {
     typealias Property = ConfiguredCounter.Property
     let original: ConfiguredCounter.ValidationScenario
     var name: String { original.name }
+    var checking: ModelChecks<Property> { original.checking }
     var expectations: [Property: ValidationExpectation] { [:] }
     var deadlockExpectation: ValidationExpectation? { original.deadlockExpectation }
     func initialMachines() throws -> [Machine] { try original.initialMachines() }

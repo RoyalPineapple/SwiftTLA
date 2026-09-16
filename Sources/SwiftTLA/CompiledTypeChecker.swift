@@ -297,7 +297,8 @@ package struct CompiledTypeChecker: Sendable {
                 values[binder] = try checkOperand(value, expected: type)
             }
             return CompiledValidationScenario(name: scenario.name, bindings: values,
-                expectations: scenario.expectations, deadlockExpectation: scenario.deadlockExpectation)
+                expectations: scenario.expectations, deadlockExpectation: scenario.deadlockExpectation,
+                checks: scenario.checks, checkDeadlock: scenario.checkDeadlock)
         }
         var actions: [CompiledAction] = []
         var invariants: [CompiledStatePredicate] = []
