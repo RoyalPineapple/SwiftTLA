@@ -5,6 +5,29 @@ import SwiftTLAMacros
 @testable import SwiftTLAPlugin
 
 struct ImportedModuleConfigurationTests {
+    @Test("sets retain contextual empty functions without admitting nonempty tuples")
+    func contextualFunctionSets() throws {
+        for empty in [true, false] {
+            let candidate = StateExpr.functionLiteral(.integerRange(0, 1), "key", 0)
+            for tuple in [StateExpr.tupleLiteral(empty ? [] : [.int(1)]),
+                          StateExpr.value(.tuple(empty ? [] : [.int(1)]))] {
+                let domain = StateExpr.ifThenElse(.bool(true), .setLiteral([tuple]), .setLiteral([candidate]))
+                let result = Var<Bool>("result")
+                let spec = TLASpec("ContextualFunctionSets") {
+                    Variable(result, Expr<Bool>(.in(candidate, domain)))
+                }
+                let compilation = try spec.compile()
+                if empty {
+                    _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+                } else {
+                    #expect(throws: CompilationDiagnostic.self) {
+                        try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+                    }
+                }
+            }
+        }
+    }
+
     @Test("imported record fields resolve from operator results and reject unknown fields")
     func resolvesImportedRecordFields() throws {
         let parser = ParserSession()

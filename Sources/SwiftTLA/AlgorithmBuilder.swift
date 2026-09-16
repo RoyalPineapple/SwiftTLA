@@ -1177,6 +1177,13 @@ extension LocalVariable: AssignmentTarget {}
 extension MacroParameter: AssignmentTarget {}
 
 extension AssignmentTarget {
+    public subscript<Key: TLAValueType & Hashable, Element: TLAValueType>(
+        _ index: some TypedExpression<Key>
+    ) -> AlgorithmLValue<Element> where Value == Dictionary<Key, Element> {
+        let base = algorithmLValue
+        return AlgorithmLValue(model: .function(base: base.model, key: index.stateExpr), sourceIssue: base.sourceIssue)
+    }
+
     public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> AlgorithmLValue<Range>
     where Value == Function<Domain, Range> {
         let base = algorithmLValue

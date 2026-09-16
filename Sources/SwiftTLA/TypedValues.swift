@@ -863,6 +863,13 @@ extension TypedExpression {
     Expr<Element>(.tupleDynamicAccess(stateExpr, index.stateExpr))
   }
 
+  @_disfavoredOverload
+  public subscript<Key: TLAValueType & Hashable, Value: TLAValueType>(
+    _ index: some TypedExpression<Key>
+  ) -> Expr<Value> where ExpressionValue == Dictionary<Key, Value> {
+    Expr(.functionApply(stateExpr, index.stateExpr))
+  }
+
   public subscript<Schema: TLARecordSchema, FieldValue>(_ field: TLAField<Schema, FieldValue>) -> Expr<FieldValue>
   where ExpressionValue == Record<Schema> {
     Expr<FieldValue>(field.recordAccess(stateExpr))

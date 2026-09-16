@@ -1464,6 +1464,13 @@ final class ParserSession {
         }
         guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
         if compilerGrammarName(in: call.calledExpression) == "IntRange" { return .set(.int) }
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           compilerGrammarName(in: member.base) == "ZSequences",
+           member.declName.baseName.sourceIdentifierName == "sequences",
+           let domain = call.arguments.first?.expression,
+           let element = typedFacadeValueType(domain, scope: scope)?.selectedElement {
+            return .set(.dictionary(.int, element))
+        }
         if compilerGrammarName(in: call.calledExpression) == "Functions",
            let domain = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
            let range = call.arguments.first(where: { $0.label?.text == "to" })?.expression {

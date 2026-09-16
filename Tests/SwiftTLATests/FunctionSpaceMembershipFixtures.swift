@@ -73,6 +73,10 @@ struct FunctionSpaceMembershipModel {
                 result.becomes(Functions(from: Key.all, to: SetExpr<Int>())
                     .contains(Function<Key, Int>.mapping { _ in 1 / zero.expr }))
             }
+            SwiftTLA.Action("largeAccepted") {
+                result.becomes(Functions(from: IntRange(0, through: 99), to: SetExpr<Int>.literal(0, 1))
+                    .contains(Dictionary<Int, Int>.mapping(over: IntRange(0, through: 99)) { _ in 0 }))
+            }
         }
     }
 }

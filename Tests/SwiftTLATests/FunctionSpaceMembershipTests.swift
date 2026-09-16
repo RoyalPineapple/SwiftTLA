@@ -69,9 +69,9 @@ struct FunctionSpaceMembershipTests {
         }
     }
 
-    @Test("A representable large space is checked without constructing its members")
+    @Test("Membership does not require a representable function-space cardinality")
     func largeSpace() throws {
-        let domain = StateExpr.integerRange(0, 39)
+        let domain = StateExpr.integerRange(0, 99)
         let member = StateExpr.functionLiteral(domain, "key", 0)
         let membership = StateExpr.in(member, .functionSet(domain, .setLiteral([0, 1])))
         #expect(try compiledValue(membership) == .bool(true))
@@ -83,7 +83,7 @@ struct FunctionSpaceMembershipTests {
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "FunctionSpaceMembershipModel", program: program))
         let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
-        #expect(generated.contains("validateFunctionSetCardinality"))
+        #expect(!generated.contains("validateFunctionSetCardinality"))
         try #require(!generated.contains("_NativeMachineOperations.functionSet("))
         let runtime = CompiledRuntime(program: program)
         let initial = try #require(try runtime.initialStates().first)
@@ -93,6 +93,10 @@ struct FunctionSpaceMembershipTests {
         var machine = try FunctionSpaceMembershipModel.makeMachine()
         #expect(try machine.send(.accepted).after.result)
         #expect(try successor.state.value(for: result) == .boolean(true))
+        let largeAccepted = try #require(compilation.layout.testActionID(named: "largeAccepted"))
+        let largeSuccessor = try #require(try runtime.successors(for: largeAccepted, from: initial).first)
+        #expect(try machine.send(.largeAccepted).after.result)
+        #expect(try largeSuccessor.state.value(for: result) == .boolean(true))
 
         let failures: [(String, FunctionSpaceMembershipModel.Action, EvalError, NativeMachineEvaluationError)] = [
             ("candidateFailure", .candidateFailure, .divisionByZero, .divisionByZero)

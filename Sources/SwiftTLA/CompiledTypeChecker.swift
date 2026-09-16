@@ -1839,16 +1839,33 @@ package struct CompiledTypeChecker: Sendable {
                     guard let right = results.popLast(), let left = results.popLast() else {
                         throw CompiledValueType.diagnostic("checking", "missing checked branch types")
                     }
-                    func isEmptyTuple(_ expression: CompiledExpression) -> Bool {
-                        switch expression.operation {
-                        case .tupleLiteral: return expression.children.isEmpty
-                        case .value(.tuple(let values)): return values.isEmpty
-                        default: return false
+                    func admitsEmptyFunctionContext(_ expression: CompiledExpression, _ type: CompiledValueType) -> Bool {
+                        var expressions = [(expression, type)]
+                        var values: [(CompiledValue, CompiledValueType)] = []
+                        while let (expression, type) = expressions.popLast() {
+                            switch (expression.operation, type) {
+                            case (.tupleLiteral, .dictionary):
+                                guard expression.children.isEmpty else { return false }
+                            case (.setLiteral, .set(let element)):
+                                expressions.append(contentsOf: expression.children.map { ($0, element) })
+                            case (.value(let value), _): values.append((value, type))
+                            default: return false
+                            }
                         }
+                        while let (value, type) = values.popLast() {
+                            switch (value, type) {
+                            case (.tuple(let members), .dictionary):
+                                guard members.isEmpty else { return false }
+                            case (.set(let members), .set(let element)):
+                                values.append(contentsOf: members.map { ($0, element) })
+                            default: return false
+                            }
+                        }
+                        return true
                     }
                     let context: CompiledValueType
-                    if case .dictionary = left, isEmptyTuple(no) { context = left }
-                    else if case .dictionary = right, isEmptyTuple(yes) { context = right }
+                    if admitsEmptyFunctionContext(no, left) { context = left }
+                    else if admitsEmptyFunctionContext(yes, right) { context = right }
                     else { context = try Self.operandContext(left, right) }
                     let offset: Int = if case .ifThenElse = ancestors.last?.operation { 1 } else { 0 }
                     pending.append(.result(context))

@@ -334,10 +334,6 @@ struct CompiledEvaluator: Sendable {
                 guard case .set(let domainValues) = domain, case .set(let rangeValues) = range else {
                     throw EvalError.expected(.functionSetDomains, actual: [domain, range])
                 }
-                try nativeOperation {
-                    try _NativeMachineOperations.validateFunctionSetCardinality(
-                        domainCount: domainValues.count, rangeCount: rangeValues.count)
-                }
                 tasks.append(.functionSpaceMember(domain: domainValues, range: rangeValues))
                 tasks.append(.expression(candidate, scope))
 

@@ -710,7 +710,6 @@ struct NativeSwiftEmitter {
                 (try { () throws -> Bool in
                     let domain = \(domain)
                     let range = \(range)
-                    try _NativeMachineOperations.validateFunctionSetCardinality(domainCount: domain.count, rangeCount: range.count)
                     let function = \(try emit(0))
                     return Set(function.keys) == domain && function.values.allSatisfy(range.contains)
                 }())

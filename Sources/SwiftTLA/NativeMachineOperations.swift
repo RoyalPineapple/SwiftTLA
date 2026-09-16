@@ -147,7 +147,7 @@ public enum _NativeMachineOperations: Sendable {
         return Set(functions)
     }
 
-    /// Preserve function-space overflow failures even when membership needs no enumeration.
+    /// Reject unrepresentable cardinalities before enumeration allocates the function space.
     public static func validateFunctionSetCardinality(domainCount: Int, rangeCount: Int) throws {
         var cardinality = 1
         for _ in 0..<domainCount {
