@@ -901,10 +901,11 @@ extension ParserSession {
         _ statements: CodeBlockItemListSyntax,
         processParameter: String,
         macros: [String: AlgorithmMacroDefinition],
-        scope: TypedFacadeScope
+        scope: TypedFacadeScope,
+        startingAt: Int = 0
     ) -> [AlgorithmStatementModel]? {
         var parsedStatements: [AlgorithmStatementModel] = []
-        for (index, statement) in statements.enumerated() {
+        for (index, statement) in statements.enumerated().dropFirst(startingAt) {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self) {
                 guard let binding = parseFormalLet(variable, scope: scope) else {
@@ -914,17 +915,17 @@ extension ParserSession {
                     }
                     return nil
                 }
-                let remaining = CodeBlockItemListSyntax(Array(statements.dropFirst(index + 1)))
                 let saved = generatedBinderName(line: UInt(variable.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
                 let shape = variable.bindings.first?.initializer.flatMap {
                     typedFacadeValueType($0.value, scope: scope)
                 }
                 let bodyScope = scope.extending(binding: binding.name, to: .variable(saved), shape: shape)
                 guard let body = parseAlgorithmStatements(
-                    remaining,
+                    statements,
                     processParameter: processParameter,
                     macros: macros,
-                    scope: bodyScope
+                    scope: bodyScope,
+                    startingAt: index + 1
                 ) else { return nil }
                 return parsedStatements + [.letBinding(variable: saved, value: binding.value, body)]
             }

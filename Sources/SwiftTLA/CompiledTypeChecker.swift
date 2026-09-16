@@ -1906,7 +1906,9 @@ package struct CompiledTypeChecker: Sendable {
                     if source.resultType == .unknown { continue }
                     guard case .record(var fields) = source.resultType,
                           let index = fields.firstIndex(where: { $0.name == name }) else {
-                        throw CompiledValueType.diagnostic("recordAccess", "unknown record field")
+                        throw annotated(CompiledValueType.diagnostic("recordAccess",
+                            "unknown record field '\(name)' in \(source.resultType.swiftType)"),
+                            at: expression.children[0])
                     }
                     fields[index] = .init(name: name, type: try projectionStorageType(fields[index].type, expected: expected))
                     let context = CompiledValueType.record(fields)
