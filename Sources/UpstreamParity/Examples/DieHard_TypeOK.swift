@@ -6,8 +6,8 @@ package struct DieHardModel: Sendable {
     package static var spec: TLASpec {
         #spec("DieHard") { scope in
             Extends(.naturals)
-            let big = scope.sharedVar("big", initial: 0)
-            let small = scope.sharedVar("small", initial: 0)
+            let big = scope.sharedVar(initial: 0)
+            let small = scope.sharedVar(initial: 0)
             Invariant("TypeOK") { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
             SwiftTLA.Action("FillSmallJug") { small.becomes(3) }
             SwiftTLA.Action("FillBigJug") { big.becomes(5) }

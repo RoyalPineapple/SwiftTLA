@@ -89,7 +89,7 @@ package struct MultiCarElevator: Sendable {
 
     package static var spec: TLASpec {
         #spec("MultiCarElevator") { scope in
-            let cars = scope.sharedVar("cars", initial: Function<CarID, Record<CarSchema>>.literal(
+            let cars = scope.sharedVar(initial: Function<CarID, Record<CarSchema>>.literal(
                 (.carA, Record<CarSchema>.literal(
                     .init(CarSchema.floor, FloorID.ground),
                     .init(CarSchema.doorsOpen, false),
@@ -101,8 +101,8 @@ package struct MultiCarElevator: Sendable {
                     .init(CarSchema.rider, "none")
                 ))
             ))
-            let calls = scope.sharedVar("calls", initial: SetExpr<Record<CallSchema>>())
-            let lastMoveDoorClosed = scope.sharedVar("lastMoveDoorClosed", initial: true)
+            let calls = scope.sharedVar(initial: SetExpr<Record<CallSchema>>())
+            let lastMoveDoorClosed = scope.sharedVar(initial: true)
             let floors = SetExpr<FloorID>.literal(.ground, .middle, .top)
             let riders = SetExpr<String>.literal("none", "alice", "bob")
             let person = ActionParameter("person", values: PersonID.finiteValues)

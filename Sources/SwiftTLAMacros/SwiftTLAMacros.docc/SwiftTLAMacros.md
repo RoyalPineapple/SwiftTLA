@@ -32,7 +32,7 @@ struct Counter {
     static var spec: TLASpec {
         #spec("Counter") {
             Algorithm("Counter", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(initial: 0)
 
                 Do(Step.advance) {
                     When(count < 1)

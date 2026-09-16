@@ -8,7 +8,7 @@ struct ScenarioExpectations {
     static var spec: TLASpec {
         #spec("ScenarioExpectations") { scope in
             let limit = scope.parameter(as: Int.self, in: 1...2)
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Algorithm("Counter") {
                 Do(Step.advance, when: value < limit) {
                     Assign(value, to: value + 1)

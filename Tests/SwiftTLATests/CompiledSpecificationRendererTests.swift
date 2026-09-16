@@ -246,7 +246,7 @@ struct CompiledSpecificationRendererTests {
         let specification = TLASpec("Authored") {
             Import(support)
             Algorithm("Authored", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(_name: "value", initial: 0)
                 Do(TestControlLabel.stay) { Assign(value, to: value.expr) }
             })
         }

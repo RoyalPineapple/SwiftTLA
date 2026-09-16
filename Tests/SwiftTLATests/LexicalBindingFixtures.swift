@@ -7,9 +7,9 @@ struct SavedValuesMachine {
 
     static var spec: TLASpec {
         #spec("SavedValues") { scope in
-            let value = scope.sharedVar("value", initial: 1)
-            let result = scope.sharedVar("result", initial: 0)
-            let valid = scope.sharedVar("valid", initial: false)
+            let value = scope.sharedVar(_name: "value", initial: 1)
+            let result = scope.sharedVar(_name: "result", initial: 0)
+            let valid = scope.sharedVar(_name: "valid", initial: false)
             Algorithm("Save") {
                 Do(Step.save) {
                     let first = value

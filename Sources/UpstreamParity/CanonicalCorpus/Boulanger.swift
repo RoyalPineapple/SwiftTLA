@@ -26,14 +26,14 @@ package struct BoulangerModel: Sendable {
         #spec("Boulanger") {
             Extends(.integers)
             Algorithm("Boulanger", scoped: { scope in
-                let num = scope.sharedVar("num", initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
-                let flag = scope.sharedVar("flag", initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
+                let num = scope.sharedVar(initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
+                let flag = scope.sharedVar(initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
 
                 Each(Process.all, fairness: .weak, scoped: { selfID, scope in
-                    let unchecked = scope.localVar("unchecked", initial: SetExpr<Process>())
-                    let max = scope.localVar("max", initial: 0)
-                    let nxt = scope.localVar("nxt", initial: Process.one)
-                    let previous = scope.localVar("previous", initial: -1)
+                    let unchecked = scope.localVar(initial: SetExpr<Process>())
+                    let max = scope.localVar(initial: 0)
+                    let nxt = scope.localVar(initial: Process.one)
+                    let previous = scope.localVar(initial: -1)
 
                     Do(Label.ncs) { Skip() }
 

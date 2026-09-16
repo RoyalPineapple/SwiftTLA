@@ -109,6 +109,21 @@ in this draft are provisional examples, not a requirement to repeat Swift names.
 Anonymous declarations must have useful source locations in diagnostics; do not
 invent another mandatory naming system merely to support them.
 
+Inside `#spec`, scoped state declarations derive their names from immutable Swift bindings:
+
+```swift
+let count = scope.sharedVar(initial: 0)
+let hour = scope.sharedVar(in: 1...12)
+let visited = process.localVar(initial: false)
+```
+
+The same rule applies to specification, algorithm, process, and procedure scopes.
+`Assign` changes the state value, not the handle binding.
+An initial string value is data and does not supply a declaration name.
+The macro supplies the internal `_name` argument for the formal builder boundary.
+The former positional-name signatures are not supported.
+State display labels and anonymous declarations still require the remaining B-02 decisions.
+
 The whole-step guard syntax is:
 
 ```swift
@@ -236,7 +251,7 @@ The predicate retains its inner scope and any process-member quantification.
 ```swift
 let safe = Invariant()
 Algorithm("Worker", scoped: { scope in
-    let value = scope.sharedVar("value", initial: 0)
+    let value = scope.sharedVar(initial: 0)
     Do(Step.wait) { Goto(Step.wait) }
     safe { value == 0 }
 })
@@ -583,7 +598,7 @@ Ordinary Swift sets can supply parameter values, legal domains, and model state:
 let nodes = scope.parameter(as: Set<Int>.self,
     in: Set<Set<Int>>([Set<Int>([1]), Set<Int>([1, 2, 3])]))
 let quorum = scope.parameter(as: Int.self, in: IntRange(1, through: nodes.cardinality))
-let selected = scope.sharedVar("selected", initial: Set<Int>([]))
+let selected = scope.sharedVar(initial: Set<Int>([]))
 
 Validation("Three nodes") {
     Bind(nodes, to: Set<Int>([1, 2, 3]))
@@ -617,7 +632,7 @@ Each(nodes) { member in
 }
 
 Each(nodes, scoped: { member, process in
-    let visited = process.localVar("visited", initial: false)
+    let visited = process.localVar(initial: false)
     Do(Step.visit) {
         Assign(visited, to: true)
     }

@@ -35,7 +35,7 @@ package struct ChangRobertsModel: Sendable {
     package static var spec: TLASpec {
         #spec("ChangRoberts") {
             Algorithm("ChangRoberts", scoped: { scope in
-                let initiator = scope.sharedVar("initiator", in: SetExpr<Function<Node, Bool>>.literal(
+                let initiator = scope.sharedVar(in: SetExpr<Function<Node, Bool>>.literal(
                     Function<Node, Bool>.literal((.one, false), (.two, false), (.three, false)),
                     Function<Node, Bool>.literal((.one, false), (.two, false), (.three, true)),
                     Function<Node, Bool>.literal((.one, false), (.two, true), (.three, false)),
@@ -45,17 +45,17 @@ package struct ChangRobertsModel: Sendable {
                     Function<Node, Bool>.literal((.one, true), (.two, true), (.three, false)),
                     Function<Node, Bool>.literal((.one, true), (.two, true), (.three, true))
                 ))
-                let processState = scope.sharedVar("processState", initial: Function<Node, ProcessState>.mapping { node in
+                let processState = scope.sharedVar(initial: Function<Node, ProcessState>.mapping { node in
                     If(
                         initiator[node] == true,
                         then: .candidate,
                         else: .lost
                     )
                 })
-                let successor = scope.sharedVar("successor", initial: Function<Node, Node>.literal(
+                let successor = scope.sharedVar(initial: Function<Node, Node>.literal(
                     (.one, .two), (.two, .three), (.three, .one)
                 ))
-                let messages = scope.sharedVar("messages", initial: Function<Node, SetExpr<Node>>.literal(
+                let messages = scope.sharedVar(initial: Function<Node, SetExpr<Node>>.literal(
                     (.one, SetExpr<Node>()),
                     (.two, SetExpr<Node>()),
                     (.three, SetExpr<Node>())

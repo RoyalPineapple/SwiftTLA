@@ -6,7 +6,7 @@ import SwiftTLAMacros
 private struct IncreasingSelection {
     static var spec: TLASpec {
         #spec("IncreasingSelection") { scope in
-            let current = scope.sharedVar("position", initial: 0)
+            let current = scope.sharedVar(_name: "position", initial: 0)
             SwiftTLA.Action("advance") {
                 let previous = current.expr
                 current.becomes(Select(from: SetExpr<Int>.literal(1, 2, 3)) { candidate in

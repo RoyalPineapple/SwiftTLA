@@ -11,8 +11,8 @@ struct AlgorithmBuilderTests {
             (lhs + rhs) * 2 - 1
         }
         let algorithm = Algorithm("GenericArithmetic", scoped: { scope in
-            let left = scope.sharedVar("left", initial: 3)
-            let right = scope.sharedVar("right", initial: 2)
+            let left = scope.sharedVar(_name: "left", initial: 3)
+            let right = scope.sharedVar(_name: "right", initial: 2)
             Do(TestControlLabel.advance) { Assign(left, to: combined(left, right)) }
         })
         let specification = try loweredSourceSpecification(algorithm)
@@ -27,9 +27,9 @@ struct AlgorithmBuilderTests {
             (lhs > rhs) && !(lhs <= rhs) && (lhs != rhs)
         }
         let algorithm = Algorithm("TypedPredicates", scoped: { scope in
-            let left = scope.sharedVar("left", initial: 3)
-            let right = scope.sharedVar("right", initial: 2)
-            let ready = scope.sharedVar("ready", initial: greater(left, right))
+            let left = scope.sharedVar(_name: "left", initial: 3)
+            let right = scope.sharedVar(_name: "right", initial: 2)
+            let ready = scope.sharedVar(_name: "ready", initial: greater(left, right))
             Do(TestControlLabel.advance) {
                 Assign(ready, to: (left < right) || (left == right))
             }
@@ -44,9 +44,9 @@ struct AlgorithmBuilderTests {
     @Test("A step guard protects every branch and update", arguments: [false, true])
     func wholeStepGuard(enabled: Bool) throws {
         let algorithm = Algorithm("GuardedBranches", scoped: { scope in
-            let ready = scope.sharedVar("ready", initial: enabled)
-            let value = scope.sharedVar("value", initial: 0)
-            let changed = scope.sharedVar("changed", initial: false)
+            let ready = scope.sharedVar(_name: "ready", initial: enabled)
+            let value = scope.sharedVar(_name: "value", initial: 0)
+            let changed = scope.sharedVar(_name: "changed", initial: false)
             Do(TestControlLabel.advance, when: ready) {
                 Assign(changed, to: true)
                 Either {
@@ -90,7 +90,7 @@ struct AlgorithmBuilderTests {
     @Test("model-level temporal properties appear once in both formal exports")
     func modelTemporalPropertyExports() throws {
         let source = TLASpec("ModelProgress", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Algorithm("Advance") {
                 Do(TestControlLabel.advance) { Assign(value, to: 1) }
             }
@@ -105,7 +105,7 @@ struct AlgorithmBuilderTests {
     @Test("specializing a lowered Algorithm preserves its authored PlusCal plan")
     func specializationPreservesAuthoredPlusCalPlan() throws {
         let source = TLASpec("SpecializedAlgorithm", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Algorithm("SpecializedAlgorithm") {
                 Do(TestControlLabel.advance) {
                     Assign(value, to: value + 1)
@@ -175,7 +175,7 @@ struct AlgorithmBuilderTests {
     @Test("compiler lowers an authored algorithm")
     func compilerLowersAuthoredAlgorithm() throws {
         let algorithm = Algorithm("CompileAtGate", scoped: { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             Do(TestControlLabel.advance) { Assign(count, to: count + 1) }
         })
         let source = TLASpec("CompileAtGate") { algorithm }
@@ -189,8 +189,7 @@ struct AlgorithmBuilderTests {
     @Test("top-level typed expression initialization retains its generated state type")
     func topLevelExpressionInitializationRetainsGeneratedStateType() throws {
         let source = #spec("TypedTopLevelFunction") { scope in
-            let values = scope.sharedVar(
-                "values",
+            let values = scope.sharedVar(_name: "values",
                 initial: Function<GeneratedSurfaceKey, Bool>.mapping { _ in false }
             )
             SwiftTLA.Action("Stay") { values.stays }
@@ -316,7 +315,7 @@ struct AlgorithmBuilderTests {
     @Test("rendered action headers use compiled process bindings")
     func renderedActionHeadersUseCompiledProcessBindings() throws {
         let algorithm = Algorithm("BoundProcessHeader", scoped: { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             Each(Node.all, fairness: .weak) { _ in
                 Do(TestControlLabel.advance) { Assign(count, to: count + 1) }
             }
@@ -400,7 +399,7 @@ struct AlgorithmBuilderTests {
     @Test("process-local family references preserve lexical bindings")
     func processLocalFamilyReplacementPreservesLexicalBindings() {
         let scope = ProcessScope()
-        let local = scope.localVar("count", initial: 0)
+        let local = scope.localVar(_name: "count", initial: 0)
         #expect(local.family(for: Node.self).raw == .processLocalFamily("count"))
 
         let expression = StateExpr.forAll(
@@ -429,7 +428,7 @@ struct AlgorithmBuilderTests {
     @Test("statement macros expand into their surrounding atomic block")
     func expandsTypedStatementMacro() throws {
         let algorithm = Algorithm("MacroLock", scoped: { scope in
-            let lock = scope.sharedVar("lock", initial: 1)
+            let lock = scope.sharedVar(_name: "lock", initial: 1)
             let acquire = Macro { (value: MacroParameter<Int>) in
                 When(value == 1)
                 Assign(value, to: 0)
@@ -454,8 +453,8 @@ struct AlgorithmBuilderTests {
     @Test("two-parameter statement macros bind each argument in caller scope")
     func expandsTwoParameterStatementMacro() throws {
         let algorithm = Algorithm("CopyValue", scoped: { scope in
-            let destination = scope.sharedVar("destination", initial: 0)
-            let source = scope.sharedVar("source", initial: 7)
+            let destination = scope.sharedVar(_name: "destination", initial: 0)
+            let source = scope.sharedVar(_name: "source", initial: 7)
             let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
                 Assign(target, to: value.expr)
             }
@@ -474,8 +473,8 @@ struct AlgorithmBuilderTests {
     @Test("statement macros retain formal expression arguments in read positions")
     func expandsExpressionMacroArguments() throws {
         let algorithm = Algorithm("OffsetValue", scoped: { scope in
-            let destination = scope.sharedVar("destination", initial: 0)
-            let source = scope.sharedVar("source", initial: 7)
+            let destination = scope.sharedVar(_name: "destination", initial: 0)
+            let source = scope.sharedVar(_name: "source", initial: 7)
             let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
                 Assign(target, to: value.expr)
             }
@@ -493,7 +492,7 @@ struct AlgorithmBuilderTests {
     @Test("statement macros report expression assignment targets during validation")
     func rejectsExpressionMacroAssignmentTarget() {
         let algorithm = Algorithm("RejectedMacroTarget", scoped: { scope in
-            let destination = scope.sharedVar("destination", initial: 0)
+            let destination = scope.sharedVar(_name: "destination", initial: 0)
             let write = Macro { (target: MacroParameter<Int>) in
                 Assign(target, to: 0)
             }
@@ -562,9 +561,9 @@ struct AlgorithmBuilderTests {
     @Test("typed procedure builders use deterministic formal parameter slots")
     func buildsTypedProcedure() throws {
         let algorithm = Algorithm("ProcedureBuilder", scoped: { scope in
-            let output = scope.sharedVar("output", initial: 0)
+            let output = scope.sharedVar(_name: "output", initial: 0)
             Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
-                let offset = scope.localVar("offset", initial: 1)
+                let offset = scope.localVar(_name: "offset", initial: 1)
                 Do(TestControlLabel.enter) {
                     Assign(output, to: value.expr + offset.expr)
                     Return()
@@ -597,7 +596,7 @@ struct AlgorithmBuilderTests {
     @Test("parameterless statement macros expand into their surrounding atomic block")
     func expandsParameterlessStatementMacro() throws {
         let algorithm = Algorithm("ParameterlessMacro", scoped: { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             let increment = Macro {
                 Assign(count, to: count + 1)
             }
@@ -623,7 +622,7 @@ struct AlgorithmBuilderTests {
             }
         }
         let algorithm = Algorithm("ReachableGraph", scoped: { scope in
-            let _ = scope.sharedVar("successors", in: choices)
+            let _ = scope.sharedVar(_name: "successors", in: choices)
             Do(TestControlLabel.done) { Stop() }
         })
 
@@ -679,8 +678,7 @@ struct AlgorithmBuilderTests {
     @Test("statement macros accept the current typed process identifier")
     func expandsMacroWithProcessIdentifier() throws {
         let algorithm = Algorithm("MacroProcess", scoped: { scope in
-            let marked = scope.sharedVar(
-                "marked",
+            let marked = scope.sharedVar(_name: "marked",
                 initial: Function<Node, Bool>.literal((.first, false), (.second, false))
             )
             let mark = Macro { (node: MacroParameter<Node>) in
@@ -730,7 +728,7 @@ struct AlgorithmBuilderTests {
     @Test("a begin-style algorithm keeps a scalar program counter")
     func lowersSequentialAlgorithmWithoutInventingAProcess() throws {
         let algorithm = Algorithm("SequentialCounter", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Do(TestControlLabel.increment) {
                 Let(value + 1) { nextValue in
                     Assign(value, to: nextValue.expr)
@@ -768,7 +766,7 @@ struct AlgorithmBuilderTests {
     @Test("sequential Algorithm fairness preserves scalar control and WF Next")
     func lowersSequentialAlgorithmFairness() throws {
         let algorithm = Algorithm("FairSequential", fairness: .weak, scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Do(TestControlLabel.increment) { Assign(value, to: value + 1) }
         })
 
@@ -805,9 +803,9 @@ struct AlgorithmBuilderTests {
     @Test("typed first-slice builders preserve ordered process steps")
     func buildsBoundedAlgorithm() throws {
         let algorithm = Algorithm("OrderedProcessSteps", scoped: { scope in
-            let selected = scope.sharedVar("selected", initial: Node.first)
+            let selected = scope.sharedVar(_name: "selected", initial: Node.first)
             Each(Node.all, scoped: { node, scope in
-                let inbox = scope.localVar("inbox", initial: 0)
+                let inbox = scope.localVar(_name: "inbox", initial: 0)
                 Do(AlgorithmLabel.receive, when: inbox > 0) {
                     Choose(Node.all) { candidate in
                         If(candidate != node) {
@@ -841,7 +839,7 @@ struct AlgorithmBuilderTests {
     @Test("algorithm-level properties lower with the executable process")
     func lowersAlgorithmProperties() throws {
         let algorithm = Algorithm("Properties", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Each(Node.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: value + 1)
@@ -865,7 +863,7 @@ struct AlgorithmBuilderTests {
     func lowersProcessLocalInvariant() throws {
         let algorithm = Algorithm("LocalProperty") {
             Each(Node.all, scoped: { selfID, scope in
-                let count = scope.localVar("count", initial: 0)
+                let count = scope.localVar(_name: "count", initial: 0)
                 Do(AlgorithmLabel.receive) { Skip() }
                 Invariant("LocalCount") { count == 0 }
                 Invariant("ControlLocation") {
@@ -918,7 +916,7 @@ struct AlgorithmBuilderTests {
     @Test("duplicate authored invariants fail at compilation")
     func rejectsDuplicateAuthoredInvariants() {
         let algorithm = Algorithm("DuplicateInvariant", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Invariant("TypeOK") { value >= 0 }
             Invariant("TypeOK") { value <= 1 }
             Do(AlgorithmLabel.receive) { Stop() }
@@ -937,7 +935,7 @@ struct AlgorithmBuilderTests {
     @Test("validation fails closed for invalid bounded algorithms")
     func rejectsInvalidAlgorithms() {
         let invalid = Algorithm("__pcal_invalid", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Each(EmptyNode.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: 1)
@@ -984,7 +982,7 @@ struct AlgorithmBuilderTests {
     @Test("A later guard reads the updated value before committing the step")
     func laterGuardReadsUpdatedValue() throws {
         let algorithm = Algorithm("ReadAfterWrite", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Do(TestControlLabel.advance) {
                 Assign(value, to: value + 1)
                 When(value > 0)
@@ -1008,8 +1006,8 @@ struct AlgorithmBuilderTests {
     @Test("authored PlusCal emits one update group for separated assignments")
     func authoredPlusCalGroupsSeparatedAssignments() throws {
         let algorithm = Algorithm("SeparatedUpdates", scoped: { scope in
-            let first = scope.sharedVar("first", initial: 1)
-            let second = scope.sharedVar("second", initial: 0)
+            let first = scope.sharedVar(_name: "first", initial: 1)
+            let second = scope.sharedVar(_name: "second", initial: 0)
             Do(TestControlLabel.advance) {
                 Assign(first, to: first + 1)
                 Skip()
@@ -1064,10 +1062,10 @@ struct AlgorithmBuilderTests {
     @Test("mutually exclusive nested update paths remain representable")
     func acceptsMutuallyExclusiveNestedUpdatePaths() throws {
         let algorithm = Algorithm("NestedUpdates", scoped: { scope in
-            let chooseFirst = scope.sharedVar("chooseFirst", initial: true)
-            let common = scope.sharedVar("common", initial: 0)
-            let first = scope.sharedVar("first", initial: 0)
-            let second = scope.sharedVar("second", initial: 0)
+            let chooseFirst = scope.sharedVar(_name: "chooseFirst", initial: true)
+            let common = scope.sharedVar(_name: "common", initial: 0)
+            let first = scope.sharedVar(_name: "first", initial: 0)
+            let second = scope.sharedVar(_name: "second", initial: 0)
             Do(TestControlLabel.advance) {
                 Assign(common, to: common + 1)
                 If(chooseFirst) {
@@ -1165,7 +1163,7 @@ struct AlgorithmBuilderTests {
     @Test("moving an independent update under a choice preserves successor multiplicity")
     func scheduledChoicePreservesSuccessorMultiplicity() throws {
         let original = Algorithm("ScheduledChoice", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Do(TestControlLabel.advance) {
                 With(SetExpr<Int>.literal(1, 2)) { _ in Skip() }
                 Assign(value, to: value + 1)
@@ -1186,7 +1184,7 @@ struct AlgorithmBuilderTests {
     @Test("lowering initializes pc and binds every atomic action to a process")
     func lowersControlStateAndActionBindings() throws {
         let algorithm = Algorithm("BoundedCounter", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Each(Node.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: value + 1)
@@ -1216,7 +1214,7 @@ struct AlgorithmBuilderTests {
     @Test("an unconditional single-loop process does not invent a program counter")
     func elidesRedundantProgramCounter() throws {
         let algorithm = Algorithm("SingleLoop", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Each(Node.all) { _ in
                 While(TestControlLabel.advance, true) {
                     Assign(value, to: value + 1)
@@ -1238,7 +1236,7 @@ struct AlgorithmBuilderTests {
     @Test("lowered atomic actions advance pc and stop before the explicit terminating self loop")
     func lowersAtomicSemantics() throws {
         let algorithm = Algorithm("BoundedCounter", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Each(Node.all) { _ in
                 Do(AlgorithmLabel.receive) {
                     Assign(value, to: value + 1)
@@ -1276,7 +1274,7 @@ struct AlgorithmBuilderTests {
     func lowersLocalState() throws {
         let algorithm = Algorithm("LocalCounter") {
             Each(Node.all, scoped: { _, scope in
-                let inbox = scope.localVar("inbox", initial: 0)
+                let inbox = scope.localVar(_name: "inbox", initial: 0)
                 Do(AlgorithmLabel.receive, when: inbox == 0) {
                     Assign(inbox, to: inbox + 1)
                     Goto(AlgorithmLabel.done)
@@ -1305,7 +1303,7 @@ struct AlgorithmBuilderTests {
     func lowersProcessDependentLocalState() throws {
         let algorithm = Algorithm("ProcessDependentInitialState") {
             Each(Node.all, scoped: { selfID, scope in
-                let _ = scope.localVar("leader", initial: selfID == .first)
+                let _ = scope.localVar(_name: "leader", initial: selfID == .first)
                 Do(AlgorithmLabel.done) { Stop() }
             })
         }
@@ -1321,7 +1319,7 @@ struct AlgorithmBuilderTests {
     @Test("closed labels compile into process control locations")
     func compilesClosedLabels() throws {
         let algorithm = Algorithm("ClosedLabels", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Each(Node.all) { _ in
                 Do(AlgorithmLabel.forward) {
                     Assign(value, to: value + 1)
@@ -1338,7 +1336,7 @@ struct AlgorithmBuilderTests {
     @Test("the end of an Each machine reaches its builder-owned Done state")
     func eachMachineEndsInDone() throws {
         let algorithm = Algorithm("ImplicitStop", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.finish) {
                     Assign(value, to: value + 1)
@@ -1358,7 +1356,7 @@ struct AlgorithmBuilderTests {
     @Test("an unlabeled transfer falls through to the next Do block")
     func intermediateDoFallsThrough() throws {
         let algorithm = Algorithm("Fallthrough", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.prepare) {
                     Assign(value, to: value + 1)
@@ -1381,7 +1379,7 @@ struct AlgorithmBuilderTests {
     @Test("TLASpec accepts an algorithm component and lowers it before checking")
     func algorithmComposesIntoTLASpec() throws {
         let algorithm = Algorithm("Composed", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.finish) { Assign(value, to: value + 1) }
             }
@@ -1403,7 +1401,7 @@ struct AlgorithmBuilderTests {
             FormalDefinition("same", taking: Int.self, Int.self) { left, right in
                 left == right
             }
-            let _ = scope.sharedVar("value", initial: 0)
+            let _ = scope.sharedVar(_name: "value", initial: 0)
             Do(TestControlLabel.stop) { Stop() }
         })
 
@@ -1427,8 +1425,8 @@ struct AlgorithmBuilderTests {
     @Test("When, Assert, With, and process fairness lower as formal semantics")
     func lowersMechanicalPlusCalStatements() throws {
         let algorithm = Algorithm("Mechanical", scoped: { scope in
-            let count = scope.sharedVar("count", initial: 0)
-            let selected = scope.sharedVar("selected", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
+            let selected = scope.sharedVar(_name: "selected", initial: 0)
             Each(Node.all, fairness: .weak) { node in
                 Do(TestControlLabel.choose, when: count == 0) {
                     With(SetExpr<Int>.literal(1, 2)) { choice in
@@ -1459,7 +1457,7 @@ struct AlgorithmBuilderTests {
     @Test("a false While condition advances control and a true condition loops")
     func lowersWhileAsFormalControl() throws {
         let algorithm = Algorithm("Loop", scoped: { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             Each(Node.all) { _ in
                 While(TestControlLabel.`repeat`, count < 2) {
                     Assign(count, to: count + 1)
@@ -1510,7 +1508,7 @@ struct AlgorithmBuilderTests {
     @Test("Assert is required only on the branch that reaches it")
     func scopesAssertToItsConditionalBranch() throws {
         let algorithm = Algorithm("ConditionalAssert", scoped: { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.check) {
                     If(count == 0) {
@@ -1537,7 +1535,7 @@ struct AlgorithmBuilderTests {
     @Test("Assert becomes a model-checker safety obligation")
     func checksAssertAsAnInvariant() throws {
         let algorithm = Algorithm("BrokenAssertion", scoped: { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.check) {
                     Assert(count == 1)
@@ -1557,7 +1555,7 @@ struct AlgorithmBuilderTests {
     @Test("SharedVar range expands to the declared finite initial states")
     func lowersNondeterministicSharedInitialization() throws {
         let algorithm = Algorithm("NondeterministicSharedInitialization", scoped: { scope in
-            let value = scope.sharedVar("value", in: 1...3)
+            let value = scope.sharedVar(_name: "value", in: 1...3)
             Each(Node.all) { _ in
                 Do(TestControlLabel.tick, when: value < 3) {
                     Assign(value, to: value + 1)
@@ -1580,9 +1578,8 @@ struct AlgorithmBuilderTests {
     @Test("SharedVar initial domains can depend on earlier formal state")
     func lowersDependentNondeterministicSharedInitialization() throws {
         let algorithm = Algorithm("DependentInitialDomain", scoped: { scope in
-            let maximum = scope.sharedVar("maximum", initial: 2)
-            let _ = scope.sharedVar(
-                "candidate",
+            let maximum = scope.sharedVar(_name: "maximum", initial: 2)
+            let _ = scope.sharedVar(_name: "candidate",
                 in: Expr<SetExpr<Int>>(.integerRange(.int(0), maximum.stateExpr))
             )
             Do(TestControlLabel.stop) { Stop() }
@@ -1600,7 +1597,7 @@ struct AlgorithmBuilderTests {
     @Test("nested With statements keep independent lexical bindings")
     func lowersNestedWithScopes() throws {
         let algorithm = Algorithm("NestedWith", scoped: { scope in
-            let selected = scope.sharedVar("selected", initial: 0)
+            let selected = scope.sharedVar(_name: "selected", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.choose) {
                     With(SetExpr<Int>.literal(1, 2), SetExpr<Int>.literal(10, 20)) { outer, inner in
@@ -1620,7 +1617,7 @@ struct AlgorithmBuilderTests {
     @Test("With preserves ordered three-source bindings")
     func lowersThreeIndependentWithScopes() throws {
         let algorithm = Algorithm("ThreeWith", scoped: { scope in
-            let selected = scope.sharedVar("selected", initial: 0)
+            let selected = scope.sharedVar(_name: "selected", initial: 0)
             Do(TestControlLabel.choose) {
                 With(
                     SetExpr<Int>.literal(1, 2),
@@ -1642,7 +1639,7 @@ struct AlgorithmBuilderTests {
     @Test("tuple patterns bind independently typed members")
     func lowersPairPatternBindings() throws {
         let algorithm = Algorithm("PairPattern", scoped: { scope in
-            let selected = scope.sharedVar("selected", initial: 0)
+            let selected = scope.sharedVar(_name: "selected", initial: 0)
             Do(TestControlLabel.choose) {
                 With(SetExpr<Pair<Int, Bool>>.literal(
                     Pair(first: 1, second: true),
@@ -1664,7 +1661,7 @@ struct AlgorithmBuilderTests {
     @Test("Choose accepts a bounded Swift integer range")
     func lowersBoundedIntegerChoice() throws {
         let algorithm = Algorithm("BoundedChoice", scoped: { scope in
-            let selected = scope.sharedVar("selected", initial: 0)
+            let selected = scope.sharedVar(_name: "selected", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.choose) {
                     Choose(1...3) { choice in
@@ -1683,8 +1680,8 @@ struct AlgorithmBuilderTests {
     @Test("dependent typed function initialization is evaluated after earlier initial state choices")
     func lowersDependentFunctionInitialization() throws {
         let algorithm = Algorithm("DependentInitial", scoped: { scope in
-            let seed = scope.sharedVar("seed", in: SetExpr<Bool>.literal(false, true))
-            let _ = scope.sharedVar("mirrors", initial: Function<Node, Bool>.mapping { _ in seed.expr })
+            let seed = scope.sharedVar(_name: "seed", in: SetExpr<Bool>.literal(false, true))
+            let _ = scope.sharedVar(_name: "mirrors", initial: Function<Node, Bool>.mapping { _ in seed.expr })
             Each(Node.all) { _ in
                 Do(TestControlLabel.stop) { Stop() }
             }
@@ -1707,8 +1704,8 @@ struct AlgorithmBuilderTests {
     func lowersDependentProcessLocalInitialization() throws {
         let algorithm = Algorithm("DependentProcessLocal") {
             Each(Node.all) { _, scope in
-                let first = scope.localVar("first", initial: 1)
-                let _ = scope.localVar("second", initial: first + 1)
+                let first = scope.localVar(_name: "first", initial: 1)
+                let _ = scope.localVar(_name: "second", initial: first + 1)
                 Do(TestControlLabel.stop) { Stop() }
             }
         }
@@ -1792,9 +1789,9 @@ private struct ProcedureGeneratedModel {
     static var spec: TLASpec {
         #spec("ProcedureGenerated") {
             Algorithm("ProcedureGenerated", scoped: { scope in
-                let output = scope.sharedVar("output", initial: 0)
+                let output = scope.sharedVar(_name: "output", initial: 0)
                 Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
-                    let offset = scope.localVar("offset", initial: 1)
+                    let offset = scope.localVar(_name: "offset", initial: 1)
                     Do(Step.enter, when: value.expr >= 0) {
                         Assign(output, to: value.expr + offset.expr)
                         Return()
@@ -1827,7 +1824,7 @@ private struct MacroProcessGeneratedModel {
     static var spec: TLASpec {
         #spec("MacroProcessGenerated") {
             Algorithm("MacroProcessGenerated", scoped: { scope in
-                let marked = scope.sharedVar("marked", initial: Function<Node, Bool>.literal((.first, false), (.second, false)))
+                let marked = scope.sharedVar(_name: "marked", initial: Function<Node, Bool>.literal((.first, false), (.second, false)))
                 let mark = Macro { (node: MacroParameter<Node>) in
                     Assign(marked, to: marked.updating(node, to: true))
                 }
@@ -1858,7 +1855,7 @@ private struct FunctionDomainGeneratedModel {
     static var spec: TLASpec {
         #spec("FunctionDomainGenerated") {
             Algorithm("FunctionDomainGenerated", scoped: { scope in
-                let successors = scope.sharedVar("successors", in: Where(
+                let successors = scope.sharedVar(_name: "successors", in: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
                     ForAll(Node.all) { node in
@@ -1888,7 +1885,7 @@ private struct StaticFormalSelectionModel {
                     from: SetExpr<Int>.literal(1, 2, 3),
                     matching: { value in value.expr % 2 == 0 }
                 )
-                let current: SharedVariable<Int> = scope.sharedVar("current", initial: selected)
+                let current: SharedVariable<Int> = scope.sharedVar(_name: "current", initial: selected)
 
                 Do(Step.done) { Stop() }
                 Invariant("SelectedEven") { current == 2 }
@@ -1925,8 +1922,7 @@ private struct StaticFilteredFunctionSelectionModel {
                     },
                     matching: { successor in successor.expr == successor.expr }
                 )
-                let current: SharedVariable<Function<Node, SetExpr<Node>>> = scope.sharedVar(
-                    "current",
+                let current: SharedVariable<Function<Node, SetExpr<Node>>> = scope.sharedVar(_name: "current",
                     initial: successors
                 )
 

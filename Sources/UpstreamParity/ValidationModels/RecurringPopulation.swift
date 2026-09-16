@@ -9,12 +9,12 @@ package struct RecurringPopulation {
         #spec("RecurringPopulation") { scope in
             let members = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([0]), Set<Int>([0, 1]), Set<Int>([2])]))
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(initial: 0)
             let EachRecurs = AlwaysEventually()
             let EachVisits = Eventually()
             Algorithm("Toggle") {
                 Each(members, fairness: .weak, scoped: { member, process in
-                    let visited = process.localVar("visited", initial: false)
+                    let visited = process.localVar(initial: false)
                     While(Step.toggle, true) {
                         Assign(value, to: 1 - value)
                         Assign(visited, to: true)

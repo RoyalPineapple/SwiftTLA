@@ -137,7 +137,7 @@ import Testing
         let source = """
         {
             Algorithm("WrongInitialType", scoped: { scope in
-                let key: SharedVariable<Key> = scope.sharedVar("key", initial: .second)
+                let key: SharedVariable<Key> = scope.sharedVar(_name: "key", initial: .second)
             })
         }
         """

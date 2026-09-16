@@ -7,7 +7,7 @@ struct NativePropertyIdentityModel {
 
     static var spec: TLASpec {
         #spec("NativePropertyIdentity") { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             Algorithm("NativePropertyIdentity") {
                 Do(Step.advance) {
                     Assign(count, to: 1)
@@ -27,7 +27,7 @@ struct NativePropertylessModel {
 
     static var spec: TLASpec {
         #spec("NativePropertyless") { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             Algorithm("NativePropertyless") {
                 Do(Step.advance) {
                     Assign(count, to: 1)

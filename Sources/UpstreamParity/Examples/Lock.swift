@@ -26,7 +26,7 @@ package struct LockModel: Sendable {
         #spec("Lock") {
             Extends(.integers)
             Algorithm("Lock", scoped: { scope in
-                let lock = scope.sharedVar("lock", initial: 1)
+                let lock = scope.sharedVar(initial: 1)
                 let acquire = Macro { (value: MacroParameter<Int>) in
                     When(value == 1)
                     Assign(value, to: 0)

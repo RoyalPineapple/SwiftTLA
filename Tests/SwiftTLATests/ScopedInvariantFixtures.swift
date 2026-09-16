@@ -12,9 +12,9 @@ struct ScopedInvariantMachine {
             let unvisited = Invariant()
             let top = Invariant()
             Algorithm("Visits", scoped: { algorithm in
-                let value = algorithm.sharedVar("value", initial: 0)
+                let value = algorithm.sharedVar(_name: "value", initial: 0)
                 Each(nodes, scoped: { member, process in
-                    let visited = process.localVar("visited", initial: false)
+                    let visited = process.localVar(_name: "visited", initial: false)
                     Do(Step.visit) {
                         Assign(visited, to: true)
                         Goto(Step.visit)

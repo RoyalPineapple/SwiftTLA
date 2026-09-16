@@ -104,7 +104,7 @@ private struct NativeRefinementCounter {
                 }
                 Constraint(value.first() < 1)
             }
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 4) }
             let instance = Instance("Counter", of: abstract)
             instance
@@ -124,7 +124,7 @@ private struct InvalidNativeRefinement {
                 Variable(value, 0)
                 SwiftTLA.Action("advance") { value.becomes(value + 1).when(value < 2) }
             }
-            let count = scope.sharedVar("count", in: 0...1)
+            let count = scope.sharedVar(_name: "count", in: 0...1)
             Invariant("BelowTwo") { count < 2 }
             Eventually("ReachesFour", count == 4)
             SwiftTLA.Action("advance") { count.becomes(count + 2).when(count < 2) }
@@ -146,7 +146,7 @@ private struct FairNativeRefinement {
                 SwiftTLA.Action("advance") { value.becomes(value + 1).when(value < 2) }
                 WeakFairnessNext()
             }
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 2) }
             let instance = Instance("Counter", of: abstract)
             instance
@@ -166,7 +166,7 @@ private struct FairConcreteRefinement {
                 SwiftTLA.Action("advance") { value.becomes(value + 1).when(value < 2) }
                 WeakFairnessNext()
             }
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 2) }
             WeakFairnessNext()
             let instance = Instance("Counter", of: abstract)
@@ -187,7 +187,7 @@ private struct StoppedConcreteRefinement {
                 SwiftTLA.Action("advance") { value.becomes(value + 1).when(value < 2) }
                 WeakFairnessNext()
             }
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 1) }
             WeakFairnessNext()
             let instance = Instance("Counter", of: abstract)

@@ -120,8 +120,8 @@ struct ChoiceScopeTests {
     func generatedControlPathsRetainTheirDestinations() throws {
         for jumps in [false, true] {
             let algorithm = Algorithm("ConditionalControl", scoped: { scope in
-                let flag = scope.sharedVar("flag", initial: jumps)
-                let count = scope.sharedVar("count", initial: 0)
+                let flag = scope.sharedVar(_name: "flag", initial: jumps)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.advance) {
                     If(flag) {
                         Goto(TestControlLabel.done)

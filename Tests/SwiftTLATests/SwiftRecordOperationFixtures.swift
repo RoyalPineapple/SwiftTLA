@@ -11,7 +11,7 @@ func swiftRecordModel(target: String = "packet", replacement: String = "Packet(c
             enum Step: String, CaseIterable { case advance }
             static var spec: TLASpec {
                 #spec("Records") { scope in
-                    let packet = scope.sharedVar("packet", initial: Packet(count: 0, ready: false))
+                    let packet = scope.sharedVar(_name: "packet", initial: Packet(count: 0, ready: false))
                     Algorithm("Records") {
                         Do(Step.advance) {
                             let saved = packet

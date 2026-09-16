@@ -7,7 +7,7 @@ struct MultiBindingChooseTests {
     @Test("two ordered ranges lower to nested existential choices and enumerate their product")
     func lowersAndEnumeratesOrderedRanges() throws {
         let algorithm = Algorithm("PairChoice", scoped: { scope in
-            let selected = scope.sharedVar("selected", initial: 0)
+            let selected = scope.sharedVar(_name: "selected", initial: 0)
             Each(MultiBindingChooseModel.Node.all) { _ in
                 Do(TestControlLabel.choose) {
                     Choose(1...2, 10...11) { first, second in
@@ -47,7 +47,7 @@ private struct MultiBindingChooseModel {
     static var spec: TLASpec {
         #spec("MultiBindingChoose") {
             Algorithm("MultiBindingChoose", scoped: { scope in
-                let selected = scope.sharedVar("selected", initial: 0)
+                let selected = scope.sharedVar(_name: "selected", initial: 0)
                 Each(Node.all) { _ in
                     Do(Step.choose) {
                         Choose(1...2, 10...11) { first, second in

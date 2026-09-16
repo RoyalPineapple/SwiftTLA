@@ -224,6 +224,10 @@ extension ParserSession {
             } else if typedFacadeType(call.calledExpression)?.name == "CollectionVar" {
                 continue
             } else if let constructor = resolveVarCall(call, in: declarationScope) {
+                if constructor.name == "SharedVar", declaration.bindingSpecifier.text != "let" {
+                    components.diagnostics.append(.init(message: "A state handle must be an immutable named let binding. Use Assign to update its value.", source: binding))
+                    continue
+                }
                 parseVariableBinding(binding, call: call, constructor: constructor, into: &components)
             } else if let value = decodeTypedFacadeValue(
                 ExprSyntax(call),
@@ -350,6 +354,23 @@ extension ParserSession {
 
         let args = Array(fc.arguments)
 
+        if callName == "SharedVar" {
+            let name = args.first(where: { $0.label?.text == "_name" })?
+                .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? patternName
+            if let range = args.first(where: { $0.label?.text == "in" })?.expression,
+               let domain = finiteSharedVariableDomain(range, declaredElementType: varTypeName, scope: sourceScope) {
+                components.variables.append(.init(name: name, initialization: .memberOf(domain.expression),
+                    generatedSwiftType: varTypeName ?? domain.elementType, origin: .source))
+            } else if let value = args.first(where: { $0.label?.text == "initial" })?.expression,
+                      let initial = decodeTypedFacadeValue(value, scope: sourceScope, expectedEnumType: varTypeName) {
+                components.variables.append(.init(name: name, initialization: .expression(initial),
+                    generatedSwiftType: varTypeName ?? initialValueTypeName(from: value), origin: .source))
+            } else {
+                components.diagnostics.append(.init(message: "A shared variable requires a supported initial expression or finite domain.", source: fc))
+            }
+            return
+        }
+
         if callName == "Var", args.count == 1,
            let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
             components.variables.append(.init(
@@ -365,16 +386,6 @@ extension ParserSession {
         }
 
         if let rangeExpr = args.first(where: { $0.label?.text == "in" })?.expression {
-            if callName == "SharedVar",
-               let domain = finiteSharedVariableDomain(rangeExpr, declaredElementType: varTypeName, scope: sourceScope) {
-                components.variables.append(.init(
-                    name: extractStringArg(fc, index: 0) ?? patternName,
-                    initialization: .memberOf(domain.expression),
-                    generatedSwiftType: varTypeName ?? domain.elementType,
-                    origin: .source
-                ))
-                return
-            }
             components.diagnostics.append(.init(
                 message: "SharedVar '\(patternName)' requires a supported finite set expression.",
                 source: rangeExpr
@@ -386,25 +397,6 @@ extension ParserSession {
 
         if let stringLit = args[0].expression.as(StringLiteralExprSyntax.self) {
             guard let varName = stringLit.representedLiteralValue else { return }
-            if callName == "SharedVar" {
-                guard args.count >= 2,
-                      let initial = decodeTypedFacadeValue(args[1].expression, scope: sourceScope, expectedEnumType: varTypeName)
-                else {
-                    components.diagnostics.append(.init(
-                        message: "SharedVar requires a supported initial formal expression.",
-                        source: fc
-                    ))
-                    return
-                }
-                let inferredType = initialValueTypeName(from: args[1].expression)
-                components.variables.append(.init(
-                    name: varName,
-                    initialization: .expression(initial),
-                    generatedSwiftType: varTypeName ?? inferredType,
-                    origin: .source
-                ))
-                return
-            }
             guard args.count >= 2 else {
                 components.diagnostics.append(.init(
                     message: "Var requires a supported initial formal value.",

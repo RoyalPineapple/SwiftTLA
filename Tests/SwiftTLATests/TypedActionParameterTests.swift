@@ -6,7 +6,7 @@ import SwiftTLAMacros
 private struct TypedParameterSelection {
     static var spec: TLASpec {
         #spec("TypedParameterSelection") { scope in
-            let selected = scope.sharedVar("result", initial: 0)
+            let selected = scope.sharedVar(_name: "result", initial: 0)
             let choice = ActionParameter("selection", values: [1, 2])
             SwiftTLA.Action("choose", parameters: [choice]) {
                 selected.becomes(choice + 1)
@@ -46,9 +46,9 @@ private struct CollectionParameterUpdates {
 
     static var spec: TLASpec {
         #spec("CollectionParameterUpdates") { scope in
-            let table = scope.sharedVar("table", initial: Function<Key, Int>.literal((.first, 0), (.second, 0)))
-            let partial = scope.sharedVar("partial", initial: PartialFunction<Key, Int>.empty)
-            let sequence = scope.sharedVar("sequence", initial: ZeroBasedSequence<Int>.literal(0, 0))
+            let table = scope.sharedVar(_name: "table", initial: Function<Key, Int>.literal((.first, 0), (.second, 0)))
+            let partial = scope.sharedVar(_name: "partial", initial: PartialFunction<Key, Int>.empty)
+            let sequence = scope.sharedVar(_name: "sequence", initial: ZeroBasedSequence<Int>.literal(0, 0))
             let key = ActionParameter("key", values: Key.finiteValues)
             let value = ActionParameter("value", values: [1, 2])
             SwiftTLA.Action("replace", parameters: [key, value]) {

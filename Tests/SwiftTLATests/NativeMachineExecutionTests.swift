@@ -14,7 +14,7 @@ private struct DescribedIntegerState {
     static var spec: TLASpec {
         #spec("DescribedIntegerState") {
             Algorithm("DescribedIntegerState", scoped: { scope in
-                let rank = scope.sharedVar("rank", initial: Rank.low)
+                let rank = scope.sharedVar(_name: "rank", initial: Rank.low)
                 Do(Step.advance) {
                     Assign(rank, to: Rank.high)
                 }
@@ -29,7 +29,7 @@ private struct BoundedExecutionCounter {
     static var spec: TLASpec {
         #spec("BoundedExecutionCounter") {
             Algorithm("BoundedExecutionCounter", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 While(Step.advance, true) {
                     When(count < 3)
                     Assign(count, to: count + 1)
@@ -45,8 +45,8 @@ private struct SavedValueExecutionSwap {
     static var spec: TLASpec {
         #spec("SavedValueExecutionSwap") {
             Algorithm("SavedValueExecutionSwap", scoped: { scope in
-                let left = scope.sharedVar("left", initial: 1)
-                let right = scope.sharedVar("right", initial: 2)
+                let left = scope.sharedVar(_name: "left", initial: 1)
+                let right = scope.sharedVar(_name: "right", initial: 2)
                 While(Step.swap, true) {
                     let originalLeft = left
                     Assign(left, to: right)
@@ -63,7 +63,7 @@ private struct ConstrainedExecutionChoice {
     static var spec: TLASpec {
         #spec("ConstrainedExecutionChoice") {
             Algorithm("ConstrainedExecutionChoice", scoped: { scope in
-                let selected = scope.sharedVar("selected", initial: 0)
+                let selected = scope.sharedVar(_name: "selected", initial: 0)
                 While(Step.select, true) {
                     Choose(1...3) { choice in
                         Assign(selected, to: choice.expr)
@@ -81,7 +81,7 @@ private struct AmbiguousExecutionChoice {
     static var spec: TLASpec {
         #spec("AmbiguousExecutionChoice") {
             Algorithm("AmbiguousExecutionChoice", scoped: { scope in
-                let selected = scope.sharedVar("selected", in: 0...1)
+                let selected = scope.sharedVar(_name: "selected", in: 0...1)
                 While(Step.select, true) {
                     When(selected < 2)
                     Choose(1...3) { choice in

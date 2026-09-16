@@ -17,7 +17,7 @@ struct RefinementExportTests {
         let instance = Instance("Abstract", of: abstract)
         let source = TLASpec("ConcreteConstants") {
             Algorithm("Loop", scoped: { scope in
-                let state = scope.sharedVar("value", initial: 0)
+                let state = scope.sharedVar(_name: "value", initial: 0)
                 While(Step.stay, true) { Assign(state, to: state) }
             })
             instance

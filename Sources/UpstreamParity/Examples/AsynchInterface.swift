@@ -15,9 +15,9 @@ package struct AsynchInterfaceModel: Sendable {
     package static var spec: TLASpec {
         #spec("AsynchInterface") { scope in
             Extends(.naturals)
-            let val = scope.sharedVar("val", in: Data.all)
-            let rdy = scope.sharedVar("rdy", in: 0...1)
-            let ack = scope.sharedVar("ack", initial: rdy.expr)
+            let val = scope.sharedVar(in: Data.all)
+            let rdy = scope.sharedVar(in: 0...1)
+            let ack = scope.sharedVar(initial: rdy.expr)
 
             Invariant("TypeInvariant") {
                 Data.all.contains(val) && rdy >= 0 && rdy <= 1 && ack >= 0 && ack <= 1

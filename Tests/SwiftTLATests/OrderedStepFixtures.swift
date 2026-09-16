@@ -8,8 +8,8 @@ struct OrderedCopyModel {
     static var spec: TLASpec {
         #spec("OrderedCopy") {
             Algorithm("OrderedCopy", scoped: { scope in
-                let x = scope.sharedVar("x", initial: 1)
-                let y = scope.sharedVar("y", initial: 0)
+                let x = scope.sharedVar(_name: "x", initial: 1)
+                let y = scope.sharedVar(_name: "y", initial: 0)
                 Do(Step.copy) {
                     Assign(x, to: x + 1)
                     Assign(y, to: x)
@@ -27,8 +27,8 @@ struct OrderedGuardModel {
     static var spec: TLASpec {
         #spec("OrderedGuard") {
             Algorithm("OrderedGuard", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
-                let copied = scope.sharedVar("copied", initial: 0)
+                let value = scope.sharedVar(_name: "value", initial: 0)
+                let copied = scope.sharedVar(_name: "copied", initial: 0)
                 Do(Step.choose) {
                     Assign(value, to: 1)
                     Choose(1...2) { candidate in
@@ -49,7 +49,7 @@ struct OrderedBlockedModel {
     static var spec: TLASpec {
         #spec("OrderedBlocked") {
             Algorithm("OrderedBlocked", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(_name: "value", initial: 0)
                 Do(Step.advance) {
                     Assign(value, to: 1)
                     When(value == 0)
@@ -67,7 +67,7 @@ struct OrderedAssertionModel {
     static var spec: TLASpec {
         #spec("OrderedAssertion") {
             Algorithm("OrderedAssertion", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(_name: "value", initial: 0)
                 Do(Step.advance) {
                     Assign(value, to: 1)
                     Assert(value == 1)
@@ -85,8 +85,8 @@ struct OrderedCallModel {
     static var spec: TLASpec {
         #spec("OrderedCall") {
             Algorithm("OrderedCall", scoped: { scope in
-                let input = scope.sharedVar("input", initial: 0)
-                let output = scope.sharedVar("output", initial: 0)
+                let input = scope.sharedVar(_name: "input", initial: 0)
+                let output = scope.sharedVar(_name: "output", initial: 0)
                 Procedure(ProcedureName.copy, parameters: Int.self) { value in
                     Do(Step.enter) {
                         Assign(output, to: value.expr)
@@ -110,8 +110,8 @@ struct SavedStepValueModel {
     static var spec: TLASpec {
         #spec("SavedStepValue") {
             Algorithm("SavedStepValue", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 1)
-                let copied = scope.sharedVar("copied", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 1)
+                let copied = scope.sharedVar(_name: "copied", initial: 0)
                 Do(Step.advance) {
                     Assign(count, to: 2)
                     let saved: Expr<Int> = count.expr

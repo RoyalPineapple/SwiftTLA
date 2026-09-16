@@ -14,8 +14,8 @@ package struct NQueensModel: Sendable {
         #spec("QueensPluscal") {
             Extends(.naturals)
             Algorithm("Queens", fairness: .weak, scoped: { scope in
-                let todo = scope.sharedVar("todo", initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>()))
-                let solutions = scope.sharedVar("sols", initial: SetExpr<TupleExpr<Int>>())
+                let todo = scope.sharedVar(initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>()))
+                let sols = scope.sharedVar(initial: SetExpr<TupleExpr<Int>>())
 
                 While(Step.nextQueen, !todo.expr.isEmpty) {
                     With(todo) { queens in
@@ -39,7 +39,7 @@ package struct NQueensModel: Sendable {
                                 }) { extensions in
                                     If(nextQueen.expr == 4) {
                                         Assign(todo, to: todo.expr.removing(queens))
-                                        Assign(solutions, to: solutions.expr.union(extensions.expr))
+                                        Assign(sols, to: sols.expr.union(extensions.expr))
                                     } else: {
                                         Assign(todo, to: todo.expr.removing(queens).union(extensions.expr))
                                     }
@@ -61,10 +61,10 @@ package struct NQueensModel: Sendable {
                     }
                 }
                 Invariant("Invariant") {
-                    solutions.expr.isSubset(of: validSolutions)
-                        && (!todo.expr.isEmpty || validSolutions.isSubset(of: solutions.expr))
+                    sols.expr.isSubset(of: validSolutions)
+                        && (!todo.expr.isEmpty || validSolutions.isSubset(of: sols.expr))
                 }
-                Invariant("NoSolutions") { solutions.expr.isEmpty }
+                Invariant("NoSolutions") { sols.expr.isEmpty }
                 Eventually("Termination", Finished())
 
                 Invariant("TypeInvariant") {
@@ -74,7 +74,7 @@ package struct NQueensModel: Sendable {
                                 IntRange(1, through: 4).contains(placement.expr[row.expr])
                             }
                     }
-                    && ForAll(in: solutions.expr) { placement in
+                    && ForAll(in: sols.expr) { placement in
                         placement.expr.count == 4
                             && ForAll(in: IntRange(1, through: placement.expr.count)) { row in
                                 IntRange(1, through: 4).contains(placement.expr[row.expr])

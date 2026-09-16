@@ -443,7 +443,7 @@ struct NativeCodeGenerationTests {
             static var spec: TLASpec {
                 #spec("NativeCounter") {
                     Algorithm("NativeCounter", scoped: { scope in
-                        let count = scope.sharedVar("count", initial: 0)
+                        let count = scope.sharedVar(_name: "count", initial: 0)
                         While(Step.advance, true) {
                             When(count < 3)
                             Assign(count, to: count + 1)
@@ -503,7 +503,7 @@ struct NativeCodeGenerationTests {
             static var spec: TLASpec {
                 #spec("NativeUnion") {
                     Algorithm("NativeUnion", scoped: { scope in
-                        let value = scope.sharedVar("value", initial: Value.first(Left.left))
+                        let value = scope.sharedVar(_name: "value", initial: Value.first(Left.left))
                         Do(Step.advance) { Assign(value, to: Value.second(Pair<Right, Int>.literal(Expr<Right>(Right.right), Expr<Int>(1) / 0).first())) }
                     })
                 }
@@ -561,7 +561,7 @@ extension NativeCodeGenerationTests {
             static var spec: TLASpec {
                 #spec("NestedSource") {
                     Algorithm("NestedSource", scoped: { scope in
-                        let count = scope.sharedVar("count", initial: 0)
+                        let count = scope.sharedVar(_name: "count", initial: 0)
                         Do(Step.advance) { Assign(count, to: \(update)) }
                     })
                 }

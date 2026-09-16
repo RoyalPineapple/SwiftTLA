@@ -57,7 +57,7 @@ private struct GeneratedTypedLocalRecursionModel {
         }, in: { recursion in recursion(4) })
       )
       Algorithm("GeneratedTypedLocalRecursionModel", scoped: { scope in
-        let counter = scope.sharedVar("counter", initial: 0)
+        let counter = scope.sharedVar(_name: "counter", initial: 0)
         Do(Step.advance) {
           Assign(counter, to: counter.expr + 1)
         }
@@ -78,7 +78,7 @@ private struct GeneratedTypedFormalDefinitionAlgorithm {
         }, in: { recursion in recursion(ballot) })
       }
       Algorithm("GeneratedTypedFormalDefinitionAlgorithm", scoped: { scope in
-        let counter = scope.sharedVar("counter", initial: 0)
+        let counter = scope.sharedVar(_name: "counter", initial: 0)
         Do(Step.advance) {
           Assign(counter, to: counter.expr + 1)
         }
@@ -93,8 +93,8 @@ private struct GeneratedTopLevelTypedFormalDefinitionModel {
 
   static var spec: TLASpec {
     #spec("GeneratedTopLevelTypedFormalDefinitionModel") { scope in
-      let bound = scope.sharedVar("bound", initial: 2)
-      let counter = scope.sharedVar("counter", initial: 0)
+      let bound = scope.sharedVar(_name: "bound", initial: 2)
+      let counter = scope.sharedVar(_name: "counter", initial: 0)
       FormalDefinition("SafeAt", taking: Int.self) { ballot in
         LetRec("SA", over: IntRange(0, through: bound.expr), taking: Int.self, { recursion, current in
           If(current == 0, then: true, else: recursion(current.expr - 1))

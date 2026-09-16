@@ -28,10 +28,10 @@ package struct PetersonModel: Sendable {
         #spec("Peterson") {
             Extends(.integers)
             Algorithm("Peterson", scoped: { scope in
-                let c = scope.sharedVar("c", initial: Function<Process, Bool>.literal(
+                let c = scope.sharedVar(initial: Function<Process, Bool>.literal(
                     (.one, false), (.two, false)
                 ))
-                let turn = scope.sharedVar("turn", initial: Process.one)
+                let turn = scope.sharedVar(initial: Process.one)
 
                 Each(Process.all) { process in
                     Do(Step.a0) {

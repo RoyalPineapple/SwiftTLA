@@ -8,8 +8,8 @@ private struct CartesianInitialSelection {
     static var spec: TLASpec {
         #spec("CartesianInitialSelection") {
             Algorithm("CartesianInitialSelection", scoped: { scope in
-                let left = scope.sharedVar("left", in: 1...2)
-                let right = scope.sharedVar("right", in: 3...4)
+                let left = scope.sharedVar(_name: "left", in: 1...2)
+                let right = scope.sharedVar(_name: "right", in: 3...4)
                 Do(Step.advance) { Assign(left, to: left + right) }
             })
         }
@@ -22,7 +22,7 @@ private struct EmptyInitialSelection {
     static var spec: TLASpec {
         #spec("EmptyInitialSelection") {
             Algorithm("EmptyInitialSelection", scoped: { scope in
-                let count = scope.sharedVar("count", in: Where(SetExpr<Int>.literal(1)) { value in value < 0 })
+                let count = scope.sharedVar(_name: "count", in: Where(SetExpr<Int>.literal(1)) { value in value < 0 })
                 Do(Step.advance) { Assign(count, to: count + 1) }
             })
         }
@@ -35,7 +35,7 @@ private struct DuplicateExecutionPaths {
     static var spec: TLASpec {
         #spec("DuplicateExecutionPaths") {
             Algorithm("DuplicateExecutionPaths", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(Step.advance) {
                     Either { Assign(count, to: 1) } or: { Assign(count, to: 1) }
                 }
@@ -50,7 +50,7 @@ private struct HiddenControlAlternatives {
     static var spec: TLASpec {
         #spec("HiddenControlAlternatives") {
             Algorithm("HiddenControlAlternatives", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(Step.select) {
                     Either { Goto(Step.left) } or: { Goto(Step.right) }
                 }
@@ -67,7 +67,7 @@ private struct CheckedExecutionOverflow {
     static var spec: TLASpec {
         #spec("CheckedExecutionOverflow") {
             Algorithm("CheckedExecutionOverflow", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 9_223_372_036_854_775_807)
+                let count = scope.sharedVar(_name: "count", initial: 9_223_372_036_854_775_807)
                 Do(Step.advance) { Assign(count, to: count + 1) }
             })
         }
@@ -80,7 +80,7 @@ private struct ReachableInvariantFailure {
     static var spec: TLASpec {
         #spec("ReachableInvariantFailure") {
             Algorithm("ReachableInvariantFailure", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(Step.advance) { Assign(count, to: 1) }
                 Invariant("Zero") { count == 0 }
             })
@@ -231,7 +231,7 @@ private struct CheckedRecordConversion {
     static var spec: TLASpec {
         #spec("CheckedRecordConversion") {
             Algorithm("CheckedRecordConversion", scoped: { scope in
-                let record = scope.sharedVar("record", initial: Record<IntegerRecord>.literal(
+                let record = scope.sharedVar(_name: "record", initial: Record<IntegerRecord>.literal(
                     .init(IntegerRecord.count, 0)))
                 Do(
                     Step.valid,

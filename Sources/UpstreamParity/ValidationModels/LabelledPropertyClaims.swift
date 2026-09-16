@@ -15,7 +15,7 @@ package struct LabelledPropertyClaims {
             let stable = EventuallyAlways(label: "Safety / progress")
             let response = LeadsTo(label: "Safety / progress")
             Algorithm("Loop", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(initial: 0)
                 Do(Step.stay) {
                     Assign(value, to: value)
                     Goto(Step.stay)

@@ -63,8 +63,8 @@ package struct VoteProofModel: Sendable {
             Refines
 
             let algorithm: Algorithm = Algorithm("Voting", scoped: { scope in
-                let votes = scope.sharedVar("votes", initial: Function<Acceptor, SetExpr<Pair<Int, Value>>>.mapping { _ in SetExpr() })
-                let maxBal = scope.sharedVar("maxBal", initial: Function<Acceptor, Int>.mapping { _ in -1 })
+                let votes = scope.sharedVar(initial: Function<Acceptor, SetExpr<Pair<Int, Value>>>.mapping { _ in SetExpr() })
+                let maxBal = scope.sharedVar(initial: Function<Acceptor, Int>.mapping { _ in -1 })
                 let values = SetExpr<Value>.literal(.v1, .v2)
                 let acceptors = SetExpr<Acceptor>.literal(.a1, .a2, .a3)
                 let quorums = SetExpr<SetExpr<Acceptor>>.literal(

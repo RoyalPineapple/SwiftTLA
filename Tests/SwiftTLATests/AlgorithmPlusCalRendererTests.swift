@@ -39,7 +39,7 @@ struct AlgorithmPlusCalRendererTests {
         }
         let specification = TLASpec("ModelValueDeclarations") {
             Algorithm("ModelValueDeclarations", scoped: { scope in
-                let _ = scope.sharedVar("value", initial: Member.node)
+                let _ = scope.sharedVar(_name: "value", initial: Member.node)
                 Do(TestControlLabel.stop) { Stop() }
             })
         }
@@ -53,11 +53,11 @@ struct AlgorithmPlusCalRendererTests {
     @Test("renders process declarations, source labels, and structured statements")
     func rendersProcessAlgorithm() throws {
         let algorithm = Algorithm("RenderedProcess", scoped: { scope in
-            let count = scope.sharedVar("count", initial: 0)
-            let flags = scope.sharedVar("flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
-            let _ = scope.sharedVar("sentinel", initial: "author text")
+            let count = scope.sharedVar(_name: "count", initial: 0)
+            let flags = scope.sharedVar(_name: "flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
+            let _ = scope.sharedVar(_name: "sentinel", initial: "author text")
             Each(Node.all, fairness: .strong, scoped: { node, scope in
-                let local = scope.localVar("local", initial: 0)
+                let local = scope.localVar(_name: "local", initial: 0)
                 While(ProcessStep.repeat, count < 2) {
                     When(count >= 0)
                     Assert(count < 3)
@@ -105,7 +105,7 @@ struct AlgorithmPlusCalRendererTests {
     @Test("compilation prepares process identifiers for PlusCal")
     func preparesProcessIdentifiers() throws {
         let algorithm = Algorithm("ProcessIdentifier", scoped: { scope in
-            let flags = scope.sharedVar("flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
+            let flags = scope.sharedVar(_name: "flags", initial: Function<Node, Bool>.literal((.left, false), (.right, false)))
             Each(Node.all) { node in
                 Do(ProcessStep.done) {
                     Assign(flags, to: flags.updating(node, to: true))
@@ -123,7 +123,7 @@ struct AlgorithmPlusCalRendererTests {
     @Test("imports Integers when rendering a negative formal value")
     func rendersNegativeFormalValue() throws {
         let algorithm = Algorithm("Negative", scoped: { scope in
-            let _: SharedVariable<Int> = scope.sharedVar("previous", initial: -1)
+            let _: SharedVariable<Int> = scope.sharedVar(_name: "previous", initial: -1)
             Do(TestControlLabel.stop) { Stop() }
         })
 
@@ -136,7 +136,7 @@ struct AlgorithmPlusCalRendererTests {
     @Test("renders legal quantified binders in authored expressions")
     func rendersLegalQuantifiedBinder() throws {
         let algorithm = Algorithm("QuantifiedBinder", scoped: { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             Do(TestControlLabel.stop) {
                 When(Expr<Bool>(StateExpr.forAll(
                     .setLiteral([.int(0), .int(1)]),
@@ -160,7 +160,7 @@ struct AlgorithmPlusCalRendererTests {
         let spec = TLASpec("Sections") {
             FormalDefinition("Bound", parameters: [], body: .value(.int(2)))
             Algorithm("Sections", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 FormalDefinition(
                     "UsesCount",
                     parameters: [],
@@ -183,7 +183,7 @@ struct AlgorithmPlusCalRendererTests {
     @Test("renders formal definitions in their declaration section")
     func rendersDirectFormalDefinitionInDefine() throws {
         let algorithm = Algorithm("DirectSections", scoped: { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             FormalDefinition("Ready", taking: Int.self, plusCalPhase: .define) { _ in
                 count == 0
             }
@@ -204,7 +204,7 @@ struct AlgorithmPlusCalRendererTests {
     func rendersTopLevelTypedProperty() throws {
         let spec = TLASpec("CompilerProperty") {
             Algorithm("Counter", scoped: { scope in
-                let _ = scope.sharedVar("count", initial: 0)
+                let _ = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.done) { Stop() }
             })
             Invariant("CountIsZero") { StateExpr.variable("count") == 0 }
@@ -369,7 +369,7 @@ struct AlgorithmPlusCalRendererTests {
             FormalDefinition("Early", parameters: [], body: true, plusCalPhase: .prelude, dependsOn: ["Late"])
             FormalDefinition("Late", parameters: [], body: true, plusCalPhase: .define)
             Algorithm("PhaseDependency", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(_name: "value", initial: 0)
                 Do(TestControlLabel.stay) { Assign(value, to: value) }
             })
         }
@@ -387,9 +387,9 @@ struct AlgorithmPlusCalRendererTests {
     @Test("renders procedure parameters with compiled state names")
     func rendersProcedureParametersWithCompiledStateNames() throws {
         let algorithm = Algorithm("Procedures", scoped: { scope in
-            let output = scope.sharedVar("output", initial: 0)
+            let output = scope.sharedVar(_name: "output", initial: 0)
             Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
-                let offset = scope.localVar("offset", initial: 1)
+                let offset = scope.localVar(_name: "offset", initial: 1)
                 Do(ProcedureStep.enter) {
                     Assign(output, to: value.expr + offset.expr)
                     Return()
@@ -461,7 +461,7 @@ struct AlgorithmPlusCalRendererTests {
     func rendersAuthoredAlgorithmAndStateConstraint() throws {
         let spec = TLASpec("Retained") {
             Algorithm("Retained", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.stop) { Stop() }
                 StateConstraint(count < 2)
             })
@@ -484,7 +484,7 @@ struct AlgorithmPlusCalRendererTests {
             FormalDefinition("Seed", parameters: [], body: .variable("N"))
             Symmetry("member", [1, 2] as Set<Int>)
             Algorithm("Context", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.stop) { Stop() }
                 Invariant("Bounded") { count.expr <= 2 }
             })
@@ -509,7 +509,7 @@ struct AlgorithmPlusCalRendererTests {
             Extends(.naturals)
             Extends(.finiteSets)
             Algorithm("Modules", scoped: { scope in
-                let _ = scope.sharedVar("count", initial: 0)
+                let _ = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.stop) { Stop() }
             })
         }

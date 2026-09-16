@@ -42,9 +42,7 @@ extension GameOfLifeModel {
     package static var spec: TLASpec {
         #spec("GameOfLife") { scope in
             Extends(.integers)
-            let grid = scope.sharedVar(
-                "grid",
-                initial: Function<Position, Bool>.mapping { boundPosition in
+            let grid = scope.sharedVar(initial: Function<Position, Bool>.mapping { boundPosition in
                     let position = boundPosition.expr
                     return position.column == 2 && position.row >= 2 && position.row <= 4
                 }

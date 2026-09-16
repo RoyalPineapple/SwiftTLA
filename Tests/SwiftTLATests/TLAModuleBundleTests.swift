@@ -22,7 +22,7 @@ private struct ImportedFormalModuleGeneratedModel {
     #spec("ImportedFormalModuleGeneratedModel") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
       Algorithm("ImportedFormalModuleGeneratedModel", scoped: { scope in
-        let value = scope.sharedVar("value", initial: 0)
+        let value = scope.sharedVar(_name: "value", initial: 0)
         Do(Step.keep) { Assign(value, to: value.expr) }
       })
     }
@@ -37,7 +37,7 @@ private struct InstancedFormalModuleGeneratedModel {
     #spec("InstancedFormalModuleGeneratedModel") {
       Instance("Folding", of: Folds.module)
       Algorithm("InstancedFormalModuleGeneratedModel", scoped: { scope in
-        let value = scope.sharedVar("value", initial: 0)
+        let value = scope.sharedVar(_name: "value", initial: 0)
         Do(Step.keep) { Assign(value, to: value.expr) }
       })
     }
@@ -163,8 +163,7 @@ struct TLAModuleBundleTests {
     let configured = TLASpec("ConfiguredZSequences") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
       Algorithm("ConfiguredZSequences", scoped: { scope in
-        let rotatedState: SharedVariable<ZeroBasedSequence<Int>> = scope.sharedVar(
-          "rotated",
+        let rotatedState: SharedVariable<ZeroBasedSequence<Int>> = scope.sharedVar(_name: "rotated",
           initial: rotated
         )
         Do(TestControlLabel.keep) { Assign(rotatedState, to: rotatedState.expr) }

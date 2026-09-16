@@ -5,7 +5,7 @@ import SwiftTLAMacros
 struct First {
     static var spec: TLASpec {
         #spec("First") { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             Invariant("Safe") { count == 0 }
         }
     }
@@ -15,7 +15,7 @@ struct First {
 struct Second {
     static var spec: TLASpec {
         #spec("Second") { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             Invariant("Safe") { count == 0 }
         }
     }

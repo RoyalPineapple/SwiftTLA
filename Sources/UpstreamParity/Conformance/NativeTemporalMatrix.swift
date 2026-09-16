@@ -5,7 +5,7 @@ import SwiftTLAMacros
 private struct UnfairTemporalMatrix {
   static var spec: TLASpec {
     #spec("TemporalMatrix") { scope in
-      let x = scope.sharedVar("x", initial: 0)
+      let x = scope.sharedVar(initial: 0)
       let a = SwiftTLA.Action("A") { x.becomes(2).when(x == 0) }
       a
       SwiftTLA.Action("B") { x.becomes(1).when(x == 0) }
@@ -26,7 +26,7 @@ private struct UnfairTemporalMatrix {
 private struct WeaklyFairTemporalMatrix {
   static var spec: TLASpec {
     #spec("TemporalMatrix") { scope in
-      let x = scope.sharedVar("x", initial: 0)
+      let x = scope.sharedVar(initial: 0)
       let a = SwiftTLA.Action("A") { x.becomes(2).when(x == 0) }
       a
       SwiftTLA.Action("B") { x.becomes(1).when(x == 0) }
@@ -47,7 +47,7 @@ private struct WeaklyFairTemporalMatrix {
 private struct StronglyFairTemporalMatrix {
   static var spec: TLASpec {
     #spec("TemporalMatrix") { scope in
-      let x = scope.sharedVar("x", initial: 0)
+      let x = scope.sharedVar(initial: 0)
       let a = SwiftTLA.Action("A") { x.becomes(2).when(x == 0) }
       a
       SwiftTLA.Action("B") { x.becomes(1).when(x == 0) }

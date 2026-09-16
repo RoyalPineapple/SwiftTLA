@@ -24,7 +24,7 @@ package struct EWD840Model: Sendable {
     package static var spec: TLASpec {
         #spec("EWD840") { scope in
             Extends(.integers)
-            let active = scope.sharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
+            let active = scope.sharedVar(in: SetExpr<Function<Node, Bool>>.literal(
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, false)),
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, true)),
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, false)),
@@ -34,7 +34,7 @@ package struct EWD840Model: Sendable {
                 Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, false)),
                 Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, true))
             ))
-            let color = scope.sharedVar("color", in: SetExpr<Function<Node, Color>>.literal(
+            let color = scope.sharedVar(in: SetExpr<Function<Node, Color>>.literal(
                 Function<Node, Color>.literal((Node.zero, .white), (Node.one, .white), (Node.two, .white)),
                 Function<Node, Color>.literal((Node.zero, .white), (Node.one, .white), (Node.two, .black)),
                 Function<Node, Color>.literal((Node.zero, .white), (Node.one, .black), (Node.two, .white)),
@@ -44,8 +44,8 @@ package struct EWD840Model: Sendable {
                 Function<Node, Color>.literal((Node.zero, .black), (Node.one, .black), (Node.two, .white)),
                 Function<Node, Color>.literal((Node.zero, .black), (Node.one, .black), (Node.two, .black))
             ))
-            let tpos = scope.sharedVar("tpos", in: 0...2)
-            let tcolor = scope.sharedVar("tcolor", initial: Color.black)
+            let tpos = scope.sharedVar(in: 0...2)
+            let tcolor = scope.sharedVar(initial: Color.black)
 
             SwiftTLA.Action("InitiateProbe") {
                 tpos == 0 && (tcolor == Color.black || color[.zero] == Color.black)

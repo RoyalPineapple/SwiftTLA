@@ -36,10 +36,9 @@ package struct ChameneosModel: Sendable {
                 Pair.literal(.red, 0),
                 Pair.literal(.yellow, 0)
             )
-            let chameneoses: SharedVariable<Function<Creature, CreatureState>> = scope.sharedVar(
-                "chameneoses", in: Functions(from: Creature.all, to: initialStates))
-            let meetingPlace = scope.sharedVar("meetingPlace", initial: 0)
-            let numMeetings = scope.sharedVar("numMeetings", initial: 0)
+            let chameneoses: SharedVariable<Function<Creature, CreatureState>> = scope.sharedVar(in: Functions(from: Creature.all, to: initialStates))
+            let meetingPlace = scope.sharedVar(initial: 0)
+            let numMeetings = scope.sharedVar(initial: 0)
             let creature = ActionParameter("cid", values: Creature.finiteValues)
 
             Invariant("TypeOK") {

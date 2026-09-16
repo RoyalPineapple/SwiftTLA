@@ -14,10 +14,10 @@ package struct MajorityModel: Sendable {
     package static var spec: TLASpec {
         #spec("Majority") { scope in
             Extends(.integers, .sequences, .finiteSets)
-            let seq = scope.sharedVar("seq", in: Sequences(of: Value.all, lengths: 0...5))
-            let i = scope.sharedVar("i", initial: 1)
-            let cand = scope.sharedVar("cand", in: Value.all)
-            let cnt = scope.sharedVar("cnt", initial: 0)
+            let seq = scope.sharedVar(in: Sequences(of: Value.all, lengths: 0...5))
+            let i = scope.sharedVar(initial: 1)
+            let cand = scope.sharedVar(in: Value.all)
+            let cnt = scope.sharedVar(initial: 0)
 
             let next = SwiftTLA.Action("Next") {
                 i <= seq.count && i.becomes(i + 1)

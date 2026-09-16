@@ -8,7 +8,7 @@ struct DeadlockScenarios {
 
     static var spec: TLASpec {
         #spec("DeadlockScenarios") { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Algorithm("Blocked") {
                 Do(Step.wait, when: value < 0) { Goto(Step.wait) }
             }

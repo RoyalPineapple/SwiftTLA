@@ -20,7 +20,7 @@ private struct ActorCounter {
     static var spec: TLASpec {
         #spec("ActorCounter") {
             Algorithm("ActorCounter", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Each(Process.all) { _ in
                     Do(Step.advance, when: count < 1) {
                         Assign(count, to: count + 1)

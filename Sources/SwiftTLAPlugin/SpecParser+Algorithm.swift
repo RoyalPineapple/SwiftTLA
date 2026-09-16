@@ -764,10 +764,12 @@ extension ParserSession {
               construct.isState(kind, in: declarationScope)
         else { return nil }
 
-        guard let declaredName = extractStringArg(initializer, index: 0) else {
-            algorithmParseFailure = "State declarations require a literal model variable name."
+        guard declaration.bindingSpecifier.text == "let" else {
+            algorithmParseFailure = "A state handle must be an immutable named let binding. Use Assign to update its value."
             return nil
         }
+        let declaredName = initializer.arguments.first(where: { $0.label?.text == "_name" })?
+            .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? sourceName
 
         let declaredType = binding.typeAnnotation?.type.as(IdentifierTypeSyntax.self)
         let expectedDeclarationType = kind == .shared ? "SharedVariable" : "LocalVariable"

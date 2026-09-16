@@ -17,8 +17,8 @@ struct GeneratedSwiftRecord {
 
     static var spec: TLASpec {
         #spec("GeneratedSwiftRecord") { scope in
-            let packet = scope.sharedVar("packet", initial: Packet(count: 0, ready: false))
-            let previousCount = scope.sharedVar("previousCount", initial: -1)
+            let packet = scope.sharedVar(_name: "packet", initial: Packet(count: 0, ready: false))
+            let previousCount = scope.sharedVar(_name: "previousCount", initial: -1)
             Algorithm("GeneratedSwiftRecord") {
                 Do(Step.advance) {
                     let saved = packet

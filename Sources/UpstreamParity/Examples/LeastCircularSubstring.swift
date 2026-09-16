@@ -110,21 +110,19 @@ package enum LeastCircularSubstringModel {
 
         Algorithm("LeastCircularSubstring", scoped: { scope in
             let characterSet = SetExpr<Int>.literal(0, 1)
-            let b = scope.sharedVar(
-                "b",
+            let b = scope.sharedVar(_name: "b",
                 in: ZSequences.sequences(over: characterSet)
             )
-            let n = scope.sharedVar("n", initial: ZSequences.length(of: b.expr))
-            let f = scope.sharedVar(
-                "f",
+            let n = scope.sharedVar(_name: "n", initial: ZSequences.length(of: b.expr))
+            let f = scope.sharedVar(_name: "f",
                 initial: FailureTable.filled(
                     through: n.expr * 2,
                     with: -1
                 )
             )
-            let i: SharedVariable<Int> = scope.sharedVar("i", initial: -1)
-            let j = scope.sharedVar("j", initial: 1)
-            let k = scope.sharedVar("k", initial: 0)
+            let i: SharedVariable<Int> = scope.sharedVar(_name: "i", initial: -1)
+            let j = scope.sharedVar(_name: "j", initial: 1)
+            let k = scope.sharedVar(_name: "k", initial: 0)
 
             Do(Step.l3) {
                 If(j < n * 2) {

@@ -91,6 +91,18 @@ private final class DSLRewriter: SyntaxRewriter {
             guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   var call = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { return binding }
             let member = call.calledExpression.as(MemberAccessExprSyntax.self)
+            if let member, ["sharedVar", "localVar"].contains(member.declName.baseName.text),
+               !call.arguments.contains(where: { $0.label?.text == "_name" }) {
+                guard node.bindingSpecifier.text == "let" else {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: StateBindingDiagnostic()))
+                    return binding
+                }
+                let argument = LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
+                    expression: StringLiteralExprSyntax(content: name), trailingComma: .commaToken())
+                call.arguments = LabeledExprListSyntax([argument] + Array(call.arguments))
+                binding.initializer?.value = ExprSyntax(call)
+                return binding
+            }
             let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
                 ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "SwiftTLA"
                     ? member?.declName.baseName.text : nil)
@@ -276,6 +288,12 @@ private struct ParameterBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-parameter-binding")
     let severity: DiagnosticSeverity = .error
     let message = "A model parameter must be an immutable named let binding in the specification scope."
+}
+
+private struct StateBindingDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-state-binding")
+    let severity: DiagnosticSeverity = .error
+    let message = "A state handle must be an immutable named let binding. Use Assign to update its value."
 }
 
 private struct PropertyBindingDiagnostic: DiagnosticMessage {

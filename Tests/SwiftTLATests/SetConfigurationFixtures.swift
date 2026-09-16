@@ -10,7 +10,7 @@ struct SetConfiguredMachine {
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([1]), Set<Int>([1, 2, 3])]))
             let quorum = scope.parameter(as: Int.self, in: IntRange(1, through: nodes.cardinality))
-            let selected = scope.sharedVar("selected", initial: Set<Int>([]))
+            let selected = scope.sharedVar(_name: "selected", initial: Set<Int>([]))
             Algorithm("Selection") {
                 Do(Step.adopt, when: selected.isEmpty) {
                     Assign(selected, to: nodes)

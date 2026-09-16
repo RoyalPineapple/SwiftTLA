@@ -125,11 +125,11 @@ public struct ElevatorBank {
     public static var spec: TLASpec {
         #spec("ElevatorBank") {
             Algorithm("ElevatorBank", scoped: { scope in
-                let cars = scope.sharedVar("cars", initial: Function<CarID, Record<CarSchema>>.literal(
+                let cars = scope.sharedVar(initial: Function<CarID, Record<CarSchema>>.literal(
                     (.carA, Record.literal(.init(CarSchema.floor, .one), .init(CarSchema.door, .closed), .init(CarSchema.rider, .none))),
                     (.carB, Record.literal(.init(CarSchema.floor, .three), .init(CarSchema.door, .closed), .init(CarSchema.rider, .none)))
                 ))
-                let riders = scope.sharedVar("riders", initial: Function<Rider, Record<RiderSchema>>.literal(
+                let riders = scope.sharedVar(initial: Function<Rider, Record<RiderSchema>>.literal(
                     (.none, Record.literal(.init(RiderSchema.phase, .arrived), .init(RiderSchema.floor, .one), .init(RiderSchema.destination, .one))),
                     (.alice, Record.literal(.init(RiderSchema.phase, .waiting), .init(RiderSchema.floor, .one), .init(RiderSchema.destination, .three))),
                     (.bob, Record.literal(.init(RiderSchema.phase, .waiting), .init(RiderSchema.floor, .three), .init(RiderSchema.destination, .one)))

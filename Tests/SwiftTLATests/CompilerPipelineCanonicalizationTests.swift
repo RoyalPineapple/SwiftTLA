@@ -43,7 +43,7 @@ private struct CompilerPipelineGeneratedModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineGeneratedModel") {
             Algorithm("CompilerPipelineGeneratedModel", scoped: { scope in
-                let counter = scope.sharedVar("counter", initial: 0)
+                let counter = scope.sharedVar(_name: "counter", initial: 0)
                 Do(Step.increment) {
                     Assign(counter, to: counter + 1)
                 }
@@ -59,7 +59,7 @@ private struct CompilerPipelineExplicitFormalNameModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineExplicitFormalName") {
             Algorithm("CompilerPipelineExplicitFormalName", scoped: { scope in
-                let counter = scope.sharedVar("counter", initial: 0)
+                let counter = scope.sharedVar(_name: "counter", initial: 0)
                 Do(Step.increment) {
                     Assign(counter, to: counter + 1)
                 }
@@ -75,7 +75,7 @@ private struct CompilerPipelineAlgorithmModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineAlgorithmModel") {
             Algorithm("CompilerPipelineAlgorithmModel", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(Step.increment) {
                     Assign(count, to: count + 1)
                 }
@@ -91,9 +91,9 @@ private struct CompilerPipelineInitializationModel {
     static var spec: TLASpec {
         #spec("CompilerPipelineInitializationModel") {
             Algorithm("CompilerPipelineInitializationModel", scoped: { scope in
-                let seed = scope.sharedVar("seed", initial: 0)
-                let computed: SharedVariable<Int> = scope.sharedVar("computed", initial: seed + 1)
-                let choice = scope.sharedVar("choice", in: SetExpr<Int>.literal(1, 2))
+                let seed = scope.sharedVar(_name: "seed", initial: 0)
+                let computed: SharedVariable<Int> = scope.sharedVar(_name: "computed", initial: seed + 1)
+                let choice = scope.sharedVar(_name: "choice", in: SetExpr<Int>.literal(1, 2))
                 Do(Step.done) {
                     Assign(computed, to: computed)
                     Assign(choice, to: choice)
@@ -450,7 +450,7 @@ struct CompilerPipelineCanonicalizationTests {
     @Test("compiled layout assigns scoped control-location identities")
     func compiledLayoutAssignsScopedControlLocationIDs() throws {
         let algorithm = Algorithm("ControlLayout", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Each(CompilerPipelineNode.all) { _ in
                 Do(TestControlLabel.start) {
                     Assign(value, to: value + 1)
@@ -497,7 +497,7 @@ struct CompilerPipelineCanonicalizationTests {
         }?.id)
         #expect(Set([processStart, firstProcedureStart, secondProcedureStart]).count == 3)
         let changed = Algorithm("ControlLayout", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Each(CompilerPipelineNode.all) { _ in
                 Do(TestControlLabel.changed) {
                     Assign(value, to: value + 1)
@@ -540,7 +540,7 @@ struct CompilerPipelineCanonicalizationTests {
     @Test("compiled algorithm control state uses control-location identities")
     func compiledAlgorithmUsesControlLocationIdentities() throws {
         let algorithm = Algorithm("ControlRuntime", scoped: { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(_name: "value", initial: 0)
             Each(CompilerPipelineNode.all) { _ in
                 Do(TestControlLabel.start) {
                     Assign(value, to: value + 1)

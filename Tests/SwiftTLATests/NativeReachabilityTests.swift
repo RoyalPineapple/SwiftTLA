@@ -8,7 +8,7 @@ private struct BranchingControl {
     static var spec: TLASpec {
         #spec("BranchingControl") {
             Algorithm("BranchingControl", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(_name: "value", initial: 0)
                 Invariant("AtMostOne") { value <= 1 }
                 Do(Step.enter) { Goto(Step.choose) }
                 Do(Step.choose) {
@@ -25,7 +25,7 @@ private struct BlockedControl {
     static var spec: TLASpec {
         #spec("BlockedControl") {
             Algorithm("BlockedControl", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(_name: "value", initial: 0)
                 Do(Step.wait, when: value == 1) {
                     Assign(value, to: 2)
                 }
@@ -41,7 +41,7 @@ private struct InvalidAssumption {
         #spec("InvalidAssumption") {
             Assume(false)
             Algorithm("InvalidAssumption", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(_name: "value", initial: 0)
                 Do(Step.advance) { Assign(value, to: 1) }
             })
         }

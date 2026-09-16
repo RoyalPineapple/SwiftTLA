@@ -12,7 +12,7 @@ struct CompiledSpecificationProjectionTests {
     func downstreamConsumersRetainOneCompilation() throws {
         let specification = TLASpec("CompiledProjection") {
             Algorithm("CompiledProjection", scoped: { scope in
-                let counter = scope.sharedVar("counter", initial: 0)
+                let counter = scope.sharedVar(_name: "counter", initial: 0)
                 Do(CompiledProjectionLabel.advance) {
                     Assign(counter, to: counter + 1)
                     Stop()

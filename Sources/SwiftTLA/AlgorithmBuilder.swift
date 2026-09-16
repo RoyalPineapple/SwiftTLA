@@ -410,7 +410,7 @@ public final class SpecificationScope {
     }
 
     public func sharedVar<Value: TLAValueType>(
-        _ name: String,
+        _name name: String = "",
         initial: Value
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, initial: initial)
@@ -418,7 +418,7 @@ public final class SpecificationScope {
         return variable
     }
 
-    public func sharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
+    public func sharedVar(_name name: String = "", in range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVariable<Int>(
             name: name,
             initialization: .memberOf(.setLiteral(range.map { .value(.int($0)) }))
@@ -428,7 +428,7 @@ public final class SpecificationScope {
     }
 
     public func sharedVar<Value: TLAValueType>(
-        _ name: String,
+        _name name: String = "",
         in values: some TypedExpression<SetExpr<Value>>
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, in: values)
@@ -437,7 +437,7 @@ public final class SpecificationScope {
     }
 
     public func sharedVar<Value: TLAValueType>(
-        _ name: String,
+        _name name: String = "",
         initial: some TypedExpression<Value>
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, initial: initial)
@@ -452,7 +452,7 @@ public final class AlgorithmScope {
     init() {}
 
     public func sharedVar<Value: TLAValueType>(
-        _ name: String,
+        _name name: String = "",
         initial: Value
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, initial: initial)
@@ -460,7 +460,7 @@ public final class AlgorithmScope {
         return variable
     }
 
-    public func sharedVar(_ name: String, in range: ClosedRange<Int>) -> SharedVariable<Int> {
+    public func sharedVar(_name name: String = "", in range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVariable<Int>(
             name: name,
             initialization: .memberOf(.setLiteral(range.map { .value(.int($0)) }))
@@ -470,7 +470,7 @@ public final class AlgorithmScope {
     }
 
     public func sharedVar<Value: TLAValueType>(
-        _ name: String,
+        _name name: String = "",
         in values: some TypedExpression<SetExpr<Value>>
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, in: values)
@@ -479,7 +479,7 @@ public final class AlgorithmScope {
     }
 
     public func sharedVar<Value: TLAValueType>(
-        _ name: String,
+        _name name: String = "",
         initial: some TypedExpression<Value>
     ) -> SharedVariable<Value> {
         let variable = SharedVariable(name: name, initial: initial)
@@ -494,7 +494,7 @@ public final class ProcessScope {
     init() {}
 
     public func localVar<Value: TLAValueType>(
-        _ name: String,
+        _name name: String = "",
         initial: Value
     ) -> LocalVariable<Value> {
         let variable = LocalVariable(name: name, initial: initial)
@@ -502,7 +502,7 @@ public final class ProcessScope {
         return variable
     }
 
-    public func localVar<Value: TLAValueType>(_ name: String, initial: some TypedExpression<Value>) -> LocalVariable<Value> {
+    public func localVar<Value: TLAValueType>(_name name: String = "", initial: some TypedExpression<Value>) -> LocalVariable<Value> {
         let variable = LocalVariable(name: name, initial: initial)
         declarations.append(localDeclaration(variable))
         return variable
@@ -515,7 +515,7 @@ public final class ProcedureScope {
     init() {}
 
     public func localVar<Value: TLAValueType>(
-        _ name: String,
+        _name name: String = "",
         initial: Value
     ) -> LocalVariable<Value> {
         let variable = LocalVariable(name: name, initial: initial)
@@ -523,7 +523,7 @@ public final class ProcedureScope {
         return variable
     }
 
-    public func localVar<Value: TLAValueType>(_ name: String, initial: some TypedExpression<Value>) -> LocalVariable<Value> {
+    public func localVar<Value: TLAValueType>(_name name: String = "", initial: some TypedExpression<Value>) -> LocalVariable<Value> {
         let variable = LocalVariable(name: name, initial: initial)
         declarations.append(localDeclaration(variable))
         return variable

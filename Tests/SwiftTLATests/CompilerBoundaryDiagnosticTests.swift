@@ -133,7 +133,7 @@ struct CompilerBoundaryDiagnosticTests {
         let source = """
         {
             Algorithm("IdentityAlgorithm", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.increment) {
                     Assign(count, to: count + 1)
                     Stop()
@@ -152,7 +152,7 @@ struct CompilerBoundaryDiagnosticTests {
         let parsedCompilation = try parsed.compile()
         let resultBuilderCompilation = try TLASpec("IdentityAlgorithm") {
             Algorithm("IdentityAlgorithm", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.increment) {
                     Assign(count, to: count + 1)
                     Stop()

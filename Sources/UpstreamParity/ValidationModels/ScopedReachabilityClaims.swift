@@ -14,9 +14,9 @@ package struct ScopedReachabilityClaims {
             let EitherOwns = Reachable()
             let Initial = Reachable()
             Algorithm("Ownership", scoped: { algorithm in
-                let owner = algorithm.sharedVar("owner", initial: 0)
+                let owner = algorithm.sharedVar(initial: 0)
                 Each(members, scoped: { member, process in
-                    let visited = process.localVar("visited", initial: false)
+                    let visited = process.localVar(initial: false)
                     Do(Step.visit) {
                         Assign(owner, to: member)
                         Assign(visited, to: true)

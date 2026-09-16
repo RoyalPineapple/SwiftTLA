@@ -136,22 +136,16 @@ package struct PaxosModel: Sendable {
         #spec("Paxos") { scope in
             Extends(.integers)
 
-            let maxBal = scope.sharedVar(
-                "maxBal",
-                initial: Function<Acceptor, Int>.mapping { _ in -1 }
+            let maxBal = scope.sharedVar(initial: Function<Acceptor, Int>.mapping { _ in -1 }
             )
-            let maxVBal = scope.sharedVar(
-                "maxVBal",
-                initial: Function<Acceptor, Int>.mapping { _ in -1 }
+            let maxVBal = scope.sharedVar(initial: Function<Acceptor, Int>.mapping { _ in -1 }
             )
-            let maxVal = scope.sharedVar(
-                "maxVal",
-                initial: Function<Acceptor, PaxosValue>.mapping { _ in PaxosValue.none }
+            let maxVal = scope.sharedVar(initial: Function<Acceptor, PaxosValue>.mapping { _ in PaxosValue.none }
             )
-            let messages = scope.sharedVar("msgs", initial: SetExpr<Message>())
+            let msgs = scope.sharedVar(initial: SetExpr<Message>())
 
             let addMessage: (Expr<Message>) -> ActionExpr = { message in
-                messages.becomes(messages.expr.inserting(message))
+                msgs.becomes(msgs.expr.inserting(message))
             }
 
             Invariant("TypeOK") {
@@ -174,38 +168,38 @@ package struct PaxosModel: Sendable {
             }
 
             SwiftTLA.Action("Phase1b_a1_0") {
-                messages.contains(Message.phase1a(0)) && 0 > maxBal[.only]
+                msgs.contains(Message.phase1a(0)) && 0 > maxBal[.only]
                     && maxBal.becomes(maxBal.updating(.only, to: 0))
                     && addMessage(Message.phase1b(0, maximumBallot: maxVBal[.only], value: maxVal[.only]))
                     && maxVBal.stays && maxVal.stays
             }
             SwiftTLA.Action("Phase1b_a1_1") {
-                messages.contains(Message.phase1a(1)) && 1 > maxBal[.only]
+                msgs.contains(Message.phase1a(1)) && 1 > maxBal[.only]
                     && maxBal.becomes(maxBal.updating(.only, to: 1))
                     && addMessage(Message.phase1b(1, maximumBallot: maxVBal[.only], value: maxVal[.only]))
                     && maxVBal.stays && maxVal.stays
             }
 
             SwiftTLA.Action("Phase2a_0_v1") {
-                !messages.contains(Message.phase2a(0))
+                !msgs.contains(Message.phase2a(0))
                     && addMessage(Message.phase2a(0))
                     && maxBal.stays && maxVBal.stays && maxVal.stays
             }
             SwiftTLA.Action("Phase2a_1_v1") {
-                !messages.contains(Message.phase2a(1))
+                !msgs.contains(Message.phase2a(1))
                     && addMessage(Message.phase2a(1))
                     && maxBal.stays && maxVBal.stays && maxVal.stays
             }
 
             SwiftTLA.Action("Phase2b_a1_0") {
-                messages.contains(Message.phase2a(0)) && 0 >= maxBal[.only]
+                msgs.contains(Message.phase2a(0)) && 0 >= maxBal[.only]
                     && maxBal.becomes(maxBal.updating(.only, to: 0))
                     && maxVBal.becomes(maxVBal.updating(.only, to: 0))
                     && maxVal.becomes(maxVal.updating(.only, to: PaxosValue.proposed))
                     && addMessage(Message.phase2b(0))
             }
             SwiftTLA.Action("Phase2b_a1_1") {
-                messages.contains(Message.phase2a(1)) && 1 >= maxBal[.only]
+                msgs.contains(Message.phase2a(1)) && 1 >= maxBal[.only]
                     && maxBal.becomes(maxBal.updating(.only, to: 1))
                     && maxVBal.becomes(maxVBal.updating(.only, to: 1))
                     && maxVal.becomes(maxVal.updating(.only, to: PaxosValue.proposed))

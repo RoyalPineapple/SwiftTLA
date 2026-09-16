@@ -64,7 +64,7 @@ struct SetConfigurationTests {
         let parameter = ModelParameter<Set<CollidingSetMember>>(reference: .init(name: "members"))
         let binding = Bind(parameter, to: collision)
         #expect(binding.value == collision.stateExpr)
-        let variable = scope.sharedVar("members", initial: collision)
+        let variable = scope.sharedVar(_name: "members", initial: collision)
         guard case .expression(.sourceIssue) = scope.declarations[0].initialization else {
             Issue.record("A variable initializer discarded the invalid set diagnostic")
             return

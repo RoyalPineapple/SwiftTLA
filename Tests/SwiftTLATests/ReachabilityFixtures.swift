@@ -9,7 +9,7 @@ struct ReachabilityCounter {
         #spec("ReachabilityCounter") { scope in
             let target = scope.parameter(as: Int.self, in: 0...3)
             let exploredThrough = scope.parameter(as: Int.self, in: 1...2)
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             Algorithm("Counter") {
                 Do(Step.advance, when: count < 2) {
                     Assign(count, to: count + 1)

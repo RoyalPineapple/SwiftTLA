@@ -17,8 +17,8 @@ struct RecordFieldAssignmentModel {
 
     static var spec: TLASpec {
         #spec("RecordFieldAssignment") { scope in
-            let envelope = scope.sharedVar("envelope", initial: Envelope(packet: Packet(count: 0, ready: false), untouched: 7))
-            let savedCount = scope.sharedVar("savedCount", initial: -1)
+            let envelope = scope.sharedVar(_name: "envelope", initial: Envelope(packet: Packet(count: 0, ready: false), untouched: 7))
+            let savedCount = scope.sharedVar(_name: "savedCount", initial: -1)
             Algorithm("RecordFieldAssignment") {
                 Do(Step.advance) {
                     let saved = envelope

@@ -43,7 +43,7 @@ package struct EWD998TerminationModel: Sendable {
     }
 
     private static func specificationComponents(_ scope: SpecificationScope) -> [SpecComponent] {
-        let active = scope.sharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
+        let active = scope.sharedVar(_name: "active", in: SetExpr<Function<Node, Bool>>.literal(
             Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, false), (.three, false)),
             Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, false), (.three, true)),
             Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, true), (.three, false)),
@@ -61,10 +61,10 @@ package struct EWD998TerminationModel: Sendable {
             Function<Node, Bool>.literal((.zero, true), (.one, true), (.two, true), (.three, false)),
             Function<Node, Bool>.literal((.zero, true), (.one, true), (.two, true), (.three, true))
         ))
-        let pending = scope.sharedVar("pending", initial: Function<Node, Int>.literal(
+        let pending = scope.sharedVar(_name: "pending", initial: Function<Node, Int>.literal(
             (.zero, 0), (.one, 0), (.two, 0), (.three, 0)
         ))
-        let terminationDetected = scope.sharedVar("terminationDetected", initial: false)
+        let terminationDetected = scope.sharedVar(_name: "terminationDetected", initial: false)
 
         let standardModules: SpecComponent = Extends(.naturals)
         let pendingBound: SpecComponent = Constraint(

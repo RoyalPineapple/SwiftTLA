@@ -9,10 +9,10 @@ package struct ConfiguredProcessMachine {
         #spec("ConfiguredProcessMachine") { scope in
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1]), Set<Int>([1, 2, 3])]))
-            let selected = scope.sharedVar("selected", initial: Set<Int>([]))
+            let selected = scope.sharedVar(initial: Set<Int>([]))
             Algorithm("Visits") {
                 Each(nodes, scoped: { member, process in
-                    let visited = process.localVar("visited", initial: false)
+                    let visited = process.localVar(initial: false)
                     Do(Step.visit) {
                         Assign(selected, to: selected.inserting(member))
                         Assign(visited, to: true)
@@ -38,7 +38,7 @@ package struct WeaklyFairConfiguredProcessMachine {
         #spec("WeaklyFairConfiguredProcessMachine") { scope in
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1]), Set<Int>([1, 2, 3])]))
-            let selected = scope.sharedVar("selected", initial: Set<Int>([]))
+            let selected = scope.sharedVar(initial: Set<Int>([]))
             Algorithm("Visits") {
                 Each(nodes, fairness: .weak) { member in
                     While(Step.visit, true) {
@@ -65,7 +65,7 @@ package struct StronglyFairConfiguredProcessMachine {
         #spec("StronglyFairConfiguredProcessMachine") { scope in
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1]), Set<Int>([1, 2, 3])]))
-            let selected = scope.sharedVar("selected", initial: Set<Int>([]))
+            let selected = scope.sharedVar(initial: Set<Int>([]))
             Algorithm("Visits") {
                 Each(nodes, fairness: .strong) { member in
                     While(Step.visit, true) {

@@ -5,7 +5,7 @@ import SwiftTLAMacros
 private struct TypedSetAlgorithm {
   static var spec: TLASpec {
     #spec("TypedSetAlgorithm") { scope in
-      let seen = scope.sharedVar("seen", initial: SetExpr<Int>())
+      let seen = scope.sharedVar(_name: "seen", initial: SetExpr<Int>())
       Action("add") {
         seen.becomes(seen.inserting(1))
       }
@@ -22,7 +22,7 @@ private struct TypedSetAlgorithm {
 private struct TypedTupleAlgorithm {
   static var spec: TLASpec {
     #spec("TypedTupleAlgorithm") { scope in
-      let values = scope.sharedVar("values", initial: TupleExpr<Int>())
+      let values = scope.sharedVar(_name: "values", initial: TupleExpr<Int>())
       Action("append") {
         values.count < 2 && values.becomes(values.appending(1))
       }
@@ -36,7 +36,7 @@ private struct TypedTupleAlgorithm {
 private struct TypedFiniteInitialAlgorithm {
   static var spec: TLASpec {
     #spec("TypedFiniteInitialAlgorithm") { scope in
-      let phase = scope.sharedVar("phase", in: SetExpr<Int>.literal(1, 2))
+      let phase = scope.sharedVar(_name: "phase", in: SetExpr<Int>.literal(1, 2))
       Action("prepare") {
         phase == 1 && phase.becomes(2)
       }

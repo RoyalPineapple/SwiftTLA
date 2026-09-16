@@ -38,12 +38,12 @@ package struct ParallelReachableModel: Sendable {
                     },
                     matching: { graph in graph.expr == graph.expr }
                 )
-                let marked = scope.sharedVar("marked", initial: SetExpr<Node>())
-                let frontier = scope.sharedVar("frontier", initial: SetExpr<Node>.literal(.one))
+                let marked = scope.sharedVar(initial: SetExpr<Node>())
+                let frontier = scope.sharedVar(initial: SetExpr<Node>.literal(.one))
 
                 Each(Worker.all, fairness: .weak, scoped: { _, scope in
-                    let current: LocalVariable<Node> = scope.localVar("current", initial: .one)
-                    let pending: LocalVariable<SetExpr<Node>> = scope.localVar("pending", initial: SetExpr<Node>())
+                    let current: LocalVariable<Node> = scope.localVar(initial: .one)
+                    let pending: LocalVariable<SetExpr<Node>> = scope.localVar(initial: SetExpr<Node>())
 
                     Do(Step.a) {
                         Either {

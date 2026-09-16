@@ -7,7 +7,7 @@ struct SelectedChecksModel {
 
     static var spec: TLASpec {
         #spec("SelectedChecks") { scope in
-            let value = scope.sharedVar("value", initial: 0)
+            let value = scope.sharedVar(initial: 0)
             Algorithm("Advance") {
                 Do(Step.advance, when: value == 0) {
                     Assign(value, to: 1)
@@ -36,7 +36,7 @@ struct UnselectedPredicateModel {
 
     static var spec: TLASpec {
         #spec("UnselectedPredicate") { scope in
-            let divisor = scope.sharedVar("divisor", initial: 0)
+            let divisor = scope.sharedVar(initial: 0)
             Algorithm("Blocked") {
                 Do(Step.wait, when: divisor < 0) { Goto(Step.wait) }
             }

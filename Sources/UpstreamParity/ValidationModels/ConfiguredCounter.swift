@@ -10,9 +10,9 @@ package struct ConfiguredCounter {
         #spec("ConfiguredCounter") { scope in
             let limit = scope.parameter(as: Int.self, in: 1...100)
             let stopAtLimit = scope.parameter(as: Bool.self)
-            let value = scope.sharedVar("value", initial: 0)
-            let previous = scope.sharedVar("previous", initial: 0)
-            let copied = scope.sharedVar("copied", initial: 0)
+            let value = scope.sharedVar(initial: 0)
+            let previous = scope.sharedVar(initial: 0)
+            let copied = scope.sharedVar(initial: 0)
             Algorithm("Counter") {
                 Each(Process.all) { _ in
                     Do(Step.advance, when: value < limit) {

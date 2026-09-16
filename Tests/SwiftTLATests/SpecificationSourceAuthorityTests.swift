@@ -87,7 +87,7 @@ struct SpecificationSourceAuthorityTests {
     func initialDomainsUseDeclarationContext(_ inAlgorithm: Bool) throws {
         let declarations = #"""
             let options = SetExpr<Int>.literal(1, 2)
-            let selected: SharedVariable<Int> = scope.sharedVar("stored", in: options)
+            let selected: SharedVariable<Int> = scope.sharedVar(_name: "stored", in: options)
         """#
         let body = inAlgorithm
             ? "Algorithm(\"ScopedDomain\", scoped: { scope in \(declarations)\n Do(Label.stay) { Skip() } })"
@@ -114,7 +114,7 @@ struct SpecificationSourceAuthorityTests {
         static var spec: TLASpec {
             #spec("ScopedTuple") { scope in
                 let initial = TupleExpr<Int>.literal(1, 2)
-                let items: SharedVariable<TupleExpr<Int>> = scope.sharedVar("stored", initial: initial)
+                let items: SharedVariable<TupleExpr<Int>> = scope.sharedVar(_name: "stored", initial: initial)
                 Invariant("Length") {
                     let sequence = items.expr
                     sequence.count == 2

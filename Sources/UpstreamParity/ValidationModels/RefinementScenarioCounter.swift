@@ -11,7 +11,7 @@ package struct RefinementScenarioCounter {
             let bounded = Invariant()
             let abstract = TLASpec("UnitCounter") {
                 Algorithm("UnitLoop", scoped: { scope in
-                    let value = scope.sharedVar("value", initial: 0)
+                    let value = scope.sharedVar(initial: 0)
                     While(Step.advance, true) {
                         When(value < 2)
                         Assign(value, to: value + 1)
@@ -19,7 +19,7 @@ package struct RefinementScenarioCounter {
                 })
             }
             Algorithm("Loop", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(initial: 0)
                 While(Step.advance, true) {
                     When(count < 2)
                     Assign(count, to: count + stride)

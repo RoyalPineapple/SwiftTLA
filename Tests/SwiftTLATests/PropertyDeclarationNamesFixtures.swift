@@ -15,7 +15,7 @@ struct QualifiedPropertyClaims {
             let stable = SwiftTLA.EventuallyAlways()
             let response = SwiftTLA.LeadsTo()
             Algorithm("Loop", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(_name: "value", initial: 0)
                 Do(Step.stay) {
                     Assign(value, to: value)
                     Goto(Step.stay)

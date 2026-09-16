@@ -15,14 +15,14 @@ package struct BinarySearchModel: Sendable {
         #spec("BinarySearch") {
             Extends(.integers)
             Algorithm("BinarySearch", fairness: .weak, scoped: { scope in
-                let seq = scope.sharedVar("seq", in: SortedSequences(
+                let seq = scope.sharedVar(in: SortedSequences(
                     of: SetExpr<Int>.literal(1, 2, 3, 4, 5),
                     lengths: 0...8
                 ))
-                let val = scope.sharedVar("val", in: SetExpr<Int>.literal(1, 2, 3, 4, 5))
-                let low = scope.sharedVar("low", initial: 1)
-                let high: SharedVariable<Int> = scope.sharedVar("high", initial: seq.count)
-                let result = scope.sharedVar("result", initial: 0)
+                let val = scope.sharedVar(in: SetExpr<Int>.literal(1, 2, 3, 4, 5))
+                let low = scope.sharedVar(initial: 1)
+                let high: SharedVariable<Int> = scope.sharedVar(initial: seq.count)
+                let result = scope.sharedVar(initial: 0)
 
                 While(Step.a, low <= high && result == 0) {
                     Let((low + high).integerDivided(by: 2)) { mid in

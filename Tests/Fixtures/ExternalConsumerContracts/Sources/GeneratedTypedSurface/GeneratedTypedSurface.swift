@@ -14,8 +14,8 @@ public struct GeneratedTypedSurface {
 
   static var spec: TLASpec {
     #spec("GeneratedTypedSurface") { scope in
-      let value = scope.sharedVar("value", initial: 0)
-      let packet = scope.sharedVar("packet", initial: Packet(count: 0, ready: false))
+      let value = scope.sharedVar(_name: "value", initial: 0)
+      let packet = scope.sharedVar(_name: "packet", initial: Packet(count: 0, ready: false))
       Algorithm("GeneratedTypedSurface") {
         Do(Step.advance, when: value < 1) {
           Assign(value, to: packet.count + 1)

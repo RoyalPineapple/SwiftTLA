@@ -14,7 +14,7 @@ package struct ConstantStateClaims {
             let absentWitness = Reachable()
             let configuredWitness = Reachable()
             Algorithm("Loop", scoped: { algorithm in
-                let value = algorithm.sharedVar("value", initial: 0)
+                let value = algorithm.sharedVar(initial: 0)
                 Do(Step.stay) {
                     Assign(value, to: value)
                     Goto(Step.stay)

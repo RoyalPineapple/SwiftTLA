@@ -152,7 +152,7 @@ import SwiftTLAMacros
     func retainsAnnotatedVariableType() throws {
         let source = """
         { scope in
-            let mode: SharedVariable<CameraMode> = scope.sharedVar("mode", initial: CameraMode.idle)
+            let mode: SharedVariable<CameraMode> = scope.sharedVar(_name: "mode", initial: CameraMode.idle)
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -356,7 +356,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("Formal", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 FormalDefinition("same", taking: Int.self, Int.self) { ballot, value in
                     ballot == value
                 }
@@ -382,7 +382,7 @@ import SwiftTLAMacros
             )
         ])
         let built = Algorithm("Formal", scoped: { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             FormalDefinition("same", taking: Int.self, Int.self) { left, right in left == right }
             Do(TestControlLabel.stop) {
                 Assert(count == 0)

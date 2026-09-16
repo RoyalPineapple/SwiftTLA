@@ -52,16 +52,16 @@ package struct DijkstraMutexModel: Sendable {
         #spec("DijkstraMutex") {
             Extends(.integers)
             Algorithm("Mutex", scoped: { scope in
-                let b = scope.sharedVar("b", initial: Function<Process, Bool>.literal(
+                let b = scope.sharedVar(initial: Function<Process, Bool>.literal(
                     (.one, true), (.two, true), (.three, true)
                 ))
-                let c = scope.sharedVar("c", initial: Function<Process, Bool>.literal(
+                let c = scope.sharedVar(initial: Function<Process, Bool>.literal(
                     (.one, true), (.two, true), (.three, true)
                 ))
-                let k = scope.sharedVar("k", in: SetExpr<Process>.literal(.one, .two, .three))
+                let k = scope.sharedVar(in: SetExpr<Process>.literal(.one, .two, .three))
 
                 Each(Process.all, fairness: .weak, scoped: { selfID, scope in
-                    let temporary = scope.localVar("temporary", initial: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.first(.notAssigned)
+                    let temporary = scope.localVar(initial: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.first(.notAssigned)
                     )
 
                     Do(Label.li0) {

@@ -42,7 +42,7 @@ struct BoundedCounter {
     static var spec: TLASpec {
         #spec("BoundedCounter") {
             Algorithm("BoundedCounter", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(initial: 0)
                 Each(Process.all) { _ in
                     Do(Step.advance, when: value < 1) {
                         Assign(value, to: value + 1)
@@ -204,7 +204,7 @@ struct CounterHost {
     static var spec: TLASpec {
         #spec("CounterHost") {
             Algorithm("CounterHost", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(initial: 0)
                 Each(Process.all) { _ in
                     Do(Step.advance, when: value < 1) {
                         Assign(value, to: value + 1)

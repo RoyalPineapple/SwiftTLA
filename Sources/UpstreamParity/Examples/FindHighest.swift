@@ -16,12 +16,12 @@ package struct FindHighestModel: Sendable {
         #spec("Highest") {
             Extends(.integers)
             Algorithm("Highest", scoped: { scope in
-                let f = scope.sharedVar("f", in: Sequences(
+                let f = scope.sharedVar(in: Sequences(
                     of: SetExpr<Int>.literal(0, 1, 2, 3, 4),
                     lengths: 0...3
                 ))
-                let h: SharedVariable<Int> = scope.sharedVar("h", initial: -1)
-                let i = scope.sharedVar("i", initial: 1)
+                let h: SharedVariable<Int> = scope.sharedVar(initial: -1)
+                let i = scope.sharedVar(initial: 1)
 
                 While(Step.lb, i <= f.count) {
                     Assign(h, to: If(h >= f[i], then: h.expr, else: f[i]))

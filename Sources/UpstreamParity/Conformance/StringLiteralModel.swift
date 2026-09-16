@@ -6,7 +6,7 @@ import SwiftTLAMacros
 package struct StringLiteralModel {
     package static var spec: TLASpec {
         #spec("StringLiterals") { scope in
-            let text = scope.sharedVar("text", initial: "plain")
+            let text = scope.sharedVar(initial: "plain")
             SwiftTLA.Action("Escape") {
                 text.becomes("quote\" slash\\ newline\n return\r tab\t form\u{c} e\u{301}")
                     .when(text == "plain")

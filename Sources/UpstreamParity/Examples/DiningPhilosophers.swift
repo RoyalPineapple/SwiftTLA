@@ -37,7 +37,7 @@ package struct DiningPhilosophersModel: Sendable {
             let ExclusiveAccess = Invariant()
 
             Algorithm("DiningPhilosophers", scoped: { scope in
-                let forks = scope.sharedVar("forks", initial: Function<Philosopher, Fork>.literal(
+                let forks = scope.sharedVar(initial: Function<Philosopher, Fork>.literal(
                     (Philosopher.one, Fork(holder: Philosopher.one, clean: false)),
                     (Philosopher.two, Fork(holder: Philosopher.one, clean: false)),
                     (Philosopher.three, Fork(holder: Philosopher.three, clean: false)),
@@ -46,7 +46,7 @@ package struct DiningPhilosophersModel: Sendable {
                 ))
 
                 Each(Philosopher.all, fairness: .weak, scoped: { philosopher, scope in
-                    let hungry = scope.localVar("hungry", initial: true)
+                    let hungry = scope.localVar(initial: true)
 
                     Do(Step.loop) {
                         let right = If(philosopher == Philosopher.one, then: Philosopher.two, else:

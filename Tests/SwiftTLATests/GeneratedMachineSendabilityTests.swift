@@ -9,7 +9,7 @@ public struct TransferableCounter {
     static var spec: TLASpec {
         #spec("TransferableCounter") {
             Algorithm("TransferableCounter", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(Step.advance) { Assign(count, to: count + 1) }
             })
         }
@@ -22,7 +22,7 @@ public struct ExplicitlyTransferableCounter: Sendable {
     static var spec: TLASpec {
         #spec("ExplicitlyTransferableCounter") {
             Algorithm("ExplicitlyTransferableCounter", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(Step.advance) { Assign(count, to: count + 1) }
             })
         }

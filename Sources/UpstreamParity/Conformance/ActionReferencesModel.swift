@@ -5,7 +5,7 @@ import SwiftTLAMacros
 package struct ActionReferencesModel {
     static var spec: TLASpec {
         #spec("ActionReferences") { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(initial: 0)
             let amount = ActionParameter("amount", values: [1, 2])
             let advance = SwiftTLA.Action("Advance", parameters: [amount]) {
                 count.becomes(amount).when(count == 0)

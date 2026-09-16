@@ -56,7 +56,7 @@ import SwiftTLAMacros
         let parsed = parseAlgorithm(try parseSpecTestClosure("""
         {
             Algorithm("Conditional", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.increment) {
                     \(statement)
                 }
@@ -74,7 +74,7 @@ import SwiftTLAMacros
         let parsed = parseAlgorithm(try parseSpecTestClosure("""
         {
             Algorithm("InvalidGuard", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.increment, \(argument)) {
                     Assign(count, to: count + 1)
                 }
@@ -90,7 +90,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("Counter", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Each(Node.all) { node in
                     Do(TestControlLabel.increment, when: count < 2) {
                         Assign(count, to: count + 1)
@@ -149,7 +149,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("Counter", scoped: { scope in
-                let values = scope.sharedVar("values", initial: Function<Node, SetExpr<Int>>.mapping { _ in SetExpr<Int>() })
+                let values = scope.sharedVar(_name: "values", initial: Function<Node, SetExpr<Int>>.mapping { _ in SetExpr<Int>() })
                 Do(TestControlLabel.increment) {
                     Assign(values, to: values)
                     Stop()
@@ -172,8 +172,8 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("MappingScope", scoped: { scope in
-                let enabled = scope.sharedVar("enabled", initial: true)
-                let values = scope.sharedVar("values", initial: Function<Node, Int>.mapping { _ in
+                let enabled = scope.sharedVar(_name: "enabled", initial: true)
+                let values = scope.sharedVar(_name: "values", initial: Function<Node, Int>.mapping { _ in
                     If(enabled == true, then: 1, else: 0)
                 })
                 Do(TestControlLabel.done) { Stop() }
@@ -194,7 +194,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("EachScope", scoped: { scope in
-                let enabled = scope.sharedVar("enabled", initial: true)
+                let enabled = scope.sharedVar(_name: "enabled", initial: true)
                 Each(Node.all) { _ in
                     Do(TestControlLabel.advance, when: enabled == true) {
                         Stop()
@@ -217,7 +217,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("MacroScope", scoped: { scope in
-                let enabled = scope.sharedVar("enabled", initial: true)
+                let enabled = scope.sharedVar(_name: "enabled", initial: true)
                 let waitUntilEnabled = Macro { (value: MacroParameter<Bool>) in
                     When(enabled == value.expr)
                 }
@@ -236,11 +236,11 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("EnumScope", scoped: { scope in
-                let phases = scope.sharedVar("phases", initial: Function<Node, Phase>.mapping { node in
+                let phases = scope.sharedVar(_name: "phases", initial: Function<Node, Phase>.mapping { node in
                     If(node == Node.one, then: .ready, else: .done)
                 })
                 Each(Worker.all, scoped: { _, scope in
-                    let current: LocalVariable<Node> = scope.localVar("\(localName)", initial: .one)
+                    let current: LocalVariable<Node> = scope.localVar(_name: "\(localName)", initial: .one)
                     Do(TestControlLabel.advance, when: phases[current] == .ready) {
                         Stop()
                     }
@@ -281,7 +281,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("TupleAppend", scoped: { scope in
-                let values = scope.sharedVar("values", initial: TupleExpr<Int>())
+                let values = scope.sharedVar(_name: "values", initial: TupleExpr<Int>())
                 Do(TestControlLabel.advance) {
                     Let(values.expr.appending(1)) { extended in
                         Assert(extended.expr.count == 1)
@@ -303,8 +303,8 @@ import SwiftTLAMacros
         {
             Extends(.sequences)
             Algorithm("TupleCount", scoped: { scope in
-                let values = scope.sharedVar("values", initial: TupleExpr<Int>.literal(1, 2))
-                let count = scope.sharedVar("count", initial: 0)
+                let values = scope.sharedVar(_name: "values", initial: TupleExpr<Int>.literal(1, 2))
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.advance) {
                     Assign(count, to: values.count)
                     Stop()
@@ -324,11 +324,11 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("ZeroBasedCount", scoped: { scope in
-                let input = scope.sharedVar("input", in: ZeroBasedSequences(
+                let input = scope.sharedVar(_name: "input", in: ZeroBasedSequences(
                     of: SetExpr<Int>.literal(1, 2),
                     lengths: 1...2
                 ))
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.advance) {
                     Assign(count, to: input.count)
                     Stop()
@@ -350,11 +350,10 @@ import SwiftTLAMacros
         {
             Extends(.sequences)
             Algorithm("BoundTupleCount", scoped: { scope in
-                let pending = scope.sharedVar(
-                    "pending",
+                let pending = scope.sharedVar(_name: "pending",
                     initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>.literal(1))
                 )
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.advance) {
                     With(pending) { tuple in
                         Assign(count, to: tuple.expr.count)
@@ -386,8 +385,7 @@ import SwiftTLAMacros
                     TupleExpr<Node>.literal(Node.one, Node.two),
                     TupleExpr<Node>.literal(Node.two, Node.one)
                 )
-                let frontier = scope.sharedVar(
-                    "frontier",
+                let frontier = scope.sharedVar(_name: "frontier",
                     in: SetExpr<TupleExpr<Node>>.literal(
                         TupleExpr<Node>.literal(Node.one, Node.two),
                         TupleExpr<Node>.literal(Node.two, Node.one)
@@ -416,7 +414,7 @@ import SwiftTLAMacros
         let source = """
         {
             let algorithm: Algorithm = Algorithm("Counter", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.increment) {
                     Assign(count, to: count + 1)
                     Stop()
@@ -488,7 +486,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("Counter", scoped: { scope in
-                let count = scope.localVar("count", initial: 0)
+                let count = scope.localVar(_name: "count", initial: 0)
                 Do(TestControlLabel.increment) { Stop() }
             })
         }
@@ -505,7 +503,7 @@ import SwiftTLAMacros
         {
             Algorithm("SiblingScopes") {
                 Each(Node.all, scoped: { node, scope in
-                    let local = scope.localVar("local", initial: 0)
+                    let local = scope.localVar(_name: "local", initial: 0)
                     Do(TestControlLabel.increment, when: local == 0) {
                         Stop()
                     }
@@ -534,7 +532,7 @@ import SwiftTLAMacros
         {
             Algorithm("LocalProperty") {
                 Each(Node.all, scoped: { node, scope in
-                    let local = scope.localVar("local", initial: 0)
+                    let local = scope.localVar(_name: "local", initial: 0)
                     Do(TestControlLabel.done) { Stop() }
                 })
                 Invariant("LeakedLocal") { local == 0 }
@@ -551,7 +549,7 @@ import SwiftTLAMacros
     func inheritsEnclosingStateBindings() throws {
         let source = """
         { scope in
-            let count = scope.sharedVar("storedCount", initial: 0)
+            let count = scope.sharedVar(_name: "storedCount", initial: 0)
             Algorithm("Counter") {
                 Do(TestControlLabel.increment) {
                     Assign(count, to: count + 1)
@@ -570,7 +568,7 @@ import SwiftTLAMacros
     func parsesRootScopedSharedDeclaration() throws {
         let source = """
         { scope in
-            let count = scope.sharedVar("count", initial: 0)
+            let count = scope.sharedVar(_name: "count", initial: 0)
             Invariant("Nonnegative") { count >= 0 }
         }
         """
@@ -666,7 +664,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("FormalClosureBoundary") { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.advance) {
                     let imported: Expr<Int> = ModuleCall("Instance", "Value", count)
                     Assign(count, to: imported)
@@ -729,7 +727,7 @@ import SwiftTLAMacros
         let source = """
         { scope in
             let start = 1
-            let x = scope.sharedVar("x", initial: 0)
+            let x = scope.sharedVar(_name: "x", initial: 0)
             let count = IntRange(start, through: x).filtering { value in
                 value.expr > 0
             }.cardinality
@@ -816,7 +814,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("Counter") { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Each(Node.all, fairness: .strong) { node in
                     While(TestControlLabel.increment, count < 2) {
                         When(count >= 0)
@@ -849,7 +847,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("Temporal") { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(_name: "value", initial: 0)
                 Do(TestControlLabel.advance) {
                     Assign(value, to: value + 1)
                 }
@@ -874,7 +872,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("ScopedFormalLambda") { scope in
-                let counters = scope.sharedVar("counters", initial: Function<Worker, Int>.literal(
+                let counters = scope.sharedVar(_name: "counters", initial: Function<Worker, Int>.literal(
                     (.left, 0),
                     (.right, 0)
                 ))
@@ -921,7 +919,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("MalformedFormalLambda") { scope in
-                let counter = scope.sharedVar("counter", initial: 0)
+                let counter = scope.sharedVar(_name: "counter", initial: 0)
                 Do(TestControlLabel.advance) {
                     Assign(counter, to: Expr<Int>(StateExpr.operatorApplication(
                         .lambda(FormalLambda(parameters: [], body: .int(1))),
@@ -950,7 +948,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("ThreeWith") { scope in
-                let selected = scope.sharedVar("selected", initial: 0)
+                let selected = scope.sharedVar(_name: "selected", initial: 0)
                 Do(TestControlLabel.choose) {
                     With(
                         SetExpr<Int>.literal(1, 2),
@@ -977,7 +975,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("MacroLock") { scope in
-                let lock = scope.sharedVar("lock", initial: 1)
+                let lock = scope.sharedVar(_name: "lock", initial: 1)
                 let acquire = Macro { (value: MacroParameter<Int>) in
                     When(value == 1)
                     Assign(value, to: 0)
@@ -1005,8 +1003,8 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("CopyValue") { scope in
-                let destination = scope.sharedVar("destination", initial: 0)
-                let source = scope.sharedVar("source", initial: 7)
+                let destination = scope.sharedVar(_name: "destination", initial: 0)
+                let source = scope.sharedVar(_name: "source", initial: 7)
                 let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
                     Assign(target, to: value.expr)
                 }
@@ -1032,8 +1030,8 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("OffsetValue") { scope in
-                let destination = scope.sharedVar("destination", initial: 0)
-                let source = scope.sharedVar("source", initial: 7)
+                let destination = scope.sharedVar(_name: "destination", initial: 0)
+                let source = scope.sharedVar(_name: "source", initial: 7)
                 let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
                     Assign(target, to: value.expr)
                 }
@@ -1086,7 +1084,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("InvalidMacroTarget") { scope in
-                let destination = scope.sharedVar("destination", initial: 0)
+                let destination = scope.sharedVar(_name: "destination", initial: 0)
                 let write = Macro { (target: MacroParameter<Int>) in
                     Assign(target, to: 1)
                 }
@@ -1109,9 +1107,9 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("ProcedureSource") { scope in
-                let output = scope.sharedVar("output", initial: 0)
+                let output = scope.sharedVar(_name: "output", initial: 0)
                 Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
-                    let offset = scope.localVar("\(localName)", initial: 1)
+                    let offset = scope.localVar(_name: "\(localName)", initial: 1)
                     Do(TestControlLabel.enter, when: value.expr >= 0) {
                         Assign(output, to: value.expr + offset.expr)
                         Return()
@@ -1136,8 +1134,8 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("BadMacroCall") { scope in
-                let destination = scope.sharedVar("destination", initial: 0)
-                let source = scope.sharedVar("source", initial: 7)
+                let destination = scope.sharedVar(_name: "destination", initial: 0)
+                let source = scope.sharedVar(_name: "source", initial: 7)
                 let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
                     Assign(target, to: value.expr)
                 }
@@ -1157,7 +1155,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("ParameterlessMacro") { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 let increment = Macro {
                     Assign(count, to: count + 1)
                 }
@@ -1182,7 +1180,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("FunctionDomain") { scope in
-                let successors = scope.sharedVar("successors", in: Where(
+                let successors = scope.sharedVar(_name: "successors", in: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
                     ForAll(Node.all) { node in
@@ -1219,9 +1217,9 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("FunctionSetInvariant", scoped: { scope in
-                let values = scope.sharedVar("values", initial: Function<Node, Int>.mapping { _ in 0 })
-                let grouped = scope.sharedVar("grouped", initial: Function<Node, SetExpr<Node>>.mapping { _ in SetExpr<Node>() })
-                let members = scope.sharedVar("members", initial: SetExpr<Node>())
+                let values = scope.sharedVar(_name: "values", initial: Function<Node, Int>.mapping { _ in 0 })
+                let grouped = scope.sharedVar(_name: "grouped", initial: Function<Node, SetExpr<Node>>.mapping { _ in SetExpr<Node>() })
+                let members = scope.sharedVar(_name: "members", initial: SetExpr<Node>())
                 Do(TestControlLabel.done) { Stop() }
                 Invariant("TypeOK") {
                     Functions(from: Node.all, to: SetExpr<Int>.literal(0, 1)).contains(values.expr)
@@ -1252,7 +1250,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("RecordFunction") { scope in
-                let cars = scope.sharedVar("cars", initial: Function<Car, Record<Model.CarRecord>>.mapping { _ in
+                let cars = scope.sharedVar(_name: "cars", initial: Function<Car, Record<Model.CarRecord>>.mapping { _ in
                     Record.literal(
                         .init(Model.CarRecord.floor, 4),
                         .init(Model.CarRecord.door, .closed)
@@ -1296,7 +1294,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("Votes") { scope in
-                let votes = scope.sharedVar("votes", initial: Function<Acceptor, SetExpr<Int>>.mapping { _ in SetExpr() })
+                let votes = scope.sharedVar(_name: "votes", initial: Function<Acceptor, SetExpr<Int>>.mapping { _ in SetExpr() })
                 Do(TestControlLabel.hold) { Assign(votes, to: votes.expr) }
             }
         }
@@ -1358,7 +1356,7 @@ import SwiftTLAMacros
                     from: SetExpr<Int>.literal(1, 2, 3),
                     matching: { value in value.expr % 2 == 0 }
                 )
-                let current: SharedVariable<Int> = scope.sharedVar("current", initial: selected)
+                let current: SharedVariable<Int> = scope.sharedVar(_name: "current", initial: selected)
                 Do(TestControlLabel.done) { Stop() }
             }
         }
@@ -1376,7 +1374,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("MacroProcess") { scope in
-                let marked = scope.sharedVar("marked", initial: Function<Node, Bool>.literal((Node.left, false), (Node.right, false)))
+                let marked = scope.sharedVar(_name: "marked", initial: Function<Node, Bool>.literal((Node.left, false), (Node.right, false)))
                 let mark = Macro { (node: MacroParameter<Node>) in
                     Assign(marked, to: marked.updating(node, to: true))
                 }
@@ -1507,7 +1505,7 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("Counter", scoped: { scope in
-                let count = scope.sharedVar("count", initial: 0)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Each(ParserNode.all) { _ in
                     Do(TestControlLabel.increment, when: count < 2) {
                         Assign(count, to: count + 1)
@@ -1540,7 +1538,7 @@ import SwiftTLAMacros
     func parsedSharedInitializerRetainsFormalExpression() throws {
         let closure = try parseSpecTestClosure("""
         { scope in
-            let count: SharedVariable<Int> = scope.sharedVar("count", initial: 1 + 2)
+            let count: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: 1 + 2)
         }
         """)
         let parsed = SpecParser.parseSpecClosure(named: "SharedInitializer", closure)
@@ -1560,12 +1558,12 @@ import SwiftTLAMacros
     func parsedAndBuiltLiteralInitializersShareIdentity() throws {
         let closure = try parseSpecTestClosure("""
         { scope in
-            let count = scope.sharedVar("count", initial: 1)
+            let count = scope.sharedVar(_name: "count", initial: 1)
         }
         """)
         let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
         let built = try TLASpec("LiteralInitializer") { scope in
-            let _ = scope.sharedVar("count", initial: 1)
+            let _ = scope.sharedVar(_name: "count", initial: 1)
         }.compile()
 
         #expect(parsed.identity == built.identity)
@@ -1575,8 +1573,8 @@ import SwiftTLAMacros
     func parsedInitialDomainsRetainStateDependencies() throws {
         let closure = try parseSpecTestClosure("""
         { scope in
-            let limit = scope.sharedVar("limit", initial: 2)
-            let choice = scope.sharedVar("choice", in: Where(SetExpr<Int>.literal(1, 2, 3)) { value in
+            let limit = scope.sharedVar(_name: "limit", initial: 2)
+            let choice = scope.sharedVar(_name: "choice", in: Where(SetExpr<Int>.literal(1, 2, 3)) { value in
                 value <= limit
             })
         }

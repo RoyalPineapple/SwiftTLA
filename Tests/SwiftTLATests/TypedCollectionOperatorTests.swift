@@ -109,7 +109,7 @@ private struct TypedCollectionGeneratedModel {
     static var spec: TLASpec {
         #spec("TypedCollectionGeneratedModel") { scope in
             Algorithm("TypedCollectionGeneratedModel", scoped: { algorithm in
-                let values = algorithm.sharedVar("values", initial: IntRange(1, through: 4))
+                let values = algorithm.sharedVar(_name: "values", initial: IntRange(1, through: 4))
                 Do(Step.keepEvenSquares) {
                     Assign(values, to:
                         values.expr
@@ -129,7 +129,7 @@ private struct TypedQuantifierGeneratedModel {
     static var spec: TLASpec {
         #spec("TypedQuantifierGeneratedModel") { scope in
             Algorithm("TypedQuantifierGeneratedModel", scoped: { algorithm in
-                let result = algorithm.sharedVar("result", initial: false)
+                let result = algorithm.sharedVar(_name: "result", initial: false)
                 Do(Step.findEven) {
                     Assign(result, to: Exists(in: IntRange(1, through: 4)) { value in
                         value.expr % 2 == 0
@@ -147,7 +147,7 @@ private struct NonEmptySubsetGeneratedModel {
     static var spec: TLASpec {
         #spec("NonEmptySubsetGeneratedModel") {
             Algorithm("NonEmptySubsetGeneratedModel", scoped: { scope in
-                let selectedKeys = scope.sharedVar("selectedKeys", in: NonEmptySubsets(
+                let selectedKeys = scope.sharedVar(_name: "selectedKeys", in: NonEmptySubsets(
                     of: SetExpr<Int>.literal(1, 2)
                 ))
                 Do(Step.keep) { Assign(selectedKeys, to: selectedKeys.expr) }
@@ -163,11 +163,11 @@ private struct ZeroBasedSequenceGeneratedModel {
     static var spec: TLASpec {
         #spec("ZeroBasedSequenceGeneratedModel") {
             Algorithm("ZeroBasedSequenceGeneratedModel", scoped: { scope in
-                let input = scope.sharedVar("input", in: ZeroBasedSequences(
+                let input = scope.sharedVar(_name: "input", in: ZeroBasedSequences(
                     of: SetExpr<Int>.literal(0, 1),
                     lengths: 1...2
                 ))
-                let table = scope.sharedVar("table", initial: ZeroBasedSequence<Int>.filled(
+                let table = scope.sharedVar(_name: "table", initial: ZeroBasedSequence<Int>.filled(
                     length: input.count * 2 + 1,
                     with: -1
                 ))
@@ -197,9 +197,9 @@ private struct ContextualCollectionModel {
     static var spec: TLASpec {
         #spec("ContextualCollectionModel") {
             Algorithm("ContextualCollectionModel", scoped: { scope in
-                let table = scope.sharedVar("table", initial: Function<Key, Entry>.literal(
+                let table = scope.sharedVar(_name: "table", initial: Function<Key, Entry>.literal(
                     (Key.first, Entry.first), (Key.second, Entry.first)))
-                let selected: SharedVariable<Entry> = scope.sharedVar("selected", initial: .first)
+                let selected: SharedVariable<Entry> = scope.sharedVar(_name: "selected", initial: .first)
                 Do(Step.update, when: selected == .first) {
                     Assign(table, to: table.updating(.first) { current in
                         If(current == .first, then: .second, else: current)
@@ -221,8 +221,8 @@ private struct FoldGeneratedModel {
         #spec("FoldGeneratedModel") {
             Import(FunctionsModule.module)
             Algorithm("FoldGeneratedModel", scoped: { scope in
-                let values = scope.sharedVar("values", initial: TupleExpr<Int>.literal(1, 2, 3))
-                let total = scope.sharedVar("total", initial: 0)
+                let values = scope.sharedVar(_name: "values", initial: TupleExpr<Int>.literal(1, 2, 3))
+                let total = scope.sharedVar(_name: "total", initial: 0)
                 Do(Step.sum) {
                     Assign(total, to: Fold(values.expr, startingWith: 0) { element, accumulated in
                         element + accumulated
