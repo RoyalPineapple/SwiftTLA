@@ -557,6 +557,10 @@ private struct JSONDuplicateKeyScanner {
     }
     private mutating func text() throws -> String {
         let range = try consumeString()
+        let body = bytes[(range.lowerBound + 1)..<(range.upperBound - 1)]
+        if body.allSatisfy({ $0 >= 0x20 && $0 < 0x80 && $0 != 0x5c }) {
+            return String(decoding: body, as: UTF8.self)
+        }
         guard let value = try JSONSerialization.jsonObject(
             with: Data(bytes[range]), options: .fragmentsAllowed) as? String else {
             throw TLCGraphEventError.malformedJSON(line: 0)

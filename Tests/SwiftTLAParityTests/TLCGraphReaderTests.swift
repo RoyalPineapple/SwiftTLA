@@ -429,6 +429,9 @@ extension TLCGraphReaderTests {
     let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
     let prefix = try header(finiteGraphCase) + "\n"
     let duplicateKeys = [
+      (#"{"":0,"":1}"#, ""),
+      (#"{"plain":0,"plain":1}"#, "plain"),
+      (#"{"slash/":0,"slash\/":1}"#, "slash/"),
       (#"{"value":"escaped quote: \" and slash: \\","nested":{"x":0,"\u0078":1}}"#, "x"),
       (#"{"\uD83D\uDE00":0,"😀":1}"#, "😀")
     ]
@@ -438,6 +441,8 @@ extension TLCGraphReaderTests {
       }
     }
     let malformed = [
+      "{\"control\u{001f}key\":0}",
+      #"{"\q":0}"#, #"{"\uD800":0}"#,
       #"{"value":"\q"}"#, #"{"value":"\uD800"}"#, #"{"value":"\uDC00"}"#,
       #"{"value":"\u12"}"#, #"{"value":"unterminated}"#
     ]
@@ -445,6 +450,20 @@ extension TLCGraphReaderTests {
       #expect(throws: TLCGraphEventError.malformedJSON(line: 2)) {
         try reader.parse(Data((prefix + record + "\n").utf8))
       }
+    }
+  }
+
+  @Test("JSON keys preserve plain, escaped, and Unicode spellings")
+  func decodesObjectKeys() throws {
+    let source = #"{"":0,"plain":1,"space key":2,"\"quote\"":3,"slash\\":4,"\uD83D\uDE00":5,"café":6}"#
+    let values = try decodeJSONObject(Data(source.utf8), line: 7)
+    #expect(Set(values.keys) == ["", "plain", "space key", "\"quote\"", "slash\\", "😀", "café"])
+    for (key, value) in ["": 0, "plain": 1, "space key": 2, "\"quote\"": 3, "slash\\": 4, "😀": 5, "café": 6] {
+      #expect(values[key] as? Int == value)
+    }
+    let invalidUTF8 = Data([0x7b, 0x22, 0xff, 0x22, 0x3a, 0x30, 0x7d])
+    #expect(throws: TLCGraphEventError.malformedJSON(line: 7)) {
+      try decodeJSONObject(invalidUTF8, line: 7)
     }
   }
 
