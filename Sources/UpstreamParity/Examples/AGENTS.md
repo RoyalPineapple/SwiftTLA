@@ -12,21 +12,23 @@ configuration. It is not a place to invent a friendlier algorithm.
    variables, process family, atomic labels, fairness, and formal properties.
 3. If the source is direct TLA+, use the typed `#spec` vocabulary directly.
    Do not manufacture an `Algorithm` around it.
-4. If an upstream construct is not supported, record the missing construct and
-   stop. Do not emulate it with raw `TLAValue`, `StateExpr`, `ActionExpr`, or
-   Swift control flow in a new port.
+4. If an upstream construct is unsupported, implement its compiler support before declaring the port complete.
+   Do not replace it with raw `TLAValue`, `StateExpr`, `ActionExpr`, or Swift control flow.
+   Do not simplify the upstream algorithm or disable its checks.
 
 ## Typed authoring rules
 
-- Give every finite domain a named `CaseIterable` raw-value enum. The model
-  macro derives its finite formal domain.
-- Use `TLARecordSchema`, `Record<Schema>`, `TLAField`, and
-  `Function<Domain, Range>` for structured state.
+- Use model-owned finite domains and typed scenario bindings.
+- Use ordinary Swift structs, enums, arrays, and sets for model values.
+- Generate formal projections from the resolved types instead of declaring parallel record schemas.
+- Retain `Function<Domain, Range>` only for total finite functions, not as a replacement for ordinary dictionaries.
+- Use typed field and indexed assignments for supported writable locations.
+- Preserve resolved types, declaration identities, and source locations until backend emission.
 - Keep formal string names behind validated variables, fields, and domains.
   Do not expose string-keyed state or add new raw-map access.
-- Keep all model logic in the specification. A generated actor, observable,
-  test, or demo view may dispatch and render it, but may not reimplement a
-  transition guard or state update.
+- Keep all model logic in the specification.
+  A generated actor, observable, test, or demo view can dispatch actions and render state.
+  Do not reimplement transition guards or updates in these consumers.
 
 ## PlusCal-shaped translation
 
@@ -52,19 +54,27 @@ formal transition. Do not put an ordinary Swift side effect in a `Do` block.
 
 ## Compilation and validation
 
-For an `@TLAModel` port, macro expansion resolves the parsed builder syntax and
-generates native Swift execution. `makeMachine()` evaluates generated initial
-state code; it must not compile `Self.spec` or invoke the formal interpreter.
+The resolved typed model supplies generated native Swift and equivalent formal exports.
+Application execution and native checking share the generated transitions.
+`makeMachine()` evaluates generated initial state code without runtime compilation or an interpreter fallback.
 
-After a port:
+For each port:
 
-1. Add or preserve the `Example.FiniteModelFixture` and its declared finite outcome.
-2. Compile the source model and run its focused bounded-exploration test.
-3. For an `@TLAModel` port, compare native initial states, enabled actions,
-   successors, and failures against the formal engine. Compare complete bounded
-   graphs where the configuration permits exhaustive exploration.
-4. When a pinned reference fixture exists, declare or update its
-   `FiniteGraphCase` and run the hosted finite-graph workflow.
+1. Read the pinned family inventory in `Verification/UpstreamExamples/inventory.json`.
+2. Preserve every applicable upstream module, variant, configuration, property, and expected outcome.
+3. Declare typed validation scenarios with the model.
+4. Derive implementation registration from those scenarios, not from duplicate scenario bindings.
+5. Run focused local diagnostics only through `scripts/local-validation.sh`, as specified by the repository safety rules.
+6. Compare complete native initial states and labeled graphs against independently pinned upstream inputs through hosted TLC.
+7. Compare all declared property outcomes, including deadlocks, termination, fairness, and temporal properties.
+8. Retain actionable counterexample traces and all differences.
+9. Remove replaced application APIs, manual schemas, and stale generated evidence.
+
+Expected failures change the validation verdict, not model behavior or check selection.
+Missing, unsupported, timed-out, malformed, or truncated results do not establish equivalence.
+State counts alone do not establish equivalence.
+Hosted checks remain the admission authority for the exact pushed SHA.
+Do not run TLC locally.
 
 ## Names and source mapping
 
