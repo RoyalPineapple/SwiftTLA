@@ -33,7 +33,17 @@ package enum TLCExecutionOutcome: Equatable, Sendable {
     case (10, _): self = .assumptionViolation
     case (11, _): self = .deadlock
     case (12, _): self = .safetyViolation
-    case (13, .propertyCheck): self = .livenessViolation
+    case (13, .propertyCheck):
+      let errors = process.stdout.split(whereSeparator: \.isNewline).filter { $0.hasPrefix("Error:") }
+      // TLC uses status 13 for both temporal and finite action-property failures.
+      if errors.count == 2,
+         errors[0].hasPrefix("Error: Action property "), errors[0].hasSuffix(" is violated."),
+         errors[1] == "Error: The behavior up to this point is:",
+         process.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        self = .safetyViolation
+      } else {
+        self = .livenessViolation
+      }
     case (14, _): self = .assertionViolation
     default: self = .failed(exitStatus: exitStatus)
     }

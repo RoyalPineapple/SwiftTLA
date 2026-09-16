@@ -466,13 +466,45 @@ struct TLCPropertyCheckTests {
     #expect(retained.steps.map { $0.state.canonicalEncoding } == [state])
   }
 
+  @Test("TLC action-property failures retain finite counterexamples")
+  func retainsActionPropertyViolation() throws {
+    let fixture = try Fixture()
+    let stream = try temporalGraphStream(case: fixture.completeGraphCase, runID: fixture.completeGraphRequest.runID)
+    let graph = try completedGraph(stream, for: fixture.completeGraphCase)
+    let trace = Data(#"{"vars":["x"],"counterexample":{"state":[[1,{"x":1}],[2,{"x":2}]],"action":[[[1,{"x":1}],{"name":"A"},[2,{"x":2}]]]}}"#.utf8)
+    let native = try TLCTraceParser().parseCounterexample(trace, states: graph.graph.states.values)
+    let comparison = try fixture.capture(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
+      propertyResult: Fixture.actionViolation,
+      trace: trace)), completeGraph: fixture.captureGraph(stream: stream), swiftRun: graph,
+      swiftResult: .violated(native))
+    #expect(comparison.status == .exact)
+    let retained = try #require(counterexample(in: comparison.tlcResult))
+    #expect(retained.cycleStartIndex == nil)
+    #expect(retained.steps.count == 2)
+    try retained.validate(in: graph.graph)
+  }
+
+  @Test("temporal failures still require a cycle for a multi-state trace")
+  func rejectsFiniteTemporalViolation() throws {
+    let fixture = try Fixture()
+    let stream = try temporalGraphStream(case: fixture.completeGraphCase, runID: fixture.completeGraphRequest.runID)
+    let graph = try completedGraph(stream, for: fixture.completeGraphCase)
+    let trace = Data(#"{"vars":["x"],"counterexample":{"state":[[1,{"x":1}],[2,{"x":2}]],"action":[[[1,{"x":1}],{"name":"A"},[2,{"x":2}]]]}}"#.utf8)
+    #expect(throws: GraphRunError.invalidLasso) {
+      try fixture.capture(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(trace: trace)),
+        completeGraph: fixture.captureGraph(stream: stream), swiftRun: graph, swiftResult: .satisfied)
+    }
+  }
+
   @Test("a safety violation cannot carry a repeating temporal counterexample")
   func rejectsCyclicSafetyTrace() throws {
-    let fixture = try Fixture(check: .property("IsTwo"))
-    #expect(throws: GraphRunError.invalidLasso) {
-      try fixture.capture(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
-        propertyResult: Fixture.safetyViolation, trace: numberedStutteringTrace())),
-        swiftResult: .satisfied)
+    for result in [Fixture.safetyViolation, Fixture.actionViolation] {
+      let fixture = try Fixture(check: .property("IsTwo"))
+      #expect(throws: GraphRunError.invalidLasso) {
+        try fixture.capture(processAdapter: TLCProcessAdapter(executor: PropertyExecutor(
+          propertyResult: result, trace: numberedStutteringTrace())),
+          swiftResult: .satisfied)
+      }
     }
   }
 
@@ -723,6 +755,8 @@ struct TLCPropertyCheckTests {
       status: 13, stdout: "Error: Temporal property is violated.", stderr: "")
     static let safetyViolation = TLCProcessResult(
       status: 12, stdout: "Error: Invariant P is violated.", stderr: "")
+    static let actionViolation = TLCProcessResult(
+      status: 13, stdout: "Error: Action property AbstractNext is violated.\nError: The behavior up to this point is:", stderr: "")
 
     let root: URL
     let module: URL
