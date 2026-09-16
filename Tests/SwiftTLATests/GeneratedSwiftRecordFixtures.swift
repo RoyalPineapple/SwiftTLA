@@ -23,8 +23,8 @@ struct GeneratedSwiftRecord {
                 Do(Step.advance) {
                     let saved = packet
                     When(saved.count == 0)
-                    Assign(previousCount, to: saved.count)
                     Assign(packet, to: Packet(count: 1, ready: true))
+                    Assign(previousCount, to: saved.count)
                     Stop()
                 }
             }

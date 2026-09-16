@@ -245,8 +245,11 @@ struct TypedFacadeContractTests {
     #expect(build.output.contains("InvalidTypedFacade.swift:32:"))
     #expect(build.output.contains("member 'person'"))
     #expect(build.output.contains("requires that 'StateExpr' conform to 'TypedExpression'"))
-    #expect(build.output.contains("value of type 'Expr<TLAValue>' has no member 'becomes'"))
     let errors = build.output.split(separator: "\n").filter { $0.contains(": error:") }
+    #expect(errors.contains {
+      $0.contains("InvalidTypedFacade.swift:39:")
+        && $0.contains("requires that 'TLAValue' conform to '_GeneratedRecordValue'")
+    })
     let rejectedLines = [32, 33, 151, 152, 154, 155, 156, 159, 160, 162, 163] + Array(139...149) + Array(38...41) + Array(43...56) + Array(58...73) + Array(75...86)
     for line in rejectedLines {
       #expect(errors.contains { $0.contains("InvalidTypedFacade.swift:\(line):") },
