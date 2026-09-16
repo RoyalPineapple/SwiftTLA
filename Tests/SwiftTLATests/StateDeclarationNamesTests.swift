@@ -3,6 +3,22 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct StateDeclarationNamesTests {
+    @Test("escaped Swift declarations retain unescaped model identities")
+    func resolvesEscapedStateNames() throws {
+        let compiled = try EscapedStateNamesModel.spec.compile()
+        let names = Set(compiled.layout.variables.map(\.declaration.name))
+        #expect(names.isSuperset(of: ["repeat", "default", "case"]))
+        #expect(names.allSatisfy { !$0.contains("`") })
+        let scenario = try #require(EscapedStateNamesModel.validationScenarios().first)
+        #expect(EscapedStateNamesModel.formalPropertyNames[.`defer`] == "defer")
+        let initial = try #require(scenario.initialMachines().first)
+        #expect(initial.state.`repeat` == "payload")
+        #expect(initial.state.`default` == 1)
+        let next = try #require(initial.successors().first?.machine)
+        #expect(next.state.`repeat` == "visited")
+        #expect(next.state.`default` == 2)
+    }
+
     @Test("mutable state-handle bindings fail before lowering")
     func rejectsMutableStateHandle() throws {
         let source = try parseSpecTestClosure("""

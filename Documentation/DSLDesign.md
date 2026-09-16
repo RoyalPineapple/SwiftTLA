@@ -124,6 +124,10 @@ The macro supplies the internal `_name` argument for the formal builder boundary
 The former positional-name signatures are not supported.
 State display labels and anonymous declarations still require the remaining B-02 decisions.
 
+Swift backticks escape keywords but are not part of declaration identity.
+For example, a state binding spelled `` `repeat` `` has the formal name `repeat`.
+References, parameter bindings, and property selections use the same unescaped identity.
+
 The whole-step guard syntax is:
 
 ```swift
@@ -213,11 +217,11 @@ successors. A synthetic stuttering edge must not hide an unfinished stuck state.
 Having enabled transitions does not prove eventual progress; temporal claims
 remain responsible for detecting executions that run forever without progressing.
 
-A validation scenario may explicitly expect getting stuck, for example to test
+A validation scenario can explicitly expect getting stuck, for example to test
 a deliberately broken protocol. This expectation changes only the scenario's
 pass/fail decision. It must not change transitions, hide the deadlock result, or
-turn a timeout or incomplete exploration into an expected failure. The exact
-scenario modifier for this expectation remains to be specified.
+turn a timeout or incomplete exploration into an expected failure.
+The scenario modifier is `.expectDeadlock(.violated)`.
 
 Both Swift checking and separate TLC validation must apply this default while
 preserving normal termination semantics. Complete graph capture must still
@@ -227,13 +231,13 @@ finish independently of any property run that stops on the first stuck state.
 
 | Declaration | Meaning | Positive result requires |
 | --- | --- | --- |
-| `Invariant("Name") { predicate }` | Every reachable state satisfies the predicate | Complete exploration with no violation |
-| `Reachable("Name") { predicate }` | Some reachable state satisfies the predicate | A valid execution reaching a matching state |
+| `Invariant()` handle with a registered predicate | Every reachable state satisfies the predicate | Complete exploration with no violation |
+| `Reachable()` handle with a registered predicate | Some reachable state satisfies the predicate | A valid execution reaching a matching state |
 | `Eventually` | Every allowed execution eventually satisfies the predicate | Complete temporal analysis under the declared semantics |
 | `LeadsTo` | Whenever a premise holds, its consequence eventually follows | Complete temporal analysis under the declared semantics |
 
-`Reachable("Name") { predicate }` is the selected declaration for finding a
-matching reachable state. Do not add a `Counterexample` declaration that asks
+`Reachable()` creates the named handle for a positive reachability claim.
+Its predicate registration selects the matching states. Do not add a `Counterexample` declaration that asks
 users to negate their goal. Counterexamples name results of failed properties.
 Some property-handle decisions remain unresolved. Retain the temporal composition
 capabilities needed by the corpus; these four forms do not limit expressiveness.

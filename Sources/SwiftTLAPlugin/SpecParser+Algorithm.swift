@@ -65,9 +65,9 @@ private enum AlgorithmSourceConstruct: Equatable {
             return
         }
         guard let member = expression.as(MemberAccessExprSyntax.self),
-              let scope = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
+              let scope = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
         else { return nil }
-        switch member.declName.baseName.text {
+        switch member.declName.baseName.sourceIdentifierName {
         case "sharedVar": self = .scopedState(.shared, scope: scope)
         case "localVar": self = .scopedState(.local, scope: scope)
         default: return nil
@@ -75,7 +75,7 @@ private enum AlgorithmSourceConstruct: Equatable {
     }
 
     static func referenceName(in expression: ExprSyntax) -> String? {
-        reference(in: expression)?.baseName.text
+        reference(in: expression)?.baseName.sourceIdentifierName
     }
 
     func isState(_ kind: AlgorithmStateDeclarationKind, in scope: String?) -> Bool {
@@ -86,7 +86,7 @@ private enum AlgorithmSourceConstruct: Equatable {
     }
 
     private init?(_ reference: DeclReferenceExprSyntax) {
-        switch reference.baseName.text {
+        switch reference.baseName.sourceIdentifierName {
         case "FormalDefinition": self = .formalDefinition
         case "Macro": self = .macro
         case "Procedure": self = .procedure
@@ -221,7 +221,7 @@ extension ParserSession {
                 ))
                 return nil
             }
-            switch access.declName.baseName.text {
+            switch access.declName.baseName.sourceIdentifierName {
             case "none": fairness = .none
             case "weak": fairness = .weak
             default:
@@ -251,7 +251,7 @@ extension ParserSession {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
                let macro = parseAlgorithmMacroDeclaration(variable, scope: sourceScope) {
-                let name = variable.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.text ?? ""
+                let name = variable.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName ?? ""
                 guard macros[name] == nil else {
                     components.diagnostics.append(.init(message: "Algorithm macro '\(name)' is declared more than once.", source: statement))
                     return nil
@@ -516,7 +516,7 @@ extension ParserSession {
 
     private func procedureParameterType(_ expression: ExprSyntax) -> ProcedureParameterType? {
         guard let metatype = expression.as(MemberAccessExprSyntax.self),
-              metatype.declName.baseName.text == "self",
+              metatype.declName.baseName.sourceIdentifierName == "self",
               let type = metatype.base,
               let terminalName = terminalTypeName(in: type)
         else { return nil }
@@ -566,7 +566,7 @@ extension ParserSession {
         _ call: FunctionCallExprSyntax,
         scope: TypedFacadeScope
     ) -> TemporalDecl? {
-        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
               call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
               call.arguments.allSatisfy({ $0.label == nil }) else { return nil }
         let arguments = Array(call.arguments)
@@ -591,7 +591,7 @@ extension ParserSession {
         if let temporal = parseBoundTemporal(call, scope: scope) {
             return .temporal(.init(name: temporal.name, expr: temporal.expr, bindings: [], reference: temporal.reference))
         }
-        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
               let handle = specBindings.properties[name],
               handle is InvariantHandle || handle is ReachableHandle,
               call.arguments.isEmpty else { return nil }
@@ -735,7 +735,7 @@ extension ParserSession {
                 algorithmParseFailure = "Each fairness must be .none, .weak, or .strong."
                 return nil
             }
-            switch access.declName.baseName.text {
+            switch access.declName.baseName.sourceIdentifierName {
             case "none": fairness = .none
             case "weak": fairness = .weak
             case "strong": fairness = .strong
@@ -855,7 +855,7 @@ extension ParserSession {
     ) -> (name: String, value: TLAValue, shape: CompiledValueType?)? {
         guard declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
-              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
               let initializer = binding.initializer?.value
         else { return nil }
 
@@ -1047,7 +1047,7 @@ extension ParserSession {
         guard declaration.bindingSpecifier.text == "let",
               declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
-              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
               let initializer = binding.initializer?.value,
               let value = decodeAlgorithmStateExpression(initializer, scope: scope)
         else { return nil }
@@ -1399,7 +1399,7 @@ extension ParserSession {
                 guard case .variable(let root) = bound else { return nil }
                 return .root(root)
             }
-            return .root(reference.baseName.text)
+            return .root(reference.baseName.sourceIdentifierName)
         }
         if let access = expression.as(MemberAccessExprSyntax.self),
            let base = access.base,
@@ -1409,13 +1409,13 @@ extension ParserSession {
             return .field(target, field.name)
         }
         if let access = expression.as(MemberAccessExprSyntax.self),
-           access.declName.baseName.text == "algorithmLValue",
+           access.declName.baseName.sourceIdentifierName == "algorithmLValue",
            let base = access.base?.as(DeclReferenceExprSyntax.self) {
             if let bound = scope.value(for: base) {
                 guard case .variable(let root) = bound else { return nil }
                 return .root(root)
             }
-            return .root(base.baseName.text)
+            return .root(base.baseName.sourceIdentifierName)
         }
         return nil
     }
@@ -1433,7 +1433,7 @@ extension ParserSession {
         if let name = registeredStringEnumCase(expression) { return name }
         guard let expression,
               let access = expression.as(MemberAccessExprSyntax.self),
-              let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text else {
+              let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName else {
             let source = expression?.description.trimmingCharacters(in: .whitespacesAndNewlines) ?? "missing"
             algorithmParseFailure = "\(construct) procedure name '\(source)' must be a qualified enum case."
             return nil
@@ -1442,7 +1442,7 @@ extension ParserSession {
             algorithmParseFailure = "\(construct) procedure-name enum '\(type)' is not registered."
             return nil
         }
-        let member = access.declName.baseName.text
+        let member = access.declName.baseName.sourceIdentifierName
         guard let value = definition.value(named: member) else {
             algorithmParseFailure = "\(construct) procedure name '\(member)' is not declared in registered enum '\(type)'."
             return nil
@@ -1453,8 +1453,8 @@ extension ParserSession {
 
     func finiteAlgorithmDomain(_ expression: ExprSyntax) -> (typeName: String, values: [TLAValue])? {
         guard let access = expression.as(MemberAccessExprSyntax.self),
-              access.declName.baseName.text == "all",
-              let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              access.declName.baseName.sourceIdentifierName == "all",
+              let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
               let values = enumDefinition(named: type)?.finiteValues, !values.isEmpty
         else { return nil }
         return (type, values)

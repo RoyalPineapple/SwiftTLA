@@ -27,7 +27,7 @@ extension ParserSession {
                 parseBuilderCall(fc, into: &components, collectionTypes: collectionTypes)
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
-                      let property = specBindings.properties[reference.baseName.text] {
+                      let property = specBindings.properties[reference.baseName.sourceIdentifierName] {
                 if property is InvariantHandle || property is ReachableHandle || property is TemporalHandle || property is LeadsToHandle {
                     components.diagnostics.append(.init(message: "A property handle requires a predicate definition before registration.", source: reference))
                 } else {
@@ -35,15 +35,15 @@ extension ParserSession {
                 }
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
-                      specBindings.instances[reference.baseName.text] != nil {
+                      specBindings.instances[reference.baseName.sourceIdentifierName] != nil {
                 continue
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
-                      let action = specBindings.actions[reference.baseName.text] {
+                      let action = specBindings.actions[reference.baseName.sourceIdentifierName] {
                 components.actions.append(action)
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
-                      let algorithm = specBindings.algorithms[reference.baseName.text] {
+                      let algorithm = specBindings.algorithms[reference.baseName.sourceIdentifierName] {
                 components.sourceAlgorithms.append(algorithm)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &components)
@@ -73,7 +73,7 @@ extension ParserSession {
         declarationScope: String? = nil
     ) {
         for binding in declaration.bindings {
-            guard let sourceName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+            guard let sourceName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
                   let initializer = binding.initializer?.value
             else {
                 components.diagnostics.append(.init(
@@ -95,11 +95,11 @@ extension ParserSession {
                 continue
             }
             if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-               member.declName.baseName.text == "parameter",
-               member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == declarationScope {
+               member.declName.baseName.sourceIdentifierName == "parameter",
+               member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == declarationScope {
                 guard declaration.bindingSpecifier.text == "let",
                       let type = call.arguments.first(where: { $0.label?.text == "as" })?.expression.as(MemberAccessExprSyntax.self),
-                      type.declName.baseName.text == "self", let base = type.base else {
+                      type.declName.baseName.sourceIdentifierName == "self", let base = type.base else {
                     components.diagnostics.append(.init(message: "A parameter requires a named let binding and an explicit value type.", source: binding))
                     continue
                 }
@@ -181,7 +181,7 @@ extension ParserSession {
                     ExprSyntax(call), context: "Action parameter binding '\(sourceName)'", position: 1,
                     diagnostics: &components.diagnostics
                 )
-            } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Instance" {
+            } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Instance" {
                 let count = components.moduleInstances.count
                 parseFormalModuleInstance(
                     call,
@@ -192,7 +192,7 @@ extension ParserSession {
                       let instance = components.moduleInstances.last
                 else { continue }
                 specBindings.instances[sourceName] = instance
-            } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
+            } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "TLASpec" {
                 parseFormalModuleBinding(
                     sourceName: sourceName,
                     call: call,
@@ -210,7 +210,7 @@ extension ParserSession {
                     specBindings.actions[sourceName] = action
                 }
             } else if algorithmBindingType(in: binding),
-                      call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Algorithm" {
+                      call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm" {
                 guard specBindings.algorithms[sourceName] == nil else {
                     components.diagnostics.append(.init(
                         message: "Specification algorithm binding '\(sourceName)' is declared more than once.",
@@ -282,7 +282,7 @@ extension ParserSession {
     }
 
     func parseForLoop(_ forStmt: ForStmtSyntax, into components: inout TLASpec) {
-        guard let pattern = forStmt.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+        guard let pattern = forStmt.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
               let range = parseIntegerClosedRange(forStmt.sequence)
         else {
             components.diagnostics.append(.init(
@@ -317,7 +317,7 @@ extension ParserSession {
         constructor: (name: String, valueType: String?),
         into components: inout TLASpec
     ) {
-        guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text else { return }
+        guard let patternName = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName else { return }
         let existingVariableCount = components.variables.count
         defer {
             if components.variables.count > existingVariableCount,
@@ -461,8 +461,8 @@ extension ParserSession {
             return ("Var", nil)
         }
         if let member = fc.calledExpression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.text == "sharedVar",
-           member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == declarationScope {
+           member.declName.baseName.sourceIdentifierName == "sharedVar",
+           member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == declarationScope {
             return ("SharedVar", nil)
         }
         return nil
@@ -520,19 +520,19 @@ extension ParserSession {
     func setExpressionElementTypeName(_ expression: ExprSyntax) -> String? {
         if let domain = finiteAlgorithmDomain(expression) { return domain.typeName }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Where",
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Where",
            let candidates = call.arguments.first?.expression {
             return setExpressionElementTypeName(candidates)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
            name == "Subsets" || name == "NonEmptySubsets",
            let values = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
            let element = setExpressionElementTypeName(values) {
             return "SetExpr<\(element)>"
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Functions",
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Functions",
            let domainSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
            let domain = finiteAlgorithmDomain(domainSyntax),
            let rangeSyntax = call.arguments.first(where: { $0.label?.text == "to" })?.expression,
@@ -540,7 +540,7 @@ extension ParserSession {
             return "Function<\(domain.typeName), \(range)>"
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
            name == "Sequences" || name == "SortedSequences" || name == "ZeroBasedSequences",
            let members = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
            let element = setExpressionElementTypeName(members) {
@@ -550,7 +550,7 @@ extension ParserSession {
         }
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-              member.declName.baseName.text == "literal",
+              member.declName.baseName.sourceIdentifierName == "literal",
               let base = member.base
         else { return nil }
         guard let type = typedFacadeType(base), type.name == "SetExpr" else { return nil }
@@ -574,8 +574,8 @@ extension ParserSession {
         if let fc = expression.as(FunctionCallExprSyntax.self),
            let memberAccess = fc.calledExpression.as(MemberAccessExprSyntax.self),
            let base = memberAccess.base?.as(DeclReferenceExprSyntax.self),
-           base.baseName.text == "TLAValue" {
-            return parseTLAValueConstructor(name: memberAccess.declName.baseName.text, call: fc)
+           base.baseName.sourceIdentifierName == "TLAValue" {
+            return parseTLAValueConstructor(name: memberAccess.declName.baseName.sourceIdentifierName, call: fc)
         }
         return nil
     }
@@ -587,7 +587,7 @@ extension ParserSession {
         guard let member = expression.as(MemberAccessExprSyntax.self),
               let type = terminalTypeName(in: member.base),
               let definition = enumDefinition(named: type),
-              definition.value(named: member.declName.baseName.text) != nil
+              definition.value(named: member.declName.baseName.sourceIdentifierName) != nil
         else { return nil }
         return type
     }
@@ -609,22 +609,22 @@ extension ParserSession {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           ["first", "second"].contains(member.declName.baseName.text),
+           ["first", "second"].contains(member.declName.baseName.sourceIdentifierName),
            call.arguments.count == 1 {
             if let type = typedFacadeType(member.base), type.name == "OneOf" {
                 return type.renderedSourceName
             }
-            if let name = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+            if let name = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
                sourceTypes.aliases[name] != nil {
                 return name
             }
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "IntRange" {
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "IntRange" {
             return "SetExpr<Int>"
         }
         if let member = expression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.text == "empty",
+           member.declName.baseName.sourceIdentifierName == "empty",
            let type = typedFacadeType(member.base), type.name == "PartialFunction" {
             return type.renderedSourceName
         }
@@ -646,7 +646,7 @@ extension ParserSession {
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            let base = member.base,
            let type = typedFacadeType(base) {
-            switch (type.name, member.declName.baseName.text) {
+            switch (type.name, member.declName.baseName.sourceIdentifierName) {
             case ("SetExpr", "literal"), ("TupleExpr", "literal"), ("Pair", "literal"),
                  ("Record", "literal"), ("Function", "literal"), ("PartialFunction", "literal"),
                  ("ZeroBasedSequence", "literal"), ("ZeroBasedSequence", "filled"), ("Function", "mapping"):
@@ -656,7 +656,7 @@ extension ParserSession {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let memberAccess = call.calledExpression.as(MemberAccessExprSyntax.self),
-           memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLAValue" {
+           memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "TLAValue" {
             return "TLAValue"
         }
         return enumCaseTypeName(from: expression)
@@ -711,7 +711,7 @@ extension ParserSession {
             registerProperty(temporal, into: &components)
             return
         }
-        if let sourceName = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+        if let sourceName = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
            let handle = specBindings.properties[sourceName],
            handle is InvariantHandle || handle is ReachableHandle {
             guard call.arguments.isEmpty, let closure = call.trailingClosure else {
@@ -778,7 +778,7 @@ extension ParserSession {
         case "Extends":
             let modules = call.arguments.compactMap { argument -> StandardModule? in
                 guard let member = argument.expression.as(MemberAccessExprSyntax.self) else { return nil }
-                switch member.declName.baseName.text {
+                switch member.declName.baseName.sourceIdentifierName {
                 case "integers": return .integers
                 case "naturals": return .naturals
                 case "finiteSets": return .finiteSets
@@ -803,7 +803,7 @@ extension ParserSession {
             }
             let kind: FormalModuleParameterKind
             if let kindExpression = call.arguments.first(where: { $0.label?.text == "kind" })?.expression {
-                guard let member = kindExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text,
+                guard let member = kindExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName,
                       let parsedKind = FormalModuleParameterKind(rawValue: member)
                 else {
                     components.diagnostics.append(.init(message: "Parameter kind must be .constant or .variable.", source: kindExpression))
@@ -837,7 +837,7 @@ extension ParserSession {
                 components.fairness.append(fc)
             } else {
                 let action = call.arguments.first?.expression
-                    .as(DeclReferenceExprSyntax.self)?.baseName.text
+                    .as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
                 components.diagnostics.append(.init(
                     message: action.map { "Fairness action reference '\($0)' is not bound by a local Action declaration." }
                         ?? "Fairness declaration requires a structural action reference.",
@@ -886,11 +886,11 @@ extension ParserSession {
     /// a generated machine's nested `Action` type.
     private func builderCallName(_ expression: ExprSyntax) -> String? {
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
-            return reference.baseName.text
+            return reference.baseName.sourceIdentifierName
         }
         guard let member = expression.as(MemberAccessExprSyntax.self),
-              member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "SwiftTLA",
-              member.declName.baseName.text == "Action"
+              member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SwiftTLA",
+              member.declName.baseName.sourceIdentifierName == "Action"
         else {
             return nil
         }
@@ -937,7 +937,7 @@ extension ParserSession {
             .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
         guard let name = bindingName ?? explicitName, !name.isEmpty,
               let instanceSyntax = call.arguments.first(where: { $0.label?.text == "instance" })?.expression,
-              let sourceName = instanceSyntax.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let sourceName = instanceSyntax.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
               let instance = specBindings.instances[sourceName]
         else {
             components.diagnostics.append(.init(
@@ -950,7 +950,7 @@ extension ParserSession {
         }
         let target: RefinementDecl.Operator
         if let operatorSyntax = call.arguments.first(where: { $0.label?.text == "operator" })?.expression,
-           let operatorName = operatorSyntax.as(MemberAccessExprSyntax.self)?.declName.baseName.text,
+           let operatorName = operatorSyntax.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName,
            let parsedTarget = RefinementDecl.Operator(sourceName: operatorName) {
             target = parsedTarget
         } else if call.arguments.contains(where: { $0.label?.text == "operator" }) {
@@ -978,8 +978,8 @@ extension ParserSession {
             let scope = sourceScope
             for element in array.elements {
                 guard let mapping = element.expression.as(FunctionCallExprSyntax.self),
-                      (mapping.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "RefinementMapping"
-                        || mapping.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "init"),
+                      (mapping.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "RefinementMapping"
+                        || mapping.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName == "init"),
                       let target = mapping.arguments.first?.expression,
                       let mappedName = refinementTargetName(target),
                       let source = mapping.arguments.first(where: { $0.label?.text == "from" })?.expression,
@@ -1024,7 +1024,7 @@ extension ParserSession {
 
     private func parseSymmetryValues(_ expression: ExprSyntax) -> [TLAValue]? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Set",
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Set",
               let domainSyntax = call.arguments.first?.expression,
               let domain = finiteAlgorithmDomain(domainSyntax)
         else { return nil }
@@ -1125,7 +1125,7 @@ extension ParserSession {
                   call.arguments.first?.label == nil,
                   let name = extractStringArg(call, index: 0)
             else { return nil }
-            switch member.declName.baseName.text {
+            switch member.declName.baseName.sourceIdentifierName {
             case "value":
                 if call.arguments.count == 1 { return .value(name) }
                 guard call.arguments.count == 2,
@@ -1171,8 +1171,8 @@ extension ParserSession {
             var parsedArguments: [ModuleArgument] = []
             for element in array.elements {
                 guard let argumentCall = element.expression.as(FunctionCallExprSyntax.self),
-                      (argumentCall.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModuleArgument"
-                        || argumentCall.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "init"),
+                      (argumentCall.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "ModuleArgument"
+                        || argumentCall.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName == "init"),
                       let parameter = extractStringArg(argumentCall, index: 0),
                       let valueSyntax = argumentCall.arguments.first(where: { $0.label?.text == "value" })?.expression,
                       let value = decodeTypedFacadeValue(valueSyntax, scope: scope) ?? decodeStateExpr(valueSyntax)
@@ -1212,7 +1212,7 @@ extension ParserSession {
     private func plusCalPhase(_ call: FunctionCallExprSyntax) -> AuthoredPlusCalDeclarationPhase? {
         guard let syntax = call.arguments.first(where: { $0.label?.text == "plusCalPhase" })?.expression
         else { return .prelude }
-        switch syntax.as(MemberAccessExprSyntax.self)?.declName.baseName.text {
+        switch syntax.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName {
         case "prelude": return .prelude
         case "define": return .define
         case "postTranslation": return .postTranslation
@@ -1238,9 +1238,9 @@ extension ParserSession {
         guard provider == .zeroBasedSequences,
               let call = argument.as(FunctionCallExprSyntax.self),
               let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-              let configurationType = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let configurationType = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
               FormalModuleProvider(sourceType: configurationType) == provider,
-              member.declName.baseName.text == "boundedNaturalNumbers",
+              member.declName.baseName.sourceIdentifierName == "boundedNaturalNumbers",
               call.arguments.count == 1,
               let bounds = call.arguments.first?.expression,
               let range = parseIntegerClosedRange(bounds)
@@ -1250,8 +1250,8 @@ extension ParserSession {
 
     private func formalModuleProvider(from expression: ExprSyntax) -> FormalModuleProvider? {
         guard let member = expression.as(MemberAccessExprSyntax.self),
-              member.declName.baseName.text == "module",
-              let sourceType = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
+              member.declName.baseName.sourceIdentifierName == "module",
+              let sourceType = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
         else { return nil }
         return FormalModuleProvider(sourceType: sourceType)
     }
@@ -1261,7 +1261,7 @@ extension ParserSession {
         bindings: [String: TLASpec]
     ) -> TLASpec? {
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
-            return bindings[reference.baseName.text]
+            return bindings[reference.baseName.sourceIdentifierName]
         }
         if let provider = formalModuleProvider(from: expression) {
             return provider.module
@@ -1343,7 +1343,7 @@ extension ParserSession {
                 continue
             }
             bindings.append(binding)
-            let sourceName = element.expression.as(DeclReferenceExprSyntax.self)?.baseName.text ?? binding.name
+            let sourceName = element.expression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName ?? binding.name
             parameterReferences.append((sourceName: sourceName, value: .variable(binding.name)))
         }
         guard components.diagnostics.isEmpty else { return nil }
@@ -1374,7 +1374,7 @@ extension ParserSession {
 
     func typedUpdateExpression(in expression: ExprSyntax) -> ExprSyntax? {
         if let call = expression.as(FunctionCallExprSyntax.self) {
-            if call.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "updating" {
+            if call.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName == "updating" {
                 return expression
             }
             for argument in call.arguments {
@@ -1419,7 +1419,7 @@ extension ParserSession {
         diagnostics: inout [SourceParseDiagnostic]
     ) -> ActionBinding? {
         if let reference = expression.as(DeclReferenceExprSyntax.self),
-           let binding = specBindings.parameters[reference.baseName.text] {
+           let binding = specBindings.parameters[reference.baseName.sourceIdentifierName] {
             return binding
         }
         guard let call = expression.as(FunctionCallExprSyntax.self),
@@ -1475,7 +1475,7 @@ extension ParserSession {
 
     private func actionParameterSwiftType(_ expression: ExprSyntax) -> String? {
         if let member = expression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.text == "finiteValues",
+           member.declName.baseName.sourceIdentifierName == "finiteValues",
            let base = member.base {
             return terminalTypeName(in: base)
         }
@@ -1488,9 +1488,9 @@ extension ParserSession {
     func closureParameterNames(in closure: ClosureExprSyntax) -> [String] {
         guard let parameters = closure.signature?.parameterClause else { return [] }
         switch parameters {
-        case .simpleInput(let list): return list.map { $0.name.text }
+        case .simpleInput(let list): return list.map { $0.name.sourceIdentifierName }
         case .parameterClause(let clause):
-            return clause.parameters.map { $0.secondName?.text ?? $0.firstName.text }
+            return clause.parameters.map { $0.secondName?.sourceIdentifierName ?? $0.firstName.sourceIdentifierName }
         }
     }
 
@@ -1503,8 +1503,8 @@ extension ParserSession {
             return values.count == array.elements.count ? values : nil
         }
         guard let member = expression.as(MemberAccessExprSyntax.self),
-              member.declName.baseName.text == "finiteValues",
-              let type = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
+              member.declName.baseName.sourceIdentifierName == "finiteValues",
+              let type = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
         else { return nil }
         return enumDefinition(named: type)?.finiteValues
     }
@@ -1579,10 +1579,10 @@ extension ParserSession {
         switch parameters {
         case .simpleInput(let list):
             guard list.count == 1 else { return nil }
-            return list.first?.name.text
+            return list.first?.name.sourceIdentifierName
         case .parameterClause(let clause):
             guard clause.parameters.count == 1, let parameter = clause.parameters.first else { return nil }
-            return parameter.secondName?.text ?? parameter.firstName.text
+            return parameter.secondName?.sourceIdentifierName ?? parameter.firstName.sourceIdentifierName
         }
     }
 

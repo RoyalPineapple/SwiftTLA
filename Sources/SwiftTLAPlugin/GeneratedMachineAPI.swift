@@ -7,6 +7,7 @@ import SwiftSyntax
 package struct GeneratedMachineAPI: Sendable, Equatable {
     package struct Variable: Sendable, Equatable {
         package let swiftIdentifier: String
+        package var argumentLabel: String { swiftIdentifier.replacingOccurrences(of: "`", with: "") }
         package let id: VariableID
         package let collection: Collection?
 

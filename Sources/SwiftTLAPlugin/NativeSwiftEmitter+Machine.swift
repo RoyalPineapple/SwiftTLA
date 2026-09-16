@@ -184,7 +184,7 @@ extension NativeSwiftEmitter {
 
     private func executionState(values: (VariableID) -> String) -> String {
         let publicFields = model.api.variables.map {
-            "\($0.swiftIdentifier): \(values($0.id))"
+            "\($0.argumentLabel): \(values($0.id))"
         }.joined(separator: ", ")
         let privateFields = program.layout.variables.filter { stateMemberNames[$0.id] == nil }.map {
             ", \(variable($0.id)): \(values($0.id))"

@@ -44,7 +44,7 @@ extension NativeSwiftEmitter {
                     }
                 }
                 let arguments = abstractModel.api.variables.enumerated().map {
-                    "\($0.element.swiftIdentifier): value\($0.offset)"
+                    "\($0.element.argumentLabel): value\($0.offset)"
                 }.joined(separator: ", ")
                 declarations += try nativeDeclarations("""
                 private func _mapRefinement\(index)(_ state: Snapshot) throws -> \(name) {

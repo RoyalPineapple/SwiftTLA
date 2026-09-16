@@ -15,6 +15,21 @@ private struct PredicateDevice: Identifiable, Sendable {
 
 @Suite(.serialized)
 struct ModelCollectionPredicateTests {
+  @Test("Escaped collection predicate parameters resolve to their bound values",
+        arguments: ["`class` in", "(`class`: Var<Int>) in"])
+  func escapedPredicateParameters(signature: String) throws {
+    let source = "devices.allSatisfy { \(signature) `class` >= 0 }"
+    let expression = try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
+    let decoded = try #require(SpecParser.decodeStateExpr(expression))
+    guard case .forAll(let domain, let binder, let body) = decoded else {
+      Issue.record("Expected a universally quantified collection predicate")
+      return
+    }
+    #expect(domain == .domain(.variable("devices")))
+    #expect(body == .greaterOrEqual(
+      .functionApply(.variable("devices"), .variable(binder)), .value(.int(0))))
+  }
+
   @Test("Collection action binders preserve reads of authored member state")
   func actionBindersDoNotCaptureState() throws {
     let devices = CollectionVar<PredicateDevice, Int>("devices")

@@ -60,21 +60,21 @@ final class ParserSession {
         }
 
         func value(for reference: DeclReferenceExprSyntax) -> StateExpr? {
-            guard let binding = bindings.last(where: { $0.sourceName == reference.baseName.text }),
+            guard let binding = bindings.last(where: { $0.sourceName == reference.baseName.sourceIdentifierName }),
                   case .value(let value) = binding.meaning
             else { return nil }
             return value
         }
 
         func recursiveOperator(for reference: DeclReferenceExprSyntax) -> String? {
-            guard let binding = bindings.last(where: { $0.sourceName == reference.baseName.text }),
+            guard let binding = bindings.last(where: { $0.sourceName == reference.baseName.sourceIdentifierName }),
                   case .recursiveOperator(let name) = binding.meaning
             else { return nil }
             return name
         }
 
         func shape(for reference: DeclReferenceExprSyntax) -> CompiledValueType? {
-            bindings.last(where: { $0.sourceName == reference.baseName.text })?.shape
+            bindings.last(where: { $0.sourceName == reference.baseName.sourceIdentifierName })?.shape
         }
 
         func extending(
@@ -162,7 +162,7 @@ final class ParserSession {
         scope: TypedFacadeScope
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "LetRec",
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "LetRec",
               let name = extractStringArg(call, index: 0), !name.isEmpty,
               let inputType = call.arguments.first(where: { $0.label?.text == "taking" })?.expression,
               isMetatype(inputType),
@@ -208,7 +208,7 @@ final class ParserSession {
 
     func isMetatype(_ expression: ExprSyntax) -> Bool {
         guard let member = expression.as(MemberAccessExprSyntax.self),
-              member.declName.baseName.text == "self",
+              member.declName.baseName.sourceIdentifierName == "self",
               member.base != nil
         else { return false }
         return true
@@ -258,7 +258,7 @@ final class ParserSession {
             return boundedQuantifier
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "If",
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "If",
            let conditionSyntax = call.arguments.first?.expression,
            let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
            let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
@@ -268,7 +268,7 @@ final class ParserSession {
             return .ifThenElse(condition, thenValue, elseValue)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "IntRange",
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "IntRange",
            let lower = call.arguments.first?.expression,
            let upper = call.arguments.first(where: { $0.label?.text == "through" })?.expression,
            let lowerExpression = decodeStateExpr(lower),
@@ -294,7 +294,7 @@ final class ParserSession {
             return .value(.string(value))
         }
         if let ref = expression.as(DeclReferenceExprSyntax.self) {
-            let name = ref.baseName.text
+            let name = ref.baseName.sourceIdentifierName
             if let resolved = constants.value(named: name) { return .value(resolved) }
             return .variable(name)
         }
@@ -307,7 +307,7 @@ final class ParserSession {
         if let memberAccess = expression.as(MemberAccessExprSyntax.self),
            let base = memberAccess.base,
            let selfExpr = decodeStateExpr(base) {
-            let propName = memberAccess.declName.baseName.text
+            let propName = memberAccess.declName.baseName.sourceIdentifierName
             switch propName {
             case "stateExpr": return selfExpr
             case "expr": return selfExpr
@@ -357,7 +357,7 @@ final class ParserSession {
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "members",
+              call.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName == "members",
               let base = call.calledExpression.as(MemberAccessExprSyntax.self)?.base,
               let domain = finiteAlgorithmDomain(base),
               let currentSyntax = call.arguments.first(where: { $0.label?.text == "before" })?.expression,
@@ -382,7 +382,7 @@ final class ParserSession {
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "At",
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "At",
               call.arguments.count == 2,
               let label = registeredStringEnumCase(call.arguments.first?.expression),
               let processSyntax = call.arguments.dropFirst().first?.expression,
@@ -401,7 +401,7 @@ final class ParserSession {
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Finished"
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Finished"
         else { return nil }
 
         if call.arguments.isEmpty {
@@ -419,7 +419,7 @@ final class ParserSession {
 
     func registeredStringEnumCase(_ expression: ExprSyntax?) -> String? {
         guard let access = expression?.as(MemberAccessExprSyntax.self),
-              let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let type = access.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
               case .string(let label) = enumDefinition(named: type)?.value(named: access.declName.baseName.sourceIdentifierName)
         else { return nil }
         return label
@@ -432,7 +432,7 @@ final class ParserSession {
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
               name == "Sequences" || name == "SortedSequences" || name == "ZeroBasedSequences",
               let memberSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
               let lengthSyntax = call.arguments.first(where: { $0.label?.text == "lengths" })?.expression,
@@ -461,7 +461,7 @@ final class ParserSession {
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let access = call.calledExpression.as(MemberAccessExprSyntax.self),
-              access.declName.baseName.text == "filled",
+              access.declName.baseName.sourceIdentifierName == "filled",
               let base = access.base,
               typedFacadeType(base)?.name == "ZeroBasedSequence",
               let lengthSyntax = call.arguments.first(where: { $0.label?.text == "length" })?.expression,
@@ -481,7 +481,7 @@ final class ParserSession {
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
               name == "Subsets" || name == "NonEmptySubsets"
         else { return nil }
         guard let valuesSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
@@ -500,7 +500,7 @@ final class ParserSession {
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Functions"
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Functions"
         else { return nil }
         guard let domainSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
               let domain = finiteAlgorithmDomain(domainSyntax)
@@ -520,7 +520,7 @@ final class ParserSession {
     private func decodeFormalChoice(_ expression: ExprSyntax, scope: TypedFacadeScope = .empty) -> StateExpr? {
         let canonicalBinding = generatedBinderName(line: UInt(expression.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Select",
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Select",
               let candidatesSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
               let candidates = decodeTypedFacadeValue(candidatesSyntax, scope: scope),
               let closure = call.trailingClosure
@@ -546,7 +546,7 @@ final class ParserSession {
     ) -> StateExpr? {
         let canonicalBinding = generatedBinderName(line: UInt(expression.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Where"
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Where"
         else { return nil }
         guard let candidatesSyntax = call.arguments.first?.expression,
               let candidates = decodeTypedFacadeValue(candidatesSyntax, scope: scope)
@@ -579,7 +579,7 @@ final class ParserSession {
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
               name == "ForAll" || name == "Exists",
               let domainSyntax = call.arguments.first?.expression,
               let domain = finiteAlgorithmDomain(domainSyntax).map({
@@ -713,7 +713,7 @@ final class ParserSession {
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
            let baseSyntax = access.base,
            let base = decodeTypedFacadeValue(baseSyntax, scope: scope) {
-            switch access.declName.baseName.text {
+            switch access.declName.baseName.sourceIdentifierName {
             case "first": return .tupleAccess(base, 1)
             case "second": return .tupleAccess(base, 2)
             case "head": return .tupleHead(base)
@@ -727,7 +727,7 @@ final class ParserSession {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            terminalTypeName(in: member.base) == "StateExpr",
-           member.declName.baseName.text == "operatorApplication",
+           member.declName.baseName.sourceIdentifierName == "operatorApplication",
            call.arguments.count == 2, call.arguments.allSatisfy({ $0.label == nil }),
            call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
            let operation = decodeFormalOperator(call.arguments[call.arguments.startIndex].expression),
@@ -763,7 +763,7 @@ final class ParserSession {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            member.base == nil,
-           member.declName.baseName.text == "variable",
+           member.declName.baseName.sourceIdentifierName == "variable",
            let name = extractStringArg(call, index: 0) {
             return .variable(name)
         }
@@ -774,7 +774,7 @@ final class ParserSession {
         // top level.  Decode both bounds here so closure bindings such as a
         // local-recursion argument remain available to the upper bound.
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "IntRange",
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "IntRange",
            let lowerSyntax = call.arguments.first?.expression,
            let upperSyntax = call.arguments.first(where: { $0.label?.text == "through" })?.expression,
            let lower = decodeTypedFacadeValue(lowerSyntax, scope: scope),
@@ -785,14 +785,14 @@ final class ParserSession {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
            access.base?.as(DeclReferenceExprSyntax.self) != nil,
-           ["first", "second"].contains(access.declName.baseName.text),
+           ["first", "second"].contains(access.declName.baseName.sourceIdentifierName),
            call.arguments.count == 1,
            let value = call.arguments.first?.expression {
             return decodeTypedFacadeValue(value, scope: scope)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            (typedFacadeType(call.calledExpression)?.name == "FormalCall"
-             || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalCall") {
+             || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "FormalCall") {
             let argumentsSyntax = Array(call.arguments).filter { $0.label?.text != "as" }
             guard let name = argumentsSyntax.first?.expression.as(StringLiteralExprSyntax.self)?
                 .representedLiteralValue
@@ -806,13 +806,13 @@ final class ParserSession {
             )
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Range",
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Range",
            call.arguments.count == 1,
            let value = decodeTypedFacadeValue(call.arguments[call.arguments.startIndex].expression, scope: scope) {
             return .operatorApplication(.reference("Range", arity: 1), [.value(value)])
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "InjectiveSequence",
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "InjectiveSequence",
            let valuesSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
            let values = decodeTypedFacadeValue(valuesSyntax, scope: scope) {
             return .choose(
@@ -823,7 +823,7 @@ final class ParserSession {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            (typedFacadeType(call.calledExpression)?.name == "ModuleCall"
-             || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "ModuleCall"),
+             || call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "ModuleCall"),
            call.arguments.count >= 2 {
             let argumentsSyntax = Array(call.arguments).filter { $0.label?.text != "as" }
             guard argumentsSyntax.count >= 2 else { return nil }
@@ -865,7 +865,7 @@ final class ParserSession {
         // it here, before falling back to the untyped decoder, so a value
         // bound by `Function.mapping` or `With` remains in scope.
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "If",
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "If",
            let conditionSyntax = call.arguments.first?.expression,
            let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
            let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
@@ -883,7 +883,7 @@ final class ParserSession {
             return .ifThenElse(condition, thenValue, elseValue)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Fold",
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Fold",
            let sequenceSyntax = call.arguments.first?.expression,
            let initialSyntax = call.arguments.first(where: { $0.label?.text == "startingWith" })?.expression,
            let sequence = decodeTypedFacadeValue(sequenceSyntax, scope: scope),
@@ -909,7 +909,7 @@ final class ParserSession {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.text == "selecting",
+           member.declName.baseName.sourceIdentifierName == "selecting",
            let sequenceSyntax = member.base,
            let sequence = decodeTypedFacadeValue(sequenceSyntax, scope: scope),
            let closure = call.trailingClosure
@@ -940,7 +940,7 @@ final class ParserSession {
                let field = fields.first(where: { $0.name == member.declName.baseName.sourceIdentifierName }) {
                 return .recordAccess(base, field.name)
             }
-            switch member.declName.baseName.text {
+            switch member.declName.baseName.sourceIdentifierName {
             case "raw", "stateExpr", "expr": return base
             case "count":
                 switch typedFacadeValueType(baseSyntax, scope: scope) {
@@ -957,7 +957,7 @@ final class ParserSession {
             }
         }
         if let member = expression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.text == "empty",
+           member.declName.baseName.sourceIdentifierName == "empty",
            typedFacadeType(member.base)?.name == "PartialFunction" {
             return .value(.function([:]))
         }
@@ -984,7 +984,7 @@ final class ParserSession {
 
         // `OneOf` preserves an ordinary TLA+ union and lifts each alternative
         // as its underlying formal value.
-        if ["first", "second"].contains(access.declName.baseName.text),
+        if ["first", "second"].contains(access.declName.baseName.sourceIdentifierName),
            let unionType = typedFacadeType(access.base),
            unionType.name == "OneOf",
            let valueSyntax = call.arguments.first?.expression,
@@ -993,12 +993,12 @@ final class ParserSession {
         }
 
         // Preserve the explicit checked value view.
-        if access.declName.baseName.text == "assuming",
+        if access.declName.baseName.sourceIdentifierName == "assuming",
            let baseSyntax = access.base,
            let base = decodeTypedFacadeValue(baseSyntax, scope: scope),
            call.arguments.count == 1,
            let metatype = call.arguments.first?.expression.as(MemberAccessExprSyntax.self),
-           metatype.declName.baseName.text == "self",
+           metatype.declName.baseName.sourceIdentifierName == "self",
            let typeSyntax = metatype.base,
            let typeName = typedFacadeType(typeSyntax)?.renderedSourceName
                 ?? Self.sourceTypePath(typeSyntax)?.joined(separator: "."),
@@ -1006,7 +1006,7 @@ final class ParserSession {
             return .assertView(base, shape)
         }
 
-        if access.declName.baseName.text == "literal",
+        if access.declName.baseName.sourceIdentifierName == "literal",
            let literalType = typedFacadeType(access.base) {
             switch literalType.name {
             case "Record":
@@ -1049,7 +1049,7 @@ final class ParserSession {
             }
         }
 
-        if access.declName.baseName.text == "mapping",
+        if access.declName.baseName.sourceIdentifierName == "mapping",
            let literalType = typedFacadeType(access.base),
            literalType.name == "Function",
            let domainType = literalType.terminalArgumentName(at: 0),
@@ -1078,7 +1078,7 @@ final class ParserSession {
             )
         }
 
-        if access.declName.baseName.text == "ifThenElse",
+        if access.declName.baseName.sourceIdentifierName == "ifThenElse",
            let base = access.base,
            typedFacadeType(base)?.name == "Expr",
            let conditionSyntax = call.arguments.first?.expression,
@@ -1101,8 +1101,8 @@ final class ParserSession {
         // Swift infers `Record<Schema>` from a surrounding `SetExpr` or
         // `Function` literal, so the source spelling may be `Record.literal`.
         // Its field entries retain enough syntax to decode independently.
-        if access.declName.baseName.text == "literal",
-           access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "Record" {
+        if access.declName.baseName.sourceIdentifierName == "literal",
+           access.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Record" {
             return decodeTypedRecordLiteral(call, scope: scope)
         }
 
@@ -1112,7 +1112,7 @@ final class ParserSession {
 
         let baseType = typedFacadeValueType(baseSyntax, scope: scope)
         let elementEnumType = baseType?.selectedElement?.enumerationType
-        switch access.declName.baseName.text {
+        switch access.declName.baseName.sourceIdentifierName {
         case "contains":
             guard let memberSyntax = call.arguments.first?.expression,
                   let member = decodeTypedFacadeValue(memberSyntax, scope: scope, expectedEnumType: elementEnumType)
@@ -1158,7 +1158,7 @@ final class ParserSession {
                   let element = decodeTypedFacadeValue(elementSyntax, scope: scope, expectedEnumType: elementEnumType)
             else { return nil }
             let singleton = StateExpr.setLiteral([element])
-            return access.declName.baseName.text == "inserting"
+            return access.declName.baseName.sourceIdentifierName == "inserting"
                 ? .union(base, singleton)
                 : .setDifference(base, singleton)
         case "updating":
@@ -1182,7 +1182,7 @@ final class ParserSession {
                         shape: typedFacadeValueType(baseSyntax, scope: scope)?.selectedElement)
                   )
             else { return nil }
-            return access.declName.baseName.text == "filtering"
+            return access.declName.baseName.sourceIdentifierName == "filtering"
                 ? .setFilter(base, parameter, expression)
                 : .setMap(expression, parameter, base)
         case "at":
@@ -1245,7 +1245,7 @@ final class ParserSession {
         let formalMember = expression.as(MemberAccessExprSyntax.self)
             ?? expression.as(FunctionCallExprSyntax.self)?.calledExpression.as(MemberAccessExprSyntax.self)
         if terminalTypeName(in: formalMember?.base) == "StateExpr" {
-            if formalMember?.declName.baseName.text == "operatorApplication" {
+            if formalMember?.declName.baseName.sourceIdentifierName == "operatorApplication" {
                 return decodeTypedFacadeExpr(expression, scope: scope, expectedEnumType: expectedEnumType)
             }
             return decodeStateExpr(expression)
@@ -1264,7 +1264,7 @@ final class ParserSession {
             return filledSequence
         }
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
-            let name = reference.baseName.text
+            let name = reference.baseName.sourceIdentifierName
             if let value = scope.value(for: reference) { return value }
             if let constant = constants.value(named: name) { return .value(constant) }
             if let state = sourceScope.value(for: reference) { return state }
@@ -1323,7 +1323,7 @@ final class ParserSession {
             return .value(value)
         }
         if matches.count > 1 {
-            algorithmParseFailure = "Enum case '.\(member.declName.baseName.text)' is ambiguous in this scope."
+            algorithmParseFailure = "Enum case '.\(member.declName.baseName.sourceIdentifierName)' is ambiguous in this scope."
         }
         return nil
     }
@@ -1369,10 +1369,10 @@ final class ParserSession {
             return terminalTypeName(in: generic.expression)
         }
         if let reference = expression?.as(DeclReferenceExprSyntax.self) {
-            return reference.baseName.text
+            return reference.baseName.sourceIdentifierName
         }
         if let member = expression?.as(MemberAccessExprSyntax.self) {
-            return member.declName.baseName.text
+            return member.declName.baseName.sourceIdentifierName
         }
         return nil
     }
@@ -1424,14 +1424,14 @@ final class ParserSession {
                $0.name == member.declName.baseName.sourceIdentifierName
            }) { return field.type }
         if let member = expression.as(MemberAccessExprSyntax.self),
-           ["expr", "raw", "stateExpr"].contains(member.declName.baseName.text),
+           ["expr", "raw", "stateExpr"].contains(member.declName.baseName.sourceIdentifierName),
            let base = member.base {
             return typedFacadeValueType(base, scope: scope)
         }
         if let member = expression.as(MemberAccessExprSyntax.self),
            let type = terminalTypeName(in: member.base),
            enumDefinition(named: type) != nil {
-            return member.declName.baseName.text == "all"
+            return member.declName.baseName.sourceIdentifierName == "all"
                 ? .set(.named(type))
                 : .named(type)
         }
@@ -1451,7 +1451,7 @@ final class ParserSession {
         if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
             let members = call.arguments.first { $0.label?.text == "of" }?.expression
             let element = members.flatMap { typedFacadeValueType($0, scope: scope)?.selectedElement }
-            switch reference.baseName.text {
+            switch reference.baseName.sourceIdentifierName {
             case "Sequences", "SortedSequences": return .set(.array(element ?? .unknown))
             case "ZeroBasedSequences": return .set(.dictionary(.int, element ?? .unknown))
             default: break
@@ -1461,19 +1461,19 @@ final class ParserSession {
             return typedFacadeValueType(type)
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           ["at", "head"].contains(member.declName.baseName.text),
+           ["at", "head"].contains(member.declName.baseName.sourceIdentifierName),
            let base = member.base,
            case .array(let element) = typedFacadeValueType(base, scope: scope) {
             return element
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.text == "removing",
+           member.declName.baseName.sourceIdentifierName == "removing",
            call.arguments.first?.label?.text == "at",
            let base = member.base {
             return typedFacadeValueType(base, scope: scope)
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           ["appending", "concatenating", "selecting", "filtering", "union", "intersection", "subtracting", "inserting", "removing", "updating", "overriding"].contains(member.declName.baseName.text),
+           ["appending", "concatenating", "selecting", "filtering", "union", "intersection", "subtracting", "inserting", "removing", "updating", "overriding"].contains(member.declName.baseName.sourceIdentifierName),
            let base = member.base {
             return typedFacadeValueType(base, scope: scope)
         }
@@ -1482,7 +1482,7 @@ final class ParserSession {
             return typedFacadeValueType(type)
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.text == "mapping",
+           member.declName.baseName.sourceIdentifierName == "mapping",
            let base = member.base,
            let closure = call.trailingClosure,
            closure.statements.count == 1,
@@ -1530,13 +1530,13 @@ final class ParserSession {
 
     private static func sourceTypePath(_ expression: ExprSyntax) -> [String]? {
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
-            return [reference.baseName.text]
+            return [reference.baseName.sourceIdentifierName]
         }
         guard let member = expression.as(MemberAccessExprSyntax.self),
               let base = member.base,
               let qualification = sourceTypePath(base)
         else { return nil }
-        return qualification + [member.declName.baseName.text]
+        return qualification + [member.declName.baseName.sourceIdentifierName]
     }
 
     static func terminalTypeName(_ type: TypeSyntax) -> String? {
@@ -1555,12 +1555,12 @@ final class ParserSession {
     }
 
     private func pairCallKind(_ call: FunctionCallExprSyntax) -> PairCallKind? {
-        if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Pair" {
+        if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Pair" {
             return .initializer
         }
         guard let access = call.calledExpression.as(MemberAccessExprSyntax.self),
-              access.declName.baseName.text == "literal",
-              access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "Pair"
+              access.declName.baseName.sourceIdentifierName == "literal",
+              access.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Pair"
         else { return nil }
         return .literal
     }
@@ -1573,7 +1573,7 @@ final class ParserSession {
               let call = expression.as(FunctionCallExprSyntax.self),
               call.arguments.isEmpty,
               call.trailingClosure == nil,
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "SetExpr"
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SetExpr"
         else { return nil }
         return .setLiteral([])
     }
@@ -1597,7 +1597,7 @@ final class ParserSession {
         var fields: [String: StateExpr] = [:]
         for argument in call.arguments {
             guard let entry = argument.expression.as(FunctionCallExprSyntax.self),
-                  let entryName = entry.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text,
+                  let entryName = entry.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName,
                   entryName == "init",
                   entry.arguments.count == 2,
                   let field = entry.arguments.first.flatMap({ typedFieldName($0.expression) }),
@@ -1689,10 +1689,10 @@ final class ParserSession {
 
     private func decodeProcessLocalFamily(_ call: FunctionCallExprSyntax) -> StateExpr? {
         guard let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-              member.declName.baseName.text == "family",
+              member.declName.baseName.sourceIdentifierName == "family",
               call.arguments.count == 1,
               call.arguments.first?.label?.text == "for",
-              let local = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text
+              let local = member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
         else {
             return nil
         }
@@ -1703,10 +1703,10 @@ final class ParserSession {
         if let family = decodeProcessLocalFamily(call) {
             return family
         }
-        let methodName = memberAccess.declName.baseName.text
+        let methodName = memberAccess.declName.baseName.sourceIdentifierName
         let args = Array(call.arguments)
         let base = memberAccess.base
-        if let sourceType = base?.as(DeclReferenceExprSyntax.self)?.baseName.text,
+        if let sourceType = base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
            FormalModuleProvider(sourceType: sourceType) == .zeroBasedSequences {
             switch methodName {
             case "indices":
@@ -1760,7 +1760,7 @@ final class ParserSession {
             else { return nil }
             return .tupleAccess(selfExpr, idx)
         case "set", "tuple":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr",
                   args.count == 1,
                   let array = args.first?.expression.as(ArrayExprSyntax.self)
             else { return nil }
@@ -1768,14 +1768,14 @@ final class ParserSession {
             guard elements.count == array.elements.count else { return nil }
             return methodName == "tuple" ? .tupleLiteral(elements) : .setLiteral(elements)
         case "singleton":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr",
                   args.count == 1,
                   let argument = args.first,
                   let element = decodeStateExpr(argument.expression)
             else { return nil }
             return .setLiteral([element])
         case "record":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr" else { return nil }
             var fields: [String: StateExpr] = [:]
             for arg in args {
                 guard let label = arg.label?.text, let val = decodeStateExpr(arg.expression) else { return nil }
@@ -1783,36 +1783,36 @@ final class ParserSession {
             }
             return StateExpr.record(fields)
         case "variable":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr",
                   let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
             else { return nil }
             return .variable(name)
         case "if":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr",
                   args.count >= 3,
                   let cond = decodeStateExpr(args[0].expression),
                   let thenVal = decodeStateExpr(args[1].expression),
                   let elseVal = decodeStateExpr(args[2].expression) else { return nil }
             return .ifThenElse(cond, thenVal, elseVal)
         case "negate":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr",
                   let value = args.first.flatMap({ decodeStateExpr($0.expression) })
             else { return nil }
             return .negate(value)
         case "integerRange":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr",
                   args.count == 2,
                   let lower = decodeStateExpr(args[0].expression),
                   let upper = decodeStateExpr(args[1].expression)
             else { return nil }
             return .integerRange(lower, upper)
         case "enabled":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr",
                   let action = actionReference(args.first?.expression)
             else { return nil }
             return .enabledAction(action.name)
         case "letValue":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr",
                   args.count == 3,
                   let name = args[0].expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
                   let value = decodeStateExpr(args[1].expression),
@@ -1820,7 +1820,7 @@ final class ParserSession {
             else { return nil }
             return .letValue(name, value, body)
         case "letIn":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr",
                   args.count == 2,
                   let definitionArray = args[0].expression.as(ArrayExprSyntax.self),
                   let body = decodeStateExpr(args[1].expression)
@@ -1831,7 +1831,7 @@ final class ParserSession {
             guard definitions.count == definitionArray.elements.count else { return nil }
             return .letIn(definitions, body)
         case "operatorApplication":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr",
                   args.count == 2,
                   let operation = decodeFormalOperator(args[0].expression),
                   let argumentArray = args[1].expression.as(ArrayExprSyntax.self)
@@ -1842,7 +1842,7 @@ final class ParserSession {
             guard arguments.count == argumentArray.elements.count else { return nil }
             return .operatorApplication(operation, arguments)
         case "setFilter", "setMap", "forAll":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr",
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr",
                   args.count == 3,
                   let binder = args[1].expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
             else { return nil }
@@ -1863,7 +1863,7 @@ final class ParserSession {
                 return nil
             }
         case "exists", "choose", "any", "functionLiteral":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr" else { return nil }
             if args.count == 3,
                let binder = args[1].expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
                 guard let domain = decodeStateExpr(args[0].expression),
@@ -1881,7 +1881,7 @@ final class ParserSession {
             else { return nil }
             return .choose(domain, generatedBinderName(), .value(.bool(true)))
         case "firstMatch":
-            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "StateExpr" else { return nil }
+            guard memberAccess.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "StateExpr" else { return nil }
             var pairs: [StateExpr] = []
             var fallback: StateExpr?
             for arg in args {
@@ -1899,7 +1899,7 @@ final class ParserSession {
 
     private func decodeLocalOperator(_ expression: ExprSyntax) -> LocalOperator? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "LocalOperator",
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "LocalOperator",
               let nameSyntax = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)
         else { return nil }
 
@@ -1934,7 +1934,7 @@ final class ParserSession {
               let member = call.calledExpression.as(MemberAccessExprSyntax.self)
         else { return nil }
 
-        switch member.declName.baseName.text {
+        switch member.declName.baseName.sourceIdentifierName {
         case "reference":
             guard let name = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?
                     .representedLiteralValue,
@@ -1955,7 +1955,7 @@ final class ParserSession {
 
     private func decodeFormalLambda(_ expression: ExprSyntax) -> FormalLambda? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "FormalLambda",
+              call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "FormalLambda",
               let parameterArray = call.arguments.first(where: { $0.label?.text == "parameters" })?
                 .expression.as(ArrayExprSyntax.self),
               let bodySyntax = call.arguments.first(where: { $0.label?.text == "body" })?.expression
@@ -1981,7 +1981,7 @@ final class ParserSession {
               let argument = call.arguments.first?.expression
         else { return nil }
 
-        switch member.declName.baseName.text {
+        switch member.declName.baseName.sourceIdentifierName {
         case "value":
             return valueDecoder(argument).map(FormalCallArgument.value)
         case "operator":
@@ -2129,7 +2129,7 @@ extension ParserSession {
     ) -> ActionExpr? {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
-           access.declName.baseName.text == "update",
+           access.declName.baseName.sourceIdentifierName == "update",
            let base = access.base,
            case .variable(let collection)? = decodeTypedFacadeValue(base, scope: scope),
            call.arguments.count == 2,
@@ -2142,12 +2142,12 @@ extension ParserSession {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let constructor = call.calledExpression.as(MemberAccessExprSyntax.self),
            compilerGrammarName(in: constructor.base) == "ActionExpr",
-           constructor.declName.baseName.text == "assign",
+           constructor.declName.baseName.sourceIdentifierName == "assign",
            call.arguments.count == 2,
            let target = call.arguments.first?.expression.as(FunctionCallExprSyntax.self),
            let selector = target.calledExpression.as(MemberAccessExprSyntax.self),
            selector.base == nil || compilerGrammarName(in: selector.base) == "ActionTarget",
-           selector.declName.baseName.text == "named",
+           selector.declName.baseName.sourceIdentifierName == "named",
            target.arguments.count == 1,
            let name = target.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
            let valueSyntax = call.arguments.last?.expression,
@@ -2156,8 +2156,8 @@ extension ParserSession {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
-           access.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "ActionExpr",
-           access.declName.baseName.text == "exists",
+           access.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "ActionExpr",
+           access.declName.baseName.sourceIdentifierName == "exists",
            let binder = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
            let domainSyntax = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
            let domain = decodeTypedFacadeValue(domainSyntax, scope: scope),
@@ -2174,7 +2174,7 @@ extension ParserSession {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
-           access.declName.baseName.text == "becomes",
+           access.declName.baseName.sourceIdentifierName == "becomes",
            let baseRef = access.base?.as(DeclReferenceExprSyntax.self),
            case .variable(let varName)? = decodeTypedFacadeValue(ExprSyntax(baseRef), scope: scope) {
             if let arg = call.arguments.first?.expression,
@@ -2189,7 +2189,7 @@ extension ParserSession {
            case .variable(let varName)? = decodeTypedFacadeValue(ExprSyntax(baseRef), scope: scope),
            let elementSyntax = call.arguments.first?.expression,
            let element = decodeTypedFacadeValue(elementSyntax, scope: scope) {
-            switch access.declName.baseName.text {
+            switch access.declName.baseName.sourceIdentifierName {
             case "inserting":
                 return .assign(
                     .named(varName),
@@ -2205,14 +2205,14 @@ extension ParserSession {
             }
         }
         if let access = expression.as(MemberAccessExprSyntax.self),
-           access.declName.baseName.text == "stays",
+           access.declName.baseName.sourceIdentifierName == "stays",
            let baseRef = access.base?.as(DeclReferenceExprSyntax.self),
            case .variable(let varName)? = decodeTypedFacadeValue(ExprSyntax(baseRef), scope: scope) {
             return .unchanged(.named(varName))
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
-           access.declName.baseName.text == "when" {
+           access.declName.baseName.sourceIdentifierName == "when" {
             guard call.arguments.count == 1,
                   let condition = call.arguments.first,
                   let outer = decodeTypedFacadeValue(condition.expression, scope: scope),
@@ -2353,7 +2353,7 @@ extension ParserSession {
               variable.bindingSpecifier.tokenKind == .keyword(.let),
               variable.bindings.count == 1,
               let binding = variable.bindings.first,
-              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+              let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
               let initializer = binding.initializer?.value,
               let value = decodeTypedFacadeValue(initializer, scope: scope)
         else { return nil }
@@ -2367,7 +2367,7 @@ extension ParserSession {
     ) -> StateExpr? {
         guard let access = call.calledExpression.as(MemberAccessExprSyntax.self),
               let collectionReference = access.base?.as(DeclReferenceExprSyntax.self),
-              let kind = CollectionPredicateKind(rawValue: access.declName.baseName.text),
+              let kind = CollectionPredicateKind(rawValue: access.declName.baseName.sourceIdentifierName),
               let closure = call.trailingClosure
                 ?? call.arguments.first?.expression.as(ClosureExprSyntax.self),
               let sourceParameter = Self.collectionPredicateParameter(in: closure),
@@ -2375,7 +2375,7 @@ extension ParserSession {
               case .expr(let bodySyntax) = closure.statements.first?.item
         else { return nil }
 
-        let sourceName = collectionReference.baseName.text
+        let sourceName = collectionReference.baseName.sourceIdentifierName
         let collection = scope.value(for: collectionReference) ?? .variable(sourceName)
         let parameter = generatedBinderName(
             line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0
@@ -2412,10 +2412,10 @@ extension ParserSession {
         let syntax: [ExprSyntax]
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            let base = member.base {
-            operation = member.declName.baseName.text
+            operation = member.declName.baseName.sourceIdentifierName
             syntax = [base] + call.arguments.map(\.expression)
         } else if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
-            operation = reference.baseName.text
+            operation = reference.baseName.sourceIdentifierName
             syntax = call.arguments.dropFirst().map(\.expression)
         } else {
             return nil
@@ -2444,7 +2444,7 @@ extension ParserSession {
     }
 
     func decodeFairness(_ call: FunctionCallExprSyntax) -> FairnessCondition? {
-        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text else {
+        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName else {
             return nil
         }
         switch name {
@@ -2462,7 +2462,7 @@ extension ParserSession {
 
     func actionReference(_ expression: ExprSyntax?) -> NamedAction? {
         guard let reference = expression?.as(DeclReferenceExprSyntax.self) else { return nil }
-        return specBindings.actions[reference.baseName.text]
+        return specBindings.actions[reference.baseName.sourceIdentifierName]
     }
 
 }

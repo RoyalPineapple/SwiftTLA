@@ -26,8 +26,8 @@ public struct SpecExpressionMacro: ExpressionMacro {
 
         let parameterScope: String?
         switch closure.signature?.parameterClause {
-        case .simpleInput(let list): parameterScope = list.first?.name.text
-        case .parameterClause(let clause): parameterScope = clause.parameters.first.map { $0.secondName?.text ?? $0.firstName.text }
+        case .simpleInput(let list): parameterScope = list.first?.name.sourceIdentifierName
+        case .parameterClause(let clause): parameterScope = clause.parameters.first.map { $0.secondName?.sourceIdentifierName ?? $0.firstName.sourceIdentifierName }
         case nil: parameterScope = nil
         }
         let rewriter = DSLRewriter(context: context, parameterScope: parameterScope)
@@ -88,10 +88,10 @@ private final class DSLRewriter: SyntaxRewriter {
         var visited = super.visit(node).as(VariableDeclSyntax.self) ?? node
         visited.bindings = PatternBindingListSyntax(zip(node.bindings, visited.bindings).map { source, binding in
             var binding = binding
-            guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
+            guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
                   var call = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { return binding }
             let member = call.calledExpression.as(MemberAccessExprSyntax.self)
-            if let member, ["sharedVar", "localVar"].contains(member.declName.baseName.text),
+            if let member, ["sharedVar", "localVar"].contains(member.declName.baseName.sourceIdentifierName),
                !call.arguments.contains(where: { $0.label?.text == "_name" }) {
                 guard node.bindingSpecifier.text == "let" else {
                     context.diagnose(Diagnostic(node: Syntax(source), message: StateBindingDiagnostic()))
@@ -103,9 +103,9 @@ private final class DSLRewriter: SyntaxRewriter {
                 binding.initializer?.value = ExprSyntax(call)
                 return binding
             }
-            let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
-                ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "SwiftTLA"
-                    ? member?.declName.baseName.text : nil)
+            let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
+                ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SwiftTLA"
+                    ? member?.declName.baseName.sourceIdentifierName : nil)
             if constructor == "Refinement" {
                 guard node.bindingSpecifier.text == "let" else {
                     context.diagnose(Diagnostic(node: Syntax(source), message: PropertyBindingDiagnostic()))
@@ -147,8 +147,8 @@ private final class DSLRewriter: SyntaxRewriter {
                 return binding
             }
             guard let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-                  member.declName.baseName.text == "parameter",
-                  member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == parameterScope else { return binding }
+                  member.declName.baseName.sourceIdentifierName == "parameter",
+                  member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == parameterScope else { return binding }
             guard node.bindingSpecifier.text == "let" else {
                 context.diagnose(Diagnostic(node: Syntax(source), message: ParameterBindingDiagnostic()))
                 return binding
@@ -252,8 +252,8 @@ private final class DSLRewriter: SyntaxRewriter {
     private func helperName(in call: FunctionCallExprSyntax) -> String? {
         let expression = call.calledExpression.as(GenericSpecializationExprSyntax.self)?.expression
             ?? call.calledExpression
-        return expression.as(DeclReferenceExprSyntax.self)?.baseName.text
-            ?? expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text
+        return expression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
+            ?? expression.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName
     }
 
     private func argument(_ label: String, _ expression: ExprSyntax) -> LabeledExprSyntax {
