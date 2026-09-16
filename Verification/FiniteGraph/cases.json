@@ -46,6 +46,7 @@
     {
       "id": "hour-clock",
       "sourceModel": "hour-clock",
+      "scenario": "Upstream",
       "module": "hour-clock/HourClock.tla",
       "configuration": "hour-clock/HourClock.cfg",
       "imports": [],

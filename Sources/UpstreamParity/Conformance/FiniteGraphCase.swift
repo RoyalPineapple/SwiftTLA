@@ -275,19 +275,23 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         package func resolveScenario() throws -> (any ModelValidationScenario)? {
+            let scenarios: [any ModelValidationScenario]
             switch sourceModel {
             case .diningPhilosophers:
-                let matches = try DiningPhilosophersModel.validationScenarios().filter { $0.name == scenario }
-                guard matches.count == 1 else {
-                    throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
-                }
-                return matches[0]
+                scenarios = try DiningPhilosophersModel.validationScenarios()
+            case .hourClock:
+                scenarios = try HourClockModel.validationScenarios()
             default:
                 guard scenario == nil else {
                     throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
                 }
                 return nil
             }
+            let matches = scenarios.filter { $0.name == scenario }
+            guard matches.count == 1 else {
+                throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
+            }
+            return matches[0]
         }
 
         private func validate() throws {
@@ -378,12 +382,11 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .majority: return try explore(MajorityModel.initialMachines())
         case .channel: return try explore(ChannelModel.initialMachines())
         case .asynchInterface: return try explore(AsynchInterfaceModel.initialMachines())
-        case .hourClock: return try explore(HourClockModel.initialMachines())
         case .dieHardTypeOK: return try explore(DieHardModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
         case .nQueensFour: return try explore(NQueensModel.initialMachines())
-        case .diningPhilosophers:
+        case .diningPhilosophers, .hourClock:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())

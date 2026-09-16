@@ -413,15 +413,15 @@ enum AlgorithmLowerer {
             return true
         }
         return !algorithm.processes.allSatisfy { process in
-            guard let members = process.domain.literalSetMembers, !members.isEmpty,
-                  process.steps.count == 1,
-                  let loopCondition = process.steps.first?.loopCondition,
-                  case .value(.bool(true)) = loopCondition
-            else {
-                return false
-            }
-            return !containsControlTransfer(process.steps[0].statements)
+            guard let members = process.domain.literalSetMembers, !members.isEmpty else { return false }
+            return isControlFreeLoop(process.steps)
         }
+    }
+
+    private static func isControlFreeLoop(_ steps: [AlgorithmStepModel]) -> Bool {
+        guard steps.count == 1, let condition = steps[0].loopCondition,
+              case .value(.bool(true)) = condition else { return false }
+        return !containsControlTransfer(steps[0].statements)
     }
 
     private static func containsControlTransfer(_ statements: [AlgorithmStatementModel]) -> Bool {
@@ -524,11 +524,12 @@ enum AlgorithmLowerer {
             algorithm: algorithm.name,
             owner: .sequential(algorithm: algorithm.name)
         )
-        var variables = [NamedVar(
+        let needsProgramCounter = !procedures.isEmpty || !isControlFreeLoop(steps)
+        var variables = (needsProgramCounter ? [NamedVar(
             name: CompilerControlSymbol.programCounter.rawValue,
             initialization: .expression(sequentialControl.location(first.label.name)),
             origin: .programCounter
-        )]
+        )] : [])
             + sharedVariables
         if !procedures.isEmpty {
             variables.append(NamedVar(
@@ -567,7 +568,9 @@ enum AlgorithmLowerer {
                 control: control
             )
             let body: ActionExpr
-            if let condition = atomic.loopCondition {
+            if !needsProgramCounter {
+                body = statements.action
+            } else if let condition = atomic.loopCondition {
                 body = .ifElse(
                     condition,
                     completingSequentialControl(statements.action, fallthrough: control.location(atomic.label.name)),
@@ -579,7 +582,9 @@ enum AlgorithmLowerer {
             actions.append(NamedAction(
                 name: label,
                 body: ActionNormalization.complete(
-                    .and(.guard_(.equal(.programCounter, control.location(atomic.label.name))), body),
+                    needsProgramCounter
+                        ? .and(.guard_(.equal(.programCounter, control.location(atomic.label.name))), body)
+                        : body,
                     variables: variables
                 )
             ))
@@ -591,19 +596,21 @@ enum AlgorithmLowerer {
             }
         }
 
-        let terminate = variableNames
-            .map { .unchanged(.named($0)) }
-            .reduce(
-                .guard_(.equal(
-                    .programCounter,
-                    .controlLocation(.init(
-                        owner: .generated(algorithm: algorithm.name, purpose: CompilerControlSymbol.done.rawValue),
-                        sourceName: CompilerControlSymbol.done.rawValue
-                    ))
-                )),
-                ActionExpr.and
-            )
-        actions.append(NamedAction(name: CompilerControlSymbol.terminatingAction.rawValue, body: terminate, isTermination: true))
+        if needsProgramCounter {
+            let terminate = variableNames
+                .map { .unchanged(.named($0)) }
+                .reduce(
+                    .guard_(.equal(
+                        .programCounter,
+                        .controlLocation(.init(
+                            owner: .generated(algorithm: algorithm.name, purpose: CompilerControlSymbol.done.rawValue),
+                            sourceName: CompilerControlSymbol.done.rawValue
+                        ))
+                    )),
+                    ActionExpr.and
+                )
+            actions.append(NamedAction(name: CompilerControlSymbol.terminatingAction.rawValue, body: terminate, isTermination: true))
+        }
 
         return lowered(TLASpec(
             name: algorithm.name,
