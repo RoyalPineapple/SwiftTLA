@@ -9,6 +9,17 @@ public protocol TLAValueType: TLAValueConvertible, TypedExpression, Sendable whe
 public protocol _GeneratedRecordValue: TLAValueType {
   static func _formalRecordFieldName(_ keyPath: PartialKeyPath<Self>) -> String?
 }
+extension _GeneratedRecordValue {
+  public static func _formalRecordDefault<Field: TLAValueType>(for keyPath: KeyPath<Self, Field>) -> Field {
+    Field.defaultValue
+  }
+  public static func _formalRecordShape<Field: TLAValueType>(for keyPath: KeyPath<Self, Field>) -> FormalValueShape {
+    Field.formalValueShape
+  }
+  public static func _formalRecordValue<Field: TLAValueType>(_ value: TLAValue, for keyPath: KeyPath<Self, Field>) -> Field? {
+    Field(formalValue: value)
+  }
+}
 extension TLAValueType {
   public var expr: Expr<Self> { Expr(self) }
   public var stateExpr: StateExpr { expr.stateExpr }

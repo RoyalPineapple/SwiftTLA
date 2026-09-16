@@ -114,12 +114,7 @@ package struct AlgorithmModel: Sendable {
             switch statement {
             case .set(let target, let value):
                 let name = binding()
-                let updated: StateExpr
-                switch target {
-                case .root: updated = expression(value)
-                case .function(let root, let key):
-                    updated = expression(.except(.variable(root), key, value))
-                }
+                let updated = expression(target.assigning(value))
                 let pending = assignments.filter { $0.target.root != target.root }
                     + [.init(target: .root(target.root), value: .variable(name))]
                 var next = replacements
@@ -410,9 +405,18 @@ internal struct CompiledAuthoredPlusCalAssignment: Sendable {
     let value: CompiledExpression
 }
 
-internal enum CompiledAuthoredPlusCalLValue: Sendable {
+internal indirect enum CompiledAuthoredPlusCalLValue: Sendable {
     case root(VariableID)
     case function(root: VariableID, key: CompiledExpression)
+    case field(CompiledAuthoredPlusCalLValue, String)
+
+    var expression: CompiledExpression {
+        switch self {
+        case .root(let root): .stateVariable(root)
+        case .function(let root, let key): .init(operation: .functionApply, children: [.stateVariable(root), key])
+        case .field(let base, let name): .recordAccess(base.expression, name)
+        }
+    }
 }
 
 internal indirect enum CompiledAuthoredPlusCalStatement: Sendable {
@@ -580,14 +584,32 @@ package struct AlgorithmLabelModel: Sendable, Hashable {
     }
 }
 
-package enum AlgorithmLValueModel: Sendable, Equatable {
+package indirect enum AlgorithmLValueModel: Sendable, Equatable {
     case root(String)
     case function(root: String, key: StateExpr)
+    case field(AlgorithmLValueModel, String)
 
     package var root: String {
         switch self {
         case .root(let root), .function(let root, _):
             return root
+        case .field(let base, _): return base.root
+        }
+    }
+
+    var expression: StateExpr {
+        switch self {
+        case .root(let root): .variable(root)
+        case .function(let root, let key): .functionApply(.variable(root), key)
+        case .field(let base, let name): .recordAccess(base.expression, name)
+        }
+    }
+
+    func assigning(_ value: StateExpr) -> StateExpr {
+        switch self {
+        case .root: value
+        case .function(let root, let key): .except(.variable(root), key, value)
+        case .field(let base, let name): base.assigning(.except(base.expression, .value(.string(name)), value))
         }
     }
 }

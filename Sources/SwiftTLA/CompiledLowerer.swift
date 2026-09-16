@@ -725,6 +725,8 @@ struct CompiledLowerer {
     ) throws -> CompiledAuthoredPlusCalLValue {
         switch target {
         case .root(let name): return .root(try variable(named: name, at: "\(path).root"))
+        case .field(let base, let name):
+            return .field(try authoredPlusCalLValue(base, at: "\(path).base", scope: scope), name)
         case .function(let name, let key):
             return .function(
                 root: try variable(named: name, at: "\(path).root"),

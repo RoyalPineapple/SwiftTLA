@@ -19,7 +19,8 @@ public struct GeneratedTypedSurface {
       Algorithm("GeneratedTypedSurface") {
         Do(Step.advance, when: value < 1) {
           Assign(value, to: packet.count + 1)
-          Assign(packet, to: Packet(count: 1, ready: true))
+          Assign(packet.count, to: packet.count + 1)
+          Assign(packet.ready, to: true)
         }
       }
       Invariant("ConsistentCount") { packet.count == value }

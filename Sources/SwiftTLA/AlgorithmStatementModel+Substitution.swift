@@ -34,6 +34,7 @@ extension AlgorithmStatementModel {
                 value
             case .function(let root, let key):
                 .function(root: root, key: expression(key))
+            case .field(let base, let name): .field(target(base), name)
             }
         }
 
@@ -139,6 +140,7 @@ extension AlgorithmStatementModel {
                 return substitutedRoot(targetRoot).map(AlgorithmLValueModel.root)
             case .function(let targetRoot, let key):
                 return substitutedRoot(targetRoot).map { .function(root: $0, key: expression(key)) }
+            case .field(let base, let name): return target(base).map { .field($0, name) }
             }
         }
 
@@ -220,16 +222,12 @@ extension Array where Element == AlgorithmStatementModel {
             case .set(let target, let value):
                 names.insert(target.root)
                 names.formUnion(value.freeVariableNames)
-                if case .function(_, let key) = target {
-                    names.formUnion(key.freeVariableNames)
-                }
+                names.formUnion(target.expression.freeVariableNames)
             case .parallel(let assignments):
                 for assignment in assignments {
                     names.insert(assignment.target.root)
                     names.formUnion(assignment.value.freeVariableNames)
-                    if case .function(_, let key) = assignment.target {
-                        names.formUnion(key.freeVariableNames)
-                    }
+                    names.formUnion(assignment.target.expression.freeVariableNames)
                 }
             case .letBinding(let variable, let value, let body):
                 names.insert(variable)

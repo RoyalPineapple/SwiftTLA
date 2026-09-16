@@ -15,25 +15,25 @@ public struct RecordValueMacro: ExtensionMacro {
         let fields = try record.memberBlock.members.compactMap { $0.decl.as(VariableDeclSyntax.self) }
             .filter { !$0.modifiers.contains { $0.name.text == "static" || $0.name.text == "class" } }
             .flatMap { variable in
-                try variable.bindings.map { binding -> (name: String, type: String) in
+                try variable.bindings.map { binding -> String in
                     guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
-                          let annotation = binding.typeAnnotation?.type, binding.accessorBlock == nil else {
+                          binding.accessorBlock == nil else {
                         throw CompiledValueType.diagnostic("record", "formal conversion requires resolved stored fields")
                     }
-                    return (name, annotation.trimmedDescription)
+                    return name
                 }
             }
-        let defaults = fields.map { "\($0.name): \($0.type).defaultValue" }.joined(separator: ", ")
-        let shapes = fields.map { ".init(name: \(String(reflecting: $0.name)), shape: \($0.type).formalValueShape)" }.joined(separator: ", ")
-        let values = fields.map { ".init(\(String(reflecting: $0.name)), self.`\($0.name)`.tlaValue)" }.joined(separator: ", ")
-        let names = fields.map(\.name).sorted().map { String(reflecting: $0) }.joined(separator: ", ")
+        let defaults = fields.map { "\($0): Self._formalRecordDefault(for: \\Self.`\($0)`)" }.joined(separator: ", ")
+        let shapes = fields.map { ".init(name: \(String(reflecting: $0)), shape: Self._formalRecordShape(for: \\Self.`\($0)`))" }.joined(separator: ", ")
+        let values = fields.map { ".init(\(String(reflecting: $0)), self.`\($0)`.tlaValue)" }.joined(separator: ", ")
+        let names = fields.sorted().map { String(reflecting: $0) }.joined(separator: ", ")
         let decoded = fields.enumerated().map { index, field in
-            "let raw\(index) = record.value(named: \(String(reflecting: field.name))), let value\(index) = \(field.type)(formalValue: raw\(index))"
+            "let raw\(index) = record.value(named: \(String(reflecting: field))), let value\(index) = Self._formalRecordValue(raw\(index), for: \\Self.`\(field)`)"
         }
         let guards = (["case .record(let record) = formalValue", "record.fields.map(\\.name) == [\(names)]"] + decoded).joined(separator: ",\n")
-        let arguments = fields.enumerated().map { "\($0.element.name): value\($0.offset)" }.joined(separator: ", ")
+        let arguments = fields.enumerated().map { "\($0.element): value\($0.offset)" }.joined(separator: ", ")
         let fieldNames = fields.map {
-            "if keyPath == \\Self.`\($0.name)` { return \(String(reflecting: $0.name)) }"
+            "if keyPath == \\Self.`\($0)` { return \(String(reflecting: $0)) }"
         }.joined(separator: "\n")
         return [try ExtensionDeclSyntax("""
         extension \(type): SwiftTLA._GeneratedRecordValue {

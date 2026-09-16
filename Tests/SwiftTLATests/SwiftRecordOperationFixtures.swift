@@ -3,7 +3,7 @@ import SwiftSyntax
 import Testing
 @testable import SwiftTLAPlugin
 
-func swiftRecordModel(replacement: String = "Packet(count: saved.count + 1, ready: true)") throws -> MacroCompilation {
+func swiftRecordModel(target: String = "packet", replacement: String = "Packet(count: saved.count + 1, ready: true)") throws -> MacroCompilation {
     let source = Parser.parse(source: """
         struct RecordMachine {
             struct Packet: Hashable, Sendable { let count: Int; let ready: Bool }
@@ -15,7 +15,7 @@ func swiftRecordModel(replacement: String = "Packet(count: saved.count + 1, read
                     Algorithm("Records") {
                         Do(Step.advance) {
                             let saved = packet
-                            Assign(packet, to: \(replacement))
+                            Assign(\(target), to: \(replacement))
                             Stop()
                         }
                     }

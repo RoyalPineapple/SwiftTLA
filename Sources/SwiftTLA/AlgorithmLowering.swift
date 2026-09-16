@@ -828,7 +828,7 @@ enum AlgorithmLowerer {
                         next[root] = .except(.variable(root), .variable(processBinding.rawValue), value)
                     case .root:
                         next[root] = value
-                    case .function:
+                    case .function, .field:
                         preconditionFailure("Scheduled assignments must target complete roots")
                     }
                 }

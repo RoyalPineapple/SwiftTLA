@@ -114,8 +114,12 @@ extension Function where Domain: FiniteTLAValueDomain {
     }
 }
 
-public struct AlgorithmLValue<Value: TLAValueType>: Sendable {
+@dynamicMemberLookup
+public struct AlgorithmLValue<Value: TLAValueType>: TypedExpression {
     fileprivate let model: AlgorithmLValueModel
+    fileprivate var sourceIssue: SourceModelIssue? = nil
+    public var stateExpr: StateExpr { sourceIssue.map(StateExpr.sourceIssue) ?? model.expression }
+    public var expr: Expr<Value> { Expr(stateExpr) }
 }
 
 /// One formal parameter in a bounded PlusCal statement macro.
@@ -1148,11 +1152,23 @@ extension SharedVariable: AssignmentTarget {}
 extension LocalVariable: AssignmentTarget {}
 extension MacroParameter: AssignmentTarget {}
 
+extension TypedExpression where Self: AssignmentTarget, Value == ExpressionValue, Value: _GeneratedRecordValue {
+    public subscript<Field: TLAValueType>(dynamicMember keyPath: KeyPath<Value, Field>) -> AlgorithmLValue<Field> {
+        let base = algorithmLValue
+        guard let name = Value._formalRecordFieldName(keyPath) else {
+            return AlgorithmLValue(model: base.model, sourceIssue: .recordField(schema: String(reflecting: Value.self)))
+        }
+        return AlgorithmLValue(model: .field(base.model, name), sourceIssue: base.sourceIssue)
+    }
+}
+
 public func Assign<Target: AssignmentTarget, Expression: TypedExpression>(
     _ target: Target,
     to value: Expression
 ) -> StepStatement where Target.Value == Expression.ExpressionValue {
-    StepStatement(model: .set(target: target.algorithmLValue.model, value: value.stateExpr))
+    let location = target.algorithmLValue
+    guard location.sourceIssue == nil else { return StepStatement(model: .rejected(.invalidTarget)) }
+    return StepStatement(model: .set(target: location.model, value: value.stateExpr))
 }
 
 public func Assign<Target: AssignmentTarget>(_ target: Target, to value: Target.Value) -> StepStatement {

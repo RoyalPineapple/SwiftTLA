@@ -1346,6 +1346,13 @@ extension ParserSession {
             return .root(reference.baseName.text)
         }
         if let access = expression.as(MemberAccessExprSyntax.self),
+           let base = access.base,
+           let fields = typedFacadeValueType(base, scope: scope)?.recordFields,
+           let field = fields.first(where: { $0.name == access.declName.baseName.sourceIdentifierName }),
+           let target = algorithmTarget(base, scope: scope) {
+            return .field(target, field.name)
+        }
+        if let access = expression.as(MemberAccessExprSyntax.self),
            access.declName.baseName.text == "algorithmLValue",
            let base = access.base?.as(DeclReferenceExprSyntax.self) {
             if let bound = scope.value(for: base) {

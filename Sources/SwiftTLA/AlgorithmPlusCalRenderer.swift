@@ -204,6 +204,7 @@ internal struct AlgorithmPlusCalRenderer {
             return try formalRenderer.variableName(variable)
         case .function(let root, let key):
             return "\(try formalRenderer.variableName(root))[\(try expression(key))]"
+        case .field(let base, let name): return "\(try lvalue(base)).\(name)"
         }
     }
 

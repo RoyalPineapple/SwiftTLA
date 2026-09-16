@@ -12,6 +12,7 @@ extension CompiledAuthoredPlusCalAlgorithmPlan {
             switch value {
             case .root: return value
             case .function(let root, let key): return .function(root: root, key: try transform(key))
+            case .field(let base, let name): return .field(try target(base), name)
             }
         }
         func statement(_ value: CompiledAuthoredPlusCalStatement) throws -> CompiledAuthoredPlusCalStatement {
