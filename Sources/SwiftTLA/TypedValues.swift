@@ -860,12 +860,14 @@ extension TypedExpression {
     Expr<FieldValue>(field.recordAccess(stateExpr))
   }
 
+  @_disfavoredOverload
   public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> Expr<
     Range
   > where ExpressionValue == Function<Domain, Range> {
     Expr<Range>(.functionApply(stateExpr, finiteDomainIndex(index)))
   }
 
+  @_disfavoredOverload
   public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: some TypedExpression<Domain>) -> Expr<
     Range
   > where ExpressionValue == Function<Domain, Range> {

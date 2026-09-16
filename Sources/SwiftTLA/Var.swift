@@ -98,6 +98,7 @@ public protocol TypedExpression<ExpressionValue>: StateExprConvertible, Sendable
 }
 
 extension TypedExpression where ExpressionValue: _GeneratedRecordValue {
+  @_disfavoredOverload
   public subscript<Field: TLAValueType>(dynamicMember keyPath: KeyPath<ExpressionValue, Field>) -> Expr<Field> {
     guard let name = ExpressionValue._formalRecordFieldName(keyPath) else {
       return Expr(.sourceIssue(.recordField(schema: String(reflecting: ExpressionValue.self))))
