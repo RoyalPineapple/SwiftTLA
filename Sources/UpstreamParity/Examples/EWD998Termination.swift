@@ -77,13 +77,12 @@ package struct EWD998TerminationModel: Sendable {
                 && pending[.two] >= 0 && pending[.three] >= 0
         }
 
+        let allNodesInactive: Expr<Bool> = active[.zero] == false && active[.one] == false
+            && active[.two] == false && active[.three] == false
+        let noPendingMessages: Expr<Bool> = pending[.zero] == 0 && pending[.one] == 0
+            && pending[.two] == 0 && pending[.three] == 0
         let safety: SpecComponent = Invariant("Safe") {
-            !terminationDetected || (
-                active[.zero] == false && active[.one] == false
-                    && active[.two] == false && active[.three] == false
-                    && pending[.zero] == 0 && pending[.one] == 0
-                    && pending[.two] == 0 && pending[.three] == 0
-            )
+            !terminationDetected || (allNodesInactive && noPendingMessages)
         }
 
         let terminate: SpecComponent = SwiftTLA.Action("Terminate", parameters: [
@@ -119,10 +118,7 @@ package struct EWD998TerminationModel: Sendable {
         }
 
         let detectTermination: SpecComponent = SwiftTLA.Action("DetectTermination") {
-            active[.zero] == false && active[.one] == false
-                && active[.two] == false && active[.three] == false
-                && pending[.zero] == 0 && pending[.one] == 0
-                && pending[.two] == 0 && pending[.three] == 0
+            allNodesInactive && noPendingMessages
                 && terminationDetected.becomes(true)
                 && active.stays && pending.stays
         }
