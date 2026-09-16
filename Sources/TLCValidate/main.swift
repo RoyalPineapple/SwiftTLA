@@ -120,13 +120,10 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         } else {
             throw FiniteGraphCLIError.unknownCase(options.caseID)
         }
-        let models = Set(selected.map(\.sourceModel))
-        let preparedModels = try Dictionary(uniqueKeysWithValues: models.map { model in
-            let compilation = try model.spec.compile()
-            return (model, try compilation.render())
-        })
-        let preparedCases = selected.map { declaration in
-            return (declaration, preparedModels[declaration.sourceModel]!)
+        let preparedCases = try selected.map { declaration in
+            let scenario = try declaration.resolveScenario()
+            let rendered = try scenario?.render() ?? declaration.sourceModel.spec.compile().render()
+            return (declaration, scenario, rendered)
         }
         let toolRoot = try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", environment)
         let inputRoot = try requiredEnvironment("FINITE_GRAPH_INPUT_ROOT", environment)
@@ -180,7 +177,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false)
         }
         var exitCode: Int32 = FiniteGraphExitCode.exact.rawValue
-        for (declaration, rendered) in preparedCases {
+        for (declaration, scenario, rendered) in preparedCases {
             let caseOutput = selected.count == 1
                 ? output
                 : output.appendingPathComponent(declaration.id, isDirectory: true)
@@ -223,7 +220,8 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             )
             let referenceConfiguration = try TLCReferenceConfiguration.parse(request, checking: rendered.checkNames)
             let check = FiniteGraphCheck().run(
-                nativeRun: { try declaration.sourceModel.nativeRun(rendered: rendered, checkingDeadlock: referenceConfiguration.checksDeadlock, for: finiteGraphCase) },
+                nativeRun: { try declaration.sourceModel.nativeRun(rendered: rendered,
+                    checkingDeadlock: referenceConfiguration.checksDeadlock, scenario: scenario, for: finiteGraphCase) },
                 tlcRequest: request,
                 referenceConfiguration: referenceConfiguration,
                 outputDirectory: caseOutput

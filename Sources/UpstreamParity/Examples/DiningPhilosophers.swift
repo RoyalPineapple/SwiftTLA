@@ -33,6 +33,8 @@ package struct DiningPhilosophersModel: Sendable {
     package static var spec: TLASpec {
         #spec("DiningPhilosophers") {
             Extends(.integers)
+            let TypeOK = Invariant()
+            let ExclusiveAccess = Invariant()
 
             Algorithm("DiningPhilosophers", scoped: { scope in
                 let forks = scope.sharedVar("forks", initial: Function<Philosopher, Fork>.literal(
@@ -116,7 +118,7 @@ package struct DiningPhilosophersModel: Sendable {
 
                     AlwaysEventually("NobodyStarves", !hungry)
 
-                    Invariant("TypeOK") {
+                    TypeOK {
                         (forks[philosopher].holder == .one
                             || forks[philosopher].holder == .two
                             || forks[philosopher].holder == .three
@@ -127,7 +129,7 @@ package struct DiningPhilosophersModel: Sendable {
                     }
                 })
 
-                Invariant("ExclusiveAccess") {
+                ExclusiveAccess {
                     ForAll(Philosopher.all) { first in
                         ForAll(Philosopher.all) { second in
                             first == second
@@ -142,6 +144,9 @@ package struct DiningPhilosophersModel: Sendable {
                 }
             })
             Validation("NP5") {}
+            Validation("AP NP5") {}
+                .checking(only: [TypeOK, ExclusiveAccess])
+                .behavior(.initialAndNext)
         }
     }
 }

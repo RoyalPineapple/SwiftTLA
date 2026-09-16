@@ -20,12 +20,13 @@ struct FiniteGraphCheckTests {
     let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
       from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
     for declaration in manifest.cases {
-      let compilation = try declaration.sourceModel.spec.compile()
-      let rendered = try compilation.render()
+      let scenario = try declaration.resolveScenario()
+      let rendered = try scenario?.render() ?? declaration.sourceModel.spec.compile().render()
       let finiteGraphCase = try FiniteGraphCase(id: declaration.id, exploration: declaration.exploration,
         moduleSHA256: declaration.moduleSHA256, cfgSHA256: declaration.cfgSHA256,
         arguments: [], environment: [:], pin: testReferencePin(), renderedActions: rendered.actions)
-      let native = try declaration.sourceModel.nativeRun(rendered: rendered, checkingDeadlock: false, for: finiteGraphCase)
+      let native = try declaration.sourceModel.nativeRun(rendered: rendered, checkingDeadlock: false,
+        scenario: scenario, for: finiteGraphCase)
       let renderedNames = Set(finiteGraphCase.renderedActions.map(\.renderedName))
       #expect(Set(native.graph.graph.edges.map(\.action)).isSubset(of: renderedNames))
       #expect(native.graph.isComplete, "\(declaration.id)")

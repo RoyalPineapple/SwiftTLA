@@ -4,6 +4,7 @@
     {
       "id": "dining-philosophers",
       "sourceModel": "dining-philosophers",
+      "scenario": "NP5",
       "module": "dining-philosophers/DiningPhilosophers.tla",
       "configuration": "dining-philosophers/DiningPhilosophers.cfg",
       "imports": [],
@@ -18,6 +19,28 @@
       },
       "moduleSHA256": "2290c338922895e78990171ce5a5bfe80c9470bd5c9bb1ff8f58ed1563f6d4ff",
       "cfgSHA256": "9a96d81b6117e554a654f0eec209f9e768527bd2b2693350ae38d8140b73a8d5",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "ap-dining-philosophers",
+      "sourceModel": "dining-philosophers",
+      "scenario": "AP NP5",
+      "module": "dining-philosophers/APDiningPhilosophers.tla",
+      "configuration": "dining-philosophers/APDiningPhilosophers.cfg",
+      "imports": ["dining-philosophers/DiningPhilosophers.tla"],
+      "dependencies": [
+        {"importingModule": "APDiningPhilosophers", "importedModule": "DiningPhilosophers"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/DiningPhilosophers/APDiningPhilosophers.tla",
+        "sha256": "bf6e7b7124c6778d21b246e0a17a1722781ce09bd09334281aa6184014971d08"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "bf6e7b7124c6778d21b246e0a17a1722781ce09bd09334281aa6184014971d08",
+      "cfgSHA256": "6a1b270b020b214dd17ee351f6649f0cf7b292f43bb446b052a343f56a42c51d",
       "timeoutSeconds": 120
     },
     {

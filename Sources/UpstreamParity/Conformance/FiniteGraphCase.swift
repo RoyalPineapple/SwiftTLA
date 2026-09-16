@@ -223,6 +223,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
 
     package struct Case: Decodable, Sendable {
         package let sourceModel: FiniteGraphSourceModel
+        package let scenario: String?
         package let id: String
         package let module: String
         package let configuration: String
@@ -235,7 +236,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package let timeoutSeconds: TimeInterval
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case id, sourceModel, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration, timeoutSeconds
+            case id, sourceModel, scenario, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration, timeoutSeconds
         }
 
         package struct Dependency: Decodable, Sendable {
@@ -257,6 +258,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             let container = try decoder.container(validatingKeys: CodingKeys.self)
             id = try container.decode(String.self, forKey: .id)
             sourceModel = try container.decode(FiniteGraphSourceModel.self, forKey: .sourceModel)
+            scenario = try container.decodeIfPresent(String.self, forKey: .scenario)
             module = try container.decode(String.self, forKey: .module)
             configuration = try container.decode(String.self, forKey: .configuration)
             imports = try container.decode([String].self, forKey: .imports)
@@ -270,6 +272,22 @@ package struct FiniteGraphManifest: Decodable, Sendable {
                 forKey: .exploration
             )
             try validate()
+        }
+
+        package func resolveScenario() throws -> (any ModelValidationScenario)? {
+            switch sourceModel {
+            case .diningPhilosophers:
+                let matches = try DiningPhilosophersModel.validationScenarios().filter { $0.name == scenario }
+                guard matches.count == 1 else {
+                    throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
+                }
+                return matches[0]
+            default:
+                guard scenario == nil else {
+                    throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
+                }
+                return nil
+            }
         }
 
         private func validate() throws {
@@ -341,7 +359,13 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case stringLiterals = "string-literals"
     case actionReferences = "action-references"
 
-    package func nativeRun(rendered: RenderedSpecification, checkingDeadlock: Bool, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {
+    package func nativeRun(rendered: RenderedSpecification, checkingDeadlock: Bool,
+        scenario: (any ModelValidationScenario)? = nil, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {
+        func exploreScenario<Scenario: ModelValidationScenario>(_ scenario: Scenario) throws -> NativeModelRun {
+            try NativeModelRun(scenario.explore(maximumStates: finiteGraphCase.exploration.maximumStateLimit),
+                rendered: rendered, checkingDeadlock: checkingDeadlock, for: finiteGraphCase)
+        }
+        if let scenario { return try exploreScenario(scenario) }
         func explore<Machine: StateMachine>(_ initial: [Machine]) throws -> NativeModelRun {
             try NativeModelRun(ReachabilityGraph(initialMachines: initial,
                 maximumStates: finiteGraphCase.exploration.maximumStateLimit),
@@ -359,7 +383,8 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
         case .nQueensFour: return try explore(NQueensModel.initialMachines())
-        case .diningPhilosophers: return try explore(DiningPhilosophersModel.initialMachines())
+        case .diningPhilosophers:
+            throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
         }
