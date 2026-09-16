@@ -47,7 +47,8 @@ private final class ProgramResolver {
         let behavior = try checked.behavior.map(root)
         let authoredAlgorithm = try checked.authoredAlgorithm.map { try $0.map(root) }
         let refinements = try checked.refinements.map { refinement in
-            CompiledRefinementProgram(name: refinement.name, abstract: refinement.abstract,
+            CompiledRefinementProgram(name: refinement.name, instance: refinement.instance,
+                operator: refinement.operator, abstract: refinement.abstract,
                 variableMappings: try refinement.variableMappings.map { try $0.map(root) })
         }
         let projections = Set(projectionChecks.compactMap { pair, allowed in allowed ? pair : nil })

@@ -438,7 +438,8 @@ package struct CompiledTypeChecker: Sendable {
                         causedBy: diagnostic)
                 }
             }
-            return CompiledRefinementProgram(name: refinement.name, abstract: refinement.abstract,
+            return CompiledRefinementProgram(name: refinement.name, instance: refinement.instance,
+                operator: refinement.operator, abstract: refinement.abstract,
                 variableMappings: mappings)
         }
         let behavior = CompiledBehavior(

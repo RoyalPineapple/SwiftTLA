@@ -6,6 +6,39 @@ import Testing
 
 @Suite("typed refinement declarations")
 struct RefinementDeclarationTests {
+  @Test("refinement typing preserves resolved instance identities independently of property order")
+  func preservesResolvedTargets() throws {
+    let value = Var<Int>("value")
+    let abstract = TLASpec("AbstractTarget") {
+      Variable(value, 0)
+      Action("stay") { value.stays }
+    }
+    let first = Instance("First", of: abstract)
+    let second = Instance("Second", of: abstract)
+    let count = Var<Int>("count")
+    let source = TLASpec("ConcreteTargets") {
+      Variable(count, 0)
+      Action("stay") { count.stays }
+      first
+      second
+      Refinement(name: "SecondClaim", instance: second, mappings: [.init(value, from: count)])
+      Refinement(name: "FirstClaim", instance: first, mappings: [.init(value, from: count)])
+    }
+    let compilation = try source.compile()
+    let inputs = try SourceTypeResolver().resolve(in: compilation)
+    let program = try CompiledProgram(inputs: inputs)
+    for refinements in [inputs.refinements, program.refinements] {
+      #expect(refinements.map(\.name) == ["SecondClaim", "FirstClaim"])
+      #expect(refinements.map(\.instance) == compilation.refinements.map(\.instance))
+      #expect(refinements.map(\.operator) == compilation.refinements.map(\.operator))
+      let namespaces = try refinements.map { refinement in
+        try #require(program.layout.moduleInstances.first { $0.id == refinement.instance }).namespace
+      }
+      #expect(namespaces == ["Second", "First"])
+      #expect(refinements.allSatisfy { $0.operator == .spec })
+    }
+  }
+
   @Test("native refinement inputs retain typed abstract state and resolved mappings")
   func resolvesAbstractProgramAndMappings() throws {
     let value = Var<Int>("value")

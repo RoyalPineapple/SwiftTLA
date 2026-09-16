@@ -64,6 +64,8 @@ package struct CompiledProgram: Sendable {
 /// An abstract native program and its state mapping, checked in the concrete program's scope.
 package struct CompiledRefinementProgram: Sendable {
     package let name: String
+    let instance: ModuleInstanceID
+    let `operator`: RefinementDecl.Operator
     package let abstract: CompiledProgram
     package let variableMappings: [CompiledStateQuery]
 }
