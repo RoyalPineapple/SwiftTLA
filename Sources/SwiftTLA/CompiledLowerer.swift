@@ -1757,6 +1757,10 @@ struct CompiledLowerer {
             return .all(try conditions.enumerated().map {
                 try lower($0.element, at: "\(path).all[\($0.offset)]", scope: scope)
             })
+        case .conditional(let predicate, let yes, let no):
+            return .conditional(try lower(predicate, at: "\(path).condition", scope: scope),
+                then: try lower(yes, at: "\(path).then", scope: scope),
+                else: try lower(no, at: "\(path).else", scope: scope))
         }
     }
 

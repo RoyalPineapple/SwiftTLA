@@ -90,6 +90,9 @@ extension CompiledSpecification {
         func predicates(_ source: TemporalCondition<CompiledStateQuery>, bindings: CompiledBindings) -> TemporalCondition<@Sendable (StateGraph.StateID) throws -> Bool> {
             switch source {
             case .all(let conditions): return .all(conditions.map { predicates($0, bindings: bindings) })
+            case .conditional(let guardQuery, let yes, let no):
+                return .conditional(predicate(guardQuery, bindings: bindings),
+                    then: predicates(yes, bindings: bindings), else: predicates(no, bindings: bindings))
             case .leadsTo(let trigger, let target): return .leadsTo(predicate(trigger, bindings: bindings, isTrigger: true), predicate(target, bindings: bindings))
             default: return source.map { predicate($0, bindings: bindings) }
             }

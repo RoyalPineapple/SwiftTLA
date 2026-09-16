@@ -2442,6 +2442,39 @@ extension ParserSession {
         case contains
     }
 
+    func decodeTemporalCondition(_ expression: ExprSyntax, scope: TypedFacadeScope) -> TemporalCondition<StateExpr>? {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
+              let member = call.calledExpression.as(MemberAccessExprSyntax.self), member.base == nil,
+              call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
+        let arguments = Array(call.arguments)
+        switch member.declName.baseName.sourceIdentifierName {
+        case "conditional":
+            guard arguments.map({ $0.label?.text }) == [nil, "then", "else"],
+                  let predicate = decodeTypedFacadeValue(arguments[0].expression, scope: scope),
+                  let yes = decodeTemporalCondition(arguments[1].expression, scope: scope),
+                  let no = decodeTemporalCondition(arguments[2].expression, scope: scope) else { return nil }
+            return .conditional(predicate, then: yes, else: no)
+        case "all":
+            guard arguments.count == 1, arguments[0].label == nil,
+                  let array = arguments[0].expression.as(ArrayExprSyntax.self) else { return nil }
+            let values = array.elements.compactMap { decodeTemporalCondition($0.expression, scope: scope) }
+            return values.count == array.elements.count ? .all(values) : nil
+        case "always", "eventually", "alwaysEventually", "eventuallyAlways", "leadsTo":
+            guard arguments.allSatisfy({ $0.label == nil }) else { return nil }
+            let values = arguments.compactMap { decodeTypedFacadeValue($0.expression, scope: scope) }
+            guard values.count == arguments.count else { return nil }
+            switch (member.declName.baseName.sourceIdentifierName, values.count) {
+            case ("always", 1): return .always(values[0])
+            case ("eventually", 1): return .eventually(values[0])
+            case ("alwaysEventually", 1): return .alwaysEventually(values[0])
+            case ("eventuallyAlways", 1): return .eventuallyAlways(values[0])
+            case ("leadsTo", 2): return .leadsTo(values[0], values[1])
+            default: return nil
+            }
+        default: return nil
+        }
+    }
+
     func decodeTemporal(
         _ call: FunctionCallExprSyntax,
         scope: TypedFacadeScope = .empty

@@ -600,6 +600,8 @@ extension NativeSwiftEmitter {
                 case .eventuallyAlways(let predicate): ".eventuallyAlways(\(predicate))"
                 case .leadsTo(let source, let target): ".leadsTo(\(source), \(target))"
                 case .all(let conditions): ".all([\(conditions.map { condition($0) }.joined(separator: ", "))])"
+                case .conditional(let predicate, let yes, let no):
+                    ".conditional(\(predicate), then: \(condition(yes)), else: \(condition(no)))"
                 }
             }
             if property.bindings.isEmpty {

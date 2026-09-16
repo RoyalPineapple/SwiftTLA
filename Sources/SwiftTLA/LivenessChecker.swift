@@ -141,6 +141,32 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
             return .init(status: .unavailable, reason: .unknownAction)
         }
 
+        if case .conditional(let predicate, let yes, let no) = property {
+            var yesStates: [State] = []
+            var noStates: [State] = []
+            for state in initialStates {
+                if try predicate(state) { yesStates.append(state) }
+                else { noStates.append(state) }
+            }
+            for (condition, initial) in [(yes, yesStates), (no, noStates)] where !initial.isEmpty {
+                var reachable = Set(initial)
+                var pending = initial
+                while let state = pending.popLast() {
+                    for edge in transitions[state] ?? [] where reachable.insert(edge.target).inserted {
+                        pending.append(edge.target)
+                    }
+                }
+                let branch = Self(states: reachable,
+                    transitions: transitions.filter { reachable.contains($0.key) },
+                    fairness: fairness, matches: matches, actionOrder: actionOrder, stateOrder: stateOrder)
+                let result = try branch.analyze(condition, initialStates: initial,
+                    isComplete: isComplete, renderScope: renderScope)
+                if result.status != .satisfied { return result }
+            }
+            return try analyze(.always { _ in true }, initialStates: initialStates,
+                isComplete: isComplete, renderScope: renderScope)
+        }
+
         if case .all(let conditions) = property {
             for condition in conditions {
                 let result = try analyze(condition, initialStates: initialStates,
@@ -156,7 +182,7 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
         case .always(let value), .eventually(let value), .alwaysEventually(let value), .eventuallyAlways(let value):
             predicate = value
         case .leadsTo(_, let target): predicate = target
-        case .all: preconditionFailure("Conjunctions are checked before atomic temporal conditions")
+        case .all, .conditional: preconditionFailure("Compound conditions are checked before atomic temporal conditions")
         }
         let negative = try states.filter { try !predicate($0) }
         let allStates = states
@@ -176,7 +202,7 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
                 try trigger(state) ? state : nil
             }).intersection(negative)
             search = .init(cycleStates: negative, prefixStates: triggers, prefixContinuationStates: negative)
-        case .all: preconditionFailure("Conjunctions are checked before atomic temporal conditions")
+        case .all, .conditional: preconditionFailure("Compound conditions are checked before atomic temporal conditions")
         }
 
         let components = fairComponents(in: search.cycleStates, fairness: fairness, enabled: enabled)

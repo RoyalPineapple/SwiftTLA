@@ -124,7 +124,7 @@ private final class DSLRewriter: SyntaxRewriter {
                 return binding
             }
             if let constructor,
-               ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo"].contains(constructor),
+               ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo", "Temporal"].contains(constructor),
                call.arguments.allSatisfy({ $0.label?.text == "label" }), call.trailingClosure == nil {
                 if !call.arguments.isEmpty {
                     guard call.arguments.count == 1,

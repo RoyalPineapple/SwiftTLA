@@ -1,3 +1,19 @@
+public struct TemporalPropertyHandle: ModelProperty {
+    public let reference: PropertyReference
+
+    package init(name: String, label: String? = nil) {
+        reference = .init(name: name, displayLabel: label)
+    }
+
+    public func callAsFunction(_ condition: TemporalCondition<StateExpr>) -> TemporalDecl {
+        .init(reference: reference, expr: condition)
+    }
+}
+
+public func Temporal(label: String? = nil, _name: String = "") -> TemporalPropertyHandle {
+    .init(name: _name, label: label)
+}
+
 public struct TemporalHandle: ModelProperty {
     package enum Kind: String, Sendable {
         case always = "Always"

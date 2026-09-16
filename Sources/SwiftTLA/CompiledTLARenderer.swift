@@ -163,6 +163,8 @@ struct CompiledTLARenderer {
         case .leadsTo(let source, let target): return "(\(try state(source.expression)) ~> \(try state(target.expression)))"
         case .all(let conditions):
             return conditions.isEmpty ? "TRUE" : "(" + (try conditions.map { try temporal($0) }).joined(separator: " /\\ ") + ")"
+        case .conditional(let predicate, let yes, let no):
+            return "(IF \(try state(predicate.expression)) THEN \(try temporal(yes)) ELSE \(try temporal(no)))"
         }
     }
 

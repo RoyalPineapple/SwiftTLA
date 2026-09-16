@@ -270,7 +270,7 @@ An unused handle registers no claim, like an unused bound predicate declaration.
 
 Each forward constructor accepts `label: String? = nil` before its macro-supplied name.
 For example, `let safe = Invariant(label: "Mutual exclusion")` keeps `safe` as the declaration name.
-This applies to `Invariant`, `Reachable`, `Always`, `Eventually`, `AlwaysEventually`, `EventuallyAlways`, and `LeadsTo`.
+This applies to `Invariant`, `Reachable`, `Always`, `Eventually`, `AlwaysEventually`, `EventuallyAlways`, `LeadsTo`, and `Temporal`.
 Inside `#spec`, an explicit label must be a nonempty string literal without interpolation.
 An omitted label uses the Swift declaration name for display.
 
@@ -357,6 +357,25 @@ A missing definition, duplicate registration, or foreign handle must fail compil
 Wrong predicate types and wrong argument counts must fail Swift compilation.
 For example, a handle from `LeadsTo()` cannot accept one predicate, and a handle from `Eventually()` cannot accept two.
 These forms do not limit the temporal composition required by the corpus.
+
+`Temporal() -> TemporalPropertyHandle` declares a handle for a composed temporal claim.
+Its definition accepts `TemporalCondition<StateExpr>` with typed Boolean predicates.
+The supported compositions include `.all([...])` and `.conditional(predicate, then: condition, else: condition)`.
+Both branches can contain further compositions or the temporal forms in the table.
+
+```swift
+let hypothesis = Temporal()
+hypothesis(.conditional(value == 0,
+    then: .eventually(value == 1),
+    else: .eventually(value == 2)))
+```
+
+The conditional predicate selects a branch at the initial state of each behavior.
+That branch remains selected when the state changes or paths from different initial states merge.
+The native checker evaluates branch predicates only in states reachable from the initial states that selected that branch.
+TLA+ export retains the temporal `IF ... THEN ... ELSE ...` expression.
+A counterexample retains the initial state that selected the violated branch.
+Incomplete exploration cannot satisfy a conditional claim.
 
 Reachability and eventual progress are different claims. A puzzle can have a
 solution even when some executions loop forever without finding it.

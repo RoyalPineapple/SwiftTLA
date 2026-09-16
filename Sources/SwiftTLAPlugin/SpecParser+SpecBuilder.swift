@@ -124,7 +124,7 @@ extension ParserSession {
                 } catch {
                     components.diagnostics.append(.init(message: "Invalid parameter type: \(error)", source: binding))
                 }
-            } else if ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo", "Refinement"].contains(compilerGrammarName(in: call.calledExpression) ?? "") {
+            } else if ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo", "Temporal", "Refinement"].contains(compilerGrammarName(in: call.calledExpression) ?? "") {
                 guard declaration.bindingSpecifier.text == "let", specBindings.properties[sourceName] == nil else {
                     components.diagnostics.append(.init(message: "A property handle requires a unique let binding.", source: binding))
                     continue
@@ -150,6 +150,10 @@ extension ParserSession {
                     }
                     if constructor == "LeadsTo" {
                         specBindings.properties[sourceName] = LeadsToHandle(name: sourceName, label: label)
+                        continue
+                    }
+                    if constructor == "Temporal" {
+                        specBindings.properties[sourceName] = TemporalPropertyHandle(name: sourceName, label: label)
                         continue
                     }
                 }

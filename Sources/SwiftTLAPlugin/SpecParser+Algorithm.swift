@@ -570,6 +570,11 @@ extension ParserSession {
               call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
               call.arguments.allSatisfy({ $0.label == nil }) else { return nil }
         let arguments = Array(call.arguments)
+        if let handle = specBindings.properties[name] as? TemporalPropertyHandle,
+           arguments.count == 1,
+           let condition = decodeTemporalCondition(arguments[0].expression, scope: scope) {
+            return handle(condition)
+        }
         if let handle = specBindings.properties[name] as? TemporalHandle,
            arguments.count == 1,
            let predicate = decodeTypedFacadeValue(arguments[0].expression, scope: scope) {
