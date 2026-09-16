@@ -110,6 +110,11 @@ final class ParserSession {
     var recordSchemas: [String: [SourceRecordField]] { sourceTypes.records }
 
     func nominalRecordType(_ expression: ExprSyntax) -> CompiledValueType? {
+        var expression = expression
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.sourceIdentifierName == "expression", let base = member.base {
+            expression = base
+        }
         guard let name = Self.sourceTypePath(expression)?.last,
               sourceTypes.structs[name] != nil || sourceTypes.aliases[name] != nil,
               let type = try? sourceTypeResolver.resolve(expression.trimmedDescription),

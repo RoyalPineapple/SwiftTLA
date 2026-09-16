@@ -918,6 +918,13 @@ enums, arrays, and sets. Authors must not translate ordinary records and
 collections into parallel DSL schema/value types just to declare model state.
 Generate the formal projection at the boundary.
 
+For symbolic field values, generated `RecordType.expression(...)` returns `Expr<RecordType>`.
+The constructor uses the fields and types from the ordinary Swift record declaration.
+Every field is required. Unknown, repeated, missing, or wrongly typed fields fail compilation.
+Nested records and model parameters remain typed expressions until native or formal emission.
+Native execution constructs the original Swift record, not a parallel schema.
+Literal `RecordType(...)` remains ordinary Swift construction.
+
 The compiler must report extra modeling requirements as clear errors attached
 to the relevant declaration or operation. A Swift type compiling in isolation
 does not establish that every operation on it can be exported; supported member

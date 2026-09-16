@@ -169,7 +169,12 @@ public struct StateRecordExpression: Hashable, Sendable {
         self.init(fields.map { .init(name: $0.key, value: $0.value) })
     }
 
-    package init(orderedFields: [Field], nativeType: CompiledValueType? = nil) {
+    public init(orderedFields: [Field]) {
+        fields = orderedFields
+        nativeType = nil
+    }
+
+    package init(orderedFields: [Field], nativeType: CompiledValueType?) {
         fields = orderedFields
         self.nativeType = nativeType
     }

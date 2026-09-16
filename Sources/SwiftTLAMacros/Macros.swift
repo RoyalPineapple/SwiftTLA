@@ -15,6 +15,7 @@ public macro _TLAFiniteEnum() = #externalMacro(module: "SwiftTLAPlugin", type: "
 @attached(member, names: named(defaultValue))
 public macro _TLAValueEnum() = #externalMacro(module: "SwiftTLAPlugin", type: "ValueEnumMacro")
 
+@attached(member, names: named(expression))
 @attached(extension, conformances: _GeneratedRecordValue, names: named(defaultValue), named(formalValueShape), named(tlaValue), named(init), named(_formalRecordFieldName))
 public macro _TLARecordValue() = #externalMacro(module: "SwiftTLAPlugin", type: "RecordValueMacro")
 
