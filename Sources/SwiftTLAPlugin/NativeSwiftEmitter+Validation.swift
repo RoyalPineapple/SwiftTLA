@@ -11,12 +11,20 @@ extension NativeSwiftEmitter {
         let projections = zip(identifiers, names).map {
             ".\($0.0): \(String(reflecting: $0.1))"
         }.joined(separator: ",\n")
+        let displayNames = properties.map { program.layout.propertyDisplayName($0.id) ?? $0.name }
+            + program.refinements.map(\.name)
+        let displayProjections = zip(identifiers, displayNames).map {
+            ".\($0.0): \(String(reflecting: $0.1))"
+        }.joined(separator: ",\n")
         return try nativeDeclarations("""
         public enum Property: Hashable, CaseIterable, Sendable {
             \(cases)
         }
         public static var formalPropertyNames: [Property: String] {
             [\(identifiers.isEmpty ? ":" : projections)]
+        }
+        public static var propertyDisplayNames: [Property: String] {
+            [\(identifiers.isEmpty ? ":" : displayProjections)]
         }
         """)
     }

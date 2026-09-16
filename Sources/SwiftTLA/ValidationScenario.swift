@@ -3,8 +3,12 @@ import Foundation
 public struct PropertyReference: Hashable, Sendable {
     private let identity = UUID()
     package let name: String
+    package let displayLabel: String?
 
-    package init(name: String) { self.name = name }
+    package init(name: String, displayLabel: String? = nil) {
+        self.name = name
+        self.displayLabel = displayLabel
+    }
 }
 
 public protocol ModelProperty: Sendable {
@@ -14,29 +18,29 @@ public protocol ModelProperty: Sendable {
 public struct InvariantHandle: ModelProperty {
     public let reference: PropertyReference
 
-    package init(name: String) { reference = .init(name: name) }
+    package init(name: String, label: String? = nil) { reference = .init(name: name, displayLabel: label) }
 
     public func callAsFunction(@InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
         .init(reference: reference, body: body())
     }
 }
 
-public func Invariant(_name: String = "") -> InvariantHandle {
-    .init(name: _name)
+public func Invariant(label: String? = nil, _name: String = "") -> InvariantHandle {
+    .init(name: _name, label: label)
 }
 
 public struct ReachableHandle: ModelProperty {
     public let reference: PropertyReference
 
-    package init(name: String) { reference = .init(name: name) }
+    package init(name: String, label: String? = nil) { reference = .init(name: name, displayLabel: label) }
 
     public func callAsFunction(@InvariantBuilder _ body: () -> StateExpr) -> ReachableDecl {
         .init(reference: reference, body: body())
     }
 }
 
-public func Reachable(_name: String = "") -> ReachableHandle {
-    .init(name: _name)
+public func Reachable(label: String? = nil, _name: String = "") -> ReachableHandle {
+    .init(name: _name, label: label)
 }
 
 public enum ValidationExpectation: String, Sendable, Codable {

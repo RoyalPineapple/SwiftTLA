@@ -11,6 +11,7 @@ public protocol StateMachine: Sendable {
     func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection
     func formalCall(for action: Action) throws -> FormalActionCall
     static var formalPropertyNames: [Property: String] { get }
+    static var propertyDisplayNames: [Property: String] { get }
     static var checksDeadlock: Bool { get }
     func assumptionsHold() throws -> Bool
     func satisfiesStateConstraint() throws -> Bool

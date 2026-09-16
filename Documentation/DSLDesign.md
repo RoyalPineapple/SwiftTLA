@@ -247,7 +247,22 @@ A bare forward handle is not a builder component. A scenario reference without a
 Two predicate registrations for the same handle also fail compilation, even when their bodies agree.
 For example, `safe { true }` followed by `safe { false }` is invalid.
 An unused handle registers no claim, like an unused bound predicate declaration.
-Display labels and anonymous declaration names remain part of B-02.
+### Property display labels
+
+Each forward constructor accepts `label: String? = nil` before its macro-supplied name.
+For example, `let safe = Invariant(label: "Mutual exclusion")` keeps `safe` as the declaration name.
+This applies to `Invariant`, `Reachable`, `Always`, `Eventually`, `AlwaysEventually`, `EventuallyAlways`, and `LeadsTo`.
+Inside `#spec`, an explicit label must be a nonempty string literal without interpolation.
+An omitted label uses the Swift declaration name for display.
+
+The label is immutable presentation metadata on the existing property reference.
+It does not select a property, replace its identity, or enter a formal identifier.
+Generated models expose `propertyDisplayNames: [Property: String]` separately from `formalPropertyNames`.
+Scenario evidence retains both mappings without using labels as result keys.
+
+Two properties with the label `"Safety / progress"` must retain distinct generated cases, formal names, selections, and outcomes.
+A numeric label, an interpolated label, or a duplicate label argument must fail compilation.
+Anonymous declaration names and labels for other declaration kinds remain part of B-02.
 
 ### Reachability handles across scopes
 

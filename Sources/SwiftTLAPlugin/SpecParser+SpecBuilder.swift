@@ -129,23 +129,27 @@ extension ParserSession {
                     components.diagnostics.append(.init(message: "A property handle requires a unique let binding.", source: binding))
                     continue
                 }
-                if compilerGrammarName(in: call.calledExpression) == "Invariant",
-                   call.arguments.isEmpty, call.trailingClosure == nil {
-                    specBindings.properties[sourceName] = InvariantHandle(name: sourceName)
-                    continue
-                }
-                if call.arguments.isEmpty, call.trailingClosure == nil,
+                if call.arguments.allSatisfy({ $0.label?.text == "label" }), call.trailingClosure == nil,
                    let constructor = compilerGrammarName(in: call.calledExpression) {
+                    let label = extractStringArg(call, index: 0)
+                    guard call.arguments.isEmpty || (call.arguments.count == 1 && label?.isEmpty == false) else {
+                        components.diagnostics.append(.init(message: "A property label requires one nonempty string literal without interpolation.", source: binding))
+                        continue
+                    }
+                    if constructor == "Invariant" {
+                        specBindings.properties[sourceName] = InvariantHandle(name: sourceName, label: label)
+                        continue
+                    }
                     if constructor == "Reachable" {
-                        specBindings.properties[sourceName] = ReachableHandle(name: sourceName)
+                        specBindings.properties[sourceName] = ReachableHandle(name: sourceName, label: label)
                         continue
                     }
                     if let kind = TemporalHandle.Kind(rawValue: constructor) {
-                        specBindings.properties[sourceName] = TemporalHandle(name: sourceName, kind: kind)
+                        specBindings.properties[sourceName] = TemporalHandle(name: sourceName, kind: kind, label: label)
                         continue
                     }
                     if constructor == "LeadsTo" {
-                        specBindings.properties[sourceName] = LeadsToHandle(name: sourceName)
+                        specBindings.properties[sourceName] = LeadsToHandle(name: sourceName, label: label)
                         continue
                     }
                 }

@@ -168,6 +168,11 @@ struct CompiledModuleInstanceLayout: Hashable, Sendable {
 }
 
 package struct CompiledLayout: Hashable, Sendable {
+    package func propertyDisplayName(_ id: PropertyID) -> String? {
+        let property = (stateProperties + temporalProperties).first { $0.id == id }
+        return property?.reference?.displayLabel ?? property?.declaration.name
+    }
+
     package let parameters: [CompiledParameterLayout]
     package let variables: [CompiledVariableLayout]
     package let actions: [CompiledActionLayout]

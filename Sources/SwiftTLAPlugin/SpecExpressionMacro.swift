@@ -96,13 +96,24 @@ private final class DSLRewriter: SyntaxRewriter {
                     ? member?.declName.baseName.text : nil)
             if let constructor,
                ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo"].contains(constructor),
-               call.arguments.isEmpty, call.trailingClosure == nil {
+               call.arguments.allSatisfy({ $0.label?.text == "label" }), call.trailingClosure == nil {
+                if !call.arguments.isEmpty {
+                    guard call.arguments.count == 1,
+                          let label = call.arguments.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+                          !label.isEmpty else {
+                        context.diagnose(Diagnostic(node: Syntax(source), message: PropertyLabelDiagnostic()))
+                        return binding
+                    }
+                }
                 guard node.bindingSpecifier.text == "let" else {
                     context.diagnose(Diagnostic(node: Syntax(source), message: PropertyBindingDiagnostic()))
                     return binding
                 }
-                call.arguments = [LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
-                    expression: StringLiteralExprSyntax(content: name))]
+                var arguments = Array(call.arguments)
+                if !arguments.isEmpty { arguments[arguments.count - 1].trailingComma = .commaToken() }
+                arguments.append(LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
+                    expression: StringLiteralExprSyntax(content: name)))
+                call.arguments = LabeledExprListSyntax(arguments)
                 binding.initializer?.value = ExprSyntax(call)
                 return binding
             }
@@ -254,4 +265,10 @@ private struct PropertyBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-property-binding")
     let severity: DiagnosticSeverity = .error
     let message = "A property handle must be an immutable named let binding."
+}
+
+private struct PropertyLabelDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-property-label")
+    let severity: DiagnosticSeverity = .error
+    let message = "A property label requires one nonempty string literal without interpolation."
 }

@@ -13,6 +13,7 @@ package struct NativeScenarioRun: Sendable {
         package let checksDeadlock: Bool
         package let behavior: ModelBehavior
         package let coversCompleteScenario: Bool
+        package let propertyDisplayNames: [String: String]
     }
     package let name: String
     package let native: NativeModelRun
@@ -24,6 +25,7 @@ package struct NativeScenarioRun: Sendable {
         let rendered = try scenario.render()
         let names = scenario.formalPropertyNames
         guard names == Scenario.Machine.formalPropertyNames,
+              Set(Scenario.Machine.propertyDisplayNames.keys) == Set(names.keys),
               scenario.checking.properties.isSubset(of: Set(names.keys)),
               scenario.checking.properties == Set(scenario.expectations.keys) else {
             throw EvidenceFormatError.invalidField(record: scenario.name, field: "scenario check coverage")
@@ -43,7 +45,10 @@ package struct NativeScenarioRun: Sendable {
             omittedProperties: omitted.map { names[$0]! }.sorted(), checksDeadlock: rendered.checksDeadlock,
             behavior: rendered.behavior,
             coversCompleteScenario: omitted.isEmpty && (rendered.checksDeadlock || !Scenario.Machine.checksDeadlock)
-                && rendered.behavior == .specification)
+                && rendered.behavior == .specification,
+            propertyDisplayNames: Dictionary(uniqueKeysWithValues: names.map {
+                ($0.value, Scenario.Machine.propertyDisplayNames[$0.key]!)
+            }))
     }
 
     package func validateExpectations() throws {

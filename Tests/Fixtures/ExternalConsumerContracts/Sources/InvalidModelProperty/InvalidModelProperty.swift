@@ -35,3 +35,10 @@ let undefinedProperty = TLASpec("Undefined") { unary }
 let goal = Reachable()
 let wrongReachabilityPredicate = goal { 1 }
 let undefinedReachability = TLASpec("Undefined") { goal }
+
+let invalidLabels = #spec("InvalidLabels") {
+    let empty = Invariant(label: "")
+    let interpolated = Reachable(label: "Goal \(1)")
+    empty { true }
+    interpolated { true }
+}

@@ -10,6 +10,7 @@ package func modelValidationScenarios() throws -> [(id: String, scenario: any Mo
         ("scoped-temporal-claims", try ScopedTemporalClaims.validationScenarios()),
         ("scoped-reachability-claims", try ScopedReachabilityClaims.validationScenarios()),
         ("constant-state-claims", try ConstantStateClaims.validationScenarios()),
+        ("labelled-property-claims", try LabelledPropertyClaims.validationScenarios()),
         ("dining-philosophers", try DiningPhilosophersModel.validationScenarios()),
         ("selected-checks", try SelectedChecksModel.validationScenarios()),
         ("unselected-predicates", try UnselectedPredicateModel.validationScenarios())
