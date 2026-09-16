@@ -51,12 +51,38 @@
       "configuration": "hour-clock/HourClock.cfg",
       "imports": [],
       "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/HourClock/HourClock.tla",
+        "sha256": "985903176db4725f9cf25df84ad84dcd53ba94be80d26298b87ec86fbc9b08b3"
+      },
       "exploration": {
         "maximumStateLimit": 100000,
         "symmetryReduction": "disabled"
       },
       "moduleSHA256": "985903176db4725f9cf25df84ad84dcd53ba94be80d26298b87ec86fbc9b08b3",
       "cfgSHA256": "c1e28ec8c38919b15577a0a7148840ba1d4e4c6541ea43e36edd482c5ff16687",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-hour-clock",
+      "sourceModel": "hour-clock",
+      "scenario": "Upstream",
+      "module": "hour-clock/APHourClock.tla",
+      "configuration": "hour-clock/APHourClock.cfg",
+      "imports": ["hour-clock/HourClock.tla"],
+      "dependencies": [
+        {"importingModule": "APHourClock", "importedModule": "HourClock"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/HourClock/APHourClock.tla",
+        "sha256": "c8f348ca33893c58fc4c084b9e34543d13fcd8068fa4a078a49d3fcd59b569ea"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c8f348ca33893c58fc4c084b9e34543d13fcd8068fa4a078a49d3fcd59b569ea",
+      "cfgSHA256": "1cae199360d6c8767bee3192ff11211d5fd091d1e3332957d55bab1dda8dd133",
       "timeoutSeconds": 60
     },
     {
