@@ -1,7 +1,4 @@
-package enum TLCBehaviorSelection: Equatable, Sendable {
-    case specification
-    case initialAndNext
-
+extension ModelBehavior {
     var directives: [String] {
         switch self {
         case .specification: ["SPECIFICATION Spec"]
@@ -12,7 +9,7 @@ package enum TLCBehaviorSelection: Equatable, Sendable {
 
 /// TLC directives retained separately so validation can select checks without reparsing output.
 package struct TLCConfiguration: Equatable, Sendable {
-    package let behavior: TLCBehaviorSelection
+    package let behavior: ModelBehavior
     package let declarations: [String]
     package let checkDeadlock: Bool
     package let invariants: [String]
@@ -21,7 +18,7 @@ package struct TLCConfiguration: Equatable, Sendable {
     package let refinements: [String]
     package let symmetry: [String]
 
-    package init(behavior: TLCBehaviorSelection = .specification, declarations: [String], checkDeadlock: Bool, invariants: [String],
+    package init(behavior: ModelBehavior = .specification, declarations: [String], checkDeadlock: Bool, invariants: [String],
         reachabilityProperties: [String] = [], properties: [String], refinements: [String] = [], symmetry: [String]) {
         self.behavior = behavior
         self.declarations = declarations
@@ -33,7 +30,7 @@ package struct TLCConfiguration: Equatable, Sendable {
         self.symmetry = symmetry
     }
 
-    func selecting(_ checks: Set<String>, checkDeadlock: Bool, behavior: TLCBehaviorSelection? = nil) throws -> Self {
+    func selecting(_ checks: Set<String>, checkDeadlock: Bool, behavior: ModelBehavior? = nil) throws -> Self {
         let unknown = checks.subtracting(invariants + reachabilityProperties + properties + refinements)
         guard unknown.isEmpty else {
             throw CompilationDiagnostic(

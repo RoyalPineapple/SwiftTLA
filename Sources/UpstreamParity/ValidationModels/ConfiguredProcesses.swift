@@ -46,10 +46,13 @@ package struct WeaklyFairConfiguredProcessMachine {
                     }
                 }
             }
-            Eventually("AllVisited", selected == nodes)
+            let allVisited = Eventually("AllVisited", selected == nodes)
+            allVisited
             Validation("Empty") { Bind(nodes, to: Set<Int>([])) }
             Validation("One") { Bind(nodes, to: Set<Int>([1])) }
             Validation("Three") { Bind(nodes, to: Set<Int>([1, 2, 3])) }
+            Validation("One without specification fairness") { Bind(nodes, to: Set<Int>([1])) }
+                .behavior(.initialAndNext).expect(allVisited, .violated)
         }
     }
 }
@@ -70,10 +73,13 @@ package struct StronglyFairConfiguredProcessMachine {
                     }
                 }
             }
-            Eventually("AllVisited", selected == nodes)
+            let allVisited = Eventually("AllVisited", selected == nodes)
+            allVisited
             Validation("Empty") { Bind(nodes, to: Set<Int>([])) }
             Validation("One") { Bind(nodes, to: Set<Int>([1])) }
             Validation("Three") { Bind(nodes, to: Set<Int>([1, 2, 3])) }
+            Validation("One without specification fairness") { Bind(nodes, to: Set<Int>([1])) }
+                .behavior(.initialAndNext).expect(allVisited, .violated)
         }
     }
 }

@@ -376,7 +376,8 @@ struct CompiledLowerer {
         }
         var scenarios: [CompiledValidationScenario] = []
         for scenario in spec.validationScenarios {
-            guard scenario.propertySelections.count <= 1, scenario.deadlockSelections.count <= 1 else {
+            guard scenario.propertySelections.count <= 1, scenario.deadlockSelections.count <= 1,
+                  scenario.behaviorSelections.count <= 1 else {
                 throw invalid(scenario.name, "duplicate check selection")
             }
             let selectedReferences = scenario.propertySelections.first
@@ -425,7 +426,8 @@ struct CompiledLowerer {
                 expectations[property.id] = expectation.expected
             }
             scenarios.append(.init(name: scenario.name, bindings: bindings, expectations: expectations,
-                deadlockExpectation: scenario.deadlockExpectations.first, checks: checks, checkDeadlock: checkDeadlock))
+                deadlockExpectation: scenario.deadlockExpectations.first, checks: checks, checkDeadlock: checkDeadlock,
+                behavior: scenario.behaviorSelections.first ?? .specification))
         }
         return scenarios
     }

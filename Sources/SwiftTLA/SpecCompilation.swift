@@ -319,9 +319,11 @@ public struct RenderedSpecification: Sendable {
     package var refinementNames: Set<String> { Set(configuration.refinements) }
     package var checkNames: Set<String> { Set(configuration.invariants + configuration.reachabilityProperties + configuration.properties + configuration.refinements) }
     package var checksDeadlock: Bool { configuration.checkDeadlock }
+    package var behavior: ModelBehavior { configuration.behavior }
 
     /// Converts model-owned check identities at the formal export boundary.
-    public func selectingChecks<Property: Hashable & Sendable>(_ checks: ModelChecks<Property>, formalPropertyNames: [Property: String]) throws -> Self {
+    public func selectingChecks<Property: Hashable & Sendable>(_ checks: ModelChecks<Property>, formalPropertyNames: [Property: String],
+        behavior: ModelBehavior? = nil) throws -> Self {
         let names = try Set(checks.properties.map { property in
             guard let name = formalPropertyNames[property] else {
                 throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "check selection",
@@ -335,7 +337,7 @@ public struct RenderedSpecification: Sendable {
                 expected: "distinct formal names for selected properties", actual: "duplicate property projection",
                 nextSafeAction: "Use the generated model's formal property names.")
         }
-        let selected = try configuration.selecting(names, checkDeadlock: checks.checkDeadlock)
+        let selected = try configuration.selecting(names, checkDeadlock: checks.checkDeadlock, behavior: behavior)
         func bundle(_ original: TLAModuleBundle) -> TLAModuleBundle {
             .init(root: .init(name: original.root.name, tla: original.root.tla,
                 cfg: selected.render(usesSymmetryReduction: true)), imports: original.imports, provenance: original.provenance)
@@ -347,7 +349,7 @@ public struct RenderedSpecification: Sendable {
     /// Selects declared checks for an independent validation pass without rendering the model again.
     /// Symmetry defaults to disabled so the pass retains the complete, unreduced graph.
     package func tlaBundle(checking checks: Set<String>, checkDeadlock: Bool,
-        symmetryReduction: SymmetryReduction = .disabled, behavior: TLCBehaviorSelection? = nil) throws -> TLAModuleBundle {
+        symmetryReduction: SymmetryReduction = .disabled, behavior: ModelBehavior? = nil) throws -> TLAModuleBundle {
         let selected = try configuration.selecting(checks, checkDeadlock: checkDeadlock, behavior: behavior)
         let usesSymmetryReduction = if case .enabled = symmetryReduction { true } else { false }
         return TLAModuleBundle(
@@ -1080,7 +1082,8 @@ private struct CanonicalSpecificationEncoder {
                             canonicalOptional(properties.first { $0.reference == reference }.map { String($0.id.ordinal) })
                         })
                     }),
-                    canonicalList(scenario.deadlockSelections.map { String($0) })])
+                    canonicalList(scenario.deadlockSelections.map { String($0) }),
+                    canonicalList(scenario.behaviorSelections.map(\.rawValue))])
             }
             list("validation", scenarios) { $0 }
         }

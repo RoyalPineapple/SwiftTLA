@@ -377,6 +377,20 @@ Native exploration and export consume this same value. Selection does not change
 application transitions, graph completeness, or resource limits. Evidence reports
 selected and omitted checks separately from complete scenario validation.
 
+`.behavior(.specification)` is the default behavior choice. It uses the model's
+initial states, transition relation, and declared fairness. Export selects
+`SPECIFICATION Spec`.
+
+`.behavior(.initialAndNext)` selects `INIT Init` and `NEXT Next` instead.
+Native checking uses the same initial states and transitions, without the fairness
+conjuncts from `Spec`. Application transitions and complete graph capture do not change.
+Temporal and refinement outcomes can change because the permitted infinite behaviors differ.
+
+Generated scenarios retain this choice as a typed `ModelBehavior` value.
+Native checking and export consume the same choice. Duplicate behavior modifiers
+produce a diagnostic. Expected outcomes do not select or alter behavior.
+Evidence identifies the selected behavior separately from property and deadlock coverage.
+
 ### Declaration syntax
 
 #### Counter parameter contract

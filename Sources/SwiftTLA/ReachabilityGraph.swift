@@ -59,12 +59,15 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     public let initialStates: Set<Machine.Snapshot>
     public let transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]]
     public let checking: ModelChecks<Machine.Property>
+    public let behavior: ModelBehavior
 
-    public init(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Machine.Property>? = nil) throws {
+    public init(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Machine.Property>? = nil,
+        behavior: ModelBehavior = .specification) throws {
         guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
         guard let initialMachine = initialMachines.first else { throw ExplorationError.noInitialStates }
         let checking = checking ?? ModelChecks(properties: Set(Machine.Property.allCases), checkDeadlock: Machine.checksDeadlock)
         self.checking = checking
+        self.behavior = behavior
         let properties = try initialMachine.temporalProperties(checking: checking.properties)
         machine = initialMachine
         var transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]] = [:]
@@ -149,7 +152,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         })
         if !properties.isEmpty {
             let checker = try temporalChecker()
-            let fairness = try initialMachine.fairnessConditions()
+            let fairness = behavior == .specification ? try initialMachine.fairnessConditions() : []
             temporalResults = try properties.mapValues {
                 try checker.analyze($0, initialStates: Array(initialStates), renderScope: { fairness[$0].name })
             }
@@ -189,7 +192,7 @@ extension ReachabilityGraph {
         let actionNames = Dictionary(uniqueKeysWithValues: Set(transitions.values.flatMap { $0.map(\.action) }).map {
             ($0, String(describing: $0))
         })
-        let fairness = try machine.fairnessConditions()
+        let fairness = behavior == .specification ? try machine.fairnessConditions() : []
         let checker = LivenessChecker<Machine.Snapshot, Machine.Action, Int>(
             states: Set(snapshots),
             transitions: Dictionary(uniqueKeysWithValues: transitions.map { source, successors in

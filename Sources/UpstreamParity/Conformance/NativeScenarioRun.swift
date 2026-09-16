@@ -11,6 +11,7 @@ package struct NativeScenarioRun: Sendable {
         package let selectedProperties: [String]
         package let omittedProperties: [String]
         package let checksDeadlock: Bool
+        package let behavior: ModelBehavior
         package let coversCompleteScenario: Bool
     }
     package let name: String
@@ -40,7 +41,9 @@ package struct NativeScenarioRun: Sendable {
         let omitted = Set(names.keys).subtracting(scenario.checking.properties)
         coverage = .init(selectedProperties: rendered.checkNames.sorted(),
             omittedProperties: omitted.map { names[$0]! }.sorted(), checksDeadlock: rendered.checksDeadlock,
-            coversCompleteScenario: omitted.isEmpty && (rendered.checksDeadlock || !Scenario.Machine.checksDeadlock))
+            behavior: rendered.behavior,
+            coversCompleteScenario: omitted.isEmpty && (rendered.checksDeadlock || !Scenario.Machine.checksDeadlock)
+                && rendered.behavior == .specification)
     }
 
     package func validateExpectations() throws {

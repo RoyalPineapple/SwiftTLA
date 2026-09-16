@@ -82,6 +82,14 @@ Native exploration and formal export consume this same selection.
 Unselected predicates do not run. Selection does not change application transitions
 or truncate the reachable graph.
 
+Scenarios default to `.behavior(.specification)`, which includes the declared fairness.
+`.behavior(.initialAndNext)` selects the same initial states and transitions without
+specification fairness. Export uses `INIT Init` and `NEXT Next` for this choice.
+The generated `behavior` value has type `ModelBehavior`.
+Native temporal checking and export consume this same value.
+The graph remains complete, but liveness and refinement outcomes can differ.
+Evidence records the behavior choice without claiming validation of omitted specification fairness.
+
 Scalar scenario bindings retain parameter identities and checked value types.
 Missing, duplicate, and foreign bindings fail explicitly. Collection bindings
 and refinement expectations remain unfinished.

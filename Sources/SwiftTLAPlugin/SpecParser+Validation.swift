@@ -6,7 +6,7 @@ extension ParserSession {
         var root = call
         var overrides: [FunctionCallExprSyntax] = []
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
-              ["expect", "expectDeadlock", "checking", "checkingDeadlock"].contains(member.declName.baseName.text),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "behavior"].contains(member.declName.baseName.text),
               let base = member.base?.as(FunctionCallExprSyntax.self) {
             overrides.append(root)
             root = base
@@ -33,6 +33,15 @@ extension ParserSession {
             var scenario = ValidationDeclaration(name: name, bindings: bindings)
             for override in overrides.reversed() {
                 if let member = override.calledExpression.as(MemberAccessExprSyntax.self) {
+                    if member.declName.baseName.text == "behavior" {
+                        guard override.arguments.count == 1,
+                              let value = override.arguments.first?.expression.as(MemberAccessExprSyntax.self),
+                              let behavior = ModelBehavior(rawValue: value.declName.baseName.text) else {
+                            throw SourceParseDiagnostic(message: "Behavior selection requires .specification or .initialAndNext.", source: override)
+                        }
+                        scenario.behaviorSelections.append(behavior)
+                        continue
+                    }
                     if member.declName.baseName.text == "checking" {
                         guard override.arguments.count == 1, let argument = override.arguments.first,
                               argument.label?.text == "only",

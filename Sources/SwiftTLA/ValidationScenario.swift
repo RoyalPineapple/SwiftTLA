@@ -31,6 +31,7 @@ public protocol ModelValidationScenario: Sendable {
     associatedtype Property: Hashable, Sendable where Property == Machine.Property
     var name: String { get }
     var checking: ModelChecks<Property> { get }
+    var behavior: ModelBehavior { get }
     var expectations: [Property: ValidationExpectation] { get }
     var deadlockExpectation: ValidationExpectation? { get }
     func initialMachines() throws -> [Machine]
@@ -40,7 +41,7 @@ public protocol ModelValidationScenario: Sendable {
 
 extension ModelValidationScenario {
     public func explore(maximumStates: Int) throws -> ReachabilityGraph<Machine> {
-        try ReachabilityGraph(initialMachines: initialMachines(), maximumStates: maximumStates, checking: checking)
+        try ReachabilityGraph(initialMachines: initialMachines(), maximumStates: maximumStates, checking: checking, behavior: behavior)
     }
 }
 
@@ -69,6 +70,7 @@ public struct ValidationDeclaration: SpecComponent {
     package var deadlockExpectations: [ValidationExpectation] = []
     package var propertySelections: [[PropertyReference]] = []
     package var deadlockSelections: [Bool] = []
+    package var behaviorSelections: [ModelBehavior] = []
 
     package init(name: String, bindings: [ValidationBinding]) {
         self.name = name
@@ -96,6 +98,12 @@ public struct ValidationDeclaration: SpecComponent {
     public func checkingDeadlock(_ enabled: Bool) -> Self {
         var copy = self
         copy.deadlockSelections.append(enabled)
+        return copy
+    }
+
+    public func behavior(_ behavior: ModelBehavior) -> Self {
+        var copy = self
+        copy.behaviorSelections.append(behavior)
         return copy
     }
 }

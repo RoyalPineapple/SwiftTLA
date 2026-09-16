@@ -103,6 +103,7 @@ package struct NativeModelRun: Sendable {
           Set(propertyNames.values).count == propertyNames.count,
           Set(try native.checking.properties.map(propertyName)) == rendered.checkNames,
           native.checking.checkDeadlock == rendered.checksDeadlock,
+          native.behavior == rendered.behavior,
           temporalNames == Set(try native.temporalResults.keys.map(propertyName)),
           rendered.reachabilityNames == Set(try native.reachabilityResults.keys.map(propertyName)),
           Set(try native.refinementFailures.keys.map(propertyName)).isSubset(of: refinementNames) else {
