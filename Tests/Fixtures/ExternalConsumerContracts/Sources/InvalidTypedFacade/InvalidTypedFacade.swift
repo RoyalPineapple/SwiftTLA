@@ -155,7 +155,7 @@ let swappedMacroArguments = pairMacro(Expr<Bool>(true), Expr<Int>(1))
 let nonBooleanLeadsToSource = Expr<Int>(1).leadsTo(Expr<Bool>(true))
 let nonBooleanLeadsToTarget = Expr<Bool>(true).leadsTo(Expr<Int>(1))
 
-func rejectRecursiveArguments(_ recursion: LocalRecursion<Int, Int>) {
+let rejectRecursiveArguments = { (recursion: LocalRecursion<Int, Int>) in
   _ = recursion("wrong")
   _ = recursion(Expr<Bool>(true))
 }

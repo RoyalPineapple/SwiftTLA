@@ -265,7 +265,7 @@ struct TypedFacadeContractTests {
     let rejectedLines = [32, 33, 151, 152, 154, 155, 156, 159, 160, 162, 163] + Array(139...149) + Array(38...41) + Array(43...56) + Array(58...73) + Array(75...86)
     for line in rejectedLines {
       #expect(errors.contains { $0.contains("InvalidTypedFacade.swift:\(line):") },
-              "Expected the invalid operation on fixture line \(line) to be rejected")
+              "Expected the invalid operation on fixture line \(line) to be rejected. Compiler errors:\n\(errors.joined(separator: "\n"))")
     }
   }
 
