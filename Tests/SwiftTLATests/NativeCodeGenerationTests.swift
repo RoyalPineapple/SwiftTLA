@@ -370,6 +370,7 @@ struct NativeCodeGenerationTests {
             invariants: [], reachabilityProperties: [], temporalProperties: [], fairness: compilation.semantics.behavior.fairness,
             constraint: nil, assume: nil)
         let program = CompiledProgram(identity: compilation.identity, moduleMetadata: compilation.moduleMetadata,
+            moduleImports: compilation.moduleImports, formalModuleReplacements: [],
             requiredStandardModules: compilation.requiredStandardModules, layout: compilation.layout,
             behavior: behavior, refinements: [], enums: .init(), projections: [], variableTypes: [:], bindingTypes: [:], binderNames: [:],
             functions: [], authoredAlgorithm: nil)
@@ -474,11 +475,14 @@ struct NativeCodeGenerationTests {
         #expect(generated.contains("switch action"))
         #expect(generated.contains("guard"))
         #expect(!generated.contains("func _enabledActions"))
-        let terminal = try #require(model.program.layout.actions.first {
+        #expect(!model.program.layout.actions.contains {
             $0.declaration.name == CompilerControlSymbol.terminatingAction.rawValue
         })
+        let advance = try #require(model.program.layout.actions.first {
+            $0.declaration.name == "advance"
+        })
         #expect(!generated.contains("func isTerminated()"))
-        #expect(generated.contains("func _updates\(terminal.id.ordinal)("))
+        #expect(generated.contains("func _updates\(advance.id.ordinal)("))
         #expect(!Parser.parse(source: "struct Expansion {\n\(generated)\n}").hasError)
         print("native-code-generation model=counter declarations=\(members.count) sourceBytes=\(generated.utf8.count)")
     }

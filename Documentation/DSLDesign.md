@@ -455,6 +455,13 @@ validation and TLA+ export must consume the same resolved configuration.
 Authors must not repeat its bindings or check selection in a handwritten
 registry or generated `.cfg` file.
 
+An imported module can use a model parameter for its finite domain.
+For example, `Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: maximum))` supplies `0..maximum` to the imported `Nat` operator.
+The bound accepts an integer literal or a typed integer expression.
+The expression must not depend on machine state or enabled actions.
+Scenario bindings supply the parameter value in both native execution and TLA+ export.
+The former positional range argument is not supported.
+
 The configuration must express the semantic choices of upstream TLC
 configurations, including parameter bindings, state constraints, action
 constraints, property selection, and deadlock selection. An unsupported choice

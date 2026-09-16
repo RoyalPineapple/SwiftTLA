@@ -1,3 +1,16 @@
+struct TLCModuleReplacement: Equatable, Sendable {
+    let moduleName: String
+    let operatorName: String
+    let definitionName: String
+}
+
+extension CompiledFormalModuleReplacement {
+    func configuration(moduleNames: [String: String] = [:]) -> TLCModuleReplacement {
+        .init(moduleName: moduleNames[moduleName] ?? moduleName,
+            operatorName: operatorName, definitionName: definitionName)
+    }
+}
+
 extension ModelBehavior {
     var directives: [String] {
         switch self {

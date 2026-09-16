@@ -20,7 +20,7 @@ private struct ImportedFormalModuleGeneratedModel {
 
   static var spec: TLASpec {
     #spec("ImportedFormalModuleGeneratedModel") {
-      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 2))
       Algorithm("ImportedFormalModuleGeneratedModel", scoped: { scope in
         let value = scope.sharedVar(_name: "value", initial: 0)
         Do(Step.keep) { Assign(value, to: value.expr) }
@@ -102,11 +102,11 @@ struct TLAModuleBundleTests {
 
   @Test("the parser records imports for builder fidelity")
   func parserRetainsImportedModule() throws {
-    let source = "{ Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2)) }"
+    let source = "{ Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 2)) }"
     let closure = try parseClosure(source)
     let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
     let built = TLASpec("Imported") {
-      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 2))
     }
     let parserTree = canonicalTestSpec(
       variables: [], actions: [], invariants: [], imports: parsed.imports,
@@ -161,7 +161,7 @@ struct TLAModuleBundleTests {
     let sequence = ZeroBasedSequence<Int>.literal(3, 1, 2)
     let rotated = ZSequences.rotation(of: sequence, leftBy: Expr(.int(1)))
     let configured = TLASpec("ConfiguredZSequences") {
-      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 2))
       Algorithm("ConfiguredZSequences", scoped: { scope in
         let rotatedState: SharedVariable<ZeroBasedSequence<Int>> = scope.sharedVar(_name: "rotated",
           initial: rotated
@@ -177,7 +177,7 @@ struct TLAModuleBundleTests {
 
     let corpus = Var<ZeroBasedSequence<Int>>("corpus", .init())
     let consumer = TLASpec("UsesZSequences") {
-      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 2))
       Variable(corpus, ZeroBasedSequence<Int>())
       Invariant("RotationOrdering") {
         ZSequences.lexicographicallyPrecedesOrEquals(
@@ -202,7 +202,7 @@ struct TLAModuleBundleTests {
   @Test("an imported module keeps its source boundary while receiving a typed TLC replacement")
   func importedModuleUsesScopedFiniteReplacement() throws {
     let consumer = TLASpec("BoundedZSequences") {
-      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 2))
     }
 
     #expect(try consumer.compile().render().tlaBundle.tla.contains("ZSequencesNat == 0..2"))
@@ -224,7 +224,7 @@ struct TLAModuleBundleTests {
 
     let corpus = Var<ZeroBasedSequence<Int>>("corpus", .init())
     let initialized = TLASpec("InitializedZSequences") {
-      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 2))
       Variable(corpus, in: ZSequences.sequences(over: SetExpr<Int>.literal(0, 1)))
     }
     let compilation = try initialized.compile()

@@ -46,6 +46,10 @@ private final class ProgramResolver {
     func resolve() throws -> CompiledProgram {
         let behavior = try checked.behavior.map(root)
         let authoredAlgorithm = try checked.authoredAlgorithm.map { try $0.map(root) }
+        let replacements = try checked.formalModuleReplacements.map {
+            CompiledFormalModuleReplacement(moduleName: $0.moduleName, operatorName: $0.operatorName,
+                definitionName: $0.definitionName, expression: try root($0.expression))
+        }
         let refinements = try checked.refinements.map { refinement in
             CompiledRefinementProgram(id: refinement.id, name: refinement.name, instance: refinement.instance,
                 operator: refinement.operator, abstract: refinement.abstract,
@@ -62,6 +66,7 @@ private final class ProgramResolver {
             }
         }
         let program = CompiledProgram(identity: checked.identity, moduleMetadata: checked.moduleMetadata,
+            moduleImports: checked.moduleImports, formalModuleReplacements: replacements,
             requiredStandardModules: checked.requiredStandardModules, layout: checked.layout,
             behavior: behavior, refinements: refinements, enums: checked.enums,
             projections: projections, variableTypes: checked.variableTypes, bindingTypes: checked.bindingTypes, binderNames: binderNames,

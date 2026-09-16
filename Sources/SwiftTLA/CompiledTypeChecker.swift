@@ -456,7 +456,12 @@ package struct CompiledTypeChecker: Sendable {
             fairness: inputs.semantics.behavior.fairness,
             constraint: constraint,
             assume: assume)
+        let replacements = try inputs.semantics.formalModuleReplacements.map {
+            CompiledFormalModuleReplacement(moduleName: $0.moduleName, operatorName: $0.operatorName,
+                definitionName: $0.definitionName, expression: try checkOperand($0.expression, expected: .unknown))
+        }
         return CompiledProgram(identity: inputs.identity, moduleMetadata: inputs.moduleMetadata,
+            moduleImports: inputs.moduleImports, formalModuleReplacements: replacements,
             requiredStandardModules: inputs.requiredStandardModules, layout: inputs.layout, behavior: behavior, refinements: refinements,
             enums: inputs.types.enums, projections: [], variableTypes: variables, bindingTypes: bindingTypes, binderNames: inputs.bindings.binders,
             functions: [], authoredAlgorithm: authoredAlgorithm)

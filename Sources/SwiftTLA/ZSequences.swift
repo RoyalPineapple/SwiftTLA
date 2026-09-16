@@ -211,7 +211,7 @@ public enum ZSequences {
 
   /// Gives the imported module's `Nat` operator a finite TLC model domain.
   public static func boundedNaturalNumbers(
-    _ range: ClosedRange<Int>
+    through upperBound: some TypedExpression<Int>
   ) -> FormalModuleConfiguration {
     FormalModuleConfiguration(
       moduleName: module.name,
@@ -219,9 +219,13 @@ public enum ZSequences {
         FormalModuleReplacement(
           operatorName: "Nat",
           definitionName: "ZSequencesNat",
-          expression: .integerRange(.int(range.lowerBound), .int(range.upperBound))
+          expression: IntRange(0, through: upperBound).stateExpr
         )
       ]
     )
+  }
+
+  public static func boundedNaturalNumbers(through upperBound: Int) -> FormalModuleConfiguration {
+    boundedNaturalNumbers(through: Expr(upperBound))
   }
 }

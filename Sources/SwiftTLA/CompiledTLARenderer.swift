@@ -20,6 +20,7 @@ struct CompiledTLARenderer {
     let operators: CompiledOperators
     let actions: [CompiledAction]
     let functions: [ResolvedFunction]
+    var moduleNames: [String: String] = [:]
 
     func assumptions(_ behavior: CompiledBehavior) throws -> [String] {
         var result = try layout.parameters.map { parameter in
@@ -235,7 +236,7 @@ struct CompiledTLARenderer {
             "\($0.parameter) <- \(try state($0.value))"
         }.joined(separator: ", ")
         let withClause = arguments.isEmpty ? "" : " WITH \(arguments)"
-        return "\(layout.namespace) == INSTANCE \(layout.moduleName)\(withClause)"
+        return "\(layout.namespace) == INSTANCE \(moduleNames[layout.moduleName] ?? layout.moduleName)\(withClause)"
     }
 
     func state(_ expression: CompiledExpression, stateNames: [VariableID: String] = [:]) throws -> String {

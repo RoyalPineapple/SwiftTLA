@@ -145,6 +145,11 @@ extension TLASpec {
         specialized.constraint = constraint.map(state)
         specialized.recursiveFuncs = recursiveFuncs.map { $0.substitutingVariables(parameters) }
         specialized.formalOperatorDefinitions = formalOperatorDefinitions.map { $0.substitutingVariables(parameters) }
+        specialized.importConfigurations = importConfigurations.map { configuration in
+            .init(moduleName: configuration.moduleName, replacements: configuration.replacements.map {
+                .init(operatorName: $0.operatorName, definitionName: $0.definitionName, expression: state($0.expression))
+            })
+        }
         specialized.refinements = refinements.map { refinement in
             .init(name: refinement.name, instance: refinement.instance, operator: refinement.operator,
                 mappings: refinement.mappings.map { .init(target: $0.target, source: state($0.source)) },

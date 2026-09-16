@@ -14,6 +14,7 @@ package final class CompiledTypeInputs: Sendable {
     let refinements: [CompiledRefinementProgram]
     let identity: CompilationIdentity
     let moduleMetadata: CompiledModuleMetadata
+    let moduleImports: CompiledModuleImports
     let requiredStandardModules: Set<StandardModule>
     let layout: CompiledLayout
     let semantics: CompiledSemantics
@@ -38,6 +39,7 @@ package final class CompiledTypeInputs: Sendable {
         }
         identity = compilation.identity
         moduleMetadata = compilation.moduleMetadata
+        moduleImports = compilation.moduleImports
         requiredStandardModules = compilation.requiredStandardModules
         layout = compilation.layout
         semantics = compilation.semantics

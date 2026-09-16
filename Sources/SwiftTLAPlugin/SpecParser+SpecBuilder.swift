@@ -1242,10 +1242,11 @@ extension ParserSession {
               FormalModuleProvider(sourceType: configurationType) == provider,
               member.declName.baseName.sourceIdentifierName == "boundedNaturalNumbers",
               call.arguments.count == 1,
+              call.arguments.first?.label?.text == "through",
               let bounds = call.arguments.first?.expression,
-              let range = parseIntegerClosedRange(bounds)
+              let upperBound = decodeTypedFacadeValue(bounds, scope: sourceScope)
         else { return nil }
-        return ZSequences.boundedNaturalNumbers(range)
+        return ZSequences.boundedNaturalNumbers(through: Expr<Int>(upperBound))
     }
 
     private func formalModuleProvider(from expression: ExprSyntax) -> FormalModuleProvider? {

@@ -101,6 +101,7 @@ public struct ModuleDescription: Sendable, Equatable {
 
 /// TLA+ output and declaration text shared with authored PlusCal rendering.
 package struct RenderedModule: Sendable, Equatable {
+    var moduleReplacements: [TLCModuleReplacement] = []
     package var imports: [TLAModuleFile] = []
     package var importedOwnership: [TLAModuleBundle.OwnershipEntry] = []
     package var dependencies: [TLAModuleBundle.ModuleDependency] = []
@@ -157,7 +158,7 @@ struct CompiledModuleMetadata: Sendable {
     let formalParameters: [FormalModuleParameter]
     var modelValueNames: Set<String>
     let extendsModules: [StandardModule]
-    let imports: [String]
+    var imports: [String]
     let collections: [(domainSymbol: String, members: [TLAValue])]
     let symmetrySets: [SymmetrySet]
     let formalDefinitionCount: Int
@@ -196,11 +197,81 @@ fileprivate struct CompiledModule: Sendable {
     let definitionsAfterInstances: [Int]
 }
 
+/// Formal dependencies retain compiled declarations until the export boundary.
+struct CompiledModuleImports: Sendable {
+    fileprivate let root: String
+    fileprivate let modules: [CompiledModule]
+    fileprivate let provenance: TLAModuleBundle.Provenance
+
+    private var dependencies: [TLAModuleBundle.ModuleDependency] {
+        guard case .compiled(_, _, let dependencies) = provenance else {
+            preconditionFailure("Compiler-owned imports require compiled provenance")
+        }
+        return dependencies
+    }
+
+    private func selectedNames(_ directImports: [String]) -> Set<String> {
+        var selected = Set(directImports)
+        var pending = directImports
+        while let name = pending.popLast() {
+            for edge in dependencies where edge.importingModule == name {
+                if selected.insert(edge.importedModule).inserted { pending.append(edge.importedModule) }
+            }
+        }
+        return selected
+    }
+
+    fileprivate func names(for directImports: [String], namespace: String?, configured: Bool) -> [String: String] {
+        let selected = selectedNames(directImports)
+        let needsNamespace = configured || modules.contains {
+            selected.contains($0.metadata.name) && !$0.semantics.formalModuleReplacements.isEmpty
+        }
+        return Dictionary(uniqueKeysWithValues: selected.sorted().enumerated().map { offset, name in
+            (name, needsNamespace ? namespace.map { "\($0)__Import\(offset)" } ?? name : name)
+        })
+    }
+
+    fileprivate func replacements(for directImports: [String], moduleNames: [String: String]) -> [TLCModuleReplacement] {
+        let selected = selectedNames(directImports)
+        return modules.filter { selected.contains($0.metadata.name) }.flatMap {
+            $0.semantics.formalModuleReplacements.map { $0.configuration(moduleNames: moduleNames) }
+        }
+    }
+
+    fileprivate func append(to result: inout RenderedModule, directImports: [String], moduleNames: [String: String],
+                            rootName: String, owningRoot: String, structuralPath: [String]) throws {
+        guard case .compiled(_, let ownership, _) = provenance else {
+            preconditionFailure("Compiler-owned imports require compiled provenance")
+        }
+        let selected = selectedNames(directImports)
+        for module in modules where selected.contains(module.metadata.name) {
+            let rendered = try module.metadata.renderModule(module, moduleNames: moduleNames)
+            result.imports.append(.init(name: moduleNames[module.metadata.name] ?? module.metadata.name,
+                tla: rendered.renderedModuleSource))
+        }
+        result.importedOwnership += ownership.filter { selected.contains($0.moduleName) }.map {
+            .init(moduleName: moduleNames[$0.moduleName] ?? $0.moduleName, owningRoot: owningRoot,
+                structuralPath: structuralPath + $0.structuralPath)
+        }
+        result.dependencies += dependencies.filter {
+            selected.contains($0.importingModule)
+                || ($0.importingModule == root && directImports.contains($0.importedModule))
+        }.map {
+            .init(importingModule: $0.importingModule == root ? rootName : moduleNames[$0.importingModule] ?? $0.importingModule,
+                importedModule: moduleNames[$0.importedModule] ?? $0.importedModule,
+                structuralPath: structuralPath + $0.structuralPath)
+        }
+    }
+}
+
 /// The validated program consumed by native generation, formal execution, and rendering.
 public struct CompiledSpecification: Sendable {
     public let description: CompilationDescription
     public var identity: CompilationIdentity { description.identity }
     var moduleMetadata: CompiledModuleMetadata { module.metadata }
+    var moduleImports: CompiledModuleImports {
+        .init(root: module.metadata.name, modules: imports, provenance: provenance)
+    }
     var requiredStandardModules: Set<StandardModule> { module.requiredStandardModules }
     package var layout: CompiledLayout { module.layout }
     package var semantics: CompiledSemantics { module.semantics }
@@ -454,6 +525,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case missingFormalModuleConfigurationTarget
         case duplicateFormalModuleConfiguration
         case duplicateFormalModuleReplacement
+        case stateDependentFormalModuleReplacement
         case invalidFormalModuleArgument
         case duplicateFormalModuleArgument
         case duplicateFormalModuleSymbol
@@ -1335,7 +1407,8 @@ extension CompiledProgram {
         let collections = metadata.collections.map {
             "\($0.domainSymbol) == {\($0.members.map(\.description).joined(separator: ", "))}"
         }
-        let prelude = try constants + collections + renderer.resolvedFunctionDefinitions() + renderer.assumptions(behavior)
+        let prelude = try constants + collections + renderer.resolvedFunctionDefinitions()
+            + formalModuleReplacements.map(renderer.formalModuleReplacement) + renderer.assumptions(behavior)
         let module = try metadata.authoredPlusCalModule(algorithm: authoredAlgorithm,
             layout: layout, declarations: declarations,
             prelude: prelude, define: [], postTranslation: declarations.instances,
@@ -1360,14 +1433,18 @@ extension CompiledProgram {
                 path: "export.\(name).parameters", expected: "resolved abstract parameter bindings",
                 actual: "unbound abstract model parameters", nextSafeAction: "Resolve abstract configuration before exporting the refinement.")
         }
-        guard moduleMetadata.imports.isEmpty, moduleMetadata.formalParameters.isEmpty else {
+        guard moduleMetadata.formalParameters.isEmpty else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
                 path: "export.\(moduleMetadata.name)", expected: "a resolved standalone module",
-                actual: "module imports or formal parameters need a resolved module closure",
+                actual: "formal parameters need resolved module bindings",
                 nextSafeAction: "Resolve the complete module closure before typed export.")
         }
         var metadata = moduleMetadata
         metadata.name = name
+        let moduleNames = moduleImports.names(for: metadata.imports,
+            namespace: structuralPath.isEmpty ? nil : name, configured: !formalModuleReplacements.isEmpty)
+        var replacements = formalModuleReplacements.map { $0.configuration(moduleNames: moduleNames) }
+            + moduleImports.replacements(for: metadata.imports, moduleNames: moduleNames)
         let modelValues = exportedModelValueNames
         let reserved = Set(layout.declarations.map(\.name) + metadata.constants.map(\.name)
             + layout.parameters.map { $0.reference.name } + layout.moduleInstances.map(\.namespace)
@@ -1417,6 +1494,12 @@ extension CompiledProgram {
             mappings += refinement.abstract.exportedModelValueNames.subtracting(constants.map(\.name)).sorted()
                 .map { "\($0) <- \($0)" }
             instances.append("\(instance.namespace) == INSTANCE \(importedName)" + (mappings.isEmpty ? "" : " WITH " + mappings.joined(separator: ", ")))
+            for (offset, replacement) in abstract.moduleReplacements.enumerated() {
+                let forwarded = "\(importedName)__Configuration\(offset)"
+                instances.append("\(forwarded) == \(instance.namespace)!\(replacement.definitionName)")
+                replacements.append(.init(moduleName: replacement.moduleName,
+                    operatorName: replacement.operatorName, definitionName: forwarded))
+            }
             renderedRefinements.append("\(refinement.name) == \(instance.namespace)!Spec")
             imports.append(.init(name: importedName, tla: abstract.renderedModuleSource))
             imports += abstract.imports
@@ -1425,21 +1508,65 @@ extension CompiledProgram {
             dependencies.append(.init(importingModule: name, importedModule: importedName, structuralPath: path))
             dependencies += abstract.dependencies
         }
+        var uniqueReplacements: [TLCModuleReplacement] = []
+        for replacement in replacements {
+            if let existing = uniqueReplacements.first(where: {
+                $0.moduleName == replacement.moduleName && $0.operatorName == replacement.operatorName
+            }) {
+                guard existing == replacement else {
+                    throw CompilationDiagnostic(code: .duplicateFormalModuleReplacement, stage: .rendering,
+                        path: "export.\(name).configuration.\(replacement.moduleName).\(replacement.operatorName)",
+                        expected: "one replacement for each exported module operator",
+                        actual: "conflicting configuration definitions",
+                        nextSafeAction: "Resolve each configured module instance into a distinct export scope.")
+                }
+            } else {
+                uniqueReplacements.append(replacement)
+            }
+        }
+        replacements = uniqueReplacements
         var result = try metadata.assembleModule(behavior: behavior, renderer: renderer,
             definitions: [], definitionsBeforeInstances: [], definitionsAfterInstances: [], instances: instances,
             recursiveFunctions: renderer.resolvedFunctionDefinitions(), renderedRefinements: renderedRefinements,
-            renderedFormalModuleReplacements: [],
-            configuration: metadata.tlcConfiguration(behavior: behavior, replacements: [], refinementNames: refinements.map(\.name)),
-            requiredStandardModules: requiredStandardModules, importedNames: [], instancesAfterBehavior: true)
+            renderedFormalModuleReplacements: formalModuleReplacements.map(renderer.formalModuleReplacement),
+            configuration: metadata.tlcConfiguration(behavior: behavior, replacements: replacements, refinementNames: refinements.map(\.name)),
+            requiredStandardModules: requiredStandardModules,
+            importedNames: metadata.imports.map { moduleNames[$0] ?? $0 }, instancesAfterBehavior: true)
+        result.moduleReplacements = replacements
         result.imports = imports
         result.importedOwnership = ownership
         result.dependencies = dependencies
+        try moduleImports.append(to: &result, directImports: metadata.imports, moduleNames: moduleNames,
+            rootName: name, owningRoot: owningRoot, structuralPath: structuralPath)
+        var uniqueImports: [TLAModuleFile] = []
+        for imported in result.imports {
+            if let existing = uniqueImports.first(where: { $0.name == imported.name }) {
+                guard existing == imported else {
+                    throw CompilationDiagnostic(code: .conflictingFormalModuleSource, stage: .rendering,
+                        path: "export.\(name).imports.\(imported.name)",
+                        expected: "one compiled source per module name", actual: "different imported module bodies",
+                        nextSafeAction: "Give distinct formal modules distinct names.")
+                }
+            } else {
+                uniqueImports.append(imported)
+            }
+        }
+        result.imports = uniqueImports
+        var owned: Set<String> = []
+        result.importedOwnership = result.importedOwnership.filter { owned.insert($0.moduleName).inserted }
         return result
     }
 }
 
 private extension CompiledModuleMetadata {
-    func renderModule(_ module: CompiledModule) throws -> RenderedModule {
+    func renderModule(_ module: CompiledModule, moduleNames: [String: String] = [:]) throws -> RenderedModule {
+        var metadata = self
+        metadata.name = moduleNames[name] ?? name
+        metadata.imports = imports.map { moduleNames[$0] ?? $0 }
+        return try metadata.renderModuleContents(module, moduleNames: moduleNames)
+    }
+
+    func renderModuleContents(_ module: CompiledModule, moduleNames: [String: String]) throws -> RenderedModule {
         let layout = module.layout
         guard layout.parameters.isEmpty else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
@@ -1455,7 +1582,7 @@ private extension CompiledModuleMetadata {
         let renderer = CompiledTLARenderer(moduleName: name,
             reservedNames: modelValueNames.union(constants.map(\.name)).union(formalParameters.map(\.name)),
             layout: layout, bindings: bindings,
-            operators: semantics.operators, actions: semantics.behavior.actions, functions: [])
+            operators: semantics.operators, actions: semantics.behavior.actions, functions: [], moduleNames: moduleNames)
         let definitions = try semantics.operators.formalDefinitionIDs.prefix(formalDefinitionCount).map(renderer.formalDefinition)
         let instances = try semantics.moduleInstances.map(renderer.moduleInstance)
         let renderedRefinements = try refinements.map(renderer.refinement)
@@ -1472,7 +1599,7 @@ private extension CompiledModuleMetadata {
             renderedRefinements: renderedRefinements,
             renderedFormalModuleReplacements: renderedFormalModuleReplacements,
             configuration: tlcConfiguration(behavior: semantics.behavior,
-                replacements: semantics.formalModuleReplacements, refinementNames: refinements.map(\.name)),
+                replacements: semantics.formalModuleReplacements.map { $0.configuration(moduleNames: moduleNames) }, refinementNames: refinements.map(\.name)),
             requiredStandardModules: requiredStandardModules, importedNames: imports)
     }
 
@@ -1733,7 +1860,7 @@ private extension CompiledModuleMetadata {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    func tlcConfiguration(behavior: CompiledBehavior, replacements: [CompiledFormalModuleReplacement],
+    func tlcConfiguration(behavior: CompiledBehavior, replacements: [TLCModuleReplacement],
         refinementNames: [String]) -> TLCConfiguration {
         var lines: [String] = []
         for constant in constants.sorted(by: { $0.name < $1.name }) {

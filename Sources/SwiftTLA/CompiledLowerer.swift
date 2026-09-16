@@ -334,6 +334,19 @@ struct CompiledLowerer {
         let constraintExpression = try lowerOptional(spec.constraint, at: "constraint", scope: rootScope)
         let constraint = constraintExpression.map(predicate)
         let scenarios = try lowerValidationScenarios(spec)
+        for replacement in formalModuleReplacements {
+            let requirements = replacement.expression.stateRequirements(operators: operators)
+            guard requirements.variables.isEmpty && !requirements.requiresCompleteState else {
+                throw CompilationDiagnostic(
+                    code: .stateDependentFormalModuleReplacement,
+                    stage: .binding,
+                    path: "importConfigurations.\(replacement.moduleName).\(replacement.operatorName)",
+                    expected: "a state-independent module configuration",
+                    actual: "a replacement that reads model state",
+                    nextSafeAction: "Use model parameters or constants for the imported module configuration."
+                )
+            }
+        }
         return CompiledSemantics(
             behavior: .init(
                 checkDeadlock: spec.checkDeadlock,

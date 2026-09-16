@@ -106,7 +106,7 @@ package enum LeastCircularSubstringModel {
     }
 
     package static let spec = TLASpec("MCLeastCircularSubstring") {
-        Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...6))
+        Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 6))
 
         Algorithm("LeastCircularSubstring", scoped: { scope in
             let characterSet = SetExpr<Int>.literal(0, 1)
