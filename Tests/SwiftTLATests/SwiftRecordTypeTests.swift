@@ -100,6 +100,8 @@ struct SwiftRecordTypeTests {
         "struct Record { var value: Int { 1 } }",
         "struct Record { var children: [Record] }",
         "struct Record { let missing: [Missing] }",
+        "struct Record { let value: Int; init(value: Int) { self.value = value + 1 } }",
+        "struct Record { @Wrapper var value: Int }",
         "struct Record<T> { let value: T }"
     ])
     func rejectsUnsupportedRecords(_ declaration: String) throws {

@@ -574,6 +574,9 @@ extension ParserSession {
               element.label == nil {
             expression = element.expression
         }
+        if let call = expression.as(FunctionCallExprSyntax.self), let record = nominalRecordType(call.calledExpression) {
+            return record.swiftType
+        }
         if let call = expression.as(FunctionCallExprSyntax.self), isSwiftSetConstructor(call),
            call.calledExpression.is(GenericSpecializationExprSyntax.self) {
             return call.calledExpression.trimmedDescription

@@ -867,7 +867,7 @@ struct NativeSwiftEmitter {
             case .tuple(let values):
                 let domain = values.isEmpty ? "Set<Int>()" : "Set(1...\(values.count))"
                 return "(try { () throws -> Set<Int> in _ = \(try emit(0)); return \(domain) }())"
-            case .record(let fields):
+            case .record(let fields), .nominalRecord(_, let fields):
                 let domain = "Set<String>([\(fields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
                 return "(try { () throws -> Set<String> in _ = \(try emit(0)); return \(domain) }())"
             default: throw unsupported("DOMAIN")
@@ -894,7 +894,7 @@ struct NativeSwiftEmitter {
                     let cases = elements.indices.map { "case \($0 + 1): return _functionValue.\(fieldName(source, index: $0))" }.joined(separator: "\n")
                     access = "switch _functionArgument { \(cases)\ndefault: throw NativeMachineEvaluationError.tupleIndexOutsideDomain(_functionArgument) }"
                 }
-            case .record(let fields):
+            case .record(let fields), .nominalRecord(_, let fields):
                 if case .value(.string(let name)) = argument {
                     if let index = fields.firstIndex(where: { $0.name == name }) { access = "return _functionValue.\(fieldName(source, index: index))" }
                     else { access = "throw NativeMachineEvaluationError.recordFieldUnavailable(_functionArgument)" }
@@ -941,7 +941,7 @@ struct NativeSwiftEmitter {
                 update = "return _NativeMachineOperations.functionUpdated(_originalValue, at: _updatedKey, to: _replacementValue)"
             case .array:
                 update = "return _NativeMachineOperations.sequenceUpdated(_originalValue, at: _updatedKey, to: _replacementValue)"
-            case .record(let fields):
+            case .record(let fields), .nominalRecord(_, let fields):
                 let selected: Int?
                 if case .value(.string(let name)) = key {
                     selected = fields.firstIndex { $0.name == name }
@@ -979,7 +979,7 @@ struct NativeSwiftEmitter {
             """
         case .recordLiteral(let declarations):
             let result = node.resultType
-            guard case .record(let fields) = result else { throw unsupported("record literal") }
+            guard let fields = result.recordFields else { throw unsupported("record literal") }
             let evaluated = try node.children.indices.map { index in
                 "let _recordField\(index): \(try swiftType(childType(index))) = \(try emit(index))"
             }

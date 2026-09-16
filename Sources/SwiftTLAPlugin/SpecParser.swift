@@ -108,6 +108,28 @@ final class ParserSession {
     let sourceTypes: SourceTypeMetadata
     let sourceTypeResolver: SourceTypeResolver
     var recordSchemas: [String: [SourceRecordField]] { sourceTypes.records }
+
+    func nominalRecordType(_ expression: ExprSyntax) -> CompiledValueType? {
+        guard let name = Self.sourceTypePath(expression)?.last,
+              sourceTypes.structs[name] != nil || sourceTypes.aliases[name] != nil,
+              let type = try? sourceTypeResolver.resolve(expression.trimmedDescription),
+              case .nominalRecord = type else { return nil }
+        return type
+    }
+
+    private func decodeNominalRecord(_ call: FunctionCallExprSyntax, scope: TypedFacadeScope) -> StateExpr? {
+        guard let type = nominalRecordType(call.calledExpression), let declared = type.recordFields,
+              call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
+        if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self), scope.value(for: reference) != nil { return nil }
+        var fields: [StateRecordExpression.Field] = []
+        for argument in call.arguments {
+            guard let name = argument.label?.sourceIdentifierName,
+                  let value = decodeTypedFacadeValue(argument.expression, scope: scope,
+                    expectedEnumType: declared.first { $0.name == name }?.type.enumerationType) else { return nil }
+            fields.append(.init(name: name, value: value))
+        }
+        return .recordLiteral(.init(orderedFields: fields, nativeType: type))
+    }
     /// Source bindings visible to the source expression currently being parsed.
     var sourceScope = TypedFacadeScope.empty
     var allowsUnboundValueNames = true
@@ -202,6 +224,9 @@ final class ParserSession {
 
     func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
         if let integer = SourceIntegerLiteral.value(expression) { return .value(.int(integer)) }
+        if let call = expression.as(FunctionCallExprSyntax.self), nominalRecordType(call.calledExpression) != nil {
+            return decodeNominalRecord(call, scope: sourceScope)
+        }
         if let precedingMembers = decodePrecedingFormalMembers(expression) {
             return precedingMembers
         }
@@ -911,6 +936,10 @@ final class ParserSession {
         if let member = expression.as(MemberAccessExprSyntax.self),
            let baseSyntax = member.base,
            let base = decodeTypedFacadeValue(baseSyntax, scope: scope) {
+            if let fields = typedFacadeValueType(baseSyntax, scope: scope)?.recordFields,
+               let field = fields.first(where: { $0.name == member.declName.baseName.sourceIdentifierName }) {
+                return .recordAccess(base, field.name)
+            }
             switch member.declName.baseName.text {
             case "raw", "stateExpr", "expr": return base
             case "count":
@@ -1198,6 +1227,9 @@ final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil
     ) -> StateExpr? {
+        if let call = expression.as(FunctionCallExprSyntax.self), nominalRecordType(call.calledExpression) != nil {
+            return decodeNominalRecord(call, scope: scope)
+        }
         if let call = expression.as(FunctionCallExprSyntax.self), isSwiftSetConstructor(call) {
             guard call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
             if call.arguments.isEmpty { return .setLiteral([]) }
@@ -1387,6 +1419,10 @@ final class ParserSession {
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
             return scope.shape(for: reference)
         }
+        if let member = expression.as(MemberAccessExprSyntax.self), let base = member.base,
+           let field = typedFacadeValueType(base, scope: scope)?.recordFields?.first(where: {
+               $0.name == member.declName.baseName.sourceIdentifierName
+           }) { return field.type }
         if let member = expression.as(MemberAccessExprSyntax.self),
            ["expr", "raw", "stateExpr"].contains(member.declName.baseName.text),
            let base = member.base {
@@ -1407,6 +1443,7 @@ final class ParserSession {
             }
         }
         guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
+        if let record = nominalRecordType(call.calledExpression) { return record }
         if isSwiftSetConstructor(call),
            call.calledExpression.is(GenericSpecializationExprSyntax.self) {
             return try? sourceTypeResolver.resolve(call.calledExpression.trimmedDescription)

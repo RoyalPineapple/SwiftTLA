@@ -258,8 +258,14 @@ final class SourceTypeResolver {
             var fields: [CompiledFieldType] = []
             var views: [FormalValueShape.Field] = []
             for member in declaration.memberBlock.members {
+                guard !member.decl.is(InitializerDeclSyntax.self) else {
+                    throw CompiledValueType.diagnostic("types.\(name)", "custom Swift record initializers require a compiled implementation")
+                }
                 guard let variable = member.decl.as(VariableDeclSyntax.self),
                       !variable.modifiers.contains(where: { $0.name.text == "static" || $0.name.text == "class" }) else { continue }
+                guard variable.attributes.isEmpty, !variable.modifiers.contains(where: { $0.name.text == "lazy" }) else {
+                    throw CompiledValueType.diagnostic("types.\(name)", "model record fields cannot use property wrappers, attributes, or lazy storage")
+                }
                 for binding in variable.bindings {
                     guard let field = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
                           let annotation = binding.typeAnnotation?.type,

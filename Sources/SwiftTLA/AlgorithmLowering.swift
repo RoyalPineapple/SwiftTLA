@@ -1037,9 +1037,7 @@ enum AlgorithmLowerer {
                     rewritten(predicate, localRoots: localRoots.subtracting([variable]))
                 )
             case .recordLiteral(let fields):
-                return .recordLiteral(.init(orderedFields: fields.fields.map {
-                    .init(name: $0.name, value: rewritten($0.value, localRoots: localRoots))
-                }))
+                return .recordLiteral(fields.mapValues { rewritten($0, localRoots: localRoots) })
             case .recordAccess(let record, let field): return .recordAccess(rewritten(record, localRoots: localRoots), field)
             case .domain(let function): return .domain(rewritten(function, localRoots: localRoots))
             case .functionLiteral(let domain, let variable, let body):

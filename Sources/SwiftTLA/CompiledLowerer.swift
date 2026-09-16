@@ -1180,7 +1180,7 @@ struct CompiledLowerer {
                     schedule(fields.map { ($0.expression, $0.path) }, at: path, scope: scope, build: { values in
                         .recordLiteral(zip(fields, values).map { field, value in
                             .init(name: field.name, value: value.expression)
-                        })
+                        }, type: record.nativeType ?? .unknown)
                     }, on: &tasks)
                 case .recordAccess(let value, let name):
                     let name = try fieldName(name, at: "\(path).field")

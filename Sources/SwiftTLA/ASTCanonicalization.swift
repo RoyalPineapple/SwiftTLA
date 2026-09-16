@@ -380,7 +380,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .recordLiteral(let fields):
                 let names = fields.fields.map(\.name)
                 schedule(fields.fields.map(\.value), environment: environment) { values in
-                    "record[\(zip(names, values).map { "\($0):\($1)" }.joined(separator: ","))]"
+                    "record\(fields.nativeType.map { "<\($0.swiftType)>" } ?? "")[\(zip(names, values).map { "\($0):\($1)" }.joined(separator: ","))]"
                 }
             case .recordAccess(let record, let field):
                 schedule([record], environment: environment) { "recordAccess(\($0[0]),\(field))" }

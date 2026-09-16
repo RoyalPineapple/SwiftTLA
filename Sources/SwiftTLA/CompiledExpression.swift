@@ -179,8 +179,8 @@ extension CompiledExpression {
     package static func sequenceSelect(_ sequence: Self, _ binder: BinderID, _ predicate: Self) -> Self {
         .init(operation: .sequenceSelect(binder), children: [sequence, predicate])
     }
-    package static func recordLiteral(_ fields: [CompiledRecordEntry]) -> Self {
-        .init(operation: .recordLiteral(fields.map(\.name)), children: fields.map(\.value))
+    package static func recordLiteral(_ fields: [CompiledRecordEntry], type: CompiledValueType = .unknown) -> Self {
+        .init(operation: .recordLiteral(fields.map(\.name)), resultType: type, children: fields.map(\.value))
     }
     package static func recordAccess(_ record: Self, _ field: String) -> Self {
         .init(operation: .recordAccess(field), children: [record])

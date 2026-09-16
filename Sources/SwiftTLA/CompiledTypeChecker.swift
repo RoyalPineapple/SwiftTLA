@@ -1202,7 +1202,7 @@ package struct CompiledTypeChecker: Sendable {
         switch source.resultType {
         case .dictionary(let key, _): result = .set(key)
         case .array, .tuple: result = .set(.int)
-        case .record: result = .set(.string)
+        case .record, .nominalRecord: result = .set(.string)
         case .unknown: result = .set(.unknown)
         default: throw CompiledValueType.diagnostic("domain", "unsupported domain shape")
         }
@@ -1322,10 +1322,18 @@ package struct CompiledTypeChecker: Sendable {
                         pending.append(contentsOf: [.updateKey(expected: expected), .discard, .retainOperand(0), .check(source, expected: expected)])
                     case .recordLiteral(let declarations):
                         let record = zip(declarations, expression.children).map { CompiledRecordEntry(name: $0, value: $1) }
-
+                        let context: CompiledValueType
+                        if case .nominalRecord = expression.resultType {
+                            context = try CompiledValueType.merge(expression.resultType, expected)
+                        } else {
+                            if case .nominalRecord = expected {
+                                throw CompiledValueType.diagnostic("record", "an anonymous record cannot replace the Swift constructor for \(expected.swiftType)")
+                            }
+                            context = expected
+                        }
                         ancestors.append(expression)
                         operandFrames.append([:])
-                        pending.append(contentsOf: [.finishRecord(expected: expected), .recordFields(record[...], expected: expected)])
+                        pending.append(contentsOf: [.finishRecord(expected: context), .recordFields(record[...], expected: context)])
                     case .tupleAppend, .tupleConcatenate:
                         let sequence = expression.children[0]
                         let value = expression.children[1]
@@ -1904,14 +1912,14 @@ package struct CompiledTypeChecker: Sendable {
                     }
                     pending.append(.finishRecordAccess(expected: expected))
                     if source.resultType == .unknown { continue }
-                    guard case .record(var fields) = source.resultType,
+                    guard var fields = source.resultType.recordFields,
                           let index = fields.firstIndex(where: { $0.name == name }) else {
                         throw annotated(CompiledValueType.diagnostic("recordAccess",
                             "unknown record field '\(name)' in \(source.resultType.swiftType)"),
                             at: expression.children[0])
                     }
                     fields[index] = .init(name: name, type: try projectionStorageType(fields[index].type, expected: expected))
-                    let context = CompiledValueType.record(fields)
+                    let context = try source.resultType.updatingRecordFields(fields)
                     if source.resultType != context {
                         pending.append(contentsOf: [.discard, .retainOperand(0), .check(expression.children[0], expected: context)])
                     }
@@ -1920,7 +1928,7 @@ package struct CompiledTypeChecker: Sendable {
                         throw CompiledValueType.diagnostic("recordAccess", "missing checked record source")
                     }
                     let result: CompiledValueType
-                    if case .record(let fields) = source.resultType,
+                    if let fields = source.resultType.recordFields,
                        let field = fields.first(where: { $0.name == name }) { result = field.type }
                     else { result = .unknown }
                     let checked = try checkedType(result, expected: expected, operandContexts: [source.resultType])
@@ -1952,7 +1960,7 @@ package struct CompiledTypeChecker: Sendable {
                         continue
                     case .dictionary(let domain, _): keyType = domain
                     case .array, .tuple: keyType = .int
-                    case .record: keyType = .string
+                    case .record, .nominalRecord: keyType = .string
                     default: throw CompiledValueType.diagnostic("function", "expected a native dictionary, sequence, or record")
                     }
                     pending.append(contentsOf: [.finishApplication(expected: expected), .discard, .retainOperand(1), .check(key, expected: keyType)])
@@ -1990,15 +1998,15 @@ package struct CompiledTypeChecker: Sendable {
                             result = try elements.reduce(expected, CompiledValueType.merge)
                             sourceType = .tuple(elements.map { _ in result })
                         }
-                    case .record(let fields):
+                    case .record(let fields), .nominalRecord(_, let fields):
                         if case .value(.string(let name)) = key.operation {
                             if let selected = fields.first(where: { $0.name == name }) {
                                 result = try Self.operandContext(selected.type, expected)
-                                sourceType = .record(fields.map { .init(name: $0.name, type: $0.name == name ? result : $0.type) })
+                                sourceType = try source.resultType.updatingRecordFields(fields.map { .init(name: $0.name, type: $0.name == name ? result : $0.type) })
                             } else { result = expected }
                         } else {
                             result = try fields.map(\.type).reduce(expected, CompiledValueType.merge)
-                            sourceType = .record(fields.map { .init(name: $0.name, type: result) })
+                            sourceType = try source.resultType.updatingRecordFields(fields.map { .init(name: $0.name, type: result) })
                         }
                     default: throw CompiledValueType.diagnostic("function", "expected a native dictionary, sequence, or record")
                     }
@@ -2013,7 +2021,7 @@ package struct CompiledTypeChecker: Sendable {
                     switch source.resultType {
                     case .array: keyType = .int
                     case .dictionary(let domain, _): keyType = domain
-                    case .record: keyType = .string
+                    case .record, .nominalRecord: keyType = .string
                     case .unknown: keyType = .unknown
                     default: throw CompiledValueType.diagnostic("except", "unsupported update shape \(source.resultType.swiftType)")
                     }
@@ -2025,7 +2033,7 @@ package struct CompiledTypeChecker: Sendable {
                     let valueType: CompiledValueType
                     switch source.resultType {
                     case .array(let item), .dictionary(_, let item): valueType = item
-                    case .record(let fields):
+                    case .record(let fields), .nominalRecord(_, let fields):
                         if case .value(.string(let name)) = key.operation {
                             valueType = fields.first { $0.name == name }?.type ?? .unknown
                         } else {
@@ -2048,7 +2056,7 @@ package struct CompiledTypeChecker: Sendable {
                     switch source.resultType {
                     case .array: result = .array(value.resultType)
                     case .dictionary(let domain, _): result = .dictionary(domain, value.resultType)
-                    case .record: result = source.resultType
+                    case .record, .nominalRecord: result = source.resultType
                     case .unknown: result = .dictionary(key.resultType, value.resultType)
                     default: throw CompiledValueType.diagnostic("except", "unsupported update shape \(source.resultType.swiftType)")
                     }
@@ -2058,7 +2066,7 @@ package struct CompiledTypeChecker: Sendable {
                         operandContexts: [checked.computationType, key.resultType, value.resultType]), in: &self)
                 case .recordFields(var remaining, let expected):
                     guard let field = remaining.popFirst() else { continue }
-                    let hints: [CompiledFieldType] = if case .record(let fields) = expected { fields } else { [] }
+                    let hints = expected.recordFields ?? []
                     pending.append(contentsOf: [
                         .recordFields(remaining, expected: expected), .discard,
                         .retainOperand(remaining.startIndex - 1),
@@ -2075,7 +2083,17 @@ package struct CompiledTypeChecker: Sendable {
                         return .init(name: name, type: child.resultType)
                     }
                     let operandContexts = fields.map(\.type)
-                    let checked = try checkedType(.record(fields.sorted { $0.name < $1.name }), expected: expected, operandContexts: operandContexts)
+                    let result: CompiledValueType
+                    if case .nominalRecord(_, let declared) = expected {
+                        guard Set(fields.map(\.name)) == Set(declared.map(\.name)), fields.count == declared.count else {
+                            throw CompiledValueType.diagnostic("record", "constructor fields must match \(expected.swiftType)")
+                        }
+                        result = try expected.updatingRecordFields(declared.map { declaration in
+                            let field = fields.first { $0.name == declaration.name }!
+                            return .init(name: field.name, type: try CompiledValueType.merge(declaration.type, field.type))
+                        })
+                    } else { result = .record(fields.sorted { $0.name < $1.name }) }
+                    let checked = try checkedType(result, expected: expected, operandContexts: operandContexts)
                     results.append(checked.type)
                     try finish(checked, in: &self)
                 case .sequenceContext(let element, let expression):

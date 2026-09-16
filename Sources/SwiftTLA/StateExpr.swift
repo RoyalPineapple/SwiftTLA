@@ -158,17 +158,24 @@ public struct StateRecordExpression: Hashable, Sendable {
     }
 
     public let fields: [Field]
+    package let nativeType: CompiledValueType?
 
     public init(_ fields: [Field]) {
         self.fields = fields.sorted { $0.name < $1.name }
+        nativeType = nil
     }
 
     public init(_ fields: [String: StateExpr]) {
         self.init(fields.map { .init(name: $0.key, value: $0.value) })
     }
 
-    init(orderedFields: [Field]) {
+    package init(orderedFields: [Field], nativeType: CompiledValueType? = nil) {
         fields = orderedFields
+        self.nativeType = nativeType
+    }
+
+    func mapValues(_ transform: (StateExpr) -> StateExpr) -> Self {
+        .init(orderedFields: fields.map { .init(name: $0.name, value: transform($0.value)) }, nativeType: nativeType)
     }
 
     public func value(named name: String) -> StateExpr? {

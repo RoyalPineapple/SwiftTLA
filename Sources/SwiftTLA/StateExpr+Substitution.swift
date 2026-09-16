@@ -141,7 +141,7 @@ extension StateExpr {
             let scoped = underBinder(binder, body: predicate)
             return .sequenceSelect(sub(sequence), scoped.name, scoped.body)
         case .recordLiteral(let record):
-            return .recordLiteral(.init(orderedFields: record.fields.map { .init(name: $0.name, value: sub($0.value)) }))
+            return .recordLiteral(record.mapValues(sub))
         case .recordAccess(let r, let f): return .recordAccess(sub(r), f)
         case .domain(let f): return .domain(sub(f))
         case .functionLiteral(let domain, let binder, let body):
@@ -285,7 +285,7 @@ extension StateExpr {
             case .sequenceSelect(let sequence, let binder, let predicate):
                 return .sequenceSelect(visit(sequence), binder, visitUnderBindings([binder], predicate))
             case .recordLiteral(let record):
-                return .recordLiteral(.init(orderedFields: record.fields.map { .init(name: $0.name, value: visit($0.value)) }))
+                return .recordLiteral(record.mapValues(visit))
             case .recordAccess(let value, let field): return .recordAccess(visit(value), field)
             case .domain(let value): return .domain(visit(value))
             case .functionLiteral(let domain, let name, let body): return .functionLiteral(visit(domain), name, visitUnderBindings([name], body))

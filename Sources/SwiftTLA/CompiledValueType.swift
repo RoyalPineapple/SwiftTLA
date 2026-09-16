@@ -23,6 +23,21 @@ package indirect enum CompiledValueType: Hashable, Sendable {
     case nominalRecord(String, [CompiledFieldType])
     case tuple([CompiledValueType])
 
+    package var recordFields: [CompiledFieldType]? {
+        switch self {
+        case .record(let fields), .nominalRecord(_, let fields): fields
+        default: nil
+        }
+    }
+
+    package func updatingRecordFields(_ fields: [CompiledFieldType]) throws -> Self {
+        switch self {
+        case .record: return .record(fields)
+        case .nominalRecord(let name, _): return .nominalRecord(name, fields)
+        default: throw Self.diagnostic("record", "expected a record, found \(swiftType)")
+        }
+    }
+
     package var components: [CompiledValueType] {
         switch self {
         case .set(let value), .array(let value): [value]
