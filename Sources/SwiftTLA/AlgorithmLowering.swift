@@ -75,7 +75,8 @@ enum AlgorithmLowerer {
                         processDomain,
                         processBinding.rawValue,
                         rewrite(invariant.body, localRoots: localRoots)
-                    )
+                    ),
+                    reference: invariant.reference
                 )
             }
         }
@@ -93,7 +94,7 @@ enum AlgorithmLowerer {
                 return NamedTemporal(name: temporal.name,
                     expr: temporal.expr.map { rewrite($0, localRoots: localRoots) },
                     bindings: [ActionBinding(name: processBinding.rawValue, domain: process.domain,
-                        generatedSwiftType: process.typeName)])
+                        generatedSwiftType: process.typeName)], reference: temporal.reference)
             }
         }
         let declaredConstraint = algorithm.components.compactMap { component -> StateExpr? in

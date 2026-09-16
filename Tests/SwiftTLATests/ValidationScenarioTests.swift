@@ -78,4 +78,47 @@ struct ValidationScenarioTests {
         changed.validationScenarios[0].deadlockExpectations = [.satisfied]
         #expect(try original.compile().identity != changed.compile().identity)
     }
+
+    @Test("expectations follow declaration handles after names change")
+    func resolvesHandlesWithoutNames() throws {
+        var spec = ScenarioExpectations.spec
+        let invariant = try #require(spec.invariants.first)
+        let reachable = try #require(spec.reachabilityProperties.first)
+        let temporal = Always("OriginalTemporal", true)
+        spec.invariants[0] = .init(name: "RenamedInvariant", body: invariant.body, reference: invariant.reference)
+        spec.reachabilityProperties[0] = .init(name: "RenamedReachable", body: reachable.body, reference: reachable.reference)
+        spec.temporalProperties.append(.init(name: "RenamedTemporal", expr: temporal.expr, bindings: [], reference: temporal.reference))
+        spec.validationScenarios[0].expectations = [
+            (try #require(invariant.reference), .violated),
+            (try #require(reachable.reference), .satisfied),
+            (temporal.reference, .violated)
+        ]
+        let compiled = try spec.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compiled))
+        let scenario = try #require(program.behavior.validationScenarios.first)
+        #expect(scenario.expectations[try #require(program.behavior.invariants.first).id] == .violated)
+        #expect(scenario.expectations[try #require(program.behavior.reachabilityProperties.first).id] == .satisfied)
+        #expect(scenario.expectations[try #require(program.behavior.temporalProperties.first).id] == .violated)
+    }
+
+    @Test("replacing a registered declaration with a namesake rejects its old handle")
+    func rejectsDetachedHandle() throws {
+        var spec = ScenarioExpectations.spec
+        let property = try #require(spec.reachabilityProperties.first)
+        spec.reachabilityProperties[0] = .init(name: property.name, body: property.body,
+            reference: .init(name: property.name))
+        #expect(throws: CompilationDiagnostic.self) { try spec.compile() }
+    }
+
+    @Test("compilation identity encodes resolved expectation targets, not handle labels or UUIDs")
+    func fingerprintsResolvedTargets() throws {
+        let original = ScenarioExpectations.spec
+        #expect(try original.compile().identity == ScenarioExpectations.spec.compile().identity)
+        var changed = original
+        let invariant = try #require(original.invariants.first)
+        let reachable = try #require(original.reachabilityProperties.first)
+        changed.invariants[0] = .init(name: invariant.name, body: invariant.body, reference: reachable.reference)
+        changed.reachabilityProperties[0] = .init(name: reachable.name, body: reachable.body, reference: invariant.reference)
+        #expect(try original.compile().identity != changed.compile().identity)
+    }
 }

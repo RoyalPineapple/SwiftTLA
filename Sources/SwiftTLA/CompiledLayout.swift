@@ -88,6 +88,7 @@ package struct CompiledActionLayout: Hashable, Sendable {
 struct CompiledPropertyLayout: Hashable, Sendable {
     let id: PropertyID
     let declaration: CompiledDeclaration
+    let reference: PropertyReference?
 }
 
 struct CompiledProcedureLayout: Hashable, Sendable {
@@ -214,14 +215,16 @@ package struct CompiledLayout: Hashable, Sendable {
         stateProperties = (spec.invariants + spec.reachabilityProperties).enumerated().map { ordinal, invariant in
             .init(
                 id: .init(ordinal: ordinal),
-                declaration: .init(kind: ordinal < spec.invariants.count ? .invariant : .reachability, name: invariant.name, sourceOffset: nil)
+                declaration: .init(kind: ordinal < spec.invariants.count ? .invariant : .reachability, name: invariant.name, sourceOffset: nil),
+                reference: invariant.reference
             )
         }
         let statePropertyCount = stateProperties.count
         temporalProperties = spec.temporalProperties.enumerated().map { ordinal, temporal in
             .init(
                 id: .init(ordinal: statePropertyCount + ordinal),
-                declaration: .init(kind: .temporalProperty, name: temporal.name, sourceOffset: nil)
+                declaration: .init(kind: .temporalProperty, name: temporal.name, sourceOffset: nil),
+                reference: temporal.reference
             )
         }
         procedures = spec.sourceAlgorithms.flatMap { algorithm in

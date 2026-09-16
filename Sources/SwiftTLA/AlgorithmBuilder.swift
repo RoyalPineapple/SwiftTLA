@@ -580,11 +580,11 @@ public enum AlgorithmBuilder {
     }
 
     public static func buildExpression(_ component: InvDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .invariant(.init(name: component.name, body: component.body)))]
+        [AlgorithmElement(model: .invariant(.init(name: component.name, body: component.body, reference: component.reference)))]
     }
 
     public static func buildExpression(_ component: TemporalDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .temporal(.init(name: component.name, expr: component.expr)))]
+        [AlgorithmElement(model: .temporal(.init(name: component.name, expr: component.expr, bindings: [], reference: component.reference)))]
     }
 
     public static func buildExpression(_ component: FairnessDecl) -> [AlgorithmElement] {

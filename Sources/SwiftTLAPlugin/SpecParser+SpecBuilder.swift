@@ -1477,13 +1477,12 @@ extension ParserSession {
     }
 
     func registerProperty(_ property: any ModelProperty, into components: inout TLASpec) {
-        components.propertyReferences.append(property.reference)
         if let property = property as? InvDecl {
-            components.invariants.append(.init(name: property.name, body: property.body))
+            components.invariants.append(.init(name: property.name, body: property.body, reference: property.reference))
         } else if let property = property as? ReachableDecl {
-            components.reachabilityProperties.append(.init(name: property.name, body: property.body))
+            components.reachabilityProperties.append(.init(name: property.name, body: property.body, reference: property.reference))
         } else if let property = property as? TemporalDecl {
-            components.temporalProperties.append(.init(name: property.name, expr: property.expr))
+            components.temporalProperties.append(.init(name: property.name, expr: property.expr, bindings: [], reference: property.reference))
         }
     }
 

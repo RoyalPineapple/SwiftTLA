@@ -370,6 +370,10 @@ struct CompiledLowerer {
         }
         let parameters = Set(spec.parameters.map(\.reference))
         let properties = layout.stateProperties + layout.temporalProperties
+        let propertyReferences = properties.compactMap(\.reference)
+        guard Set(propertyReferences).count == propertyReferences.count else {
+            throw invalid("declarations", "duplicate property registration")
+        }
         var scenarios: [CompiledValidationScenario] = []
         for scenario in spec.validationScenarios {
             let references = scenario.bindings.map(\.parameter)
@@ -378,7 +382,7 @@ struct CompiledLowerer {
             }
             let expectedProperties = scenario.expectations.map(\.property)
             guard Set(expectedProperties).count == expectedProperties.count,
-                  Set(expectedProperties).isSubset(of: Set(spec.propertyReferences)),
+                  Set(expectedProperties).isSubset(of: Set(propertyReferences)),
                   scenario.deadlockExpectations.count <= 1,
                   scenario.deadlockExpectations.isEmpty || spec.checkDeadlock else {
                 throw invalid(scenario.name, "duplicate, unregistered, or disabled check expectation")
@@ -401,7 +405,7 @@ struct CompiledLowerer {
             }
             var expectations: [PropertyID: ValidationExpectation] = [:]
             for expectation in scenario.expectations {
-                guard let property = properties.first(where: { $0.declaration.name == expectation.property.name }) else {
+                guard let property = properties.first(where: { $0.reference == expectation.property }) else {
                     throw invalid(scenario.name, "unresolved property expectation")
                 }
                 expectations[property.id] = expectation.expected

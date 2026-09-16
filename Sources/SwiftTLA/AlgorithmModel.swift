@@ -254,9 +254,10 @@ package struct AlgorithmModel: Sendable {
                     )
                 )
             case .invariant(let invariant):
-                return .invariant(.init(name: invariant.name, body: expression(invariant.body)))
+                return .invariant(.init(name: invariant.name, body: expression(invariant.body), reference: invariant.reference))
             case .temporal(let declaration):
-                return .temporal(.init(name: declaration.name, expr: declaration.expr.map(expression)))
+                return .temporal(.init(name: declaration.name, expr: declaration.expr.map(expression),
+                    bindings: declaration.bindings, reference: declaration.reference))
             case .invalidPlacement:
                 return value
             case .formalOperator(let definition):

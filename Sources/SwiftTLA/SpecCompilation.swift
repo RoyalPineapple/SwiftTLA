@@ -1025,7 +1025,8 @@ private struct CanonicalSpecificationEncoder {
 
     private mutating func specification(_ spec: TLASpec) {
         field("spec.name", spec.name)
-        field("declarationLayout", CompiledLayout(source: spec).canonicalEncoding)
+        let layout = CompiledLayout(source: spec)
+        field("declarationLayout", layout.canonicalEncoding)
         list("variables", spec.variables, canonicalVariable)
         let constants = spec.constants.sorted { $0.name < $1.name }.map {
             node("constant", [$0.name, canonicalValue($0.value)])
@@ -1041,10 +1042,14 @@ private struct CanonicalSpecificationEncoder {
             node("formal-parameter", [$0.name, $0.kind.rawValue])
         }
         if !spec.validationScenarios.isEmpty {
+            let properties = layout.stateProperties + layout.temporalProperties
             let scenarios = spec.validationScenarios.map { scenario in
                 node("scenario", [scenario.name,
                     canonicalList(scenario.bindings.map { node("binding", [$0.parameter.name, canonicalExpression($0.value)]) }),
-                    canonicalList(scenario.expectations.map { node("expect", [$0.property.name, $0.expected.rawValue]) }),
+                    canonicalList(scenario.expectations.map { expectation in
+                        let property = properties.first { $0.reference == expectation.property }
+                        return node("expect", [canonicalOptional(property.map { String($0.id.ordinal) }), expectation.expected.rawValue])
+                    }),
                     canonicalList(scenario.deadlockExpectations.map(\.rawValue))])
             }
             list("validation", scenarios) { $0 }

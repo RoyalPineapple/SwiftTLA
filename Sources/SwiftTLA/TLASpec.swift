@@ -189,13 +189,15 @@ public struct NamedTemporal: Sendable, CustomStringConvertible, Equatable {
   public let name: String
   public let expr: TemporalCondition<StateExpr>
   package let bindings: [ActionBinding]
+  package let reference: PropertyReference?
   public init(name: String, expr: TemporalCondition<StateExpr>) {
     self.init(name: name, expr: expr, bindings: [])
   }
-  package init(name: String, expr: TemporalCondition<StateExpr>, bindings: [ActionBinding]) {
+  package init(name: String, expr: TemporalCondition<StateExpr>, bindings: [ActionBinding], reference: PropertyReference? = nil) {
     self.name = name
     self.expr = expr
     self.bindings = bindings
+    self.reference = reference
   }
   public var description: String { "\(name): \(expr)" }
 
@@ -219,15 +221,20 @@ public struct NamedTemporal: Sendable, CustomStringConvertible, Equatable {
       defer { index += 1 }
       return predicates[index]
     }
-    return NamedTemporal(name: name, expr: expression, bindings: bindings)
+    return NamedTemporal(name: name, expr: expression, bindings: bindings, reference: reference)
   }
 }
 public struct NamedStatePredicate: Sendable, CustomStringConvertible, Equatable {
   public let name: String
   public let body: StateExpr
+  package let reference: PropertyReference?
   public init(name: String, body: StateExpr) {
+    self.init(name: name, body: body, reference: nil)
+  }
+  package init(name: String, body: StateExpr, reference: PropertyReference?) {
     self.name = name
     self.body = body
+    self.reference = reference
   }
   public var description: String { "\(name): \(body)" }
 }
@@ -264,7 +271,6 @@ public struct TLASpec: Sendable {
   package var variables: [NamedVar]
   package var constants: [ConstantDecl]
   package var parameters: [ModelParameterDeclaration] = []
-  package var propertyReferences: [PropertyReference] = []
   package var validationScenarios: [ValidationDeclaration] = []
   /// Parameters supplied by a named TLA+ `INSTANCE … WITH` declaration.
   package var formalParameters: [FormalModuleParameter]
