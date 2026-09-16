@@ -627,10 +627,15 @@ import Testing
                 : .init(operation: .equal, children: [.setFilter(domain, binder, predicate), domain])
             layers.append(nested)
         }
-        let checked = try checker.resolutionScope(try #require(layers.last), expected: .bool)
-        #expect(checked.resultType == .bool)
-        var predicate = checked
+        var predicate = try checker.resolutionScope(try #require(layers.last), expected: .bool)
+        #expect(predicate.resultType == .bool)
+        var checkedLayers: [CompiledExpression] = []
+        defer {
+            checkedLayers.reverse()
+            while checkedLayers.popLast() != nil {}
+        }
         for _ in 0..<1_000 {
+            checkedLayers.append(predicate)
             let selection = predicate.children[0]
             #expect(selection.children[0].resultType == .set(.int))
             predicate = selection.children[1]
