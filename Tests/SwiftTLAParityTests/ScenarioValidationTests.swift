@@ -3,6 +3,19 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct ScenarioValidationTests {
+    @Test("registered model scenarios derive complete graphs and satisfy their declared outcomes")
+    func validatesRegisteredScenarios() throws {
+        let scenarios = try modelValidationScenarios()
+        #expect(scenarios.count == 11)
+        #expect(Set(scenarios.map(\.id)).count == scenarios.count)
+        for (_, scenario) in scenarios {
+            let run = try NativeScenarioRun(scenario, maximumStates: 20)
+            try run.validateExpectations()
+            #expect(run.native.graph.isComparable)
+            #expect(Set(run.native.checks.properties.keys) == run.native.rendered.checkNames)
+        }
+    }
+
     @Test("scenario admission requires complete agreeing checks and declared expectations")
     func validatesIndependentResults() throws {
         for scenario in try ConfiguredCounter.validationScenarios() {

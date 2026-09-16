@@ -1,4 +1,5 @@
 import Testing
+import UpstreamParity
 @testable import SwiftTLA
 
 struct ConfiguredProcessTests {

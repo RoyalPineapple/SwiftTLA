@@ -16,15 +16,14 @@ func runScenarios(arguments: [String]) -> Never {
         }
         let pin = try referencePin(from: lock, javaArchive: archive, toolRoot: toolRoot)
         let tools = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: root, pin: pin)
-        let scenarios = try ConfiguredCounter.validationScenarios()
-        guard !scenarios.isEmpty else { throw EvidenceFormatError.invalidField(record: "Counter", field: "no scenarios") }
+        let scenarios = try modelValidationScenarios()
         var failed = false
-        for (index, scenario) in scenarios.enumerated() {
-            let directory = output.appendingPathComponent("counter-\(index)")
+        for (id, scenario) in scenarios {
+            let directory = output.appendingPathComponent(id)
             do {
                 let run = try NativeScenarioRun(scenario, maximumStates: 1000)
                 let bundle = try run.native.rendered.tlaBundle(checking: [], checkDeadlock: false)
-                let work = try RetainedFiles.createDirectory(output.appendingPathComponent("work-\(index)"), beneath: output)
+                let work = try RetainedFiles.createDirectory(output.appendingPathComponent("work-\(id)"), beneath: output)
                 let launch = try FiniteGraphCase(id: scenario.name,
                     exploration: .init(maximumStateLimit: 1000, symmetryReduction: .disabled),
                     moduleSHA256: SHA256.hex(Data(bundle.tla.utf8)), cfgSHA256: SHA256.hex(Data(bundle.cfg.utf8)),
@@ -36,12 +35,12 @@ func runScenarios(arguments: [String]) -> Never {
                     finiteGraphCase: launch, runID: UUID(), timeout: 120, invocation: .finiteGraph,
                     referenceArtifacts: tools.artifacts)
                 try TLCScenarioCheck().run(run, request: request, in: directory)
-                print("scenario \(scenario.name): exact")
+                print("scenario \(id) (\(scenario.name)): exact")
             } catch {
                 failed = true
                 try RetainedFiles.createDirectory(directory, beneath: output)
                 try RetainedFiles.writeText(String(describing: error), to: directory.appendingPathComponent("scenario-error.txt"))
-                fputs("scenario \(scenario.name): \(error)\n", stderr)
+                fputs("scenario \(id) (\(scenario.name)): \(error)\n", stderr)
             }
         }
         exit(failed ? 2 : 0)

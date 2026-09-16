@@ -2,10 +2,10 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-struct ConfiguredProcessMachine {
-    enum Step: String, CaseIterable { case visit }
+package struct ConfiguredProcessMachine {
+    package enum Step: String, CaseIterable { case visit }
 
-    static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("ConfiguredProcessMachine") { scope in
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1]), Set<Int>([1, 2, 3])]))
@@ -21,19 +21,20 @@ struct ConfiguredProcessMachine {
             }
             Invariant("Members") { selected.isSubset(of: nodes) }
             Reachable("Complete") { selected == nodes }
-            Eventually("AllVisited", selected == nodes)
+            let allVisited = Eventually("AllVisited", selected == nodes)
+            allVisited
             Validation("Empty") { Bind(nodes, to: Set<Int>([])) }
-            Validation("One") { Bind(nodes, to: Set<Int>([1])) }
-            Validation("Three") { Bind(nodes, to: Set<Int>([1, 2, 3])) }
+            Validation("One") { Bind(nodes, to: Set<Int>([1])) }.expect(allVisited, .violated)
+            Validation("Three") { Bind(nodes, to: Set<Int>([1, 2, 3])) }.expect(allVisited, .violated)
         }
     }
 }
 
 @TLAModel
-struct WeaklyFairConfiguredProcessMachine {
-    enum Step: String, CaseIterable { case visit }
+package struct WeaklyFairConfiguredProcessMachine {
+    package enum Step: String, CaseIterable { case visit }
 
-    static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("WeaklyFairConfiguredProcessMachine") { scope in
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1]), Set<Int>([1, 2, 3])]))
@@ -54,10 +55,10 @@ struct WeaklyFairConfiguredProcessMachine {
 }
 
 @TLAModel
-struct StronglyFairConfiguredProcessMachine {
-    enum Step: String, CaseIterable { case visit }
+package struct StronglyFairConfiguredProcessMachine {
+    package enum Step: String, CaseIterable { case visit }
 
-    static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("StronglyFairConfiguredProcessMachine") { scope in
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1]), Set<Int>([1, 2, 3])]))
