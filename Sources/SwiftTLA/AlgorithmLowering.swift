@@ -23,6 +23,21 @@ enum AlgorithmLowerer {
     }
     private static let processBinding = CompilerBindingSymbol.process
 
+    static func lowerAtomicStep(_ step: AtomicStep) throws -> (action: ActionExpr, assertions: [StateExpr]) {
+        try step.requireIndependentStep()
+        var usedBindings = step.model.statements.algorithmScopeNames
+        var ordinal = 0
+        func binding() -> String {
+            while true {
+                let name = "__atomic_\(ordinal)"
+                ordinal += 1
+                if usedBindings.insert(name).inserted { return name }
+            }
+        }
+        return lower(scheduleAtomicStatements(step.model.statements, binding: binding),
+            processLocalRoots: nil, procedures: [], owner: nil, nextLabel: nil, control: nil)
+    }
+
     private static func lowered(_ specification: TLASpec) -> TLASpec {
         var specification = specification
         specification.algorithmPhase = .lowered
@@ -818,8 +833,8 @@ enum AlgorithmLowerer {
         processLocalRoots: Set<String>?,
         procedures: [AlgorithmProcedureModel],
         owner: AlgorithmProcedureModel?,
-        nextLabel: StateExpr,
-        control: ControlFlow
+        nextLabel: StateExpr?,
+        control: ControlFlow?
     ) -> (action: ActionExpr, assertions: [StateExpr]) {
         typealias Result = (action: ActionExpr, assertions: [StateExpr])
         func scoped(_ value: StateExpr) -> StateExpr {
@@ -893,6 +908,9 @@ enum AlgorithmLowerer {
             case .rejected:
                 return (.guard_(.bool(false)), [])
             case .goto, .call, .return, .stop:
+                guard let control, let nextLabel else {
+                    preconditionFailure("Independent steps must reject algorithm control transfers before lowering")
+                }
                 let transfer: ActionExpr
                 if case .call(let target, let arguments) = statement,
                    rest.first == .return {

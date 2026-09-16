@@ -297,6 +297,7 @@ public struct TLASpec: Sendable {
   package var collections: [ModelCollectionDecl]
   /// The authored Algorithm declaration that supplies the compiled PlusCal plan.
   package var sourceAlgorithms: [Algorithm]
+  package var sourceAtomicSteps: [AtomicStep] = []
   var authoredPlusCalAlgorithmPlan: AuthoredPlusCalAlgorithmPlan?
   package var algorithmPhase: AlgorithmPhase
   package var diagnostics: [SourceParseDiagnostic] = []
@@ -691,6 +692,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ModelCollectionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: Algorithm) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: AtomicStep) -> [SpecComponent] { [expr] }
   public static func buildExpression<T: TLAValueType>(_ expr: Var<T>) -> [SpecComponent] {
     if let issue = expr.sourceIssue {
       return [VarDecl(expr.name, initialization: .expression(.sourceIssue(issue)))]

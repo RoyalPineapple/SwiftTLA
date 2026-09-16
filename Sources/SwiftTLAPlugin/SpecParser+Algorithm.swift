@@ -196,6 +196,26 @@ extension ParserSession {
             ?? call.arguments.first(where: { $0.label?.text == "scoped" })?.expression.as(ClosureExprSyntax.self)
     }
 
+    func parseIndependentStep(_ call: FunctionCallExprSyntax, into components: inout TLASpec) {
+        algorithmParseFailure = nil
+        algorithmSourceDiagnostic = nil
+        guard call.arguments.first?.label == nil, call.additionalTrailingClosures.isEmpty,
+              case .step(let model)? = parseEachComponent(call, construct: .doStep,
+                processParameter: "__independent_step", macros: [:], scope: sourceScope) else {
+            components.diagnostics.append(algorithmSourceDiagnostic ?? .init(
+                message: algorithmParseFailure ?? "Do requires a typed label, an optional when guard, and an atomic body.",
+                source: call))
+            return
+        }
+        let step = AtomicStep(model: model)
+        do {
+            try step.requireIndependentStep()
+            components.sourceAtomicSteps.append(step)
+        } catch {
+            components.diagnostics.append(.init(message: String(describing: error), source: call))
+        }
+    }
+
     /// Parses the bounded PlusCal-shaped authoring layer into an `AlgorithmModel`.
     func parseAlgorithm(
         _ call: FunctionCallExprSyntax,

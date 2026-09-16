@@ -157,6 +157,37 @@ Each accepted candidate contributes a possible successor. A choice must not
 silently select the first member. Application dispatch must report ambiguity
 unless the caller has supplied enough information to select a transition.
 
+### Independent atomic steps
+
+Direct-TLA models can declare `Do` directly inside scoped `#spec`.
+`Do` returns an `AtomicStep`, which both specification and algorithm builders accept.
+At specification scope, each step declares an independent action over `scope.sharedVar` state.
+No program counter, source-order scheduling, or termination action is added.
+
+```swift
+#spec("IndependentCounter") { scope in
+    let count = scope.sharedVar(initial: 0)
+    Do(Step.increment, when: count < 2) {
+        Assign(count, to: count + 1)
+    }
+    Do(Step.reset, when: count == 2) {
+        Assign(count, to: 0)
+    }
+    Validation("Complete") {}
+}
+```
+
+Independent steps retain the same ordered assignments, guards, choices, saved values, assertions, and rollback behavior as algorithm steps.
+An unchanged state variable retains its value.
+No enabled step means deadlock, not implicit completion.
+`Goto`, `Call`, `Return`, and `Stop` require an enclosing `Algorithm`, including inside nested branches.
+Duplicate step labels and non-Boolean guards fail compilation.
+Current implementation limitation: mixed independent steps and `Algorithm` declarations fail explicitly.
+This restriction does not satisfy B-06. Required composition remains unfinished.
+
+Acceptance requires generated execution, complete native graphs, TLA+ export without synthetic control state, and independent hosted TLC evidence.
+The direct model must not acquire an authored PlusCal algorithm.
+
 ### Atomicity and assignment semantics
 
 A `Do` block executes statements in order, like normal Swift. Later statements

@@ -383,6 +383,12 @@ public struct AlgorithmElement: Sendable {
     fileprivate let model: AlgorithmComponentModel
 }
 
+public struct AtomicStep: SpecComponent {
+    package let model: AlgorithmStepModel
+
+    package init(model: AlgorithmStepModel) { self.model = model }
+}
+
 private extension SharedVariable {
     var algorithmElement: AlgorithmElement {
         AlgorithmElement(model: .shared(.init(
@@ -599,6 +605,10 @@ public enum AlgorithmBuilder {
         [component]
     }
 
+    public static func buildExpression(_ component: AtomicStep) -> [AlgorithmElement] {
+        [AlgorithmElement(model: .step(component.model))]
+    }
+
     public static func buildExpression(_ component: InvDecl) -> [AlgorithmElement] {
         [AlgorithmElement(model: .invariant(.init(name: component.name, body: component.body, reference: component.reference)))]
     }
@@ -752,16 +762,16 @@ private func process<Domain: FormalSetValue>(
     )
 }
 
-/// Defines one labeled atomic region of a PlusCal algorithm.
+/// Defines one labeled atomic step, independent at specification scope or scheduled inside an algorithm.
 ///
 /// Statements read earlier updates in source order and produce one atomic
 /// transition. No intermediate state is visible to another process.
-/// The label is the program-counter destination for `Goto`.
+/// Inside an algorithm, the label is the program-counter destination for `Goto`.
 public func Do<Name: CaseIterable & RawRepresentable & Sendable>(
     _ label: Name,
     @DoBuilder _ body: () -> [StepStatement]
-) -> AlgorithmElement where Name.RawValue == String {
-    AlgorithmElement(model: .step(AlgorithmStepModel(label: AlgorithmLabelModel(name: label.rawValue), statements: body().map(\.model))))
+) -> AtomicStep where Name.RawValue == String {
+    AtomicStep(model: AlgorithmStepModel(label: AlgorithmLabelModel(name: label.rawValue), statements: body().map(\.model)))
 }
 
 /// Defines an atomic step whose entire body is guarded by `condition`.
@@ -769,7 +779,7 @@ public func Do<Name: CaseIterable & RawRepresentable & Sendable>(
     _ label: Name,
     when condition: some TypedExpression<Bool>,
     @DoBuilder _ body: () -> [StepStatement]
-) -> AlgorithmElement where Name.RawValue == String {
+) -> AtomicStep where Name.RawValue == String {
     Do(label) {
         When(condition)
         body()

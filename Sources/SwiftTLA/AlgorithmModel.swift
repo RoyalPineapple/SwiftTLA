@@ -95,68 +95,10 @@ package struct AlgorithmModel: Sendable {
             }
         }
 
-        // Snapshot each write where it occurs, then publish one assignment per
-        // root at the end of the atomic branch. PlusCal labels require that form.
-        func schedule(
-            _ values: [AlgorithmStatementModel],
-            assignments: [AlgorithmAssignmentModel] = [],
-            replacements: [String: StateExpr] = [:]
-        ) -> [AlgorithmStatementModel] {
-            let finalWrites = assignments.isEmpty ? [] : [AlgorithmStatementModel.parallel(assignments)]
-            guard let statement = values.first else { return finalWrites }
-            let suffix = Array(values.dropFirst())
-            func expression(_ value: StateExpr) -> StateExpr {
-                StateExpr.substituteVariables(replacements, in: value)
-            }
-            func continued(_ body: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
-                schedule(body + suffix, assignments: assignments, replacements: replacements)
-            }
-            switch statement {
-            case .set(let target, let value):
-                let name = binding()
-                let updated = expression(target.assigning(value))
-                let pending = assignments.filter { $0.target.root != target.root }
-                    + [.init(target: .root(target.root), value: .variable(name))]
-                var next = replacements
-                next[target.root] = .variable(name)
-                return [.letBinding(variable: name, value: updated,
-                    schedule(suffix, assignments: pending, replacements: next))]
-            case .when, .assert, .skip, .rejected:
-                return [statement.mappingExpressions(expression)] + continued([])
-            case .letBinding(let variable, let value, let body):
-                let name = binding()
-                let renamed = body.map {
-                    $0.substitutingVariable(variable, with: .variable(name), assignmentTargets: .replaceWhenVariable)
-                }
-                return [.letBinding(variable: name, value: expression(value), continued(renamed))]
-            case .with(let variable, let source, let body):
-                let name = binding()
-                let renamed = body.map {
-                    $0.substitutingVariable(variable, with: .variable(name), assignmentTargets: .replaceWhenVariable)
-                }
-                return [.with(variable: name, source: expression(source), continued(renamed))]
-            case .choose(let variable, let domain, let body):
-                return continued([.with(variable: variable,
-                    source: .setLiteral(domain.map(StateExpr.value)), body)])
-            case .ifElse(let condition, let then, let otherwise):
-                return [.ifElse(expression(condition), continued(then), continued(otherwise))]
-            case .either(let first, let second):
-                return [.either(continued(first), continued(second))]
-            case .stop:
-                return finalWrites + [.stop]
-            case .goto, .return:
-                return finalWrites + [statement]
-            case .call:
-                return finalWrites + [statement.mappingExpressions(expression)] + suffix
-            case .parallel:
-                preconditionFailure("Atomic statements must only be scheduled once")
-            }
-        }
-
         func component(_ value: AlgorithmComponentModel) -> AlgorithmComponentModel {
             switch value {
             case .step(let step):
-                return .step(.init(label: step.label, statements: schedule(step.statements),
+                return .step(.init(label: step.label, statements: scheduleAtomicStatements(step.statements, binding: binding),
                     loopCondition: step.loopCondition))
             case .process(let process):
                 return .process(.init(typeName: process.typeName, domain: process.domain,
@@ -651,4 +593,67 @@ package indirect enum AlgorithmStatementModel: Sendable, Equatable {
     case `return`
     case stop
     case skip
+}
+
+func scheduleAtomicStatements(
+    _ statements: [AlgorithmStatementModel], binding: () -> String
+) -> [AlgorithmStatementModel] {
+    // Snapshot each write where it occurs, then publish one assignment per
+    // root at the end of the atomic branch. PlusCal labels require that form.
+    func schedule(
+        _ values: [AlgorithmStatementModel],
+        assignments: [AlgorithmAssignmentModel] = [],
+        replacements: [String: StateExpr] = [:]
+    ) -> [AlgorithmStatementModel] {
+        let finalWrites = assignments.isEmpty ? [] : [AlgorithmStatementModel.parallel(assignments)]
+        guard let statement = values.first else { return finalWrites }
+        let suffix = Array(values.dropFirst())
+        func expression(_ value: StateExpr) -> StateExpr {
+            StateExpr.substituteVariables(replacements, in: value)
+        }
+        func continued(_ body: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
+            schedule(body + suffix, assignments: assignments, replacements: replacements)
+        }
+        switch statement {
+        case .set(let target, let value):
+            let name = binding()
+            let updated = expression(target.assigning(value))
+            let pending = assignments.filter { $0.target.root != target.root }
+                + [.init(target: .root(target.root), value: .variable(name))]
+            var next = replacements
+            next[target.root] = .variable(name)
+            return [.letBinding(variable: name, value: updated,
+                schedule(suffix, assignments: pending, replacements: next))]
+        case .when, .assert, .skip, .rejected:
+            return [statement.mappingExpressions(expression)] + continued([])
+        case .letBinding(let variable, let value, let body):
+            let name = binding()
+            let renamed = body.map {
+                $0.substitutingVariable(variable, with: .variable(name), assignmentTargets: .replaceWhenVariable)
+            }
+            return [.letBinding(variable: name, value: expression(value), continued(renamed))]
+        case .with(let variable, let source, let body):
+            let name = binding()
+            let renamed = body.map {
+                $0.substitutingVariable(variable, with: .variable(name), assignmentTargets: .replaceWhenVariable)
+            }
+            return [.with(variable: name, source: expression(source), continued(renamed))]
+        case .choose(let variable, let domain, let body):
+            return continued([.with(variable: variable,
+                source: .setLiteral(domain.map(StateExpr.value)), body)])
+        case .ifElse(let condition, let then, let otherwise):
+            return [.ifElse(expression(condition), continued(then), continued(otherwise))]
+        case .either(let first, let second):
+            return [.either(continued(first), continued(second))]
+        case .stop:
+            return finalWrites + [.stop]
+        case .goto, .return:
+            return finalWrites + [statement]
+        case .call:
+            return finalWrites + [statement.mappingExpressions(expression)] + suffix
+        case .parallel:
+            preconditionFailure("Atomic statements must only be scheduled once")
+        }
+    }
+    return schedule(statements)
 }

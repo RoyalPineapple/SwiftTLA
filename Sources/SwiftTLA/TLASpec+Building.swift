@@ -36,6 +36,8 @@ extension TLASpec {
         ))
       } else if let algorithm = comp as? Algorithm {
         sourceAlgorithms.append(algorithm)
+      } else if let step = comp as? AtomicStep {
+        sourceAtomicSteps.append(step)
       } else if let scenario = comp as? ValidationDeclaration {
         validationScenarios.append(scenario)
       } else if let i = comp as? InvDecl {
@@ -101,6 +103,20 @@ extension TLASpec {
     var constraint = constraint
     var formalOperatorDefinitions = formalOperatorDefinitions
     var authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
+
+    guard sourceAtomicSteps.isEmpty || sourceAlgorithms.isEmpty else {
+      throw CompilationDiagnostic(code: .invalidAlgorithm, stage: .validation, path: "steps",
+        expected: "top-level Do steps or an Algorithm declaration",
+        actual: "top-level Do steps mixed with an Algorithm",
+        nextSafeAction: "Keep scheduled steps inside Algorithm or declare only independent top-level steps.")
+    }
+    for step in sourceAtomicSteps {
+      let lowered = try AlgorithmLowerer.lowerAtomicStep(step)
+      actions.append(.init(name: step.model.label.name, body: lowered.action))
+      invariants += lowered.assertions.enumerated().map {
+        NamedStatePredicate(name: "__step_assert_\(step.model.label.name)_\($0.offset)", body: $0.element)
+      }
+    }
 
     if algorithmPhase == .source {
       for algorithm in sourceAlgorithms {

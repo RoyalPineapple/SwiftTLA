@@ -753,6 +753,8 @@ extension ParserSession {
         }
 
         switch name {
+        case "Do":
+            parseIndependentStep(call, into: &components)
         case "Algorithm":
             if let algorithm = parseAlgorithm(call, into: &components) {
                 components.sourceAlgorithms.append(algorithm)

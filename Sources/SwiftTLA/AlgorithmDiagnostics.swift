@@ -1,3 +1,25 @@
+extension AtomicStep {
+    package func requireIndependentStep() throws {
+        var pending = model.statements
+        while let statement = pending.popLast() {
+            switch statement {
+            case .goto, .call, .return, .stop:
+                throw CompilationDiagnostic(code: .invalidAlgorithm, stage: .validation,
+                    path: "steps.\(model.label.name)",
+                    expected: "an atomic step without algorithm control transfers",
+                    actual: "Goto, Call, Return, and Stop require an enclosing Algorithm",
+                    nextSafeAction: "Use guards for independent steps or move the step into Algorithm.")
+            case .letBinding(_, _, let body), .with(_, _, let body), .choose(_, _, let body):
+                pending += body
+            case .ifElse(_, let first, let second), .either(let first, let second):
+                pending += first + second
+            case .set, .parallel, .when, .assert, .skip, .rejected:
+                break
+            }
+        }
+    }
+}
+
 package enum AlgorithmDiagnosticCode: String, Sendable, Hashable {
     case reservedName
     case invalidName
