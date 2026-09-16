@@ -108,8 +108,9 @@ private struct NativeRefinementCounter {
             SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 4) }
             let instance = Instance("Counter", of: abstract)
             instance
-            Refinement(name: "Refines", instance: instance,
+            let Refines = Refinement(instance: instance,
                 mappings: [.init(Var<Pair<Int, Int>>("value"), from: Pair<Int, Int>.literal(count / 2, 0))])
+            Refines
         }
     }
 }
@@ -129,7 +130,8 @@ private struct InvalidNativeRefinement {
             SwiftTLA.Action("advance") { count.becomes(count + 2).when(count < 2) }
             let instance = Instance("Counter", of: abstract)
             instance
-            Refinement(name: "Refines", instance: instance, mappings: [.init(Var<Int>("value"), from: count)])
+            let Refines = Refinement(instance: instance, mappings: [.init(Var<Int>("value"), from: count)])
+            Refines
         }
     }
 }
@@ -148,7 +150,8 @@ private struct FairNativeRefinement {
             SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 2) }
             let instance = Instance("Counter", of: abstract)
             instance
-            Refinement(name: "Refines", instance: instance, mappings: [.init(Var<Int>("value"), from: count)])
+            let Refines = Refinement(instance: instance, mappings: [.init(Var<Int>("value"), from: count)])
+            Refines
         }
     }
 }
@@ -168,7 +171,8 @@ private struct FairConcreteRefinement {
             WeakFairnessNext()
             let instance = Instance("Counter", of: abstract)
             instance
-            Refinement(name: "Refines", instance: instance, mappings: [.init(Var<Int>("value"), from: count)])
+            let Refines = Refinement(instance: instance, mappings: [.init(Var<Int>("value"), from: count)])
+            Refines
         }
     }
 }
@@ -188,7 +192,8 @@ private struct StoppedConcreteRefinement {
             WeakFairnessNext()
             let instance = Instance("Counter", of: abstract)
             instance
-            Refinement(name: "Refines", instance: instance, mappings: [.init(Var<Int>("value"), from: count)])
+            let Refines = Refinement(instance: instance, mappings: [.init(Var<Int>("value"), from: count)])
+            Refines
         }
     }
 }

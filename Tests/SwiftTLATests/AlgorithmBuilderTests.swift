@@ -279,7 +279,7 @@ struct AlgorithmBuilderTests {
         for operation in [RefinementDecl.Operator.liveSpec, .liveSpecEquals] {
             let concrete = TLASpec("UnsupportedTarget") {
                 instance
-                Refinement(name: "Refines", instance: instance, operator: operation, mappings: [])
+                Refinement(_name: "Refines", instance: instance, operator: operation, mappings: [])
             }
 
             do {

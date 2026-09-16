@@ -42,3 +42,12 @@ let invalidLabels = #spec("InvalidLabels") {
     empty { true }
     interpolated { true }
 }
+
+let invalidRefinementLabels = #spec("InvalidRefinementLabels") {
+    let target = Instance("Target", of: TLASpec("Abstract") {})
+    target
+    let empty = Refinement(instance: target, mappings: [], label: "")
+    let interpolated = Refinement(instance: target, mappings: [], label: "Claim \(1)")
+    empty
+    interpolated
+}

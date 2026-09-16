@@ -14,7 +14,7 @@ struct ExplorationValidationTests {
             Action("stay") { concreteValue.stays }
             Always("stable", concreteValue == 0)
             instance
-            Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+            Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
         }
         let compilation = try concrete.compile()
         let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)

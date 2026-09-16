@@ -4,12 +4,60 @@ import UpstreamParity
 @testable import SwiftTLAPlugin
 
 struct PropertyDeclarationNamesTests {
+    @Test("refinement binding names supply distinct identities despite equal labels")
+    func derivesRefinementNames() throws {
+        let first = try labelledRefinements("label: \"Shared label\"").compile()
+        let second = try labelledRefinements("label: \"Changed label\"").compile()
+        #expect(first.identity == second.identity)
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: first))
+        #expect(program.refinements.map(\.name) == ["firstClaim", "secondClaim"])
+        #expect(Set(program.refinements.map(\.id)).count == 2)
+        #expect(program.refinements.map { program.layout.propertyDisplayName($0.id) } == ["Shared label", "Shared label"])
+        let module = try program.renderModule()
+        #expect(module.configuration.refinements == ["firstClaim", "secondClaim"])
+        #expect(!module.renderedModuleSource.contains("Shared label"))
+    }
+
+    @Test("invalid refinement display labels fail at their declaration", arguments: [
+        "label: 1", "label: \"\"", "label: \"text \\(1)\"", "label: \"one\", label: \"two\""
+    ])
+    func rejectsInvalidRefinementLabels(arguments: String) throws {
+        let spec = try labelledRefinements(arguments)
+        #expect(spec.diagnostics.contains { $0.message == "A property label requires one nonempty string literal without interpolation." })
+        #expect(throws: (any Error).self) { try spec.compile() }
+    }
+
+    private func labelledRefinements(_ arguments: String) throws -> TLASpec {
+        SpecParser.parseSpecClosure(named: "RefinementLabels", try parseSpecTestClosure("""
+        {
+            let abstract = TLASpec("Abstract") {
+                let value = Var<Int>("value")
+                Variable(value, 0)
+                SwiftTLA.Action("stay") { value.stays }
+            }
+            let count = Var<Int>("count")
+            Variable(count, 0)
+            SwiftTLA.Action("stay") { count.stays }
+            let first = Instance("First", of: abstract)
+            first
+            let second = Instance("Second", of: abstract)
+            second
+            let firstClaim = Refinement(instance: first,
+                mappings: [.init(Var<Int>("value"), from: count)], \(arguments))
+            firstClaim
+            let secondClaim = Refinement(instance: second,
+                mappings: [.init(Var<Int>("value"), from: count)], label: "Shared label")
+            secondClaim
+        }
+        """))
+    }
+
     @Test("standalone spec macros reject invalid labels during Swift compilation")
     func rejectsInvalidSwiftLabels() throws {
         let build = try buildExternalConsumer("InvalidModelProperty")
         #expect(build.status != 0)
         let errors = build.output.split(separator: "\n").filter { $0.contains(": error:") }
-        for line in [40, 41] {
+        for line in [40, 41, 49, 50] {
             #expect(errors.contains {
                 $0.contains("InvalidModelProperty.swift:\(line):")
                     && $0.contains("A property label requires one nonempty string literal without interpolation.")

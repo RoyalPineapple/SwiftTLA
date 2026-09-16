@@ -94,6 +94,23 @@ private final class DSLRewriter: SyntaxRewriter {
             let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
                 ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "SwiftTLA"
                     ? member?.declName.baseName.text : nil)
+            if constructor == "Refinement" {
+                guard node.bindingSpecifier.text == "let" else {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: PropertyBindingDiagnostic()))
+                    return binding
+                }
+                let labels = call.arguments.filter { $0.label?.text == "label" }
+                let label = labels.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
+                guard labels.isEmpty || (labels.count == 1 && label?.isEmpty == false) else {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: PropertyLabelDiagnostic()))
+                    return binding
+                }
+                let argument = LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
+                    expression: StringLiteralExprSyntax(content: name), trailingComma: .commaToken())
+                call.arguments = LabeledExprListSyntax([argument] + Array(call.arguments))
+                binding.initializer?.value = ExprSyntax(call)
+                return binding
+            }
             if let constructor,
                ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo"].contains(constructor),
                call.arguments.allSatisfy({ $0.label?.text == "label" }), call.trailingClosure == nil {

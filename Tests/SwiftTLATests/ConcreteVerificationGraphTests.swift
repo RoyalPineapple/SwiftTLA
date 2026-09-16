@@ -63,7 +63,7 @@ struct ConcreteVerificationGraphTests {
             Action("advance") { concreteValue.becomes("b").when(concreteValue == "a") }
             Symmetry("Members", Set(["a", "b"]))
             instance
-            Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+            Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
         }
         let compilation = try concrete.compile()
         #expect(throws: FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly) {

@@ -154,7 +154,11 @@ extension ParserSession {
                     }
                 }
                 var parsed = TLASpec(name: components.name, variables: [], actions: [], invariants: [])
-                parseBuilderCall(call, into: &parsed, collectionTypes: [:])
+                if compilerGrammarName(in: call.calledExpression) == "Refinement" {
+                    parseRefinement(call, named: sourceName, into: &parsed)
+                } else {
+                    parseBuilderCall(call, into: &parsed, collectionTypes: [:])
+                }
                 components.diagnostics.append(contentsOf: parsed.diagnostics)
                 if let property = parsed.invariants.first {
                     specBindings.properties[sourceName] = InvDecl(property.name, property.body)
@@ -928,9 +932,18 @@ extension ParserSession {
 
     private func parseRefinement(
         _ call: FunctionCallExprSyntax,
+        named bindingName: String? = nil,
         into components: inout TLASpec
     ) {
-        guard let name = extractStringArg(call, index: 0), !name.isEmpty,
+        let labels = call.arguments.filter { $0.label?.text == "label" }
+        let label = labels.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
+        guard labels.isEmpty || (labels.count == 1 && label?.isEmpty == false) else {
+            components.diagnostics.append(.init(message: "A property label requires one nonempty string literal without interpolation.", source: call))
+            return
+        }
+        let explicitName = call.arguments.first { $0.label?.text == "_name" }?
+            .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
+        guard let name = bindingName ?? explicitName, !name.isEmpty,
               let instanceSyntax = call.arguments.first(where: { $0.label?.text == "instance" })?.expression,
               let sourceName = instanceSyntax.as(DeclReferenceExprSyntax.self)?.baseName.text,
               let instance = specBindings.instances[sourceName]
@@ -938,7 +951,7 @@ extension ParserSession {
             components.diagnostics.append(.init(
                 message: "Refinement requires a declared Instance binding.",
                 source: call,
-                expected: "let C = Instance(\"C\", of: Module.module); C; Refinement(name: \"Refines\", instance: C, operator: .spec, mappings: mappings)",
+                expected: "let C = Instance(\"C\", of: Module.module); C; let Refines = Refinement(instance: C, operator: .spec, mappings: mappings); Refines",
                 nextSafeAction: "Declare the instance in this specification, then pass that binding to Refinement."
             ))
             return
@@ -996,7 +1009,8 @@ extension ParserSession {
             ))
             return
         }
-        components.refinements.append(.init(name: name, instance: instance.reference, operator: target, mappings: mappings))
+        components.refinements.append(.init(name: name, instance: instance.reference, operator: target,
+            mappings: mappings, reference: .init(name: name, displayLabel: label)))
     }
 
     private func refinementTargetName(_ expression: ExprSyntax) -> String? {

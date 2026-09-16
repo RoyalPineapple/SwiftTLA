@@ -609,16 +609,18 @@ public struct RefinementMapping: Sendable, Equatable {
 }
 
 public func Refinement(
-  name: String,
+  _name: String = "",
   instance: FormalModuleInstance,
   operator: RefinementDecl.Operator = .spec,
-  mappings: [RefinementMapping]
+  mappings: [RefinementMapping],
+  label: String? = nil
 ) -> RefinementDecl {
   RefinementDecl(
-    name: name,
+    name: _name,
     instance: instance.reference,
     operator: `operator`,
-    mappings: mappings
+    mappings: mappings,
+    reference: .init(name: _name, displayLabel: label)
   )
 }
 

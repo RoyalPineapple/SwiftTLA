@@ -28,13 +28,14 @@ package struct RefinementScenarioCounter {
             })
             let target = Instance("Target", of: abstract)
             target
-            let refinement = Refinement(name: "UnitSteps", instance: target,
-                mappings: [.init(Var<Int>("value"), from: StateExpr.variable("count"))])
-            refinement
+            let UnitSteps = Refinement(instance: target,
+                mappings: [.init(Var<Int>("value"), from: StateExpr.variable("count"))],
+                label: "Unit-step behavior")
+            UnitSteps
             Validation("Unit steps") { Bind(stride, to: 1) }
                 .expectDeadlock(.violated)
             Validation("Skipped step") { Bind(stride, to: 2) }
-                .expect(refinement, .violated)
+                .expect(UnitSteps, .violated)
                 .expectDeadlock(.violated)
         }
     }

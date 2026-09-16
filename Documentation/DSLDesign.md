@@ -255,6 +255,12 @@ This applies to `Invariant`, `Reachable`, `Always`, `Eventually`, `AlwaysEventua
 Inside `#spec`, an explicit label must be a nonempty string literal without interpolation.
 An omitted label uses the Swift declaration name for display.
 
+Refinements use the same naming and label rules.
+For example, `let refines = Refinement(instance: target, mappings: mappings, label: "Abstract behavior")` keeps `refines` as its formal name.
+The separate `refines` builder expression registers this declaration.
+The macro supplies the internal `_name` argument from the Swift binding.
+The former `Refinement(name: ...)` spelling is not supported.
+
 The label is immutable presentation metadata on the existing property reference.
 It does not select a property, replace its identity, or enter a formal identifier.
 Generated models expose `propertyDisplayNames: [Property: String]` separately from `formalPropertyNames`.

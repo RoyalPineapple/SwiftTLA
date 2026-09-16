@@ -6,6 +6,8 @@ struct RefinementScenarioTests {
     @Test("refinement scenarios preserve all checks and retain expected failure traces")
     func checksRefinementScenarios() throws {
         let scenarios = try RefinementScenarioCounter.validationScenarios()
+        #expect(RefinementScenarioCounter.formalPropertyNames[.UnitSteps] == "UnitSteps")
+        #expect(RefinementScenarioCounter.propertyDisplayNames[.UnitSteps] == "Unit-step behavior")
         #expect(scenarios.count == 2)
         for scenario in scenarios {
             #expect(scenario.checking.properties == Set(RefinementScenarioCounter.Property.allCases))

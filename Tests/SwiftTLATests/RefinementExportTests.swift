@@ -21,7 +21,7 @@ struct RefinementExportTests {
                 While(Step.stay, true) { Assign(state, to: state) }
             })
             instance
-            Refinement(name: "Refines", instance: instance, mappings: [.init(value, from: value)])
+            Refinement(_name: "Refines", instance: instance, mappings: [.init(value, from: value)])
         }
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: source.compile()))
         let module = try program.renderModule()
@@ -58,7 +58,7 @@ struct RefinementExportTests {
             Variable(value, limit)
             Action("stay") { value.stays }
             inner
-            Refinement(name: "InnerClaim", instance: inner,
+            Refinement(_name: "InnerClaim", instance: inner,
                 mappings: [.init(value, from: value), .init(FormalModuleParameter("Limit"), from: limit)])
         }
         let outer = Instance("Outer", of: middle)
@@ -66,7 +66,7 @@ struct RefinementExportTests {
             Variable(value, 3)
             Action("stay") { value.stays }
             outer
-            Refinement(name: "OuterClaim", instance: outer,
+            Refinement(_name: "OuterClaim", instance: outer,
                 mappings: [.init(value, from: value), .init(FormalModuleParameter("Limit"), from: 3)])
         }
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: root.compile()))
@@ -94,8 +94,8 @@ struct RefinementExportTests {
             Action("stay") { count.stays }
             first
             second
-            Refinement(name: "SecondClaim", instance: second, mappings: [.init(value, from: count + 1)])
-            Refinement(name: "FirstClaim", instance: first, mappings: [.init(value, from: count)])
+            Refinement(_name: "SecondClaim", instance: second, mappings: [.init(value, from: count + 1)])
+            Refinement(_name: "FirstClaim", instance: first, mappings: [.init(value, from: count)])
         }
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: source.compile()))
         let module = try program.renderModule()
@@ -124,14 +124,14 @@ struct RefinementExportTests {
             Variable(value, 0)
             Action("stay") { value.stays }
             leafInstance
-            Refinement(name: "InnerClaim", instance: leafInstance, mappings: [.init(value, from: value)])
+            Refinement(_name: "InnerClaim", instance: leafInstance, mappings: [.init(value, from: value)])
         }
         let middleInstance = Instance("Outer", of: middle)
         let root = TLASpec("Root") {
             Variable(value, 0)
             Action("stay") { value.stays }
             middleInstance
-            Refinement(name: "OuterClaim", instance: middleInstance, mappings: [.init(value, from: value)])
+            Refinement(_name: "OuterClaim", instance: middleInstance, mappings: [.init(value, from: value)])
         }
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: root.compile()))
         let module = try program.renderModule()
@@ -155,7 +155,7 @@ struct RefinementExportTests {
             Variable(count, 0)
             action
             instance
-            Refinement(name: "Refines", instance: instance, mappings: [.init(available, from: StateExpr.enabled(action))])
+            Refinement(_name: "Refines", instance: instance, mappings: [.init(available, from: StateExpr.enabled(action))])
         }
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: source.compile()))
         let module = try program.renderModule()

@@ -14,8 +14,8 @@ struct RefinementDeclarationTests {
       Action("stay") { value.stays }
     }
     let instance = Instance("Target", of: abstract)
-    let claim = Refinement(name: "Refines", instance: instance, mappings: [.init(value, from: value)])
-    let foreign = Refinement(name: "Refines", instance: instance, mappings: [.init(value, from: value)])
+    let claim = Refinement(_name: "Refines", instance: instance, mappings: [.init(value, from: value)])
+    let foreign = Refinement(_name: "Refines", instance: instance, mappings: [.init(value, from: value)])
     let source = TLASpec("Concrete") {
       Variable(value, 0)
       Action("stay") { value.stays }
@@ -47,8 +47,8 @@ struct RefinementDeclarationTests {
       Action("stay") { count.stays }
       first
       second
-      Refinement(name: "SecondClaim", instance: second, mappings: [.init(value, from: count)])
-      Refinement(name: "FirstClaim", instance: first, mappings: [.init(value, from: count)])
+      Refinement(_name: "SecondClaim", instance: second, mappings: [.init(value, from: count)])
+      Refinement(_name: "FirstClaim", instance: first, mappings: [.init(value, from: count)])
     }
     let compilation = try source.compile()
     let inputs = try SourceTypeResolver().resolve(in: compilation)
@@ -80,7 +80,7 @@ struct RefinementDeclarationTests {
       Variable(count, 0)
       Action("advance") { count.becomes(count + 1).when(count < 2) }
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(value, from: count)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(value, from: count)])
     }
     let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: concrete.compile()))
     let refinement = try #require(program.refinements.first)
@@ -126,7 +126,7 @@ struct RefinementDeclarationTests {
     let instance = Instance("C", of: abstract)
     let concrete = TLASpec("Concrete") {
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(state, from: 0)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(state, from: 0)])
     }
 
     let source = try concrete.compile().render().tlaBundle.tla
@@ -142,7 +142,7 @@ struct RefinementDeclarationTests {
     }
     let instance = Instance("C", of: abstract)
     let concrete = TLASpec("Concrete") {
-      Refinement(name: "Refines", instance: instance, mappings: [])
+      Refinement(_name: "Refines", instance: instance, mappings: [])
     }
 
     do {
@@ -163,7 +163,7 @@ struct RefinementDeclarationTests {
     let instance = Instance("C", of: abstract)
     let concrete = TLASpec("Concrete") {
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [])
+      Refinement(_name: "Refines", instance: instance, mappings: [])
     }
 
     do {
@@ -188,7 +188,7 @@ struct RefinementDeclarationTests {
       }
       let C = Instance("C", of: abstractProtocol)
       C
-      Refinement(name: "Refines", instance: C, operator: .spec, mappings: [.init(FormalModuleParameter("Value"), from: SetExpr<Int>(0)), .init(Var<SetExpr<Int>>("chosen"), from: SetExpr<Int>())])
+      Refinement(_name: "Refines", instance: C, operator: .spec, mappings: [.init(FormalModuleParameter("Value"), from: SetExpr<Int>(0)), .init(Var<SetExpr<Int>>("chosen"), from: SetExpr<Int>())])
     }
     """
     let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
@@ -210,7 +210,7 @@ struct RefinementDeclarationTests {
     let instance = Instance("C", of: abstractProtocol)
     let builder = TLASpec("Parsed") {
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [
+      Refinement(_name: "Refines", instance: instance, mappings: [
         .init(value, from: SetExpr<Int>(0)),
         .init(chosen, from: SetExpr<Int>())
       ])
@@ -232,7 +232,7 @@ struct RefinementDeclarationTests {
       }
       let C = Instance("C", of: abstractProtocol)
       C
-      Refinement(name: "Refines", instance: C, operator: .liveSpec, mappings: [])
+      Refinement(_name: "Refines", instance: C, operator: .liveSpec, mappings: [])
     }
     """
     let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
@@ -259,7 +259,7 @@ struct RefinementDeclarationTests {
         concreteValue.becomes(concreteValue + 1).when(concreteValue < 1)
       }
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
     let compilation = try concrete.compile()
@@ -293,7 +293,7 @@ struct RefinementDeclarationTests {
       FormalDefinition("CanAdvance", parameters: [], body: StateExpr.enabled(concreteAdvance))
       instance
       Refinement(
-        name: "Refines",
+        _name: "Refines",
         instance: instance,
         mappings: [.init(abstractEnabled, from: StateExpr.letIn([
           LocalOperator("Here", parameters: [], body: FormalCall(as: Bool.self, "CanAdvance").stateExpr)
@@ -337,7 +337,7 @@ struct RefinementDeclarationTests {
         concreteValue.becomes(concreteValue + 2).when(concreteValue < 1)
       }
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
     let outcome = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
@@ -365,7 +365,7 @@ struct RefinementDeclarationTests {
         concreteValue.becomes(concreteValue + 1).when(concreteValue < 1)
       }
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
     let outcome = try ModelChecker(
@@ -388,7 +388,7 @@ struct RefinementDeclarationTests {
     let declaration = TLASpec("ConcreteFailureEvidence") {
       Variable(concreteValue)
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
     let failures: [(ModelCheckingFailureKind, [NamedStatePredicate], StateExpr?, Bool, VariableInitialization)] = [
       (.invariantViolated, [.init(name: "safe", body: false)], nil, false, .value(.int(0))),
@@ -430,7 +430,7 @@ struct RefinementDeclarationTests {
       let concrete = TLASpec("ConcreteAssumption") {
         Variable(concreteValue)
         instance
-        Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+        Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
       }
       let compilation = try concrete.compile()
       let checker = ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled))
@@ -458,7 +458,7 @@ struct RefinementDeclarationTests {
     let concrete = TLASpec("Concrete") {
       Variable(concreteValue)
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
     do {
@@ -487,7 +487,7 @@ struct RefinementDeclarationTests {
       Variable(concreteValue)
       FormalDefinition("Current", parameters: [], body: concreteValue)
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [
+      Refinement(_name: "Refines", instance: instance, mappings: [
         .init(parameter, from: current),
         .init(abstractValue, from: concreteValue)
       ])

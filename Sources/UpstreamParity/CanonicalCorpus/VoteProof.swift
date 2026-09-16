@@ -53,14 +53,14 @@ package struct VoteProofModel: Sendable {
                 dependsOn: ["chosen"]
             )
             consensus
-            Refinement(
-                name: "Refines",
+            let Refines = Refinement(
                 instance: consensus,
                 mappings: [
                     .init(FormalModuleParameter("Value"), from: consensusValue),
                     .init(Var<SetExpr<Value>>("chosen"), from: consensusChosen)
                 ]
             )
+            Refines
 
             let algorithm: Algorithm = Algorithm("Voting", scoped: { scope in
                 let votes = scope.sharedVar("votes", initial: Function<Acceptor, SetExpr<Pair<Int, Value>>>.mapping { _ in SetExpr() })
