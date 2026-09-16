@@ -90,7 +90,11 @@ private final class DSLRewriter: SyntaxRewriter {
             var binding = binding
             guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   var call = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { return binding }
-            if let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+            let member = call.calledExpression.as(MemberAccessExprSyntax.self)
+            let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text
+                ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "SwiftTLA"
+                    ? member?.declName.baseName.text : nil)
+            if let constructor,
                ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo"].contains(constructor),
                call.arguments.isEmpty, call.trailingClosure == nil {
                 guard node.bindingSpecifier.text == "let" else {
