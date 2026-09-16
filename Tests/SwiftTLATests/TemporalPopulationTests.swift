@@ -7,7 +7,8 @@ struct TemporalPopulationTests {
     func checksEachMember() throws {
         for scenario in try RecurringPopulation.validationScenarios() {
             let graph = try scenario.explore(maximumStates: 20)
-            #expect(graph.temporalResults[.EachRecurs]?.status == .satisfied)
+            #expect(graph.temporalResults[.EachRecurs]?.status ==
+                (scenario.configuration.members.contains(2) ? .violated : .satisfied))
             #expect(graph.temporalResults[.EachVisits]?.status == .satisfied)
             let tla = try scenario.render().tlaBundle.tla
             #expect(tla.contains("EachRecurs == (\\A _process \\in members: []<>(value = _process))"))

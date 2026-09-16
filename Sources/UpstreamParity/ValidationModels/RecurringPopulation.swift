@@ -10,6 +10,8 @@ package struct RecurringPopulation {
             let members = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([0]), Set<Int>([0, 1]), Set<Int>([2])]))
             let value = scope.sharedVar("value", initial: 0)
+            let EachRecurs = AlwaysEventually()
+            let EachVisits = Eventually()
             Algorithm("Toggle") {
                 Each(members, fairness: .weak, scoped: { member, process in
                     let visited = process.localVar("visited", initial: false)
@@ -17,13 +19,15 @@ package struct RecurringPopulation {
                         Assign(value, to: 1 - value)
                         Assign(visited, to: true)
                     }
-                    AlwaysEventually("EachRecurs", value == member)
-                    Eventually("EachVisits", visited)
+                    EachRecurs(value == member)
+                    EachVisits(visited)
                 })
             }
             Validation("Empty") { Bind(members, to: Set<Int>([])) }
             Validation("One") { Bind(members, to: Set<Int>([0])) }
             Validation("Two") { Bind(members, to: Set<Int>([0, 1])) }
+            Validation("Outside cycle") { Bind(members, to: Set<Int>([2])) }
+                .expect(EachRecurs, .violated)
         }
     }
 }

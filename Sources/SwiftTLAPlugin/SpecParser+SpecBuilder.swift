@@ -28,8 +28,8 @@ extension ParserSession {
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let property = specBindings.properties[reference.baseName.text] {
-                if property is InvariantHandle {
-                    components.diagnostics.append(.init(message: "An invariant handle requires a predicate body before registration.", source: reference))
+                if property is InvariantHandle || property is TemporalHandle || property is LeadsToHandle {
+                    components.diagnostics.append(.init(message: "A property handle requires a predicate definition before registration.", source: reference))
                 } else {
                     registerProperty(property, into: &components)
                 }
@@ -133,6 +133,17 @@ extension ParserSession {
                    call.arguments.isEmpty, call.trailingClosure == nil {
                     specBindings.properties[sourceName] = InvariantHandle(name: sourceName)
                     continue
+                }
+                if call.arguments.isEmpty, call.trailingClosure == nil,
+                   let constructor = compilerGrammarName(in: call.calledExpression) {
+                    if let kind = TemporalHandle.Kind(rawValue: constructor) {
+                        specBindings.properties[sourceName] = TemporalHandle(name: sourceName, kind: kind)
+                        continue
+                    }
+                    if constructor == "LeadsTo" {
+                        specBindings.properties[sourceName] = LeadsToHandle(name: sourceName)
+                        continue
+                    }
                 }
                 var parsed = TLASpec(name: components.name, variables: [], actions: [], invariants: [])
                 parseBuilderCall(call, into: &parsed, collectionTypes: [:])
@@ -690,6 +701,10 @@ extension ParserSession {
         collectionTypes: [String: ModelCollectionSourceTypes] = [:]
     ) {
         if parseValidation(call, into: &components) { return }
+        if let temporal = parseBoundTemporal(call, scope: sourceScope) {
+            registerProperty(temporal, into: &components)
+            return
+        }
         if let sourceName = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
            let handle = specBindings.properties[sourceName] as? InvariantHandle {
             guard call.arguments.isEmpty, let closure = call.trailingClosure else {

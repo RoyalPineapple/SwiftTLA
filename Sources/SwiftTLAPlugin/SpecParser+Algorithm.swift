@@ -310,8 +310,8 @@ extension ParserSession {
                 ))
                 return nil
             }
-            if let invariant = parseBoundAlgorithmInvariant(call, scope: sourceScope) {
-                algorithmComponents.append(.invariant(invariant))
+            if let property = parseBoundAlgorithmProperty(call, scope: sourceScope) {
+                algorithmComponents.append(property)
                 continue
             }
             guard let construct = AlgorithmSourceConstruct(call.calledExpression) else {
@@ -560,14 +560,39 @@ extension ParserSession {
         return expression.map { .init(name: name, expr: $0) }
     }
 
-    private func parseBoundAlgorithmInvariant(
+    func parseBoundTemporal(
         _ call: FunctionCallExprSyntax,
         scope: TypedFacadeScope
-    ) -> NamedStatePredicate? {
+    ) -> TemporalDecl? {
+        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+              call.arguments.allSatisfy({ $0.label == nil }) else { return nil }
+        let arguments = Array(call.arguments)
+        if let handle = specBindings.properties[name] as? TemporalHandle,
+           arguments.count == 1,
+           let predicate = decodeTypedFacadeValue(arguments[0].expression, scope: scope) {
+            return handle.declaration(predicate)
+        }
+        if let handle = specBindings.properties[name] as? LeadsToHandle,
+           arguments.count == 2,
+           let premise = decodeTypedFacadeValue(arguments[0].expression, scope: scope),
+           let consequence = decodeTypedFacadeValue(arguments[1].expression, scope: scope) {
+            return handle.declaration(premise, consequence)
+        }
+        return nil
+    }
+
+    private func parseBoundAlgorithmProperty(
+        _ call: FunctionCallExprSyntax,
+        scope: TypedFacadeScope
+    ) -> AlgorithmComponentModel? {
+        if let temporal = parseBoundTemporal(call, scope: scope) {
+            return .temporal(.init(name: temporal.name, expr: temporal.expr, bindings: [], reference: temporal.reference))
+        }
         guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
               let handle = specBindings.properties[name] as? InvariantHandle,
               call.arguments.isEmpty else { return nil }
-        return parseAlgorithmInvariant(call, scope: scope, reference: handle.reference)
+        return parseAlgorithmInvariant(call, scope: scope, reference: handle.reference).map(AlgorithmComponentModel.invariant)
     }
 
     private func parseAlgorithmInvariant(
@@ -670,8 +695,8 @@ extension ParserSession {
             else {
                 return nil
             }
-            if let invariant = parseBoundAlgorithmInvariant(componentCall, scope: processScope) {
-                components.append(.invariant(invariant))
+            if let property = parseBoundAlgorithmProperty(componentCall, scope: processScope) {
+                components.append(property)
                 continue
             }
             guard let construct = AlgorithmSourceConstruct(componentCall.calledExpression) else {

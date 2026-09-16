@@ -24,3 +24,10 @@ struct Second {
 let foreignProperty: First.Property = Second.Property.Safe
 let stringProperty: First.Property = "Safe"
 let missingProperty: First.Property = .Missing
+
+let unary = Eventually()
+let binary = LeadsTo()
+let excessArguments = unary(true, false)
+let missingArgument = binary(true)
+let wrongPredicate = unary(1)
+let undefinedProperty = TLASpec("Undefined") { unary }

@@ -90,10 +90,11 @@ private final class DSLRewriter: SyntaxRewriter {
             var binding = binding
             guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   var call = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { return binding }
-            if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Invariant",
+            if let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+               ["Invariant", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo"].contains(constructor),
                call.arguments.isEmpty, call.trailingClosure == nil {
                 guard node.bindingSpecifier.text == "let" else {
-                    context.diagnose(Diagnostic(node: Syntax(source), message: InvariantBindingDiagnostic()))
+                    context.diagnose(Diagnostic(node: Syntax(source), message: PropertyBindingDiagnostic()))
                     return binding
                 }
                 call.arguments = [LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
@@ -245,8 +246,8 @@ private struct ParameterBindingDiagnostic: DiagnosticMessage {
     let message = "A model parameter must be an immutable named let binding in the specification scope."
 }
 
-private struct InvariantBindingDiagnostic: DiagnosticMessage {
-    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-invariant-binding")
+private struct PropertyBindingDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-property-binding")
     let severity: DiagnosticSeverity = .error
-    let message = "An invariant handle must be an immutable named let binding."
+    let message = "A property handle must be an immutable named let binding."
 }

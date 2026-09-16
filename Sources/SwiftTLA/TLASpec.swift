@@ -427,8 +427,11 @@ public struct TemporalDecl: ModelProperty, SpecComponent {
   public let name: String
   public let expr: TemporalCondition<StateExpr>
   package init(_ name: String, _ expr: TemporalCondition<StateExpr>) {
-    reference = .init(name: name)
-    self.name = name
+    self.init(reference: .init(name: name), expr: expr)
+  }
+  package init(reference: PropertyReference, expr: TemporalCondition<StateExpr>) {
+    self.reference = reference
+    self.name = reference.name
     self.expr = expr
   }
 }
