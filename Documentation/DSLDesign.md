@@ -247,7 +247,54 @@ A bare forward handle is not a builder component. A scenario reference without a
 Two predicate registrations for the same handle also fail compilation, even when their bodies agree.
 For example, `safe { true }` followed by `safe { false }` is invalid.
 An unused handle registers no claim, like an unused bound predicate declaration.
-This decision settles invariant scope references only. Temporal handles, display labels, and anonymous declaration names remain part of B-02 and B-04.
+Display labels and anonymous declaration names remain part of B-02.
+
+### Temporal handles across scopes
+
+Temporal forward declarations use the same identity and registration rules as invariant handles.
+This contract decision requires implementation and acceptance evidence before completion.
+
+| Constructor signature | Handle definition | Temporal meaning |
+| --- | --- | --- |
+| `Always() -> TemporalHandle` | `claim(predicate)` | `[]predicate` |
+| `Eventually() -> TemporalHandle` | `claim(predicate)` | `<>predicate` |
+| `AlwaysEventually() -> TemporalHandle` | `claim(predicate)` | `[]<>predicate` |
+| `EventuallyAlways() -> TemporalHandle` | `claim(predicate)` | `<>[]predicate` |
+| `LeadsTo() -> LeadsToHandle` | `claim(premise, consequence)` | `premise ~> consequence` |
+
+`TemporalHandle` exposes `callAsFunction(_ predicate: some TypedExpression<Bool>) -> TemporalDecl`.
+`LeadsToHandle` exposes `callAsFunction(_ premise: some TypedExpression<Bool>, _ consequence: some TypedExpression<Bool>) -> TemporalDecl`.
+Both handles conform to `ModelProperty` and have compiler-checked `Sendable` conformance.
+Neither handle is a builder component before its definition.
+Each constructor requires a named `let` binding inside `#spec`, which supplies the default name without a duplicate string.
+
+The definition registers one claim in its enclosing specification, algorithm, or process builder.
+A process definition retains the member binding, local state, and universal temporal quantification described in this section.
+Outer scenarios reference the handle, not the predicate body or a formal name string.
+An expected violation changes only the validation verdict. It does not alter fairness, transitions, or the selected checks.
+
+For example, the existing `RecurringPopulation` declarations supply `members`, `value`, and `Step` in this excerpt:
+
+```swift
+let EachRecurs = AlwaysEventually()
+Algorithm("Toggle") {
+    Each(members, fairness: .weak) { member in
+        While(Step.toggle, true) {
+            Assign(value, to: 1 - value)
+        }
+        EachRecurs(value == member)
+    }
+}
+Validation("Outside cycle") { Bind(members, to: Set<Int>([2])) }
+    .expect(EachRecurs, .violated)
+```
+
+Acceptance requires the expected violation and actionable native and TLC lassos for member `2`.
+The successful and empty populations must retain their existing outcomes.
+A missing definition, duplicate registration, or foreign handle must fail compilation.
+Wrong predicate types and wrong argument counts must fail Swift compilation.
+For example, a handle from `LeadsTo()` cannot accept one predicate, and a handle from `Eventually()` cannot accept two.
+These forms do not limit the temporal composition required by the corpus.
 
 Reachability and eventual progress are different claims. A puzzle can have a
 solution even when some executions loop forever without finding it.
@@ -307,7 +354,8 @@ Fairness remains explicit and independent of the claim.
 The compiler retains typed member bindings through native generation and TLA+ export.
 Generated predicates capture native member values. They do not invoke an expression interpreter.
 Outer validation declarations can reference invariant handles through the forward-declaration syntax in this section.
-Temporal scope references remain part of the unresolved B-02 and B-04 contract.
+Temporal scope references use the temporal forward-declaration contract in this section.
+Fairness and symmetry still require the remaining B-04 decisions and evidence.
 
 ### Configured authored PlusCal export
 
