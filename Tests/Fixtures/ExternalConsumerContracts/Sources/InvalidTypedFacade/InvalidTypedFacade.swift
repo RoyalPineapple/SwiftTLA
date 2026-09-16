@@ -155,9 +155,9 @@ let swappedMacroArguments = pairMacro(Expr<Bool>(true), Expr<Int>(1))
 let nonBooleanLeadsToSource = Expr<Int>(1).leadsTo(Expr<Bool>(true))
 let nonBooleanLeadsToTarget = Expr<Bool>(true).leadsTo(Expr<Int>(1))
 
-let rejectRecursiveArguments = { (recursion: LocalRecursion<Int, Int>) in
-  _ = recursion("wrong")
-  _ = recursion(Expr<Bool>(true))
-}
+// Separate initializers diagnose both calls even when module emission stops early.
+let rejectRecursiveString = { (recursion: LocalRecursion<Int, Int>) in recursion("wrong") }
+let rejectRecursiveBoolean = { (recursion: LocalRecursion<Int, Int>) in recursion(Expr<Bool>(true)) }
+
 let wrongRecursiveOutput = LetRec("Output", over: IntRange(0, through: 1), taking: Int.self, { (_: LocalRecursion<Int, Int>, _: WithValue<Int>) in true }, in: { recursion in recursion(0) })
 let wrongLetResult: Expr<Int> = LetRec("Result", over: IntRange(0, through: 1), taking: Int.self, { (_: LocalRecursion<Int, Int>, _: WithValue<Int>) in 1 }, in: { _ in true })
