@@ -1057,19 +1057,30 @@ final class ParserSession {
 
         if access.declName.baseName.sourceIdentifierName == "mapping",
            let literalType = typedFacadeType(access.base),
-           literalType.name == "Function",
+           ["Function", "Dictionary"].contains(literalType.name),
            let domainType = literalType.terminalArgumentName(at: 0),
-           let domain = enumDefinition(named: domainType)?.finiteValues,
            let closure = call.trailingClosure,
+           closureParameterNames(in: closure).count == 1,
            let parameter = closureParameterNames(in: closure).first,
            closure.statements.count == 1,
            case .expr(let bodySyntax) = closure.statements.first?.item {
+            let domain: StateExpr
+            if literalType.name == "Dictionary" {
+                guard call.arguments.map({ $0.label?.text }) == ["over"],
+                      let syntax = call.arguments.first?.expression,
+                      let decoded = decodeTypedFacadeValue(syntax, scope: scope)
+                else { return nil }
+                domain = decoded
+            } else {
+                guard let values = enumDefinition(named: domainType)?.finiteValues else { return nil }
+                domain = .setLiteral(values.map(StateExpr.value))
+            }
             let key = generatedBinderName(
                 line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0
             )
             let functionScope = scope.extending(binding: parameter,
                 to: .variable(key),
-                shape: .named(domainType))
+                shape: literalType.argument(at: 0).flatMap { try? sourceTypeResolver.resolve($0) })
             let body = decodeTypedFacadeValue(
                 bodySyntax,
                 scope: functionScope,
@@ -1078,7 +1089,7 @@ final class ParserSession {
                 ?? decodeTypedDefaultValue(bodySyntax, expectedType: literalType.argument(at: 1))
             guard let body else { return nil }
             return .functionLiteral(
-                .setLiteral(domain.map(StateExpr.value)),
+                domain,
                 key,
                 body
             )

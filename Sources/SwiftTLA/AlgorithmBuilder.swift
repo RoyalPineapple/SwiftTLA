@@ -86,6 +86,26 @@ public struct WithValue<Value: TLAValueType>: TypedExpression {
 
 }
 
+extension Dictionary where Key: TLAValueType, Value: TLAValueType {
+    public static func mapping<Domain: FormalSetValue>(
+        over domain: some TypedExpression<Domain>,
+        file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+        _ body: (WithValue<Key>) -> Value
+    ) -> Expr<Self> where Domain.Element == Key {
+        mapping(over: domain, file: file, line: line, column: column) { key in Expr(body(key)) }
+    }
+
+    public static func mapping<Domain: FormalSetValue, Result: TypedExpression<Value>>(
+        over domain: some TypedExpression<Domain>,
+        file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+        _ body: (WithValue<Key>) -> Result
+    ) -> Expr<Self> where Domain.Element == Key {
+        let binding = generatedBinderName(file: file, line: line, column: column)
+        return Expr(.functionLiteral(domain.stateExpr, binding,
+            body(WithValue(expression: .variable(binding))).stateExpr))
+    }
+}
+
 extension Function where Domain: FiniteTLAValueDomain {
     /// Builds a total finite formal function from a concrete typed value.
     public static func mapping(

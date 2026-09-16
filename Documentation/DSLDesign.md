@@ -650,6 +650,18 @@ Dictionary projections reject invalid keys, invalid values, and collisions betwe
 `Functions(from: 1, to: Set<Int>([0, 1]))` is invalid because its domain is not a set.
 Finite enum domains retain the existing `Functions(from: Key.all, to: ...)` contract.
 
+`Dictionary<Key, Value>.mapping(over:)` constructs one function over a typed finite domain.
+The closure binds each key and can read parameters or earlier variables.
+An empty domain produces an empty dictionary without evaluation of the closure body.
+
+```swift
+let f = algorithm.sharedVar(initial: Dictionary<Int, Int>.mapping(
+    over: IntRange(0, through: n * 2)) { _ in -1 })
+```
+
+The compiler retains the domain, key binding, and body as one typed function expression.
+Native generation and TLA+ export use that expression.
+
 #### Configured process populations
 
 `Each` accepts a typed set expression. Its element type supplies the process

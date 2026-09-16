@@ -7,6 +7,7 @@ struct FunctionSpaceMembershipTests {
     func configuredDomains() throws {
         let scenarios = try ConfiguredFunctionDomainModel.validationScenarios()
         let expected: [Set<[Int: Int]>] = [[[:]], [[0: 0, 1: 0], [0: 0, 1: 1], [0: 1, 1: 0], [0: 1, 1: 1]]]
+        #expect(scenarios.count == expected.count)
         for (scenario, assignments) in zip(scenarios, expected) {
             let machines = try scenario.initialMachines()
             #expect(Set(machines.map { $0.state.values }) == assignments)
@@ -16,6 +17,24 @@ struct FunctionSpaceMembershipTests {
             let bundle = try scenario.render().tlaBundle
             #expect(bundle.tla.contains("size"))
             #expect(bundle.tla.contains("->"))
+        }
+    }
+
+    @Test("function mappings retain configured domains and lexical keys")
+    func configuredMappings() throws {
+        let scenarios = try ConfiguredFunctionMappingModel.validationScenarios()
+        let expected: [[Int: Int]] = [[:], [0: 2, 1: 3]]
+        #expect(scenarios.count == expected.count)
+        for (scenario, values) in zip(scenarios, expected) {
+            let machines = try scenario.initialMachines()
+            #expect(machines.count == 1)
+            let machine = try #require(machines.first)
+            #expect(machine.state.values == values)
+            #expect(machine.state.constants == values.mapValues { _ in -1 })
+            let successor = try #require(try machine.successors().first)
+            #expect(successor.machine.state.values == values)
+            #expect(successor.machine.state.constants == machine.state.constants)
+            #expect(try scenario.render().tlaBundle.tla.contains("|->"))
         }
     }
 

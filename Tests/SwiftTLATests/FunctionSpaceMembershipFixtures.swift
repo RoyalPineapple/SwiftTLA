@@ -21,6 +21,29 @@ struct ConfiguredFunctionDomainModel {
     }
 }
 
+@TLAModel
+struct ConfiguredFunctionMappingModel {
+    enum Step: String, CaseIterable { case keep }
+
+    static var spec: TLASpec {
+        #spec("ConfiguredFunctionMappingModel") { scope in
+            let size = scope.parameter(as: Int.self, in: 0...2)
+            Algorithm("Worker", scoped: { algorithm in
+                let values = algorithm.sharedVar(initial: Dictionary<Int, Int>.mapping(
+                    over: IntRange(0, through: size - 1)) { key in key + size })
+                let constants = algorithm.sharedVar(initial: Dictionary<Int, Int>.mapping(
+                    over: IntRange(0, through: size - 1)) { _ in -1 })
+                Do(Step.keep) {
+                    Assign(values, to: values)
+                    Assign(constants, to: constants)
+                }
+            })
+            Validation("Empty") { Bind(size, to: 0) }
+            Validation("Two keys") { Bind(size, to: 2) }
+        }
+    }
+}
+
 enum CollidingFunctionKey: Hashable, TLAValueType {
     case first, second
     static var defaultValue: Self { .first }

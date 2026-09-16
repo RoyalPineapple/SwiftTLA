@@ -660,7 +660,8 @@ extension ParserSession {
             switch (type.name, member.declName.baseName.sourceIdentifierName) {
             case ("SetExpr", "literal"), ("TupleExpr", "literal"), ("Pair", "literal"),
                  ("Record", "literal"), ("Function", "literal"), ("PartialFunction", "literal"),
-                 ("ZeroBasedSequence", "literal"), ("ZeroBasedSequence", "filled"), ("Function", "mapping"):
+                 ("ZeroBasedSequence", "literal"), ("ZeroBasedSequence", "filled"), ("Function", "mapping"),
+                 ("Dictionary", "mapping"):
                 return type.renderedSourceName
             default: break
             }
