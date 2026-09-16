@@ -545,7 +545,7 @@ public func FormalDefinition<First: TLAValueType, Second: TLAValueType>(
   ))
 }
 /// A named refinement of this specification by a module-instance specification.
-public struct RefinementDecl: SpecComponent, Sendable, Equatable {
+public struct RefinementDecl: SpecComponent, ModelProperty, Equatable {
   public enum Operator: Sendable, Equatable {
     case spec
     case liveSpec
@@ -563,6 +563,7 @@ public struct RefinementDecl: SpecComponent, Sendable, Equatable {
 
   public let name: String
   package let instance: FormalModuleInstanceReference
+  public let reference: PropertyReference
   public let `operator`: Operator
   public let mappings: [RefinementMapping]
 
@@ -570,12 +571,19 @@ public struct RefinementDecl: SpecComponent, Sendable, Equatable {
     name: String,
     instance: FormalModuleInstanceReference,
     operator: Operator,
-    mappings: [RefinementMapping]
+    mappings: [RefinementMapping],
+    reference: PropertyReference? = nil
   ) {
     self.name = name
     self.instance = instance
+    self.reference = reference ?? .init(name: name)
     self.operator = `operator`
     self.mappings = mappings
+  }
+
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.name == rhs.name && lhs.instance == rhs.instance
+      && lhs.operator == rhs.operator && lhs.mappings == rhs.mappings
   }
 }
 

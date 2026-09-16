@@ -124,7 +124,7 @@ extension ParserSession {
                 } catch {
                     components.diagnostics.append(.init(message: "Invalid parameter type: \(error)", source: binding))
                 }
-            } else if ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo"].contains(compilerGrammarName(in: call.calledExpression) ?? "") {
+            } else if ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo", "Refinement"].contains(compilerGrammarName(in: call.calledExpression) ?? "") {
                 guard declaration.bindingSpecifier.text == "let", specBindings.properties[sourceName] == nil else {
                     components.diagnostics.append(.init(message: "A property handle requires a unique let binding.", source: binding))
                     continue
@@ -162,6 +162,8 @@ extension ParserSession {
                     specBindings.properties[sourceName] = ReachableDecl(property.name, property.body)
                 } else if let property = parsed.temporalProperties.first {
                     specBindings.properties[sourceName] = TemporalDecl(property.name, property.expr)
+                } else if let property = parsed.refinements.first {
+                    specBindings.properties[sourceName] = property
                 }
             } else if compilerGrammarName(in: call.calledExpression) == "ActionParameter" {
                 guard declaration.bindingSpecifier.text == "let", specBindings.parameters[sourceName] == nil else {
@@ -1532,6 +1534,8 @@ extension ParserSession {
             components.reachabilityProperties.append(.init(name: property.name, body: property.body, reference: property.reference))
         } else if let property = property as? TemporalDecl {
             components.temporalProperties.append(.init(name: property.name, expr: property.expr, bindings: [], reference: property.reference))
+        } else if let property = property as? RefinementDecl {
+            components.refinements.append(property)
         }
     }
 

@@ -3,6 +3,23 @@ import UpstreamParity
 @testable import SwiftTLA
 
 struct ConstantStateClaimsTests {
+    @Test("constant operators retain witnesses when their state arguments are unused")
+    func preservesIgnoredStateArguments() throws {
+        let predicates = TLASpec("ConstantPredicates") {
+            DefineRecursive("Never", params: ["ignored"]) { StateExpr.value(.bool(false)) }
+        }
+        let value = Var<Int>("value")
+        let target = Instance("Predicates", of: predicates)
+        let source = TLASpec("IgnoredStateArgument") {
+            Variable(value, 0)
+            Action("stay") { value.stays }
+            target
+            Invariant("NeverHolds") { target.call("Never", value.stateExpr) }
+        }
+        let rendered = try source.compile().render().tlaBundle.tla
+        #expect(rendered.contains("NeverHolds == (Predicates!Never(value)) /\\ (value = value)"))
+    }
+
     @Test("constant claims retain their outcomes and initial-state witnesses")
     func preservesConstantPredicates() throws {
         for scenario in try ConstantStateClaims.validationScenarios() {

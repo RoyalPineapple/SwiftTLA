@@ -274,10 +274,10 @@ struct TLAModuleBundleTests {
       Invariant("ValueIsTwoTimesOne") { math.call("Twice", value.stateExpr) == 2 }
     }
 
-    #expect(try consumer.compile().render().tlaBundle.tla.contains("Math == INSTANCE InstanceArithmetic"))
-    #expect(try consumer.compile().render().tlaBundle.tla.contains("ValueIsTwoTimesOne == (Math!Twice(value) = 2)"))
-    #expect(!(try consumer.compile().render().tlaBundle.tla.contains("EXTENDS Integers, FiniteSets, Sequences, InstanceArithmetic")))
     let bundle = try consumer.compile().render().tlaBundle
+    #expect(bundle.tla.contains("Math == INSTANCE InstanceArithmetic"))
+    #expect(bundle.tla.contains("ValueIsTwoTimesOne == (Math!Twice(value) = 2)"), "Rendered module: \(bundle.tla)")
+    #expect(!bundle.tla.contains("EXTENDS Integers, FiniteSets, Sequences, InstanceArithmetic"))
     #expect(bundle.imports.map(\.name) == ["InstanceArithmetic"])
     let importedModule = try #require(bundle.imports.first)
     #expect(importedModule.tla.contains("Twice(value) =="))

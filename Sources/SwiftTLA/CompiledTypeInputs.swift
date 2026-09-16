@@ -32,7 +32,7 @@ package final class CompiledTypeInputs: Sendable {
         refinements = try compilation.refinements.map { refinement in
             let abstractInputs = try CompiledTypeInputs(compilation: refinement.abstract,
                 types: types, resolveSourceType: resolveSourceType)
-            return .init(name: refinement.name, instance: refinement.instance, operator: refinement.operator,
+            return .init(id: refinement.id, name: refinement.name, instance: refinement.instance, operator: refinement.operator,
                 abstract: try CompiledProgram(inputs: abstractInputs),
                 variableMappings: refinement.variableMappings)
         }

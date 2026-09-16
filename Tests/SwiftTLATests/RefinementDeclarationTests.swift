@@ -6,6 +6,32 @@ import Testing
 
 @Suite("typed refinement declarations")
 struct RefinementDeclarationTests {
+  @Test("scenario expectations reject a foreign refinement with the same display name")
+  func rejectsForeignRefinementExpectation() throws {
+    let value = Var<Int>("value")
+    let abstract = TLASpec("Abstract") {
+      Variable(value, 0)
+      Action("stay") { value.stays }
+    }
+    let instance = Instance("Target", of: abstract)
+    let claim = Refinement(name: "Refines", instance: instance, mappings: [.init(value, from: value)])
+    let foreign = Refinement(name: "Refines", instance: instance, mappings: [.init(value, from: value)])
+    let source = TLASpec("Concrete") {
+      Variable(value, 0)
+      Action("stay") { value.stays }
+      instance
+      claim
+      Validation("Foreign expectation") {}.expect(foreign, .violated)
+    }
+    do {
+      _ = try source.compile()
+      Issue.record("A distinct refinement handle must not resolve by name")
+    } catch let diagnostic as CompilationDiagnostic {
+      #expect(diagnostic.code == .unknownReference)
+      #expect(diagnostic.path == "validation.Foreign expectation")
+    }
+  }
+
   @Test("refinement typing preserves resolved instance identities independently of property order")
   func preservesResolvedTargets() throws {
     let value = Var<Int>("value")
@@ -29,6 +55,8 @@ struct RefinementDeclarationTests {
     let program = try CompiledProgram(inputs: inputs)
     for refinements in [inputs.refinements, program.refinements] {
       #expect(refinements.map(\.name) == ["SecondClaim", "FirstClaim"])
+      #expect(refinements.map(\.id) == compilation.refinements.map(\.id))
+      #expect(refinements.map(\.id) == program.layout.properties.map(\.id))
       #expect(refinements.map(\.instance) == compilation.refinements.map(\.instance))
       #expect(refinements.map(\.operator) == compilation.refinements.map(\.operator))
       let namespaces = try refinements.map { refinement in

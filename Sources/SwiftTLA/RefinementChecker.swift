@@ -147,7 +147,8 @@ extension TLASpec {
         specialized.formalOperatorDefinitions = formalOperatorDefinitions.map { $0.substitutingVariables(parameters) }
         specialized.refinements = refinements.map { refinement in
             .init(name: refinement.name, instance: refinement.instance, operator: refinement.operator,
-                mappings: refinement.mappings.map { .init(target: $0.target, source: state($0.source)) })
+                mappings: refinement.mappings.map { .init(target: $0.target, source: state($0.source)) },
+                reference: refinement.reference)
         }
         return specialized
     }

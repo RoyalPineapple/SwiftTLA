@@ -45,6 +45,7 @@ package struct CompiledDeclaration: Hashable, Sendable {
         case invariant
         case reachability
         case temporalProperty
+        case refinement
     }
 
     package let kind: Kind
@@ -85,10 +86,10 @@ package struct CompiledActionLayout: Hashable, Sendable {
     package let isTermination: Bool
 }
 
-struct CompiledPropertyLayout: Hashable, Sendable {
-    let id: PropertyID
-    let declaration: CompiledDeclaration
-    let reference: PropertyReference?
+package struct CompiledPropertyLayout: Hashable, Sendable {
+    package let id: PropertyID
+    package let declaration: CompiledDeclaration
+    package let reference: PropertyReference?
 }
 
 struct CompiledProcedureLayout: Hashable, Sendable {
@@ -168,8 +169,10 @@ struct CompiledModuleInstanceLayout: Hashable, Sendable {
 }
 
 package struct CompiledLayout: Hashable, Sendable {
+    package var properties: [CompiledPropertyLayout] { stateProperties + temporalProperties + refinementProperties }
+
     package func propertyDisplayName(_ id: PropertyID) -> String? {
-        let property = (stateProperties + temporalProperties).first { $0.id == id }
+        let property = properties.first { $0.id == id }
         return property?.reference?.displayLabel ?? property?.declaration.name
     }
 
@@ -178,6 +181,7 @@ package struct CompiledLayout: Hashable, Sendable {
     package let actions: [CompiledActionLayout]
     let stateProperties: [CompiledPropertyLayout]
     let temporalProperties: [CompiledPropertyLayout]
+    let refinementProperties: [CompiledPropertyLayout]
     let procedures: [CompiledProcedureLayout]
     package let controlLocations: [CompiledControlLocation]
     let moduleInstances: [CompiledModuleInstanceLayout]
@@ -232,6 +236,12 @@ package struct CompiledLayout: Hashable, Sendable {
                 reference: temporal.reference
             )
         }
+        let temporalPropertyCount = temporalProperties.count
+        refinementProperties = spec.refinements.enumerated().map { ordinal, refinement in
+            .init(id: .init(ordinal: statePropertyCount + temporalPropertyCount + ordinal),
+                declaration: .init(kind: .refinement, name: refinement.name, sourceOffset: nil),
+                reference: refinement.reference)
+        }
         procedures = spec.sourceAlgorithms.flatMap { algorithm in
             algorithm.model.procedures.enumerated().map { ordinal, procedure in
                 .init(
@@ -254,6 +264,7 @@ package struct CompiledLayout: Hashable, Sendable {
             + actions.map(\.declaration)
             + stateProperties.map(\.declaration)
             + temporalProperties.map(\.declaration)
+            + refinementProperties.map(\.declaration)
     }
 
     func programCounterID() -> VariableID? {

@@ -482,7 +482,7 @@ package struct FormalModuleClosure: Sendable {
           )
         }
         guard let target = module.imports.first(where: { $0.name == configuration.moduleName }) else { continue }
-        let targetSymbols = Self.moduleInterfaceSymbols(of: target)
+        let targetSymbols = Self.moduleInterfaceSymbols(of: try target.loweredSourceModel())
         for replacement in configuration.replacements where replacement.operatorName.isEmpty || !targetSymbols.contains(replacement.operatorName) {
           throw diagnostic(.unresolvedFormalModuleReplacement, path: path + ["configurations", configuration.moduleName, replacement.operatorName], expected: "a structural interface symbol of '\(target.name)'", actual: "an unresolved replacement name", nextSafeAction: "Configure a formal parameter or free module symbol, then compile again.")
         }
@@ -519,8 +519,9 @@ package struct FormalModuleClosure: Sendable {
             nextSafeAction: "Keep one argument for the parameter, then compile again."
           )
         }
-        let declared = Set(instance.module.formalParameters.map(\.name))
-          .union(instance.module.variables.map(\.name))
+        let target = try instance.module.loweredSourceModel()
+        let declared = Set(target.formalParameters.map(\.name))
+          .union(target.variables.map(\.name))
         if let invalid = arguments.first(where: { $0.isEmpty || !declared.contains($0) }) {
           throw diagnostic(
             .invalidFormalModuleArgument,
@@ -533,7 +534,8 @@ package struct FormalModuleClosure: Sendable {
       }
     }
 
-    func visit(_ module: TLASpec, path: [String]) throws {
+    func visit(_ sourceModule: TLASpec, path: [String]) throws {
+      let module = try sourceModule.loweredSourceModel()
       try validateDeclaredRelationships(module, path: path)
       let source = module.compilationIdentity
       if let previousSource = sourceByName[module.name] {

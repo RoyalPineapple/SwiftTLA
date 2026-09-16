@@ -369,7 +369,7 @@ struct CompiledLowerer {
             throw invalid("declarations", "duplicate or empty scenario name")
         }
         let parameters = Set(spec.parameters.map(\.reference))
-        let properties = layout.stateProperties + layout.temporalProperties
+        let properties = layout.properties
         let propertyReferences = properties.compactMap(\.reference)
         guard Set(propertyReferences).count == propertyReferences.count else {
             throw invalid("declarations", "duplicate property registration")

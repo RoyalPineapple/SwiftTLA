@@ -620,8 +620,8 @@ extension NativeSwiftEmitter {
                 """)
             }
         }
-        let unsupportedRefinements = program.refinements.enumerated().filter { !supportsNativeRefinement($0.element) }.map {
-            "if checking.contains(.\(refinementPropertyCases[$0.offset])) { throw ExplorationError.unsupportedRefinement(\(String(reflecting: $0.element.name))) }"
+        let unsupportedRefinements = program.refinements.filter { !supportsNativeRefinement($0) }.map {
+            "if checking.contains(.\(propertyCases[$0.id]!)) { throw ExplorationError.unsupportedRefinement(\(String(reflecting: $0.name))) }"
         }.joined(separator: "\n")
         let propertyBody = unsupportedRefinements + "\n" + (temporalProperties.isEmpty ? "return [:]" :
             "var result: [Property: TemporalCondition<@Sendable (Snapshot) throws -> Bool>] = [:]\n" + temporalProperties.joined(separator: "\n") + "\nreturn result")

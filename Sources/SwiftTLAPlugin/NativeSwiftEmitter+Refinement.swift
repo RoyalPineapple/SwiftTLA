@@ -53,8 +53,8 @@ extension NativeSwiftEmitter {
                 }
                 """)
                 checks.append("""
-                if checking.contains(.\(refinementPropertyCases[index])), let failure = try graph.refinementFailure(initialMachines: \(name).initialMachines(), mapping: _mapRefinement\(index)) {
-                    failures[.\(refinementPropertyCases[index])] = failure
+                if checking.contains(.\(propertyCases[refinement.id]!)), let failure = try graph.refinementFailure(initialMachines: \(name).initialMachines(), mapping: _mapRefinement\(index)) {
+                    failures[.\(propertyCases[refinement.id]!)] = failure
                 }
                 """)
             }

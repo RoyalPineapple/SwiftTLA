@@ -47,7 +47,7 @@ private final class ProgramResolver {
         let behavior = try checked.behavior.map(root)
         let authoredAlgorithm = try checked.authoredAlgorithm.map { try $0.map(root) }
         let refinements = try checked.refinements.map { refinement in
-            CompiledRefinementProgram(name: refinement.name, instance: refinement.instance,
+            CompiledRefinementProgram(id: refinement.id, name: refinement.name, instance: refinement.instance,
                 operator: refinement.operator, abstract: refinement.abstract,
                 variableMappings: try refinement.variableMappings.map { try $0.map(root) })
         }

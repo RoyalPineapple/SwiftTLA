@@ -663,8 +663,16 @@ types, are immutable for an execution, and are distinct from state variables.
 Scalar and set-valued parameters use the contracts in this section. Bindings are closed typed
 values, not opaque closures that backends evaluate differently. State, parameter,
 and operator dependencies in scenario bindings currently produce explicit diagnostics.
-Parameter-dependent process populations, fixed `ModelCollection` bindings, and refinement expectation
-handles remain open. Generated scenarios reject these unsupported cases explicitly.
+Parameter-dependent process populations and fixed `ModelCollection` bindings remain open.
+Generated scenarios reject these unsupported cases explicitly.
+
+Registered refinements have model-owned property handles and participate in every scenario by default.
+A `let` binding alone does not register a refinement. Its handle must also appear as a specification builder expression.
+`.expect(refinement, .violated)` changes the expected outcome without disabling the refinement or other checks.
+A distinct handle with the same name does not resolve to the registered refinement.
+Generated native checking and TLA+ export use the same resolved refinement identity and mappings.
+
+General composition, unresolved abstract configurations, and additional refinement targets remain open under B-06.
 
 `.expectDeadlock(.violated)` declares an expected deadlock without disabling its
 check. Duplicate overrides and expectations for disabled checks are errors.

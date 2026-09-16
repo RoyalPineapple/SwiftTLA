@@ -142,6 +142,7 @@ struct DirectModuleAction: Sendable, Equatable {
 }
 
 struct CompiledRefinement: Sendable {
+    let id: PropertyID
     let name: String
     let instance: ModuleInstanceID
     let `operator`: RefinementDecl.Operator
@@ -912,7 +913,7 @@ public extension TLASpec {
         layout: CompiledLayout,
         semantics: CompiledSemantics
     ) throws -> [CompiledRefinement] {
-        return try refinements.map { refinement in
+        return try zip(refinements, layout.refinementProperties).map { refinement, property in
             guard let instanceOffset = moduleInstances.firstIndex(where: refinement.instance.resolves) else {
                 throw CompilationDiagnostic(
                     code: .unresolvedRefinementInstance,
@@ -975,6 +976,7 @@ public extension TLASpec {
             // A TLC exploration constraint is configuration, not part of C!Spec.
             specialized.constraint = nil
             return .init(
+                id: property.id,
                 name: refinement.name,
                 instance: instanceID,
                 operator: refinement.operator,
@@ -1482,16 +1484,14 @@ private extension CompiledModuleMetadata {
         requiredStandardModules: Set<StandardModule>, importedNames: [String], instancesAfterBehavior: Bool = false
     ) throws -> RenderedModule {
         let layout = renderer.layout
-        func containsStateReference(_ expression: CompiledExpression) -> Bool {
-            if case .stateVariable = expression.operation { return true }
-            return expression.children.contains(where: containsStateReference)
-        }
         func statePredicate(_ expression: CompiledExpression, negated: Bool = false) throws -> String {
             let rendered = try renderer.state(expression)
             let predicate = negated ? "~(\(rendered))" : rendered
             // TLC folds constant operators before registering invariants. Keep their
             // truth values unchanged while making initial-state witnesses observable.
-            guard !containsStateReference(expression), let variable = layout.variables.first else { return predicate }
+            let requirements = expression.stateRequirements(operators: renderer.operators)
+            guard requirements.variables.isEmpty, !requirements.requiresCompleteState,
+                  let variable = layout.variables.first else { return predicate }
             let state = try renderer.state(.stateVariable(variable.id))
             return "(\(predicate)) /\\ (\(state) = \(state))"
         }

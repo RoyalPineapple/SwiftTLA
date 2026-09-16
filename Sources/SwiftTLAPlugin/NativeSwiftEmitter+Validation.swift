@@ -3,16 +3,14 @@ import SwiftTLA
 
 extension NativeSwiftEmitter {
     func propertyIdentityDeclarations() throws -> [DeclSyntax] {
-        let properties = (program.behavior.invariants + program.behavior.reachabilityProperties).map { (id: $0.id, name: $0.name) }
-            + program.behavior.temporalProperties.map { (id: $0.id, name: $0.name) }
-        let names = properties.map(\.name) + program.refinements.map(\.name)
-        let identifiers = properties.map { propertyCases[$0.id]! } + refinementPropertyCases
+        let properties = program.layout.properties
+        let names = properties.map { $0.declaration.name }
+        let identifiers = properties.map { propertyCases[$0.id]! }
         let cases = identifiers.map { "case \($0)" }.joined(separator: "\n")
         let projections = zip(identifiers, names).map {
             ".\($0.0): \(String(reflecting: $0.1))"
         }.joined(separator: ",\n")
-        let displayNames = properties.map { program.layout.propertyDisplayName($0.id) ?? $0.name }
-            + program.refinements.map(\.name)
+        let displayNames = properties.map { program.layout.propertyDisplayName($0.id) ?? $0.declaration.name }
         let displayProjections = zip(identifiers, displayNames).map {
             ".\($0.0): \(String(reflecting: $0.1))"
         }.joined(separator: ",\n")
@@ -34,11 +32,7 @@ extension NativeSwiftEmitter {
         guard model.api.collections.isEmpty else {
             throw unsupported("validation scenarios require explicit collection bindings")
         }
-        guard program.refinements.isEmpty else {
-            throw unsupported("validation scenarios require resolved refinement expectation handles")
-        }
-        let properties = (program.behavior.invariants + program.behavior.reachabilityProperties).map { (id: $0.id, name: $0.name) }
-            + program.behavior.temporalProperties.map { (id: $0.id, name: $0.name) }
+        let properties = program.layout.properties
         let identifiers = properties.map { propertyCases[$0.id]! }
         let hasConfiguration = !program.layout.parameters.isEmpty
         var scenarios: [String] = []
