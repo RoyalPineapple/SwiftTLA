@@ -225,6 +225,49 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
         )
     }
 
+    /// Checks an action predicate on every step of each permitted infinite behavior.
+    func analyzeAlwaysTransition(
+        _ predicate: @Sendable (State, State) throws -> Bool,
+        initialStates: [State],
+        isComplete: Bool = true,
+        renderScope: (Scope) throws -> String
+    ) throws -> TemporalAnalysis<State, Action?> {
+        let baseline = try analyze(.always { _ in true }, initialStates: initialStates,
+            isComplete: isComplete, renderScope: renderScope)
+        guard baseline.status == .satisfied else { return baseline }
+
+        var reachable = Set(initialStates)
+        var pending = initialStates
+        while let state = pending.popLast() {
+            for edge in explicitEdges(from: state) where reachable.insert(edge.target).inserted {
+                pending.append(edge.target)
+            }
+        }
+        var witness: FairLassoWitness<State, Action?>?
+        for source in reachable.sorted(by: stateOrder) {
+            for edge in edges(from: source).sorted(by: edgeOrder) {
+                guard try !predicate(source, edge.target),
+                      let suffix = findWitness(baseline.fairComponents, initialStates: [edge.target],
+                        prefixStates: nil, prefixContinuationStates: nil, cycleRequiredStates: nil,
+                        fairness: fairness, enabled: enabled) else { continue }
+                for initial in initialStates.sorted(by: stateOrder) {
+                    guard let prefix = shortestPath(from: initial, to: source, in: nil) else { continue }
+                    let candidate = FairLassoWitness(
+                        prefix: prefix.0 + [edge.target] + suffix.prefix.dropFirst(),
+                        cycle: suffix.cycle,
+                        prefixActions: prefix.1.map(\.action) + [edge.action] + suffix.prefixActions,
+                        cycleActions: suffix.cycleActions)
+                    if let witness, !witnessOrder(candidate, witness) { continue }
+                    witness = candidate
+                }
+            }
+        }
+        return .init(status: witness == nil ? .satisfied : .violated,
+            reason: witness == nil ? .satisfied : .violatingFairLasso, witness: witness,
+            enabledActions: baseline.enabledActions, fairComponents: baseline.fairComponents,
+            rejectedComponents: baseline.rejectedComponents)
+    }
+
     /// Finds a concrete fair behavior that eventually stops taking an abstract fair action.
     func fairnessViolation(
         initialStates: [State], isStrong: Bool, enabledStates: Set<State>,
