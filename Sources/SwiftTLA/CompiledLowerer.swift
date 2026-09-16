@@ -33,6 +33,7 @@ private enum ActionLoweringTask {
 private struct BindingScope {
     var values: [String: BinderID] = [:]
     var operators: [String: OperatorID] = [:]
+    var allowsNextState = false
 }
 
 private enum FormalOperatorLoweringPlan {
@@ -1130,6 +1131,16 @@ struct CompiledLowerer {
                     requiredStandardModules.formUnion(shape.requiredStandardModules)
                     scheduleUnary(value, at: path, scope: scope, operation: .assertView(shape), on: &tasks)
                 case .negate(let value): scheduleUnary(value, at: path, scope: scope, operation: .negate, on: &tasks)
+                case .nextState(let value):
+                    guard scope.allowsNextState else {
+                        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                            path: path, expected: "one successor-state read inside an always transition predicate",
+                            actual: "a successor-state read in a state-only or already primed expression",
+                            nextSafeAction: "Use before and after values inside an alwaysStep predicate.")
+                    }
+                    var successorScope = scope
+                    successorScope.allowsNextState = false
+                    scheduleUnary(value, at: path, scope: successorScope, operation: .nextState, on: &tasks)
                 case .not(let value): scheduleUnary(value, at: path, scope: scope, operation: .not, on: &tasks)
                 case .cardinality(let value): scheduleUnary(value, at: path, scope: scope, operation: .cardinality, on: &tasks)
                 case .powerSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .powerSet, on: &tasks)
@@ -1412,11 +1423,12 @@ struct CompiledLowerer {
                     var childScopes: [BindingScope] = []
                     for (operation, id) in declarations {
                         let operationPath = "\(path).\(operation.name)"
-                        let parameterScope = try bind(
+                        var parameterScope = try bind(
                             operation.parameters,
                             at: "\(operationPath).parameters",
                             scope: nested
                         )
+                        parameterScope.allowsNextState = false
                         let parameters = try operation.parameters.map {
                             try bound($0, in: parameterScope, at: operationPath)
                         }
@@ -1741,7 +1753,9 @@ struct CompiledLowerer {
     ) throws -> TemporalCondition<CompiledExpression> {
         switch expression {
         case .always(let predicate):
-            return .always(try lower(predicate, at: "\(path).body", scope: scope))
+            var transitionScope = scope
+            transitionScope.allowsNextState = true
+            return .always(try lower(predicate, at: "\(path).body", scope: transitionScope))
         case .eventually(let predicate):
             return .eventually(try lower(predicate, at: "\(path).body", scope: scope))
         case .alwaysEventually(let predicate):

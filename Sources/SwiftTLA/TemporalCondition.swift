@@ -35,6 +35,15 @@ public enum TemporalCondition<Expression: Sendable>: Sendable {
 
 extension TemporalCondition: Equatable where Expression: Equatable {}
 extension TemporalCondition where Expression == Expr<Bool> {
+    public static func alwaysStep<Value: TLAValueType>(
+        on value: some TypedExpression<Value>,
+        _ predicate: (Expr<Value>, Expr<Value>) -> some TypedExpression<Bool>
+    ) -> Self {
+        let next = Expr<Value>(.nextState(value.stateExpr))
+        return .always(Expr(.or(.equal(value.stateExpr, next.stateExpr),
+            predicate(value.expr, next).stateExpr)))
+    }
+
     @_disfavoredOverload
     public static func always(_ predicate: some TypedExpression<Bool>) -> Self { .always(predicate.expr) }
     @_disfavoredOverload

@@ -410,6 +410,38 @@ TLA+ export retains the temporal `IF ... THEN ... ELSE ...` expression.
 A counterexample retains the initial state that selected the violated branch.
 Incomplete exploration cannot satisfy a conditional claim.
 
+### Before and after values
+
+`TemporalCondition<Expr<Bool>>.alwaysStep(on:_:)` defines a transition claim over a typed expression.
+The closure receives two `Expr<Value>` arguments and returns a typed Boolean expression.
+The arguments describe the selected value before and after one transition.
+For example:
+
+```swift
+let decreases = Temporal()
+decreases(.alwaysStep(on: can) { before, after in
+    after.black + after.white < before.black + before.white
+})
+```
+
+The claim means `[][predicate]_value`.
+A transition that preserves the selected value satisfies the claim without evaluation of the closure predicate.
+This includes implicit stuttering and transitions that change only other variables.
+Other transitions must satisfy the predicate on their actual before and after values.
+Declared fairness still determines the permitted infinite behaviors.
+The claim can appear inside `.all` and either branch of `.conditional`.
+
+The compiler retains a typed successor-state expression until native generation or TLA+ serialization.
+It does not encode successor reads in variable names.
+Native checking uses generated predicates over the same snapshots and transitions as application execution.
+A counterexample includes the violating transition and a fair continuation.
+A successor read in an initializer, invariant, state liveness predicate, or another successor read fails compilation.
+The existing state-only interpreter cannot check transition predicates and reports an explicit failure.
+
+Acceptance includes nominal record fields, scalar projections, composite values, stuttering, multiple initial states, and mixed temporal compositions.
+A non-Boolean result or a closure without two distinct parameters fails compilation.
+Independent hosted TLC validation must retain complete graphs and both satisfied and violated property outcomes.
+
 Reachability and eventual progress are different claims. A puzzle can have a
 solution even when some executions loop forever without finding it.
 

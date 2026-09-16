@@ -2457,8 +2457,22 @@ extension ParserSession {
     func decodeTemporalCondition(_ expression: ExprSyntax, scope: TypedFacadeScope) -> TemporalCondition<StateExpr>? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-              call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
+              call.additionalTrailingClosures.isEmpty else { return nil }
         let arguments = Array(call.arguments)
+        if member.base == nil, member.declName.baseName.sourceIdentifierName == "alwaysStep" {
+            guard arguments.count == 1, arguments[0].label?.text == "on",
+                  let value = decodeTypedFacadeValue(arguments[0].expression, scope: scope),
+                  let closure = call.trailingClosure, closure.statements.count == 1,
+                  case .expr(let body) = closure.statements.first?.item else { return nil }
+            let parameters = closureParameterNames(in: closure)
+            guard parameters.count == 2, Set(parameters).count == 2 else { return nil }
+            let shape = typedFacadeValueType(arguments[0].expression, scope: scope)
+            let nested = scope.extending(binding: parameters[0], to: value, shape: shape)
+                .extending(binding: parameters[1], to: .nextState(value), shape: shape)
+            guard let predicate = decodeTypedFacadeValue(body, scope: nested) else { return nil }
+            return .always(.or(.equal(value, .nextState(value)), predicate))
+        }
+        guard call.trailingClosure == nil else { return nil }
         if member.base != nil {
             guard member.declName.baseName.sourceIdentifierName == "leadsTo",
                   arguments.count == 1, arguments[0].label == nil else { return nil }

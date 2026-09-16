@@ -43,6 +43,7 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case integerOverflow(NativeMachineEvaluationError.IntegerOperation, operands: [Int])
     case indexOutOfBounds(Int, Int)
     case recursionDepthExceeded(Int)
+    case transitionPredicateRequiresGeneratedChecking
 
     package var description: String {
         switch self {
@@ -75,6 +76,8 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
             return "Integer \(operation.rawValue) overflowed for \(operands.map(String.init).joined(separator: ", "))"
         case .indexOutOfBounds(let index, let count): return "Index \(index) out of bounds (1..\(count))"
         case .recursionDepthExceeded(let limit): return "Evaluation exceeded recursive depth \(limit)"
+        case .transitionPredicateRequiresGeneratedChecking:
+            return "Transition predicates require generated native checking with both states"
         }
     }
 }
@@ -669,6 +672,8 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.expression(sequence, scope))
                 case .convert:
                     tasks.append(.expression(expression.children[0], scope))
+                case .nextState:
+                    throw EvalError.transitionPredicateRequiresGeneratedChecking
                 case .call(let target):
                     guard functions.indices.contains(target.ordinal) else {
                         throw CompiledEvaluationError.unresolvedOperator
@@ -737,6 +742,8 @@ private extension CompiledEvaluator {
 extension CompiledOperation {
     func apply(to values: inout [CompiledValue], operandCount: Int) throws {
         switch self {
+        case .nextState:
+            throw EvalError.transitionPredicateRequiresGeneratedChecking
         case .assertView(let shape):
             guard operandCount == 1, let value = values.last else {
                 throw EvalError.invalidContinuation(availableValues: values.count)

@@ -302,6 +302,8 @@ struct CompiledTLARenderer {
 
                     tasks.append(.checkedView(shape, start: parts.count))
                     tasks.append(.expression(value))
+                case .nextState:
+                    try schedule(expression.operation, expression.children)
                 case .value(let value): parts.append(try value.rendered(using: layout).description)
                 case .stateVariable(let variable): parts.append(try stateNames[variable] ?? variableName(variable))
                 case .boundValue(let binder): parts.append(try binderName(binder))
@@ -499,6 +501,7 @@ extension CompiledOperation {
         case .setSum: ("Sum(", ", ", ")")
         case .integerRange: ("", "..", "")
         case .negate: ("(-", "", ")")
+        case .nextState: ("(", "", ")'")
         case .not: ("(~", "", ")")
         case .cardinality: ("Cardinality(", "", ")")
         case .powerSet: ("SUBSET ", "", "")

@@ -14,6 +14,7 @@ package enum CompiledOperation: Hashable, Sendable {
     case modulo
     case negate
     case assertView(FormalValueShape)
+    case nextState
     case convert
     case integerDivide
     case equal

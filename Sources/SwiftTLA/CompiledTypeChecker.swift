@@ -2263,6 +2263,9 @@ package struct CompiledTypeChecker: Sendable {
             let source = try checkOperand(value)
             result = try inputs.types.resolve(shape)
             return try checkedType(result, expected: expected, children: [source])
+        case .nextState:
+            let source = try checkOperand(expression.children[0], expected: expected)
+            return try checkedType(source.resultType, expected: expected, children: [source])
         case .value(let value):
             let type = try literal(value, expected: expected)
             return .init(type: type, computationType: type)

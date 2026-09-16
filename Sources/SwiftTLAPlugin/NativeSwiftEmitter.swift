@@ -15,6 +15,7 @@ struct NativeSwiftEmitter {
     let propertyCases: [PropertyID: String]
     private let variableNames: [VariableID: String]
     private var expressionValues: [CompiledExpression: String] = [:]
+    private var successorBindings: [BinderID: (value: CompiledExpression, substitutions: [BinderID: String])] = [:]
     private var expressionOrdinals: [CompiledExpression: Int] = [:]
     private var hasDepthScope = false
     private var nextMembershipPredicate = 0
@@ -556,6 +557,9 @@ struct NativeSwiftEmitter {
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         switch id.operation {
+        case .nextState:
+            return try expression(id.children[0], state: "nextState.", substitutions: substitutions,
+                activeFunctions: activeFunctions)
         case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate:
             return try arithmeticExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .value, .stateVariable, .boundValue, .controlLocation, .enabledAction,
@@ -651,13 +655,17 @@ struct NativeSwiftEmitter {
         case .stateVariable(let id):
             return stateValue(id, prefix: state)
         case .boundValue(let id):
+            if state == "nextState.", let binding = successorBindings[id] {
+                return try self.expression(binding.value, state: state, substitutions: binding.substitutions,
+                    activeFunctions: activeFunctions)
+            }
             if let substitution = substitutions[id] { return substitution }
             if let parameter = program.layout.parameters.first(where: { $0.binder == id }) {
                 return "configuration.`\(parameter.reference.name)`"
             }
             return binder(id)
         case .controlLocation(let id): return "_ControlLocation.location\(id.ordinal)"
-        case .enabledAction(let id): return "enabled.contains(\(id.ordinal))"
+        case .enabledAction(let id): return "\(state == "nextState." ? "nextEnabled" : "enabled").contains(\(id.ordinal))"
         case .convert:
             return try projected(emit(0), from: childType(0), to: node.resultType)
         case .assertView:
@@ -884,6 +892,9 @@ struct NativeSwiftEmitter {
             var nested = substitutions
             nested[binding] = "(try \(name)())"
             let value = try cachedBinding(named: name, type: node.children[0].resultType, value: emit(node.children[0]))
+            let previous = successorBindings[binding]
+            successorBindings[binding] = (node.children[0], substitutions)
+            defer { successorBindings[binding] = previous }
             let result = try membershipPredicate(node.children[1], state: state, substitutions: nested,
                 activeFunctions: activeFunctions, membershipFunctions: membershipFunctions)
             body = "\(value)\n\(result.declaration)\nreturn \(result.call)"
@@ -1165,6 +1176,9 @@ struct NativeSwiftEmitter {
             nested[binding] = "(try \(binder(binding))())"
             let valueType = childType(0)
             let valueCode = try emit(0)
+            let previous = successorBindings[binding]
+            successorBindings[binding] = (node.children[0], substitutions)
+            defer { successorBindings[binding] = previous }
             let bodyCode = try self.expression(node.children[1], state: state, substitutions: nested, activeFunctions: activeFunctions)
             let declaration = try cachedBinding(named: binder(binding), type: valueType, value: valueCode)
             return "(try { () throws -> \(try swiftType(result)) in\n\(declaration)\nreturn \(bodyCode)\n}())"

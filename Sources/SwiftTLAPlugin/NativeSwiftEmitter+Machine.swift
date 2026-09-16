@@ -585,12 +585,13 @@ extension NativeSwiftEmitter {
                 let function = "_temporal\(property.id.ordinal)_\(index)"
                 index += 1
                 declarations += try nativeDeclarations("""
-                private static func \(function)(in state: Snapshot, nextState: Snapshot\(collectionParameters)\(boundParameters), enabled: Set<Int>) throws -> Bool {
+                private static func \(function)(in state: Snapshot, nextState: Snapshot\(collectionParameters)\(boundParameters), enabled: Set<Int>, nextEnabled: Set<Int>) throws -> Bool {
                     \(try expression(query.expression))
                 }
                 """)
                 let enabled = enabledActionsCall(query.enabledActions, state: "state", collectionArguments: arguments)
-                return "{ \(propertyCaptureList)state, nextState in try Self.\(function)(in: state, nextState: nextState\(arguments)\(boundArguments), enabled: \(enabled)) }"
+                let nextEnabled = enabledActionsCall(query.enabledActions, state: "nextState", collectionArguments: arguments)
+                return "{ \(propertyCaptureList)state, nextState in try Self.\(function)(in: state, nextState: nextState\(arguments)\(boundArguments), enabled: \(enabled), nextEnabled: \(nextEnabled)) }"
             }
             func condition(_ value: TemporalCondition<String>) -> String {
                 switch value {

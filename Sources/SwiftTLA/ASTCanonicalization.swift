@@ -375,6 +375,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .functionSet(let lhs, let rhs): schedule("functionSet", [lhs, rhs], environment: environment)
             case .assertView(let value, let shape): schedule("assertView[\(shape)]", [value], environment: environment)
             case .negate(let value): schedule("negate", [value], environment: environment)
+            case .nextState(let value): schedule("nextState", [value], environment: environment)
             case .not(let value): schedule("not", [value], environment: environment)
             case .cardinality(let value): schedule("cardinality", [value], environment: environment)
             case .powerSet(let value): schedule("powerSet", [value], environment: environment)
