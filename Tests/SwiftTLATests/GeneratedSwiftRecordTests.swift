@@ -9,7 +9,18 @@ struct GeneratedSwiftRecordTests {
         let transition = try machine.send(.advance)
         #expect(transition.before.packet == .init(count: 0, ready: false))
         #expect(transition.after.packet == .init(count: 1, ready: true))
+        #expect(transition.before.previousCount == -1)
+        #expect(transition.after.previousCount == 0)
         #expect(machine.state == transition.after)
+    }
+
+    @Test("record expression fields retain their Swift field types")
+    func readsTypedFields() {
+        let record = Expr<GeneratedSwiftRecord.Packet>(.variable("packet"))
+        let count: Expr<Int> = record.count
+        let ready: Expr<Bool> = record.ready
+        #expect(count.stateExpr == .recordAccess(.variable("packet"), "count"))
+        #expect(ready.stateExpr == .recordAccess(.variable("packet"), "ready"))
     }
 
     @Test("generated record conversion validates every key and value")

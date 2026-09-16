@@ -18,10 +18,11 @@ public struct GeneratedTypedSurface {
       let packet = scope.sharedVar("packet", initial: Packet(count: 0, ready: false))
       Algorithm("GeneratedTypedSurface") {
         Do(Step.advance, when: value < 1) {
-          Assign(value, to: value + 1)
+          Assign(value, to: packet.count + 1)
           Assign(packet, to: Packet(count: 1, ready: true))
         }
       }
+      Invariant("ConsistentCount") { packet.count == value }
     }
   }
 }

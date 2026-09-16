@@ -4,6 +4,11 @@ public protocol TLAValueType: TLAValueConvertible, TypedExpression, Sendable whe
   static var formalValueShape: FormalValueShape { get }
   init?(formalValue: TLAValue)
 }
+
+/// Generated record metadata used at the typed source/formal boundary.
+public protocol _GeneratedRecordValue: TLAValueType {
+  static func _formalRecordFieldName(_ keyPath: PartialKeyPath<Self>) -> String?
+}
 extension TLAValueType {
   public var expr: Expr<Self> { Expr(self) }
   public var stateExpr: StateExpr { expr.stateExpr }
@@ -81,7 +86,17 @@ public protocol TypedExpression<ExpressionValue>: StateExprConvertible, Sendable
   var expr: Expr<ExpressionValue> { get }
 }
 
+extension TypedExpression where ExpressionValue: _GeneratedRecordValue {
+  public subscript<Field: TLAValueType>(dynamicMember keyPath: KeyPath<ExpressionValue, Field>) -> Expr<Field> {
+    guard let name = ExpressionValue._formalRecordFieldName(keyPath) else {
+      return Expr(.sourceIssue(.recordField(schema: String(reflecting: ExpressionValue.self))))
+    }
+    return Expr(.recordAccess(stateExpr, name))
+  }
+}
+
 /// Phantom-typed expression: `Expr<Int>` can only be assigned to `Var<Int>`.
+@dynamicMemberLookup
 public struct Expr<T: TLAValueType>: TypedExpression {
   public var expr: Self { self }
   public let raw: StateExpr

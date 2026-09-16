@@ -32,8 +32,15 @@ public struct RecordValueMacro: ExtensionMacro {
         }
         let guards = (["case .record(let record) = formalValue", "record.fields.map(\\.name) == [\(names)]"] + decoded).joined(separator: ",\n")
         let arguments = fields.enumerated().map { "\($0.element.name): value\($0.offset)" }.joined(separator: ", ")
+        let fieldNames = fields.map {
+            "if keyPath == \\Self.`\($0.name)` { return \(String(reflecting: $0.name)) }"
+        }.joined(separator: "\n")
         return [try ExtensionDeclSyntax("""
-        extension \(type): SwiftTLA.TLAValueType {
+        extension \(type): SwiftTLA._GeneratedRecordValue {
+            public static func _formalRecordFieldName(_ keyPath: PartialKeyPath<Self>) -> String? {
+                \(raw: fieldNames)
+                return nil
+            }
             public static var defaultValue: Self { Self(\(raw: defaults)) }
             public static var formalValueShape: SwiftTLA.FormalValueShape { .record([\(raw: shapes)]) }
             public var tlaValue: SwiftTLA.TLAValue { .record(SwiftTLA.TLARecord([\(raw: values)])) }

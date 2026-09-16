@@ -58,6 +58,7 @@ extension FiniteDomain {
     }
 }
 
+@dynamicMemberLookup
 public struct ProcessIdentifier<Value: TLAValueType>: TypedExpression {
     fileprivate let expression: StateExpr
 
@@ -75,6 +76,7 @@ public struct ProcessIdentifier<Value: TLAValueType>: TypedExpression {
 /// A value bound for one atomic `With` body.
 ///
 /// It carries a scoped formal action binding while the algorithm IR is built.
+@dynamicMemberLookup
 public struct WithValue<Value: TLAValueType>: TypedExpression {
     let expression: StateExpr
 
@@ -120,6 +122,7 @@ public struct AlgorithmLValue<Value: TLAValueType>: Sendable {
 ///
 /// Its body is substituted into the surrounding `Do` block before the
 /// algorithm lowers.
+@dynamicMemberLookup
 public struct MacroParameter<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
 
@@ -132,6 +135,7 @@ public struct MacroParameter<Value: TLAValueType>: TypedExpression {
 }
 
 /// A typed formal input of a PlusCal procedure.
+@dynamicMemberLookup
 public struct ProcedureParameter<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     public var stateExpr: StateExpr { .variable(name) }
@@ -209,6 +213,7 @@ public func Macro(@DoBuilder _ body: () -> [StepStatement]) -> StatementMacro<Vo
 /// A typed shared variable declaration.
 ///
 /// Declare it through the scope supplied by `TLASpec` or `Algorithm`.
+@dynamicMemberLookup
 public struct SharedVariable<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     fileprivate let initialization: VariableInitialization
@@ -264,6 +269,7 @@ public struct SharedVariable<Value: TLAValueType>: TypedExpression {
 /// A typed process-local algorithm variable.
 ///
 /// Declare it through the scope supplied by `Each` or `Procedure`.
+@dynamicMemberLookup
 public struct LocalVariable<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     fileprivate let initialization: VariableInitialization

@@ -18,12 +18,17 @@ struct GeneratedSwiftRecord {
     static var spec: TLASpec {
         #spec("GeneratedSwiftRecord") { scope in
             let packet = scope.sharedVar("packet", initial: Packet(count: 0, ready: false))
+            let previousCount = scope.sharedVar("previousCount", initial: -1)
             Algorithm("GeneratedSwiftRecord") {
                 Do(Step.advance) {
+                    let saved = packet
+                    When(saved.count == 0)
+                    Assign(previousCount, to: saved.count)
                     Assign(packet, to: Packet(count: 1, ready: true))
                     Stop()
                 }
             }
+            Invariant("Bounded") { packet.count <= 1 }
         }
     }
 }
