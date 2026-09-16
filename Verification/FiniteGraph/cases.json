@@ -2,6 +2,25 @@
   "schema": "FiniteGraphCases",
   "cases": [
     {
+      "id": "dining-philosophers",
+      "sourceModel": "dining-philosophers",
+      "module": "dining-philosophers/DiningPhilosophers.tla",
+      "configuration": "dining-philosophers/DiningPhilosophers.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/DiningPhilosophers/DiningPhilosophers.tla",
+        "sha256": "2290c338922895e78990171ce5a5bfe80c9470bd5c9bb1ff8f58ed1563f6d4ff"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "2290c338922895e78990171ce5a5bfe80c9470bd5c9bb1ff8f58ed1563f6d4ff",
+      "cfgSHA256": "9a96d81b6117e554a654f0eec209f9e768527bd2b2693350ae38d8140b73a8d5",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "hour-clock",
       "sourceModel": "hour-clock",
       "module": "hour-clock/HourClock.tla",

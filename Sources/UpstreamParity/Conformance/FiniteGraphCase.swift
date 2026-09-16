@@ -337,6 +337,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case multiCarElevator = "multicar-elevator"
     case tlcmcGraph1 = "tlcmc-graph-1"
     case nQueensFour = "n-queens-four"
+    case diningPhilosophers = "dining-philosophers"
     case stringLiterals = "string-literals"
     case actionReferences = "action-references"
 
@@ -358,6 +359,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
         case .nQueensFour: return try explore(NQueensModel.initialMachines())
+        case .diningPhilosophers: return try explore(DiningPhilosophersModel.initialMachines())
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
         }
@@ -376,6 +378,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .multiCarElevator: MultiCarElevator.spec
         case .tlcmcGraph1: TLCMCModel.spec
         case .nQueensFour: NQueensModel.spec
+        case .diningPhilosophers: DiningPhilosophersModel.spec
         case .stringLiterals: StringLiteralModel.spec
         case .actionReferences: ActionReferencesModel.spec
         }
