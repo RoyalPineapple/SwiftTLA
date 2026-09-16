@@ -9,6 +9,7 @@ package func modelValidationScenarios() throws -> [(id: String, scenario: any Mo
         ("recurring-population", try RecurringPopulation.validationScenarios()),
         ("scoped-temporal-claims", try ScopedTemporalClaims.validationScenarios()),
         ("scoped-reachability-claims", try ScopedReachabilityClaims.validationScenarios()),
+        ("constant-state-claims", try ConstantStateClaims.validationScenarios()),
         ("dining-philosophers", try DiningPhilosophersModel.validationScenarios()),
         ("selected-checks", try SelectedChecksModel.validationScenarios()),
         ("unselected-predicates", try UnselectedPredicateModel.validationScenarios())

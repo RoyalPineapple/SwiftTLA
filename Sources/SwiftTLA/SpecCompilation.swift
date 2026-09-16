@@ -1388,8 +1388,21 @@ private extension CompiledModuleMetadata {
         requiredStandardModules: Set<StandardModule>, importedNames: [String]
     ) throws -> RenderedModule {
         let layout = renderer.layout
-        let invariants = try behavior.invariants.map { ($0.id, "\($0.name) == \(try renderer.state($0.predicate.expression))") }
-            + behavior.reachabilityProperties.map { ($0.id, "\($0.name) == ~(\(try renderer.state($0.predicate.expression)))") }
+        func containsStateReference(_ expression: CompiledExpression) -> Bool {
+            if case .stateVariable = expression.operation { return true }
+            return expression.children.contains(where: containsStateReference)
+        }
+        func statePredicate(_ expression: CompiledExpression, negated: Bool = false) throws -> String {
+            let rendered = try renderer.state(expression)
+            let predicate = negated ? "~(\(rendered))" : rendered
+            // TLC folds constant operators before registering invariants. Keep their
+            // truth values unchanged while making initial-state witnesses observable.
+            guard !containsStateReference(expression), let variable = layout.variables.first else { return predicate }
+            let state = try renderer.state(.stateVariable(variable.id))
+            return "(\(predicate)) /\\ (\(state) = \(state))"
+        }
+        let invariants = try behavior.invariants.map { ($0.id, "\($0.name) == \(try statePredicate($0.predicate.expression))") }
+            + behavior.reachabilityProperties.map { ($0.id, "\($0.name) == \(try statePredicate($0.predicate.expression, negated: true))") }
         let temporalProperties = try behavior.temporalProperties.map { ($0.id, "\($0.name) == \(try renderer.temporal($0))") }
         let constraint = try behavior.constraint.map { "StateConstraint == \(try renderer.state($0.expression))" }
         let emittedActionNamesByID = Dictionary(
