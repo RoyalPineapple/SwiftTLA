@@ -220,8 +220,34 @@ finish independently of any property run that stops on the first stuck state.
 `Reachable("Name") { predicate }` is the selected declaration for finding a
 matching reachable state. Do not add a `Counterexample` declaration that asks
 users to negate their goal. Counterexamples name results of failed properties.
-The property-handle API remains to be settled. Retain the temporal composition
+Some property-handle decisions remain unresolved. Retain the temporal composition
 capabilities needed by the corpus; these four forms do not limit expressiveness.
+
+### Invariant handles across scopes
+
+The invariant forward-declaration syntax is `let safe = Invariant()` inside `#spec`.
+The macro supplies the Swift binding name. The declaration creates an immutable handle, not a registered predicate.
+The signature is `Invariant() -> InvariantHandle`.
+The handle exposes `callAsFunction(@InvariantBuilder _ body: () -> StateExpr) -> InvDecl`.
+The expression `safe { predicate }` registers the predicate in its enclosing specification, algorithm, or process builder.
+An outer scenario can select this same handle with `.checking(only: [safe])` or reference it with `.expect(safe, .satisfied)`.
+The predicate retains its inner scope and any process-member quantification.
+
+```swift
+let safe = Invariant()
+Algorithm("Worker", scoped: { scope in
+    let value = scope.sharedVar("value", initial: 0)
+    Do(Step.wait) { Goto(Step.wait) }
+    safe { value == 0 }
+})
+Validation("Safety") {}.checking(only: [safe])
+```
+
+A bare forward handle is not a builder component. A scenario reference without a registered predicate fails compilation.
+Two predicate registrations for the same handle also fail compilation, even when their bodies agree.
+For example, `safe { true }` followed by `safe { false }` is invalid.
+An unused handle registers no claim, like an unused bound predicate declaration.
+This decision settles invariant scope references only. Temporal handles, display labels, and anonymous declaration names remain part of B-02 and B-04.
 
 Reachability and eventual progress are different claims. A puzzle can have a
 solution even when some executions loop forever without finding it.
@@ -280,8 +306,8 @@ Fairness remains explicit and independent of the claim.
 
 The compiler retains typed member bindings through native generation and TLA+ export.
 Generated predicates capture native member values. They do not invoke an expression interpreter.
-References to process-scoped property handles from outer validation declarations remain
-part of the unresolved B-02 and B-04 contract.
+Outer validation declarations can reference invariant handles through the forward-declaration syntax in this section.
+Temporal scope references remain part of the unresolved B-02 and B-04 contract.
 
 ### Configured authored PlusCal export
 

@@ -399,7 +399,20 @@ public struct ActionDecl: SpecComponent, Sendable {
     self.bindings = bindings
   }
 }
-public struct InvDecl: ModelProperty {
+public struct InvDecl: ModelProperty, SpecComponent {
+  public let reference: PropertyReference
+  public let name: String
+  public let body: StateExpr
+  package init(_ name: String, _ body: StateExpr) {
+    self.init(reference: .init(name: name), body: body)
+  }
+  package init(reference: PropertyReference, body: StateExpr) {
+    self.reference = reference
+    self.name = reference.name
+    self.body = body
+  }
+}
+public struct ReachableDecl: ModelProperty, SpecComponent {
   public let reference: PropertyReference
   public let name: String
   public let body: StateExpr
@@ -409,17 +422,7 @@ public struct InvDecl: ModelProperty {
     self.body = body
   }
 }
-public struct ReachableDecl: ModelProperty {
-  public let reference: PropertyReference
-  public let name: String
-  public let body: StateExpr
-  package init(_ name: String, _ body: StateExpr) {
-    reference = .init(name: name)
-    self.name = name
-    self.body = body
-  }
-}
-public struct TemporalDecl: ModelProperty {
+public struct TemporalDecl: ModelProperty, SpecComponent {
   public let reference: PropertyReference
   public let name: String
   public let expr: TemporalCondition<StateExpr>

@@ -7,8 +7,22 @@ public struct PropertyReference: Hashable, Sendable {
     package init(name: String) { self.name = name }
 }
 
-public protocol ModelProperty: SpecComponent {
+public protocol ModelProperty: Sendable {
     var reference: PropertyReference { get }
+}
+
+public struct InvariantHandle: ModelProperty {
+    public let reference: PropertyReference
+
+    package init(name: String) { reference = .init(name: name) }
+
+    public func callAsFunction(@InvariantBuilder _ body: () -> StateExpr) -> InvDecl {
+        .init(reference: reference, body: body())
+    }
+}
+
+public func Invariant(_name: String = "") -> InvariantHandle {
+    .init(name: _name)
 }
 
 public enum ValidationExpectation: String, Sendable, Codable {

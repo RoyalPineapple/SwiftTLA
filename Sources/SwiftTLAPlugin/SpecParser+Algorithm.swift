@@ -310,6 +310,10 @@ extension ParserSession {
                 ))
                 return nil
             }
+            if let invariant = parseBoundAlgorithmInvariant(call, scope: sourceScope) {
+                algorithmComponents.append(.invariant(invariant))
+                continue
+            }
             guard let construct = AlgorithmSourceConstruct(call.calledExpression) else {
                 if let diagnostic = unsupportedAlgorithmSourceDiagnostic(
                     in: call.calledExpression, source: call
@@ -556,11 +560,22 @@ extension ParserSession {
         return expression.map { .init(name: name, expr: $0) }
     }
 
-    private func parseAlgorithmInvariant(
+    private func parseBoundAlgorithmInvariant(
         _ call: FunctionCallExprSyntax,
         scope: TypedFacadeScope
     ) -> NamedStatePredicate? {
-        guard let name = extractStringArg(call, index: 0),
+        guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+              let handle = specBindings.properties[name] as? InvariantHandle,
+              call.arguments.isEmpty else { return nil }
+        return parseAlgorithmInvariant(call, scope: scope, reference: handle.reference)
+    }
+
+    private func parseAlgorithmInvariant(
+        _ call: FunctionCallExprSyntax,
+        scope: TypedFacadeScope,
+        reference: PropertyReference? = nil
+    ) -> NamedStatePredicate? {
+        guard let name = reference?.name ?? extractStringArg(call, index: 0),
               let closure = call.trailingClosure
         else { return nil }
 
@@ -594,7 +609,7 @@ extension ParserSession {
         }
         guard !expressions.isEmpty else { return nil }
         let body = expressions.dropFirst().reduce(expressions[0], StateExpr.and)
-        return .init(name: name, body: body)
+        return .init(name: name, body: body, reference: reference)
     }
 
     private func parseEach(
@@ -654,6 +669,10 @@ extension ParserSession {
                   let componentCall = expression.as(FunctionCallExprSyntax.self)
             else {
                 return nil
+            }
+            if let invariant = parseBoundAlgorithmInvariant(componentCall, scope: processScope) {
+                components.append(.invariant(invariant))
+                continue
             }
             guard let construct = AlgorithmSourceConstruct(componentCall.calledExpression) else {
                 guard let sourceName = AlgorithmSourceConstruct.referenceName(in: componentCall.calledExpression) else {

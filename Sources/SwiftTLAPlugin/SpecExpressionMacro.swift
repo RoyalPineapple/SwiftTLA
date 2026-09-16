@@ -89,8 +89,19 @@ private final class DSLRewriter: SyntaxRewriter {
         visited.bindings = PatternBindingListSyntax(zip(node.bindings, visited.bindings).map { source, binding in
             var binding = binding
             guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-                  var call = binding.initializer?.value.as(FunctionCallExprSyntax.self),
-                  let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+                  var call = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { return binding }
+            if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "Invariant",
+               call.arguments.isEmpty, call.trailingClosure == nil {
+                guard node.bindingSpecifier.text == "let" else {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: InvariantBindingDiagnostic()))
+                    return binding
+                }
+                call.arguments = [LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
+                    expression: StringLiteralExprSyntax(content: name))]
+                binding.initializer?.value = ExprSyntax(call)
+                return binding
+            }
+            guard let member = call.calledExpression.as(MemberAccessExprSyntax.self),
                   member.declName.baseName.text == "parameter",
                   member.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == parameterScope else { return binding }
             guard node.bindingSpecifier.text == "let" else {
@@ -232,4 +243,10 @@ private struct ParameterBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-parameter-binding")
     let severity: DiagnosticSeverity = .error
     let message = "A model parameter must be an immutable named let binding in the specification scope."
+}
+
+private struct InvariantBindingDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-invariant-binding")
+    let severity: DiagnosticSeverity = .error
+    let message = "An invariant handle must be an immutable named let binding."
 }

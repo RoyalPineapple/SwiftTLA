@@ -28,7 +28,11 @@ extension ParserSession {
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let property = specBindings.properties[reference.baseName.text] {
-                registerProperty(property, into: &components)
+                if property is InvariantHandle {
+                    components.diagnostics.append(.init(message: "An invariant handle requires a predicate body before registration.", source: reference))
+                } else {
+                    registerProperty(property, into: &components)
+                }
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       specBindings.instances[reference.baseName.text] != nil {
@@ -123,6 +127,11 @@ extension ParserSession {
             } else if ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo"].contains(compilerGrammarName(in: call.calledExpression) ?? "") {
                 guard declaration.bindingSpecifier.text == "let", specBindings.properties[sourceName] == nil else {
                     components.diagnostics.append(.init(message: "A property handle requires a unique let binding.", source: binding))
+                    continue
+                }
+                if compilerGrammarName(in: call.calledExpression) == "Invariant",
+                   call.arguments.isEmpty, call.trailingClosure == nil {
+                    specBindings.properties[sourceName] = InvariantHandle(name: sourceName)
                     continue
                 }
                 var parsed = TLASpec(name: components.name, variables: [], actions: [], invariants: [])
@@ -681,6 +690,18 @@ extension ParserSession {
         collectionTypes: [String: ModelCollectionSourceTypes] = [:]
     ) {
         if parseValidation(call, into: &components) { return }
+        if let sourceName = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+           let handle = specBindings.properties[sourceName] as? InvariantHandle {
+            guard call.arguments.isEmpty, let closure = call.trailingClosure else {
+                components.diagnostics.append(.init(message: "An invariant handle requires one predicate closure.", source: call))
+                return
+            }
+            do {
+                let body = try parseInvariantBody(closure, named: handle.reference.name)
+                registerProperty(InvDecl(reference: handle.reference, body: body), into: &components)
+            } catch { components.diagnostics.append(error) }
+            return
+        }
         guard let name = builderCallName(call.calledExpression) else {
             components.diagnostics.append(.init(
                 message: "Specification body contains an unsupported call.",
