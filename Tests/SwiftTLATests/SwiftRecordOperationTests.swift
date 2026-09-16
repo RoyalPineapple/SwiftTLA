@@ -3,6 +3,27 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct SwiftRecordOperationTests {
+    @Test("record fingerprints include nested field types even when values are empty")
+    func fingerprintsResolvedFields() throws {
+        func expression(element: CompiledValueType) -> StateExpr {
+            .recordLiteral(.init(orderedFields: [.init(name: "items", value: .tupleLiteral([]))],
+                nativeType: .nominalRecord("Packet", [.init(name: "items", type: .array(element))])))
+        }
+        let integers = expression(element: .int)
+        let booleans = expression(element: .bool)
+        #expect(alphaKey(integers) == alphaKey(expression(element: .int)))
+        #expect(alphaKey(integers) != alphaKey(booleans))
+        func compilation(_ value: StateExpr) throws -> CompiledSpecification {
+            try TLASpec(name: "RecordIdentity",
+                variables: [NamedVar(name: "packet", initial: .record(["items": .tuple([])]))],
+                actions: [NamedAction(name: "replace", body: .assign(.named("packet"), value))],
+                invariants: []).compile()
+        }
+        #expect(try compilation(integers).identity != compilation(booleans).identity)
+        #expect(alphaKey(expression(element: .nominalRecord("Item", [.init(name: "value", type: .int)])))
+            != alphaKey(expression(element: .nominalRecord("Item", [.init(name: "value", type: .bool)]))))
+    }
+
     @Test("Swift constructors retain their nominal type through saved values and both emitters")
     func preservesConstructorIdentity() throws {
         let model = try swiftRecordModel()

@@ -1,3 +1,47 @@
+private func typeKeyNode(_ tag: String, _ fields: [String] = []) -> String {
+    tag + "[" + fields.map { "\($0.utf8.count):\($0)" }.joined() + "]"
+}
+
+private func nativeTypeKey(_ type: CompiledValueType) -> String {
+    func fields(_ values: [CompiledFieldType]) -> [String] {
+        values.map { typeKeyNode("field", [$0.name, nativeTypeKey($0.type)]) }
+    }
+    switch type {
+    case .unknown: return typeKeyNode("unknown")
+    case .int: return typeKeyNode("int")
+    case .bool: return typeKeyNode("bool")
+    case .string: return typeKeyNode("string")
+    case .modelValue: return typeKeyNode("modelValue")
+    case .controlLocation: return typeKeyNode("controlLocation")
+    case .named(let name): return typeKeyNode("named", [name])
+    case .finite(let values): return typeKeyNode("finite", values.map(typeValueKey))
+    case .union(let types): return typeKeyNode("union", types.map(nativeTypeKey))
+    case .collectionMember(let id, let name): return typeKeyNode("member", [String(id.ordinal), name])
+    case .set(let element): return typeKeyNode("set", [nativeTypeKey(element)])
+    case .array(let element): return typeKeyNode("array", [nativeTypeKey(element)])
+    case .dictionary(let key, let value): return typeKeyNode("dictionary", [nativeTypeKey(key), nativeTypeKey(value)])
+    case .record(let members): return typeKeyNode("record", fields(members))
+    case .nominalRecord(let name, let members): return typeKeyNode("nominalRecord", [name] + fields(members))
+    case .tuple(let elements): return typeKeyNode("tuple", elements.map(nativeTypeKey))
+    }
+}
+
+private func typeValueKey(_ value: CompiledValue) -> String {
+    switch value {
+    case .integer(let value): return typeKeyNode("int", [String(value)])
+    case .boolean(let value): return typeKeyNode("bool", [String(value)])
+    case .string(let value): return typeKeyNode("string", [value])
+    case .constant(let value): return typeKeyNode("constant", [value])
+    case .controlLocation(let id): return typeKeyNode("location", [String(id.ordinal)])
+    case .set(let values): return typeKeyNode("set", values.sorted().map(typeValueKey))
+    case .tuple(let values): return typeKeyNode("tuple", values.map(typeValueKey))
+    case .record(let record):
+        return typeKeyNode("record", record.fields.map { typeKeyNode("field", [typeValueKey($0.key), typeValueKey($0.value)]) })
+    case .function(let values):
+        return typeKeyNode("function", values.keys.sorted().map { typeKeyNode("entry", [typeValueKey($0), typeValueKey(values[$0]!)]) })
+    }
+}
+
 func alphaKey(_ action: ActionExpr) -> String {
     alphaKey(action, bindingNames: [])
 }
@@ -380,7 +424,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .recordLiteral(let fields):
                 let names = fields.fields.map(\.name)
                 schedule(fields.fields.map(\.value), environment: environment) { values in
-                    "record\(fields.nativeType.map { "<\($0.swiftType)>" } ?? "")[\(zip(names, values).map { "\($0):\($1)" }.joined(separator: ","))]"
+                    "record\(fields.nativeType.map { "<\(nativeTypeKey($0))>" } ?? "")[\(zip(names, values).map { "\($0):\($1)" }.joined(separator: ","))]"
                 }
             case .recordAccess(let record, let field):
                 schedule([record], environment: environment) { "recordAccess(\($0[0]),\(field))" }
