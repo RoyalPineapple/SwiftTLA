@@ -22,14 +22,19 @@ permissions:
 
 env:
   DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+  ADMISSION_MODE: ${{ inputs.admission_mode || 'admission' }}
+  SWIFT_TLA_SHA: ${{ inputs.swift_tla_sha || github.sha }}
 
 jobs:
-  finite-graph:
+  validation:
+    name: Validate ${{ matrix.phase }}
     runs-on: macos-15
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        phase: [scenarios, graphs]
     env:
-      ADMISSION_MODE: ${{ inputs.admission_mode || 'admission' }}
-      SWIFT_TLA_SHA: ${{ inputs.swift_tla_sha || github.sha }}
       FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
     steps:
       - name: Validate SwiftTLA SHA
@@ -43,17 +48,16 @@ jobs:
           fetch-depth: 0
           submodules: false
 
-      - id: revision
-        name: Verify SwiftTLA revision
+      - name: Verify SwiftTLA revision
         run: |
           resolved_sha="$(git rev-parse HEAD)"
           [ "$resolved_sha" = "$SWIFT_TLA_SHA" ]
           if [ "$ADMISSION_MODE" = admission ]; then
             git merge-base --is-ancestor "$resolved_sha" refs/remotes/origin/main
           fi
-          echo "sha=$resolved_sha" >> "$GITHUB_OUTPUT"
 
       - name: Validate all model-owned corpus scenarios
+        if: matrix.phase == 'scenarios'
         env:
           FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
           SWIFTTLA_SCENARIO_MAXIMUM_STATES: "2000000"
@@ -64,17 +68,61 @@ jobs:
           swift run --configuration release -Xswiftc -warnings-as-errors -j 1 tlc-validate scenarios run --output .build/scenario-evidence
 
       - name: Run exact finite graph comparison
+        if: matrix.phase == 'graphs'
         env:
           FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
         run: ./scripts/run_finite_graph_check.sh --case all --output .build/finite-graph-evidence
+
+      - name: Stage retained evidence
+        if: always()
+        run: |
+          mkdir -p .build/retained
+          for directory in finite-graph-evidence scenario-evidence; do
+            if [ -d ".build/$directory" ]; then
+              mv ".build/$directory" .build/retained/
+            fi
+          done
+
+      - name: Upload phase evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: finite-graph-part-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.phase }}
+          path: .build/retained
+          include-hidden-files: true
+          if-no-files-found: error
+
+  finite-graph:
+    needs: validation
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download scenario evidence
+        if: always()
+        uses: actions/download-artifact@v5
+        with:
+          name: finite-graph-part-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-scenarios
+          path: evidence
+
+      - name: Download graph evidence
+        if: always()
+        uses: actions/download-artifact@v5
+        with:
+          name: finite-graph-part-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-graphs
+          path: evidence
 
       - name: Upload finite-graph evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: finite-graph-${{ env.ADMISSION_MODE }}-${{ steps.revision.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            .build/finite-graph-evidence
-            .build/scenario-evidence
+          name: finite-graph-${{ env.ADMISSION_MODE }}-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence
           include-hidden-files: true
           if-no-files-found: error
+
+      - name: Require both validation phases
+        if: always()
+        env:
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+        run: test "$VALIDATION_RESULT" = success
