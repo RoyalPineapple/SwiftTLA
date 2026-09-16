@@ -91,7 +91,7 @@ private final class DSLRewriter: SyntaxRewriter {
             guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
                   var call = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { return binding }
             if let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-               ["Invariant", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo"].contains(constructor),
+               ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo"].contains(constructor),
                call.arguments.isEmpty, call.trailingClosure == nil {
                 guard node.bindingSpecifier.text == "let" else {
                     context.diagnose(Diagnostic(node: Syntax(source), message: PropertyBindingDiagnostic()))

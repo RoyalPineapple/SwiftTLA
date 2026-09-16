@@ -6,7 +6,7 @@ struct ScenarioValidationTests {
     @Test("registered model scenarios derive complete graphs and satisfy their declared outcomes")
     func validatesRegisteredScenarios() throws {
         let scenarios = try modelValidationScenarios()
-        #expect(scenarios.count == 24)
+        #expect(scenarios.count == 27)
         #expect(Set(scenarios.map(\.id)).count == scenarios.count)
         for (_, scenario) in scenarios {
             let run = try NativeScenarioRun(scenario, maximumStates: 1000)

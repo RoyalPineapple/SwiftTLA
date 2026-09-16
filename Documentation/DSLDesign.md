@@ -249,6 +249,28 @@ For example, `safe { true }` followed by `safe { false }` is invalid.
 An unused handle registers no claim, like an unused bound predicate declaration.
 Display labels and anonymous declaration names remain part of B-02.
 
+### Reachability handles across scopes
+
+The forward declaration is `let solved = Reachable()` inside `#spec`.
+Its signature is `Reachable() -> ReachableHandle`.
+The handle exposes `callAsFunction(@InvariantBuilder _ body: () -> StateExpr) -> ReachableDecl`.
+The expression `solved { predicate }` registers one positive claim in its enclosing specification, algorithm, or process builder.
+The handle follows the invariant identity, naming, registration, and `Sendable` rules.
+Outer scenarios can select the handle or declare `.expect(solved, .violated)` without changing its meaning.
+
+Inside `Each`, the claim requires one reachable state where every member satisfies the predicate.
+The compiler universally quantifies the state predicate before the reachability check.
+Separate executions or separate states cannot supply witnesses for different members.
+An empty population gives a true predicate, but reachability still requires a reachable state.
+Process-local state and typed member bindings retain their scope through both backends.
+
+Acceptance includes two processes that take exclusive ownership.
+Each process can own the resource, but the all-member ownership claim is unreachable.
+A separate claim for either owner is reachable and retains a valid witness.
+A claim that every process has visited succeeds only after both visits occur in one execution.
+Missing definitions, duplicate registrations, foreign handles, bare handles, and non-Boolean predicates must fail compilation.
+Complete native and hosted TLC evidence remains required for this contract.
+
 ### Temporal handles across scopes
 
 Temporal forward declarations use the same identity and registration rules as invariant handles.

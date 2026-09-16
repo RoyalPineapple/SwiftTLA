@@ -80,6 +80,23 @@ enum AlgorithmLowerer {
                 )
             }
         }
+        let declaredReachability = algorithm.components.compactMap { component -> NamedStatePredicate? in
+            guard case .reachable(let predicate) = component else { return nil }
+            return predicate
+        }
+        let processReachability = processes.flatMap { process -> [NamedStatePredicate] in
+            let localRoots = Set(process.components.compactMap { component -> String? in
+                guard case .local(let state) = component else { return nil }
+                return state.root
+            })
+            return process.components.compactMap { component -> NamedStatePredicate? in
+                guard case .reachable(let predicate) = component else { return nil }
+                return NamedStatePredicate(name: predicate.name,
+                    body: .forAll(process.domain, processBinding.rawValue,
+                        rewrite(predicate.body, localRoots: localRoots)),
+                    reference: predicate.reference)
+            }
+        }
         let declaredTemporal = algorithm.components.compactMap { component -> NamedTemporal? in
             guard case .temporal(let temporal) = component else { return nil }
             return temporal
@@ -339,6 +356,7 @@ enum AlgorithmLowerer {
             actions: actions,
             invariants: declaredInvariants + processInvariants
                 + compilerOwnedAssertionInvariants(generatedAssertionInvariants),
+            reachabilityProperties: declaredReachability + processReachability,
             temporalProperties: declaredTemporal + processTemporal,
             fairness: fairness,
             constraint: declaredConstraint,
@@ -441,6 +459,10 @@ enum AlgorithmLowerer {
             guard case .invariant(let invariant) = component else { return nil }
             return invariant
         }
+        let declaredReachability = algorithm.components.compactMap { component -> NamedStatePredicate? in
+            guard case .reachable(let predicate) = component else { return nil }
+            return predicate
+        }
         let declaredTemporal = algorithm.components.compactMap { component -> NamedTemporal? in
             guard case .temporal(let temporal) = component else { return nil }
             return temporal
@@ -488,6 +510,7 @@ enum AlgorithmLowerer {
                 variables: sharedVariables + procedureVariables,
                 actions: [],
                 invariants: declaredInvariants,
+                reachabilityProperties: declaredReachability,
                 temporalProperties: declaredTemporal,
                 fairness: sequentialFairnessConditions(for: algorithm.sequentialFairness),
                 constraint: declaredConstraint,
@@ -587,6 +610,7 @@ enum AlgorithmLowerer {
             variables: variables,
             actions: actions,
             invariants: declaredInvariants + compilerOwnedAssertionInvariants(generatedAssertionInvariants),
+            reachabilityProperties: declaredReachability,
             temporalProperties: declaredTemporal,
             fairness: sequentialFairnessConditions(for: algorithm.sequentialFairness),
             constraint: declaredConstraint,

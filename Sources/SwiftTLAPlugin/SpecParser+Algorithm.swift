@@ -28,6 +28,7 @@ private enum AlgorithmSourceConstruct: Equatable {
     case doStep
     case whileStep
     case invariant
+    case reachable
     case leadsTo
     case eventually
     case always
@@ -93,6 +94,7 @@ private enum AlgorithmSourceConstruct: Equatable {
         case "Do": self = .doStep
         case "While": self = .whileStep
         case "Invariant": self = .invariant
+        case "Reachable": self = .reachable
         case "LeadsTo": self = .leadsTo
         case "Eventually": self = .eventually
         case "Always": self = .always
@@ -401,9 +403,9 @@ extension ParserSession {
                 macros: macros,
                 scope: scope
             )
-        case .invariant:
-            guard let invariant = parseAlgorithmInvariant(call, scope: scope) else { return nil }
-            return .invariant(invariant)
+        case .invariant, .reachable:
+            guard let predicate = parseAlgorithmStateProperty(call, scope: scope) else { return nil }
+            return construct == .reachable ? .reachable(predicate) : .invariant(predicate)
         case .leadsTo, .eventually, .always, .alwaysEventually, .eventuallyAlways:
             guard let temporal = parseAlgorithmTemporal(call, construct: construct, scope: scope) else { return nil }
             return .temporal(temporal)
@@ -590,12 +592,14 @@ extension ParserSession {
             return .temporal(.init(name: temporal.name, expr: temporal.expr, bindings: [], reference: temporal.reference))
         }
         guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-              let handle = specBindings.properties[name] as? InvariantHandle,
+              let handle = specBindings.properties[name],
+              handle is InvariantHandle || handle is ReachableHandle,
               call.arguments.isEmpty else { return nil }
-        return parseAlgorithmInvariant(call, scope: scope, reference: handle.reference).map(AlgorithmComponentModel.invariant)
+        guard let predicate = parseAlgorithmStateProperty(call, scope: scope, reference: handle.reference) else { return nil }
+        return handle is ReachableHandle ? .reachable(predicate) : .invariant(predicate)
     }
 
-    private func parseAlgorithmInvariant(
+    private func parseAlgorithmStateProperty(
         _ call: FunctionCallExprSyntax,
         scope: TypedFacadeScope,
         reference: PropertyReference? = nil
@@ -622,11 +626,11 @@ extension ParserSession {
                 expression = nil
             }
             guard let expression else {
-                algorithmParseFailure = "Invariant '\(name)' statement \(index + 1) is not a formal expression."
+                algorithmParseFailure = "State property '\(name)' statement \(index + 1) is not a formal expression."
                 return nil
             }
             guard let decoded = decodeTypedFacadeValue(expression, scope: bodyScope) else {
-                algorithmParseFailure = "Invariant '\(name)' statement \(index + 1) could not be decoded: "
+                algorithmParseFailure = "State property '\(name)' statement \(index + 1) could not be decoded: "
                     + "'\(expression.description.trimmingCharacters(in: .whitespacesAndNewlines))'."
                 return nil
             }
@@ -930,9 +934,9 @@ extension ParserSession {
                 loopCondition = nil
             }
             return .step(.init(label: .init(name: label), statements: statements, loopCondition: loopCondition))
-        case .invariant:
-            guard let invariant = parseAlgorithmInvariant(call, scope: scope) else { return nil }
-            return .invariant(invariant)
+        case .invariant, .reachable:
+            guard let predicate = parseAlgorithmStateProperty(call, scope: scope) else { return nil }
+            return construct == .reachable ? .reachable(predicate) : .invariant(predicate)
         case .leadsTo, .eventually, .always, .alwaysEventually, .eventuallyAlways:
             guard let temporal = parseAlgorithmTemporal(call, construct: construct, scope: scope) else { return nil }
             return .temporal(temporal)

@@ -28,7 +28,7 @@ extension ParserSession {
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let property = specBindings.properties[reference.baseName.text] {
-                if property is InvariantHandle || property is TemporalHandle || property is LeadsToHandle {
+                if property is InvariantHandle || property is ReachableHandle || property is TemporalHandle || property is LeadsToHandle {
                     components.diagnostics.append(.init(message: "A property handle requires a predicate definition before registration.", source: reference))
                 } else {
                     registerProperty(property, into: &components)
@@ -136,6 +136,10 @@ extension ParserSession {
                 }
                 if call.arguments.isEmpty, call.trailingClosure == nil,
                    let constructor = compilerGrammarName(in: call.calledExpression) {
+                    if constructor == "Reachable" {
+                        specBindings.properties[sourceName] = ReachableHandle(name: sourceName)
+                        continue
+                    }
                     if let kind = TemporalHandle.Kind(rawValue: constructor) {
                         specBindings.properties[sourceName] = TemporalHandle(name: sourceName, kind: kind)
                         continue
@@ -706,14 +710,19 @@ extension ParserSession {
             return
         }
         if let sourceName = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
-           let handle = specBindings.properties[sourceName] as? InvariantHandle {
+           let handle = specBindings.properties[sourceName],
+           handle is InvariantHandle || handle is ReachableHandle {
             guard call.arguments.isEmpty, let closure = call.trailingClosure else {
-                components.diagnostics.append(.init(message: "An invariant handle requires one predicate closure.", source: call))
+                components.diagnostics.append(.init(message: "A state property handle requires one predicate closure.", source: call))
                 return
             }
             do {
                 let body = try parseInvariantBody(closure, named: handle.reference.name)
-                registerProperty(InvDecl(reference: handle.reference, body: body), into: &components)
+                if handle is ReachableHandle {
+                    registerProperty(ReachableDecl(reference: handle.reference, body: body), into: &components)
+                } else {
+                    registerProperty(InvDecl(reference: handle.reference, body: body), into: &components)
+                }
             } catch { components.diagnostics.append(error) }
             return
         }

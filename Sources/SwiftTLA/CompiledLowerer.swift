@@ -578,7 +578,7 @@ struct CompiledLowerer {
             named name: String,
             at path: String
         ) throws -> CompiledPropertyLayout {
-            let properties = kind == .invariant ? layout.stateProperties : layout.temporalProperties
+            let properties = kind == .temporalProperty ? layout.temporalProperties : layout.stateProperties
             guard let property = properties.first(where: { $0.declaration.name == name }) else {
                 throw diagnostic(path: path, actual: "unresolved property '\(name)'")
             }
@@ -596,6 +596,8 @@ struct CompiledLowerer {
                 switch component {
                 case .invariant(let invariant):
                     properties.append(try property(kind: .invariant, named: invariant.name, at: componentPath))
+                case .reachable(let predicate):
+                    properties.append(try property(kind: .reachability, named: predicate.name, at: componentPath))
                 case .temporal(let temporal):
                     if isTranslatorTermination(temporal) {
                         translatorOwnedNames.insert(temporal.name)

@@ -25,6 +25,20 @@ public func Invariant(_name: String = "") -> InvariantHandle {
     .init(name: _name)
 }
 
+public struct ReachableHandle: ModelProperty {
+    public let reference: PropertyReference
+
+    package init(name: String) { reference = .init(name: name) }
+
+    public func callAsFunction(@InvariantBuilder _ body: () -> StateExpr) -> ReachableDecl {
+        .init(reference: reference, body: body())
+    }
+}
+
+public func Reachable(_name: String = "") -> ReachableHandle {
+    .init(name: _name)
+}
+
 public enum ValidationExpectation: String, Sendable, Codable {
     case satisfied
     case violated

@@ -31,3 +31,7 @@ let excessArguments = unary(true, false)
 let missingArgument = binary(true)
 let wrongPredicate = unary(1)
 let undefinedProperty = TLASpec("Undefined") { unary }
+
+let goal = Reachable()
+let wrongReachabilityPredicate = goal { 1 }
+let undefinedReachability = TLASpec("Undefined") { goal }

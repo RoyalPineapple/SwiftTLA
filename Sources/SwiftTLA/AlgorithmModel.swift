@@ -63,7 +63,7 @@ package struct AlgorithmModel: Sendable {
                         names.insert($0.label.name)
                         names.formUnion($0.statements.algorithmScopeNames)
                     }
-                case .invariant(let invariant):
+                case .invariant(let invariant), .reachable(let invariant):
                     names.insert(invariant.name)
                 case .temporal(let temporal):
                     names.insert(temporal.name)
@@ -255,6 +255,8 @@ package struct AlgorithmModel: Sendable {
                 )
             case .invariant(let invariant):
                 return .invariant(.init(name: invariant.name, body: expression(invariant.body), reference: invariant.reference))
+            case .reachable(let predicate):
+                return .reachable(.init(name: predicate.name, body: expression(predicate.body), reference: predicate.reference))
             case .temporal(let declaration):
                 return .temporal(.init(name: declaration.name, expr: declaration.expr.map(expression),
                     bindings: declaration.bindings, reference: declaration.reference))
@@ -448,6 +450,7 @@ package indirect enum AlgorithmComponentModel: Sendable {
     case process(AlgorithmProcessModel)
     case procedure(AlgorithmProcedureModel)
     case invariant(NamedStatePredicate)
+    case reachable(NamedStatePredicate)
     case temporal(NamedTemporal)
     case formalOperator(FormalOperatorDefinition)
     /// A TLC state-space bound whose excluded states are omitted from exploration.

@@ -417,8 +417,11 @@ public struct ReachableDecl: ModelProperty, SpecComponent {
   public let name: String
   public let body: StateExpr
   package init(_ name: String, _ body: StateExpr) {
-    reference = .init(name: name)
-    self.name = name
+    self.init(reference: .init(name: name), body: body)
+  }
+  package init(reference: PropertyReference, body: StateExpr) {
+    self.reference = reference
+    self.name = reference.name
     self.body = body
   }
 }
@@ -719,7 +722,7 @@ public enum InvariantBuilder {
     if components.isEmpty { return .value(.bool(true)) }
     return components.dropFirst().reduce(components[0]) { .and($0, $1) }
   }
-  public static func buildExpression(_ expr: StateExpr) -> StateExpr { expr }
+  package static func buildExpression(_ expr: StateExpr) -> StateExpr { expr }
   public static func buildExpression(_ expr: some TypedExpression<Bool>) -> StateExpr { expr.stateExpr }
   public static func buildExpression(_ expr: Bool) -> StateExpr { .value(.bool(expr)) }
   public static func buildOptional(_ component: StateExpr?) -> StateExpr {

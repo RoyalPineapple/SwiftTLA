@@ -95,6 +95,7 @@ extension TLASpec {
     var variables = variables
     var actions = actions
     var invariants = invariants
+    var reachabilityProperties = reachabilityProperties
     var temporalProperties = temporalProperties
     var fairness = fairness
     var constraint = constraint
@@ -115,6 +116,7 @@ extension TLASpec {
         variables += lowered.variables
         actions += lowered.actions
         invariants += lowered.invariants
+        reachabilityProperties += lowered.reachabilityProperties
         temporalProperties += lowered.temporalProperties
         fairness += lowered.fairness
         formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions

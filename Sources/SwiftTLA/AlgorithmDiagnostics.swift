@@ -85,7 +85,7 @@ internal enum AlgorithmPlacementValidator {
             for (index, component) in procedure.components.enumerated() {
                 try validate(component, path: path + ["procedure", "components[\(index)]"])
             }
-        case .shared, .invariant, .temporal, .formalOperator,
+        case .shared, .invariant, .reachable, .temporal, .formalOperator,
              .stateConstraint, .local, .step:
             return
         }
