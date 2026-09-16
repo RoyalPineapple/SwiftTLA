@@ -601,8 +601,8 @@ intersection, difference, insertion, and removal. These operations preserve the
 declared element type. Compilation rejects distinct Swift members that collapse
 to one formal value. A set declaration does not imply symmetry.
 
-This support does not complete configurable `Each` populations or the replacement
-of fixed `ModelCollection` declarations. Those requirements remain part of B-01.
+The next section defines configurable `Each` populations.
+Replacement of fixed `ModelCollection` declarations remains part of B-01.
 
 #### Configured process populations
 
@@ -637,16 +637,17 @@ Process domains remain symbolic in TLA+ output. Action metadata contains the
 configured members and complete arguments. Explicit fairness applies separately
 to each process instance. A set does not declare fairness or symmetry.
 
-This settles the process-population part of B-01. Implementation and independent
-validation remain required. Collection composition remains open.
+This settles the process-population syntax in B-01.
+Generated scenarios support empty, singleton, and multi-member populations, including explicit weak and strong fairness.
+Independent validation remains required for every upstream configuration. Collection composition remains open.
 
 The selected syntax inside a model scope containing typed declarations is:
 
 ```swift
-let exclusion = Invariant("MutualExclusion") {
+let exclusion = Invariant(label: "Mutual exclusion")
+exclusion {
     criticalSection.count <= 1
 }
-exclusion
 
 Validation("Correct protocol") {
     Bind(processCount, to: 3)
@@ -660,17 +661,17 @@ Validation("Missing lock") {
 .expect(exclusion, .violated)
 ```
 
-The explicit `exclusion` expression contributes the
-declaration to the builder. Binding it with `let` alone must not secretly
-register it. The handle retains a model-owned identity through expectation binding.
+The `exclusion { ... }` expression registers the predicate in the builder.
+A `let` binding alone must not register it.
+The handle retains a model-owned identity through expectation binding.
 
 `Validation`, `Bind`, and `.expect` declare model-owned scenarios. Parameter handles have
 types, are immutable for an execution, and are distinct from state variables.
 Scalar and set-valued parameters use the contracts in this section. Bindings are closed typed
 values, not opaque closures that backends evaluate differently. State, parameter,
 and operator dependencies in scenario bindings currently produce explicit diagnostics.
-Parameter-dependent process populations and fixed `ModelCollection` bindings remain open.
-Generated scenarios reject these unsupported cases explicitly.
+Parameter-dependent process populations use the configured `Each` contract.
+Fixed `ModelCollection` bindings remain open and produce explicit diagnostics.
 
 Registered refinements have model-owned property handles and participate in every scenario by default.
 A `let` binding alone does not register a refinement. Its handle must also appear as a specification builder expression.
