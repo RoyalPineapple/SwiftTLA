@@ -12,20 +12,20 @@ struct TemporalConjunctionTests {
 
     @Test("recurring progress for each member does not require simultaneous progress")
     func independentRecurrence() throws {
-        let property: TemporalCondition<@Sendable (Int) throws -> Bool> = .all([
-            .alwaysEventually { $0 == 0 }, .all([.alwaysEventually { $0 == 1 }])
+        let property: TemporalCondition<@Sendable (Int, Int) throws -> Bool> = .all([
+            .alwaysEventually { state, _ in state == 0 }, .all([.alwaysEventually { state, _ in state == 1 }])
         ])
         let result = try checker.analyze(property, initialStates: [0], renderScope: { _ in "advance" })
         #expect(result.status == .satisfied)
         #expect(result.enabledActions["advance"] == [0: true, 1: true])
-        let simultaneous = try checker.analyze(.alwaysEventually { $0 == 0 && $0 == 1 },
+        let simultaneous = try checker.analyze(.alwaysEventually { state, _ in state == 0 && state == 1 },
             initialStates: [0], renderScope: { _ in "advance" })
         #expect(simultaneous.status == .violated)
     }
 
     @Test("one false conjunct retains a counterexample for the complete property")
     func counterexample() throws {
-        let result = try checker.analyze(.all([.eventually { $0 == 1 }, .eventually { $0 == 2 }]),
+        let result = try checker.analyze(.all([.eventually { state, _ in state == 1 }, .eventually { state, _ in state == 2 }]),
             initialStates: [0], renderScope: { _ in "advance" })
         #expect(result.status == .violated)
         let witness = try #require(result.witness)

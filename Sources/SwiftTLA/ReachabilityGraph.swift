@@ -16,7 +16,7 @@ public protocol StateMachine: Sendable {
     func assumptionsHold() throws -> Bool
     func satisfiesStateConstraint() throws -> Bool
     func fairnessConditions() throws -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)]
-    func temporalProperties(checking: Set<Property>) throws -> [Property: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
+    func temporalProperties(checking: Set<Property>) throws -> [Property: TemporalCondition<@Sendable (Snapshot, Snapshot) throws -> Bool>]
     func violatedInvariants(checking: Set<Property>) throws -> [Property]
     static var reachabilityProperties: [Property] { get }
     func matchedReachabilityProperties(checking: Set<Property>) throws -> [Property]

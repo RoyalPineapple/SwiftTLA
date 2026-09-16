@@ -118,34 +118,45 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
         })
     }
 
-    func analyze(
-        _ property: TemporalCondition<@Sendable (State) throws -> Bool>,
-        initialStates: [State],
-        isComplete: Bool = true,
-        renderScope: (Scope) throws -> String
-    ) throws -> TemporalAnalysis<State, Action?> {
+    private func invalidGraph(initialStates: [State], isComplete: Bool) -> TemporalDiagnosticReason? {
         guard isComplete else {
-            return .init(status: .unavailable, reason: .incompleteExploration)
+            return .incompleteExploration
         }
         guard !initialStates.isEmpty, initialStates.allSatisfy({ states.contains($0) }) else {
-            return .init(status: .unavailable, reason: .missingInitialStateIdentity)
+            return .missingInitialStateIdentity
         }
 
         guard transitions.allSatisfy({ source, transitions in
             states.contains(source) && transitions.allSatisfy { states.contains($0.target) }
         }) else {
-            return .init(status: .unavailable, reason: .invalidGraphTopology)
+            return .invalidGraphTopology
         }
 
         guard hasValidActions() else {
-            return .init(status: .unavailable, reason: .unknownAction)
+            return .unknownAction
+        }
+        return nil
+    }
+
+    func analyze(
+        _ property: TemporalCondition<@Sendable (State, State) throws -> Bool>,
+        initialStates: [State],
+        isComplete: Bool = true,
+        renderScope: (Scope) throws -> String
+    ) throws -> TemporalAnalysis<State, Action?> {
+        if case .always(let predicate) = property {
+            return try analyzeAlwaysTransition(predicate, initialStates: initialStates,
+                isComplete: isComplete, renderScope: renderScope)
+        }
+        if let reason = invalidGraph(initialStates: initialStates, isComplete: isComplete) {
+            return .init(status: .unavailable, reason: reason)
         }
 
         if case .conditional(let predicate, let yes, let no) = property {
             var yesStates: [State] = []
             var noStates: [State] = []
             for state in initialStates {
-                if try predicate(state) { yesStates.append(state) }
+                if try predicate(state, state) { yesStates.append(state) }
                 else { noStates.append(state) }
             }
             for (condition, initial) in [(yes, yesStates), (no, noStates)] where !initial.isEmpty {
@@ -163,7 +174,7 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
                     isComplete: isComplete, renderScope: renderScope)
                 if result.status != .satisfied { return result }
             }
-            return try analyze(.always { _ in true }, initialStates: initialStates,
+            return try analyze(.always { _, _ in true }, initialStates: initialStates,
                 isComplete: isComplete, renderScope: renderScope)
         }
 
@@ -173,24 +184,22 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
                     isComplete: isComplete, renderScope: renderScope)
                 if result.status != .satisfied { return result }
             }
-            return try analyze(.always { _ in true }, initialStates: initialStates,
+            return try analyze(.always { _, _ in true }, initialStates: initialStates,
                 isComplete: isComplete, renderScope: renderScope)
         }
 
-        let predicate: @Sendable (State) throws -> Bool
+        let predicate: @Sendable (State, State) throws -> Bool
         switch property {
-        case .always(let value), .eventually(let value), .alwaysEventually(let value), .eventuallyAlways(let value):
+        case .eventually(let value), .alwaysEventually(let value), .eventuallyAlways(let value):
             predicate = value
         case .leadsTo(_, let target): predicate = target
-        case .all, .conditional: preconditionFailure("Compound conditions are checked before atomic temporal conditions")
+        case .always, .all, .conditional: preconditionFailure("Transition and compound conditions are checked before state liveness conditions")
         }
-        let negative = try states.filter { try !predicate($0) }
+        let negative = try states.filter { try !predicate($0, $0) }
         let allStates = states
         let search: LassoSearch<State>
 
         switch property {
-        case .always:
-            search = .init(cycleStates: allStates, prefixStates: negative)
         case .eventually:
             search = .init(cycleStates: negative, prefixContinuationStates: negative)
         case .alwaysEventually:
@@ -199,10 +208,10 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
             search = .init(cycleStates: allStates, cycleRequiredStates: negative)
         case .leadsTo(let trigger, _):
             let triggers = Set(try states.compactMap { state in
-                try trigger(state) ? state : nil
+                try trigger(state, state) ? state : nil
             }).intersection(negative)
             search = .init(cycleStates: negative, prefixStates: triggers, prefixContinuationStates: negative)
-        case .all, .conditional: preconditionFailure("Compound conditions are checked before atomic temporal conditions")
+        case .always, .all, .conditional: preconditionFailure("Transition and compound conditions are checked before state liveness conditions")
         }
 
         let components = fairComponents(in: search.cycleStates, fairness: fairness, enabled: enabled)
@@ -226,15 +235,16 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
     }
 
     /// Checks an action predicate on every step of each permitted infinite behavior.
-    func analyzeAlwaysTransition(
+    private func analyzeAlwaysTransition(
         _ predicate: @Sendable (State, State) throws -> Bool,
         initialStates: [State],
         isComplete: Bool = true,
         renderScope: (Scope) throws -> String
     ) throws -> TemporalAnalysis<State, Action?> {
-        let baseline = try analyze(.always { _ in true }, initialStates: initialStates,
-            isComplete: isComplete, renderScope: renderScope)
-        guard baseline.status == .satisfied else { return baseline }
+        if let reason = invalidGraph(initialStates: initialStates, isComplete: isComplete) {
+            return .init(status: .unavailable, reason: reason)
+        }
+        let components = fairComponents(in: states, fairness: fairness, enabled: enabled)
 
         var reachable = Set(initialStates)
         var pending = initialStates
@@ -247,7 +257,7 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
         for source in reachable.sorted(by: stateOrder) {
             for edge in edges(from: source).sorted(by: edgeOrder) {
                 guard try !predicate(source, edge.target),
-                      let suffix = findWitness(baseline.fairComponents, initialStates: [edge.target],
+                      let suffix = findWitness(components.fair, initialStates: [edge.target],
                         prefixStates: nil, prefixContinuationStates: nil, cycleRequiredStates: nil,
                         fairness: fairness, enabled: enabled) else { continue }
                 for initial in initialStates.sorted(by: stateOrder) {
@@ -264,8 +274,8 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
         }
         return .init(status: witness == nil ? .satisfied : .violated,
             reason: witness == nil ? .satisfied : .violatingFairLasso, witness: witness,
-            enabledActions: baseline.enabledActions, fairComponents: baseline.fairComponents,
-            rejectedComponents: baseline.rejectedComponents)
+            enabledActions: try renderedEnabledness(enabled, renderScope: renderScope),
+            fairComponents: components.fair, rejectedComponents: components.rejected)
     }
 
     /// Finds a concrete fair behavior that eventually stops taking an abstract fair action.

@@ -13,7 +13,7 @@ struct LivenessCheckerTests {
     })
     let checker = LivenessChecker<Int, Int, Int>(states: states, transitions: transitions,
       fairness: [], matches: { $0 == $1 }, actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
-    let result = try checker.analyze(.always { _ in true }, initialStates: [0], renderScope: { _ in "step" })
+    let result = try checker.analyze(.always { _, _ in true }, initialStates: [0], renderScope: { _ in "step" })
     #expect(result.status == .satisfied)
     #expect(result.witness == nil)
     #expect(Set(result.fairComponents) == [Set([0]), Set(1...count)])
@@ -29,10 +29,10 @@ struct LivenessCheckerTests {
       matchCount.withLock { $0 += 1 }
       return action == scope
     }, actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
-    let properties: [TemporalCondition<@Sendable (Int) throws -> Bool>] = [
-      .always { _ in true },
-      .eventuallyAlways { _ in true },
-      .leadsTo({ _ in false }, { _ in false })
+    let properties: [TemporalCondition<@Sendable (Int, Int) throws -> Bool>] = [
+      .always { _, _ in true },
+      .eventuallyAlways { _, _ in true },
+      .leadsTo({ _, _ in false }, { _, _ in false })
     ]
     for property in properties {
       matchCount.withLock { $0 = 0 }
@@ -60,7 +60,7 @@ struct LivenessCheckerTests {
     }, actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
     #expect(matchCount.withLock { $0 } == 2)
     for _ in 0..<2 {
-      let result = try checker.analyze(.eventually { _ in true },
+      let result = try checker.analyze(.eventually { _, _ in true },
         initialStates: [first], renderScope: { _ in "step" })
       #expect(result.status == .satisfied)
     }

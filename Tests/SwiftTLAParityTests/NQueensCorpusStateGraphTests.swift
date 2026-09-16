@@ -54,7 +54,7 @@ struct NQueensCorpusStateGraphTests {
             Issue.record("Expected the generated termination predicate")
             return
         }
-        #expect(try Set(native.transitions.keys.filter(isDone)) == [terminal])
+        #expect(try Set(native.transitions.keys.filter { try isDone($0, $0) }) == [terminal])
         #expect(terminal.state.todo.isEmpty)
         #expect(terminal.state.sols == [[2, 4, 1, 3], [3, 1, 4, 2]])
     }

@@ -4,7 +4,7 @@ import UpstreamParity
 @testable import SwiftTLAPlugin
 
 struct ConditionalTemporalTests {
-    private typealias Condition = TemporalCondition<@Sendable (Int) throws -> Bool>
+    private typealias Condition = TemporalCondition<@Sendable (Int, Int) throws -> Bool>
     private enum PredicateError: Error { case evaluated }
 
     private func checker() -> LivenessChecker<Int, Int, Int> {
@@ -18,16 +18,16 @@ struct ConditionalTemporalTests {
 
     @Test("conditional properties select each initial state's branch across merged paths")
     func retainsInitialBranch() throws {
-        let condition = Condition.conditional({ $0 == 0 },
-            then: .eventually { $0 == 0 }, else: .eventually { $0 == 1 })
+        let condition = Condition.conditional({ state, _ in state == 0 },
+            then: .eventually { state, _ in state == 0 }, else: .eventually { state, _ in state == 1 })
         let result = try checker().analyze(condition, initialStates: [0, 1], renderScope: String.init)
         #expect(result.status == .satisfied)
     }
 
     @Test("a conditional counterexample starts in the initial state that selected its branch")
     func retainsWitnessOrigin() throws {
-        let condition = Condition.conditional({ $0 == 0 },
-            then: .eventually { $0 == 1 }, else: .eventually { $0 == 1 })
+        let condition = Condition.conditional({ state, _ in state == 0 },
+            then: .eventually { state, _ in state == 1 }, else: .eventually { state, _ in state == 1 })
         let result = try checker().analyze(condition, initialStates: [0, 1], renderScope: String.init)
         #expect(result.status == .violated)
         #expect(result.witness?.prefix.first == 0)
@@ -35,20 +35,20 @@ struct ConditionalTemporalTests {
 
     @Test("unselected branches and states unreachable from a selected branch are not evaluated")
     func skipsUnselectedEvaluation() throws {
-        let condition = Condition.conditional({ $0 == 0 }, then: .all([
-            .always { state in
+        let condition = Condition.conditional({ state, _ in state == 0 }, then: .all([
+            .always { state, _ in
                 if state == 1 { throw PredicateError.evaluated }
                 return true
             },
-            .conditional({ $0 == 0 }, then: .eventually { $0 == 0 },
-                else: .always { _ in throw PredicateError.evaluated })
-        ]), else: .always { _ in true })
+            .conditional({ state, _ in state == 0 }, then: .eventually { state, _ in state == 0 },
+                else: .always { _, _ in throw PredicateError.evaluated })
+        ]), else: .always { _, _ in true })
         #expect(try checker().analyze(condition, initialStates: [0, 1], renderScope: String.init).status == .satisfied)
     }
 
     @Test("conditional guard failures propagate and incomplete graphs remain unavailable")
     func preservesFailures() throws {
-        let condition = Condition.conditional({ _ in throw PredicateError.evaluated },
+        let condition = Condition.conditional({ _, _ in throw PredicateError.evaluated },
             then: .all([]), else: .all([]))
         #expect(throws: PredicateError.self) {
             try checker().analyze(condition, initialStates: [0], renderScope: String.init)

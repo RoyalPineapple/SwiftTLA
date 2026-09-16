@@ -69,8 +69,8 @@ extension CompiledSpecification {
         let runtime = CompiledRuntime(compilation: self)
         let checker = livenessChecker(graph: graph)
         func predicate(_ query: CompiledStateQuery, bindings: CompiledBindings,
-                       isTrigger: Bool = false) -> @Sendable (StateGraph.StateID) throws -> Bool {
-            { state in
+                       isTrigger: Bool = false) -> @Sendable (StateGraph.StateID, StateGraph.StateID) throws -> Bool {
+            { state, _ in
                 guard let compiled = states[state] else {
                     throw CompilationDiagnostic(
                         code: .compilationIdentityMismatch, stage: .checking, path: "liveness.state",
@@ -87,7 +87,7 @@ extension CompiledSpecification {
                 }
             }
         }
-        func predicates(_ source: TemporalCondition<CompiledStateQuery>, bindings: CompiledBindings) -> TemporalCondition<@Sendable (StateGraph.StateID) throws -> Bool> {
+        func predicates(_ source: TemporalCondition<CompiledStateQuery>, bindings: CompiledBindings) -> TemporalCondition<@Sendable (StateGraph.StateID, StateGraph.StateID) throws -> Bool> {
             switch source {
             case .all(let conditions): return .all(conditions.map { predicates($0, bindings: bindings) })
             case .conditional(let guardQuery, let yes, let no):

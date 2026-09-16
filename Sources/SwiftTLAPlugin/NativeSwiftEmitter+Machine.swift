@@ -585,12 +585,12 @@ extension NativeSwiftEmitter {
                 let function = "_temporal\(property.id.ordinal)_\(index)"
                 index += 1
                 declarations += try nativeDeclarations("""
-                private static func \(function)(in state: Snapshot\(collectionParameters)\(boundParameters), enabled: Set<Int>) throws -> Bool {
+                private static func \(function)(in state: Snapshot, nextState: Snapshot\(collectionParameters)\(boundParameters), enabled: Set<Int>) throws -> Bool {
                     \(try expression(query.expression))
                 }
                 """)
                 let enabled = enabledActionsCall(query.enabledActions, state: "state", collectionArguments: arguments)
-                return "{ \(propertyCaptureList)state in try Self.\(function)(in: state\(arguments)\(boundArguments), enabled: \(enabled)) }"
+                return "{ \(propertyCaptureList)state, nextState in try Self.\(function)(in: state, nextState: nextState\(arguments)\(boundArguments), enabled: \(enabled)) }"
             }
             func condition(_ value: TemporalCondition<String>) -> String {
                 switch value {
@@ -613,7 +613,7 @@ extension NativeSwiftEmitter {
                 }.joined(separator: "\n")
                 temporalProperties.append("""
                 if checking.contains(.\(propertyCases[property.id]!)) {
-                var \(name): [TemporalCondition<@Sendable (Snapshot) throws -> Bool>] = []
+                var \(name): [TemporalCondition<@Sendable (Snapshot, Snapshot) throws -> Bool>] = []
                 \(loops)
                 \(name).append(\(condition(predicates)))
                 \(String(repeating: "}\n", count: property.bindings.count))
@@ -626,9 +626,9 @@ extension NativeSwiftEmitter {
             "if checking.contains(.\(propertyCases[$0.id]!)) { throw ExplorationError.unsupportedRefinement(\(String(reflecting: $0.name))) }"
         }.joined(separator: "\n")
         let propertyBody = unsupportedRefinements + "\n" + (temporalProperties.isEmpty ? "return [:]" :
-            "var result: [Property: TemporalCondition<@Sendable (Snapshot) throws -> Bool>] = [:]\n" + temporalProperties.joined(separator: "\n") + "\nreturn result")
+            "var result: [Property: TemporalCondition<@Sendable (Snapshot, Snapshot) throws -> Bool>] = [:]\n" + temporalProperties.joined(separator: "\n") + "\nreturn result")
         declarations += try nativeDeclarations("""
-        public func temporalProperties(checking: Set<Property> = Set(Property.allCases)) throws -> [Property: TemporalCondition<@Sendable (Snapshot) throws -> Bool>] {
+        public func temporalProperties(checking: Set<Property> = Set(Property.allCases)) throws -> [Property: TemporalCondition<@Sendable (Snapshot, Snapshot) throws -> Bool>] {
             \(propertyBody)
         }
         """)
