@@ -17,6 +17,7 @@ struct NativeSwiftEmitter {
     private var expressionValues: [CompiledExpression: String] = [:]
     private var expressionOrdinals: [CompiledExpression: Int] = [:]
     private var hasDepthScope = false
+    private var nextMembershipPredicate = 0
 
     init(model: MacroCompilation, sharedTypes: NativeTypeDeclarations? = nil) {
         self.model = model
@@ -701,17 +702,25 @@ struct NativeSwiftEmitter {
             default: throw unsupported("tuple literal")
             }
         case .in:
-            if let membership = node.functionSpaceMembership {
-                let domain = try self.expression(membership.domain, state: state,
-                    substitutions: substitutions, activeFunctions: activeFunctions)
-                let range = try self.expression(membership.range, state: state,
-                    substitutions: substitutions, activeFunctions: activeFunctions)
+            if hasSymbolicMembership(node.children[1]) {
+                let ownsDepth = !hasDepthScope
+                hasDepthScope = true
+                defer { if ownsDepth { hasDepthScope = false } }
+                var pending = [node]
+                var needsDepth = false
+                while ownsDepth, let expression = pending.popLast() {
+                    if case .call = expression.operation { needsDepth = true; break }
+                    pending += expression.children
+                }
+                let predicate = try membershipPredicate(node.children[1], state: state,
+                    substitutions: substitutions, activeFunctions: activeFunctions, membershipFunctions: [])
                 return """
                 (try { () throws -> Bool in
-                    let domain = \(domain)
-                    let range = \(range)
-                    let function = \(try emit(0))
-                    return Set(function.keys) == domain && function.values.allSatisfy(range.contains)
+                    \(needsDepth ? "var _nativeDepth = 0" : "")
+                    \(predicate.declaration)
+                    let contains = \(predicate.call)
+                    let candidate = \(try emit(0))
+                    return contains(candidate)
                 }())
                 """
             }
@@ -758,6 +767,130 @@ struct NativeSwiftEmitter {
             return "(try { () throws -> Int in let mapping = \(functionCode); let members = \(domainCode); return try _NativeMachineOperations.sum(try members.map { try _NativeMachineOperations.functionValue(mapping, at: $0) }) }())"
         default: throw unsupported("collectionExpression operation")
         }
+    }
+
+    private func hasSymbolicMembership(_ source: CompiledExpression) -> Bool {
+        var pending = [source]
+        var functions: Set<ResolvedFunctionID> = []
+        while let node = pending.popLast() {
+            switch node.operation {
+            case .functionSet: return true
+            case .call(let id) where functions.insert(id).inserted:
+                pending.append(program[id].body)
+            case .ifThenElse: pending += node.children.dropFirst()
+            case .letValue: pending.append(node.children[1])
+            case .union, .intersection, .setDifference: pending += node.children
+            case .unionAll:
+                if case .setMap = node.children[0].operation {
+                    pending.append(node.children[0].children[0])
+                }
+            default: break
+            }
+        }
+        return false
+    }
+
+    /// Build the complete right operand before evaluating the candidate. Function
+    /// spaces retain typed domains and ranges instead of all possible mappings.
+    private mutating func membershipPredicate(
+        _ node: CompiledExpression, state: String, substitutions: [BinderID: String],
+        activeFunctions: Set<ResolvedFunctionID>, membershipFunctions: Set<ResolvedFunctionID>
+    ) throws -> (declaration: String, call: String) {
+        guard case .set(let element) = node.resultType else { throw unsupported("membership set") }
+        let predicateType = "(\(try swiftType(element))) -> Bool"
+        let name = "_membershipPredicate\(nextMembershipPredicate)"
+        nextMembershipPredicate += 1
+        func emit(_ expression: CompiledExpression) throws -> String {
+            try self.expression(expression, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+        }
+        func predicate(_ expression: CompiledExpression) throws -> (declaration: String, call: String) {
+            try membershipPredicate(expression, state: state, substitutions: substitutions,
+                activeFunctions: activeFunctions, membershipFunctions: membershipFunctions)
+        }
+        let body: String
+        switch node.operation {
+        case .functionSet:
+            body = """
+            let domain = \(try emit(node.children[0]))
+            let range = \(try emit(node.children[1]))
+            return { candidate in Set(candidate.keys) == domain && candidate.values.allSatisfy(range.contains) }
+            """
+        case .ifThenElse:
+            let first = try predicate(node.children[1])
+            let second = try predicate(node.children[2])
+            body = """
+            \(first.declaration)
+            \(second.declaration)
+            if \(try emit(node.children[0])) { return \(first.call) }
+            return \(second.call)
+            """
+        case .union, .intersection, .setDifference:
+            let operation = if case .union = node.operation { "left(candidate) || right(candidate)" }
+                else if case .intersection = node.operation { "left(candidate) && right(candidate)" }
+                else { "left(candidate) && !right(candidate)" }
+            let first = try predicate(node.children[0])
+            let second = try predicate(node.children[1])
+            body = """
+            \(first.declaration)
+            \(second.declaration)
+            let left = \(first.call)
+            let right = \(second.call)
+            return { candidate in \(operation) }
+            """
+        case .unionAll where { if case .setMap = node.children[0].operation { true } else { false } }():
+            let mapped = node.children[0]
+            guard case .setMap(let binding) = mapped.operation,
+                  case .set(let input) = mapped.children[1].resultType else { throw unsupported("membership union domain") }
+            var nested = substitutions
+            nested[binding] = binder(binding)
+            let member = try membershipPredicate(mapped.children[0], state: state, substitutions: nested,
+                activeFunctions: activeFunctions, membershipFunctions: membershipFunctions)
+            body = """
+            let predicates = try \(try emit(mapped.children[1])).sorted(by: \(try ordering(input))).map {
+                (\(binder(binding)): \(try swiftType(input))) throws -> (\(predicateType)) in
+                \(member.declaration)
+                return \(member.call)
+            }
+            return { candidate in predicates.contains { $0(candidate) } }
+            """
+        case .call(let id) where !membershipFunctions.contains(id) && !activeFunctions.contains(id):
+            let function = program[id]
+            var nested = substitutions
+            var arguments: [String] = []
+            let callOrdinal = ordinal(for: node)
+            for ((parameter, type), argument) in zip(function.parameters, node.children) {
+                let name = "_membershipArgument\(callOrdinal)_\(parameter.ordinal)"
+                arguments.append(try cachedBinding(named: name, type: type, value: emit(argument)))
+                nested[parameter] = "(try \(name)())"
+            }
+            let domainGuard = try function.domainGuard.map {
+                "guard \(try expression($0, state: state, substitutions: nested, activeFunctions: activeFunctions)) else { throw NativeMachineEvaluationError.functionArgumentOutsideDomain }"
+            } ?? ""
+            let result = try membershipPredicate(function.body, state: state, substitutions: nested,
+                activeFunctions: activeFunctions, membershipFunctions: membershipFunctions.union([id]))
+            body = """
+            guard _nativeDepth < _NativeMachineOperations.maximumRecursiveDepth else {
+                throw NativeMachineEvaluationError.recursionDepthExceeded(_NativeMachineOperations.maximumRecursiveDepth)
+            }
+            _nativeDepth += 1
+            defer { _nativeDepth -= 1 }
+            \(arguments.joined(separator: "\n"))
+            \(domainGuard)
+            \(result.declaration)
+            return \(result.call)
+            """
+        case .letValue(let binding):
+            let name = "_membershipBinding\(ordinal(for: node))_\(binding.ordinal)"
+            var nested = substitutions
+            nested[binding] = "(try \(name)())"
+            let value = try cachedBinding(named: name, type: node.children[0].resultType, value: emit(node.children[0]))
+            let result = try membershipPredicate(node.children[1], state: state, substitutions: nested,
+                activeFunctions: activeFunctions, membershipFunctions: membershipFunctions)
+            body = "\(value)\n\(result.declaration)\nreturn \(result.call)"
+        default:
+            body = "let members = \(try emit(node))\nreturn { members.contains($0) }"
+        }
+        return ("func \(name)() throws -> (\(predicateType)) {\n\(body)\n}", "try \(name)()")
     }
 
     private mutating func sequenceExpression(
