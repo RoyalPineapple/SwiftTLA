@@ -74,6 +74,16 @@ The workflow artifact contains both graph streams, the TLC process output, and
 
 ## Hosted result
 
+The scenario runner accepts two resource limits through environment variables:
+
+- `SWIFTTLA_SCENARIO_MAXIMUM_STATES`: a positive integer, with a default of 1,000 states.
+- `SWIFTTLA_SCENARIO_TIMEOUT_SECONDS`: a positive finite number, with a default of 120 seconds per TLC invocation.
+
+The hosted workflow supplies 2,000,000 states and 600 seconds for model-owned scenarios.
+Independent upstream cases declare their limits in `cases.json`.
+These limits do not change model parameters, transitions, or selected properties.
+An incomplete graph or timeout remains a validation failure.
+
 The `finite-graph.yml` workflow accepts `swift_tla_sha`. It uses that exact
 commit and names the artifact with the resolved commit, run ID, and run
 attempt.

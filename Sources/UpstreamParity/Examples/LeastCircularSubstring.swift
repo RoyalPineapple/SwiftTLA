@@ -1,234 +1,93 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-private struct FailureTable: TLAValueType {
-    private let values: [Int: Int]
-
-    static var defaultValue: Self { Self(values: [:]) }
-
-    private init(values: [Int: Int]) {
-        self.values = values
+@TLAModel
+package struct LeastCircularSubstringModel: Sendable {
+    package enum Step: String, CaseIterable {
+        case L3, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, LVR
     }
 
-    init?(formalValue: TLAValue) {
-        guard case .function(let entries) = formalValue else { return nil }
-        var values: [Int: Int] = [:]
-        for (key, value) in entries {
-            guard case .int(let index) = key, case .int(let failure) = value else { return nil }
-            values[index] = failure
-        }
-        self.values = values
-    }
+    package static var spec: TLASpec {
+        #spec("MCLeastCircularSubstring") { scope in
+            let CharSetSize = scope.parameter(as: Int.self, in: 0...3)
+            let MaxStringLength = scope.parameter(as: Int.self, in: 0...8)
+            let TypeInvariant = Invariant()
+            let Correctness = Invariant()
+            Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: MaxStringLength))
+            Algorithm("LeastCircularSubstring", scoped: { algorithm in
+                let b = algorithm.sharedVar(in: ZSequences.sequences(over: IntRange(0, through: CharSetSize - 1)))
+                let n = algorithm.sharedVar(initial: ZSequences.length(of: b))
+                let f = algorithm.sharedVar(initial: Dictionary<Int, Int>.mapping(
+                    over: IntRange(0, through: n * 2)) { _ in -1 })
+                let i = algorithm.sharedVar(initial: -1)
+                let j = algorithm.sharedVar(initial: 1)
+                let k = algorithm.sharedVar(initial: 0)
 
-    var tlaValue: TLAValue {
-        .function(Dictionary(uniqueKeysWithValues: values.map { (.int($0.key), .int($0.value)) }))
-    }
+                Do(Step.L3) {
+                    If(j < n * 2) { Goto(Step.L5) } else: { Stop() }
+                }
+                Do(Step.L5) { Assign(i, to: f[j - k - 1]) }
+                Do(Step.L6) {
+                    If(b[j % n] != b[(k + i + 1) % n] && i != -1) {
+                        Goto(Step.L7)
+                    } else: { Goto(Step.L10) }
+                }
+                Do(Step.L7) {
+                    If(b[j % n] < b[(k + i + 1) % n]) {
+                        Goto(Step.L8)
+                    } else: { Goto(Step.L9) }
+                }
+                Do(Step.L8) { Assign(k, to: j - i - 1) }
+                Do(Step.L9) {
+                    Assign(i, to: f[i])
+                    Goto(Step.L6)
+                }
+                Do(Step.L10) {
+                    If(b[j % n] != b[(k + i + 1) % n] && i == -1) {
+                        Goto(Step.L11)
+                    } else: { Goto(Step.L14) }
+                }
+                Do(Step.L11) {
+                    If(b[j % n] < b[(k + i + 1) % n]) {
+                        Goto(Step.L12)
+                    } else: { Goto(Step.L13) }
+                }
+                Do(Step.L12) { Assign(k, to: j) }
+                Do(Step.L13) {
+                    Assign(f[j - k], to: -1)
+                    Goto(Step.LVR)
+                }
+                Do(Step.L14) { Assign(f[j - k], to: i + 1) }
+                Do(Step.LVR) {
+                    Assign(j, to: j + 1)
+                    Goto(Step.L3)
+                }
 
-    static func filled(through upperBound: Expr<Int>, with value: Int) -> Expr<Self> {
-        let index = "__failureTableIndex"
-        return Expr(.functionLiteral(
-            .integerRange(.int(0), upperBound.raw),
-            index,
-            .int(value)
-        ))
-    }
-}
-
-/// Kellogg Booth's published least-circular-substring algorithm.
-///
-/// This is the upstream PlusCal control flow with its labels preserved. The
-/// model imports `ZSequences` as a real module, and configures that module's
-/// `Nat` operator with the same finite bound used for model checking.
-package enum LeastCircularSubstringModel {
-    private enum Step: String, CaseIterable {
-        case l3 = "L3"
-        case l5 = "L5"
-        case l6 = "L6"
-        case l7 = "L7"
-        case l8 = "L8"
-        case l9 = "L9"
-        case l10 = "L10"
-        case l11 = "L11"
-        case l12 = "L12"
-        case l13 = "L13"
-        case l14 = "L14"
-        case loopReturn = "LVR"
-    }
-
-    private static func character(
-        in sequence: SharedVariable<ZeroBasedSequence<Int>>,
-        length: SharedVariable<Int>,
-        at index: Expr<Int>
-    ) -> Expr<Int> {
-        Expr(.functionApply(sequence.stateExpr, .modulo(index.raw, length.stateExpr)))
-    }
-
-    private static func failure(
-        in table: SharedVariable<FailureTable>,
-        at index: Expr<Int>
-    ) -> Expr<Int> {
-        Expr(.functionApply(table.stateExpr, index.raw))
-    }
-
-    private static func updatingFailure(
-        in table: SharedVariable<FailureTable>,
-        at index: Expr<Int>,
-        to value: Expr<Int>
-    ) -> Expr<FailureTable> {
-        Expr(.except(table.stateExpr, index.raw, value.raw))
-    }
-
-    private static func mismatch(
-        sequence: SharedVariable<ZeroBasedSequence<Int>>,
-        length: SharedVariable<Int>,
-        offset: SharedVariable<Int>,
-        prefix: SharedVariable<Int>,
-        position: SharedVariable<Int>
-    ) -> Expr<Bool> {
-        character(in: sequence, length: length, at: position.expr) !=
-            character(
-                in: sequence,
-                length: length,
-                at: offset + prefix + 1
-            )
-    }
-
-    private static func correctness(
-        sequence: SharedVariable<ZeroBasedSequence<Int>>,
-        shift: SharedVariable<Int>
-    ) -> Expr<Bool> {
-        let candidate = ZSequences.rotation(of: sequence.expr, leftBy: shift.expr)
-        return !Finished() || ForAll(in: ZSequences.rotations(of: sequence.expr)) { other in
-            let otherSequence = other.seq
-            let otherShift = other.shift
-            let precedes = Expr<Bool>(ZSequences.lexicographicallyPrecedesOrEquals(candidate, otherSequence))
-            return precedes && (candidate != otherSequence || shift <= otherShift)
+                TypeInvariant {
+                    ZSequences.sequences(over: IntRange(0, through: CharSetSize - 1)).contains(b)
+                        && n == ZSequences.length(of: b)
+                        && Functions(from: IntRange(0, through: n * 2),
+                            to: IntRange(0, through: n * 2).union(SetExpr<Int>.literal(-1))).contains(f)
+                        && IntRange(0, through: n * 2).union(SetExpr<Int>.literal(-1)).contains(i)
+                        && IntRange(0, through: n * 2).union(SetExpr<Int>.literal(1)).contains(j)
+                        && ZSequences.indices(of: b).union(SetExpr<Int>.literal(0)).contains(k)
+                }
+                Correctness {
+                    !Finished() || ForAll(in: ZSequences.rotations(of: b)) { other in
+                        Expr<Bool>(ZSequences.lexicographicallyPrecedesOrEquals(
+                            ZSequences.rotation(of: b, leftBy: k), other.seq))
+                            && (ZSequences.rotation(of: b, leftBy: k) != other.seq || k <= other.shift)
+                    }
+                }
+            })
+            Validation("Small") {
+                Bind(CharSetSize, to: 2)
+                Bind(MaxStringLength, to: 6)
+            }
+            Validation("Medium") {
+                Bind(CharSetSize, to: 3)
+                Bind(MaxStringLength, to: 8)
+            }
         }
     }
-
-    package static let spec = TLASpec("MCLeastCircularSubstring") {
-        Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 6))
-
-        Algorithm("LeastCircularSubstring", scoped: { scope in
-            let characterSet = SetExpr<Int>.literal(0, 1)
-            let b = scope.sharedVar(_name: "b",
-                in: ZSequences.sequences(over: characterSet)
-            )
-            let n = scope.sharedVar(_name: "n", initial: ZSequences.length(of: b.expr))
-            let f = scope.sharedVar(_name: "f",
-                initial: FailureTable.filled(
-                    through: n.expr * 2,
-                    with: -1
-                )
-            )
-            let i: SharedVariable<Int> = scope.sharedVar(_name: "i", initial: -1)
-            let j = scope.sharedVar(_name: "j", initial: 1)
-            let k = scope.sharedVar(_name: "k", initial: 0)
-
-            Do(Step.l3) {
-                If(j < n * 2) {
-                    Goto(Step.l5)
-                } else: {
-                    Stop()
-                }
-            }
-            Do(Step.l5) {
-                Assign(i, to: failure(in: f, at: j.expr - k.expr - 1))
-            }
-            Do(Step.l6) {
-                If(mismatch(sequence: b, length: n, offset: k, prefix: i, position: j) && i != -1) {
-                    Goto(Step.l7)
-                } else: {
-                    Goto(Step.l10)
-                }
-            }
-            Do(Step.l7) {
-                If(
-                    character(in: b, length: n, at: j.expr) <
-                        character(in: b, length: n, at: k + i + 1)
-                ) {
-                    Goto(Step.l8)
-                } else: {
-                    Goto(Step.l9)
-                }
-            }
-            Do(Step.l8) {
-                Assign(k, to: j - i - 1)
-            }
-            Do(Step.l9) {
-                Assign(i, to: failure(in: f, at: i.expr))
-                Goto(Step.l6)
-            }
-            Do(Step.l10) {
-                If(mismatch(sequence: b, length: n, offset: k, prefix: i, position: j) && i == -1) {
-                    Goto(Step.l11)
-                } else: {
-                    Goto(Step.l14)
-                }
-            }
-            Do(Step.l11) {
-                If(
-                    character(in: b, length: n, at: j.expr) <
-                        character(in: b, length: n, at: k + i + 1)
-                ) {
-                    Goto(Step.l12)
-                } else: {
-                    Goto(Step.l13)
-                }
-            }
-            Do(Step.l12) {
-                Assign(k, to: j.expr)
-            }
-            Do(Step.l13) {
-                Assign(f, to: updatingFailure(
-                    in: f,
-                    at: j.expr - k.expr,
-                    to: Expr(-1)
-                ))
-                Goto(Step.loopReturn)
-            }
-            Do(Step.l14) {
-                Assign(f, to: updatingFailure(
-                    in: f,
-                    at: j.expr - k.expr,
-                    to: i + 1
-                ))
-            }
-            Do(Step.loopReturn) {
-                Assign(j, to: j + 1)
-                Goto(Step.l3)
-            }
-
-            Invariant("TypeInvariant") {
-                let indexRange = StateExpr.integerRange(.int(0), .multiply(.int(2), n.stateExpr))
-                return .and(
-                    .in(b.stateExpr, ZSequences.sequences(over: characterSet).raw),
-                    .and(
-                        .equal(n.stateExpr, ZSequences.length(of: b.expr).raw),
-                        .and(
-                            .in(f.stateExpr, .functionSet(indexRange, .union(indexRange, .setLiteral([.int(-1)])))),
-                            .and(
-                                .in(i.stateExpr, .union(indexRange, .setLiteral([.int(-1)]))),
-                                .and(
-                                    .in(j.stateExpr, .union(indexRange, .setLiteral([.int(1)]))),
-                                    .in(k.stateExpr, .union(ZSequences.indices(of: b.expr).raw, .setLiteral([.int(0)])))
-                                )
-                            )
-                        )
-                    )
-                )
-            }
-            Invariant("Correctness") {
-                correctness(sequence: b, shift: k)
-            }
-        })
-    }
-}
-
-extension Example {
-    package static let leastCircularSubstring = FiniteModelFixture(
-        expectedDistinct: 8_554,
-        maximumStateLimit: 10_000,
-        spec: LeastCircularSubstringModel.spec,
-    )
 }

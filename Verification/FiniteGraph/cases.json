@@ -2,6 +2,70 @@
   "schema": "FiniteGraphCases",
   "cases": [
     {
+      "id": "least-circular-substring-small",
+      "sourceModel": "least-circular-substring",
+      "scenario": "Small",
+      "module": "least-circular-substring/MCLeastCircularSubstring.tla",
+      "configuration": "least-circular-substring/MCLeastCircularSubstringSmall.cfg",
+      "imports": [
+        "least-circular-substring/LeastCircularSubstring.tla",
+        "least-circular-substring/ZSequences.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCLeastCircularSubstring",
+          "importedModule": "LeastCircularSubstring"
+        },
+        {
+          "importingModule": "LeastCircularSubstring",
+          "importedModule": "ZSequences"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/LeastCircularSubstring/MCLeastCircularSubstring.tla",
+        "sha256": "e1c09a0132181bce2a37b5aed0849662b7d74e4304d9d5dab7fd0f3f9c80d838"
+      },
+      "exploration": {
+        "maximumStateLimit": 2000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "e1c09a0132181bce2a37b5aed0849662b7d74e4304d9d5dab7fd0f3f9c80d838",
+      "cfgSHA256": "1d0ff02c8d31ed7570008f369562f8445fd707d38d5ad36855fc368cae67d110",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "least-circular-substring-medium",
+      "sourceModel": "least-circular-substring",
+      "scenario": "Medium",
+      "module": "least-circular-substring/MCLeastCircularSubstring.tla",
+      "configuration": "least-circular-substring/MCLeastCircularSubstringMedium.cfg",
+      "imports": [
+        "least-circular-substring/LeastCircularSubstring.tla",
+        "least-circular-substring/ZSequences.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCLeastCircularSubstring",
+          "importedModule": "LeastCircularSubstring"
+        },
+        {
+          "importingModule": "LeastCircularSubstring",
+          "importedModule": "ZSequences"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/LeastCircularSubstring/MCLeastCircularSubstring.tla",
+        "sha256": "e1c09a0132181bce2a37b5aed0849662b7d74e4304d9d5dab7fd0f3f9c80d838"
+      },
+      "exploration": {
+        "maximumStateLimit": 2000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "e1c09a0132181bce2a37b5aed0849662b7d74e4304d9d5dab7fd0f3f9c80d838",
+      "cfgSHA256": "1b728b5dc6eebc67db776228cc5055d86e274547ffc82137f9f3c41a8419cc6a",
+      "timeoutSeconds": 600
+    },
+    {
       "id": "dining-philosophers",
       "sourceModel": "dining-philosophers",
       "scenario": "NP5",

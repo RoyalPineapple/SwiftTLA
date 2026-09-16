@@ -56,6 +56,8 @@ jobs:
       - name: Validate all model-owned corpus scenarios
         env:
           FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+          SWIFTTLA_SCENARIO_MAXIMUM_STATES: "2000000"
+          SWIFTTLA_SCENARIO_TIMEOUT_SECONDS: "600"
         run: |
           ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT"
           unset FINITE_GRAPH_GITHUB_TOKEN
