@@ -4,6 +4,7 @@ import SwiftTLAMacros
 // Dining Philosophers — Chandy-Misra solution. NP=5.
 // Upstream: specifications/DiningPhilosophers/DiningPhilosophers.tla
 
+@TLAModel
 package struct DiningPhilosophersModel: Sendable {
     package enum Philosopher: Int, FiniteTLAValueDomain {
         case one = 1
@@ -42,7 +43,7 @@ package struct DiningPhilosophersModel: Sendable {
         package static let clean = field(\ForkFields.clean)
     }
 
-    private enum Step: String, CaseIterable {
+    package enum Step: String, CaseIterable {
         case loop = "Loop"
         case think = "Think"
         case eat = "Eat"
@@ -61,7 +62,7 @@ package struct DiningPhilosophersModel: Sendable {
                     (Philosopher.five, Record.literal(.init(Fork.holder, Philosopher.five), .init(Fork.clean, false)))
                 ))
 
-                Each(Philosopher.all, scoped: { philosopher, scope in
+                Each(Philosopher.all, fairness: .weak, scoped: { philosopher, scope in
                     let hungry = scope.localVar("hungry", initial: true)
 
                     Do(Step.loop) {
@@ -146,6 +147,8 @@ package struct DiningPhilosophersModel: Sendable {
                         Goto(Step.loop)
                     }
 
+                    AlwaysEventually("NobodyStarves", !hungry)
+
                     Invariant("TypeOK") {
                         (forks[philosopher][Fork.holder] == .one
                             || forks[philosopher][Fork.holder] == .two
@@ -171,6 +174,7 @@ package struct DiningPhilosophersModel: Sendable {
                     }
                 }
             })
+            Validation("NP5") {}
         }
     }
 }
