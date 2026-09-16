@@ -178,11 +178,3 @@ package struct DiningPhilosophersModel: Sendable {
         }
     }
 }
-
-extension Example {
-    static let diningPhilosophersNP5 = FiniteModelFixture(
-        expectedDistinct: 67,
-        maximumStateLimit: 50_000,
-        spec: DiningPhilosophersModel.spec,
-    )
-}
