@@ -101,6 +101,9 @@ public struct ModuleDescription: Sendable, Equatable {
 
 /// TLA+ output and declaration text shared with authored PlusCal rendering.
 package struct RenderedModule: Sendable, Equatable {
+    package var imports: [TLAModuleFile] = []
+    package var importedOwnership: [TLAModuleBundle.OwnershipEntry] = []
+    package var dependencies: [TLAModuleBundle.ModuleDependency] = []
     package let renderedModuleSource: String
     package let configuration: TLCConfiguration
     package let renderedActions: [RenderedAction]
@@ -148,10 +151,10 @@ struct CompiledRefinement: Sendable {
 
 /// Source metadata needed by renderers after executable declarations are lowered.
 struct CompiledModuleMetadata: Sendable {
-    let name: String
+    var name: String
     let constants: [ConstantDecl]
     let formalParameters: [FormalModuleParameter]
-    let modelValueNames: Set<String>
+    var modelValueNames: Set<String>
     let extendsModules: [StandardModule]
     let imports: [String]
     let collections: [(domainSymbol: String, members: [TLAValue])]
@@ -273,13 +276,20 @@ public struct RenderedSpecification: Sendable {
     @_documentation(visibility: internal)
     public init(_generatedModule name: String, source: String, compilationIdentity: String,
         declarations: [String], checkDeadlock: Bool, invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
-        symmetry: [String], actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil) throws {
+        symmetry: [String], actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil,
+        _generatedImports: [(name: String, source: String, structuralPath: [String])] = [],
+        _generatedDependencies: [(importingModule: String, importedModule: String, structuralPath: [String])] = []) throws {
         let configuration = TLCConfiguration(declarations: declarations, checkDeadlock: checkDeadlock,
             invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements, symmetry: symmetry)
         let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
-            cfg: configuration.render(usesSymmetryReduction: true)), provenance: .compiled(
+            cfg: configuration.render(usesSymmetryReduction: true)),
+            imports: _generatedImports.map { .init(name: $0.name, tla: $0.source) }, provenance: .compiled(
                 identity: .init(value: compilationIdentity),
-                ownership: [.init(moduleName: name, owningRoot: name, structuralPath: [])], dependencies: []))
+                ownership: [.init(moduleName: name, owningRoot: name, structuralPath: [])]
+                    + _generatedImports.map { .init(moduleName: $0.name, owningRoot: name, structuralPath: $0.structuralPath) },
+                dependencies: _generatedDependencies.map {
+                    .init(importingModule: $0.importingModule, importedModule: $0.importedModule, structuralPath: $0.structuralPath)
+                }))
         try bundle.validateDeclaredClosure()
         let plusCal = try _generatedPlusCal.map { result -> Result<TLAModuleBundle, CompilationDiagnostic> in
             switch result {
@@ -955,6 +965,13 @@ public extension TLASpec {
                 return (parameter.name, source)
             })
             var specialized = abstractModule.specializing(parameters: parameters)
+            let parameterDependencies = parameters.values.reduce(into: Set<String>()) {
+                $0.formUnion($1.freeVariableNames)
+            }
+            specialized.formalParameters += formalParameters.filter {
+                parameterDependencies.contains($0.name)
+                    && !specialized.formalParameters.contains($0)
+            }
             // A TLC exploration constraint is configuration, not part of C!Spec.
             specialized.constraint = nil
             return .init(
@@ -1306,39 +1323,116 @@ extension CompiledProgram {
                 pending.append(contentsOf: expression.children)
             }
         }
-        let renderer = CompiledTLARenderer(moduleName: moduleMetadata.name,
-            reservedNames: moduleMetadata.modelValueNames.union(moduleMetadata.constants.map(\.name)),
+        var metadata = moduleMetadata
+        metadata.modelValueNames = exportedModelValueNames
+        let renderer = CompiledTLARenderer(moduleName: metadata.name,
+            reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
             actions: behavior.actions, functions: functions)
-        let constants = moduleMetadata.constants.sorted { $0.name < $1.name }.map { "ASSUME \($0.name) = \($0.value)" }
-        let collections = moduleMetadata.collections.map {
+        let constants = metadata.constants.sorted { $0.name < $1.name }.map { "ASSUME \($0.name) = \($0.value)" }
+        let collections = metadata.collections.map {
             "\($0.domainSymbol) == {\($0.members.map(\.description).joined(separator: ", "))}"
         }
         let prelude = try constants + collections + renderer.resolvedFunctionDefinitions() + renderer.assumptions(behavior)
-        let module = try moduleMetadata.authoredPlusCalModule(algorithm: authoredAlgorithm,
+        let module = try metadata.authoredPlusCalModule(algorithm: authoredAlgorithm,
             layout: layout, declarations: declarations,
-            prelude: prelude, define: [], postTranslation: [],
+            prelude: prelude, define: [], postTranslation: declarations.instances,
             parameterNames: layout.parameters.map { binderNames[$0.binder]! }, requiredModules: requiredStandardModules)
         return try AlgorithmPlusCalRenderer(module: module, formalRenderer: renderer).render()
     }
 
     package func renderModule() throws -> RenderedModule {
-        guard moduleMetadata.imports.isEmpty, moduleMetadata.formalParameters.isEmpty, refinements.isEmpty else {
+        try renderModule(named: moduleName, owningRoot: moduleName, structuralPath: [])
+    }
+
+    private var exportedModelValueNames: Set<String> {
+        refinements.reduce(moduleMetadata.modelValueNames.union(CompiledValue.modelValueNames(
+            in: moduleMetadata.constants.map { CompiledValue(formal: $0.value) }))) {
+            $0.union($1.abstract.exportedModelValueNames)
+        }
+    }
+
+    private func renderModule(named name: String, owningRoot: String, structuralPath: [String]) throws -> RenderedModule {
+        guard structuralPath.isEmpty || layout.parameters.isEmpty else {
+            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
+                path: "export.\(name).parameters", expected: "resolved abstract parameter bindings",
+                actual: "unbound abstract model parameters", nextSafeAction: "Resolve abstract configuration before exporting the refinement.")
+        }
+        guard moduleMetadata.imports.isEmpty, moduleMetadata.formalParameters.isEmpty else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
                 path: "export.\(moduleMetadata.name)", expected: "a resolved standalone module",
-                actual: "module imports, formal parameters, or refinement exports need a resolved module closure",
+                actual: "module imports or formal parameters need a resolved module closure",
                 nextSafeAction: "Resolve the complete module closure before typed export.")
         }
-        let renderer = CompiledTLARenderer(moduleName: moduleMetadata.name,
-            reservedNames: moduleMetadata.modelValueNames.union(moduleMetadata.constants.map(\.name)),
+        var metadata = moduleMetadata
+        metadata.name = name
+        let modelValues = exportedModelValueNames
+        let reserved = Set(layout.declarations.map(\.name) + metadata.constants.map(\.name)
+            + layout.parameters.map { $0.reference.name } + layout.moduleInstances.map(\.namespace)
+            + refinements.map(\.name) + ["Init", "Next", "Spec", "vars", "StateConstraint", "Terminating"])
+        for value in modelValues.subtracting(metadata.modelValueNames).sorted() where reserved.contains(value) {
+            guard metadata.constants.contains(where: { $0.name == value && $0.value == .constant(value) }) else {
+                throw CompilationDiagnostic(code: .invalidFormalDeclaration, stage: .rendering,
+                    path: "export.\(name).modelValues", expected: "a model value distinct from module declarations",
+                    actual: "imported model value '\(value)' conflicts with a declared symbol",
+                    nextSafeAction: "Rename the model value or the conflicting declaration.")
+            }
+        }
+        metadata.modelValueNames = modelValues
+        let renderer = CompiledTLARenderer(moduleName: name,
+            reservedNames: metadata.modelValueNames.union(metadata.constants.map(\.name)),
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
             actions: behavior.actions, functions: functions)
-        return try moduleMetadata.assembleModule(behavior: behavior, renderer: renderer,
-            definitions: [], definitionsBeforeInstances: [], definitionsAfterInstances: [], instances: [],
-            recursiveFunctions: renderer.resolvedFunctionDefinitions(), renderedRefinements: [],
+        var imports: [TLAModuleFile] = []
+        var ownership: [TLAModuleBundle.OwnershipEntry] = []
+        var dependencies: [TLAModuleBundle.ModuleDependency] = []
+        var instances: [String] = []
+        var renderedRefinements: [String] = []
+        for refinement in refinements {
+            guard let instance = layout.moduleInstances.first(where: { $0.id == refinement.instance }) else {
+                throw CompilationDiagnostic(code: .unresolvedRefinementInstance, stage: .rendering,
+                    path: "export.\(name).refinements.\(refinement.name)", expected: "a resolved module-instance identity",
+                    actual: "missing instance", nextSafeAction: "Resolve the refinement instance before typed export.")
+            }
+            guard refinement.operator == .spec else {
+                throw CompilationDiagnostic(code: .unsupportedRefinementTarget, stage: .rendering,
+                    path: "export.\(name).refinements.\(refinement.name)", expected: "a resolved specification target",
+                    actual: "\(refinement.operator)", nextSafeAction: "Resolve the target behavior before typed export.")
+            }
+            let importedName = "\(name)__Refinement\(instance.id.ordinal)"
+            let path = structuralPath + [instance.namespace]
+            let abstract = try refinement.abstract.renderModule(named: importedName, owningRoot: owningRoot, structuralPath: path)
+            guard refinement.abstract.layout.variables.count == refinement.variableMappings.count else {
+                throw CompilationDiagnostic(code: .incompleteRefinementMapping, stage: .rendering,
+                    path: "export.\(name).refinements.\(refinement.name)", expected: "one resolved mapping per abstract variable",
+                    actual: "mapping count differs", nextSafeAction: "Resolve all variable mappings before typed export.")
+            }
+            var mappings = try zip(refinement.abstract.layout.variables, refinement.variableMappings).map {
+                "\($0.declaration.name) <- \(try renderer.state($1.expression))"
+            }
+            let constants = refinement.abstract.moduleMetadata.constants
+            mappings += constants.map { "\($0.name) <- \($0.value)" }
+            mappings += refinement.abstract.exportedModelValueNames.subtracting(constants.map(\.name)).sorted()
+                .map { "\($0) <- \($0)" }
+            instances.append("\(instance.namespace) == INSTANCE \(importedName)" + (mappings.isEmpty ? "" : " WITH " + mappings.joined(separator: ", ")))
+            renderedRefinements.append("\(refinement.name) == \(instance.namespace)!Spec")
+            imports.append(.init(name: importedName, tla: abstract.renderedModuleSource))
+            imports += abstract.imports
+            ownership.append(.init(moduleName: importedName, owningRoot: owningRoot, structuralPath: path))
+            ownership += abstract.importedOwnership
+            dependencies.append(.init(importingModule: name, importedModule: importedName, structuralPath: path))
+            dependencies += abstract.dependencies
+        }
+        var result = try metadata.assembleModule(behavior: behavior, renderer: renderer,
+            definitions: [], definitionsBeforeInstances: [], definitionsAfterInstances: [], instances: instances,
+            recursiveFunctions: renderer.resolvedFunctionDefinitions(), renderedRefinements: renderedRefinements,
             renderedFormalModuleReplacements: [],
-            configuration: moduleMetadata.tlcConfiguration(behavior: behavior, replacements: [], refinementNames: []),
-            requiredStandardModules: requiredStandardModules, importedNames: [])
+            configuration: metadata.tlcConfiguration(behavior: behavior, replacements: [], refinementNames: refinements.map(\.name)),
+            requiredStandardModules: requiredStandardModules, importedNames: [], instancesAfterBehavior: true)
+        result.imports = imports
+        result.importedOwnership = ownership
+        result.dependencies = dependencies
+        return result
     }
 }
 
@@ -1385,7 +1479,7 @@ private extension CompiledModuleMetadata {
         definitions: [String], definitionsBeforeInstances: [String], definitionsAfterInstances: [String],
         instances: [String], recursiveFunctions: [String], renderedRefinements: [String],
         renderedFormalModuleReplacements: [String], configuration: TLCConfiguration,
-        requiredStandardModules: Set<StandardModule>, importedNames: [String]
+        requiredStandardModules: Set<StandardModule>, importedNames: [String], instancesAfterBehavior: Bool = false
     ) throws -> RenderedModule {
         let layout = renderer.layout
         func containsStateReference(_ expression: CompiledExpression) -> Bool {
@@ -1461,7 +1555,8 @@ private extension CompiledModuleMetadata {
                 layout: layout,
                 behavior: behavior,
                 requiredStandardModules: requiredStandardModules,
-                importedNames: importedNames
+                importedNames: importedNames,
+                instancesAfterBehavior: instancesAfterBehavior
             ),
             configuration: configuration,
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
@@ -1487,7 +1582,8 @@ private extension CompiledModuleMetadata {
         layout: CompiledLayout,
         behavior: CompiledBehavior,
         requiredStandardModules: Set<StandardModule>,
-        importedNames: [String]
+        importedNames: [String],
+        instancesAfterBehavior: Bool
     ) throws -> String {
         let varNames = layout.variables.map(\.declaration.name)
         let varsTuple = varNames.count == 1 ? varNames[0] : "<<\(varNames.joined(separator: ", "))>>"
@@ -1541,18 +1637,9 @@ private extension CompiledModuleMetadata {
         }
         lines.append(contentsOf: recursiveFunctions)
         if !recursiveFunctions.isEmpty { lines.append("") }
-        for instance in renderedInstances {
-            lines.append(instance)
-            lines.append("")
-        }
-        for definition in definitionsAfterInstances {
-            lines.append(definition)
-            lines.append("")
-        }
-        for refinement in renderedRefinements {
-            lines.append(refinement)
-            lines.append("")
-        }
+        let instanceDeclarations = (renderedInstances + definitionsAfterInstances + renderedRefinements)
+            .flatMap { [$0, ""] }
+        if !instancesAfterBehavior { lines += instanceDeclarations }
 
         lines += try renderer.assumptions(behavior)
         if behavior.assume != nil { lines.append("") }
@@ -1641,6 +1728,7 @@ private extension CompiledModuleMetadata {
         lines.append("")
         lines.append(contentsOf: renderedTemporalProperties)
         if !renderedTemporalProperties.isEmpty { lines.append("") }
+        if instancesAfterBehavior { lines += instanceDeclarations }
         lines.append("====")
         return lines.joined(separator: "\n") + "\n"
     }

@@ -134,23 +134,21 @@ extension TLASpec {
             case .memberOf(let set): return .memberOf(state(set))
             }
         }
-        var specialized = TLASpec(
-            name: name,
-            variables: variables.map { .init(name: $0.name, initialization: initialization($0.initialization), collectionType: $0.collectionType, generatedSwiftType: $0.generatedSwiftType, origin: $0.origin) },
-            actions: actions.map { $0.substitutingVariables(parameters) },
-            invariants: invariants.map { .init(name: $0.name, body: state($0.body), reference: $0.reference) },
-            reachabilityProperties: reachabilityProperties.map { .init(name: $0.name, body: state($0.body), reference: $0.reference) },
-            temporalProperties: temporalProperties.map { $0.substitutingVariables(parameters) },
-            fairness: fairness, assume: assume.map(state), checkDeadlock: checkDeadlock,
-            extendsModules: extendsModules, constraint: constraint.map(state),
-            recursiveFuncs: recursiveFuncs.map { $0.substitutingVariables(parameters) },
-            formalOperatorDefinitions: formalOperatorDefinitions.map { $0.substitutingVariables(parameters) },
-            imports: imports, importConfigurations: importConfigurations, moduleInstances: moduleInstances, refinements: [],
-            symmetrySets: symmetrySets, collections: collections,
-            sourceAlgorithms: sourceAlgorithms
-        )
-        specialized.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
-        specialized.algorithmPhase = algorithmPhase
+        var specialized = self
+        specialized.formalParameters.removeAll { parameters[$0.name] != nil }
+        specialized.variables = variables.map { .init(name: $0.name, initialization: initialization($0.initialization), collectionType: $0.collectionType, generatedSwiftType: $0.generatedSwiftType, origin: $0.origin) }
+        specialized.actions = actions.map { $0.substitutingVariables(parameters) }
+        specialized.invariants = invariants.map { .init(name: $0.name, body: state($0.body), reference: $0.reference) }
+        specialized.reachabilityProperties = reachabilityProperties.map { .init(name: $0.name, body: state($0.body), reference: $0.reference) }
+        specialized.temporalProperties = temporalProperties.map { $0.substitutingVariables(parameters) }
+        specialized.assume = assume.map(state)
+        specialized.constraint = constraint.map(state)
+        specialized.recursiveFuncs = recursiveFuncs.map { $0.substitutingVariables(parameters) }
+        specialized.formalOperatorDefinitions = formalOperatorDefinitions.map { $0.substitutingVariables(parameters) }
+        specialized.refinements = refinements.map { refinement in
+            .init(name: refinement.name, instance: refinement.instance, operator: refinement.operator,
+                mappings: refinement.mappings.map { .init(target: $0.target, source: state($0.source)) })
+        }
         return specialized
     }
 }

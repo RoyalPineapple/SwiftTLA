@@ -24,6 +24,15 @@ extension NativeSwiftEmitter {
                 return "\(String(reflecting: "CONSTANT " + name + " = ")) + (\(value)).description"
             }
             let declarations = module.configuration.declarations.map { String(reflecting: $0) } + parameterBindings
+            let imports = try module.imports.map { imported in
+                guard let owner = module.importedOwnership.first(where: { $0.moduleName == imported.name }) else {
+                    throw unsupported("missing imported module ownership: \(imported.name)")
+                }
+                return "(name: \(String(reflecting: imported.name)), source: \(String(reflecting: imported.tla)), structuralPath: \(String(reflecting: owner.structuralPath)))"
+            }.joined(separator: ",\n")
+            let dependencies = module.dependencies.map {
+                "(importingModule: \(String(reflecting: $0.importingModule)), importedModule: \(String(reflecting: $0.importedModule)), structuralPath: \(String(reflecting: $0.structuralPath)))"
+            }.joined(separator: ",\n")
             let actions = module.renderedActions.map { action in
                 "RenderedAction(sourceName: \(String(reflecting: action.sourceName)), arguments: [\(action.arguments.map(renderedLiteral).joined(separator: ", "))], renderedName: \(String(reflecting: action.renderedName)))"
             }
@@ -57,7 +66,8 @@ extension NativeSwiftEmitter {
                 properties: \(String(reflecting: module.configuration.properties)),
                 refinements: \(String(reflecting: module.configuration.refinements)),
                 symmetry: \(String(reflecting: module.configuration.symmetry)),
-                actions: _actions, _generatedPlusCal: \(plusCal))
+                actions: _actions, _generatedPlusCal: \(plusCal),
+                _generatedImports: [\(imports)], _generatedDependencies: [\(dependencies)])
             """
         } catch let diagnostic as CompilationDiagnostic {
             body = """

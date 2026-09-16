@@ -10,7 +10,7 @@ struct NativeRefinementCheckingTests {
         #expect(graph.transitions.count == 5)
         #expect(graph.refinementFailures.isEmpty)
         let compilation = try NativeRefinementCounter.spec.compile()
-        let exported = try NativeModelRun(graph, rendered: compilation.render())
+        let exported = try NativeModelRun(graph, rendered: NativeRefinementCounter.render())
         #expect(exported.checks.properties["Refines"] == .satisfied)
         #expect(exported.rendered.refinementNames == ["Refines"])
         #expect(!exported.rendered.temporalNames.contains("Refines"))
@@ -33,8 +33,7 @@ struct NativeRefinementCheckingTests {
         for initial in try InvalidNativeRefinement.initialMachines() {
             let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 4)
             let failure = try #require(graph.refinementFailures[.Refines])
-            let compilation = try InvalidNativeRefinement.spec.compile()
-            let exported = try NativeModelRun(graph, rendered: compilation.render())
+            let exported = try NativeModelRun(graph, rendered: InvalidNativeRefinement.render())
             guard case .violated(let trace) = exported.checks.properties["Refines"],
                   case .violated = exported.checks.properties["BelowTwo"],
                   case .violated = exported.checks.properties["ReachesFour"] else {
@@ -65,8 +64,7 @@ struct NativeRefinementCheckingTests {
         }
         #expect(witness.cycle.first == witness.cycle.last)
         #expect(witness.cycleActions == [nil])
-        let compilation = try FairNativeRefinement.spec.compile()
-        let exported = try NativeModelRun(graph, rendered: compilation.render())
+        let exported = try NativeModelRun(graph, rendered: FairNativeRefinement.render())
         guard case .violated(let trace) = exported.checks.properties["Refines"] else {
             Issue.record("Expected a retained refinement counterexample")
             return
