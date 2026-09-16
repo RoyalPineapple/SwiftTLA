@@ -2,6 +2,7 @@
 public protocol StateMachine: Sendable {
     associatedtype Snapshot: Hashable, Sendable
     associatedtype Action: Hashable, Sendable
+    associatedtype Property: Hashable, CaseIterable, Sendable
 
     /// Complete execution state, including compiler-owned control state.
     var snapshot: Snapshot { get }
@@ -9,15 +10,16 @@ public protocol StateMachine: Sendable {
     /// Explicit conversions used by independent validation and export.
     func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection
     func formalCall(for action: Action) throws -> FormalActionCall
+    static var formalPropertyNames: [Property: String] { get }
     static var checksDeadlock: Bool { get }
     func assumptionsHold() throws -> Bool
     func satisfiesStateConstraint() throws -> Bool
     func fairnessConditions() throws -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)]
-    func temporalProperties() throws -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
-    func violatedInvariants() throws -> [String]
-    static var reachabilityPropertyNames: [String] { get }
-    func matchedReachabilityProperties() throws -> [String]
-    func refinementFailures(in graph: inout ReachabilityGraph<Self>) throws -> [String: RefinementFailure<Snapshot, Action>]
+    func temporalProperties() throws -> [Property: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
+    func violatedInvariants() throws -> [Property]
+    static var reachabilityProperties: [Property] { get }
+    func matchedReachabilityProperties() throws -> [Property]
+    func refinementFailures(in graph: inout ReachabilityGraph<Self>) throws -> [Property: RefinementFailure<Snapshot, Action>]
     func successors() throws -> [(action: Action, machine: Self)]
 }
 
@@ -37,8 +39,8 @@ public enum ReachabilityOutcome<Snapshot: Hashable & Sendable>: Equatable, Senda
     case unreachable
 }
 
-public enum SafetyViolation: Hashable, Sendable {
-    case invariant(String)
+public enum SafetyViolation<Property: Hashable & Sendable>: Hashable, Sendable {
+    case invariant(Property)
     case deadlock
 }
 
@@ -46,13 +48,13 @@ public enum SafetyViolation: Hashable, Sendable {
 public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     private let machine: Machine
     private let predecessors: [Machine.Snapshot: (source: Machine.Snapshot, action: Machine.Action)]
-    public let safetyViolations: [Machine.Snapshot: [SafetyViolation]]
+    public let safetyViolations: [Machine.Snapshot: [SafetyViolation<Machine.Property>]]
     /// States with no executable successor, before constraint filtering or check selection.
     public let deadlockedStates: Set<Machine.Snapshot>
-    public let reachabilityResults: [String: ReachabilityOutcome<Machine.Snapshot>]
-    package let reachabilityTargets: [String: Set<Machine.Snapshot>]
-    public private(set) var refinementFailures: [String: RefinementFailure<Machine.Snapshot, Machine.Action>] = [:]
-    public private(set) var temporalResults: [String: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] = [:]
+    public let reachabilityResults: [Machine.Property: ReachabilityOutcome<Machine.Snapshot>]
+    package let reachabilityTargets: [Machine.Property: Set<Machine.Snapshot>]
+    public private(set) var refinementFailures: [Machine.Property: RefinementFailure<Machine.Snapshot, Machine.Action>] = [:]
+    public private(set) var temporalResults: [Machine.Property: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] = [:]
     private var checker: LivenessChecker<Machine.Snapshot, Machine.Action, Int>?
     public let initialStates: Set<Machine.Snapshot>
     public let transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]]
@@ -65,18 +67,20 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         var transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]] = [:]
         var pending: ArraySlice<Machine> = []
         var predecessors: [Machine.Snapshot: (source: Machine.Snapshot, action: Machine.Action)] = [:]
-        var violations: [Machine.Snapshot: [SafetyViolation]] = [:]
+        var violations: [Machine.Snapshot: [SafetyViolation<Machine.Property>]] = [:]
         var deadlockedStates: Set<Machine.Snapshot> = []
-        var reachabilityWitnesses: [String: Machine.Snapshot] = [:]
-        let reachabilityNames = Set(Machine.reachabilityPropertyNames)
-        var reachabilityTargets = Dictionary(uniqueKeysWithValues: reachabilityNames.map { ($0, Set<Machine.Snapshot>()) })
+        var reachabilityWitnesses: [Machine.Property: Machine.Snapshot] = [:]
+        let reachabilityProperties = Set(Machine.reachabilityProperties)
+        var reachabilityTargets = Dictionary(uniqueKeysWithValues: reachabilityProperties.map { ($0, Set<Machine.Snapshot>()) })
         let initialRoots = Set(initialMachines.map(\.snapshot))
         func recordReachability(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
-            for name in try machine.matchedReachabilityProperties() {
-                guard reachabilityNames.contains(name) else { throw ExplorationError.undeclaredReachabilityProperty(name) }
-                reachabilityTargets[name, default: []].insert(machine.snapshot)
-                guard reachabilityWitnesses[name] == nil else { continue }
-                reachabilityWitnesses[name] = machine.snapshot
+            for property in try machine.matchedReachabilityProperties() {
+                guard reachabilityProperties.contains(property) else {
+                    throw ExplorationError.undeclaredReachabilityProperty(String(reflecting: property))
+                }
+                reachabilityTargets[property, default: []].insert(machine.snapshot)
+                guard reachabilityWitnesses[property] == nil else { continue }
+                reachabilityWitnesses[property] = machine.snapshot
                 if !initialRoots.contains(machine.snapshot), predecessors[machine.snapshot] == nil {
                     predecessors[machine.snapshot] = predecessor
                 }
@@ -137,8 +141,8 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         safetyViolations = violations
         self.deadlockedStates = deadlockedStates
         self.reachabilityTargets = reachabilityTargets
-        reachabilityResults = Dictionary(uniqueKeysWithValues: reachabilityNames.map { name in
-            (name, reachabilityWitnesses[name].map(ReachabilityOutcome.reached) ?? .unreachable)
+        reachabilityResults = Dictionary(uniqueKeysWithValues: reachabilityProperties.map { property in
+            (property, reachabilityWitnesses[property].map(ReachabilityOutcome.reached) ?? .unreachable)
         })
         if !properties.isEmpty {
             let checker = try temporalChecker()

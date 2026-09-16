@@ -28,7 +28,7 @@ struct BoulangerCorpusExecutionTests {
             let violations = try compilation.semantics.behavior.invariants.filter {
                 try !runtime.invariantHolds($0, in: formal)
             }.map(\.name)
-            #expect(try native.violatedInvariants() == violations)
+            #expect(try native.violatedInvariants().map { BoulangerModel.formalPropertyNames[$0]! } == violations)
         }
 
         try compareVisibleStateAndInvariants()

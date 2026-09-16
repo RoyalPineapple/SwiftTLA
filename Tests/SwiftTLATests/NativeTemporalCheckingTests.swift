@@ -8,7 +8,7 @@ struct NativeTemporalCheckingTests {
         let machine = try UnreachableCounter.makeMachine()
         let graph = try ReachabilityGraph(initialMachines: [machine], maximumStates: 10)
         let results = graph.temporalResults
-        let result = try #require(results["ReachesTwo"])
+        let result = try #require(results[.ReachesTwo])
         #expect(result.status == .violated)
         #expect(result.reason == .violatingFairLasso)
         let trace = try #require(result.witness)

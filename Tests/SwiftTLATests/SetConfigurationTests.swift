@@ -25,7 +25,7 @@ struct SetConfigurationTests {
             let graph = try scenario.explore(maximumStates: 10)
             #expect(graph.transitions.count == 2)
             #expect(graph.deadlockedStates.count == 1)
-            guard case .reached = graph.reachabilityResults["Quorum"] else {
+            guard case .reached = graph.reachabilityResults[.Quorum] else {
                 Issue.record("Missing quorum witness")
                 continue
             }

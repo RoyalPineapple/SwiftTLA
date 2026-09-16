@@ -20,8 +20,8 @@ struct ConfiguredProcessTests {
             let graph = try scenario.explore(maximumStates: 20)
             #expect(graph.transitions.count == 1 << population.count)
             #expect(graph.deadlockedStates.isEmpty)
-            #expect(graph.temporalResults["AllVisited"]?.status == (population.isEmpty ? .satisfied : .violated))
-            guard case .reached = graph.reachabilityResults["Complete"] else {
+            #expect(graph.temporalResults[.AllVisited]?.status == (population.isEmpty ? .satisfied : .violated))
+            guard case .reached = graph.reachabilityResults[.Complete] else {
                 Issue.record("Missing completed-population witness")
                 continue
             }
@@ -35,7 +35,7 @@ struct ConfiguredProcessTests {
     func weakFairness() throws {
         for scenario in try WeaklyFairConfiguredProcessMachine.validationScenarios() {
             try checkFairness(try #require(scenario.initialMachines().first),
-                population: scenario.configuration.nodes.count, strong: false)
+                population: scenario.configuration.nodes.count, property: .AllVisited, strong: false)
             let tla = try scenario.render().tlaBundle.tla
             #expect(tla.contains("\\A"))
             #expect(tla.contains("(\\A _process \\in nodes: WF_<<selected, pc>>(visit(_process)))"))
@@ -46,12 +46,12 @@ struct ConfiguredProcessTests {
     func strongFairness() throws {
         for scenario in try StronglyFairConfiguredProcessMachine.validationScenarios() {
             try checkFairness(try #require(scenario.initialMachines().first),
-                population: scenario.configuration.nodes.count, strong: true)
+                population: scenario.configuration.nodes.count, property: .AllVisited, strong: true)
             #expect(try scenario.render().tlaBundle.tla.contains("(\\A _process \\in nodes: SF_<<selected, pc>>(visit(_process)))"))
         }
     }
 
-    private func checkFairness<M: StateMachine>(_ machine: M, population: Int, strong: Bool) throws {
+    private func checkFairness<M: StateMachine>(_ machine: M, population: Int, property: M.Property, strong: Bool) throws {
         let fairness = try machine.fairnessConditions()
         #expect(fairness.count == population)
         #expect(fairness.allSatisfy { $0.isStrong == strong })
@@ -61,7 +61,7 @@ struct ConfiguredProcessTests {
         }
         let graph = try ReachabilityGraph(initialMachines: [machine], maximumStates: 20)
         #expect(graph.deadlockedStates.isEmpty)
-        #expect(graph.temporalResults["AllVisited"]?.status == .satisfied)
+        #expect(graph.temporalResults[property]?.status == .satisfied)
         #expect(graph.transitions.count == 1 << population)
     }
 }

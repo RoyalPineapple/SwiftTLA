@@ -24,7 +24,7 @@ struct ChangRobertsCorpusContractTests {
         #expect(!terminalStates.isEmpty)
         #expect(Set(native.safetyViolations.keys) == terminalStates)
         #expect(native.safetyViolations.values.allSatisfy { $0 == [.deadlock] })
-        #expect(native.temporalResults["Liveness"]?.status == .satisfied)
+        #expect(native.temporalResults[.Liveness]?.status == .satisfied)
         let exported = try CanonicalGraph(native)
         let formal = try FormalGraphExporter().export(exploration)
         #expect(exported == formal.graph)

@@ -192,7 +192,7 @@ private struct ReachableInvariantFailure {
         var machine = try ReachableInvariantFailure.makeMachine()
         #expect(try machine.violatedInvariants().isEmpty)
         #expect(try machine.send(.advance).after.count == 1)
-        #expect(try machine.violatedInvariants() == [invariant.name])
+        #expect(try machine.violatedInvariants().map { ReachableInvariantFailure.formalPropertyNames[$0]! } == [invariant.name])
     }
 }
 

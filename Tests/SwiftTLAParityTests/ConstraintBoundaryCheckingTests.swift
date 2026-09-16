@@ -25,7 +25,7 @@ struct ConstraintBoundaryCheckingTests {
         let configuration = try ConstraintBoundaryCounter.Configuration(safetyLimit: 2)
         let graph = try ReachabilityGraph(initialMachines: ConstraintBoundaryCounter.initialMachines(configuration: configuration), maximumStates: 10)
         let boundary = try #require(graph.safetyViolations.keys.first)
-        #expect(graph.safetyViolations[boundary] == [.invariant("Bounded")])
+        #expect(graph.safetyViolations[boundary] == [.invariant(.Bounded)])
         #expect(boundary.state.count == 2)
         #expect(graph.transitions[boundary] == nil)
         #expect(try graph.trace(to: boundary).map { $0.state.state.count } == [0, 1, 2])
@@ -41,7 +41,7 @@ struct ConstraintBoundaryCheckingTests {
         #expect(Set(graph.transitions.keys.map { $0.state.count }) == [0, 1])
         let boundary = try #require(graph.safetyViolations.keys.first)
         #expect(boundary.state.count == 2)
-        #expect(graph.safetyViolations[boundary] == [.invariant("Bounded")])
+        #expect(graph.safetyViolations[boundary] == [.invariant(.Bounded)])
         #expect(try graph.trace(to: boundary).map { $0.state.state.count } == [2])
         let compilation = try ConstraintInitialCounter.spec.compile()
         let formal = try ModelChecker(compilation: compilation,

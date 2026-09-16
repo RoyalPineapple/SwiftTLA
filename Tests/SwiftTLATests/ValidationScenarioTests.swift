@@ -16,11 +16,11 @@ struct ValidationScenarioTests {
             #expect(scenario.expectations.values.allSatisfy { $0 == .satisfied })
             #expect(graph.transitions.count == scenario.configuration.limit + 1)
             let rendered = try scenario.render()
-            #expect(rendered.checkNames == Set(scenario.expectations.keys.map(\.rawValue)))
+            #expect(rendered.checkNames == Set(scenario.expectations.keys.map { ConfiguredCounter.formalPropertyNames[$0]! }))
             #expect(rendered.checksDeadlock)
             #expect(graph.deadlockedStates.isEmpty == scenario.configuration.stopAtLimit)
             #expect(scenario.deadlockExpectation == (scenario.configuration.stopAtLimit ? .satisfied : .violated))
-            guard case .reached(let witness) = graph.reachabilityResults["AtLimit"] else {
+            guard case .reached(let witness) = graph.reachabilityResults[.AtLimit] else {
                 Issue.record("Missing scenario reachability witness")
                 continue
             }
@@ -33,7 +33,7 @@ struct ValidationScenarioTests {
         let scenario = try #require(ScenarioExpectations.validationScenarios().first)
         #expect(scenario.expectations == [.Bounded: .satisfied, .BeyondLimit: .violated])
         let graph = try scenario.explore(maximumStates: 3)
-        #expect(graph.reachabilityResults["BeyondLimit"] == .unreachable)
+        #expect(graph.reachabilityResults[.BeyondLimit] == .unreachable)
         #expect(graph.transitions.count == 3)
         #expect(try scenario.render().tlaBundle.tla.contains("BeyondLimit == ~("))
         let compiled = try ScenarioExpectations.spec.compile()

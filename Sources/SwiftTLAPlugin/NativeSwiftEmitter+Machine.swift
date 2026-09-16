@@ -13,6 +13,7 @@ extension NativeSwiftEmitter {
         let appendedArguments = collectionArguments.isEmpty ? "" : ", \(collectionArguments)"
         var declarations: [DeclSyntax] = []
         declarations += try configurationDeclarations()
+        declarations += try propertyIdentityDeclarations()
         declarations += try validationDeclarations()
         let fields = try program.layout.variables.filter { stateMemberNames[$0.id] == nil }.map { variable in
             "let \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
@@ -545,11 +546,11 @@ extension NativeSwiftEmitter {
             }
             """)
             let enabled = enabledActionsCall(invariant.predicate.enabledActions, state: "_execution", collectionArguments: arguments)
-            checks.append("if try !Self._invariant\(invariant.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(\(String(reflecting: invariant.name))) }")
+            checks.append("if try !Self._invariant\(invariant.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(.\(propertyCases[invariant.id]!)) }")
         }
         declarations += try nativeDeclarations("""
-        public func violatedInvariants() throws -> [String] {
-            \(checks.isEmpty ? "return []" : "var result: [String] = []\n" + checks.joined(separator: "\n") + "\nreturn result")
+        public func violatedInvariants() throws -> [Property] {
+            \(checks.isEmpty ? "return []" : "var result: [Property] = []\n" + checks.joined(separator: "\n") + "\nreturn result")
         }
         """)
         var reachabilityChecks: [String] = []
@@ -560,12 +561,12 @@ extension NativeSwiftEmitter {
             }
             """)
             let enabled = enabledActionsCall(property.predicate.enabledActions, state: "_execution", collectionArguments: arguments)
-            reachabilityChecks.append("if try Self._reachable\(property.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(\(String(reflecting: property.name))) }")
+            reachabilityChecks.append("if try Self._reachable\(property.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(.\(propertyCases[property.id]!)) }")
         }
         declarations += try nativeDeclarations("""
-        public static var reachabilityPropertyNames: [String] { \(String(reflecting: program.behavior.reachabilityProperties.map(\.name))) }
-        public func matchedReachabilityProperties() throws -> [String] {
-            \(reachabilityChecks.isEmpty ? "return []" : "var result: [String] = []\n" + reachabilityChecks.joined(separator: "\n") + "\nreturn result")
+        public static var reachabilityProperties: [Property] { [\(program.behavior.reachabilityProperties.map { ".\(propertyCases[$0.id]!)" }.joined(separator: ", "))] }
+        public func matchedReachabilityProperties() throws -> [Property] {
+            \(reachabilityChecks.isEmpty ? "return []" : "var result: [Property] = []\n" + reachabilityChecks.joined(separator: "\n") + "\nreturn result")
         }
         """)
         var temporalProperties: [String] = []
@@ -603,7 +604,7 @@ extension NativeSwiftEmitter {
                 }
             }
             if property.bindings.isEmpty {
-                temporalProperties.append("\(String(reflecting: property.name)): \(condition(predicates))")
+                temporalProperties.append(".\(propertyCases[property.id]!): \(condition(predicates))")
             } else {
                 let name = "_temporalMembers\(property.id.ordinal)"
                 let loops = try property.bindings.map { binding in
@@ -615,7 +616,7 @@ extension NativeSwiftEmitter {
                 \(name).append(\(condition(predicates)))
                 \(String(repeating: "}\n", count: property.bindings.count))
                 """)
-                temporalProperties.append("\(String(reflecting: property.name)): .all(\(name))")
+                temporalProperties.append(".\(propertyCases[property.id]!): .all(\(name))")
             }
         }
         let propertyBody: String
@@ -625,7 +626,7 @@ extension NativeSwiftEmitter {
             propertyBody = temporalDomains.joined(separator: "\n") + "\nreturn [\(temporalProperties.isEmpty ? ":" : temporalProperties.joined(separator: ",\n"))]"
         }
         declarations += try nativeDeclarations("""
-        public func temporalProperties() throws -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>] {
+        public func temporalProperties() throws -> [Property: TemporalCondition<@Sendable (Snapshot) throws -> Bool>] {
             \(propertyBody)
         }
         """)

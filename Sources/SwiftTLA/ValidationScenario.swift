@@ -18,7 +18,7 @@ public enum ValidationExpectation: String, Sendable, Codable {
 
 public protocol ModelValidationScenario: Sendable {
     associatedtype Machine: StateMachine
-    associatedtype Property: Hashable, Sendable
+    associatedtype Property: Hashable, Sendable where Property == Machine.Property
     var name: String { get }
     var expectations: [Property: ValidationExpectation] { get }
     var deadlockExpectation: ValidationExpectation? { get }

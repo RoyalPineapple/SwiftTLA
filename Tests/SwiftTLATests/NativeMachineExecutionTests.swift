@@ -237,7 +237,7 @@ struct NativeMachineExecutionTests {
             #expect(try machine.enabledActions() == (formalNext.isEmpty ? [] : [.select]))
             #expect(try machine.isEnabled(.select) == !formalNext.isEmpty)
             let failed = try compilation.semantics.behavior.invariants.filter { try !runtime.invariantHolds($0, in: formal) }.map(\.name)
-            #expect(try machine.violatedInvariants() == failed)
+            #expect(try machine.violatedInvariants().map { AmbiguousExecutionChoice.formalPropertyNames[$0]! } == failed)
             if !failed.isEmpty { violations.insert(source) }
             var sending = machine
             switch nativeNext.count {
@@ -275,7 +275,7 @@ struct NativeMachineExecutionTests {
         #expect(Set(graph.safetyViolations.keys.map { $0.state.selected }) == [2, 3])
         let excluded = try #require(graph.safetyViolations.keys.first { $0.state.selected == 3 })
         #expect(graph.transitions[excluded] == nil)
-        #expect(graph.safetyViolations[excluded] == [.invariant("BelowTwo")])
+        #expect(graph.safetyViolations[excluded] == [.invariant(.BelowTwo)])
         #expect(try graph.trace(to: excluded).count == 2)
     }
 

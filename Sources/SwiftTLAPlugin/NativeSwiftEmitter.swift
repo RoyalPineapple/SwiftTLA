@@ -12,6 +12,8 @@ struct NativeSwiftEmitter {
     private(set) var functionPlans: [ResolvedFunctionID: NativeFunctionPlan] = [:]
     let stateMemberNames: [VariableID: String]
     let enabledActionIDs: Set<ActionID>
+    let propertyCases: [PropertyID: String]
+    let refinementPropertyCases: [String]
     private let variableNames: [VariableID: String]
     private var expressionValues: [CompiledExpression: String] = [:]
     private var expressionOrdinals: [CompiledExpression: Int] = [:]
@@ -20,6 +22,12 @@ struct NativeSwiftEmitter {
     init(model: MacroCompilation, sharedTypes: NativeTypeDeclarations? = nil) {
         self.model = model
         let program = model.program
+        let properties = (program.behavior.invariants + program.behavior.reachabilityProperties).map { (id: $0.id, name: $0.name) }
+            + program.behavior.temporalProperties.map { (id: $0.id, name: $0.name) }
+        let identifiers = GeneratedMachineAPI.generatedIdentifiers(
+            properties.map(\.name) + program.refinements.map(\.name), fallback: "property")
+        propertyCases = Dictionary(uniqueKeysWithValues: zip(properties.map(\.id), identifiers))
+        refinementPropertyCases = Array(identifiers.dropFirst(properties.count))
         var enabledActionIDs = program.behavior.constraint?.enabledActions ?? []
         for action in model.api.actions {
             enabledActionIDs.formUnion(program.behavior.enabledActionDependencies[action.compiledAction] ?? [])

@@ -32,7 +32,7 @@ struct NativeRefinementCheckingTests {
     func reportsNativeRefinementFailures() throws {
         for initial in try InvalidNativeRefinement.initialMachines() {
             let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 4)
-            let failure = try #require(graph.refinementFailures["Refines"])
+            let failure = try #require(graph.refinementFailures[.Refines])
             let compilation = try InvalidNativeRefinement.spec.compile()
             let exported = try NativeModelRun(graph, rendered: compilation.render())
             guard case .violated(let trace) = exported.checks.properties["Refines"],
@@ -59,7 +59,7 @@ struct NativeRefinementCheckingTests {
     @Test("native refinement reports unfair mapped stuttering")
     func reportsAbstractFairnessViolation() throws {
         let graph = try ReachabilityGraph(initialMachines: FairNativeRefinement.initialMachines(), maximumStates: 3)
-        guard case .fairness(_, let witness) = try #require(graph.refinementFailures["Refines"]) else {
+        guard case .fairness(_, let witness) = try #require(graph.refinementFailures[.Refines]) else {
             Issue.record("Expected an abstract fairness counterexample")
             return
         }
@@ -85,7 +85,7 @@ struct NativeRefinementCheckingTests {
     @Test("abstract enabledness includes successors missing from the concrete graph")
     func checksUnreachableAbstractSuccessors() throws {
         let graph = try ReachabilityGraph(initialMachines: StoppedConcreteRefinement.initialMachines(), maximumStates: 2)
-        guard case .fairness(_, let witness) = try #require(graph.refinementFailures["Refines"]) else {
+        guard case .fairness(_, let witness) = try #require(graph.refinementFailures[.Refines]) else {
             Issue.record("Expected missing abstract progress")
             return
         }

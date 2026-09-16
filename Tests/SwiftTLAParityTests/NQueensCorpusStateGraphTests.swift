@@ -35,10 +35,10 @@ struct NQueensCorpusStateGraphTests {
         let native = try ReachabilityGraph(initialMachines: NQueensModel.initialMachines(), maximumStates: 5_000)
         #expect(!native.safetyViolations.isEmpty)
         for (snapshot, violations) in native.safetyViolations {
-            #expect(violations == [.invariant("NoSolutions")])
+            #expect(violations == [.invariant(.NoSolutions)])
             #expect(!snapshot.state.sols.isEmpty)
         }
-        #expect(native.temporalResults["Termination"]?.status == .satisfied)
+        #expect(native.temporalResults[.Termination]?.status == .satisfied)
         let exported = try CanonicalGraph(native)
         let formal = try FormalGraphExporter().export(exploration)
         #expect(exported == formal.graph)
@@ -50,7 +50,7 @@ struct NQueensCorpusStateGraphTests {
         let edge = try #require(terminalEdges.first)
         #expect(edge.source == edge.target)
         let terminal = edge.source
-        guard case .eventually(let isDone) = try machine.temporalProperties()["Termination"] else {
+        guard case .eventually(let isDone) = try machine.temporalProperties()[.Termination] else {
             Issue.record("Expected the generated termination predicate")
             return
         }

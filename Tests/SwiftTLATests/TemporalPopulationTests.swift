@@ -7,8 +7,8 @@ struct TemporalPopulationTests {
     func checksEachMember() throws {
         for scenario in try RecurringPopulation.validationScenarios() {
             let graph = try scenario.explore(maximumStates: 20)
-            #expect(graph.temporalResults["EachRecurs"]?.status == .satisfied)
-            #expect(graph.temporalResults["EachVisits"]?.status == .satisfied)
+            #expect(graph.temporalResults[.EachRecurs]?.status == .satisfied)
+            #expect(graph.temporalResults[.EachVisits]?.status == .satisfied)
             let tla = try scenario.render().tlaBundle.tla
             #expect(tla.contains("EachRecurs == (\\A _process \\in members: []<>(value = _process))"))
             #expect(tla.contains("EachVisits == (\\A _process \\in members: <>visited[_process])"))
@@ -19,13 +19,13 @@ struct TemporalPopulationTests {
     func retainsCounterexample() throws {
         let machine = try RecurringPopulation.makeMachine(configuration: .init(members: [2]))
         let graph = try ReachabilityGraph(initialMachines: [machine], maximumStates: 20)
-        let result = try #require(graph.temporalResults["EachRecurs"])
+        let result = try #require(graph.temporalResults[.EachRecurs])
         #expect(result.status == .violated)
         #expect(result.reason == .violatingFairLasso)
         let trace = try #require(result.witness)
         #expect(trace.cycle.first == trace.cycle.last)
         #expect(trace.cycleActions.contains(.toggle(process: 2)))
-        #expect(graph.temporalResults["EachVisits"]?.status == .satisfied)
+        #expect(graph.temporalResults[.EachVisits]?.status == .satisfied)
     }
 
     @Test("authored PlusCal exports the same quantified temporal properties")

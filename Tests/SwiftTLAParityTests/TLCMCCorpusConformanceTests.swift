@@ -53,7 +53,7 @@ struct TLCMCCorpusConformanceTests {
             let enabled = try machine.enabledActions()
             #expect(Set(enabled.map { String(describing: $0) }) == Set(try successors.map { try #require(names[$0.action]) }))
             let violations = try compilation.semantics.behavior.invariants.filter { try !runtime.invariantHolds($0, in: state) }.map(\.name)
-            #expect(try machine.violatedInvariants() == violations)
+            #expect(try machine.violatedInvariants().map { TLCMCModel.formalPropertyNames[$0]! } == violations)
             for successor in successors where names[successor.action] == "Terminating" {
                 #expect(successor.state == state)
                 #expect(enabled == [.Terminating])

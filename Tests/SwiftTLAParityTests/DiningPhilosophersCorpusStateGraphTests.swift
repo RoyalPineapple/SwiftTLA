@@ -11,7 +11,7 @@ struct DiningPhilosophersCorpusStateGraphTests {
         #expect(graph.transitions.count == 67)
         #expect(graph.safetyViolations.isEmpty)
         #expect(graph.deadlockedStates.isEmpty)
-        #expect(graph.temporalResults["NobodyStarves"]?.status == .satisfied)
+        #expect(graph.temporalResults[.NobodyStarves]?.status == .satisfied)
         let rendered = try scenario.render()
         #expect(rendered.tlaBundle.cfg.contains("NobodyStarves"))
         #expect(rendered.tlaBundle.tla.contains("WF_<<pc, forks, hungry>>"))

@@ -24,7 +24,7 @@ struct PositiveReachabilityTests {
         for target in [0, 1, 2] {
             let graph = try ReachabilityGraph(initialMachines: ReachabilityCounter.initialMachines(
                 configuration: .init(target: target, exploredThrough: 2)), maximumStates: 10)
-            guard case .reached(let state) = graph.reachabilityResults["Target"] else {
+            guard case .reached(let state) = graph.reachabilityResults[.Target] else {
                 Issue.record("Expected a positive reachability witness for \(target)")
                 continue
             }
@@ -40,7 +40,7 @@ struct PositiveReachabilityTests {
     func unreachableAndIncompleteRemainDistinct() throws {
         let graph = try ReachabilityGraph(initialMachines: ReachabilityCounter.initialMachines(
             configuration: .init(target: 3, exploredThrough: 2)), maximumStates: 10)
-        #expect(graph.reachabilityResults["Target"] == .unreachable)
+        #expect(graph.reachabilityResults[.Target] == .unreachable)
         #expect(graph.transitions.count == 3)
         #expect(throws: ExplorationError.stateLimitExceeded(1)) {
             try ReachabilityGraph(initialMachines: ReachabilityCounter.initialMachines(
@@ -52,7 +52,7 @@ struct PositiveReachabilityTests {
     func retainsBoundaryWitness() throws {
         let graph = try ReachabilityGraph(initialMachines: ReachabilityCounter.initialMachines(
             configuration: .init(target: 2, exploredThrough: 1)), maximumStates: 10)
-        guard case .reached(let state) = graph.reachabilityResults["Target"] else {
+        guard case .reached(let state) = graph.reachabilityResults[.Target] else {
             Issue.record("Expected a witness for the excluded candidate")
             return
         }

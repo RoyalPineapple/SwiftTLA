@@ -30,7 +30,7 @@ struct VoteProofCorpusExecutionTests {
             try !runtime.invariantHolds($0, in: initial)
         }.map(\.name)
         #expect(violations.isEmpty)
-        #expect(try native.violatedInvariants() == violations)
+        #expect(try native.violatedInvariants().map { VoteProofModel.formalPropertyNames[$0]! } == violations)
         #expect(try Set(native.enabledActions()) == [
             .pcalProcess1(process: .a1), .pcalProcess1(process: .a2), .pcalProcess1(process: .a3)
         ])

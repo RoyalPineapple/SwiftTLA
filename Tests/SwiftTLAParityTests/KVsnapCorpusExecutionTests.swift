@@ -26,7 +26,7 @@ struct KVsnapCorpusExecutionTests {
             try !runtime.invariantHolds($0, in: initial)
         }.map(\.name)
         #expect(violations.isEmpty)
-        #expect(try native.violatedInvariants() == violations)
+        #expect(try native.violatedInvariants().map { KVsnapModel.formalPropertyNames[$0]! } == violations)
         #expect(try Set(native.enabledActions()) == [
             .START(process: .t1), .START(process: .t2), .START(process: .t3)
         ])

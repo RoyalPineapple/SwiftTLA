@@ -92,9 +92,19 @@ package struct NativeModelRun: Sendable {
     let temporalNames = rendered.temporalNames
     let invariantNames = rendered.invariantNames
     let refinementNames = rendered.refinementNames
-    guard temporalNames == Set(native.temporalResults.keys),
-          rendered.reachabilityNames == Set(native.reachabilityResults.keys),
-          Set(native.refinementFailures.keys).isSubset(of: refinementNames) else {
+    let propertyNames = Machine.formalPropertyNames
+    func propertyName(_ property: Machine.Property) throws -> String {
+      guard let name = propertyNames[property] else {
+        throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "undeclared native property")
+      }
+      return name
+    }
+    guard Set(propertyNames.keys) == Set(Machine.Property.allCases),
+          Set(propertyNames.values).count == propertyNames.count,
+          Set(propertyNames.values) == rendered.checkNames,
+          temporalNames == Set(try native.temporalResults.keys.map(propertyName)),
+          rendered.reachabilityNames == Set(try native.reachabilityResults.keys.map(propertyName)),
+          Set(try native.refinementFailures.keys.map(propertyName)).isSubset(of: refinementNames) else {
       throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "native property declarations")
     }
     let renderedNames = Dictionary(uniqueKeysWithValues: (finiteGraphCase?.renderedActions ?? rendered.actions).map {
@@ -129,8 +139,11 @@ package struct NativeModelRun: Sendable {
       paths[snapshot] = result
       return result
     }
-    let reachabilityTargets = try native.reachabilityTargets.mapValues { try Set($0.map(stateKey)) }
-    for (name, result) in native.reachabilityResults {
+    let reachabilityTargets = try Dictionary(uniqueKeysWithValues: native.reachabilityTargets.map {
+      (try propertyName($0.key), try Set($0.value.map(stateKey)))
+    })
+    for (property, result) in native.reachabilityResults {
+      let name = try propertyName(property)
       switch result {
       case .reached(let snapshot): properties[name] = .reached(try trace(to: snapshot))
       case .unreachable: properties[name] = .unreachable
@@ -140,7 +153,8 @@ package struct NativeModelRun: Sendable {
     for (snapshot, violations) in failures {
       for violation in violations {
         switch violation {
-        case .invariant(let name):
+        case .invariant(let property):
+          let name = try propertyName(property)
           guard invariantNames.contains(name) else {
             throw EvidenceFormatError.invalidField(record: name, field: "undeclared native invariant")
           }
@@ -158,7 +172,8 @@ package struct NativeModelRun: Sendable {
         deadlock = .violated(try trace(to: first))
       }
     }
-    for (name, failure) in native.refinementFailures {
+    for (property, failure) in native.refinementFailures {
+      let name = try propertyName(property)
       let witness: GraphTrace
       switch failure {
       case .initialState(let snapshot): witness = try trace(to: snapshot)
@@ -168,7 +183,8 @@ package struct NativeModelRun: Sendable {
       }
       properties[name] = .violated(witness)
     }
-    for (name, analysis) in native.temporalResults {
+    for (property, analysis) in native.temporalResults {
+      let name = try propertyName(property)
       switch analysis.status {
       case .satisfied: properties[name] = .satisfied
       case .unavailable: properties[name] = .unavailable

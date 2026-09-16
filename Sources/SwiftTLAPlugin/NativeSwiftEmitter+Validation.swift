@@ -2,6 +2,25 @@ import SwiftSyntax
 import SwiftTLA
 
 extension NativeSwiftEmitter {
+    func propertyIdentityDeclarations() throws -> [DeclSyntax] {
+        let properties = (program.behavior.invariants + program.behavior.reachabilityProperties).map { (id: $0.id, name: $0.name) }
+            + program.behavior.temporalProperties.map { (id: $0.id, name: $0.name) }
+        let names = properties.map(\.name) + program.refinements.map(\.name)
+        let identifiers = properties.map { propertyCases[$0.id]! } + refinementPropertyCases
+        let cases = identifiers.map { "case \($0)" }.joined(separator: "\n")
+        let projections = zip(identifiers, names).map {
+            ".\($0.0): \(String(reflecting: $0.1))"
+        }.joined(separator: ",\n")
+        return try nativeDeclarations("""
+        public enum Property: Hashable, CaseIterable, Sendable {
+            \(cases)
+        }
+        public static var formalPropertyNames: [Property: String] {
+            [\(identifiers.isEmpty ? ":" : projections)]
+        }
+        """)
+    }
+
     mutating func validationDeclarations() throws -> [DeclSyntax] {
         guard !program.behavior.validationScenarios.isEmpty else { return [] }
         guard model.api.collections.isEmpty else {
@@ -12,10 +31,7 @@ extension NativeSwiftEmitter {
         }
         let properties = (program.behavior.invariants + program.behavior.reachabilityProperties).map { (id: $0.id, name: $0.name) }
             + program.behavior.temporalProperties.map { (id: $0.id, name: $0.name) }
-        let identifiers = GeneratedMachineAPI.generatedIdentifiers(properties.map(\.name), fallback: "property")
-        let propertyCases = zip(properties, identifiers).map {
-            "case \($0.1) = \(String(reflecting: $0.0.name))"
-        }.joined(separator: "\n")
+        let identifiers = properties.map { propertyCases[$0.id]! }
         let hasConfiguration = !program.layout.parameters.isEmpty
         var scenarios: [String] = []
         for scenario in program.behavior.validationScenarios {
@@ -39,7 +55,6 @@ extension NativeSwiftEmitter {
         }
         let arguments = hasConfiguration ? "configuration: configuration" : ""
         return try nativeDeclarations("""
-        \(properties.isEmpty ? "public enum Property: Hashable, Sendable {}" : "public enum Property: String, CaseIterable, Sendable {\n\(propertyCases)\n}")
         public struct ValidationScenario: ModelValidationScenario {
             public typealias Machine = \(model.typeName)
             public typealias Property = \(model.typeName).Property
@@ -52,7 +67,7 @@ extension NativeSwiftEmitter {
                 try \(model.typeName).initialMachines(\(arguments))
             }
             public var formalPropertyNames: [Property: String] {
-                \(properties.isEmpty ? "[:]" : "Dictionary(uniqueKeysWithValues: Property.allCases.map { ($0, $0.rawValue) })")
+                Machine.formalPropertyNames
             }
             public func render() throws -> RenderedSpecification {
                 try \(model.typeName).render(\(arguments))

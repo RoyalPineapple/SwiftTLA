@@ -54,14 +54,14 @@ extension NativeSwiftEmitter {
                 """)
                 checks.append("""
                 if let failure = try graph.refinementFailure(initialMachines: \(name).initialMachines(), mapping: _mapRefinement\(index)) {
-                    failures[\(String(reflecting: refinement.name))] = failure
+                    failures[.\(refinementPropertyCases[index])] = failure
                 }
                 """)
             }
         }
-        let body = checks.isEmpty ? "return [:]" : "var failures: [String: RefinementFailure<Snapshot, Action>] = [:]\n" + checks.joined(separator: "\n") + "\nreturn failures"
+        let body = checks.isEmpty ? "return [:]" : "var failures: [Property: RefinementFailure<Snapshot, Action>] = [:]\n" + checks.joined(separator: "\n") + "\nreturn failures"
         declarations += try nativeDeclarations("""
-        public func refinementFailures(in graph: inout ReachabilityGraph<Self>) throws -> [String: RefinementFailure<Snapshot, Action>] {
+        public func refinementFailures(in graph: inout ReachabilityGraph<Self>) throws -> [Property: RefinementFailure<Snapshot, Action>] {
             \(body)
         }
         """)

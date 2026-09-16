@@ -76,7 +76,7 @@ private struct InvalidAssumption {
         let graph = try ReachabilityGraph(initialMachines: BranchingControl.initialMachines(), maximumStates: 10)
         let failure = try #require(graph.safetyViolations.first)
         #expect(graph.safetyViolations.count == 1)
-        #expect(failure.value == [.invariant("AtMostOne")])
+        #expect(failure.value == [.invariant(.AtMostOne)])
         #expect(failure.key.state.value == 2)
         #expect(graph.transitions.count == 4)
         let trace = try graph.trace(to: failure.key)

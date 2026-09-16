@@ -11,6 +11,7 @@ Each generated machine exposes these `Sendable` value types:
 
 - `State`: immutable typed values for declared variables.
 - `Action`: a typed action identity and typed parameters.
+- `Property`: a model-owned identity for each invariant, reachability goal, temporal property, and refinement.
 - `Transition`: the typed action and state before and after one successful transition.
 
 Collections use native `Set`, `Array`, and `Dictionary` values. Pairs and records
@@ -47,10 +48,15 @@ initial states.
 
 ## Property checks
 
-`violatedInvariants()` reports the names of false invariants without changing
+`violatedInvariants()` reports the `Property` values of false invariants without changing
 state. `assumptionsHold()` checks assumptions. State constraints select states
 for exploration. They do not change application transitions or action enabledness.
 Invariant checks include excluded initial states and successor candidates.
+
+Native result dictionaries use `Model.Property` keys, not strings.
+Scenario expectations use the same property type.
+A property from another model cannot identify a result in this model.
+`formalPropertyNames` maps property identities to names at the export or reporting boundary.
 
 ## Model-owned validation scenarios
 
