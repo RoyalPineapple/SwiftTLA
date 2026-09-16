@@ -364,6 +364,17 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
         providingAttributesFor member: some DeclSyntaxProtocol,
         in context: some MacroExpansionContext
     ) throws -> [AttributeSyntax] {
+        if let record = member.as(StructDeclSyntax.self) {
+            guard !TLASpecVerifier.inheritedTypeNames(in: record.inheritanceClause).contains("TLAValueType"),
+                  let source = declaration.memberBlock.members.compactMap({ $0.decl.as(StructDeclSyntax.self) })
+                    .first(where: { $0.name.sourceIdentifierName == record.name.sourceIdentifierName }),
+                  let model = try? TLASpecVerifier.parseAndVerify(declaration),
+                  NativeTypeDeclarations(program: model.program).nominalRecords.contains(where: {
+                      if case .nominalRecord(let name, _) = $0 { return name == SourceTypeResolver.qualifiedName(of: source) }
+                      return false
+                  }) else { return [] }
+            return ["@_TLARecordValue"]
+        }
         guard let enumDeclaration = member.as(EnumDeclSyntax.self),
               let inheritance = enumDeclaration.inheritanceClause
         else { return [] }

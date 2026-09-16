@@ -4,6 +4,7 @@ import SwiftTLA
 struct NativeTypeDeclarations: Sendable {
     let names: [CompiledValueType: String]
     let records: [CompiledValueType]
+    let nominalRecords: [CompiledValueType]
     let unions: [[CompiledValueType]]
     let finiteValues: [[CompiledValue]]
     let modelValueCases: [String: String]
@@ -71,6 +72,7 @@ struct NativeTypeDeclarations: Sendable {
     init(types: [CompiledValueType], literals: [CompiledValue], namedDomains: [String: Set<CompiledValue>]) {
         var names: [CompiledValueType: String] = [:]
         var records: [CompiledValueType] = []
+        var nominalRecords: [CompiledValueType] = []
         var unions: [[CompiledValueType]] = []
         var finiteValues: [[CompiledValue]] = []
         var visited: Set<CompiledValueType> = []
@@ -78,6 +80,8 @@ struct NativeTypeDeclarations: Sendable {
         while let type = pending.popLast() {
             guard visited.insert(type).inserted else { continue }
             switch type {
+            case .nominalRecord:
+                nominalRecords.append(type)
             case .record, .tuple:
                 names[type] = "NativeRecord\(records.count)"
                 records.append(type)
@@ -104,6 +108,7 @@ struct NativeTypeDeclarations: Sendable {
         modelValueCases = Dictionary(uniqueKeysWithValues: zip(values, caseNames))
         self.names = names
         self.records = records
+        self.nominalRecords = nominalRecords
         self.unions = unions
         self.finiteValues = finiteValues
     }

@@ -91,7 +91,7 @@ final class SourceTypeResolver {
         self.nominalNames = nominalNames
     }
 
-    private static func qualifiedName(of declaration: StructDeclSyntax) -> String {
+    static func qualifiedName(of declaration: StructDeclSyntax) -> String {
         var names = [declaration.name.text]
         var ancestor = declaration.parent
         while let node = ancestor {

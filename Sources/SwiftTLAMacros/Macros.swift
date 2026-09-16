@@ -15,6 +15,9 @@ public macro _TLAFiniteEnum() = #externalMacro(module: "SwiftTLAPlugin", type: "
 @attached(member, names: named(defaultValue))
 public macro _TLAValueEnum() = #externalMacro(module: "SwiftTLAPlugin", type: "ValueEnumMacro")
 
+@attached(extension, conformances: TLAValueType, names: named(defaultValue), named(formalValueShape), named(tlaValue), named(init))
+public macro _TLARecordValue() = #externalMacro(module: "SwiftTLAPlugin", type: "RecordValueMacro")
+
 /// Declares a source model for `@TLAModel`.
 ///
 /// `#spec` is the compile-time boundary for the PlusCal-shaped authoring DSL.
