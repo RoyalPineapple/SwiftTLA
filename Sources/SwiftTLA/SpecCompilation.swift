@@ -323,8 +323,8 @@ public struct RenderedSpecification: Sendable {
     /// Selects declared checks for an independent validation pass without rendering the model again.
     /// Symmetry defaults to disabled so the pass retains the complete, unreduced graph.
     package func tlaBundle(checking checks: Set<String>, checkDeadlock: Bool,
-        symmetryReduction: SymmetryReduction = .disabled) throws -> TLAModuleBundle {
-        let selected = try configuration.selecting(checks, checkDeadlock: checkDeadlock)
+        symmetryReduction: SymmetryReduction = .disabled, behavior: TLCBehaviorSelection? = nil) throws -> TLAModuleBundle {
+        let selected = try configuration.selecting(checks, checkDeadlock: checkDeadlock, behavior: behavior)
         let usesSymmetryReduction = if case .enabled = symmetryReduction { true } else { false }
         return TLAModuleBundle(
             root: .init(name: tlaBundle.root.name, tla: tlaBundle.root.tla,
