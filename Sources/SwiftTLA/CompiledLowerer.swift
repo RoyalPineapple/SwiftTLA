@@ -870,6 +870,19 @@ struct CompiledLowerer {
             return .init(scope: .next, isStrong: false)
         case .strongFairnessNext:
             return .init(scope: .next, isStrong: true)
+        case .weakFairnessEachAction(let name), .strongFairnessEachAction(let name):
+            let id = try self.action(named: name, at: "\(path).action")
+            guard let compiled = actions[id] else { throw diagnostic(path: path) }
+            for binding in compiled.bindings {
+                let requirements = binding.domain.stateRequirements(operators: operators)
+                guard requirements.variables.isEmpty, !requirements.requiresCompleteState else {
+                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                        path: "\(path).domain", expected: "immutable per-instance fairness domains",
+                        actual: "a domain that reads state or action enabledness",
+                        nextSafeAction: "Declare fairness populations with immutable parameters or values.")
+                }
+            }
+            return .init(scope: .eachAction(id), isStrong: condition.isStrong)
         case .weakFairness(let name):
             action = try self.action(named: name, at: "\(path).action")
             arguments = nil

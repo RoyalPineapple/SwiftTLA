@@ -50,4 +50,23 @@ struct SymbolicActionExportTests {
         #expect(generated.contains("an immutable domain independent of machine state"))
         #expect(!generated.contains("_actions.append"))
     }
+
+    @Test("per-instance fairness rejects mutable populations before rendering")
+    func rejectsMutableFairnessDomain() throws {
+        var spec = canonicalTestSpec(variables: [("value", .value(.int(1)))], actions: [
+            ("select", .assign(.named("value"), .variable("member")), [
+                ActionBinding(name: "member", domain: .integerRange(.int(1), .variable("value")), generatedSwiftType: "Int")
+            ])
+        ])
+        for fairness in [FairnessCondition.weakFairnessEachAction("select"), .strongFairnessEachAction("select")] {
+            spec.fairness = [fairness]
+            do {
+                _ = try spec.compile()
+                Issue.record("Mutable fairness population was accepted")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.stage == .lowering)
+                #expect(diagnostic.expected == "immutable per-instance fairness domains")
+            }
+        }
+    }
 }

@@ -138,6 +138,16 @@ struct CompiledTLARenderer {
         case .actionCall(let call):
             guard let name = actionCalls[call] else { throw missing("action", call.action.ordinal) }
             action = name
+        case .eachAction(let id):
+            let bindings = actions[id.ordinal].bindings
+            let parameters = try bindings.map { try binderName($0.binder) }
+            let name = layout.actions[id.ordinal].renderedName
+            let invocation = name + (parameters.isEmpty ? "" : "(\(parameters.joined(separator: ", ")))")
+            var result = "\(condition.isStrong ? "SF" : "WF")_\(vars)(\(invocation))"
+            for (parameter, binding) in zip(parameters, bindings).reversed() {
+                result = "(\\A \(parameter) \\in \(try state(binding.domain)): \(result))"
+            }
+            return result
         }
         return "\(condition.isStrong ? "SF" : "WF")_\(vars)(\(action))"
     }

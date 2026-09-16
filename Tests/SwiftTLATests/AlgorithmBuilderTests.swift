@@ -87,6 +87,21 @@ struct AlgorithmBuilderTests {
         }
     }
 
+    @Test("model-level temporal properties appear once in both formal exports")
+    func modelTemporalPropertyExports() throws {
+        let source = TLASpec("ModelProgress", scoped: { scope in
+            let value = scope.sharedVar("value", initial: 0)
+            Algorithm("Advance") {
+                Do(TestControlLabel.advance) { Assign(value, to: 1) }
+            }
+            Eventually("Progress", value == 1)
+        })
+        let rendered = try source.compile().render()
+        for text in [rendered.tlaBundle.tla, try rendered.plusCalBundle().root.tla] {
+            #expect(text.components(separatedBy: "Progress == <>(value = 1)").count == 2)
+        }
+    }
+
     @Test("specializing a lowered Algorithm preserves its authored PlusCal plan")
     func specializationPreservesAuthoredPlusCalPlan() throws {
         let source = TLASpec("SpecializedAlgorithm", scoped: { scope in

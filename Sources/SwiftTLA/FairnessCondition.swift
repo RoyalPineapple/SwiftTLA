@@ -8,6 +8,9 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
     /// PlusCal-equivalent fairness obligation.
     case weakFairnessActionCall(FormalActionCall)
     case strongFairnessActionCall(FormalActionCall)
+    /// One obligation for each argument tuple in the action's immutable domains.
+    case weakFairnessEachAction(String)
+    case strongFairnessEachAction(String)
 
     public var description: String {
         switch self {
@@ -17,13 +20,15 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
         case .strongFairnessNext: return "SF(Next)"
         case .weakFairnessActionCall(let action): return "WF(\(action))"
         case .strongFairnessActionCall(let action): return "SF(\(action))"
+        case .weakFairnessEachAction(let action): return "Each(WF(\(action)))"
+        case .strongFairnessEachAction(let action): return "Each(SF(\(action)))"
         }
     }
 
     internal var isStrong: Bool {
         switch self {
-        case .strongFairness, .strongFairnessNext, .strongFairnessActionCall: true
-        case .weakFairness, .weakFairnessNext, .weakFairnessActionCall: false
+        case .strongFairness, .strongFairnessNext, .strongFairnessActionCall, .strongFairnessEachAction: true
+        case .weakFairness, .weakFairnessNext, .weakFairnessActionCall, .weakFairnessEachAction: false
         }
     }
 }

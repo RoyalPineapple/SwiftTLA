@@ -444,6 +444,7 @@ package struct CompiledFairnessCondition: Sendable {
         case next
         case action(ActionID)
         case actionCall(CompiledActionCall)
+        case eachAction(ActionID)
     }
 
     package let scope: Scope

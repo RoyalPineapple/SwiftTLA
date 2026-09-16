@@ -12,7 +12,7 @@ public protocol StateMachine: Sendable {
     static var checksDeadlock: Bool { get }
     func assumptionsHold() throws -> Bool
     func satisfiesStateConstraint() throws -> Bool
-    func fairnessConditions() -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)]
+    func fairnessConditions() throws -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)]
     func temporalProperties() throws -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>]
     func violatedInvariants() throws -> [String]
     static var reachabilityPropertyNames: [String] { get }
@@ -141,8 +141,8 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             (name, reachabilityWitnesses[name].map(ReachabilityOutcome.reached) ?? .unreachable)
         })
         if !properties.isEmpty {
-            let checker = temporalChecker()
-            let fairness = initialMachine.fairnessConditions()
+            let checker = try temporalChecker()
+            let fairness = try initialMachine.fairnessConditions()
             temporalResults = try properties.mapValues {
                 try checker.analyze($0, initialStates: Array(initialStates), renderScope: { fairness[$0].name })
             }
@@ -175,14 +175,14 @@ extension ReachabilityGraph {
         try machine.formalCall(for: action)
     }
 
-    mutating func temporalChecker() -> LivenessChecker<Machine.Snapshot, Machine.Action, Int> {
+    mutating func temporalChecker() throws -> LivenessChecker<Machine.Snapshot, Machine.Action, Int> {
         if let checker { return checker }
         let snapshots = Array(transitions.keys)
         let stateOrder = Dictionary(uniqueKeysWithValues: snapshots.enumerated().map { ($0.element, $0.offset) })
         let actionNames = Dictionary(uniqueKeysWithValues: Set(transitions.values.flatMap { $0.map(\.action) }).map {
             ($0, String(describing: $0))
         })
-        let fairness = machine.fairnessConditions()
+        let fairness = try machine.fairnessConditions()
         let checker = LivenessChecker<Machine.Snapshot, Machine.Action, Int>(
             states: Set(snapshots),
             transitions: Dictionary(uniqueKeysWithValues: transitions.map { source, successors in

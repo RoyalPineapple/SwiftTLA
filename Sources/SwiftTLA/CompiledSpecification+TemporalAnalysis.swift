@@ -15,6 +15,23 @@ extension FiniteExploration {
 extension CompiledSpecification {
     func livenessChecker(graph: StateGraph) -> LivenessChecker<StateGraph.StateID, CompiledActionCall, CompiledFairnessCondition.Scope> {
         let knownActions = Set(semantics.behavior.actions.map(\.id))
+        let calls = Set(graph.transitions.values.flatMap { successors in
+            successors.compactMap { successor -> CompiledActionCall? in
+                guard let id = successor.label.actionID, knownActions.contains(id) else { return nil }
+                return CompiledActionCall(action: id, arguments: successor.label.arguments)
+            }
+        }).sorted {
+            if $0.action != $1.action { return $0.action.ordinal < $1.action.ordinal }
+            return $0.arguments.lexicographicallyPrecedes($1.arguments)
+        }
+        // An invocation absent from the entire graph is never enabled there,
+        // so both its weak and strong fairness obligations are vacuous.
+        let fairness = semantics.behavior.fairness.flatMap { condition -> [(CompiledFairnessCondition.Scope, Bool)] in
+            if case .eachAction(let id) = condition.scope {
+                return calls.filter { $0.action == id }.map { (.actionCall($0), condition.isStrong) }
+            }
+            return [(condition.scope, condition.isStrong)]
+        }
         return LivenessChecker(
             states: Set(graph.states.keys),
             transitions: Dictionary(uniqueKeysWithValues: graph.transitions.map { source, successors in
@@ -26,12 +43,13 @@ extension CompiledSpecification {
                     return GraphEdge(source: source, action: call, target: successor.target)
                 })
             }),
-            fairness: semantics.behavior.fairness.map { ($0.scope, $0.isStrong) },
+            fairness: fairness,
             matches: { call, scope in
                 switch scope {
                 case .next: return true
                 case .action(let action): return call.action == action
                 case .actionCall(let expected): return call == expected
+                case .eachAction: preconditionFailure("Per-instance fairness must be expanded before analysis")
                 }
             },
             actionOrder: { lhs, rhs in
@@ -87,6 +105,7 @@ extension CompiledSpecification {
                             named: layout.actions[call.action.ordinal].declaration.name,
                             arguments: try call.arguments.map { try $0.rendered(using: layout) }
                         )
+                    case .eachAction: preconditionFailure("Per-instance fairness must be expanded before analysis")
                     }
                 }
             ).map(state: { $0 }, action: { call in

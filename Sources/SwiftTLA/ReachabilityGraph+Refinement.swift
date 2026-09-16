@@ -12,7 +12,7 @@ extension ReachabilityGraph {
         mapping: (Machine.Snapshot) throws -> Abstract
     ) throws -> RefinementFailure<Machine.Snapshot, Machine.Action>? {
         guard let initial = initialMachines.first else { throw ExplorationError.noInitialStates }
-        let fairness = initial.fairnessConditions()
+        let fairness = try initial.fairnessConditions()
         for machine in initialMachines {
             guard machine.hasSameConfiguration(as: initial) else { throw ExplorationError.configurationMismatch }
             guard try machine.assumptionsHold() else { throw ExplorationError.assumptionViolated }
@@ -50,7 +50,7 @@ extension ReachabilityGraph {
             // Enabledness includes all abstract successors, even targets absent from the concrete graph.
             for abstract in mapped.values { _ = try abstractSuccessors(abstract) }
             let projections = mapped.mapValues(\.snapshot)
-            let checker = temporalChecker()
+            let checker = try temporalChecker()
             for condition in fairness {
                 try Task.checkCancellation()
                 let taken = successors.mapValues { edges in

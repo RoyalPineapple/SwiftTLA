@@ -187,8 +187,8 @@ enum AlgorithmLowerer {
         let localRoots = Set(localStates.map(\.root) + procedureSlots(procedures).map(\.root))
         var generatedAssertionInvariants: [NamedStatePredicate] = []
         var fairness: [FairnessCondition] = []
-        var actions = try processes.enumerated().flatMap { processIndex, process in
-            try process.steps.enumerated().map { index, atomic in
+        var actions = processes.enumerated().flatMap { processIndex, process in
+            process.steps.enumerated().map { index, atomic in
                 let controlOwner = ControlOwner.process(
                     algorithm: algorithm.name,
                     ordinal: processIndex,
@@ -251,7 +251,7 @@ enum AlgorithmLowerer {
                     generatedAssertionInvariants += assertionInvariants(loweredStatements.assertions,
                         enabled: enabled, domain: process.domain)
                 }
-                fairness += try fairnessConditions(for: generatedAction, domain: process.domain, policy: process.fairness)
+                fairness += fairnessConditions(for: generatedAction, domain: process.domain, policy: process.fairness)
                 return generatedAction
             }
         }
@@ -375,13 +375,14 @@ enum AlgorithmLowerer {
         }
     }
 
-    /// A process machine with one unconditional control-free loop has no `pc`.
+    /// A nonempty process machine with one unconditional control-free loop has no `pc`.
     private static func requiresProgramCounter(for algorithm: AlgorithmModel) -> Bool {
         guard !algorithm.processes.isEmpty, algorithm.procedures.isEmpty else {
             return true
         }
         return !algorithm.processes.allSatisfy { process in
-            guard process.steps.count == 1,
+            guard let members = process.domain.literalSetMembers, !members.isEmpty,
+                  process.steps.count == 1,
                   let loopCondition = process.steps.first?.loopCondition,
                   case .value(.bool(true)) = loopCondition
             else {
@@ -932,13 +933,10 @@ enum AlgorithmLowerer {
         for action: NamedAction,
         domain: StateExpr,
         policy: AlgorithmFairness
-    ) throws -> [FairnessCondition] {
+    ) -> [FairnessCondition] {
         if case .none = policy { return [] }
         guard let members = domain.literalSetMembers else {
-            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
-                path: "actions.\(action.name).fairness", expected: "per-instance fairness over a configured population",
-                actual: "symbolic process domain",
-                nextSafeAction: "Implement configured per-instance fairness before validating this model.")
+            return [policy == .strong ? .strongFairnessEachAction(action.name) : .weakFairnessEachAction(action.name)]
         }
         return switch policy {
         case .none:

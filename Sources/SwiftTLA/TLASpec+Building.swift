@@ -186,7 +186,10 @@ extension TLASpec {
     guard sourceAlgorithms.count == 1, let plusCalAlgorithm = algorithm else { return }
     let sourceProperties = plusCalAlgorithm.properties
     let sourcePropertyIDs = Set(sourceProperties.map(\.id))
-    let topLevelPropertyNames = layout.stateProperties.filter { !sourcePropertyIDs.contains($0.id) }.map { $0.declaration.name }
+    let topLevelPropertyNames = (layout.stateProperties + layout.temporalProperties)
+      .filter { !sourcePropertyIDs.contains($0.id)
+        && !plusCalAlgorithm.translatorOwnedPropertyNames.contains($0.declaration.name) }
+      .map { $0.declaration.name }
     let sourcePropertyNames = sourceProperties.map(\.declaration.name)
     let loweredPropertyNames = invariants.map(\.name) + reachabilityProperties.map(\.name) + temporalProperties.map(\.name)
     guard Set(sourcePropertyNames).count == sourcePropertyNames.count,
@@ -218,7 +221,10 @@ extension CompiledModuleMetadata {
     let declarationSections = authoredPlusCalDeclarationSections(order: declarationOrder, declarations: declarations)
     let sourcePropertyIDs = plusCalAlgorithm.properties.map(\.id)
     let sourceProperties = Set(sourcePropertyIDs)
-    let propertyIDs = sourcePropertyIDs + layout.stateProperties.map(\.id).filter { !sourceProperties.contains($0) }
+    let propertyIDs = sourcePropertyIDs + (layout.stateProperties + layout.temporalProperties)
+      .filter { !sourceProperties.contains($0.id)
+        && !plusCalAlgorithm.translatorOwnedPropertyNames.contains($0.declaration.name) }
+      .map(\.id)
     let renderedProperties = try propertyIDs.map { id in
       guard let definition = declarations.properties[id] else {
         throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering, path: "authoredPlusCal.properties", expected: "a compiled property for identity \(id.ordinal)", actual: "no compiled property", nextSafeAction: "Compile the model again from its current source.")
