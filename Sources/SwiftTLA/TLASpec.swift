@@ -188,11 +188,39 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
 public struct NamedTemporal: Sendable, CustomStringConvertible, Equatable {
   public let name: String
   public let expr: TemporalCondition<StateExpr>
+  package let bindings: [ActionBinding]
   public init(name: String, expr: TemporalCondition<StateExpr>) {
+    self.init(name: name, expr: expr, bindings: [])
+  }
+  package init(name: String, expr: TemporalCondition<StateExpr>, bindings: [ActionBinding]) {
     self.name = name
     self.expr = expr
+    self.bindings = bindings
   }
   public var description: String { "\(name): \(expr)" }
+
+  package func substitutingVariables(_ replacements: [String: StateExpr]) -> NamedTemporal {
+    let scoped = bindings.reversed().reduce(StateExpr.tupleLiteral(expr.predicates)) { body, binding in
+      .forAll(binding.domain, binding.name, body)
+    }
+    var substituted = StateExpr.substituteVariables(replacements, in: scoped)
+    let bindings = bindings.map { binding -> ActionBinding in
+      guard case .forAll(let domain, let name, let body) = substituted else {
+        preconditionFailure("Substitution must preserve temporal binding scopes")
+      }
+      substituted = body
+      return ActionBinding(name: name, domain: domain, generatedSwiftType: binding.generatedSwiftType)
+    }
+    guard case .tupleLiteral(let predicates) = substituted else {
+      preconditionFailure("Substitution must preserve the temporal predicate list")
+    }
+    var index = 0
+    let expression = expr.map { _ in
+      defer { index += 1 }
+      return predicates[index]
+    }
+    return NamedTemporal(name: name, expr: expression, bindings: bindings)
+  }
 }
 public struct NamedStatePredicate: Sendable, CustomStringConvertible, Equatable {
   public let name: String

@@ -662,9 +662,10 @@ package struct FormalModuleClosure: Sendable {
     module.invariants.forEach { freeNames.formUnion($0.body.freeVariableNames) }
     module.reachabilityProperties.forEach { freeNames.formUnion($0.body.freeVariableNames) }
     for temporal in module.temporalProperties {
-      for expression in temporal.expr.predicates {
-        freeNames.formUnion(expression.freeVariableNames)
+      let scoped = temporal.bindings.reversed().reduce(StateExpr.tupleLiteral(temporal.expr.predicates)) { body, binding in
+        .forAll(binding.domain, binding.name, body)
       }
+      freeNames.formUnion(scoped.freeVariableNames)
     }
     if let constraint = module.constraint { freeNames.formUnion(constraint.freeVariableNames) }
     if let assume = module.assume { freeNames.formUnion(assume.freeVariableNames) }

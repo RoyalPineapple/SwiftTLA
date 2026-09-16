@@ -202,6 +202,7 @@ public struct CompiledSpecification: Sendable {
     package var semantics: CompiledSemantics { module.semantics }
     var bindings: CompiledBindingTable { module.bindings }
     var refinements: [CompiledRefinement] { module.refinements }
+    var authoredAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan? { module.authoredAlgorithm?.plan }
     fileprivate let module: CompiledModule
     fileprivate let imports: [CompiledModule]
     fileprivate let provenance: TLAModuleBundle.Provenance
@@ -248,7 +249,7 @@ public struct CompiledSpecification: Sendable {
         return RenderedSpecification(
             tlaBundle: renderedBundle,
             configuration: rootModule.configuration,
-            actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle
+            actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle.map { .success($0) }
         )
     }
 }
@@ -258,10 +259,10 @@ public struct RenderedSpecification: Sendable {
     public let tlaBundle: TLAModuleBundle
     fileprivate let configuration: TLCConfiguration
     package let actions: [RenderedAction]
-    fileprivate let renderedPlusCalModuleBundle: TLAModuleBundle?
+    fileprivate let renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?
 
     init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration, actions: [RenderedAction],
-        renderedPlusCalModuleBundle: TLAModuleBundle?) {
+        renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?) {
         self.tlaBundle = tlaBundle
         self.configuration = configuration
         self.actions = actions
@@ -272,7 +273,7 @@ public struct RenderedSpecification: Sendable {
     @_documentation(visibility: internal)
     public init(_generatedModule name: String, source: String, compilationIdentity: String,
         declarations: [String], checkDeadlock: Bool, invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
-        symmetry: [String], actions: [RenderedAction]) throws {
+        symmetry: [String], actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil) throws {
         let configuration = TLCConfiguration(declarations: declarations, checkDeadlock: checkDeadlock,
             invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements, symmetry: symmetry)
         let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
@@ -280,7 +281,17 @@ public struct RenderedSpecification: Sendable {
                 identity: .init(value: compilationIdentity),
                 ownership: [.init(moduleName: name, owningRoot: name, structuralPath: [])], dependencies: []))
         try bundle.validateDeclaredClosure()
-        self.init(tlaBundle: bundle, configuration: configuration, actions: actions, renderedPlusCalModuleBundle: nil)
+        let plusCal = try _generatedPlusCal.map { result -> Result<TLAModuleBundle, CompilationDiagnostic> in
+            switch result {
+            case .failure(let diagnostic): return .failure(diagnostic)
+            case .success(let source):
+                let authored = TLAModuleBundle(root: .init(name: name, tla: source, cfg: bundle.root.cfg),
+                    imports: bundle.imports, provenance: bundle.provenance)
+                try authored.validateDeclaredClosure()
+                return .success(authored)
+            }
+        }
+        self.init(tlaBundle: bundle, configuration: configuration, actions: actions, renderedPlusCalModuleBundle: plusCal)
     }
 
     package func tlaBundle(
@@ -347,7 +358,7 @@ public struct RenderedSpecification: Sendable {
                 nextSafeAction: "Compile one source model with one canonical Algorithm per exported module."
             )
         }
-        return renderedPlusCalModuleBundle
+        return try renderedPlusCalModuleBundle.get()
     }
 }
 
@@ -1051,7 +1062,13 @@ private struct CanonicalSpecificationEncoder {
             list("reachability", reachability) { $0 }
         }
         let temporalProperties = spec.temporalProperties.map {
-            node("temporal", [$0.name, canonicalTemporal($0.expr)])
+            var fields = [$0.name, canonicalTemporal($0.expr)]
+            if !$0.bindings.isEmpty {
+                fields.append(node("bindings", $0.bindings.map {
+                    node("binding", [$0.name, canonicalExpression($0.domain), canonicalOptional($0.generatedSwiftType)])
+                }))
+            }
+            return node("temporal", fields)
         }
         list("temporal", temporalProperties) { $0 }
         list("fairness", spec.fairness, canonicalFairness)
@@ -1237,6 +1254,36 @@ private struct CanonicalSpecificationEncoder {
 }
 
 extension CompiledProgram {
+    package func renderAuthoredPlusCal(declarations: RenderedModule) throws -> String? {
+        guard let authoredAlgorithm else { return nil }
+        for function in functions {
+            var pending = [function.body] + (function.domainGuard.map { [$0] } ?? [])
+            while let expression = pending.popLast() {
+                if case .enabledAction = expression.operation {
+                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
+                        path: "export.plusCal.helpers", expected: "a helper independent of translated action names",
+                        actual: "a helper queries action enabledness",
+                        nextSafeAction: "Resolve enabledness against the authored PlusCal translation before exporting this helper.")
+                }
+                pending.append(contentsOf: expression.children)
+            }
+        }
+        let renderer = CompiledTLARenderer(moduleName: moduleMetadata.name,
+            reservedNames: moduleMetadata.modelValueNames.union(moduleMetadata.constants.map(\.name)),
+            layout: layout, bindings: .init(binders: binderNames), operators: .init(),
+            actions: behavior.actions, functions: functions)
+        let constants = moduleMetadata.constants.sorted { $0.name < $1.name }.map { "ASSUME \($0.name) = \($0.value)" }
+        let collections = moduleMetadata.collections.map {
+            "\($0.domainSymbol) == {\($0.members.map(\.description).joined(separator: ", "))}"
+        }
+        let prelude = try constants + collections + renderer.resolvedFunctionDefinitions() + renderer.assumptions(behavior)
+        let module = try moduleMetadata.authoredPlusCalModule(algorithm: authoredAlgorithm,
+            layout: layout, declarations: declarations,
+            prelude: prelude, define: [], postTranslation: [],
+            parameterNames: layout.parameters.map { binderNames[$0.binder]! }, requiredModules: requiredStandardModules)
+        return try AlgorithmPlusCalRenderer(module: module, formalRenderer: renderer).render()
+    }
+
     package func renderModule() throws -> RenderedModule {
         guard moduleMetadata.imports.isEmpty, moduleMetadata.formalParameters.isEmpty, refinements.isEmpty else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
@@ -1305,7 +1352,7 @@ private extension CompiledModuleMetadata {
         let layout = renderer.layout
         let invariants = try behavior.invariants.map { ($0.id, "\($0.name) == \(try renderer.state($0.predicate.expression))") }
             + behavior.reachabilityProperties.map { ($0.id, "\($0.name) == ~(\(try renderer.state($0.predicate.expression)))") }
-        let temporalProperties = try behavior.temporalProperties.map { ($0.id, "\($0.name) == \(try renderer.temporal($0.expression))") }
+        let temporalProperties = try behavior.temporalProperties.map { ($0.id, "\($0.name) == \(try renderer.temporal($0))") }
         let constraint = try behavior.constraint.map { "StateConstraint == \(try renderer.state($0.expression))" }
         let emittedActionNamesByID = Dictionary(
             uniqueKeysWithValues: layout.actions.map { ($0.id, $0.renderedName) }
@@ -1456,18 +1503,8 @@ private extension CompiledModuleMetadata {
             lines.append("")
         }
 
-        for parameter in layout.parameters {
-            guard let domain = behavior.parameterDomains[parameter.binder] else {
-                throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
-                    path: "parameters.\(parameter.reference.name).domain", expected: "a resolved domain", actual: "missing domain",
-                    nextSafeAction: "Resolve the parameter domain before export.")
-            }
-            lines.append("ASSUME \(try renderer.binderName(parameter.binder)) \\in \(try renderer.state(domain))")
-        }
-        if let assume = behavior.assume {
-            lines.append("ASSUME \(try renderer.state(assume.expression))")
-            lines.append("")
-        }
+        lines += try renderer.assumptions(behavior)
+        if behavior.assume != nil { lines.append("") }
 
         if !isLibraryModule, varNames.count > 1 {
             lines.append("vars == \(varsTuple)")

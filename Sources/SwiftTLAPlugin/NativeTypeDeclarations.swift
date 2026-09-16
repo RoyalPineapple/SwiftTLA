@@ -26,6 +26,7 @@ struct NativeTypeDeclarations: Sendable {
             pending.append(contentsOf: program.behavior.validationScenarios.flatMap { $0.bindings.values })
             pending.append(contentsOf: program.behavior.actions.flatMap { $0.bindings.map(\.domain) })
             pending.append(contentsOf: program.behavior.temporalProperties.flatMap { $0.expression.predicates.map(\.expression) })
+            pending.append(contentsOf: program.behavior.temporalProperties.flatMap { $0.bindings.map(\.domain) })
             pending.append(contentsOf: program.refinements.flatMap { $0.variableMappings.map(\.expression) })
             pending.append(contentsOf: program.behavior.invariants.map { $0.predicate.expression })
             pending.append(contentsOf: program.behavior.reachabilityProperties.map { $0.predicate.expression })

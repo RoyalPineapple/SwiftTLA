@@ -68,7 +68,8 @@ extension CompiledSpecification {
     ) throws -> [TemporalAnalysis<StateGraph.StateID, String?>] {
         let runtime = CompiledRuntime(compilation: self)
         let checker = livenessChecker(graph: graph)
-        func predicate(_ query: CompiledStateQuery, isTrigger: Bool = false) -> @Sendable (StateGraph.StateID) throws -> Bool {
+        func predicate(_ query: CompiledStateQuery, bindings: CompiledBindings,
+                       isTrigger: Bool = false) -> @Sendable (StateGraph.StateID) throws -> Bool {
             { state in
                 guard let compiled = states[state] else {
                     throw CompilationDiagnostic(
@@ -79,23 +80,34 @@ extension CompiledSpecification {
                     )
                 }
                 do {
-                    return try runtime.predicateHolds(query, in: compiled)
+                    return try runtime.predicateHolds(query, in: compiled, bindings: bindings)
                 } catch let error as EvalError {
                     if isTrigger { throw TemporalEvaluationError.leadsToTrigger(state: state, cause: error) }
                     throw TemporalEvaluationError.predicate(state: state, cause: error)
                 }
             }
         }
-        func predicates(_ source: TemporalCondition<CompiledStateQuery>) -> TemporalCondition<@Sendable (StateGraph.StateID) throws -> Bool> {
+        func predicates(_ source: TemporalCondition<CompiledStateQuery>, bindings: CompiledBindings) -> TemporalCondition<@Sendable (StateGraph.StateID) throws -> Bool> {
             switch source {
-            case .all(let conditions): return .all(conditions.map { predicates($0) })
-            case .leadsTo(let trigger, let target): return .leadsTo(predicate(trigger, isTrigger: true), predicate(target))
-            default: return source.map { predicate($0) }
+            case .all(let conditions): return .all(conditions.map { predicates($0, bindings: bindings) })
+            case .leadsTo(let trigger, let target): return .leadsTo(predicate(trigger, bindings: bindings, isTrigger: true), predicate(target, bindings: bindings))
+            default: return source.map { predicate($0, bindings: bindings) }
             }
         }
         return try semantics.behavior.temporalProperties.map { property in
+            var bindings = [CompiledBindings()]
+            for binding in property.bindings {
+                bindings = try bindings.flatMap { scope in
+                    let domain = try CompiledEvaluator(variableValues: [:], operators: semantics.operators, bindings: scope).evaluate(binding.domain)
+                    guard case .set(let members) = domain else {
+                        throw EvalError.expected(.set, actual: [domain])
+                    }
+                    return CompiledValue.sorted(members).map { scope.binding($0, to: binding.binder) }
+                }
+            }
             return try checker.analyze(
-                predicates(property.expression),
+                property.bindings.isEmpty ? predicates(property.expression, bindings: .init())
+                    : .all(bindings.map { predicates(property.expression, bindings: $0) }),
                 initialStates: initialStateIDs, isComplete: isComplete,
                 renderScope: { scope in
                     switch scope {

@@ -101,9 +101,10 @@ struct CompiledRuntime {
         return try boolean(invariant.predicate, in: state)
     }
 
-    func predicateHolds(_ predicate: CompiledStateQuery, in state: CompiledState) throws -> Bool {
+    func predicateHolds(_ predicate: CompiledStateQuery, in state: CompiledState,
+                        bindings: CompiledBindings = .init()) throws -> Bool {
         try state.requireIdentity(identity)
-        return try boolean(predicate, in: state)
+        return try boolean(predicate, in: state, bindings: bindings)
     }
 
     func evaluate(_ queries: [CompiledStateQuery], in state: CompiledState) throws -> [CompiledValue] {
@@ -147,11 +148,12 @@ struct CompiledRuntime {
 
     private func boolean(
         _ predicate: CompiledStateQuery,
-        in state: CompiledState
+        in state: CompiledState,
+        bindings: CompiledBindings = .init()
     ) throws -> Bool {
         let value = try CompiledEvaluator(
             state: state,
-            operators: operators, functions: functions,
+            operators: operators, functions: functions, bindings: bindings,
             enabledActions: try enabledActions(in: state, required: predicate.enabledActions)
         ).evaluate(predicate.expression)
         guard case .boolean(let boolean) = value else {

@@ -45,6 +45,7 @@ private final class ProgramResolver {
 
     func resolve() throws -> CompiledProgram {
         let behavior = try checked.behavior.map(root)
+        let authoredAlgorithm = try checked.authoredAlgorithm.map { try $0.map(root) }
         let refinements = try checked.refinements.map { refinement in
             CompiledRefinementProgram(name: refinement.name, abstract: refinement.abstract,
                 variableMappings: try refinement.variableMappings.map { try $0.map(root) })
@@ -63,10 +64,16 @@ private final class ProgramResolver {
             requiredStandardModules: checked.requiredStandardModules, layout: checked.layout,
             behavior: behavior, refinements: refinements, enums: checked.enums,
             projections: projections, variableTypes: checked.variableTypes, bindingTypes: checked.bindingTypes, binderNames: binderNames,
-            functions: resolvedFunctions)
+            functions: resolvedFunctions, authoredAlgorithm: authoredAlgorithm)
         for parameter in checked.layout.parameters {
             try program.requireImmutableDomain(try require(behavior.parameterDomains[parameter.binder]),
                 path: "parameters.\(parameter.reference.name).domain at \(parameter.reference.sourceSpan)")
+        }
+        for property in behavior.temporalProperties {
+            for binding in property.bindings {
+                try program.requireImmutableDomain(binding.domain,
+                    path: "temporalProperties.\(property.name).bindings.\(binding.sourceName)")
+            }
         }
         return program
     }

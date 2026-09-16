@@ -426,11 +426,19 @@ package struct CompiledTemporal<Expression: Sendable>: Sendable {
     package let id: PropertyID
     package let name: String
     package let expression: TemporalCondition<Expression>
+    package let bindings: [CompiledActionBinding]
+
+    package init(id: PropertyID, name: String, expression: TemporalCondition<Expression>, bindings: [CompiledActionBinding] = []) {
+        self.id = id
+        self.name = name
+        self.expression = expression
+        self.bindings = bindings
+    }
 
     package func map<Result: Sendable>(
         _ transform: (Expression) throws -> Result
     ) rethrows -> CompiledTemporal<Result> {
-        .init(id: id, name: name, expression: try expression.map(transform))
+        .init(id: id, name: name, expression: try expression.map(transform), bindings: bindings)
     }
 }
 

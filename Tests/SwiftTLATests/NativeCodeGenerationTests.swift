@@ -372,7 +372,7 @@ struct NativeCodeGenerationTests {
         let program = CompiledProgram(identity: compilation.identity, moduleMetadata: compilation.moduleMetadata,
             requiredStandardModules: compilation.requiredStandardModules, layout: compilation.layout,
             behavior: behavior, refinements: [], enums: .init(), projections: [], variableTypes: [:], bindingTypes: [:], binderNames: [:],
-            functions: [])
+            functions: [], authoredAlgorithm: nil)
         let model = try MacroCompilation(typeName: "SharedPredicates",
             program: program)
         var emitter = NativeSwiftEmitter(model: model)

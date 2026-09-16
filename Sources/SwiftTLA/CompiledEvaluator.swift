@@ -292,7 +292,8 @@ struct CompiledEvaluator: Sendable {
     init(
         variableValues: [VariableID: CompiledValue],
         operators: CompiledOperators,
-        functions: [ResolvedFunction] = []
+        functions: [ResolvedFunction] = [],
+        bindings: CompiledBindings = .init()
     ) {
         self.variableValue = { variable in
             guard let value = variableValues[variable] else {
@@ -302,7 +303,7 @@ struct CompiledEvaluator: Sendable {
         }
         self.operators = operators
         self.functions = functions
-        self.bindings = .init()
+        self.bindings = bindings
         self.enabledActions = []
     }
 

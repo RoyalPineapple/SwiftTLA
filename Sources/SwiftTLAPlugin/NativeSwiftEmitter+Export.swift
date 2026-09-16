@@ -7,6 +7,14 @@ extension NativeSwiftEmitter {
         let body: String
         do {
             let module = try program.renderModule()
+            let plusCal: String
+            do {
+                plusCal = try program.renderAuthoredPlusCal(declarations: module).map {
+                    ".success(\(String(reflecting: $0)))"
+                } ?? "nil"
+            } catch let diagnostic as CompilationDiagnostic {
+                plusCal = ".failure(\(exportDiagnostic(diagnostic)))"
+            }
             let parameterBindings = try program.layout.parameters.map { parameter in
                 guard let type = program.bindingTypes[parameter.binder],
                       let name = program.binderNames[parameter.binder] else {
@@ -49,13 +57,11 @@ extension NativeSwiftEmitter {
                 properties: \(String(reflecting: module.configuration.properties)),
                 refinements: \(String(reflecting: module.configuration.refinements)),
                 symmetry: \(String(reflecting: module.configuration.symmetry)),
-                actions: _actions)
+                actions: _actions, _generatedPlusCal: \(plusCal))
             """
         } catch let diagnostic as CompilationDiagnostic {
             body = """
-            throw CompilationDiagnostic(code: .\(diagnostic.code), stage: .\(diagnostic.stage),
-                path: \(String(reflecting: diagnostic.path)), expected: \(String(reflecting: diagnostic.expected)),
-                actual: \(String(reflecting: diagnostic.actual)), nextSafeAction: \(String(reflecting: diagnostic.nextSafeAction)))
+            throw \(exportDiagnostic(diagnostic))
             """
         }
         return try nativeDeclarations("""
@@ -63,5 +69,13 @@ extension NativeSwiftEmitter {
             \(body)
         }
         """)
+    }
+
+    private func exportDiagnostic(_ diagnostic: CompilationDiagnostic) -> String {
+        """
+        CompilationDiagnostic(code: .\(diagnostic.code), stage: .\(diagnostic.stage),
+            path: \(String(reflecting: diagnostic.path)), expected: \(String(reflecting: diagnostic.expected)),
+            actual: \(String(reflecting: diagnostic.actual)), nextSafeAction: \(String(reflecting: diagnostic.nextSafeAction)))
+        """
     }
 }

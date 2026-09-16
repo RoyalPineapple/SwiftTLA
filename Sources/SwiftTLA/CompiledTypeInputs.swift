@@ -18,6 +18,7 @@ package final class CompiledTypeInputs: Sendable {
     let layout: CompiledLayout
     let semantics: CompiledSemantics
     let bindings: CompiledBindingTable
+    let authoredAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan?
     package let variableTypes: [VariableID: CompiledValueType]
     package let bindingTypes: [BinderID: CompiledValueType]
     package let collectionDomains: [VariableID: Set<CompiledValue>]
@@ -40,6 +41,7 @@ package final class CompiledTypeInputs: Sendable {
         layout = compilation.layout
         semantics = compilation.semantics
         bindings = compilation.bindings
+        authoredAlgorithm = compilation.authoredAlgorithm
         self.types = types
 
         var variableTypes: [VariableID: CompiledValueType] = [:]
@@ -68,6 +70,14 @@ package final class CompiledTypeInputs: Sendable {
                     bindingTypes[binding.binder] = try binding.generatedSwiftType.map(resolveSourceType) ?? .unknown
                 }
             }
+        }
+        for property in semantics.behavior.temporalProperties {
+            for binding in property.bindings {
+                bindingTypes[binding.binder] = try binding.generatedSwiftType.map(resolveSourceType) ?? .unknown
+            }
+        }
+        for process in authoredAlgorithm?.processes ?? [] {
+            bindingTypes[process.binder] = try resolveSourceType(process.swiftType)
         }
         for definition in semantics.operators.definitions.values {
             for parameter in definition.parameters {

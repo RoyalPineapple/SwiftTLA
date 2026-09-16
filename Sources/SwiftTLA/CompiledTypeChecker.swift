@@ -265,8 +265,9 @@ package struct CompiledTypeChecker: Sendable {
         for parameter in inputs.layout.parameters {
             bindings[parameter.binder] = inputs.bindingTypes[parameter.binder]
         }
-        for action in inputs.semantics.behavior.actions {
-            for binding in action.bindings {
+        for domainBindings in inputs.semantics.behavior.actions.map(\.bindings)
+            + inputs.semantics.behavior.temporalProperties.map(\.bindings) {
+            for binding in domainBindings {
                 actionBinders.insert(binding.binder)
                 let hint = inputs.bindingTypes[binding.binder] ?? .unknown
                 let inferred = try (binding.literalMembers ?? []).reduce(hint) { try CompiledValueType.merge($0, literal($1, expected: hint)) }
@@ -362,10 +363,14 @@ package struct CompiledTypeChecker: Sendable {
         }
         for property in inputs.semantics.behavior.temporalProperties {
             do {
-                let checked = try property.map { predicate in
+                let domainBindings = try property.bindings.map { binding in
+                    try binding.map { try checkOperand($0, expected: .set(bindings[binding.binder] ?? .unknown)) }
+                }
+                let expression = try property.expression.map { predicate in
                     try predicate.map { try checkOperand($0, expected: .bool) }
                 }
-                temporalProperties.append(checked)
+                temporalProperties.append(.init(id: property.id, name: property.name,
+                    expression: expression, bindings: domainBindings))
             } catch let diagnostic as CompilationDiagnostic {
                 throw Self.contextualDiagnostic("temporalProperties.\(property.name)", causedBy: diagnostic)
             }
@@ -382,6 +387,7 @@ package struct CompiledTypeChecker: Sendable {
                     at: "variables.\(variable.declaration.name)")
             }
         }
+        let authoredAlgorithm = try inputs.authoredAlgorithm.map { try checkAuthoredAlgorithm($0) }
         var bindingTypes = Dictionary(uniqueKeysWithValues: inputs.layout.parameters.map {
             ($0.binder, bindings[$0.binder]!)
         })
@@ -451,7 +457,129 @@ package struct CompiledTypeChecker: Sendable {
         return CompiledProgram(identity: inputs.identity, moduleMetadata: inputs.moduleMetadata,
             requiredStandardModules: inputs.requiredStandardModules, layout: inputs.layout, behavior: behavior, refinements: refinements,
             enums: inputs.types.enums, projections: [], variableTypes: variables, bindingTypes: bindingTypes, binderNames: inputs.bindings.binders,
-            functions: [])
+            functions: [], authoredAlgorithm: authoredAlgorithm)
+    }
+
+    private mutating func checkAuthoredAlgorithm(_ plan: CompiledAuthoredPlusCalAlgorithmPlan) throws -> CompiledAuthoredPlusCalAlgorithmPlan {
+        let storedTypes = variables
+        defer { variables = storedTypes }
+        let shared = try plan.shared.map { try checkAuthoredState($0) }
+        if !plan.processes.isEmpty {
+            let locals = plan.processes.flatMap { $0.locals.map(\.variable) }
+                + plan.procedures.flatMap { $0.locals.map(\.variable) + $0.parameterVariables }
+            for variable in locals {
+                guard case .dictionary(_, let value)? = storedTypes[variable] else {
+                    throw CompiledValueType.diagnostic("authoredPlusCal.locals", "missing process-local storage type")
+                }
+                variables[variable] = value
+            }
+        }
+        for procedure in plan.procedures {
+            for (binder, variable) in zip(procedure.parameters, procedure.parameterVariables) {
+                bindings[binder] = variables[variable]
+                actionBinders.insert(binder)
+            }
+        }
+        let procedures = try plan.procedures.map { procedure in
+            try CompiledAuthoredPlusCalProcedure(id: procedure.id, parameters: procedure.parameters,
+                parameterVariables: procedure.parameterVariables,
+                locals: procedure.locals.map { try checkAuthoredState($0) },
+                steps: procedure.steps.map { try checkAuthoredStep($0, procedures: plan.procedures) })
+        }
+        let processes = try plan.processes.map { process in
+            let member = inputs.bindingTypes[process.binder] ?? .unknown
+            let domain = try checkOperand(process.domain, expected: .set(member))
+            bindings[process.binder] = try element(domain.resultType)
+            actionBinders.insert(process.binder)
+            return try CompiledAuthoredPlusCalProcess(name: process.name, binder: process.binder, swiftType: process.swiftType,
+                domain: domain, fairness: process.fairness,
+                locals: process.locals.map { try checkAuthoredState($0) },
+                steps: process.steps.map { try checkAuthoredStep($0, procedures: plan.procedures) })
+        }
+        return try .init(name: plan.name, sequentialFairness: plan.sequentialFairness,
+            shared: shared, procedures: procedures, processes: processes,
+            sequentialSteps: plan.sequentialSteps.map { try checkAuthoredStep($0, procedures: plan.procedures) },
+            properties: plan.properties, translatorOwnedPropertyNames: plan.translatorOwnedPropertyNames)
+    }
+
+    private mutating func checkAuthoredState(_ state: CompiledAuthoredPlusCalState) throws -> CompiledAuthoredPlusCalState {
+        let type = variables[state.variable] ?? .unknown
+        let initialization: CompiledAuthoredPlusCalState.Initialization
+        switch state.initialization {
+        case .expression(let value): initialization = .expression(try checkOperand(value, expected: type))
+        case .memberOf(let domain): initialization = .memberOf(try checkOperand(domain, expected: .set(type)))
+        }
+        return .init(variable: state.variable, initialization: initialization)
+    }
+
+    private mutating func checkAuthoredStep(_ step: CompiledAuthoredPlusCalStep,
+                                          procedures: [CompiledAuthoredPlusCalProcedure]) throws -> CompiledAuthoredPlusCalStep {
+        try .init(label: step.label, statements: step.statements.map { try checkAuthoredStatement($0, procedures: procedures) },
+            loopCondition: step.loopCondition.map { try checkOperand($0, expected: .bool) })
+    }
+
+    private mutating func checkAuthoredAssignment(_ target: CompiledAuthoredPlusCalLValue,
+                                                value: CompiledExpression) throws -> CompiledAuthoredPlusCalAssignment {
+        switch target {
+        case .root(let variable):
+            return .init(target: target, value: try checkOperand(value, expected: variables[variable] ?? .unknown))
+        case .function(let variable, let key):
+            let update = try checkOperand(.except(.stateVariable(variable), key, value), expected: variables[variable] ?? .unknown)
+            return .init(target: .function(root: variable, key: update.children[1]), value: update.children[2])
+        }
+    }
+
+    private mutating func checkAuthoredStatement(_ statement: CompiledAuthoredPlusCalStatement,
+                                               procedures: [CompiledAuthoredPlusCalProcedure]) throws -> CompiledAuthoredPlusCalStatement {
+        switch statement {
+        case .when(let condition): return .when(try checkOperand(condition, expected: .bool))
+        case .assert(let condition): return .assert(try checkOperand(condition, expected: .bool))
+        case .set(let target, let value):
+            let assignment = try checkAuthoredAssignment(target, value: value)
+            return .set(target: assignment.target, value: assignment.value)
+        case .parallel(let assignments):
+            return .parallel(try assignments.map { try checkAuthoredAssignment($0.target, value: $0.value) })
+        case .letBinding(let binder, let value, let body):
+            actionBinders.insert(binder)
+            bindingSources[binder] = .setLiteral([value])
+            bindingDomains[binder] = literalValues(value)
+            let checked = try checkOperand(value, expected: bindings[binder] ?? .unknown)
+            bindings[binder] = checked.resultType
+            let statements = try checkAuthoredBody(body, binding: binder, procedures: procedures)
+            return .letBinding(variable: binder, value: try refineOperand(checked, from: value, expected: bindings[binder]!), statements)
+        case .with(let binder, let source, let body):
+            actionBinders.insert(binder)
+            bindingSources[binder] = source
+            bindingDomains[binder] = literalDomain(source)
+            let checked = try checkOperand(source, expected: .set(bindings[binder] ?? .unknown))
+            bindings[binder] = try element(checked.resultType)
+            let statements = try checkAuthoredBody(body, binding: binder, procedures: procedures)
+            return .with(variable: binder, source: try refineOperand(checked, from: source, expected: .set(bindings[binder]!)), statements)
+        case .ifElse(let condition, let yes, let no):
+            return .ifElse(try checkOperand(condition, expected: .bool),
+                try yes.map { try checkAuthoredStatement($0, procedures: procedures) },
+                try no.map { try checkAuthoredStatement($0, procedures: procedures) })
+        case .either(let left, let right):
+            return .either(try left.map { try checkAuthoredStatement($0, procedures: procedures) },
+                try right.map { try checkAuthoredStatement($0, procedures: procedures) })
+        case .call(let target, let arguments):
+            guard let procedure = procedures.first(where: { $0.id == target }), procedure.parameters.count == arguments.count else {
+                throw CompiledValueType.diagnostic("authoredPlusCal.call", "unresolved procedure signature")
+            }
+            return .call(target: target, arguments: try zip(arguments, procedure.parameters).map {
+                try checkOperand($0.0, expected: bindings[$0.1] ?? .unknown)
+            })
+        case .goto, .return, .skip: return statement
+        }
+    }
+
+    private mutating func checkAuthoredBody(_ body: [CompiledAuthoredPlusCalStatement], binding: BinderID,
+                                          procedures: [CompiledAuthoredPlusCalProcedure]) throws -> [CompiledAuthoredPlusCalStatement] {
+        while true {
+            let input = bindings[binding]
+            let checked = try body.map { try checkAuthoredStatement($0, procedures: procedures) }
+            if bindings[binding] == input { return checked }
+        }
     }
 
     private mutating func checkUnionConstructor(_ expression: CompiledExpression, expected: CompiledValueType) throws -> CheckedType? {

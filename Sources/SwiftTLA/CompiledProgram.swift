@@ -35,6 +35,7 @@ package struct CompiledProgram: Sendable {
     package let bindingTypes: [BinderID: CompiledValueType]
     package let binderNames: [BinderID: String]
     package let functions: [ResolvedFunction]
+    let authoredAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan?
     package subscript(_ id: ResolvedFunctionID) -> ResolvedFunction { functions[id.ordinal] }
     package subscript(_ id: ActionID) -> CompiledAction { behavior.actions[id.ordinal] }
 

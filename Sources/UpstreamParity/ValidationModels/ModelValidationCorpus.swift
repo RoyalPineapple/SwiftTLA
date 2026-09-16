@@ -5,7 +5,8 @@ package func modelValidationScenarios() throws -> [(id: String, scenario: any Mo
         ("counter", try ConfiguredCounter.validationScenarios()),
         ("configured-processes", try ConfiguredProcessMachine.validationScenarios()),
         ("weakly-fair-processes", try WeaklyFairConfiguredProcessMachine.validationScenarios()),
-        ("strongly-fair-processes", try StronglyFairConfiguredProcessMachine.validationScenarios())
+        ("strongly-fair-processes", try StronglyFairConfiguredProcessMachine.validationScenarios()),
+        ("recurring-population", try RecurringPopulation.validationScenarios())
     ]
     return try models.flatMap { model in
         guard !model.scenarios.isEmpty else {

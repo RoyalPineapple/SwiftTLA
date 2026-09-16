@@ -569,20 +569,28 @@ extension NativeSwiftEmitter {
         }
         """)
         var temporalProperties: [String] = []
+        var temporalDomains: [String] = []
         let captures = machineCaptures.joined(separator: ", ")
         let captureList = captures.isEmpty ? "" : "[\(captures)] "
         for property in program.behavior.temporalProperties {
+            let boundNames = property.bindings.map { binder($0.binder) }
+            let boundParameters = try property.bindings.map {
+                ", \(binder($0.binder)): \(try swiftType(program.bindingTypes[$0.binder]!))"
+            }.joined()
+            let boundArguments = boundNames.map { ", \($0): \($0)" }.joined()
+            let propertyCaptures = machineCaptures + boundNames
+            let propertyCaptureList = propertyCaptures.isEmpty ? "" : "[\(propertyCaptures.joined(separator: ", "))] "
             var index = 0
             let predicates = try property.expression.map { query in
                 let function = "_temporal\(property.id.ordinal)_\(index)"
                 index += 1
                 declarations += try nativeDeclarations("""
-                private static func \(function)(in state: Snapshot\(collectionParameters), enabled: Set<Int>) throws -> Bool {
+                private static func \(function)(in state: Snapshot\(collectionParameters)\(boundParameters), enabled: Set<Int>) throws -> Bool {
                     \(try expression(query.expression))
                 }
                 """)
                 let enabled = enabledActionsCall(query.enabledActions, state: "state", collectionArguments: arguments)
-                return "{ \(captureList)state in try Self.\(function)(in: state\(arguments), enabled: \(enabled)) }"
+                return "{ \(propertyCaptureList)state in try Self.\(function)(in: state\(arguments)\(boundArguments), enabled: \(enabled)) }"
             }
             func condition(_ value: TemporalCondition<String>) -> String {
                 switch value {
@@ -594,13 +602,27 @@ extension NativeSwiftEmitter {
                 case .all(let conditions): ".all([\(conditions.map { condition($0) }.joined(separator: ", "))])"
                 }
             }
-            temporalProperties.append("\(String(reflecting: property.name)): \(condition(predicates))")
+            if property.bindings.isEmpty {
+                temporalProperties.append("\(String(reflecting: property.name)): \(condition(predicates))")
+            } else {
+                let name = "_temporalMembers\(property.id.ordinal)"
+                let loops = try property.bindings.map { binding in
+                    "for \(binder(binding.binder)) in \(try actionDomain(binding, state: "")) {"
+                }.joined(separator: "\n")
+                temporalDomains.append("""
+                var \(name): [TemporalCondition<@Sendable (Snapshot) throws -> Bool>] = []
+                \(loops)
+                \(name).append(\(condition(predicates)))
+                \(String(repeating: "}\n", count: property.bindings.count))
+                """)
+                temporalProperties.append("\(String(reflecting: property.name)): .all(\(name))")
+            }
         }
         let propertyBody: String
         if let refinement = program.refinements.first(where: { !supportsNativeRefinement($0) })?.name {
             propertyBody = "throw ExplorationError.unsupportedRefinement(\(String(reflecting: refinement)))"
         } else {
-            propertyBody = "[\(temporalProperties.isEmpty ? ":" : temporalProperties.joined(separator: ",\n"))]"
+            propertyBody = temporalDomains.joined(separator: "\n") + "\nreturn [\(temporalProperties.isEmpty ? ":" : temporalProperties.joined(separator: ",\n"))]"
         }
         declarations += try nativeDeclarations("""
         public func temporalProperties() throws -> [String: TemporalCondition<@Sendable (Snapshot) throws -> Bool>] {

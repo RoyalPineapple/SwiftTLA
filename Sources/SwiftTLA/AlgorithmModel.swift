@@ -340,6 +340,7 @@ internal struct AuthoredPlusCalAlgorithmPlan: Sendable {
 internal struct AuthoredPlusCalProcessPlan: Sendable {
     let name: String
     let owner: ControlOwner
+    let swiftType: String
     let domain: StateExpr
     let fairness: AlgorithmFairness
     let locals: [AlgorithmStateModel]
@@ -348,6 +349,7 @@ internal struct AuthoredPlusCalProcessPlan: Sendable {
     init(process: AlgorithmProcessModel, name: String, owner: ControlOwner) {
         self.name = name
         self.owner = owner
+        swiftType = process.typeName
         domain = process.domain
         fairness = process.fairness
         locals = process.components.compactMap {
@@ -382,12 +384,15 @@ internal struct CompiledAuthoredPlusCalState: Sendable {
 internal struct CompiledAuthoredPlusCalProcedure: Sendable {
     let id: ProcedureID
     let parameters: [BinderID]
+    let parameterVariables: [VariableID]
     let locals: [CompiledAuthoredPlusCalState]
     let steps: [CompiledAuthoredPlusCalStep]
 }
 
 internal struct CompiledAuthoredPlusCalProcess: Sendable {
     let name: String
+    let binder: BinderID
+    let swiftType: String
     let domain: CompiledExpression
     let fairness: AlgorithmFairness
     let locals: [CompiledAuthoredPlusCalState]

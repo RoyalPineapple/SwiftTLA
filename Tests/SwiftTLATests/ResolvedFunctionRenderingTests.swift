@@ -3,6 +3,32 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct ResolvedFunctionRenderingTests {
+    @Test("recursive helpers pass transitive state and guard captures explicitly without name capture")
+    func rendersExplicitStateCaptures() throws {
+        let compilation = try TLASpec(name: "Captures", variables: [
+            .init(name: "count", initial: .int(0)), .init(name: "limit", initial: .int(3))
+        ], actions: [], invariants: []).compile()
+        let count = VariableID(ordinal: 0)
+        let limit = VariableID(ordinal: 1)
+        let countRead = CompiledExpression(operation: .stateVariable(count), resultType: .int, children: [])
+        let limitRead = CompiledExpression(operation: .stateVariable(limit), resultType: .int, children: [])
+        let first = CompiledExpression(operation: .call(.init(ordinal: 0)), resultType: .int, children: [])
+        let second = CompiledExpression(operation: .call(.init(ordinal: 1)), resultType: .int, children: [])
+        let renderer = CompiledTLARenderer(moduleName: "Captures", reservedNames: ["__Captures_state0"],
+            layout: compilation.layout, bindings: .init(), operators: .init(), actions: [], functions: [
+                .init(parameters: [], resultType: .int, body: second, domainGuard: nil),
+                .init(parameters: [], resultType: .int,
+                    body: .init(operation: .add, resultType: .int, children: [countRead, first]),
+                    domainGuard: .init(operation: .lessThan, resultType: .bool, children: [countRead, limitRead]))
+            ])
+        #expect(try renderer.resolvedFunctionDefinitions() == [
+            "RECURSIVE __Captures_resolvedFunction0(_, _), __Captures_resolvedFunction1(_, _)",
+            "__Captures_resolvedFunction0(__Captures_state0_, __Captures_state1) == __Captures_resolvedFunction1(__Captures_state0_, __Captures_state1)",
+            "__Captures_resolvedFunction1(__Captures_state0_, __Captures_state1) == CASE (__Captures_state0_ < __Captures_state1) -> ((__Captures_state0_ + __Captures_resolvedFunction0(__Captures_state0_, __Captures_state1)))"
+        ])
+        #expect(try renderer.state(first) == "__Captures_resolvedFunction0(count, limit)")
+    }
+
     @Test("an empty transition relation exports FALSE and retains deadlock checking")
     func rendersEmptyNext() throws {
         let compilation = try TLASpec(name: "Stuck", variables: [.init(name: "count", initial: .int(0))],

@@ -1421,9 +1421,11 @@ package enum AlgorithmValidator {
                 )
             case .invariant(let invariant):
                 validateName(invariant.name, at: processAnchor, diagnostics: &diagnostics)
+            case .temporal(let temporal):
+                validateName(temporal.name, at: processAnchor, diagnostics: &diagnostics)
             case .invalidPlacement:
                 continue
-            case .temporal, .formalOperator, .stateConstraint:
+            case .formalOperator, .stateConstraint:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))
             case .shared, .process, .procedure:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))

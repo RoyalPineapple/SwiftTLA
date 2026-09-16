@@ -21,20 +21,68 @@ struct CompiledTLARenderer {
     let actions: [CompiledAction]
     let functions: [ResolvedFunction]
 
+    func assumptions(_ behavior: CompiledBehavior) throws -> [String] {
+        var result = try layout.parameters.map { parameter in
+            guard let domain = behavior.parameterDomains[parameter.binder] else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
+                    path: "parameters.\(parameter.reference.name).domain", expected: "a resolved domain", actual: "missing domain",
+                    nextSafeAction: "Resolve the parameter domain before export.")
+            }
+            return "ASSUME \(try binderName(parameter.binder)) \\in \(try state(domain))"
+        }
+        if let assume = behavior.assume {
+            result.append("ASSUME \(try state(assume.expression))")
+        }
+        return result
+    }
+
     func resolvedFunctionDefinitions() throws -> [String] {
         guard !functions.isEmpty else { return [] }
         let signatures = try functions.enumerated().map { index, function in
             let name = try resolvedFunctionName(.init(ordinal: index))
-            let slots = function.parameters.map { _ in "_" }.joined(separator: ", ")
+            let captures = try functionStateCaptures(.init(ordinal: index))
+            let slots = Array(repeating: "_", count: function.parameters.count + captures.count).joined(separator: ", ")
             return name + (slots.isEmpty ? "" : "(\(slots))")
         }
         return try ["RECURSIVE " + signatures.joined(separator: ", ")] + functions.enumerated().map { index, function in
             let name = try resolvedFunctionName(.init(ordinal: index))
-            let parameters = try function.parameters.map { try binderName($0.binder) }.joined(separator: ", ")
-            let body = try state(function.body)
-            let value = try function.domainGuard.map { "CASE \(try state($0)) -> (\(body))" } ?? body
+            let captures = try functionStateCaptures(.init(ordinal: index))
+            let names = try captures.map { try stateCaptureName($0) }
+            let substitutions = Dictionary(uniqueKeysWithValues: zip(captures, names))
+            let parameters = try (function.parameters.map { try binderName($0.binder) } + names).joined(separator: ", ")
+            let body = try state(function.body, stateNames: substitutions)
+            let value = try function.domainGuard.map { "CASE \(try state($0, stateNames: substitutions)) -> (\(body))" } ?? body
             return name + (parameters.isEmpty ? "" : "(\(parameters))") + " == " + value
         }
+    }
+
+    private func functionStateCaptures(_ id: ResolvedFunctionID) throws -> [VariableID] {
+        var pending = [id]
+        var visited: Set<ResolvedFunctionID> = []
+        var variables: Set<VariableID> = []
+        while let current = pending.popLast() {
+            guard visited.insert(current).inserted else { continue }
+            guard functions.indices.contains(current.ordinal) else { throw missing("resolved function", current.ordinal) }
+            let function = functions[current.ordinal]
+            var expressions = [function.body] + (function.domainGuard.map { [$0] } ?? [])
+            while let expression = expressions.popLast() {
+                switch expression.operation {
+                case .stateVariable(let variable): variables.insert(variable)
+                case .call(let callee): pending.append(callee)
+                default: break
+                }
+                expressions.append(contentsOf: expression.children)
+            }
+        }
+        return variables.sorted { $0.ordinal < $1.ordinal }
+    }
+
+    private func stateCaptureName(_ variable: VariableID) throws -> String {
+        let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
+            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+        var name = "__\(moduleName)_state\(variable.ordinal)"
+        while occupied.contains(name) { name += "_" }
+        return name
     }
 
     private func resolvedFunctionName(_ id: ResolvedFunctionID) throws -> String {
@@ -93,6 +141,14 @@ struct CompiledTLARenderer {
             }
         }
         return parts.joined()
+    }
+
+    func temporal(_ property: CompiledTemporal<CompiledStateQuery>) throws -> String {
+        var result = try temporal(property.expression)
+        for binding in property.bindings.reversed() {
+            result = "(\\A \(try binderName(binding.binder)) \\in \(try state(binding.domain)): \(result))"
+        }
+        return result
     }
 
     func temporal(
@@ -182,7 +238,7 @@ struct CompiledTLARenderer {
         return "\(layout.namespace) == INSTANCE \(layout.moduleName)\(withClause)"
     }
 
-    func state(_ expression: CompiledExpression) throws -> String {
+    func state(_ expression: CompiledExpression, stateNames: [VariableID: String] = [:]) throws -> String {
         var tasks = [StateRenderingTask.expression(expression)]
         var parts: [String] = []
 
@@ -244,7 +300,7 @@ struct CompiledTLARenderer {
                     tasks.append(.checkedView(shape, start: parts.count))
                     tasks.append(.expression(value))
                 case .value(let value): parts.append(try value.rendered(using: layout).description)
-                case .stateVariable(let variable): parts.append(try variableName(variable))
+                case .stateVariable(let variable): parts.append(try stateNames[variable] ?? variableName(variable))
                 case .boundValue(let binder): parts.append(try binderName(binder))
                 case .controlLocation(let location): parts.append(try controlLocationName(location))
                 case .operatorReference(let operation): parts.append(try operatorName(operation))
@@ -257,12 +313,17 @@ struct CompiledTLARenderer {
                         throw missing("resolved function arguments", id.ordinal)
                     }
                     parts.append(name)
-                    if !expression.children.isEmpty {
+                    let captures = try functionStateCaptures(id)
+                    if !expression.children.isEmpty || !captures.isEmpty {
                         parts.append("(")
                         var arguments: [StateRenderingTask] = []
                         for (index, child) in expression.children.enumerated() {
                             if index > 0 { arguments.append(.text(", ")) }
                             arguments.append(.expression(child))
+                        }
+                        for variable in captures {
+                            if !arguments.isEmpty { arguments.append(.text(", ")) }
+                            arguments.append(.text(try stateNames[variable] ?? variableName(variable)))
                         }
                         arguments.append(.text(")"))
                         schedule(arguments)

@@ -83,6 +83,19 @@ enum AlgorithmLowerer {
             guard case .temporal(let temporal) = component else { return nil }
             return temporal
         }
+        let processTemporal = processes.flatMap { process -> [NamedTemporal] in
+            let localRoots = Set(process.components.compactMap { component -> String? in
+                guard case .local(let state) = component else { return nil }
+                return state.root
+            })
+            return process.components.compactMap { component -> NamedTemporal? in
+                guard case .temporal(let temporal) = component else { return nil }
+                return NamedTemporal(name: temporal.name,
+                    expr: temporal.expr.map { rewrite($0, localRoots: localRoots) },
+                    bindings: [ActionBinding(name: processBinding.rawValue, domain: process.domain,
+                        generatedSwiftType: process.typeName)])
+            }
+        }
         let declaredConstraint = algorithm.components.compactMap { component -> StateExpr? in
             guard case .stateConstraint(let constraint) = component else { return nil }
             return constraint
@@ -325,7 +338,7 @@ enum AlgorithmLowerer {
             actions: actions,
             invariants: declaredInvariants + processInvariants
                 + compilerOwnedAssertionInvariants(generatedAssertionInvariants),
-            temporalProperties: declaredTemporal,
+            temporalProperties: declaredTemporal + processTemporal,
             fairness: fairness,
             constraint: declaredConstraint,
             formalOperatorDefinitions: resolvedFormalOperators,

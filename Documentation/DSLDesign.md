@@ -257,6 +257,43 @@ and TLA+ export; it is not a runtime scheduling mechanism.
 
 Fairness belongs to behavior because it changes allowed executions.
 
+### Temporal claims for each process member
+
+A temporal declaration inside `Each` applies separately to every member of that
+process population. Its predicate can reference the member and process-local state.
+The population must depend only on constants or immutable model parameters.
+
+```swift
+Each(members, fairness: .weak) { member in
+    While(Step.toggle, true) {
+        Assign(value, to: 1 - value)
+    }
+    AlwaysEventually("EachRecurs", value == member)
+}
+```
+
+This claim means `\A member \in members: []<>(value = member)`.
+It does not require all members to satisfy the predicate simultaneously.
+An empty population satisfies the claim after complete exploration.
+The declaration produces one property result, with a counterexample if any member fails.
+Fairness remains explicit and independent of the claim.
+
+The compiler retains typed member bindings through native generation and TLA+ export.
+Generated predicates capture native member values. They do not invoke an expression interpreter.
+References to process-scoped property handles from outer validation declarations remain
+part of the unresolved B-02 and B-04 contract.
+
+### Configured authored PlusCal export
+
+Generated TLA+ and authored PlusCal exports use the same resolved typed model and scenario configuration.
+Model parameters remain symbolic constants in both exports.
+The compiler retains typed process bindings, local initializers, procedure arguments, and statement expressions until rendering.
+
+The renderer gives state-dependent helpers explicit state arguments, including transitive dependencies through recursive calls and domain guards.
+This keeps helper declarations independent of the placement of translated PlusCal variables.
+An unsupported export reports a diagnostic. It does not recompile the source or use an interpreter.
+Hosted translation and complete graph comparison remain required evidence for export equivalence.
+
 ### Interchangeable members: explicit declaration required
 
 The checker must treat collection members as distinct unless the author explicitly
@@ -493,7 +530,7 @@ cannot excuse an unavailable result or incomplete graph.
 
 The runner uses rendered check metadata without compiling the specification again.
 Temporal and refinement declarations remain distinct until TLC configuration output.
-The hosted `tlc-validate scenarios run --output <directory>` command derives Counter
+The hosted `tlc-validate scenarios run --output <directory>` command derives registered model
 runs from those declarations. It retains complete native and TLC graphs, property
 results, expectations, and comparison failures. Missing or disagreeing results fail
 the run. The finite-graph workflow includes this command.

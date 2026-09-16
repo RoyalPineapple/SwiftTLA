@@ -889,6 +889,9 @@ extension ParserSession {
         case .invariant:
             guard let invariant = parseAlgorithmInvariant(call, scope: scope) else { return nil }
             return .invariant(invariant)
+        case .leadsTo, .eventually, .always, .alwaysEventually, .eventuallyAlways:
+            guard let temporal = parseAlgorithmTemporal(call, construct: construct, scope: scope) else { return nil }
+            return .temporal(temporal)
         default:
             return nil
         }

@@ -140,7 +140,7 @@ extension TLASpec {
             actions: actions.map { $0.substitutingVariables(parameters) },
             invariants: invariants.map { .init(name: $0.name, body: state($0.body)) },
             reachabilityProperties: reachabilityProperties.map { .init(name: $0.name, body: state($0.body)) },
-            temporalProperties: temporalProperties.map { .init(name: $0.name, expr: $0.expr.map(state)) },
+            temporalProperties: temporalProperties.map { $0.substitutingVariables(parameters) },
             fairness: fairness, assume: assume.map(state), checkDeadlock: checkDeadlock,
             extendsModules: extendsModules, constraint: constraint.map(state),
             recursiveFuncs: recursiveFuncs.map { $0.substitutingVariables(parameters) },

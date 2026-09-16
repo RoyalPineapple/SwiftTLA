@@ -219,6 +219,17 @@ extension CompiledModuleMetadata {
     declarations: RenderedModule
   ) throws -> AuthoredPlusCalModule {
     let declarationSections = authoredPlusCalDeclarationSections(order: declarationOrder, declarations: declarations)
+    return try authoredPlusCalModule(algorithm: plusCalAlgorithm, layout: layout, declarations: declarations,
+      prelude: declarationSections.prelude, define: declarationSections.define,
+      postTranslation: declarationSections.postTranslation)
+  }
+
+  func authoredPlusCalModule(
+    algorithm plusCalAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan,
+    layout: CompiledLayout, declarations: RenderedModule,
+    prelude: [String], define: [String], postTranslation: [String],
+    parameterNames: [String] = [], requiredModules: Set<StandardModule> = []
+  ) throws -> AuthoredPlusCalModule {
     let sourcePropertyIDs = plusCalAlgorithm.properties.map(\.id)
     let sourceProperties = Set(sourcePropertyIDs)
     let propertyIDs = sourcePropertyIDs + (layout.stateProperties + layout.temporalProperties)
@@ -231,17 +242,17 @@ extension CompiledModuleMetadata {
       }
       return definition
     }
-    let postTranslationDeclarations = declarationSections.postTranslation
+    let postTranslationDeclarations = postTranslation
       + (declarations.constraint.map { [$0] } ?? [])
       + renderedProperties
       + authoredPlusCalSymmetry
     let module = AuthoredPlusCalModule(
       name: name,
-      extendsModules: authoredPlusCalExtends,
-      constants: constantDeclaration(including: []).map { [$0] } ?? [],
-      preludeDeclarations: declarationSections.prelude,
+      extendsModules: authoredPlusCalExtends + requiredModules.map(\.rawValue).sorted().filter { !authoredPlusCalExtends.contains($0) },
+      constants: constantDeclaration(including: parameterNames).map { [$0] } ?? [],
+      preludeDeclarations: prelude,
       algorithm: plusCalAlgorithm,
-      defineDeclarations: declarationSections.define,
+      defineDeclarations: define,
       postTranslationDeclarations: postTranslationDeclarations,
       refinements: declarations.refinements
     )

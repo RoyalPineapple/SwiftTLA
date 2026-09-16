@@ -35,7 +35,9 @@ package struct CompiledBehavior: Sendable {
             invariants: invariants.map { try $0.map(transform) },
             reachabilityProperties: reachabilityProperties.map { try $0.map(transform) },
             temporalProperties: temporalProperties.map { property in
-                try property.map { try $0.map(transform) }
+                try .init(id: property.id, name: property.name,
+                    expression: property.expression.map { try $0.map(transform) },
+                    bindings: property.bindings.map { try $0.map(transform) })
             },
             fairness: fairness,
             constraint: constraint.map { try $0.map(transform) },

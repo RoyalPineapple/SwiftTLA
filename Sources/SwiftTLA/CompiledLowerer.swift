@@ -184,16 +184,12 @@ struct CompiledLowerer {
                     at: "\($0.1.declaration.kind == .invariant ? "invariants" : "reachabilityProperties").\($0.0.name).body", scope: rootScope)
             )
         }
-        let temporalBodies = try zip(spec.temporalProperties, layout.temporalProperties).map {
-            CompiledTemporal<CompiledExpression>(
-                id: $0.1.id,
-                name: $0.0.name,
-                expression: try lower(
-                    $0.0.expr,
-                    at: "temporalProperties.\($0.0.name)",
-                    scope: rootScope
-                )
-            )
+        let temporalBodies = try zip(spec.temporalProperties, layout.temporalProperties).map { property, declaration in
+            var scope = rootScope
+            let path = "temporalProperties.\(property.name)"
+            let bindings = try lowerBindings(property.bindings, at: path, scope: &scope)
+            return CompiledTemporal<CompiledExpression>(id: declaration.id, name: property.name,
+                expression: try lower(property.expr, at: path, scope: scope), bindings: bindings)
         }
         let fairness = try spec.fairness.enumerated().map { offset, condition in
             try lower(condition, actions: actionsByID, at: "fairness[\(offset)]")
@@ -323,7 +319,18 @@ struct CompiledLowerer {
         let stateProperties = statePropertyBodies.map { property in
             CompiledStatePredicate(id: property.id, name: property.name, predicate: predicate(property.body))
         }
-        let temporalProperties = temporalBodies.map { $0.map(predicate) }
+        let temporalProperties = try temporalBodies.map { property in
+            for binding in property.bindings {
+                let requirements = binding.domain.stateRequirements(operators: operators)
+                guard requirements.variables.isEmpty && !requirements.requiresCompleteState else {
+                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .binding,
+                        path: "temporalProperties.\(property.name).bindings.\(binding.sourceName)",
+                        expected: "a state-independent temporal domain", actual: "a domain that reads state or enabledness",
+                        nextSafeAction: "Use a constant or configured population for a temporal quantifier.")
+                }
+            }
+            return property.map(predicate)
+        }
         let constraintExpression = try lowerOptional(spec.constraint, at: "constraint", scope: rootScope)
         let constraint = constraintExpression.map(predicate)
         let scenarios = try lowerValidationScenarios(spec)
@@ -452,6 +459,9 @@ struct CompiledLowerer {
                     parameters: try procedure.parameters.map {
                         try bound($0.root, in: scope, at: "\(path).parameters")
                     },
+                    parameterVariables: try procedure.parameters.map {
+                        try variable(named: $0.root, at: "\(path).parameters")
+                    },
                     locals: try procedure.locals.enumerated().map {
                         try authoredPlusCalState($0.element, at: "\(path).locals[\($0.offset)]", scope: scope)
                     },
@@ -484,6 +494,8 @@ struct CompiledLowerer {
                 }
                 return .init(
                     name: process.name,
+                    binder: try bound("self", in: scope, at: "\(path).binders"),
+                    swiftType: process.swiftType,
                     domain: domain,
                     fairness: process.fairness,
                     locals: try process.locals.enumerated().map {
@@ -924,22 +936,7 @@ struct CompiledLowerer {
             throw issue.compilationDiagnostic(stage: .binding, path: "actions.\(action.name).bindings")
         }
         var scope = rootScope
-        let bindings = try action.bindings.map {
-            let domain = try lower($0.domain,
-                at: "actions.\(action.name).bindings.\($0.name).domain", scope: scope)
-            let binder = try allocateBinder(
-                $0.name,
-                in: scope,
-                at: "actions.\(action.name).bindings.\($0.name)"
-            )
-            scope.values[$0.name] = binder
-            return CompiledActionBinding(
-                binder: binder,
-                sourceName: $0.name,
-                domain: domain,
-                generatedSwiftType: $0.generatedSwiftType
-            )
-        }
+        let bindings = try lowerBindings(action.bindings, at: "actions.\(action.name)", scope: &scope)
         let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope)
         if bindings.isEmpty,
            case .existsAction(let sourceMember, _, _) = action.body,
@@ -968,6 +965,17 @@ struct CompiledLowerer {
             body: body,
             collection: nil
         )
+    }
+
+    private mutating func lowerBindings(_ bindings: [ActionBinding], at path: String,
+                                       scope: inout BindingScope) throws -> [CompiledActionBinding] {
+        try bindings.map { binding in
+            let domain = try lower(binding.domain, at: "\(path).bindings.\(binding.name).domain", scope: scope)
+            let binder = try allocateBinder(binding.name, in: scope, at: "\(path).bindings.\(binding.name)")
+            scope.values[binding.name] = binder
+            return CompiledActionBinding(binder: binder, sourceName: binding.name,
+                domain: domain, generatedSwiftType: binding.generatedSwiftType)
+        }
     }
 
     private func accepts(_ arguments: [CompiledValue], for action: CompiledAction) -> Bool {
