@@ -141,11 +141,22 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
             return .init(status: .unavailable, reason: .unknownAction)
         }
 
+        if case .all(let conditions) = property {
+            for condition in conditions {
+                let result = try analyze(condition, initialStates: initialStates,
+                    isComplete: isComplete, renderScope: renderScope)
+                if result.status != .satisfied { return result }
+            }
+            return try analyze(.always { _ in true }, initialStates: initialStates,
+                isComplete: isComplete, renderScope: renderScope)
+        }
+
         let predicate: @Sendable (State) throws -> Bool
         switch property {
         case .always(let value), .eventually(let value), .alwaysEventually(let value), .eventuallyAlways(let value):
             predicate = value
         case .leadsTo(_, let target): predicate = target
+        case .all: preconditionFailure("Conjunctions are checked before atomic temporal conditions")
         }
         let negative = try states.filter { try !predicate($0) }
         let allStates = states
@@ -165,6 +176,7 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
                 try trigger(state) ? state : nil
             }).intersection(negative)
             search = .init(cycleStates: negative, prefixStates: triggers, prefixContinuationStates: negative)
+        case .all: preconditionFailure("Conjunctions are checked before atomic temporal conditions")
         }
 
         let components = fairComponents(in: search.cycleStates, fairness: fairness, enabled: enabled)

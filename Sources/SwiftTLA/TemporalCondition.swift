@@ -5,11 +5,13 @@ public enum TemporalCondition<Expression: Sendable>: Sendable {
     case alwaysEventually(Expression)
     case eventuallyAlways(Expression)
     case leadsTo(Expression, Expression)
+    case all([Self])
 
     public var predicates: [Expression] {
         switch self {
         case .always(let value), .eventually(let value), .alwaysEventually(let value), .eventuallyAlways(let value): [value]
         case .leadsTo(let source, let target): [source, target]
+        case .all(let conditions): conditions.flatMap(\.predicates)
         }
     }
 
@@ -22,6 +24,7 @@ public enum TemporalCondition<Expression: Sendable>: Sendable {
         case .alwaysEventually(let predicate): .alwaysEventually(try transform(predicate))
         case .eventuallyAlways(let predicate): .eventuallyAlways(try transform(predicate))
         case .leadsTo(let source, let target): .leadsTo(try transform(source), try transform(target))
+        case .all(let conditions): .all(try conditions.map { try $0.map(transform) })
         }
     }
 }
@@ -37,6 +40,7 @@ extension TemporalCondition: CustomStringConvertible where Expression: CustomStr
         case .alwaysEventually(let predicate): "[]<>(\(predicate))"
         case .eventuallyAlways(let predicate): "<>[](\(predicate))"
         case .leadsTo(let source, let target): "(\(source) ~> \(target))"
+        case .all(let conditions): conditions.isEmpty ? "TRUE" : "(" + conditions.map(\.description).joined(separator: " /\\ ") + ")"
         }
     }
 }

@@ -86,15 +86,16 @@ extension CompiledSpecification {
                 }
             }
         }
-        return try semantics.behavior.temporalProperties.map { property in
-            let expression: TemporalCondition<@Sendable (StateGraph.StateID) throws -> Bool>
-            if case .leadsTo(let trigger, let target) = property.expression {
-                expression = .leadsTo(predicate(trigger, isTrigger: true), predicate(target))
-            } else {
-                expression = property.expression.map { predicate($0) }
+        func predicates(_ source: TemporalCondition<CompiledStateQuery>) -> TemporalCondition<@Sendable (StateGraph.StateID) throws -> Bool> {
+            switch source {
+            case .all(let conditions): return .all(conditions.map { predicates($0) })
+            case .leadsTo(let trigger, let target): return .leadsTo(predicate(trigger, isTrigger: true), predicate(target))
+            default: return source.map { predicate($0) }
             }
+        }
+        return try semantics.behavior.temporalProperties.map { property in
             return try checker.analyze(
-                expression,
+                predicates(property.expression),
                 initialStates: initialStateIDs, isComplete: isComplete,
                 renderScope: { scope in
                     switch scope {

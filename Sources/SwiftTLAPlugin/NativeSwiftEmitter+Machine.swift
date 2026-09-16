@@ -584,15 +584,17 @@ extension NativeSwiftEmitter {
                 let enabled = enabledActionsCall(query.enabledActions, state: "state", collectionArguments: arguments)
                 return "{ \(captureList)state in try Self.\(function)(in: state\(arguments), enabled: \(enabled)) }"
             }
-            let condition: String
-            switch predicates {
-            case .always(let predicate): condition = ".always(\(predicate))"
-            case .eventually(let predicate): condition = ".eventually(\(predicate))"
-            case .alwaysEventually(let predicate): condition = ".alwaysEventually(\(predicate))"
-            case .eventuallyAlways(let predicate): condition = ".eventuallyAlways(\(predicate))"
-            case .leadsTo(let source, let target): condition = ".leadsTo(\(source), \(target))"
+            func condition(_ value: TemporalCondition<String>) -> String {
+                switch value {
+                case .always(let predicate): ".always(\(predicate))"
+                case .eventually(let predicate): ".eventually(\(predicate))"
+                case .alwaysEventually(let predicate): ".alwaysEventually(\(predicate))"
+                case .eventuallyAlways(let predicate): ".eventuallyAlways(\(predicate))"
+                case .leadsTo(let source, let target): ".leadsTo(\(source), \(target))"
+                case .all(let conditions): ".all([\(conditions.map { condition($0) }.joined(separator: ", "))])"
+                }
             }
-            temporalProperties.append("\(String(reflecting: property.name)): \(condition)")
+            temporalProperties.append("\(String(reflecting: property.name)): \(condition(predicates))")
         }
         let propertyBody: String
         if let refinement = program.refinements.first(where: { !supportsNativeRefinement($0) })?.name {

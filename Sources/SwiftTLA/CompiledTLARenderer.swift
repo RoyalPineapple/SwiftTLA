@@ -104,6 +104,8 @@ struct CompiledTLARenderer {
         case .alwaysEventually(let predicate): return "[]<>\(try state(predicate.expression))"
         case .eventuallyAlways(let predicate): return "<>[]\(try state(predicate.expression))"
         case .leadsTo(let source, let target): return "(\(try state(source.expression)) ~> \(try state(target.expression)))"
+        case .all(let conditions):
+            return conditions.isEmpty ? "TRUE" : "(" + (try conditions.map { try temporal($0) }).joined(separator: " /\\ ") + ")"
         }
     }
 

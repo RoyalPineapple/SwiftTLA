@@ -1708,6 +1708,10 @@ struct CompiledLowerer {
                 try lower(from, at: "\(path).from", scope: scope),
                 try lower(to, at: "\(path).to", scope: scope)
             )
+        case .all(let conditions):
+            return .all(try conditions.enumerated().map {
+                try lower($0.element, at: "\(path).all[\($0.offset)]", scope: scope)
+            })
         }
     }
 

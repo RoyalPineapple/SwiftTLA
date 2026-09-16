@@ -68,6 +68,7 @@ func alphaKey(_ expression: TemporalCondition<StateExpr>) -> String {
     case .alwaysEventually(let state): return "alwaysEventually(\(alphaKey(state)))"
     case .eventuallyAlways(let state): return "eventuallyAlways(\(alphaKey(state)))"
     case .leadsTo(let from, let to): return "leadsTo(\(alphaKey(from)),\(alphaKey(to)))"
+    case .all(let conditions): return "all[" + conditions.map { alphaKey($0) }.joined(separator: ",") + "]"
     }
 }
 
