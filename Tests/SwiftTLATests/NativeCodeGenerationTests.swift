@@ -276,9 +276,10 @@ struct NativeCodeGenerationTests {
         var emitter = NativeSwiftEmitter(model: model)
         #expect(emitter.enabledActionIDs == [ready, advance])
         let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
-        #expect(generated.contains("func _enabledActions"))
+        #expect(!generated.contains("func _enabledActions"))
         for action in [ready, advance] {
-            #expect(generated.contains("required.contains(\(action.ordinal))"))
+            #expect(generated.contains("func _isEnabled\(action.ordinal)("))
+            #expect(generated.contains("try Self._isEnabled\(action.ordinal)(in: state)"))
             #expect(generated.contains("func _updates\(action.ordinal)("))
         }
         #expect(!Parser.parse(source: "struct Expansion {\n\(generated)\n}").hasError)
@@ -475,6 +476,7 @@ struct NativeCodeGenerationTests {
         #expect(generated.contains("switch action"))
         #expect(generated.contains("guard"))
         #expect(!generated.contains("func _enabledActions"))
+        #expect(!generated.contains("func _isEnabled"))
         #expect(!model.program.layout.actions.contains {
             $0.declaration.name == CompilerControlSymbol.terminatingAction.rawValue
         })

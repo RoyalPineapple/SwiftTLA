@@ -26,22 +26,11 @@ extension NativeSwiftEmitter {
                     }
                 }
                 """)
-                let collectionArguments = machineArguments.isEmpty ? "" : ", " + machineArguments
                 var values: [String] = []
                 for (offset, query) in refinement.variableMappings.enumerated() {
-                    let enabled = enabledActionsCall(query.enabledActions, state: "state", collectionArguments: collectionArguments)
                     let type = try swiftType(query.expression.resultType)
                     let value = try expression(query.expression)
-                    if query.enabledActions.isEmpty {
-                        values.append("let value\(offset): \(type) = \(value)")
-                    } else {
-                        values.append("""
-                        let value\(offset): \(type) = try { () throws -> \(type) in
-                            let enabled: Set<Int> = \(enabled)
-                            return \(value)
-                        }()
-                        """)
-                    }
+                    values.append("let value\(offset): \(type) = \(value)")
                 }
                 let arguments = abstractModel.api.variables.enumerated().map {
                     "\($0.element.argumentLabel): value\($0.offset)"

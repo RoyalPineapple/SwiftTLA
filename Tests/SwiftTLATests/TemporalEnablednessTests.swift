@@ -4,9 +4,9 @@ import Testing
 struct TemporalEnablednessTests {
     @Test("Temporal guards skip unused enabledness reads but demanded reads still fail")
     func respectsGuardEvaluation() throws {
-        let machine = try GuardedTemporalEnabledness.makeMachine()
+        let machine = try GuardedEnabledness.makeMachine()
         let properties = try machine.temporalProperties()
-        for property: GuardedTemporalEnabledness.Property in [.stutter, .guarded, .alternative] {
+        for property: GuardedEnabledness.Property in [.stutter, .guarded, .alternative, .transitive] {
             guard case .always(let predicate) = try #require(properties[property]) else {
                 Issue.record("Expected an always predicate")
                 continue

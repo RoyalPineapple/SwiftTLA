@@ -337,16 +337,10 @@ extension NativeSwiftEmitter {
             "\(binder($0.binder)): \(try swiftType(program.bindingTypes[$0.binder]!))"
         }.joined(separator: ", ")
         return DeclSyntax(stringLiteral: """
-        private static func _updates\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters), enabled: Set<Int>) throws -> [_Updates] {
+        private static func _updates\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters)) throws -> [_Updates] {
             \(try actionFunctions(action.body))
         }
         """)
-    }
-
-    func enabledActionsCall(_ dependencies: Set<ActionID>, state: String, collectionArguments: String) -> String {
-        guard !dependencies.isEmpty else { return "[]" }
-        let identifiers = dependencies.map(\.ordinal).sorted().map(String.init).joined(separator: ", ")
-        return "try Self._enabledActions(in: \(state)\(collectionArguments), required: [\(identifiers)])"
     }
 
     mutating func actionDomain(_ binding: CompiledActionBinding, state: String) throws -> String {
@@ -358,7 +352,7 @@ extension NativeSwiftEmitter {
 
     mutating func enabledDeclarations(collectionParameters: String, collectionArguments: String) throws -> [DeclSyntax] {
         guard !enabledActionIDs.isEmpty else { return [] }
-        var checks = ""
+        var declarations: [DeclSyntax] = []
         for index in program.behavior.enabledActionIndices {
             let action = program.behavior.actions[index]
             guard enabledActionIDs.contains(action.id) else { continue }
@@ -367,18 +361,21 @@ extension NativeSwiftEmitter {
             var arguments: [String] = []
             for binding in action.bindings {
                 let name = binder(binding.binder)
-                let domain = try actionDomain(binding, state: "state")
+                let domain = try actionDomain(binding, state: "state.")
                 loops += "for \(name) in \(domain) {\n"
                 closing += "}\n"
                 arguments.append("\(name): \(name)")
             }
-            checks += "if required.contains(\(action.id.ordinal)) {\n" + loops + "if try !_updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(collectionArguments), enabled: result).isEmpty { result.insert(\(action.id.ordinal)) }\n" + closing + "}\n"
+            declarations += try nativeDeclarations("""
+            private static func _isEnabled\(action.id.ordinal)(in state: Snapshot\(collectionParameters)) throws -> Bool {
+                \(loops)
+                if try !_updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(collectionArguments)).isEmpty { return true }
+                \(closing)
+                return false
+            }
+            """)
         }
-        return try nativeDeclarations("""
-        private static func _enabledActions(in state: Snapshot\(collectionParameters), required: Set<Int>) throws -> Set<Int> {
-            \(checks.isEmpty ? "return []" : "var result: Set<Int> = []\n" + checks + "\nreturn result")
-        }
-        """)
+        return declarations
     }
 
     func successorFunction(_ action: CompiledAction, api: GeneratedMachineAPI.Action, collectionParameters: String, collectionArguments: String) throws -> DeclSyntax {
@@ -387,8 +384,8 @@ extension NativeSwiftEmitter {
         }.joined(separator: ", ")
         let arguments = action.bindings.map { "\(binder($0.binder)): \(binder($0.binder))" }.joined(separator: ", ")
         return DeclSyntax(stringLiteral: """
-        private static func _successors\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters), enabled: Set<Int>) throws -> [Snapshot] {
-            let updates = try _updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(collectionArguments), enabled: enabled)
+        private static func _successors\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters)) throws -> [Snapshot] {
+            let updates = try _updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(collectionArguments))
             let candidates = updates.map { $0.applying(to: state) }
             return candidates.reduce(into: [Snapshot]()) { states, state in
                 if !states.contains(state) { states.append(state) }
@@ -426,7 +423,7 @@ extension NativeSwiftEmitter {
                     pattern.append("member: let \(name)")
                     actionArguments.append("member: \(name)")
                 } else {
-                    domain = try actionDomain(binding, state: "_execution")
+                    domain = try actionDomain(binding, state: "_execution.")
                     if apiBinding.isPublic {
                         pattern.append("\(apiBinding.swiftIdentifier): let \(name)")
                         actionArguments.append("\(apiBinding.swiftIdentifier): \(name)")
@@ -466,12 +463,10 @@ extension NativeSwiftEmitter {
             let label = ".\(api.swiftIdentifier)" + (pattern.isEmpty ? "" : "(\(pattern.joined(separator: ", ")))")
             let formalName = program.layout.actions[action.id.ordinal].renderedName
             formalCases.append("case \(label): return FormalActionCall(name: \(String(reflecting: formalName)), arguments: [\(formalArguments.joined(separator: ", "))])")
-            let enabled = enabledActionsCall(program.behavior.enabledActionDependencies[action.id] ?? [],
-                state: "_execution", collectionArguments: collectionArguments)
             cases.append("""
             case \(label):
                 \(validations.joined(separator: "\n"))
-                return try Self._successors\(action.id.ordinal)(from: _execution\(invocation.isEmpty ? "" : ", " + invocation.joined(separator: ", "))\(collectionArguments), enabled: \(enabled))
+                return try Self._successors\(action.id.ordinal)(from: _execution\(invocation.isEmpty ? "" : ", " + invocation.joined(separator: ", "))\(collectionArguments))
             """)
             let actionValue = ".\(api.swiftIdentifier)" + (actionArguments.isEmpty ? "" : "(\(actionArguments.joined(separator: ", ")))")
             enumeration.append("do {\n" + loops + "result.append(\(actionValue))\n" + closing + "}\n")
@@ -527,13 +522,12 @@ extension NativeSwiftEmitter {
         var checks: [String] = []
         declarations += try nativeDeclarations("public static var checksDeadlock: Bool { \(program.behavior.checkDeadlock) }")
         if let constraint = program.behavior.constraint {
-            let enabled = enabledActionsCall(constraint.enabledActions, state: "_execution", collectionArguments: arguments)
             declarations += try nativeDeclarations("""
-            private static func _constraintHolds(in state: Snapshot\(collectionParameters), enabled: Set<Int>) throws -> Bool {
+            private static func _constraintHolds(in state: Snapshot\(collectionParameters)) throws -> Bool {
                 \(try expression(constraint.expression))
             }
             public func satisfiesStateConstraint() throws -> Bool {
-                try Self._constraintHolds(in: _execution\(arguments), enabled: \(enabled))
+                try Self._constraintHolds(in: _execution\(arguments))
             }
             """)
         } else {
@@ -541,12 +535,11 @@ extension NativeSwiftEmitter {
         }
         for invariant in program.behavior.invariants {
             declarations += try nativeDeclarations("""
-            private static func _invariant\(invariant.id.ordinal)(in state: Snapshot\(collectionParameters), enabled: Set<Int>) throws -> Bool {
+            private static func _invariant\(invariant.id.ordinal)(in state: Snapshot\(collectionParameters)) throws -> Bool {
                 \(try expression(invariant.predicate.expression))
             }
             """)
-            let enabled = enabledActionsCall(invariant.predicate.enabledActions, state: "_execution", collectionArguments: arguments)
-            checks.append("if checking.contains(.\(propertyCases[invariant.id]!)), try !Self._invariant\(invariant.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(.\(propertyCases[invariant.id]!)) }")
+            checks.append("if checking.contains(.\(propertyCases[invariant.id]!)), try !Self._invariant\(invariant.id.ordinal)(in: _execution\(arguments)) { result.append(.\(propertyCases[invariant.id]!)) }")
         }
         declarations += try nativeDeclarations("""
         public func violatedInvariants(checking: Set<Property> = Set(Property.allCases)) throws -> [Property] {
@@ -556,12 +549,11 @@ extension NativeSwiftEmitter {
         var reachabilityChecks: [String] = []
         for property in program.behavior.reachabilityProperties {
             declarations += try nativeDeclarations("""
-            private static func _reachable\(property.id.ordinal)(in state: Snapshot\(collectionParameters), enabled: Set<Int>) throws -> Bool {
+            private static func _reachable\(property.id.ordinal)(in state: Snapshot\(collectionParameters)) throws -> Bool {
                 \(try expression(property.predicate.expression))
             }
             """)
-            let enabled = enabledActionsCall(property.predicate.enabledActions, state: "_execution", collectionArguments: arguments)
-            reachabilityChecks.append("if checking.contains(.\(propertyCases[property.id]!)), try Self._reachable\(property.id.ordinal)(in: _execution\(arguments), enabled: \(enabled)) { result.append(.\(propertyCases[property.id]!)) }")
+            reachabilityChecks.append("if checking.contains(.\(propertyCases[property.id]!)), try Self._reachable\(property.id.ordinal)(in: _execution\(arguments)) { result.append(.\(propertyCases[property.id]!)) }")
         }
         declarations += try nativeDeclarations("""
         public static var reachabilityProperties: [Property] { [\(program.behavior.reachabilityProperties.map { ".\(propertyCases[$0.id]!)" }.joined(separator: ", "))] }
@@ -586,7 +578,7 @@ extension NativeSwiftEmitter {
                 index += 1
                 declarations += try nativeDeclarations("""
                 private static func \(function)(in state: Snapshot, nextState: Snapshot\(collectionParameters)\(boundParameters)) throws -> Bool {
-                    \(try temporalExpression(query.expression, collectionArguments: arguments))
+                    \(try expression(query.expression))
                 }
                 """)
                 return "{ \(propertyCaptureList)state, nextState in try Self.\(function)(in: state, nextState: nextState\(arguments)\(boundArguments)) }"
@@ -690,11 +682,11 @@ extension NativeSwiftEmitter {
         """)
         if let assume = program.behavior.assume {
             declarations += try nativeDeclarations("""
-            private static func _assumptionsHold(in state: Snapshot\(collectionParameters), enabled: Set<Int>) throws -> Bool {
+            private static func _assumptionsHold(in state: Snapshot\(collectionParameters)) throws -> Bool {
                 \(try expression(assume.expression))
             }
             public func assumptionsHold() throws -> Bool {
-                try Self._assumptionsHold(in: _execution\(arguments), enabled: [])
+                try Self._assumptionsHold(in: _execution\(arguments))
             }
             """)
         } else {
