@@ -475,6 +475,7 @@
     {
       "id": "majority",
       "sourceModel": "majority",
+      "scenario": "MCMajority",
       "module": "majority/MCMajority.tla",
       "configuration": "majority/MCMajority.cfg",
       "imports": [

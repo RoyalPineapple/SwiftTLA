@@ -22,6 +22,7 @@ package func modelValidationScenarios() throws -> [(id: String, scenario: any Mo
         ("die-harder", try DieHarderModel.validationScenarios()),
         ("channel", try ChannelModel.validationScenarios()),
         ("asynch-interface", try AsynchInterfaceModel.validationScenarios()),
+        ("majority", try MajorityModel.validationScenarios()),
         ("hour-clock", try HourClockModel.validationScenarios()),
         ("hour-clock-2", try HourClock2Model.validationScenarios()),
         ("least-circular-substring", try LeastCircularSubstringModel.validationScenarios()),
