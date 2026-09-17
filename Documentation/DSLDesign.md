@@ -759,6 +759,11 @@ A nonempty domain with an empty range has no functions.
 The compiler preserves parameter identities through native generation and TLA+ export.
 Dictionary projections reject invalid keys, invalid values, and collisions between Swift and formal key identities.
 
+Dictionary expressions expose `.keys` as a typed set. An empty dictionary has an empty key set.
+Native generation and TLA+ export preserve the key type and domain expression.
+`ForAll(in:)` and `Exists(in:)` accept typed Swift sets and retain their element types.
+`Assume` and `Constraint` resolve parameter and state handles in their declaration scope.
+
 `Functions(from: 1, to: Set<Int>([0, 1]))` is invalid because its domain is not a set.
 Finite enum domains retain the existing `Functions(from: Key.all, to: ...)` contract.
 

@@ -779,7 +779,7 @@ extension ParserSession {
             parseStateProperty(call, into: &components, reachability: true)
         case "Constraint", "Assume":
             if call.arguments.count == 1, let argument = call.arguments.first,
-               let expression = decodeStateExpr(argument.expression) {
+               let expression = decodeTypedFacadeValue(argument.expression, scope: sourceScope) {
                 if name == "Assume" {
                     components.assume = components.assume.map { .and($0, expression) } ?? expression
                 } else {

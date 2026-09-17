@@ -2,6 +2,40 @@
   "schema": "FiniteGraphCases",
   "cases": [
     {
+      "id": "mc-die-harder",
+      "sourceModel": "die-harder",
+      "scenario": "MCDieHarder",
+      "module": "die-harder/MCDieHarder.tla",
+      "configuration": "die-harder/MCDieHarder.cfg",
+      "imports": ["die-harder/DieHarder.tla"],
+      "dependencies": [{"importingModule": "MCDieHarder", "importedModule": "DieHarder"}],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/DieHard/MCDieHarder.tla",
+        "sha256": "0c45536b4116e80a3736af5a968d5df43653eb54809567bcdcf4e2ca3d54a324"
+      },
+      "exploration": {"maximumStateLimit": 100000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "0c45536b4116e80a3736af5a968d5df43653eb54809567bcdcf4e2ca3d54a324",
+      "cfgSHA256": "2aaf747d6566dc2c8ffb2d17caacc7c9cf64cd8faa623f8b312e9078ed72a557",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-die-harder",
+      "sourceModel": "die-harder",
+      "scenario": "APDieHarder",
+      "module": "die-harder/APDieHarder.tla",
+      "configuration": "die-harder/APDieHarder.cfg",
+      "imports": ["die-harder/DieHarder.tla"],
+      "dependencies": [{"importingModule": "APDieHarder", "importedModule": "DieHarder"}],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/DieHard/APDieHarder.tla",
+        "sha256": "13717bfa8f60570945a471643dc201d3d359225f71d0613bdf6190f059d557ee"
+      },
+      "exploration": {"maximumStateLimit": 100000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "13717bfa8f60570945a471643dc201d3d359225f71d0613bdf6190f059d557ee",
+      "cfgSHA256": "8a155aefb3af798525d9cf2c6f289b121211d6ba5de893d926b55a8d1b61a591",
+      "timeoutSeconds": 60
+    },
+    {
       "id": "least-circular-substring-small",
       "sourceModel": "least-circular-substring",
       "scenario": "Small",

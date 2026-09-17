@@ -960,6 +960,9 @@ final class ParserSession {
             }
             switch member.declName.baseName.sourceIdentifierName {
             case "raw", "stateExpr", "expr": return base
+            case "keys":
+                guard case .dictionary = typedFacadeValueType(baseSyntax, scope: scope) else { return nil }
+                return .domain(base)
             case "count":
                 switch typedFacadeValueType(baseSyntax, scope: scope) {
                 case .array: return .tupleLength(base)
@@ -1501,6 +1504,11 @@ final class ParserSession {
            let field = typedFacadeValueType(base, scope: scope)?.recordFields?.first(where: {
                $0.name == member.declName.baseName.sourceIdentifierName
            }) { return field.type }
+        if let member = expression.as(MemberAccessExprSyntax.self), let base = member.base,
+           member.declName.baseName.sourceIdentifierName == "keys",
+           case .dictionary(let key, _) = typedFacadeValueType(base, scope: scope) {
+            return .set(key)
+        }
         if let member = expression.as(MemberAccessExprSyntax.self),
            ["expr", "raw", "stateExpr"].contains(member.declName.baseName.sourceIdentifierName),
            let base = member.base {

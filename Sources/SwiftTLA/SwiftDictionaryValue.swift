@@ -1,3 +1,14 @@
+public protocol FormalDictionaryValue: TLAValueType {
+    associatedtype Key: TLAValueType & Hashable
+    associatedtype Value: TLAValueType
+}
+
+extension Dictionary: FormalDictionaryValue where Key: TLAValueType, Value: TLAValueType {}
+
+extension TypedExpression where ExpressionValue: FormalDictionaryValue {
+    public var keys: Expr<Set<ExpressionValue.Key>> { Expr(.domain(stateExpr)) }
+}
+
 extension Dictionary: TLAValueType, TLAValueConvertible, TypedExpression, StateExprConvertible
 where Key: TLAValueType, Value: TLAValueType {
     public static var defaultValue: Self { [:] }

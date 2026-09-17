@@ -287,6 +287,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
                 scenarios = try LeastCircularSubstringModel.validationScenarios()
             case .dieHard:
                 scenarios = try DieHardModel.validationScenarios()
+            case .dieHarder:
+                scenarios = try DieHarderModel.validationScenarios()
             default:
                 guard scenario == nil else {
                     throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
@@ -364,6 +366,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case hourClock2 = "hour-clock-2"
     case leastCircularSubstring = "least-circular-substring"
     case dieHard = "die-hard"
+    case dieHarder = "die-harder"
     case multiCarElevator = "multicar-elevator"
     case tlcmcGraph1 = "tlcmc-graph-1"
     case nQueensFour = "n-queens-four"
@@ -393,7 +396,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
         case .nQueensFour: return try explore(NQueensModel.initialMachines())
-        case .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard:
+        case .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
@@ -412,6 +415,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .hourClock2: HourClock2Model.spec
         case .leastCircularSubstring: LeastCircularSubstringModel.spec
         case .dieHard: DieHardModel.spec
+        case .dieHarder: DieHarderModel.spec
         case .multiCarElevator: MultiCarElevator.spec
         case .tlcmcGraph1: TLCMCModel.spec
         case .nQueensFour: NQueensModel.spec

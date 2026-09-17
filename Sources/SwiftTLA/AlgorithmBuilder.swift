@@ -1079,12 +1079,12 @@ public func Let<Value: TLAValueType>(
 /// Tests whether a bounded formal set has a member that satisfies `predicate`.
 ///
 /// This is the typed Swift spelling of TLA+ `\\E value \\in domain : predicate`.
-public func Exists<Value: TLAValueType, Predicate: TypedExpression<Bool>>(
-    in domain: some TypedExpression<SetExpr<Value>>,
+public func Exists<Domain: FormalSetValue, Predicate: TypedExpression<Bool>>(
+    in domain: some TypedExpression<Domain>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
-    where predicate: (WithValue<Value>) -> Predicate
+    where predicate: (WithValue<Domain.Element>) -> Predicate
 ) -> Expr<Bool> {
     let variable = generatedBinderName(file: file, line: line, column: column)
     return Expr(.exists(domain.stateExpr, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
@@ -1095,13 +1095,13 @@ public func Exists<Value: TLAValueType, Predicate: TypedExpression<Bool>>(
 /// This is the Swift spelling of nested TLA+ existential quantifiers. The
 /// nested AST preserves the same scope and short-circuit semantics as the
 /// source language's multi-binder form.
-public func Exists<First: TLAValueType, Second: TLAValueType, Predicate: TypedExpression<Bool>>(
-    in first: some TypedExpression<SetExpr<First>>,
-    and second: some TypedExpression<SetExpr<Second>>,
+public func Exists<First: FormalSetValue, Second: FormalSetValue, Predicate: TypedExpression<Bool>>(
+    in first: some TypedExpression<First>,
+    and second: some TypedExpression<Second>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
-    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate
+    where predicate: (WithValue<First.Element>, WithValue<Second.Element>) -> Predicate
 ) -> Expr<Bool> {
     Exists(in: first, file: file, line: line, column: column) { firstValue in
         Exists(in: second, file: file, line: line, column: column + 1) { secondValue in
@@ -1113,25 +1113,25 @@ public func Exists<First: TLAValueType, Second: TLAValueType, Predicate: TypedEx
 /// Tests whether every bounded formal set member satisfies `predicate`.
 ///
 /// This is the typed Swift spelling of TLA+ `\\A value \\in domain : predicate`.
-public func ForAll<Value: TLAValueType, Predicate: TypedExpression<Bool>>(
-    in domain: some TypedExpression<SetExpr<Value>>,
+public func ForAll<Domain: FormalSetValue, Predicate: TypedExpression<Bool>>(
+    in domain: some TypedExpression<Domain>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
-    where predicate: (WithValue<Value>) -> Predicate
+    where predicate: (WithValue<Domain.Element>) -> Predicate
 ) -> Expr<Bool> {
     let variable = generatedBinderName(file: file, line: line, column: column)
     return Expr(.forAll(domain.stateExpr, variable, predicate(WithValue(expression: .variable(variable))).stateExpr))
 }
 
 /// Tests a predicate for every pair of independently bound members.
-public func ForAll<First: TLAValueType, Second: TLAValueType, Predicate: TypedExpression<Bool>>(
-    in first: some TypedExpression<SetExpr<First>>,
-    and second: some TypedExpression<SetExpr<Second>>,
+public func ForAll<First: FormalSetValue, Second: FormalSetValue, Predicate: TypedExpression<Bool>>(
+    in first: some TypedExpression<First>,
+    and second: some TypedExpression<Second>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
-    where predicate: (WithValue<First>, WithValue<Second>) -> Predicate
+    where predicate: (WithValue<First.Element>, WithValue<Second.Element>) -> Predicate
 ) -> Expr<Bool> {
     ForAll(in: first, file: file, line: line, column: column) { firstValue in
         ForAll(in: second, file: file, line: line, column: column + 1) { secondValue in
