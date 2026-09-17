@@ -4,6 +4,23 @@ import Testing
 
 @Suite("Compiled specification rendering")
 struct CompiledSpecificationRendererTests {
+    @Test("Set syntax has the same deterministic ordering as set values without reordering tuples")
+    func canonicalSetSerialization() throws {
+        let compilation = try TLASpec(name: "Sets", variables: [], actions: [], invariants: []).compile()
+        let renderer = CompiledTLARenderer(moduleName: "Sets", reservedNames: [], layout: compilation.layout,
+            bindings: .init(), operators: compilation.semantics.operators, actions: [], functions: [])
+        let one = CompiledExpression.value(.integer(1))
+        let two = CompiledExpression.value(.integer(2))
+        let empty = CompiledExpression(operation: .setLiteral, children: [])
+        let pair = CompiledExpression(operation: .setLiteral, children: [two, one])
+        let nested = CompiledExpression(operation: .setLiteral, children: [empty, pair])
+        let value = CompiledExpression.value(.set([.set([]), .set([.integer(1), .integer(2)])]))
+        #expect(try renderer.state(nested) == renderer.state(value))
+        let tuple = CompiledExpression(operation: .tupleLiteral, children: [two, pair, one])
+        #expect(try renderer.state(tuple) == "<<2, {1, 2}, 1>>")
+        #expect(try renderer.state(empty) == "{}")
+    }
+
     @Test("Enabledness references use the resolved action declaration name")
     func rendersResolvedActionNames() throws {
         let compilation = try TLASpec(name: "ResolvedActionNames", variables: [

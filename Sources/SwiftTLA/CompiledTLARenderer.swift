@@ -1,5 +1,8 @@
 private enum StateRenderingTask {
     case expression(CompiledExpression)
+    case setMember(CompiledExpression)
+    case finishSetMember(start: Int)
+    case finishSet(start: Int)
     case checkedView(FormalValueShape, start: Int)
     case formalArgument(CompiledFormalCallArgument)
     case formalOperator(CompiledFormalOperator)
@@ -269,6 +272,15 @@ struct CompiledTLARenderer {
             switch task {
             case .text(let text):
                 parts.append(text)
+            case .setMember(let member):
+                tasks.append(.finishSetMember(start: parts.count))
+                tasks.append(.expression(member))
+            case .finishSetMember(let start):
+                let member = parts[start...].joined()
+                parts.replaceSubrange(start..., with: [member])
+            case .finishSet(let start):
+                let members = parts[start...].sorted().joined(separator: ", ")
+                parts.replaceSubrange(start..., with: ["{\(members)}"])
             case .formalArgument(let argument):
                 switch argument {
                 case .value(let value): tasks.append(.expression(value))
@@ -302,6 +314,9 @@ struct CompiledTLARenderer {
                 parts.append("(LET \(name) == \(operand) IN CASE \(shape.predicate(for: name)) -> \(name))")
             case .expression(let expression):
                 switch expression.operation {
+                case .setLiteral:
+                    tasks.append(.finishSet(start: parts.count))
+                    tasks.append(contentsOf: expression.children.reversed().map(StateRenderingTask.setMember))
                 case .assertView(let shape):
                     let value = expression.children[0]
 
@@ -397,7 +412,7 @@ struct CompiledTLARenderer {
                     rendered.append(.text("\nIN "))
                     rendered.append(.expression(body))
                     schedule(rendered)
-                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .sequenceSelect, .functionApply, .functionSet, .setSum, .integerRange, .negate, .not, .cardinality, .powerSet, .unionAll, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .ifThenElse, .setLiteral, .setFilter, .setMap, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
+                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .sequenceSelect, .functionApply, .functionSet, .setSum, .integerRange, .negate, .not, .cardinality, .powerSet, .unionAll, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .ifThenElse, .setFilter, .setMap, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
                     try schedule(expression.operation, expression.children)
 
                 }
