@@ -68,6 +68,34 @@ jobs:
       - name: Build the validator once for this revision
         run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
 
+      - name: Verify release CLI case selection without launching TLC
+        env:
+          FINITE_GRAPH_CASES: ${{ github.workspace }}/Verification/FiniteGraph/cases.json
+        run: |
+          while IFS= read -r case_id; do
+            expected=1
+            if [ "$case_id" = all ]; then
+              expected=$(jq '.cases | length' "$FINITE_GRAPH_CASES")
+            fi
+            if output=$(env -u FINITE_GRAPH_TOOL_ROOT -u FINITE_GRAPH_INPUT_ROOT \
+              .build/release/tlc-validate finite-graph run --case "$case_id" \
+              --output .build/selection-must-not-run 2>&1); then
+              echo "Case selection unexpectedly succeeded without TLC prerequisites: $case_id"
+              exit 1
+            fi
+            echo "$output"
+            echo "$output" | grep -F "finite-graph: selected $expected case(s) for $case_id"
+            echo "$output" | grep -F 'finite-graph is not set up: missing FINITE_GRAPH_TOOL_ROOT'
+          done < <(jq -r '"all", .cases[].id' "$FINITE_GRAPH_CASES")
+          if output=$(env -u FINITE_GRAPH_TOOL_ROOT -u FINITE_GRAPH_INPUT_ROOT \
+            .build/release/tlc-validate finite-graph run --case unknown-case \
+            --output .build/selection-must-not-run 2>&1); then
+            echo 'Unknown case unexpectedly succeeded'
+            exit 1
+          fi
+          echo "$output" | grep -F 'unknown finite-graph case: unknown-case'
+          test ! -e .build/selection-must-not-run
+
       - name: Upload validator
         uses: actions/upload-artifact@v6
         with:

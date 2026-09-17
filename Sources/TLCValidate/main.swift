@@ -112,13 +112,12 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         let environment = ProcessInfo.processInfo.environment
         let casesPath = try requiredEnvironment("FINITE_GRAPH_CASES", environment)
         let manifest = try decode(FiniteGraphManifest.self, at: URL(fileURLWithPath: casesPath))
-        let selected: [FiniteGraphManifest.Case]
-        if options.caseID == "all" {
-            selected = manifest.cases
-        } else if let declaration = manifest.cases.first(where: { $0.id == options.caseID }) {
-            selected = [declaration]
-        } else {
+        let selected = manifest.cases.filter { options.caseID == "all" || $0.id == options.caseID }
+        guard !selected.isEmpty else {
             throw FiniteGraphCLIError.unknownCase(options.caseID)
+        }
+        guard options.caseID == "all" || selected.count == 1 else {
+            throw FiniteGraphCLIError.invalidManifest("case selection is not unique")
         }
         fputs("finite-graph: selected \(selected.count) case(s) for \(options.caseID)\n", stderr)
         let preparedCases = try selected.map { declaration in
