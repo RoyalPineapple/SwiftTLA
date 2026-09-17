@@ -40,4 +40,20 @@ struct DependentRecordSetTests {
         #expect(try compiledValue(empty.stateExpr) == .set([]))
         #expect(try compiledValue(repeated.stateExpr) == .set([.int(0), .int(1), .int(2), .int(3)]))
     }
+
+    @Test("Swift set operators retain element types and nested lexical bindings")
+    func swiftSetOperators() throws {
+        let filtered: Expr<Set<Int>> = Set<Int>([0, 1, 2]).filtering { $0 > 0 }
+        let mapped = filtered.mapping { $0 * 2 }
+        let flattened: Expr<Set<Int>> = filtered.flatMapping { _ in Set<Int>([4, 5]) }
+        let empty: Expr<Set<Int>> = Set<Int>().flatMapping { _ in Set<Int>([4, 5]) }
+        let nested = Set<Int>([0, 1]).flatMapping { outer in
+            Set<Int>([0, 1]).mapping { inner in outer + inner }
+        }
+        #expect(try compiledValue(filtered.stateExpr) == .set([.int(1), .int(2)]))
+        #expect(try compiledValue(mapped.stateExpr) == .set([.int(2), .int(4)]))
+        #expect(try compiledValue(flattened.stateExpr) == .set([.int(4), .int(5)]))
+        #expect(try compiledValue(empty.stateExpr) == .set([]))
+        #expect(try compiledValue(nested.stateExpr) == .set([.int(0), .int(1), .int(2)]))
+    }
 }

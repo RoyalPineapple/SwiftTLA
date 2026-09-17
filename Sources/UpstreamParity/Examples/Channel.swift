@@ -22,14 +22,11 @@ package struct ChannelModel: Sendable {
     package static var spec: TLASpec {
         #spec("Channel") { scope in
             Extends(.naturals)
-            let chan = scope.sharedVar(in: Set<Channel>([
-                Channel(ack: 0, rdy: 0, val: Data.d1),
-                Channel(ack: 1, rdy: 1, val: Data.d1),
-                Channel(ack: 0, rdy: 0, val: Data.d2),
-                Channel(ack: 1, rdy: 1, val: Data.d2),
-                Channel(ack: 0, rdy: 0, val: Data.d3),
-                Channel(ack: 1, rdy: 1, val: Data.d3),
-            ]))
+            let chan = scope.sharedVar(in: Set<Data>([Data.d1, Data.d2, Data.d3]).flatMapping { value in
+                Set<Int>([0, 1]).mapping { bit in
+                    Channel.expression(ack: bit, rdy: bit, val: value)
+                }
+            })
             let TypeInvariant = Invariant()
 
             Do(Step.Send, over: Set<Data>([Data.d1, Data.d2, Data.d3])) { d in

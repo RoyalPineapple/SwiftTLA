@@ -992,35 +992,35 @@ public func IntRange(_ lower: Int, through upper: Int) -> Expr<SetExpr<Int>> {
   IntRange(Expr(lower), through: Expr(upper))
 }
 
-extension TypedExpression {
+extension TypedExpression where ExpressionValue: FormalSetValue {
   /// Selects formal set members that satisfy `predicate`.
-  public func filtering<Element: TLAValueType, Predicate: TypedExpression<Bool>>(
+  public func filtering<Predicate: TypedExpression<Bool>>(
     file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
-    _ predicate: (WithValue<Element>) -> Predicate
-  ) -> Expr<SetExpr<Element>> where ExpressionValue == SetExpr<Element> {
+    _ predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<ExpressionValue> {
     let binding = generatedBinderName(file: file, line: line, column: column)
-    let element = WithValue<Element>(expression: .variable(binding))
-    return Expr<SetExpr<Element>>(.setFilter(stateExpr, binding, predicate(element).stateExpr))
+    let element = WithValue<ExpressionValue.Element>(expression: .variable(binding))
+    return Expr(.setFilter(stateExpr, binding, predicate(element).stateExpr))
   }
 
   /// Maps every formal set member through a typed formal expression.
-  public func mapping<Element: TLAValueType, Result: TypedExpression>(
+  public func mapping<Result: TypedExpression>(
     file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
-    _ transform: (WithValue<Element>) -> Result
-  ) -> Expr<SetExpr<Result.ExpressionValue>> where ExpressionValue == SetExpr<Element> {
+    _ transform: (WithValue<ExpressionValue.Element>) -> Result
+  ) -> Expr<SetExpr<Result.ExpressionValue>> {
     let binding = generatedBinderName(file: file, line: line, column: column)
-    let element = WithValue<Element>(expression: .variable(binding))
+    let element = WithValue<ExpressionValue.Element>(expression: .variable(binding))
     return Expr<SetExpr<Result.ExpressionValue>>(.setMap(transform(element).stateExpr, binding, stateExpr))
   }
 
   /// Unions the formal sets produced by a typed expression for each member.
-  public func flatMapping<Element: TLAValueType, Output: TLAValueType, Result: TypedExpression<SetExpr<Output>>>(
+  public func flatMapping<Result: TypedExpression>(
     file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
-    _ transform: (WithValue<Element>) -> Result
-  ) -> Expr<SetExpr<Output>> where ExpressionValue == SetExpr<Element> {
+    _ transform: (WithValue<ExpressionValue.Element>) -> Result
+  ) -> Expr<Result.ExpressionValue> where Result.ExpressionValue: FormalSetValue {
     let binding = generatedBinderName(file: file, line: line, column: column)
-    let element = WithValue<Element>(expression: .variable(binding))
-    return Expr<SetExpr<Output>>(.unionAll(.setMap(transform(element).stateExpr, binding, stateExpr)))
+    let element = WithValue<ExpressionValue.Element>(expression: .variable(binding))
+    return Expr(.unionAll(.setMap(transform(element).stateExpr, binding, stateExpr)))
   }
 }
 

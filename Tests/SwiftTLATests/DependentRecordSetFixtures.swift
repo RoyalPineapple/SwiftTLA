@@ -9,7 +9,9 @@ struct DependentRecordSetModel {
     static var spec: TLASpec {
         #spec("DependentRecordSetModel") { scope in
             let maximum = scope.parameter(as: Int.self, in: 0...4)
-            let pair = scope.sharedVar(in: IntRange(0, through: maximum).flatMapping { first in
+            let pair = scope.sharedVar(in: Set<Int>([0, 1, 2, 3, 4]).filtering { member in
+                member <= maximum
+            }.flatMapping { first in
                 IntRange(0, through: first).mapping { second in
                     Pair.expression(first: first, second: second)
                 }
