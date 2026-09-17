@@ -27,18 +27,32 @@ struct TransitionPropertyTests {
             try trace.validate(in: run.native.graph.graph)
             let bundle = try scenario.render().tlaBundle
             #expect(bundle.tla.contains("(value)'"))
+            #expect(bundle.tla.contains("increases == []["))
+            #expect(bundle.tla.contains("]_(value)"))
+            #expect(bundle.tla.contains("]_((value).count)"))
             #expect(bundle.tla.contains("preservesParity"))
             #expect(bundle.cfg.contains("PROPERTY"))
         }
     }
 
     @Test("Typed step constructors retain a structured successor read")
-    func retainsStructuredExpression() {
+    func retainsStructuredExpression() throws {
         let value = Var<Int>("value")
         let condition: TemporalCondition<Expr<Bool>> = .alwaysStep(on: value) { before, after in after > before }
-        #expect(condition.map(\.stateExpr) == .always(.or(
-            .equal(.variable("value"), .nextState(.variable("value"))),
+        #expect(condition.map(\.stateExpr) == .always(.stutteringStep(
+            .variable("value"),
             .greaterThan(.nextState(.variable("value")), .variable("value")))))
+        let compilation = try canonicalTestSpec(variables: [("value", .value(.int(0)))],
+            temporal: [("increases", condition.map(\.stateExpr))]).compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        guard case .always(let query) = program.behavior.temporalProperties[0].expression else {
+            Issue.record("Expected an always predicate")
+            return
+        }
+        #expect(query.expression.operation == .stutteringStep)
+        #expect(query.expression.resultType == .bool)
+        #expect(query.expression.children[0].resultType == .int)
+        #expect(query.expression.children[0].operation == query.expression.children[1].children[1].operation)
     }
 
     @Test("Successor reads outside transition predicates and nested primes fail during lowering")
@@ -83,6 +97,17 @@ struct TransitionPropertyTests {
         let source = try emitter.machineMembers().map(\.description).joined(separator: "\n")
         #expect(source.contains("nextState.state.value"))
         #expect(!source.contains("CompiledRuntime"))
+    }
+
+    @Test("Successor reads hidden behind aliases cannot silently become single primes")
+    func rejectsPrimedAliases() throws {
+        let specification = canonicalTestSpec(variables: [("value", .value(.int(0)))],
+            temporal: [("invalid", .always(.letValue("saved", .nextState(.variable("value")),
+                .equal(.nextState(.variable("saved")), .value(.int(0))))))])
+        let compilation = try specification.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "PrimedAliases", program: program))
+        #expect(throws: CompilationDiagnostic.self) { try emitter.machineMembers() }
     }
 
     @Test("Malformed step predicates fail compilation", arguments: [

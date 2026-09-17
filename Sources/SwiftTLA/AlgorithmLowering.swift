@@ -1045,6 +1045,8 @@ enum AlgorithmLowerer {
             case .assertView(let value, let shape): return .assertView(rewritten(value, localRoots: localRoots), shape)
             case .negate(let value): return .negate(rewritten(value, localRoots: localRoots))
             case .nextState(let value): return .nextState(rewritten(value, localRoots: localRoots))
+            case .stutteringStep(let value, let predicate):
+                return .stutteringStep(rewritten(value, localRoots: localRoots), rewritten(predicate, localRoots: localRoots))
             case .integerDivide(let lhs, let rhs): return .integerDivide(rewritten(lhs, localRoots: localRoots), rewritten(rhs, localRoots: localRoots))
             case .equal(let lhs, let rhs): return .equal(rewritten(lhs, localRoots: localRoots), rewritten(rhs, localRoots: localRoots))
             case .notEqual(let lhs, let rhs): return .notEqual(rewritten(lhs, localRoots: localRoots), rewritten(rhs, localRoots: localRoots))

@@ -557,7 +557,14 @@ struct NativeSwiftEmitter {
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         switch id.operation {
+        case .stutteringStep:
+            guard state != "nextState." else { throw unsupported("nested successor-state read") }
+            let before = try expression(id.children[0], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            let after = try expression(id.children[0], state: "nextState.", substitutions: substitutions, activeFunctions: activeFunctions)
+            let predicate = try expression(id.children[1], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+            return "((\(before) == \(after)) ? true : \(predicate))"
         case .nextState:
+            guard state != "nextState." else { throw unsupported("nested successor-state read") }
             return try expression(id.children[0], state: "nextState.", substitutions: substitutions,
                 activeFunctions: activeFunctions)
         case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate:

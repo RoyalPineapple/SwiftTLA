@@ -40,7 +40,7 @@ extension TemporalCondition where Expression == Expr<Bool> {
         _ predicate: (Expr<Value>, Expr<Value>) -> some TypedExpression<Bool>
     ) -> Self {
         let next = Expr<Value>(.nextState(value.stateExpr))
-        return .always(Expr(.or(.equal(value.stateExpr, next.stateExpr),
+        return .always(Expr(.stutteringStep(value.stateExpr,
             predicate(value.expr, next).stateExpr)))
     }
 

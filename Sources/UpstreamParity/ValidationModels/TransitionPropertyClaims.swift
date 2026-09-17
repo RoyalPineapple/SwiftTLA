@@ -23,7 +23,7 @@ package struct TransitionPropertyClaims {
             Do(Step.stay, when: value.count == limit) { Assign(value, to: value) }
             WeakFairnessNext()
             increases(.alwaysStep(on: value) { before, after in
-                after.count > before.count && 1 / (after.count - before.count) > 0
+                1 / (after.count - before.count) > 0 && after.count > before.count
             })
             preservesMarker(.alwaysStep(on: value) { before, after in before.marker == after.marker })
             preservesParity(.alwaysStep(on: value.count) { before, after in before % 2 == after % 2 })

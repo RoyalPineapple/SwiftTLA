@@ -2266,6 +2266,10 @@ package struct CompiledTypeChecker: Sendable {
         case .nextState:
             let source = try checkOperand(expression.children[0], expected: expected)
             return try checkedType(source.resultType, expected: expected, children: [source])
+        case .stutteringStep:
+            let value = try checkOperand(expression.children[0])
+            let predicate = try checkOperand(expression.children[1], expected: .bool)
+            return try checkedType(.bool, expected: expected, children: [value, predicate])
         case .value(let value):
             let type = try literal(value, expected: expected)
             return .init(type: type, computationType: type)

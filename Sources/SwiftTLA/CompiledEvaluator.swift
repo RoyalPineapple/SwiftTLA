@@ -672,7 +672,7 @@ struct CompiledEvaluator: Sendable {
                     tasks.append(.expression(sequence, scope))
                 case .convert:
                     tasks.append(.expression(expression.children[0], scope))
-                case .nextState:
+                case .nextState, .stutteringStep:
                     throw EvalError.transitionPredicateRequiresGeneratedChecking
                 case .call(let target):
                     guard functions.indices.contains(target.ordinal) else {
@@ -742,7 +742,7 @@ private extension CompiledEvaluator {
 extension CompiledOperation {
     func apply(to values: inout [CompiledValue], operandCount: Int) throws {
         switch self {
-        case .nextState:
+        case .nextState, .stutteringStep:
             throw EvalError.transitionPredicateRequiresGeneratedChecking
         case .assertView(let shape):
             guard operandCount == 1, let value = values.last else {

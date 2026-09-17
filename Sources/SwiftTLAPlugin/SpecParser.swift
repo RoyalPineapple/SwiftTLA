@@ -2470,7 +2470,7 @@ extension ParserSession {
             let nested = scope.extending(binding: parameters[0], to: value, shape: shape)
                 .extending(binding: parameters[1], to: .nextState(value), shape: shape)
             guard let predicate = decodeTypedFacadeValue(body, scope: nested) else { return nil }
-            return .always(.or(.equal(value, .nextState(value)), predicate))
+            return .always(.stutteringStep(value, predicate))
         }
         guard call.trailingClosure == nil else { return nil }
         if member.base != nil {

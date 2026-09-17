@@ -1131,6 +1131,18 @@ struct CompiledLowerer {
                     requiredStandardModules.formUnion(shape.requiredStandardModules)
                     scheduleUnary(value, at: path, scope: scope, operation: .assertView(shape), on: &tasks)
                 case .negate(let value): scheduleUnary(value, at: path, scope: scope, operation: .negate, on: &tasks)
+                case .stutteringStep(let value, let predicate):
+                    guard scope.allowsNextState else {
+                        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                            path: path, expected: "a stuttering step inside an always transition predicate",
+                            actual: "a stuttering step in a state-only or primed expression",
+                            nextSafeAction: "Use alwaysStep to declare a transition property.")
+                    }
+                    var valueScope = scope
+                    valueScope.allowsNextState = false
+                    schedule([(value, "\(path).value"), (predicate, "\(path).predicate")],
+                        at: path, scope: scope, childScopes: [valueScope, scope],
+                        build: { .init(operation: .stutteringStep, children: $0.map(\.expression)) }, on: &tasks)
                 case .nextState(let value):
                     guard scope.allowsNextState else {
                         throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,

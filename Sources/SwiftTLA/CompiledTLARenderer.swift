@@ -156,7 +156,12 @@ struct CompiledTLARenderer {
         _ expression: TemporalCondition<CompiledStateQuery>
     ) throws -> String {
         switch expression {
-        case .always(let predicate): return "[]\(try state(predicate.expression))"
+        case .always(let predicate):
+            let claim = predicate.expression
+            if case .stutteringStep = claim.operation {
+                return "[][\(try state(claim))]_(\(try state(claim.children[0])))"
+            }
+            return "[]\(try state(claim))"
         case .eventually(let predicate): return "<>\(try state(predicate.expression))"
         case .alwaysEventually(let predicate): return "[]<>\(try state(predicate.expression))"
         case .eventuallyAlways(let predicate): return "<>[]\(try state(predicate.expression))"
@@ -302,7 +307,7 @@ struct CompiledTLARenderer {
 
                     tasks.append(.checkedView(shape, start: parts.count))
                     tasks.append(.expression(value))
-                case .nextState:
+                case .nextState, .stutteringStep:
                     try schedule(expression.operation, expression.children)
                 case .value(let value): parts.append(try value.rendered(using: layout).description)
                 case .stateVariable(let variable): parts.append(try stateNames[variable] ?? variableName(variable))
@@ -541,6 +546,9 @@ extension CompiledOperation {
         }
         let parts: [TLAExpressionPart]
         switch self {
+        case .stutteringStep:
+            parts = [.text("(IF ("), .operand(0), .text(" = ("), .operand(0),
+                .text(")') THEN TRUE ELSE "), .operand(1), .text(")")]
         case .ifThenElse:
             parts = [.text("(IF "), .operand(0), .text(" THEN "), .operand(1),
                 .text(" ELSE "), .operand(2), .text(")")]

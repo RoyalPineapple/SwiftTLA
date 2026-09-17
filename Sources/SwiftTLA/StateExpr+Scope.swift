@@ -11,7 +11,7 @@ extension StateExpr {
             [name]
         case .processLocalFamily(let name):
             [name]
-        case .add(let lhs, let rhs), .subtract(let lhs, let rhs),
+        case .stutteringStep(let lhs, let rhs), .add(let lhs, let rhs), .subtract(let lhs, let rhs),
              .multiply(let lhs, let rhs), .divide(let lhs, let rhs),
              .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
              .equal(let lhs, let rhs), .notEqual(let lhs, let rhs),
