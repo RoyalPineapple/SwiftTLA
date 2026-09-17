@@ -13,10 +13,20 @@ package struct ConfiguredDictionaryValues: Sendable {
                 in: Functions(from: jugs, to: Set<Int>([3, 5])))
             let contents = scope.sharedVar(initial: capacity)
             let total = Invariant()
+            let sameKey = Invariant()
+            let hasCapacity = Invariant()
             Do(Step.fill, over: jugs) { jug in
                 Assign(contents[jug], to: capacity[jug])
             }
             total { Functions(from: jugs, to: Set<Int>([3, 5])).contains(contents) }
+            sameKey {
+                ForAll(in: jugs, and: jugs) { first, second in
+                    first != second || contents[first] == contents[second]
+                }
+            }
+            hasCapacity {
+                Exists(in: jugs, and: Set<Int>([3, 5])) { jug, amount in contents[jug] == amount } == !jugs.isEmpty
+            }
             Validation("Empty") {
                 Bind(jugs, to: Set<String>([]))
                 Bind(capacity, to: [:])

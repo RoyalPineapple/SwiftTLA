@@ -15,6 +15,8 @@ struct DictionaryConfigurationTests {
             #expect(run.native.graph.graph.states.count == 1)
             #expect(run.native.graph.graph.edges.count == [0, 0, 1, 2][index])
             #expect(run.native.checks.properties["total"] == .satisfied)
+            #expect(run.native.checks.properties["sameKey"] == .satisfied)
+            #expect(run.native.checks.properties["hasCapacity"] == .satisfied)
             let bundle = try scenario.render().tlaBundle
             #expect(bundle.cfg.contains("CONSTANT capacity <- __SwiftTLAParameter1"))
             #expect(bundle.tla.contains("__SwiftTLAParameter1 == ["))

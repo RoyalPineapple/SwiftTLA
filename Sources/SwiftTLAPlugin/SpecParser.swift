@@ -586,30 +586,42 @@ final class ParserSession {
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
-              let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
+              let name = compilerGrammarName(in: call.calledExpression),
               name == "ForAll" || name == "Exists",
-              let domainSyntax = call.arguments.first?.expression,
-              let domain = finiteAlgorithmDomain(domainSyntax).map({
-                  StateExpr.setLiteral($0.values.map(StateExpr.value))
-              }) ?? decodeTypedFacadeValue(domainSyntax, scope: scope),
+              call.additionalTrailingClosures.isEmpty,
               let closure = call.trailingClosure,
               closure.statements.count == 1,
               case .expr(let bodySyntax) = closure.statements.first?.item
         else { return nil }
 
+        let arguments = call.arguments.filter { !["file", "line", "column"].contains($0.label?.text ?? "") }
+        let labels = arguments.map { $0.label?.text }
+        guard labels == [nil] || labels == ["in"] || labels == ["in", "and"] else { return nil }
         let parameters = closureParameterNames(in: closure)
-        guard parameters.count <= 1 else { return nil }
-        let sourceParameter = parameters.first ?? "$0"
-        let parameter = parameters.first ?? generatedBinderName(
-            line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset),
-            column: 0
-        )
-        let bodyScope = scope.extending(binding: sourceParameter, to: .variable(parameter),
-            shape: typedFacadeValueType(domainSyntax, scope: scope)?.selectedElement)
-        guard let predicate = decodeTypedFacadeValue(bodySyntax, scope: bodyScope) else { return nil }
-        return name == "ForAll"
-            ? .forAll(domain, parameter, predicate)
-            : .exists(domain, parameter, predicate)
+        guard parameters.isEmpty || parameters.count == arguments.count,
+              Set(parameters.filter { $0 != "_" }).count == parameters.filter({ $0 != "_" }).count else { return nil }
+        var bodyScope = scope
+        var bindings: [(domain: StateExpr, name: String)] = []
+        for (index, argument) in arguments.enumerated() {
+            let domainSyntax = argument.expression
+            guard let domain = finiteAlgorithmDomain(domainSyntax).map({
+                StateExpr.setLiteral($0.values.map(StateExpr.value))
+            }) ?? decodeTypedFacadeValue(domainSyntax, scope: scope) else { return nil }
+            let sourceName = parameters.isEmpty ? "$\(index)" : parameters[index]
+            let binder = sourceName.hasPrefix("$") || sourceName == "_"
+                ? generatedBinderName(line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset), column: UInt(index))
+                : sourceName
+            bodyScope = bodyScope.extending(binding: sourceName, to: .variable(binder),
+                shape: typedFacadeValueType(domainSyntax, scope: scope)?.selectedElement)
+            bindings.append((domain, binder))
+        }
+        guard var predicate = decodeTypedFacadeValue(bodySyntax, scope: bodyScope) else { return nil }
+        for binding in bindings.reversed() {
+            predicate = name == "ForAll"
+                ? .forAll(binding.domain, binding.name, predicate)
+                : .exists(binding.domain, binding.name, predicate)
+        }
+        return predicate
     }
 
     func decodeTypedFacadeExpr(
