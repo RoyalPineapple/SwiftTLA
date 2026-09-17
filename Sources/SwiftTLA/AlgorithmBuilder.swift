@@ -385,8 +385,12 @@ public struct AlgorithmElement: Sendable {
 
 public struct AtomicStep: SpecComponent {
     package let model: AlgorithmStepModel
+    package let bindings: [ActionBinding]
 
-    package init(model: AlgorithmStepModel) { self.model = model }
+    package init(model: AlgorithmStepModel, bindings: [ActionBinding] = []) {
+        self.model = model
+        self.bindings = bindings
+    }
 }
 
 private extension SharedVariable {
@@ -606,7 +610,10 @@ public enum AlgorithmBuilder {
     }
 
     public static func buildExpression(_ component: AtomicStep) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .step(component.model))]
+        guard component.bindings.isEmpty else {
+            return [AlgorithmElement(model: .invalidPlacement(.parameterizedStep))]
+        }
+        return [AlgorithmElement(model: .step(component.model))]
     }
 
     public static func buildExpression(_ component: InvDecl) -> [AlgorithmElement] {
@@ -784,6 +791,38 @@ public func Do<Name: CaseIterable & RawRepresentable & Sendable>(
         When(condition)
         body()
     }
+}
+
+/// Defines an independent action with one typed argument from a finite domain.
+public func Do<Name: CaseIterable & RawRepresentable & Sendable, Domain: FormalSetValue>(
+    _ label: Name,
+    over domain: some TypedExpression<Domain>,
+    _name: String = "member",
+    @DoBuilder _ body: (Expr<Domain.Element>) -> [StepStatement]
+) -> AtomicStep where Name.RawValue == String {
+    AtomicStep(model: .init(label: .init(name: label.rawValue),
+        statements: body(Expr(.variable(_name))).map(\.model)),
+        bindings: [.init(name: _name, domain: domain.stateExpr,
+            generatedSwiftType: swiftSurfaceTypeName(for: Domain.Element.self))])
+}
+
+/// Defines an independent action over the Cartesian product of two finite domains.
+public func Do<Name: CaseIterable & RawRepresentable & Sendable, First: FormalSetValue, Second: FormalSetValue>(
+    _ label: Name,
+    over first: some TypedExpression<First>,
+    _ second: some TypedExpression<Second>,
+    _firstName: String = "first",
+    _secondName: String = "second",
+    @DoBuilder _ body: (Expr<First.Element>, Expr<Second.Element>) -> [StepStatement]
+) -> AtomicStep where Name.RawValue == String {
+    AtomicStep(model: .init(label: .init(name: label.rawValue),
+        statements: body(Expr(.variable(_firstName)), Expr(.variable(_secondName))).map(\.model)),
+        bindings: [
+            .init(name: _firstName, domain: first.stateExpr,
+                generatedSwiftType: swiftSurfaceTypeName(for: First.Element.self)),
+            .init(name: _secondName, domain: second.stateExpr,
+                generatedSwiftType: swiftSurfaceTypeName(for: Second.Element.self))
+        ])
 }
 
 /// Defines a labeled bounded `while` loop.

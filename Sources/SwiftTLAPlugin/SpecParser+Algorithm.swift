@@ -199,6 +199,10 @@ extension ParserSession {
     func parseIndependentStep(_ call: FunctionCallExprSyntax, into components: inout TLASpec) {
         algorithmParseFailure = nil
         algorithmSourceDiagnostic = nil
+        if call.arguments.contains(where: { $0.label?.text == "over" }) {
+            parseParameterizedIndependentStep(call, into: &components)
+            return
+        }
         guard call.arguments.first?.label == nil, call.additionalTrailingClosures.isEmpty,
               case .step(let model)? = parseEachComponent(call, construct: .doStep,
                 processParameter: "__independent_step", macros: [:], scope: sourceScope) else {
@@ -208,6 +212,53 @@ extension ParserSession {
             return
         }
         let step = AtomicStep(model: model)
+        do {
+            try step.requireIndependentStep()
+            components.sourceAtomicSteps.append(step)
+        } catch {
+            components.diagnostics.append(.init(message: String(describing: error), source: call))
+        }
+    }
+
+    private func parseParameterizedIndependentStep(_ call: FunctionCallExprSyntax, into components: inout TLASpec) {
+        let arguments = Array(call.arguments)
+        guard (2...3).contains(arguments.count), arguments[0].label == nil,
+              arguments[1].label?.text == "over",
+              arguments.dropFirst(2).allSatisfy({ $0.label == nil }),
+              call.additionalTrailingClosures.isEmpty,
+              let label = algorithmLabel(arguments[0].expression),
+              let closure = call.trailingClosure else {
+            components.diagnostics.append(.init(
+                message: "Parameterized Do requires a typed label and one or two domains after over:.", source: call))
+            return
+        }
+        let names = closureParameterNames(in: closure)
+        guard names.count == arguments.count - 1, Set(names).count == names.count,
+              names.allSatisfy({ !$0.isEmpty && $0 != "_" }) else {
+            components.diagnostics.append(.init(
+                message: "Name each Do argument once in its closure, with one name per domain.", source: closure))
+            return
+        }
+        var bindings: [ActionBinding] = []
+        var bodyScope = sourceScope
+        for (name, argument) in zip(names, arguments.dropFirst()) {
+            guard case .set(let element)? = typedFacadeValueType(argument.expression, scope: sourceScope),
+                  element.resolved,
+                  let domain = decodeTypedFacadeValue(argument.expression, scope: sourceScope) else {
+                components.diagnostics.append(.init(
+                    message: "Do requires a typed finite set with a resolved element type for each domain.", source: argument))
+                return
+            }
+            bindings.append(.init(name: name, domain: domain, generatedSwiftType: element.swiftType))
+            bodyScope = bodyScope.extending(binding: name, to: .variable(name), shape: element)
+        }
+        guard let statements = parseAlgorithmStatements(closure.statements,
+            processParameter: "__independent_step", macros: [:], scope: bodyScope) else {
+            components.diagnostics.append(algorithmSourceDiagnostic ?? .init(
+                message: algorithmParseFailure ?? "Do requires a supported atomic body.", source: closure))
+            return
+        }
+        let step = AtomicStep(model: .init(label: .init(name: label), statements: statements), bindings: bindings)
         do {
             try step.requireIndependentStep()
             components.sourceAtomicSteps.append(step)
@@ -933,8 +984,13 @@ extension ParserSession {
     ) -> AlgorithmComponentModel? {
         switch construct {
         case .doStep, .whileStep:
+            if call.arguments.contains(where: { $0.label?.text == "over" }) {
+                algorithmParseFailure = "Parameterized Do belongs directly in #spec. Use Each for processes or With for local choices."
+                return nil
+            }
             guard let label = algorithmLabel(call.arguments.first?.expression),
                   let closure = call.trailingClosure,
+                  closureParameterNames(in: closure).isEmpty,
                   var statements = parseAlgorithmStatements(
                     closure.statements,
                     processParameter: processParameter,

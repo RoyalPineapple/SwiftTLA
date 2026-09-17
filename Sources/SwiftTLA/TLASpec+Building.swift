@@ -112,9 +112,12 @@ extension TLASpec {
     }
     for step in sourceAtomicSteps {
       let lowered = try AlgorithmLowerer.lowerAtomicStep(step)
-      actions.append(.init(name: step.model.label.name, body: lowered.action))
+      actions.append(.init(name: step.model.label.name, body: lowered.action, bindings: step.bindings))
       invariants += lowered.assertions.enumerated().map {
-        NamedStatePredicate(name: "__step_assert_\(step.model.label.name)_\($0.offset)", body: $0.element)
+        NamedStatePredicate(name: "__step_assert_\(step.model.label.name)_\($0.offset)",
+          body: step.bindings.reversed().reduce($0.element) { body, binding in
+            .forAll(binding.domain, binding.name, body)
+          })
       }
     }
 

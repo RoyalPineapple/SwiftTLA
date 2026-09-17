@@ -136,6 +136,15 @@ internal enum AlgorithmPlacementValidator {
                 actual: component.actualPlacement,
                 nextSafeAction: component.nextSafeAction
             )
+        case .parameterizedStep:
+            .init(
+                code: .invalidAlgorithm,
+                stage: .validation,
+                path: path.joined(separator: "."),
+                expected: component.expectedPlacement,
+                actual: component.actualPlacement,
+                nextSafeAction: component.nextSafeAction
+            )
         }
     }
 }

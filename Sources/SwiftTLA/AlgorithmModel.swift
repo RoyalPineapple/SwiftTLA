@@ -405,6 +405,7 @@ package indirect enum AlgorithmComponentModel: Sendable {
 package enum InvalidAlgorithmComponent: String, Sendable {
     case genericFairness
     case assumption
+    case parameterizedStep
 
     package var expectedPlacement: String {
         switch self {
@@ -412,6 +413,8 @@ package enum InvalidAlgorithmComponent: String, Sendable {
             "Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness"
         case .assumption:
             "an assumption declared in the formal specification"
+        case .parameterizedStep:
+            "a parameterized Do declared directly in the formal specification"
         }
     }
 
@@ -419,6 +422,7 @@ package enum InvalidAlgorithmComponent: String, Sendable {
         switch self {
         case .genericFairness: "generic fairness declaration inside Algorithm"
         case .assumption: "Assume declaration inside Algorithm"
+        case .parameterizedStep: "parameterized Do inside Algorithm"
         }
     }
 
@@ -426,6 +430,7 @@ package enum InvalidAlgorithmComponent: String, Sendable {
         switch self {
         case .genericFairness: "Move the fairness requirement to Algorithm or Each."
         case .assumption: "Move the assumption outside Algorithm."
+        case .parameterizedStep: "Declare independent actions outside Algorithm, or use Each for processes and With for local choices."
         }
     }
 }

@@ -81,6 +81,12 @@ private final class ProgramResolver {
                     path: "temporalProperties.\(property.name).bindings.\(binding.sourceName)")
             }
         }
+        for action in behavior.actions {
+            for binding in action.bindings {
+                try program.requireImmutableDomain(binding.domain,
+                    path: "actions.\(checked.layout.actions[action.id.ordinal].declaration.name).bindings.\(binding.sourceName).domain")
+            }
+        }
         return program
     }
 

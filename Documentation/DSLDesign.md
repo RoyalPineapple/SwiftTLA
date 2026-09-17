@@ -188,6 +188,34 @@ This restriction does not satisfy B-06. Required composition remains unfinished.
 Acceptance requires generated execution, complete native graphs, TLA+ export without synthetic control state, and independent hosted TLC evidence.
 The direct model must not acquire an authored PlusCal algorithm.
 
+#### Parameterized independent steps
+
+`Do(label, over: domain) { member in ... }` declares one action argument.
+`Do(label, over: firstDomain, secondDomain) { first, second in ... }` declares two action arguments.
+Each domain is a typed finite set of immutable values or model parameters.
+The closure must name each argument. These names supply the generated action argument labels.
+The compiler retains each argument type and binding identity through native generation and formal export.
+
+```swift
+Do(Step.pour, over: jugs, jugs) { source, destination in
+    When(source != destination)
+    let amount = contents[source]
+    Assign(contents[source], to: 0)
+    Assign(contents[destination], to: contents[destination] + amount)
+}
+```
+
+The domains define a Cartesian product. Guards select enabled argument combinations.
+An empty domain produces no action instances. It does not remove properties or disable the default deadlock check.
+Assertions quantify over all argument combinations and preserve the guards and ordered assignment semantics.
+These declarations belong directly in `#spec`. They do not create processes or control state.
+Inside `Algorithm`, `Each` declares process arguments and `With` declares local choices.
+
+`Do(Step.pick, over: mutableState) { item in ... }` is invalid because its domain depends on mutable state.
+Missing, duplicate, or anonymous closure arguments are invalid.
+An unresolved element type is a compile-time error, including for empty sets without a declared element type.
+Acceptance requires argument-sensitive graph comparison, configured empty domains, and diagnostics for each rejection rule.
+
 ### Atomicity and assignment semantics
 
 A `Do` block executes statements in order, like normal Swift. Later statements

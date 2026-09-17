@@ -167,9 +167,6 @@ public struct NamedAction: Sendable, CustomStringConvertible, Equatable {
         return .actionBinding(action: action, parameter: nil, problem: "a parameter has no name")
       }
       if let members = binding.literalMembers {
-        guard !members.isEmpty else {
-          return .actionBinding(action: action, parameter: binding.name, problem: "the domain is empty")
-        }
         guard Set(members).count == members.count else {
           return .actionBinding(action: action, parameter: binding.name, problem: "the domain contains duplicate values")
         }

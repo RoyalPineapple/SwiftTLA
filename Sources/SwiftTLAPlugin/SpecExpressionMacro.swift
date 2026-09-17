@@ -169,6 +169,26 @@ private final class DSLRewriter: SyntaxRewriter {
 
     override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
         var visited = super.visit(node).as(FunctionCallExprSyntax.self) ?? node
+        if helperName(in: node) == "Do", node.arguments.contains(where: { $0.label?.text == "over" }),
+           let closure = node.trailingClosure {
+            let names: [String]
+            switch closure.signature?.parameterClause {
+            case .simpleInput(let list): names = list.map { $0.name.sourceIdentifierName }
+            case .parameterClause(let clause): names = clause.parameters.map {
+                $0.secondName?.sourceIdentifierName ?? $0.firstName.sourceIdentifierName
+            }
+            case nil: names = []
+            }
+            let labels = names.count == 1 ? ["_name"] : ["_firstName", "_secondName"]
+            if (1...2).contains(names.count) {
+                var arguments = Array(visited.arguments)
+                for (label, name) in zip(labels, names) {
+                    if !arguments.isEmpty { arguments[arguments.count - 1].trailingComma = .commaToken() }
+                    arguments.append(argument(label, ExprSyntax(StringLiteralExprSyntax(content: name))))
+                }
+                visited.arguments = LabeledExprListSyntax(arguments)
+            }
+        }
         if let name = helperName(in: node), Self.stepBuilders.contains(name) {
             if let original = node.trailingClosure, let body = visited.trailingClosure {
                 visited.trailingClosure = body.with(\.statements,
