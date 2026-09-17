@@ -1218,21 +1218,17 @@ final class ParserSession {
             else { return nil }
             return .partialFunctionOverriding(base, key: selection.selector, value: value)
         case "filtering", "mapping", "flatMapping":
-            guard let closure = call.trailingClosure,
-                  closure.statements.count == 1,
-                  case .expr(let body) = closure.statements.first?.item,
-                  let parameter = closureParameterNames(in: closure).first,
-                  closureParameterNames(in: closure).count == 1,
+            guard let closure = collectionClosure(in: call),
                   let expression = decodeTypedFacadeValue(
-                    body,
-                    scope: scope.extending(binding: parameter, to: .variable(parameter),
+                    closure.body,
+                    scope: scope.extending(binding: closure.sourceName, to: .variable(closure.binder),
                         shape: typedFacadeValueType(baseSyntax, scope: scope)?.selectedElement)
                   )
             else { return nil }
             switch access.declName.baseName.sourceIdentifierName {
-            case "filtering": return .setFilter(base, parameter, expression)
-            case "flatMapping": return .unionAll(.setMap(expression, parameter, base))
-            default: return .setMap(expression, parameter, base)
+            case "filtering": return .setFilter(base, closure.binder, expression)
+            case "flatMapping": return .unionAll(.setMap(expression, closure.binder, base))
+            default: return .setMap(expression, closure.binder, base)
             }
         case "at":
             guard let indexSyntax = call.arguments.first?.expression,
@@ -1599,14 +1595,10 @@ final class ParserSession {
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            ["mapping", "flatMapping"].contains(member.declName.baseName.sourceIdentifierName),
            let base = member.base,
-           let closure = call.trailingClosure,
-           closure.statements.count == 1,
-           case .expr(let body) = closure.statements.first?.item,
-           closureParameterNames(in: closure).count == 1,
-           let parameter = closureParameterNames(in: closure).first {
-            let bodyScope = scope.extending(binding: parameter, to: .variable(parameter),
+           let closure = collectionClosure(in: call) {
+            let bodyScope = scope.extending(binding: closure.sourceName, to: .variable(closure.binder),
                 shape: typedFacadeValueType(base, scope: scope)?.selectedElement)
-            let bodyType = typedFacadeValueType(body, scope: bodyScope)
+            let bodyType = typedFacadeValueType(closure.body, scope: bodyScope)
             if member.declName.baseName.sourceIdentifierName == "flatMapping" {
                 guard case .set = bodyType else { return nil }
                 return bodyType
@@ -1614,6 +1606,22 @@ final class ParserSession {
             return bodyType.map(CompiledValueType.set)
         }
         return nil
+    }
+
+    private func collectionClosure(in call: FunctionCallExprSyntax)
+        -> (body: ExprSyntax, sourceName: String, binder: String)? {
+        guard call.additionalTrailingClosures.isEmpty,
+              call.arguments.allSatisfy({ ["file", "line", "column"].contains($0.label?.text ?? "") }),
+              let closure = call.trailingClosure,
+              closure.statements.count == 1,
+              case .expr(let body) = closure.statements.first?.item else { return nil }
+        let parameters = closureParameterNames(in: closure)
+        guard parameters.count == 1 || closure.signature?.parameterClause == nil else { return nil }
+        let sourceName = parameters.first ?? "$0"
+        let binder = sourceName == "$0" || sourceName == "_"
+            ? generatedBinderName(line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset))
+            : sourceName
+        return (body, sourceName, binder)
     }
 
     private func typedFacadeValueType(_ type: TypedFacadeType) -> CompiledValueType? {
