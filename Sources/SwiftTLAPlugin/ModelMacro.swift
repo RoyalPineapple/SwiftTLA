@@ -200,13 +200,22 @@ enum TLASpecVerifier {
                     } else {
                         value = .string(element.name.sourceIdentifierName)
                     }
+                    let caseName = element.name.sourceIdentifierName
+                    let constructor: String
+                    switch encoding {
+                    case .rawValue(let name): constructor = name
+                    case .cases(let names):
+                        guard let name = names[caseName] else {
+                            throw ModelMacroError.unsupportedEnumEncoding(typeName: enumDecl.name.text)
+                        }
+                        constructor = name
+                    }
                     let encoded: TLAValue
-                    if encoding == "constant", case .string(let raw) = value {
+                    if constructor == "constant", case .string(let raw) = value {
                         encoded = .constant(raw)
                     } else {
                         encoded = value
                     }
-                    let caseName = element.name.sourceIdentifierName
                     guard caseNames.insert(caseName).inserted else {
                         throw ModelMacroError.duplicateEnumCase(typeName: enumDecl.name.sourceIdentifierName, caseName: caseName)
                     }
@@ -217,6 +226,9 @@ enum TLASpecVerifier {
                 }
             }
 
+            if case .cases(let encodings) = encoding, Set(encodings.keys) != caseNames {
+                throw ModelMacroError.unsupportedEnumEncoding(typeName: enumDecl.name.text)
+            }
             enums.append(SourceEnum(
                 typeName: enumDecl.name.text,
                 cases: cases,
@@ -227,11 +239,16 @@ enum TLASpecVerifier {
         return enums
     }
 
-    private static func enumEncoding(in declaration: EnumDeclSyntax, intBacked: Bool) throws -> String {
+    private enum EnumEncoding {
+        case rawValue(String)
+        case cases([String: String])
+    }
+
+    private static func enumEncoding(in declaration: EnumDeclSyntax, intBacked: Bool) throws -> EnumEncoding {
         let encodings = declaration.memberBlock.members.compactMap { $0.decl.as(VariableDeclSyntax.self) }.filter {
             $0.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "tlaValue" }
         }
-        guard let encoding = encodings.first else { return intBacked ? "int" : "string" }
+        guard let encoding = encodings.first else { return .rawValue(intBacked ? "int" : "string") }
         let failure = ModelMacroError.unsupportedEnumEncoding(typeName: declaration.name.text)
         guard encodings.count == 1, encoding.bindings.count == 1,
               !encoding.modifiers.contains(where: { $0.name.text == "static" }),
@@ -245,11 +262,38 @@ enum TLASpecVerifier {
                   getter.effectSpecifiers == nil, let body = getter.body {
             statements = body.statements
         } else { throw failure }
-        guard statements.count == 1, let statement = statements.first else { throw failure }
-        let expression: ExprSyntax?
-        if case .expr(let value) = statement.item { expression = value }
-        else { expression = statement.item.as(ReturnStmtSyntax.self)?.expression }
-        guard let call = expression?.as(FunctionCallExprSyntax.self),
+        func expression(in statements: CodeBlockItemListSyntax) -> ExprSyntax? {
+            guard statements.count == 1, let statement = statements.first else { return nil }
+            if case .expr(let value) = statement.item { return value }
+            if let statement = statement.item.as(ExpressionStmtSyntax.self) { return statement.expression }
+            return statement.item.as(ReturnStmtSyntax.self)?.expression
+        }
+        guard let body = expression(in: statements) else { throw failure }
+        if let choice = body.as(SwitchExprSyntax.self) {
+            guard choice.subject.as(DeclReferenceExprSyntax.self)?.baseName.text == "self" else { throw failure }
+            var names: [String: String] = [:]
+            for branch in choice.cases {
+                guard let branch = branch.as(SwitchCaseSyntax.self),
+                      let label = branch.label.as(SwitchCaseLabelSyntax.self),
+                      let result = expression(in: branch.statements) else { throw failure }
+                let constructor = try rawValueEncoding(result, intBacked: intBacked, failure: failure)
+                for item in label.caseItems {
+                    guard item.whereClause == nil,
+                          let pattern = item.pattern.as(ExpressionPatternSyntax.self),
+                          let member = pattern.expression.as(MemberAccessExprSyntax.self),
+                          member.base == nil,
+                          names.updateValue(constructor, forKey: member.declName.baseName.sourceIdentifierName) == nil
+                    else { throw failure }
+                }
+            }
+            return .cases(names)
+        }
+        return .rawValue(try rawValueEncoding(body, intBacked: intBacked, failure: failure))
+    }
+
+    private static func rawValueEncoding(_ expression: ExprSyntax, intBacked: Bool,
+        failure: ModelMacroError) throws -> String {
+        guard let call = expression.as(FunctionCallExprSyntax.self),
               call.arguments.count == 1, call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
               let constructor = call.calledExpression.as(MemberAccessExprSyntax.self),
               constructor.base == nil || constructor.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLAValue",
@@ -344,7 +388,7 @@ enum ModelMacroError: Error, CustomStringConvertible, Equatable {
         case .nonLiteralSpecification: "The static spec getter must contain only a direct #spec or TLASpec declaration, optionally preceded by return, with a literal module name and an inline builder closure"
         case .dynamicModuleName(let source): "\(source.rawValue) requires a literal module name"
         case .unsupportedRecordSchema(let typeName): "Native type \(typeName) requires a literal alias or a record schema whose fieldName directly maps every declared key path to a unique string literal"
-        case .unsupportedEnumEncoding(let typeName): "Enum \(typeName).tlaValue must directly encode rawValue as .string, .constant, or .int matching its raw type; dynamic encodings are not supported"
+        case .unsupportedEnumEncoding(let typeName): "Enum \(typeName).tlaValue must encode rawValue as .string, .constant, or .int matching its raw type, directly or through an exhaustive switch self; dynamic encodings are not supported"
         case .duplicateTypeDeclaration(let typeName): "Type '\(typeName)' is declared more than once in the model"
         case .duplicateEnumCase(let typeName, let caseName): "Enum \(typeName) declares case '\(caseName)' more than once"
         case .duplicateEnumRawValue(let typeName, let caseName): "Enum \(typeName) case '\(caseName)' repeats an earlier case's raw value"

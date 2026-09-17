@@ -102,17 +102,18 @@ package struct CompiledTypeContext: Sendable {
 
     package init(enums: CompiledEnums, formalNames: [String: String]) throws {
         self.enums = enums
-        self.namedRepresentations = try enums.cases.mapValues { cases in
-            try cases.reduce(CompiledValueType.unknown) { result, member in
-                let type: CompiledValueType
+        self.namedRepresentations = enums.cases.reduce(into: [:]) { result, declaration in
+            let representations = Set(declaration.value.map { member -> CompiledValueType in
                 switch member.value {
-                case .integer: type = .int
-                case .boolean: type = .bool
-                case .string: type = .string
-                case .constant: type = .modelValue
-                default: type = .unknown
+                case .integer: .int
+                case .boolean: .bool
+                case .string: .string
+                case .constant: .modelValue
+                default: .unknown
                 }
-                return try CompiledValueType.merge(result, type)
+            })
+            if representations.count == 1, let representation = representations.first, representation != .unknown {
+                result[declaration.key] = representation
             }
         }
         self.formalNames = formalNames

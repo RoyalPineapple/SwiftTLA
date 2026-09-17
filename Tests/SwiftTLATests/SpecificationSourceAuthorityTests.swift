@@ -405,6 +405,45 @@ struct SpecificationSourceAuthorityTests {
         }
     }
 
+    @Test("Exhaustive enum encodings preserve each case's formal tag")
+    func exhaustiveEnumEncodings() throws {
+        let declaration = try declaration("""
+        enum Datum: String, FiniteTLAValueDomain {
+            case first = "d1", second = "d2", text = "d1_OF_DATUM"
+            var tlaValue: TLAValue {
+                switch self {
+                case .first, .second: return .constant(rawValue)
+                case .text: return TLAValue.string(self.rawValue)
+                }
+            }
+        }
+        """)
+        let info = try #require(TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members).first)
+        #expect(info.cases.map(\.value) == [.constant("d1"), .constant("d2"), .string("d1_OF_DATUM")])
+    }
+
+    @Test("Enum encoding switches must be exhaustive, static, and unambiguous", arguments: [
+        "switch self { case .first: .constant(rawValue) }",
+        "switch self { case .first: .constant(rawValue); default: .string(rawValue) }",
+        "switch self { case .first: .constant(rawValue); case .first, .second: .string(rawValue) }",
+        "switch self { case .first, .second, .unknown: .constant(rawValue) }",
+        "switch self { case .first where flag: .constant(rawValue); case .second: .string(rawValue) }",
+        "switch other { case .first: .constant(rawValue); case .second: .string(rawValue) }",
+        "switch self { case .first: encode(rawValue); case .second: .string(rawValue) }",
+        "switch self { case .first: recordAccess(); return .constant(rawValue); case .second: .string(rawValue) }"
+    ])
+    func rejectsInvalidEncodingSwitches(_ body: String) throws {
+        let declaration = try declaration("""
+        enum Datum: String, FiniteTLAValueDomain {
+            case first, second
+            var tlaValue: TLAValue { \(body) }
+        }
+        """)
+        #expect(throws: ModelMacroError.unsupportedEnumEncoding(typeName: "Datum")) {
+            _ = try TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members)
+        }
+    }
+
     @Test("Native source metadata preserves aliases and formal record field names")
     func sourceMetadataPreservesAliasesAndRecordNames() throws {
         let declaration = try declaration(#"""
