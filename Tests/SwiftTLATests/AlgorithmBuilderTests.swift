@@ -1600,7 +1600,7 @@ struct AlgorithmBuilderTests {
             let selected = scope.sharedVar(_name: "selected", initial: 0)
             Each(Node.all) { _ in
                 Do(TestControlLabel.choose) {
-                    With(SetExpr<Int>.literal(1, 2), SetExpr<Int>.literal(10, 20)) { outer, inner in
+                    With(Set<Int>([1, 2]), SetExpr<Int>.literal(10, 20)) { outer, inner in
                         Assign(selected, to: outer.expr + inner.expr)
                     }
                 }
@@ -1620,9 +1620,9 @@ struct AlgorithmBuilderTests {
             let selected = scope.sharedVar(_name: "selected", initial: 0)
             Do(TestControlLabel.choose) {
                 With(
-                    SetExpr<Int>.literal(1, 2),
+                    Set<Int>([1, 2]),
                     SetExpr<Int>.literal(10),
-                    SetExpr<Int>.literal(100, 200)
+                    Set<Int>([100, 200])
                 ) { first, second, third in
                     Assign(selected, to: first.expr + second.expr + third.expr)
                 }
@@ -1641,10 +1641,10 @@ struct AlgorithmBuilderTests {
         let algorithm = Algorithm("PairPattern", scoped: { scope in
             let selected = scope.sharedVar(_name: "selected", initial: 0)
             Do(TestControlLabel.choose) {
-                With(SetExpr<Pair<Int, Bool>>.literal(
+                With(Set<Pair<Int, Bool>>([
                     Pair(first: 1, second: true),
                     Pair(first: 2, second: false)
-                )) { number, flag in
+                ])) { number, flag in
                     Assert((number.expr == 1) || !flag.expr)
                     Assign(selected, to: number.expr)
                 }
@@ -1656,6 +1656,23 @@ struct AlgorithmBuilderTests {
         let successors = try successors(named: "choose", in: compilation, from: initial)
 
         #expect(Set(try successors.map { try value(named: "selected", in: $0, compilation: compilation) }) == [.int(1), .int(2)])
+    }
+
+    @Test("four Swift set choices preserve every combination and empty domains disable the step", arguments: [false, true])
+    func lowersFourSetChoices(empty: Bool) throws {
+        let algorithm = Algorithm("FourChoices", scoped: { scope in
+            let selected = scope.sharedVar(_name: "selected", initial: 0)
+            Do(TestControlLabel.choose) {
+                With(Set<Int>([1, 2]), Set<Int>([10]), Set<Int>([100]),
+                     empty ? Set<Int>([]) : Set<Int>([1000, 2000])) { a, b, c, d in
+                    Assign(selected, to: a + b + c + d)
+                }
+            }
+        })
+        let (compilation, initial) = try initialState(of: loweredSourceSpecification(algorithm))
+        let next = try successors(named: "choose", in: compilation, from: initial)
+        let actual = Set(try next.map { try value(named: "selected", in: $0, compilation: compilation) })
+        #expect(actual == (empty ? [] : [.int(1111), .int(1112), .int(2111), .int(2112)]))
     }
 
     @Test("Choose accepts a bounded Swift integer range")

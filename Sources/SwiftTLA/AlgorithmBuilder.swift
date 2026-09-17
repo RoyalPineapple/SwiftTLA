@@ -962,15 +962,15 @@ public func Procedure<Name: CaseIterable & RawRepresentable & Sendable, A: TLAVa
 
 /// Binds a nondeterministically chosen member of a bounded formal set for one
 /// atomic block. An empty set disables that block, as PlusCal `with (x \in S)`.
-public func With<Value: TLAValueType>(
-    _ source: some TypedExpression<SetExpr<Value>>,
+public func With<Domain: FormalSetValue>(
+    _ source: some TypedExpression<Domain>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
-    @DoBuilder _ body: (WithValue<Value>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<Domain.Element>) -> [StepStatement]
 ) -> StepStatement {
     let variable = generatedBinderName(file: file, line: line, column: column)
-    let value = WithValue<Value>(expression: .variable(variable))
+    let value = WithValue<Domain.Element>(expression: .variable(variable))
     return StepStatement(model: .with(variable: variable, source: source.stateExpr, body(value).map(\.model)))
 }
 
@@ -979,13 +979,13 @@ public func With<Value: TLAValueType>(
 /// This is the Swift spelling of PlusCal's `with (left \in Left; right \in Right)`.
 /// It lowers to nested formal binders, so each choice remains independently
 /// scoped and an empty source disables the whole block.
-public func With<First: TLAValueType, Second: TLAValueType>(
-    _ first: some TypedExpression<SetExpr<First>>,
-    _ second: some TypedExpression<SetExpr<Second>>,
+public func With<First: FormalSetValue, Second: FormalSetValue>(
+    _ first: some TypedExpression<First>,
+    _ second: some TypedExpression<Second>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
-    @DoBuilder _ body: (WithValue<First>, WithValue<Second>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<First.Element>, WithValue<Second.Element>) -> [StepStatement]
 ) -> StepStatement {
     With(first, file: file, line: line, column: column) { firstValue in
         With(second, file: file, line: line, column: column + 1) { secondValue in
@@ -995,14 +995,14 @@ public func With<First: TLAValueType, Second: TLAValueType>(
 }
 
 /// Binds three independent members in formal left-to-right scope order.
-public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>(
-    _ first: some TypedExpression<SetExpr<First>>,
-    _ second: some TypedExpression<SetExpr<Second>>,
-    _ third: some TypedExpression<SetExpr<Third>>,
+public func With<First: FormalSetValue, Second: FormalSetValue, Third: FormalSetValue>(
+    _ first: some TypedExpression<First>,
+    _ second: some TypedExpression<Second>,
+    _ third: some TypedExpression<Third>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
-    @DoBuilder _ body: (WithValue<First>, WithValue<Second>, WithValue<Third>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<First.Element>, WithValue<Second.Element>, WithValue<Third.Element>) -> [StepStatement]
 ) -> StepStatement {
     With(first, file: file, line: line, column: column) { firstValue in
         With(second, file: file, line: line, column: column + 1) { secondValue in
@@ -1014,15 +1014,15 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>
 }
 
 /// Binds four independent members in formal left-to-right scope order.
-public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType, Fourth: TLAValueType>(
-    _ first: some TypedExpression<SetExpr<First>>,
-    _ second: some TypedExpression<SetExpr<Second>>,
-    _ third: some TypedExpression<SetExpr<Third>>,
-    _ fourth: some TypedExpression<SetExpr<Fourth>>,
+public func With<First: FormalSetValue, Second: FormalSetValue, Third: FormalSetValue, Fourth: FormalSetValue>(
+    _ first: some TypedExpression<First>,
+    _ second: some TypedExpression<Second>,
+    _ third: some TypedExpression<Third>,
+    _ fourth: some TypedExpression<Fourth>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
-    @DoBuilder _ body: (WithValue<First>, WithValue<Second>, WithValue<Third>, WithValue<Fourth>) -> [StepStatement]
+    @DoBuilder _ body: (WithValue<First.Element>, WithValue<Second.Element>, WithValue<Third.Element>, WithValue<Fourth.Element>) -> [StepStatement]
 ) -> StepStatement {
     With(first, second, third, file: file, line: line, column: column) { firstValue, secondValue, thirdValue in
         With(fourth, file: file, line: line, column: column + 3) { fourthValue in
@@ -1036,13 +1036,13 @@ public func With<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
 /// This is the typed Swift spelling of PlusCal's
 /// `with <<first, second>> \in Pairs`. The generated bindings are formal
 /// expressions.
-public func With<First: TLAValueType, Second: TLAValueType>(
-    _ pairs: some TypedExpression<SetExpr<Pair<First, Second>>>,
+public func With<Domain: FormalSetValue, First: TLAValueType, Second: TLAValueType>(
+    _ pairs: some TypedExpression<Domain>,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
     @DoBuilder _ body: (WithValue<First>, WithValue<Second>) -> [StepStatement]
-) -> StepStatement {
+) -> StepStatement where Domain.Element == Pair<First, Second> {
     With(pairs, file: file, line: line, column: column) { pair in
         Let(pair.first(), file: file, line: line, column: column + 1) { first in
             Let(pair.second(), file: file, line: line, column: column + 2) { second in
