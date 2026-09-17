@@ -4,6 +4,48 @@ import Testing
 
 @Suite(.serialized)
 struct LivenessCheckerTests {
+  @Test("fairness ignores changes outside its projection, including conditional properties", arguments: [false, true])
+  func projectedEnabledness(_ strong: Bool) throws {
+    let transitions: [Int: [GraphEdge<Int, Int>]] = [
+      0: [.init(source: 0, action: 1, target: 1)],
+      1: [.init(source: 1, action: 1, target: 0)]
+    ]
+    let checker = LivenessChecker<Int, Int, Int>(states: [0, 1], transitions: transitions,
+      fairness: [(scope: 1, isStrong: strong)], matches: { $0 == $1 },
+      changes: { before, after, _ in before / 2 != after / 2 },
+      actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+    let eventually: TemporalCondition<@Sendable (Int, Int) throws -> Bool> = .eventually { state, _ in state == 1 }
+    for property in [eventually, .conditional({ _, _ in true }, then: eventually, else: .always { _, _ in true })] {
+      let result = try checker.analyze(property, initialStates: [0], renderScope: { _ in "projected" })
+      #expect(result.status == .violated)
+      #expect(result.enabledActions == ["projected": [0: false, 1: false]])
+      let witness = try #require(result.witness)
+      #expect(witness.cycle == [0, 0])
+      #expect(witness.cycleActions == [nil])
+    }
+    let wholeState = LivenessChecker<Int, Int, Int>(states: [0, 1], transitions: transitions,
+      fairness: [(scope: 1, isStrong: strong)], matches: { $0 == $1 },
+      actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+    #expect(try wholeState.analyze(eventually, initialStates: [0], renderScope: { _ in "whole" }).status == .satisfied)
+  }
+
+  @Test("projection-stuttering edges cannot discharge an enabled fairness obligation", arguments: [false, true])
+  func projectedProgress(_ strong: Bool) throws {
+    let checker = LivenessChecker<Int, Int, Int>(states: [0, 1, 2], transitions: [
+      0: [.init(source: 0, action: 1, target: 1), .init(source: 0, action: 1, target: 2)],
+      1: [.init(source: 1, action: 1, target: 0), .init(source: 1, action: 1, target: 2)],
+      2: []
+    ], fairness: [(scope: 1, isStrong: strong)], matches: { $0 == $1 },
+      changes: { before, after, _ in before / 2 != after / 2 },
+      actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+    let result = try checker.analyze(.eventually { state, _ in state == 2 },
+      initialStates: [0], renderScope: { _ in "projected" })
+    #expect(result.status == .satisfied)
+    #expect(result.witness == nil)
+    #expect(result.enabledActions == ["projected": [0: true, 1: true, 2: false]])
+    #expect(result.rejectedComponents.contains([0, 1]))
+  }
+
   @Test("deep transition graphs do not consume the call stack")
   func deepTransitionGraph() throws {
     let count = 20_000

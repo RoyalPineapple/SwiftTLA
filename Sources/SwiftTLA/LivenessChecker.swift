@@ -82,11 +82,12 @@ public struct TemporalAnalysis<State: Hashable & Sendable, Action: Equatable & S
 /// Bounded liveness checking over `[][Next]_vars` behaviors.
 ///
 /// Every reachable state has an implicit stutter edge. Fairness uses only
-/// explicit, state-changing named-action transitions.
+/// explicit named-action transitions that change the fairness projection.
 package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Sendable, Scope: Hashable & Sendable>: Sendable {
     let states: Set<State>
     let transitions: [State: [GraphEdge<State, Action>]]
     let matches: @Sendable (Action, Scope) -> Bool
+    let changes: @Sendable (State, State, Scope) -> Bool
     let actionOrder: @Sendable (Action, Action) -> Bool
     let stateOrder: @Sendable (State, State) -> Bool
     private let fairness: [(scope: Scope, isStrong: Bool)]
@@ -97,6 +98,7 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
         transitions: [State: [GraphEdge<State, Action>]],
         fairness: [(scope: Scope, isStrong: Bool)],
         matches: @escaping @Sendable (Action, Scope) -> Bool,
+        changes: @escaping @Sendable (State, State, Scope) -> Bool = { before, after, _ in before != after },
         actionOrder: @escaping @Sendable (Action, Action) -> Bool,
         stateOrder: @escaping @Sendable (State, State) -> Bool
     ) {
@@ -104,13 +106,14 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
         self.transitions = transitions
         self.fairness = fairness
         self.matches = matches
+        self.changes = changes
         self.actionOrder = actionOrder
         self.stateOrder = stateOrder
         enabled = Dictionary(uniqueKeysWithValues: Set(fairness.map(\.scope)).map { scope in
             let values = Dictionary(uniqueKeysWithValues: states.map { state in
                 let isEnabled = (transitions[state] ?? []).contains { edge in
                     guard let action = edge.action else { return false }
-                    return matches(action, scope) && edge.target != state
+                    return matches(action, scope) && changes(state, edge.target, scope)
                 }
                 return (state, isEnabled)
             })
@@ -169,7 +172,8 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
                 }
                 let branch = Self(states: reachable,
                     transitions: transitions.filter { reachable.contains($0.key) },
-                    fairness: fairness, matches: matches, actionOrder: actionOrder, stateOrder: stateOrder)
+                    fairness: fairness, matches: matches, changes: changes,
+                    actionOrder: actionOrder, stateOrder: stateOrder)
                 let result = try branch.analyze(condition, initialStates: initial,
                     isComplete: isComplete, renderScope: renderScope)
                 if result.status != .satisfied { return result }
@@ -313,7 +317,7 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
 
     private func matches(_ edge: GraphEdge<State, Action>, _ scope: Scope) -> Bool {
         guard let action = edge.action else { return false }
-        return matches(action, scope)
+        return matches(action, scope) && changes(edge.source, edge.target, scope)
     }
 
     private func fairComponents(
@@ -356,7 +360,7 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
     ) -> Bool {
         let taken = component.contains { state in
             explicitEdges(from: state).contains { edge in
-                allowsEdge(edge) && matches(edge, condition.scope) && (edge.target == state) == false && component.contains(edge.target)
+                allowsEdge(edge) && matches(edge, condition.scope) && component.contains(edge.target)
             }
         }
         if taken { return true }
@@ -441,7 +445,6 @@ extension LivenessChecker {
             edge: GraphEdge<State, Action>?
         ) -> CycleSearchConfiguration<State, Scope> {
             let taken = edge.flatMap { edge -> Set<Scope>? in
-                guard (edge.target == edge.source) == false else { return [] }
                 return Set(scopes.filter { matches(edge, $0) })
             } ?? []
             let disabled = Set(scopes.filter { (enabled[$0]?[state] == true) == false })
