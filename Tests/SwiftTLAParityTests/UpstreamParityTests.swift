@@ -150,70 +150,64 @@ struct UpstreamParityTests {
         }
     }
 
-    @Test("Channel preserves its initial handshake and parameterized native/formal graph")
+    @Test("Channel application transitions and complete checking agree for every upstream configuration")
     func channelGraphParity() throws {
         struct Edge: Hashable {
-            let source: ChannelModel.State
-            let action: String
-            let target: ChannelModel.State
+            let source: ChannelModel.Snapshot
+            let action: ChannelModel.Action
+            let target: ChannelModel.Snapshot
         }
-        let exploration = try explore(ChannelModel.spec, maximumStateLimit: 100)
-        try #require(exploration.isComplete)
-        #expect(isSuccessful(exploration))
-        let token = try #require(TLAStateProjection.Token(validating: "chan"))
-        let formalStates = try exploration.graph.states.mapValues { projection in
-            let record = try #require(projection.value(for: token).flatMap(ChannelModel.Channel.init(formalValue:)))
-            return ChannelModel.State(chan: record)
-        }
-        let formalInitial = try Set(exploration.initialStateIDs.map { try #require(formalStates[$0]) })
-        #expect(formalInitial.count == 6)
-        #expect(formalInitial.allSatisfy { $0.chan.ack == $0.chan.rdy })
-        var formalEdges: Set<Edge> = []
-        for (source, transitions) in exploration.graph.transitions {
-            for transition in transitions {
-                formalEdges.insert(try Edge(source: #require(formalStates[source]),
-                    action: transition.label.description, target: #require(formalStates[transition.target])))
+        for scenario in try ChannelModel.validationScenarios() {
+            let configuration = scenario.configuration
+            let exploration = try scenario.explore(maximumStates: 100)
+            let count = configuration.Data.count
+            #expect(exploration.initialStates.count == 2 * count)
+            #expect(exploration.initialStates.allSatisfy { $0.state.chan.ack == $0.state.chan.rdy })
+            let checkedEdges = Set(exploration.transitions.flatMap { source, transitions in
+                transitions.map { Edge(source: source, action: $0.action, target: $0.target) }
+            })
+            var pending = try scenario.initialMachines()
+            #expect(Set(pending.map(\.snapshot)) == exploration.initialStates)
+            #expect(throws: GeneratedMachineError.ambiguousInitialState) {
+                try ChannelModel.makeMachine(configuration: configuration)
             }
-        }
-        var pending = try ChannelModel.initialMachines()
-        #expect(Set(pending.map(\.state)) == formalInitial)
-        #expect(throws: GeneratedMachineError.ambiguousInitialState) { try ChannelModel.makeMachine() }
-        #expect(throws: GeneratedMachineError.invalidInitialState) {
-            try ChannelModel.makeMachine(.init(chan: .init(ack: 1, rdy: 0, val: .d1)))
-        }
-        let actions: [(ChannelModel.Action, String)] = ChannelModel.Data.allCases.map {
-            (.Send(d: $0), FormalActionCall(name: "Send", arguments: [$0.tlaValue]).description)
-        } + [(.Rcv, "Rcv")]
-        var nativeStates: Set<ChannelModel.State> = []
-        var nativeEdges: Set<Edge> = []
-        while let machine = pending.popLast() {
-            guard nativeStates.insert(machine.state).inserted else { continue }
-            try #require(nativeStates.count <= 12)
-            #expect(try machine.violatedInvariants().isEmpty)
-            let enabled = try Set(machine.enabledActions())
-            for (action, label) in actions {
-                let successors = try machine.successors(for: action)
-                #expect(try machine.isEnabled(action) == !successors.isEmpty)
-                #expect(enabled.contains(action) == !successors.isEmpty)
-                var next = machine
-                guard let successor = successors.first else {
-                    #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try next.send(action) }
-                    #expect(next.state == machine.state)
-                    continue
+            let datum = try #require(configuration.Data.first)
+            #expect(throws: GeneratedMachineError.invalidInitialState) {
+                try ChannelModel.makeMachine(.init(chan: .init(ack: 1, rdy: 0, val: datum)),
+                    configuration: configuration)
+            }
+            let actions = configuration.Data.map { ChannelModel.Action.Send(d: $0) } + [.Rcv]
+            var states: Set<ChannelModel.Snapshot> = []
+            var edges: Set<Edge> = []
+            while let machine = pending.popLast() {
+                guard states.insert(machine.snapshot).inserted else { continue }
+                try #require(states.count <= 4 * count)
+                #expect(try machine.violatedInvariants().isEmpty)
+                let enabled = try Set(machine.enabledActions())
+                for action in actions {
+                    let successors = try machine.successors(for: action)
+                    #expect(try machine.isEnabled(action) == !successors.isEmpty)
+                    #expect(enabled.contains(action) == !successors.isEmpty)
+                    var next = machine
+                    guard let successor = successors.first else {
+                        #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try next.send(action) }
+                        #expect(next.state == machine.state)
+                        continue
+                    }
+                    try #require(successors.count == 1)
+                    let transition = try next.send(action)
+                    #expect(transition.before == machine.state)
+                    #expect(transition.after == successor.state)
+                    #expect(next.state == successor.state)
+                    edges.insert(Edge(source: machine.snapshot, action: action, target: next.snapshot))
+                    pending.append(next)
                 }
-                try #require(successors.count == 1)
-                let transition = try next.send(action)
-                #expect(transition.before == machine.state)
-                #expect(transition.after == successor.state)
-                #expect(next.state == successor.state)
-                nativeEdges.insert(Edge(source: machine.state, action: label, target: next.state))
-                pending.append(next)
             }
+            #expect(states == Set(exploration.transitions.keys))
+            #expect(edges == checkedEdges)
+            #expect(states.count == 4 * count)
+            #expect(edges.count == 2 * count * (count + 1))
         }
-        #expect(nativeStates == Set(formalStates.values))
-        #expect(nativeEdges == formalEdges)
-        #expect(nativeStates.count == 12)
-        #expect(nativeEdges.count == 24)
     }
 
     @Test("AsynchInterface preserves its initial handshake and complete native/formal graph")

@@ -2,6 +2,87 @@
   "schema": "FiniteGraphCases",
   "cases": [
     {
+      "id": "ap-channel",
+      "sourceModel": "channel",
+      "scenario": "APChannel",
+      "module": "channel/APChannel.tla",
+      "configuration": "channel/APChannel.cfg",
+      "imports": [
+        "channel/Channel.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APChannel",
+          "importedModule": "Channel"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/AsynchronousInterface/APChannel.tla",
+        "sha256": "d3c1297ecca74ed632a27e19561ff3ee035314594e6330e7b2cbace7066bbabc"
+      },
+      "exploration": {
+        "maximumStateLimit": 100,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "d3c1297ecca74ed632a27e19561ff3ee035314594e6330e7b2cbace7066bbabc",
+      "cfgSHA256": "210577143af935e631c7931bc0b24ff6f5768d6f18d42663a51a41cbd2eaa1ec",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-channel-composing",
+      "sourceModel": "channel",
+      "scenario": "APChannel",
+      "module": "channel/composing/APChannel.tla",
+      "configuration": "channel/APChannel.cfg",
+      "imports": [
+        "channel/Channel.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APChannel",
+          "importedModule": "Channel"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/Composing/APChannel.tla",
+        "sha256": "f3cac6ad99aa1122d2966ff482c7c046e0ddd38442ba7364c49227c6dd2e09d3"
+      },
+      "exploration": {
+        "maximumStateLimit": 100,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "f3cac6ad99aa1122d2966ff482c7c046e0ddd38442ba7364c49227c6dd2e09d3",
+      "cfgSHA256": "210577143af935e631c7931bc0b24ff6f5768d6f18d42663a51a41cbd2eaa1ec",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-channel-fifo",
+      "sourceModel": "channel",
+      "scenario": "APChannel",
+      "module": "channel/fifo/APChannel.tla",
+      "configuration": "channel/APChannel.cfg",
+      "imports": [
+        "channel/Channel.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APChannel",
+          "importedModule": "Channel"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/FIFO/APChannel.tla",
+        "sha256": "6bb1f596600cb121576bff44f67a191da7c105fbdb8c80c155f8ccdd3429eb34"
+      },
+      "exploration": {
+        "maximumStateLimit": 100,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "6bb1f596600cb121576bff44f67a191da7c105fbdb8c80c155f8ccdd3429eb34",
+      "cfgSHA256": "210577143af935e631c7931bc0b24ff6f5768d6f18d42663a51a41cbd2eaa1ec",
+      "timeoutSeconds": 60
+    },
+    {
       "id": "mc-die-harder",
       "sourceModel": "die-harder",
       "scenario": "MCDieHarder",

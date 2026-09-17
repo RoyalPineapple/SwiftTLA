@@ -6,9 +6,12 @@ import Testing
 struct FiniteGraphCheckTests {
   @Test("Finite enum model values are declared in generated upstream modules")
   func declaresFiniteEnumModelValues() throws {
-    for spec in [AsynchInterfaceModel.spec, ChannelModel.spec] {
-      let rendered = try spec.compile().render()
-      #expect(rendered.tlaBundle.tla.contains("CONSTANTS d1, d2, d3\n"))
+    let channel = try #require(ChannelModel.validationScenarios().first)
+    for (rendered, declaration) in [
+      (try AsynchInterfaceModel.spec.compile().render(), "CONSTANTS d1, d2, d3\n"),
+      (try channel.render(), "CONSTANTS Data, d1, d2, d3\n")
+    ] {
+      #expect(rendered.tlaBundle.tla.contains(declaration))
       for name in ["d1", "d2", "d3"] {
         #expect(rendered.tlaBundle.cfg.contains("CONSTANT \(name) = \(name)\n"))
       }
