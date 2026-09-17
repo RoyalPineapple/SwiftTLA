@@ -617,6 +617,13 @@ final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil
     ) -> StateExpr? {
+        if let member = expression.as(MemberAccessExprSyntax.self),
+           let type = terminalTypeName(in: member.base), enumDefinition(named: type) != nil {
+            if let domain = finiteAlgorithmDomain(expression) {
+                return .value(.set(Set(domain.values)))
+            }
+            return decodeEnumCase(expression, expectedType: expectedEnumType)
+        }
         // SwiftSyntax represents a parenthesized expression as a one-element
         // tuple. Keep decoding through the typed path so scoped facade values
         // such as `current.expr` retain their lexical scope.

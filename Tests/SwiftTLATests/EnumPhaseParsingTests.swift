@@ -376,16 +376,17 @@ import SwiftTLAMacros
 
     @Test func parseInitializedEnumVar() throws {
         let source = """
-        {
-            let mode = Var<CameraMode>(CameraMode.idle)
+        { scope in
+            let mode = scope.sharedVar(initial: CameraMode.idle)
         }
         """
         let closure = try parseSpecTestClosure(source)
         let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure, sourceTypes: .init(enums: [cameraModeDefinition]))
         #expect(parsed.variables.count == 1)
-        #expect(parsed.variables[0].name == "mode")
-        #expect(parsed.variables[0].initialization == .value(.string("idle")))
-        #expect(parsed.variables[0].generatedSwiftType == "CameraMode")
+        let variable = try #require(parsed.variables.first)
+        #expect(variable.name == "mode")
+        #expect(variable.initialization == .value(.string("idle")))
+        #expect(variable.generatedSwiftType == "CameraMode")
     }
 
 }
