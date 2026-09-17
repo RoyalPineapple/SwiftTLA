@@ -39,6 +39,10 @@ extension ParserSession {
                 continue
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
+                      let step = specBindings.atomicSteps[reference.baseName.sourceIdentifierName] {
+                components.sourceAtomicSteps.append(step)
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
                       let action = specBindings.actions[reference.baseName.sourceIdentifierName] {
                 components.actions.append(action)
             } else if case .expr(let expression) = statement.item,
@@ -202,6 +206,14 @@ extension ParserSession {
                     call: call,
                     into: &components
                 )
+            } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Do" {
+                guard declaration.bindingSpecifier.text == "let", specBindings.atomicSteps[sourceName] == nil else {
+                    components.diagnostics.append(.init(message: "An atomic step requires a unique immutable let binding.", source: binding))
+                    continue
+                }
+                if let step = parseIndependentStep(call, into: &components) {
+                    specBindings.atomicSteps[sourceName] = step
+                }
             } else if compilerGrammarName(in: call.calledExpression) == "Action" {
                 guard specBindings.actions[sourceName] == nil else {
                     components.diagnostics.append(.init(
@@ -755,7 +767,9 @@ extension ParserSession {
 
         switch name {
         case "Do":
-            parseIndependentStep(call, into: &components)
+            if let step = parseIndependentStep(call, into: &components) {
+                components.sourceAtomicSteps.append(step)
+            }
         case "Algorithm":
             if let algorithm = parseAlgorithm(call, into: &components) {
                 components.sourceAlgorithms.append(algorithm)

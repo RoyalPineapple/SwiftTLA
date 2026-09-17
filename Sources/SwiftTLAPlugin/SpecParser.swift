@@ -142,6 +142,7 @@ final class ParserSession {
         var properties: [String: any ModelProperty] = [:]
         var parameters: [String: ActionBinding] = [:]
         var actions: [String: NamedAction] = [:]
+        var atomicSteps: [String: AtomicStep] = [:]
         var instances: [String: FormalModuleInstance] = [:]
         var algorithms: [String: Algorithm] = [:]
         var modules: [String: TLASpec] = [:]
@@ -228,6 +229,7 @@ final class ParserSession {
     }
 
     func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+        if let enabled = decodeStepEnabledness(expression, scope: sourceScope) { return enabled }
         if let integer = SourceIntegerLiteral.value(expression) { return .value(.int(integer)) }
         if let call = expression.as(FunctionCallExprSyntax.self), nominalRecordType(call.calledExpression) != nil {
             return decodeNominalRecord(call, scope: sourceScope)
@@ -1266,6 +1268,7 @@ final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil
     ) -> StateExpr? {
+        if let enabled = decodeStepEnabledness(expression, scope: scope) { return enabled }
         if let array = expression.as(ArrayExprSyntax.self) {
             let elements = array.elements.compactMap {
                 decodeTypedFacadeValue($0.expression, scope: scope, expectedEnumType: expectedEnumType)
@@ -1400,6 +1403,15 @@ final class ParserSession {
         return result
     }
 
+    private func decodeStepEnabledness(_ expression: ExprSyntax, scope: TypedFacadeScope) -> StateExpr? {
+        guard let member = expression.as(MemberAccessExprSyntax.self),
+              member.declName.baseName.sourceIdentifierName == "enabled",
+              let reference = member.base?.as(DeclReferenceExprSyntax.self),
+              scope.value(for: reference) == nil,
+              let step = specBindings.atomicSteps[reference.baseName.sourceIdentifierName] else { return nil }
+        return step.enabled.stateExpr
+    }
+
     private func decodeEnumCase(
         _ expression: ExprSyntax,
         expectedType: String? = nil
@@ -1507,6 +1519,7 @@ final class ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope
     ) -> CompiledValueType? {
+        if decodeStepEnabledness(expression, scope: scope) != nil { return .bool }
         var expression = expression
         while let parentheses = expression.as(TupleExprSyntax.self),
               parentheses.elements.count == 1,
@@ -2639,11 +2652,11 @@ extension ParserSession {
         }
         switch name {
         case "WeakFairness":
-            guard let action = actionReference(call.arguments.first?.expression) else { return nil }
-            return .weakFairness(action.name)
+            guard let name = actionName(call.arguments.first?.expression) else { return nil }
+            return .weakFairness(name)
         case "StrongFairness":
-            guard let action = actionReference(call.arguments.first?.expression) else { return nil }
-            return .strongFairness(action.name)
+            guard let name = actionName(call.arguments.first?.expression) else { return nil }
+            return .strongFairness(name)
         case "WeakFairnessNext": return .weakFairnessNext
         case "StrongFairnessNext": return .strongFairnessNext
         default: return nil
@@ -2653,6 +2666,12 @@ extension ParserSession {
     func actionReference(_ expression: ExprSyntax?) -> NamedAction? {
         guard let reference = expression?.as(DeclReferenceExprSyntax.self) else { return nil }
         return specBindings.actions[reference.baseName.sourceIdentifierName]
+    }
+
+    private func actionName(_ expression: ExprSyntax?) -> String? {
+        guard let reference = expression?.as(DeclReferenceExprSyntax.self) else { return nil }
+        return specBindings.atomicSteps[reference.baseName.sourceIdentifierName]?.model.label.name
+            ?? actionReference(expression)?.name
     }
 
 }

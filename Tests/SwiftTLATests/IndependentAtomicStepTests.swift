@@ -8,6 +8,21 @@ struct IndependentAtomicStepTests {
         .init(enums: [parserTestEnum("Step", cases: ["next": .string("next"), "other": .string("other")])])
     }
 
+    @Test("bound steps reject mutable bindings, duplicate registration, and unregistered enabledness", arguments: [
+        "var next = Do(Step.next) { Skip() }\nnext",
+        "let next = Do(Step.next) { Skip() }\nnext\nnext",
+        "let next = Do(Step.next) { Skip() }\nInvariant(\"Ready\") { next.enabled }"
+    ])
+    func rejectsInvalidBoundSteps(_ declarations: String) throws {
+        let spec = SpecParser.parseSpecClosure(named: "InvalidBoundSteps", try parseSpecTestClosure("""
+        { scope in
+            let value = scope.sharedVar(initial: 0)
+            \(declarations)
+        }
+        """), sourceTypes: sourceTypes)
+        #expect(throws: (any Error).self) { try spec.compile() }
+    }
+
     @Test("top-level steps preserve ordered writes without generated control state")
     func independentExecution() throws {
         let source = IndependentAtomicSteps.spec

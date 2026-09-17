@@ -388,6 +388,8 @@ public struct AtomicStep: SpecComponent {
     package let model: AlgorithmStepModel
     package let bindings: [ActionBinding]
 
+    public var enabled: Expr<Bool> { Expr(.enabledAction(model.label.name)) }
+
     package init(model: AlgorithmStepModel, bindings: [ActionBinding] = []) {
         self.model = model
         self.bindings = bindings

@@ -188,6 +188,22 @@ This restriction does not satisfy B-06. Required composition remains unfinished.
 Acceptance requires generated execution, complete native graphs, TLA+ export without synthetic control state, and independent hosted TLC evidence.
 The direct model must not acquire an authored PlusCal algorithm.
 
+An immutable binding can retain an independent `Do` step for later references.
+The binding does not register the step. A separate expression registers it once:
+
+```swift
+let finish = Do(Step.finish, when: count == 0) { Skip() }
+finish
+let Finished = Temporal()
+Finished(.eventually(finish.enabled))
+WeakFairness(finish)
+```
+
+`step.enabled` tests whether the step has a successor, including its guards and local choices.
+Parameterized steps quantify over their configured arguments. An empty argument domain makes the step disabled.
+`WeakFairness(step)` and `StrongFairness(step)` refer to that same registered action.
+Missing registration and duplicate registration fail compilation.
+
 #### Parameterized independent steps
 
 `Do(label, over: domain) { member in ... }` declares one action argument.

@@ -878,6 +878,12 @@ public func WeakFairness(_ action: ActionDecl) -> FairnessDecl {
 public func StrongFairness(_ action: ActionDecl) -> FairnessDecl {
   FairnessDecl(.strongFairness(action.name))
 }
+public func WeakFairness(_ step: AtomicStep) -> FairnessDecl {
+  FairnessDecl(.weakFairness(step.model.label.name))
+}
+public func StrongFairness(_ step: AtomicStep) -> FairnessDecl {
+  FairnessDecl(.strongFairness(step.model.label.name))
+}
 public func WeakFairnessNext() -> FairnessDecl {
   FairnessDecl(.weakFairnessNext)
 }

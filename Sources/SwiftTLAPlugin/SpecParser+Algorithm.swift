@@ -196,12 +196,11 @@ extension ParserSession {
             ?? call.arguments.first(where: { $0.label?.text == "scoped" })?.expression.as(ClosureExprSyntax.self)
     }
 
-    func parseIndependentStep(_ call: FunctionCallExprSyntax, into components: inout TLASpec) {
+    func parseIndependentStep(_ call: FunctionCallExprSyntax, into components: inout TLASpec) -> AtomicStep? {
         algorithmParseFailure = nil
         algorithmSourceDiagnostic = nil
         if call.arguments.contains(where: { $0.label?.text == "over" }) {
-            parseParameterizedIndependentStep(call, into: &components)
-            return
+            return parseParameterizedIndependentStep(call, into: &components)
         }
         guard call.arguments.first?.label == nil, call.additionalTrailingClosures.isEmpty,
               case .step(let model)? = parseEachComponent(call, construct: .doStep,
@@ -209,18 +208,19 @@ extension ParserSession {
             components.diagnostics.append(algorithmSourceDiagnostic ?? .init(
                 message: algorithmParseFailure ?? "Do requires a typed label, an optional when guard, and an atomic body.",
                 source: call))
-            return
+            return nil
         }
         let step = AtomicStep(model: model)
         do {
             try step.requireIndependentStep()
-            components.sourceAtomicSteps.append(step)
+            return step
         } catch {
             components.diagnostics.append(.init(message: String(describing: error), source: call))
+            return nil
         }
     }
 
-    private func parseParameterizedIndependentStep(_ call: FunctionCallExprSyntax, into components: inout TLASpec) {
+    private func parseParameterizedIndependentStep(_ call: FunctionCallExprSyntax, into components: inout TLASpec) -> AtomicStep? {
         let arguments = Array(call.arguments)
         guard (2...3).contains(arguments.count), arguments[0].label == nil,
               arguments[1].label?.text == "over",
@@ -230,14 +230,14 @@ extension ParserSession {
               let closure = call.trailingClosure else {
             components.diagnostics.append(.init(
                 message: "Parameterized Do requires a typed label and one or two domains after over:.", source: call))
-            return
+            return nil
         }
         let names = closureParameterNames(in: closure)
         guard names.count == arguments.count - 1, Set(names).count == names.count,
               names.allSatisfy({ !$0.isEmpty && $0 != "_" }) else {
             components.diagnostics.append(.init(
                 message: "Name each Do argument once in its closure, with one name per domain.", source: closure))
-            return
+            return nil
         }
         var bindings: [ActionBinding] = []
         var bodyScope = sourceScope
@@ -247,7 +247,7 @@ extension ParserSession {
                   let domain = decodeTypedFacadeValue(argument.expression, scope: sourceScope) else {
                 components.diagnostics.append(.init(
                     message: "Do requires a typed finite set with a resolved element type for each domain.", source: argument))
-                return
+                return nil
             }
             bindings.append(.init(name: name, domain: domain, generatedSwiftType: element.swiftType))
             bodyScope = bodyScope.extending(binding: name, to: .variable(name), shape: element)
@@ -256,14 +256,15 @@ extension ParserSession {
             processParameter: "__independent_step", macros: [:], scope: bodyScope) else {
             components.diagnostics.append(algorithmSourceDiagnostic ?? .init(
                 message: algorithmParseFailure ?? "Do requires a supported atomic body.", source: closure))
-            return
+            return nil
         }
         let step = AtomicStep(model: .init(label: .init(name: label), statements: statements), bindings: bindings)
         do {
             try step.requireIndependentStep()
-            components.sourceAtomicSteps.append(step)
+            return step
         } catch {
             components.diagnostics.append(.init(message: String(describing: error), source: call))
+            return nil
         }
     }
 
