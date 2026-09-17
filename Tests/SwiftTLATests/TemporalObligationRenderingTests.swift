@@ -6,17 +6,17 @@ import UpstreamParity
 struct TemporalObligationRenderingTests {
     @Test("configured property binders serialize each member without free names or mutable domains")
     func instantiatesBindings() throws {
-        let rendered = try ConditionalPopulation.render(configuration: .init(members: [0, 1]))
-        let obligations = try #require(rendered.temporalObligations["selected"])
+        let rendered = try RecurringPopulation.render(configuration: .init(members: [0, 1]))
+        let obligations = try #require(rendered.temporalObligations["EachProgress"])
         #expect(obligations.count == 4)
         for member in [0, 1] {
             let prefix = "LET _process == \(member) IN "
             #expect(obligations.filter { $0.initialCondition.hasPrefix(prefix) && $0.property.hasPrefix(prefix) }.count == 2)
         }
-        #expect(try rendered.temporalObligationBundles(checking: "selected")?.count == 4)
-        let empty = try ConditionalPopulation.render(configuration: .init(members: []))
-        #expect(try empty.temporalObligationBundles(checking: "selected") == nil)
-        #expect(empty.tlaBundle.cfg.contains("PROPERTY selected"))
+        #expect(try rendered.temporalObligationBundles(checking: "EachProgress")?.count == 4)
+        let empty = try RecurringPopulation.render(configuration: .init(members: []))
+        #expect(try empty.temporalObligationBundles(checking: "EachProgress") == nil)
+        #expect(empty.tlaBundle.cfg.contains("PROPERTY EachProgress"))
     }
 
     @Test("conditional action claims partition initial states without changing transitions or fairness")

@@ -10,6 +10,10 @@ struct TemporalPopulationTests {
             #expect(graph.temporalResults[.EachRecurs]?.status ==
                 (scenario.configuration.members.contains(2) ? .violated : .satisfied))
             #expect(graph.temporalResults[.EachVisits]?.status == .satisfied)
+            #expect(graph.temporalResults[.EachProgress]?.status ==
+                (scenario.configuration.members.contains(2) ? .violated : .satisfied))
+            let native = try NativeScenarioRun(scenario, maximumStates: 20)
+            try native.validateExpectations()
             let tla = try scenario.render().tlaBundle.tla
             #expect(tla.contains("EachRecurs == (\\A _process \\in members: []<>(value = _process))"))
             #expect(tla.contains("EachVisits == (\\A _process \\in members: <>visited[_process])"))
@@ -27,6 +31,10 @@ struct TemporalPopulationTests {
         #expect(trace.cycle.first == trace.cycle.last)
         #expect(trace.cycleActions.contains(.toggle(process: 2)))
         #expect(graph.temporalResults[.EachVisits]?.status == .satisfied)
+        let conditional = try #require(graph.temporalResults[.EachProgress]?.witness)
+        #expect(conditional.prefix.first?.state.value == 0)
+        #expect(conditional.cycle.first == conditional.cycle.last)
+        #expect(conditional.cycleActions.contains(.toggle(process: 2)))
     }
 
     @Test("authored PlusCal exports the same quantified temporal properties")

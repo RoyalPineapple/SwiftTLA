@@ -12,6 +12,7 @@ package struct RecurringPopulation {
             let value = scope.sharedVar(initial: 0)
             let EachRecurs = AlwaysEventually()
             let EachVisits = Eventually()
+            let EachProgress = Temporal()
             Algorithm("Toggle") {
                 Each(members, fairness: .weak, scoped: { member, process in
                     let visited = process.localVar(initial: false)
@@ -21,6 +22,11 @@ package struct RecurringPopulation {
                     }
                     EachRecurs(value == member)
                     EachVisits(visited)
+                    EachProgress(.conditional(value == member,
+                        then: .alwaysStep(on: value) { before, after in
+                            before + after == 1 && member == 0
+                        },
+                        else: .eventually(value == member)))
                 })
             }
             Validation("Empty") { Bind(members, to: Set<Int>([])) }
@@ -28,6 +34,7 @@ package struct RecurringPopulation {
             Validation("Two") { Bind(members, to: Set<Int>([0, 1])) }
             Validation("Outside cycle") { Bind(members, to: Set<Int>([2])) }
                 .expect(EachRecurs, .violated)
+                .expect(EachProgress, .violated)
         }
     }
 }
