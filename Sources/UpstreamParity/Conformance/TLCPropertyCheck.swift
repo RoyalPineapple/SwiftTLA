@@ -42,7 +42,7 @@ package enum TLCPropertySource: Sendable {
 }
 
 package struct TLCPropertyCheck: Sendable {
-  private enum BatchOutcome { case satisfied, violated, temporalTautology, notRun }
+  private enum BatchOutcome { case satisfied, violated, temporalTautology, unavailable, notRun }
   private let processAdapter: TLCProcessAdapter
 
   package init(processAdapter: TLCProcessAdapter = TLCProcessAdapter()) {
@@ -67,6 +67,9 @@ package struct TLCPropertyCheck: Sendable {
       }
       let outcome: TLCExecutionOutcome = capture.outcome == .failed(exitStatus: 13)
         ? .livenessViolation : capture.outcome
+      if case .failed = outcome {
+        return try processAdapter.capture(request, retainingIn: directory)
+      }
       let check: ModelCheck
       if outcome == .deadlock {
         check = .deadlock
@@ -140,6 +143,7 @@ package struct TLCPropertyCheck: Sendable {
       let outcome = try processAdapter.run(request, retainingIn: output)
       if outcome == .completed { return .satisfied }
       if outcome == .temporalTautology { return .temporalTautology }
+      if case .failed = outcome { return .unavailable }
       // A failed batch establishes no individual verdict. Validate its trace,
       // then isolate the checks to identify the disagreement with Swift.
       guard let property = passingChecks.first(where: { $0 != .deadlock }) else {

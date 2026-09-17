@@ -5,6 +5,38 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct TLCPropertyCheckTests {
+  @Test("an unsupported batch isolates every check without accepting unavailable results", arguments: [false, true])
+  func isolatesUnsupportedBatch(unsupportedProperty: Bool) throws {
+    let x = Var<Int>("x", 1)
+    let rendered = try TLASpec("TemporalFixture") {
+      Variable(x)
+      Invariant("Positive") { x > 0 }
+      AlwaysEventually("Progress", x == 1)
+    }.compile().render()
+    let fixture = try Fixture(renderedOverride: rendered)
+    let deadlock = try TLCTraceParser().parseCounterexample(numberedInitialStateTrace(), states: fixture.swiftRun.graph.states.values)
+    let native = try NativeModelRun(rendered: rendered, graph: fixture.swiftRun,
+      checks: .init(properties: ["Positive": .satisfied, "Progress": .satisfied], deadlock: .violated(deadlock)))
+    let checker = TLCPropertyCheck(processAdapter: .init(executor:
+      TLCUnsupportedPropertyExecutor(unsupportedProperty: unsupportedProperty)))
+    let graphDirectory = fixture.root.appendingPathComponent("graph")
+    let graph = try checker.captureGraph(native, request: fixture.completeGraphRequest, source: .generated,
+      in: graphDirectory)
+    #expect(graph.outcome == .completed)
+    #expect(graph.graph.isComparable)
+    #expect(graph.request.bundle == fixture.completeGraphRequest.bundle)
+    #expect(FileManager.default.fileExists(atPath: graphDirectory.appendingPathComponent("checked-graph/logs/tlc.stdout.log").path))
+    let result = try checker.captureAll(native, completeGraph: .success(graph), source: .generated, in: fixture.directory)
+    #expect(result.graphComparison?.matches == true)
+    #expect(result.checks.map(\.check) == [.property("Positive"), .property("Progress"), .deadlock])
+    for (check, comparison) in result.checks {
+      let expected: PropertyComparisonStatus = check == .property("Progress") && unsupportedProperty ? .unavailable : .exact
+      #expect(try comparison.get().status == expected)
+      #expect(FileManager.default.fileExists(atPath: fixture.directory.appendingPathComponent(check.artifactPath)
+        .appendingPathComponent("tlc-process.json").path))
+    }
+  }
+
   @Test("a temporal tautology never replaces graph capture or the other batch checks", arguments: [false, true])
   func isolatesTautology(failingSafety: Bool) throws {
     let x = Var<Int>("x", 1)
