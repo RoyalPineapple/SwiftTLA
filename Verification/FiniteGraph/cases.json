@@ -344,6 +344,7 @@
     {
       "id": "n-queens-four",
       "sourceModel": "n-queens-four",
+      "scenario": "FourQueens",
       "module": "n-queens-four/MC.tla",
       "configuration": "n-queens-four/MC.cfg",
       "imports": [

@@ -484,9 +484,9 @@ public protocol FormalSetValue: TLAValueType {
 extension SetExpr: FormalSetValue {}
 
 extension TypedExpression where ExpressionValue: FormalSetValue {
-  public func intersection(
-    _ other: some TypedExpression<ExpressionValue>
-  ) -> Expr<ExpressionValue> {
+  public func intersection<Other: FormalSetValue>(
+    _ other: some TypedExpression<Other>
+  ) -> Expr<ExpressionValue> where Other.Element == ExpressionValue.Element {
     Expr(.intersection(stateExpr, other.stateExpr))
   }
 
@@ -498,7 +498,8 @@ extension TypedExpression where ExpressionValue: FormalSetValue {
     Expr<Int>(.cardinality(stateExpr))
   }
 
-  public func isSubset(of other: some TypedExpression<ExpressionValue>) -> Expr<Bool> {
+  public func isSubset<Other: FormalSetValue>(of other: some TypedExpression<Other>) -> Expr<Bool>
+  where Other.Element == ExpressionValue.Element {
     Expr(stateExpr.isSubset(of: other))
   }
 }
@@ -682,14 +683,14 @@ extension ZeroBasedSequence: FormalZeroBasedSequenceValue {}
 public func Sequences<Domain: FormalSetValue>(
   of elements: some TypedExpression<Domain>,
   lengths: ClosedRange<Int>
-) -> Expr<SetExpr<TupleExpr<Domain.Element>>> {
+) -> Expr<SetExpr<[Domain.Element]>> {
   Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths, kind: .sequences))
 }
 
 public func Sequences<Domain: FormalSetValue, Lengths: FormalSetValue>(
   of elements: some TypedExpression<Domain>,
   lengths: some TypedExpression<Lengths>
-) -> Expr<SetExpr<TupleExpr<Domain.Element>>> where Lengths.Element == Int {
+) -> Expr<SetExpr<[Domain.Element]>> where Lengths.Element == Int {
   Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths.stateExpr, kind: .sequences))
 }
 
@@ -719,14 +720,14 @@ public func ZeroBasedSequences<Domain: FormalSetValue, Lengths: FormalSetValue>(
 public func SortedSequences<Domain: FormalSetValue>(
   of elements: some TypedExpression<Domain>,
   lengths: ClosedRange<Int>
-) -> Expr<SetExpr<TupleExpr<Int>>> where Domain.Element == Int {
+) -> Expr<SetExpr<[Int]>> where Domain.Element == Int {
   Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths, kind: .sorted))
 }
 
 public func SortedSequences<Domain: FormalSetValue, Lengths: FormalSetValue>(
   of elements: some TypedExpression<Domain>,
   lengths: some TypedExpression<Lengths>
-) -> Expr<SetExpr<TupleExpr<Int>>> where Domain.Element == Int, Lengths.Element == Int {
+) -> Expr<SetExpr<[Int]>> where Domain.Element == Int, Lengths.Element == Int {
   Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths.stateExpr, kind: .sorted))
 }
 
@@ -790,15 +791,15 @@ package func formalZeroBasedSequence(_ elements: [StateExpr]) -> StateExpr {
 
 extension TypedExpression where ExpressionValue: FormalSetValue {
   /// Returns the formal union of two typed sets.
-  public func union(
-    _ other: some TypedExpression<ExpressionValue>
-  ) -> Expr<ExpressionValue> {
+  public func union<Other: FormalSetValue>(
+    _ other: some TypedExpression<Other>
+  ) -> Expr<ExpressionValue> where Other.Element == ExpressionValue.Element {
     Expr(.union(stateExpr, other.stateExpr))
   }
 
-  public func subtracting(
-    _ other: some TypedExpression<ExpressionValue>
-  ) -> Expr<ExpressionValue> {
+  public func subtracting<Other: FormalSetValue>(
+    _ other: some TypedExpression<Other>
+  ) -> Expr<ExpressionValue> where Other.Element == ExpressionValue.Element {
     Expr(.setDifference(stateExpr, other.stateExpr))
   }
 

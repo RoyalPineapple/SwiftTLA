@@ -4,6 +4,20 @@ import SwiftSyntax
 @testable import SwiftTLAPlugin
 
 struct ArrayValueTests {
+    @Test("sequence domains and set expressions compose without collection adapters")
+    func collectionComposition() throws {
+        let domain: Expr<SetExpr<[Int]>> = Sequences(of: Set<Int>([1, 2]), lengths: 1...1)
+        let values = Set<[Int]>([[1]]).expr
+        let union: Expr<Set<[Int]>> = values.union(domain)
+        let intersection: Expr<Set<[Int]>> = values.intersection(domain)
+        let difference: Expr<Set<[Int]>> = values.subtracting(domain)
+        #expect(try compiledValue(union.stateExpr) == .set([.tuple([.int(1)]), .tuple([.int(2)])]))
+        #expect(try compiledValue(intersection.stateExpr) == .set([.tuple([.int(1)])]))
+        #expect(try compiledValue(difference.stateExpr) == .set([]))
+        #expect(try compiledValue(values.isSubset(of: domain).stateExpr) == .bool(true))
+        #expect(try compiledValue(domain.isSubset(of: values).stateExpr) == .bool(false))
+    }
+
     @Test("Swift arrays preserve ordered repeated values at the formal boundary")
     func preservesValues() throws {
         let values = [2, 1, 2]

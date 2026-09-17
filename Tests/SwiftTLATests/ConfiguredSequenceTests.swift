@@ -4,6 +4,22 @@ import SwiftSyntax
 @testable import SwiftTLAPlugin
 
 struct ConfiguredSequenceTests {
+    @Test("Algorithm lexical aliases retain configured sequence expressions")
+    func algorithmBindings() throws {
+        let scenarios = try ConfiguredAlgorithmBindingMachine.validationScenarios()
+        #expect(scenarios.count == 2)
+        for scenario in scenarios {
+            let machine = try #require(scenario.initialMachines().first)
+            let successors = try machine.successors(for: .adopt)
+            let expected = Set((1...scenario.configuration.limit).map { Array(repeating: 7, count: $0) })
+            #expect(Set(successors.map { $0.state.row }) == expected)
+            let graph = try scenario.explore(maximumStates: 10)
+            #expect(graph.safetyViolations.isEmpty)
+            #expect(Set(graph.transitions.keys.map { $0.state.row }) == expected.union([[]]))
+            #expect(try scenario.render().tlaBundle.tla == scenarios[0].render().tlaBundle.tla)
+        }
+    }
+
     @Test("configured sequence domains preserve every length, order, and index convention")
     func completeConfiguredDomains() throws {
         for scenario in try ConfiguredSequenceDomainMachine.validationScenarios() {

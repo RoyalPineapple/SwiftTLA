@@ -1347,7 +1347,7 @@ import SwiftTLAMacros
         #expect(try specification.compile().render().tlaBundle.tla.contains("CASE"))
     }
 
-    @Test("source model compiles a static formal selection")
+    @Test("source model retains a formal selection until evaluation")
     func parsesStaticFormalSelection() throws {
         let source = """
         {
@@ -1366,7 +1366,16 @@ import SwiftTLAMacros
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
         let specification = try loweredSource(parsed, named: "StaticChoice")
-        #expect(specification.variables.first { $0.name == "current" }?.initialization == .value(.int(2)))
+        let current = try #require(specification.variables.first { $0.name == "current" })
+        guard case .expression(.choose) = current.initialization else {
+            Issue.record("Expected the formal selection expression")
+            return
+        }
+        let compilation = try specification.compile()
+        #expect(try compilation.render().tlaBundle.tla.contains("CHOOSE"))
+        let state = try #require(CompiledRuntime(compilation: compilation).initialStates().first)
+        let token = try #require(TLAStateProjection.Token(validating: "current"))
+        #expect(try state.projection(using: compilation.layout).value(for: token) == .int(2))
     }
 
     @Test("parser expands a statement macro with the current process identifier")

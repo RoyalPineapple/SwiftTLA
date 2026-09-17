@@ -295,6 +295,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
                 scenarios = try AsynchInterfaceModel.validationScenarios()
             case .majority:
                 scenarios = try MajorityModel.validationScenarios()
+            case .nQueensFour:
+                scenarios = try NQueensModel.validationScenarios()
             default:
                 guard scenario == nil else {
                     throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
@@ -398,8 +400,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .kvsnap: return try explore(KVsnapModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
-        case .nQueensFour: return try explore(NQueensModel.initialMachines())
-        case .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .channel, .asynchInterface, .majority:
+        case .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .channel, .asynchInterface, .majority, .nQueensFour:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())

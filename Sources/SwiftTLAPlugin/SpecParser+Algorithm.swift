@@ -350,10 +350,8 @@ extension ParserSession {
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
                let value = parseAlgorithmLexicalValue(variable) {
-                let constant = ConstantDecl(value.name, value.value)
-                constants.append(constant)
                 sourceScope = sourceScope.extending(binding: value.name,
-                    to: .value(value.value),
+                    to: value.value,
                     shape: value.shape)
                 continue
             }
@@ -928,51 +926,24 @@ extension ParserSession {
 
     private func parseAlgorithmLexicalValue(
         _ declaration: VariableDeclSyntax
-    ) -> (name: String, value: TLAValue, shape: CompiledValueType?)? {
+    ) -> (name: String, value: StateExpr, shape: CompiledValueType?)? {
         guard declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
               let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
               let initializer = binding.initializer?.value
         else { return nil }
 
+        guard declaration.bindingSpecifier.text == "let" else {
+            algorithmParseFailure = "Algorithm values must be immutable let bindings. Use scope.sharedVar and Assign for mutable state."
+            return nil
+        }
         guard let expression = decodeTypedFacadeValue(initializer, scope: sourceScope)
             ?? decodeStateExpr(initializer) else {
             algorithmParseFailure = algorithmParseFailure
-                ?? "Algorithm let '\(name)' must be a closed formal value; its expression could not be decoded."
+                ?? "Algorithm let '\(name)' requires a supported formal expression."
             return nil
         }
-        let value: TLAValue
-        do {
-            value = try evaluateClosed(expression)
-        } catch let error as EvalError {
-            algorithmSourceDiagnostic = .init(
-                message: "Algorithm let '\(name)' could not be evaluated as a closed formal value.",
-                source: initializer,
-                actual: error.description
-            )
-            return nil
-        } catch let error as CompilationDiagnostic {
-            algorithmSourceDiagnostic = .init(
-                message: "Algorithm let '\(name)' could not be compiled as a closed formal value.",
-                source: initializer,
-                actual: error.description
-            )
-            return nil
-        } catch let error as CompiledEvaluationError {
-            algorithmSourceDiagnostic = .init(
-                message: "Algorithm let '\(name)' reached an invalid compiled operation.",
-                source: initializer,
-                actual: error.description
-            )
-            return nil
-        } catch {
-            algorithmSourceDiagnostic = .init(
-                message: "Algorithm let '\(name)' reached an unclassified compiler failure.",
-                source: initializer
-            )
-            return nil
-        }
-        return (name, value, typedFacadeValueType(initializer, scope: sourceScope))
+        return (name, expression, typedFacadeValueType(initializer, scope: sourceScope))
     }
 
     private func parseEachComponent(

@@ -2,6 +2,29 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
+struct ConfiguredAlgorithmBindingMachine {
+    enum Step: String, CaseIterable { case adopt }
+
+    static var spec: TLASpec {
+        #spec("ConfiguredAlgorithmBindingMachine") { model in
+            let limit = model.parameter(as: Int.self, in: 1...2)
+            Algorithm("Bindings", scoped: { scope in
+                let lengths = IntRange(1, through: limit)
+                let domain = Sequences(of: Set<Int>([7]), lengths: lengths)
+                let rows = domain
+                let row = scope.sharedVar(initial: Array<Int>([]))
+                Do(Step.adopt) {
+                    With(rows) { selected in Assign(row, to: selected) }
+                }
+                Invariant("Bounded") { row.count <= limit }
+            })
+            Validation("One") { Bind(limit, to: 1) }
+            Validation("Two") { Bind(limit, to: 2) }
+        }
+    }
+}
+
+@TLAModel
 struct ConfiguredSequenceDomainMachine {
     enum Step: String, CaseIterable { case stay }
 

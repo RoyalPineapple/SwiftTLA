@@ -756,6 +756,8 @@ let row = scope.sharedVar(initial: Array<Int>([]))
 Array expressions support append, concatenation, indexed reads, indexed removal,
 selection, length, head, and folds through the shared sequence operations.
 These operations retain the array type. They do not require a `TupleExpr` value.
+`Sequences` and `SortedSequences` produce domains of ordinary Swift arrays.
+Set operations accept different set representations with the same element type and preserve the receiver type.
 DSL sequence indices start at one, as in TLA+.
 Generated application state uses ordinary Swift arrays, whose indices start at zero.
 The formal boundary rejects invalid element values instead of discarding them.
@@ -781,6 +783,8 @@ The compiler retains both domain expressions and their lexical bindings in forma
 It does not enumerate their Cartesian products during source construction.
 Generated initial states preserve element types, including nominal enums.
 Different configurations retain the same generated types and TLA+ module.
+Immutable `let` bindings inside `Algorithm` retain their formal expressions, including parameter references and references to earlier bindings.
+The parser does not evaluate these expressions as closed constants.
 
 Lengths must be nonnegative integers. The builders also accept compile-time ranges such as `0...2`.
 Compilation rejects negative lengths in these ranges.

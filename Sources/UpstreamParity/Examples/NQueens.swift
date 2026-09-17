@@ -1,9 +1,7 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// The upstream N-Queens PlusCal algorithm, specialized to the published
-/// FourQueens TLC model. A tuple is one partial board: its index is the row
-/// and its value is the chosen column.
+/// The upstream N-Queens PlusCal algorithm with its published FourQueens scenario.
 @TLAModel
 package struct NQueensModel: Sendable {
     private enum Step: String, CaseIterable {
@@ -11,17 +9,23 @@ package struct NQueensModel: Sendable {
     }
 
     package static var spec: TLASpec {
-        #spec("QueensPluscal") {
+        #spec("QueensPluscal") { model in
             Extends(.naturals)
+            let N = model.parameter(as: Int.self, in: 1...4)
+            Assume(N > 0)
+            let TypeInvariant = Invariant()
+            let NoSolutions = Invariant()
+            let Invariant = Invariant()
+            let Termination = Temporal()
             Algorithm("Queens", fairness: .weak, scoped: { scope in
-                let todo = scope.sharedVar(initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>()))
-                let sols = scope.sharedVar(initial: SetExpr<TupleExpr<Int>>())
+                let todo = scope.sharedVar(initial: Set<[Int]>([Array<Int>([])]))
+                let sols = scope.sharedVar(initial: Set<[Int]>([]))
 
                 While(Step.nextQueen, !todo.expr.isEmpty) {
                     With(todo) { queens in
                         Let(queens.expr.count + 1) { nextQueen in
                             Let(
-                                IntRange(1, through: 4).filtering { column in
+                                IntRange(1, through: N).filtering { column in
                                     !Exists(in: IntRange(1, through: queens.expr.count)) { row in
                                         queens.expr.appending(column.expr).at(row.expr)
                                             == queens.expr.appending(column.expr).at(nextQueen.expr)
@@ -37,7 +41,7 @@ package struct NQueensModel: Sendable {
                                 Let(columns.expr.mapping { column in
                                     queens.expr.appending(column.expr)
                                 }) { extensions in
-                                    If(nextQueen.expr == 4) {
+                                    If(nextQueen.expr == N) {
                                         Assign(todo, to: todo.expr.removing(queens))
                                         Assign(sols, to: sols.expr.union(extensions.expr))
                                     } else: {
@@ -50,38 +54,39 @@ package struct NQueensModel: Sendable {
                 }
 
                 let validSolutions = Sequences(
-                    of: SetExpr<Int>.literal(1, 2, 3, 4), lengths: 4...4
+                    of: IntRange(1, through: N), lengths: IntRange(N, through: N)
                 ).filtering { placement in
-                    ForAll(in: IntRange(1, through: 3)) { row in
-                        ForAll(in: IntRange(row.expr + 1, through: 4)) { other in
+                    ForAll(in: IntRange(1, through: N - 1)) { row in
+                        ForAll(in: IntRange(row.expr + 1, through: N)) { other in
                             placement.expr[row.expr] != placement.expr[other.expr]
                                 && placement.expr[row.expr] - placement.expr[other.expr] != row.expr - other.expr
                                 && placement.expr[other.expr] - placement.expr[row.expr] != row.expr - other.expr
                         }
                     }
                 }
-                Invariant("Invariant") {
+                Invariant {
                     sols.expr.isSubset(of: validSolutions)
                         && (!todo.expr.isEmpty || validSolutions.isSubset(of: sols.expr))
                 }
-                Invariant("NoSolutions") { sols.expr.isEmpty }
-                Eventually("Termination", Finished())
+                NoSolutions { sols.expr.isEmpty }
+                Termination(.eventually(Finished()))
 
-                Invariant("TypeInvariant") {
+                TypeInvariant {
                     ForAll(in: todo.expr) { placement in
-                        placement.expr.count < 4
+                        placement.expr.count < N
                             && ForAll(in: IntRange(1, through: placement.expr.count)) { row in
-                                IntRange(1, through: 4).contains(placement.expr[row.expr])
+                                IntRange(1, through: N).contains(placement.expr[row.expr])
                             }
                     }
                     && ForAll(in: sols.expr) { placement in
-                        placement.expr.count == 4
+                        placement.expr.count == N
                             && ForAll(in: IntRange(1, through: placement.expr.count)) { row in
-                                IntRange(1, through: 4).contains(placement.expr[row.expr])
+                                IntRange(1, through: N).contains(placement.expr[row.expr])
                             }
                     }
                 }
             })
+            Validation("FourQueens") { Bind(N, to: 4) }.expect(NoSolutions, .violated)
         }
     }
 }

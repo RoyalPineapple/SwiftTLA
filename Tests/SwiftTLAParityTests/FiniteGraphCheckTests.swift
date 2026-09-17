@@ -42,13 +42,6 @@ struct FiniteGraphCheckTests {
       #expect(!native.graph.graph.initialStateKeys.isEmpty, "\(declaration.id)")
       if let scenario {
         try validate(scenario, native: native)
-      } else if declaration.sourceModel == .nQueensFour {
-        guard case .violated(let trace) = native.checks.properties["NoSolutions"] else {
-          Issue.record("FourQueens must report the upstream NoSolutions counterexample")
-          continue
-        }
-        try trace.validate(in: native.graph.graph)
-        #expect(native.checks.properties.filter { $0.key != "NoSolutions" }.values.allSatisfy { $0 == .satisfied })
       } else {
         #expect(native.checks.properties.values.allSatisfy { $0 == .satisfied }, "\(declaration.id)")
       }
