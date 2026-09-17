@@ -16,6 +16,7 @@ struct NativeSwiftEmitter {
     private let variableNames: [VariableID: String]
     private var expressionValues: [CompiledExpression: String] = [:]
     private var successorBindings: [BinderID: (value: CompiledExpression, substitutions: [BinderID: String])] = [:]
+    private var temporalCollectionArguments: String?
     private var expressionOrdinals: [CompiledExpression: Int] = [:]
     private var hasDepthScope = false
     private var nextMembershipPredicate = 0
@@ -544,6 +545,13 @@ struct NativeSwiftEmitter {
         }
     }
 
+    mutating func temporalExpression(_ expression: CompiledExpression, collectionArguments: String) throws -> String {
+        let previous = temporalCollectionArguments
+        temporalCollectionArguments = collectionArguments
+        defer { temporalCollectionArguments = previous }
+        return try self.expression(expression)
+    }
+
     mutating func expression(
         _ id: CompiledExpression, state: String = "state.", substitutions: [BinderID: String] = [:],
         activeFunctions: Set<ResolvedFunctionID> = []
@@ -672,7 +680,14 @@ struct NativeSwiftEmitter {
             }
             return binder(id)
         case .controlLocation(let id): return "_ControlLocation.location\(id.ordinal)"
-        case .enabledAction(let id): return "\(state == "nextState." ? "nextEnabled" : "enabled").contains(\(id.ordinal))"
+        case .enabledAction(let id):
+            if let arguments = temporalCollectionArguments {
+                let dependencies = (program.behavior.enabledActionDependencies[id] ?? []).union([id])
+                let call = enabledActionsCall(dependencies,
+                    state: state == "nextState." ? "nextState" : "state", collectionArguments: arguments)
+                return "(\(call)).contains(\(id.ordinal))"
+            }
+            return "enabled.contains(\(id.ordinal))"
         case .convert:
             return try projected(emit(0), from: childType(0), to: node.resultType)
         case .assertView:
