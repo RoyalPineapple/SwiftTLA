@@ -370,6 +370,7 @@
     {
       "id": "asynch-interface",
       "sourceModel": "asynch-interface",
+      "scenario": "Upstream",
       "module": "asynch-interface/AsynchInterface.tla",
       "configuration": "asynch-interface/AsynchInterface.cfg",
       "imports": [],
@@ -384,6 +385,26 @@
       },
       "moduleSHA256": "86adf068c65219ebe140e047dece85a9d04b9492d508e4aa4d5f86685ada09d4",
       "cfgSHA256": "1d5437ab52c06defaa83bd3b860310e94865e2e19b60524d56c4de08f13c068f",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-asynch-interface",
+      "sourceModel": "asynch-interface",
+      "scenario": "APAsynchInterface",
+      "module": "asynch-interface/APAsynchInterface.tla",
+      "configuration": "asynch-interface/APAsynchInterface.cfg",
+      "imports": ["asynch-interface/AsynchInterface.tla"],
+      "dependencies": [{"importingModule": "APAsynchInterface", "importedModule": "AsynchInterface"}],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SpecifyingSystems/AsynchronousInterface/APAsynchInterface.tla",
+        "sha256": "934e39d49d51c91cc2ab83a4042840fccbb6f452c8e6d10b7132d0c38a360ec9"
+      },
+      "exploration": {
+        "maximumStateLimit": 100,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "934e39d49d51c91cc2ab83a4042840fccbb6f452c8e6d10b7132d0c38a360ec9",
+      "cfgSHA256": "210577143af935e631c7931bc0b24ff6f5768d6f18d42663a51a41cbd2eaa1ec",
       "timeoutSeconds": 60
     },
     {

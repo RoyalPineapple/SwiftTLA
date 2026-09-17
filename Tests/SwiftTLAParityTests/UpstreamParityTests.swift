@@ -210,80 +210,69 @@ struct UpstreamParityTests {
         }
     }
 
-    @Test("AsynchInterface preserves its initial handshake and complete native/formal graph")
+    @Test("AsynchInterface application transitions and complete checking agree for every upstream configuration")
     func asynchInterfaceGraphParity() throws {
         struct Edge: Hashable {
-            let source: AsynchInterfaceModel.State
-            let action: String
-            let target: AsynchInterfaceModel.State
+            let source: AsynchInterfaceModel.Snapshot
+            let action: AsynchInterfaceModel.Action
+            let target: AsynchInterfaceModel.Snapshot
         }
-        let exploration = try explore(AsynchInterfaceModel.spec, maximumStateLimit: 100)
-        try #require(exploration.isComplete)
-        #expect(isSuccessful(exploration))
-        let val = try #require(TLAStateProjection.Token(validating: "val"))
-        let rdy = try #require(TLAStateProjection.Token(validating: "rdy"))
-        let ack = try #require(TLAStateProjection.Token(validating: "ack"))
-        let formalStates = try exploration.graph.states.mapValues { projection in
-            try AsynchInterfaceModel.State(
-                val: #require(projection.value(for: val).flatMap(AsynchInterfaceModel.Data.init(formalValue:))),
-                rdy: #require(projection.value(for: rdy).flatMap(Int.init(formalValue:))),
-                ack: #require(projection.value(for: ack).flatMap(Int.init(formalValue:))))
-        }
-        let formalInitial = try Set(exploration.initialStateIDs.map { try #require(formalStates[$0]) })
-        // Upstream Init requires ack = rdy, not merely that both are bits.
-        #expect(formalInitial.count == 6)
-        #expect(formalInitial.allSatisfy { $0.ack == $0.rdy })
-        var formalEdges: Set<Edge> = []
-        for (source, transitions) in exploration.graph.transitions {
-            for transition in transitions {
-                formalEdges.insert(try Edge(source: #require(formalStates[source]),
-                    action: transition.label.action, target: #require(formalStates[transition.target])))
+        for scenario in try AsynchInterfaceModel.validationScenarios() {
+            let configuration = scenario.configuration
+            let exploration = try scenario.explore(maximumStates: 100)
+            let count = configuration.Data.count
+            #expect(exploration.initialStates.count == 2 * count)
+            #expect(exploration.initialStates.allSatisfy { $0.state.ack == $0.state.rdy })
+            let checkedEdges = Set(exploration.transitions.flatMap { source, transitions in
+                transitions.map { Edge(source: source, action: $0.action, target: $0.target) }
+            })
+            var pending = try scenario.initialMachines()
+            #expect(Set(pending.map(\.snapshot)) == exploration.initialStates)
+            #expect(throws: GeneratedMachineError.ambiguousInitialState) {
+                try AsynchInterfaceModel.makeMachine(configuration: configuration)
             }
-        }
-        var pending = try AsynchInterfaceModel.initialMachines()
-        #expect(Set(pending.map(\.state)) == formalInitial)
-        #expect(throws: GeneratedMachineError.ambiguousInitialState) {
-            try AsynchInterfaceModel.makeMachine()
-        }
-        #expect(throws: GeneratedMachineError.invalidInitialState) {
-            try AsynchInterfaceModel.makeMachine(.init(val: .d1, rdy: 0, ack: 1))
-        }
-        var nativeStates: Set<AsynchInterfaceModel.State> = []
-        var nativeEdges: Set<Edge> = []
-        let actions: [AsynchInterfaceModel.Action] = [.Send, .Rcv]
-        while let machine = pending.popLast() {
-            guard nativeStates.insert(machine.state).inserted else { continue }
-            try #require(nativeStates.count <= 12)
-            #expect(try machine.violatedInvariants().isEmpty)
-            let enabled = try Set(machine.enabledActions())
-            for action in actions {
-                let candidates = try machine.successors(for: action)
-                #expect(try machine.isEnabled(action) == !candidates.isEmpty)
-                #expect(enabled.contains(action) == !candidates.isEmpty)
-                var sent = machine
-                switch candidates.count {
-                case 0:
-                    #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try sent.send(action) }
-                    #expect(sent.state == machine.state)
-                case 1:
-                    let transition = try sent.send(action)
-                    #expect(transition.before == machine.state)
-                    #expect(transition.after == candidates[0].state)
-                    #expect(sent.state == candidates[0].state)
-                default:
-                    #expect(throws: GeneratedMachineError.ambiguousAction) { try sent.send(action) }
-                    #expect(sent.state == machine.state)
-                }
-                for candidate in candidates {
-                    nativeEdges.insert(Edge(source: machine.state, action: String(describing: action), target: candidate.state))
-                }
-                pending.append(contentsOf: candidates)
+            let datum = try #require(configuration.Data.first)
+            #expect(throws: GeneratedMachineError.invalidInitialState) {
+                try AsynchInterfaceModel.makeMachine(.init(val: datum, rdy: 0, ack: 1),
+                    configuration: configuration)
             }
+            var states: Set<AsynchInterfaceModel.Snapshot> = []
+            var edges: Set<Edge> = []
+            let actions: [AsynchInterfaceModel.Action] = [.Send, .Rcv]
+            while let machine = pending.popLast() {
+                guard states.insert(machine.snapshot).inserted else { continue }
+                try #require(states.count <= 4 * count)
+                #expect(try machine.violatedInvariants().isEmpty)
+                let enabled = try Set(machine.enabledActions())
+                for action in actions {
+                    let candidates = try machine.successors(for: action)
+                    #expect(try machine.isEnabled(action) == !candidates.isEmpty)
+                    #expect(enabled.contains(action) == !candidates.isEmpty)
+                    var sent = machine
+                    switch candidates.count {
+                    case 0:
+                        #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try sent.send(action) }
+                        #expect(sent.snapshot == machine.snapshot)
+                    case 1:
+                        let transition = try sent.send(action)
+                        #expect(transition.before == machine.state)
+                        #expect(transition.after == candidates[0].state)
+                        #expect(sent.snapshot == candidates[0].snapshot)
+                    default:
+                        #expect(throws: GeneratedMachineError.ambiguousAction) { try sent.send(action) }
+                        #expect(sent.snapshot == machine.snapshot)
+                    }
+                    for candidate in candidates {
+                        edges.insert(Edge(source: machine.snapshot, action: action, target: candidate.snapshot))
+                    }
+                    pending.append(contentsOf: candidates)
+                }
+            }
+            #expect(states == Set(exploration.transitions.keys))
+            #expect(edges == checkedEdges)
+            #expect(states.count == 4 * count)
+            #expect(edges.count == 2 * count * (count + 1))
         }
-        #expect(nativeStates == Set(formalStates.values))
-        #expect(nativeEdges == formalEdges)
-        #expect(nativeStates.count == Example.asynchInterface.expectedDistinct)
-        #expect(nativeEdges.count == 24)
     }
 
     @Test("TeachingConcurrency Simple models use typed phase state")
