@@ -1,7 +1,7 @@
 # Finite graph comparison
 
-Finite graph comparison compares one bounded SwiftTLA exploration with one
-pinned TLC run. Each case resolves one source model and declares its TLC bundle
+Finite graph comparison compares native exploration with separate TLC runs of
+the pinned upstream model and the generated model. Each case resolves one source model and declares its TLC bundle
 and maximum state count. Each completed graph supplies its observable states
 and labeled actions.
 
@@ -30,18 +30,26 @@ counterexample. `native-checks.json` preserves all results; it does not select
 only the first failure. The runner validates that the native result names and
 requested deadlock check exactly cover the rendered model's declarations.
 
-The pinned upstream TLA+ fixture still runs as an independent reference, and its
-complete graph must match native execution. The runner separately explores the
-DSL-generated TLA+ with property and deadlock checks disabled, retaining that
-complete graph in `generated/tlc-graph.jsonl`. This graph must also match native
-execution. Each declared property and requested deadlock check then runs independently,
-reusing that captured graph without dumping or parsing another graph. Each check
-must use the same rendered module and exploration configuration, changing only
-the selected checks; its counterexample must belong to the shared graph. Reports in `properties/<name>/` and `deadlock/`
-compare both verdicts and retain their counterexamples. Matching violations can
-establish agreement; a violation need not hide other checks or stop validation.
-A check that cannot finish or produces an unavailable result cannot pass, and
-does not skip subsequent checks.
+The pinned upstream TLA+ fixture runs as an independent reference.
+The runner also explores the DSL-generated TLA+ and retains its complete graph in `generated/tlc-graph.jsonl`.
+Both TLC graphs must match native execution.
+
+The runner can combine graph capture with a batch of checks that native execution reports as satisfied.
+Only a completed TLC graph run can supply both graph evidence and satisfied results for that batch.
+A property violation, unsupported formula, or temporal tautology does not establish complete graph capture.
+The runner can collect the complete graph with checks disabled, then run the checks separately.
+This changes only check selection, not model behavior or the required outcomes.
+
+A successful batch supplies results only for its selected checks.
+Other checks run separately against the same module and exploration configuration.
+An unavailable batch supplies no property verdicts.
+The runner isolates its checks to identify unavailable results and differences.
+Each counterexample must belong to the shared complete graph.
+
+Reports in `properties/<name>/` and `deadlock/` retain verdicts and counterexamples.
+Matching violations can establish agreement without hiding other failures.
+An unavailable check cannot pass, including when the scenario expects a violation.
+Incomplete graphs, timeouts, malformed evidence, and unsupported checks remain failures.
 
 The root `comparison.json` records upstream and generated graph differences and
 every check's status. An incomplete upstream reference run remains a failure.
@@ -63,6 +71,12 @@ bounded oracle for the declared case.
 The hosted workflow runs the complete declared case set for a requested
 SwiftTLA commit.
 
+The workflow builds one release executable for that commit.
+Before distribution, it checks every case selector, the `all` selector, and rejection of an unknown selector without invoking TLC.
+The manifest determines one job per graph case.
+A separate job runs the model-owned scenarios.
+Each graph job retains its complete comparison independently of the other jobs.
+
 ```sh
 gh workflow run finite-graph.yml \
   --ref main \
@@ -71,6 +85,10 @@ gh workflow run finite-graph.yml \
 
 The workflow artifact contains both graph streams, the TLC process output, and
 `comparison.json` and `native-checks.json`. Inspect graph differences and every native check when a case differs.
+
+The combined job retains available evidence even after a failure.
+Artifact publication alone does not establish success.
+The final gate requires successful jobs and exact, complete comparisons for every declared graph case.
 
 ## Hosted result
 

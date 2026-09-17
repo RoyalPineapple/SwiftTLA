@@ -74,12 +74,14 @@ implementation work; they do not justify removing families from the target.
 Generated machines expose their complete typed snapshots and all native
 successors. `ReachabilityGraph` explores those successors and returns a complete
 graph or throws. It evaluates generated assumptions, invariants, and termination
-guards, retaining safety violations and shortest native traces. Temporal analysis
-and independent equivalence validation remain outstanding.
+guards, retaining safety violations and shortest native traces.
+Native temporal analysis evaluates generated predicates over the completed graph and uses the declared fairness conditions.
+Supported refinement checks use generated abstract transitions and generated state mappings.
+Independent TLC comparisons cover the registered finite cases and model-owned scenarios.
+Full DSL support, corpus coverage, and complete independent validation remain outstanding.
 
-The earlier `ModelChecker`, expression evaluator, and formal-call representation
-remain in existing validation paths. They are migration work, not a parallel
-architecture to preserve. Move property evaluation, temporal analysis, and
-canonical export consumers onto the typed model and generated semantics, migrate
-callers, then delete those execution paths. Additional representations must
-justify why the existing pipeline cannot serve their purpose.
+The earlier `ModelChecker` and expression evaluator remain in formal-core fixtures and some validation paths, including symmetry comparison.
+These remaining callers require migration or an explicit formal-boundary justification.
+They do not provide an alternative application backend.
+Formal calls remain serialization data for TLC action labels, not instructions for generated execution.
+The replacement and deletion requirements in `DSLDesign.md` remain part of completion.

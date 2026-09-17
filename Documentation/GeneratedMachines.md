@@ -74,6 +74,13 @@ values.
 currently permitted. Both operations can throw a generated-machine diagnostic.
 A rejected action leaves `state` unchanged.
 
+Generated model expressions evaluate `ENABLED` only when expression evaluation reaches that operand.
+A false guard or a satisfied alternative can skip the reference and its dependencies.
+An evaluated reference uses the generated action relation, not a duplicate predicate that approximates its guard.
+Evaluation errors propagate from required references.
+These rules apply to action guards, state predicates, temporal predicates, and refinement mappings.
+The compiler rejects cyclic enabledness dependencies.
+
 `initialMachines()` returns every permitted initial machine. `successors(for:)`
 returns every distinct successor machine for an action without changing the
 receiver. These values retain process control state and application collection
