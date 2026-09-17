@@ -153,7 +153,7 @@ jobs:
       - name: Validate all model-owned corpus scenarios
         if: matrix.phase == 'scenarios'
         env:
-          SWIFTTLA_SCENARIO_MAXIMUM_STATES: "2000000"
+          SWIFTTLA_SCENARIO_MAXIMUM_STATES: "5000000"
           SWIFTTLA_SCENARIO_TIMEOUT_SECONDS: "600"
         run: .build/validation-bin/tlc-validate scenarios run --output .build/scenario-evidence
 

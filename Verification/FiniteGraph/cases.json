@@ -342,6 +342,93 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "coffee-can-100",
+      "sourceModel": "coffee-can",
+      "scenario": "CoffeeCan100Beans",
+      "module": "coffee-can/CoffeeCan.tla",
+      "configuration": "coffee-can/CoffeeCan100Beans.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CoffeeCan/CoffeeCan.tla",
+        "sha256": "32c5d9c900104c0d8be0d3730a6013d141dc90901e08ccaea403fb0be731cd90"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "32c5d9c900104c0d8be0d3730a6013d141dc90901e08ccaea403fb0be731cd90",
+      "cfgSHA256": "850aac3ef82a64b7a61f3445bf4772cc4c737d24e46a5ce00ccef3c65d08073a",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "coffee-can-1000",
+      "sourceModel": "coffee-can",
+      "scenario": "CoffeeCan1000Beans",
+      "module": "coffee-can/CoffeeCan.tla",
+      "configuration": "coffee-can/CoffeeCan1000Beans.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CoffeeCan/CoffeeCan.tla",
+        "sha256": "32c5d9c900104c0d8be0d3730a6013d141dc90901e08ccaea403fb0be731cd90"
+      },
+      "exploration": {
+        "maximumStateLimit": 600000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "32c5d9c900104c0d8be0d3730a6013d141dc90901e08ccaea403fb0be731cd90",
+      "cfgSHA256": "a57c02854cd0a0f7622df98d45cb70ea607337c35fa3a2ae49424d675f46e00a",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "coffee-can-3000",
+      "sourceModel": "coffee-can",
+      "scenario": "CoffeeCan3000Beans",
+      "module": "coffee-can/CoffeeCan.tla",
+      "configuration": "coffee-can/CoffeeCan3000Beans.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CoffeeCan/CoffeeCan.tla",
+        "sha256": "32c5d9c900104c0d8be0d3730a6013d141dc90901e08ccaea403fb0be731cd90"
+      },
+      "exploration": {
+        "maximumStateLimit": 5000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "32c5d9c900104c0d8be0d3730a6013d141dc90901e08ccaea403fb0be731cd90",
+      "cfgSHA256": "7904ab6bc7fa788828f04c5db64f85c96859bca2e7019341d6294ab1d032cf83",
+      "timeoutSeconds": 1800
+    },
+    {
+      "id": "coffee-can-ap",
+      "sourceModel": "coffee-can",
+      "scenario": "APCoffeeCan",
+      "module": "coffee-can/APCoffeeCan.tla",
+      "configuration": "coffee-can/APCoffeeCan.cfg",
+      "imports": [
+        "coffee-can/CoffeeCan.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "APCoffeeCan",
+          "importedModule": "CoffeeCan"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CoffeeCan/APCoffeeCan.tla",
+        "sha256": "1de47b998ded67418cdab386f9ddde0122dcdaf553b8cca126c670045d67dbc3"
+      },
+      "exploration": {
+        "maximumStateLimit": 100,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "1de47b998ded67418cdab386f9ddde0122dcdaf553b8cca126c670045d67dbc3",
+      "cfgSHA256": "47b87131aab41a7f7c1994dad45a1f284105eab3d2f942f671c0a47a0a594052",
+      "timeoutSeconds": 1800
+    },
+    {
       "id": "queens-four",
       "sourceModel": "queens-four",
       "scenario": "FourQueens",

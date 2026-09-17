@@ -40,8 +40,8 @@ import UpstreamParity
 
   @Test("CoffeeCan MaxBeanCount=5 = 20 states (parity catalog)")
   func coffeeCanMax5() throws {
-    let count = try ModelChecker(compilation: try Example.coffeeCanMax5.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500, symmetryReduction: .disabled))
-      .exploreGraph().states.count
+    let scenario = try #require(CoffeeCanModel.validationScenarios().first { $0.name == "APCoffeeCan" })
+    let count = try scenario.explore(maximumStates: 500).transitions.count
     #expect(count == 20)
   }
 
