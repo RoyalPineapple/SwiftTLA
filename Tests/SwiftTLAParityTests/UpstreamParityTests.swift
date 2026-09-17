@@ -162,11 +162,8 @@ struct UpstreamParityTests {
         #expect(isSuccessful(exploration))
         let token = try #require(TLAStateProjection.Token(validating: "chan"))
         let formalStates = try exploration.graph.states.mapValues { projection in
-            let record = try #require(projection.value(for: token).flatMap(Record<ChannelModel.ChannelSchema>.init(formalValue:)))
-            return try ChannelModel.State(chan: .init(
-                ack: #require(record.value(for: ChannelModel.ChannelSchema.acknowledgement)),
-                rdy: #require(record.value(for: ChannelModel.ChannelSchema.ready)),
-                val: #require(record.value(for: ChannelModel.ChannelSchema.value))))
+            let record = try #require(projection.value(for: token).flatMap(ChannelModel.Channel.init(formalValue:)))
+            return ChannelModel.State(chan: record)
         }
         let formalInitial = try Set(exploration.initialStateIDs.map { try #require(formalStates[$0]) })
         #expect(formalInitial.count == 6)

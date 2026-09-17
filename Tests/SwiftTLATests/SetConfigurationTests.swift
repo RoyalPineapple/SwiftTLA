@@ -5,6 +5,19 @@ import SwiftSyntax
 @testable import SwiftTLAPlugin
 
 struct SetConfigurationTests {
+    @Test("shared variable domains accept Swift sets in specification and algorithm scopes")
+    func acceptsSharedVariableDomains() throws {
+        for values: Set<Int> in [[], [1], [1, 2]] {
+            let specification = SpecificationScope()
+            let variable: SharedVariable<Int> = specification.sharedVar(_name: "member", in: values)
+            #expect(variable.stateExpr == .variable("member"))
+            #expect(specification.declarations[0].initialization == .memberOf(values.stateExpr))
+            let algorithm = AlgorithmScope()
+            let shared: SharedVariable<Int> = algorithm.sharedVar(_name: "member", in: values)
+            #expect(shared.stateExpr == variable.stateExpr)
+        }
+    }
+
     @Test("Swift set parameters preserve generated types across scenario populations")
     func variesPopulation() throws {
         let scenarios = try SetConfiguredMachine.validationScenarios()

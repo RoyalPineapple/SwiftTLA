@@ -289,6 +289,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
                 scenarios = try DieHardModel.validationScenarios()
             case .dieHarder:
                 scenarios = try DieHarderModel.validationScenarios()
+            case .channel:
+                scenarios = try ChannelModel.validationScenarios()
             default:
                 guard scenario == nil else {
                     throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
@@ -391,12 +393,11 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .voteProof: return try explore(VoteProofModel.initialMachines())
         case .kvsnap: return try explore(KVsnapModel.initialMachines())
         case .majority: return try explore(MajorityModel.initialMachines())
-        case .channel: return try explore(ChannelModel.initialMachines())
         case .asynchInterface: return try explore(AsynchInterfaceModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
         case .nQueensFour: return try explore(NQueensModel.initialMachines())
-        case .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder:
+        case .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .channel:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())

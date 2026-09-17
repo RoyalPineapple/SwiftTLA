@@ -308,6 +308,7 @@
     {
       "id": "channel",
       "sourceModel": "channel",
+      "scenario": "Upstream",
       "module": "channel/Channel.tla",
       "configuration": "channel/Channel.cfg",
       "imports": [],

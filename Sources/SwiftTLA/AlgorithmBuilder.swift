@@ -254,7 +254,8 @@ public struct SharedVariable<Value: TLAValueType>: TypedExpression {
         )
     }
 
-    fileprivate init(name: String, in values: some TypedExpression<SetExpr<Value>>) {
+    fileprivate init<Domain: FormalSetValue>(name: String, in values: some TypedExpression<Domain>)
+    where Domain.Element == Value {
         self.init(
             name: name,
             initialization: .memberOf(values.stateExpr)
@@ -457,10 +458,10 @@ public final class SpecificationScope {
         return variable
     }
 
-    public func sharedVar<Value: TLAValueType>(
+    public func sharedVar<Domain: FormalSetValue>(
         _name name: String = "",
-        in values: some TypedExpression<SetExpr<Value>>
-    ) -> SharedVariable<Value> {
+        in values: some TypedExpression<Domain>
+    ) -> SharedVariable<Domain.Element> {
         let variable = SharedVariable(name: name, in: values)
         declarations.append(variable.specificationDeclaration)
         return variable
@@ -499,10 +500,10 @@ public final class AlgorithmScope {
         return variable
     }
 
-    public func sharedVar<Value: TLAValueType>(
+    public func sharedVar<Domain: FormalSetValue>(
         _name name: String = "",
-        in values: some TypedExpression<SetExpr<Value>>
-    ) -> SharedVariable<Value> {
+        in values: some TypedExpression<Domain>
+    ) -> SharedVariable<Domain.Element> {
         let variable = SharedVariable(name: name, in: values)
         declarations.append(variable.algorithmElement)
         return variable
