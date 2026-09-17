@@ -555,7 +555,6 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidTypedRecordField
         case invalidTypedRecordLiteral
         case invalidTypedFunctionLiteral
-        case invalidSequenceElementDomain
         case invalidSequenceLength
         case invalidFiniteDomain
         case invalidFiniteDomainValue

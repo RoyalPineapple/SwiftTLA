@@ -198,7 +198,6 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
     case recordLiteral(schema: String, duplicateFields: [String], missingFields: [String])
     case invalidRecordSchema(schema: String, problem: String)
     case functionLiteral(domain: String, duplicateValues: [String], missingValues: [String])
-    case sequenceElementDomain(operation: String)
     case negativeSequenceLength(operation: String, lowerBound: Int)
     case finiteDomain(type: String, problem: FiniteDomainProblem)
     case finiteDomainValue(type: String, value: String)
@@ -230,8 +229,6 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
                 missing.isEmpty ? nil : "missing domain values: \(missing.joined(separator: ", "))"
             ].compactMap { $0 }.joined(separator: "; ")
             return (.invalidTypedFunctionLiteral, "one value for every member of \(domain)", details, "Provide every finite domain value exactly once, then compile again.")
-        case .sequenceElementDomain(let operation):
-            return (.invalidSequenceElementDomain, "SetExpr.literal(...) as the element domain for \(operation)", "a symbolic formal set", "Use SetExpr.literal(...) for this bounded sequence declaration, then compile again.")
         case .negativeSequenceLength(let operation, let lowerBound):
             return (.invalidSequenceLength, "a non-negative lower sequence length for \(operation)", "\(lowerBound)", "Use only non-negative sequence lengths, then compile again.")
         case .finiteDomain(let type, let problem):

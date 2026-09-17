@@ -430,32 +430,23 @@ final class ParserSession {
         return label
     }
 
-    /// Expands the bounded `Sequences(of:lengths:)` spelling into the finite
-    /// model-checking form of TLA+ `Seq(S)`.
+    /// Preserves bounded sequence domains as scoped formal comprehensions.
     private func decodeBoundedSequenceDomain(
         _ expression: ExprSyntax,
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
-              name == "Sequences" || name == "SortedSequences" || name == "ZeroBasedSequences",
+              let kind = BoundedSequenceKind(rawValue: name),
+              call.arguments.count == 2,
               let memberSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
               let lengthSyntax = call.arguments.first(where: { $0.label?.text == "lengths" })?.expression,
               let memberSet = finiteAlgorithmDomain(memberSyntax).map({
                   StateExpr.setLiteral($0.values.map(StateExpr.value))
               }) ?? decodeTypedFacadeValue(memberSyntax, scope: scope),
-              case .setLiteral(let members) = memberSet,
               let lengths = parseIntegerClosedRange(lengthSyntax)
         else { return nil }
-        let sequences = formalSequenceExpressions(members: members, lengths: lengths)
-        switch name {
-        case "SortedSequences":
-            return .setLiteral(sequences.filter(formalIntegerSequenceIsSorted))
-        case "ZeroBasedSequences":
-            return .setLiteral(formalZeroBasedSequenceExpressions(members: members, lengths: lengths))
-        default:
-            return .setLiteral(sequences)
-        }
+        return formalSequenceDomain(elements: memberSet, lengths: lengths, kind: kind)
     }
 
     /// Parses `ZeroBasedSequence<Element>.filled(length:with:)` into its

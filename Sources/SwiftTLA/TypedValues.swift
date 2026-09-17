@@ -676,36 +676,22 @@ extension ZeroBasedSequence: FormalZeroBasedSequenceValue {}
 /// The element domain and every permitted length are explicit, so the result
 /// remains finite and can be explored by the checker and TLC.
 // swiftlint:disable:next identifier_name
-public func Sequences<Element: TLAValueType>(
-  of elements: some TypedExpression<SetExpr<Element>>,
+public func Sequences<Domain: FormalSetValue>(
+  of elements: some TypedExpression<Domain>,
   lengths: ClosedRange<Int>
-) -> Expr<SetExpr<TupleExpr<Element>>> {
-  guard case .setLiteral(let members) = elements.stateExpr else {
-    return Expr(.sourceIssue(.sequenceElementDomain(operation: "Sequences")))
-  }
-  guard lengths.lowerBound >= 0 else {
-    return Expr(.sourceIssue(.negativeSequenceLength(operation: "Sequences", lowerBound: lengths.lowerBound)))
-  }
-
-  let sequences = formalSequenceExpressions(members: members, lengths: lengths)
-  return Expr<SetExpr<TupleExpr<Element>>>(.setLiteral(sequences))
+) -> Expr<SetExpr<TupleExpr<Domain.Element>>> {
+  Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths, kind: .sequences))
 }
 
 /// Creates a finite formal set of zero-based sequences for model checking.
 ///
 /// This is the bounded form of a `ZSeq(S)` input domain. The returned values
 /// have function domains `0..<(length)`, so indexing at zero stays formal.
-public func ZeroBasedSequences<Element: TLAValueType>(
-  of elements: some TypedExpression<SetExpr<Element>>,
+public func ZeroBasedSequences<Domain: FormalSetValue>(
+  of elements: some TypedExpression<Domain>,
   lengths: ClosedRange<Int>
-) -> Expr<SetExpr<ZeroBasedSequence<Element>>> {
-  guard case .setLiteral(let members) = elements.stateExpr else {
-    return Expr(.sourceIssue(.sequenceElementDomain(operation: "ZeroBasedSequences")))
-  }
-  guard lengths.lowerBound >= 0 else {
-    return Expr(.sourceIssue(.negativeSequenceLength(operation: "ZeroBasedSequences", lowerBound: lengths.lowerBound)))
-  }
-  return Expr(.setLiteral(formalZeroBasedSequenceExpressions(members: members, lengths: lengths)))
+) -> Expr<SetExpr<ZeroBasedSequence<Domain.Element>>> {
+  Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths, kind: .zeroBased))
 }
 
 /// Creates a finite formal set of nondecreasing integer sequences.
@@ -713,51 +699,48 @@ public func ZeroBasedSequences<Element: TLAValueType>(
 /// This is the bounded model-checking form of a sorted `Seq(Values)` domain.
 /// Use it when sortedness is a declared input assumption, as in binary search.
 // swiftlint:disable:next identifier_name
-public func SortedSequences(
-  of elements: some TypedExpression<SetExpr<Int>>,
+public func SortedSequences<Domain: FormalSetValue>(
+  of elements: some TypedExpression<Domain>,
   lengths: ClosedRange<Int>
-) -> Expr<SetExpr<TupleExpr<Int>>> {
-  guard case .setLiteral(let members) = elements.stateExpr else {
-    return Expr(.sourceIssue(.sequenceElementDomain(operation: "SortedSequences")))
-  }
+) -> Expr<SetExpr<TupleExpr<Int>>> where Domain.Element == Int {
+  Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths, kind: .sorted))
+}
+
+package enum BoundedSequenceKind: String {
+  case sequences = "Sequences"
+  case zeroBased = "ZeroBasedSequences"
+  case sorted = "SortedSequences"
+}
+
+/// Retains the element expression in scoped comprehensions instead of
+/// enumerating its Cartesian products during source construction.
+package func formalSequenceDomain(
+  elements: StateExpr, lengths: ClosedRange<Int>, kind: BoundedSequenceKind
+) -> StateExpr {
   guard lengths.lowerBound >= 0 else {
-    return Expr(.sourceIssue(.negativeSequenceLength(operation: "SortedSequences", lowerBound: lengths.lowerBound)))
+    return .sourceIssue(.negativeSequenceLength(operation: kind.rawValue, lowerBound: lengths.lowerBound))
   }
-  return Expr<SetExpr<TupleExpr<Int>>>(.setLiteral(
-    formalSequenceExpressions(members: members, lengths: lengths).filter(formalIntegerSequenceIsSorted)
-  ))
-}
-
-/// The finite sequence-domain expansion shared by the builder and source
-/// parser.
-package func formalSequenceExpressions(
-  members: [StateExpr],
-  lengths: ClosedRange<Int>
-) -> [StateExpr] {
-  guard lengths.lowerBound >= 0 else { return [] }
-
-  var sequences: [StateExpr] = []
+  var result: StateExpr?
+  let freeNames = elements.freeVariableNames
   for length in lengths {
-    var prefixes: [[StateExpr]] = [[]]
-    for _ in 0..<length {
-      prefixes = prefixes.flatMap { prefix in
-        members.map { prefix + [$0] }
-      }
+    let names = (0..<length).map {
+      StateExpr.freshBoundName("__sequenceMember\($0)", avoiding: freeNames)
     }
-    sequences += prefixes.map(StateExpr.tupleLiteral)
+    let values = names.map(StateExpr.variable)
+    let sequence: StateExpr = kind == .zeroBased
+      ? formalZeroBasedSequence(values) : .tupleLiteral(values)
+    var domain = StateExpr.setLiteral([sequence])
+    if kind == .sorted, length > 1 {
+      let ordered = zip(values, values.dropFirst()).map(StateExpr.lessOrEqual)
+        .reduce(StateExpr.bool(true), StateExpr.and)
+      domain = .ifThenElse(ordered, domain, .setLiteral([]))
+    }
+    for name in names.reversed() {
+      domain = .unionAll(.setMap(domain, name, elements))
+    }
+    result = result.map { .union($0, domain) } ?? domain
   }
-  return sequences
-}
-
-package func formalZeroBasedSequenceExpressions(
-  members: [StateExpr],
-  lengths: ClosedRange<Int>
-) -> [StateExpr] {
-  guard lengths.lowerBound >= 0 else { return [] }
-  return formalSequenceExpressions(members: members, lengths: lengths).map { tuple in
-    guard case .tupleLiteral(let elements) = tuple else { return tuple }
-    return formalZeroBasedSequence(elements)
-  }
+  return result ?? .setLiteral([])
 }
 
 /// The index domain guarantees that exactly one CASE branch matches.
@@ -769,16 +752,6 @@ package func formalZeroBasedSequence(_ elements: [StateExpr]) -> StateExpr {
   }
   return .functionLiteral(
     .setLiteral(elements.indices.map { .int($0) }), index, .caseExpr(branches, nil))
-}
-
-package func formalIntegerSequenceIsSorted(_ expression: StateExpr) -> Bool {
-  guard case .tupleLiteral(let values) = expression else { return false }
-  let integers = values.compactMap { value -> Int? in
-    guard case .value(.int(let integer)) = value else { return nil }
-    return integer
-  }
-  return integers.count == values.count
-    && zip(integers, integers.dropFirst()).allSatisfy { $0 <= $1 }
 }
 
 extension TypedExpression where ExpressionValue: FormalSetValue {

@@ -505,10 +505,6 @@ private struct FoldGeneratedModel {
                 .invalidTypedFunctionLiteral
             ),
             (
-                Sequences(of: Expr<SetExpr<Int>>(.variable("values")), lengths: 0...1).raw,
-                .invalidSequenceElementDomain
-            ),
-            (
                 ZeroBasedSequences(of: SetExpr<Int>.literal(1), lengths: -1...1).raw,
                 .invalidSequenceLength
             ),

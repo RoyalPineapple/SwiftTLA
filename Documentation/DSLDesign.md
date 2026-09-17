@@ -742,6 +742,28 @@ to one formal value. A set declaration does not imply symmetry.
 The next section defines configurable `Each` populations.
 Replacement of fixed `ModelCollection` declarations remains part of B-01.
 
+#### Configured sequence elements
+
+The bounded sequence builders accept typed set expressions, including set-valued parameters:
+
+```swift
+let row = scope.sharedVar(in: Sequences(of: members, lengths: 0...2))
+let sorted = scope.sharedVar(in: SortedSequences(of: members, lengths: 0...2))
+let zeroBased = scope.sharedVar(in: ZeroBasedSequences(of: members, lengths: 0...2))
+```
+
+`SortedSequences` requires integer elements and retains only nondecreasing sequences.
+`ZeroBasedSequences` uses indices from zero. The other builders use TLA+ sequence indices from one.
+An empty element set admits the empty sequence when the length range includes zero.
+It admits no positive-length sequences.
+
+The compiler retains element expressions and lexical bindings in formal comprehensions.
+It does not enumerate their Cartesian products during source construction.
+Generated initial states preserve element types, including nominal enums.
+
+Length ranges remain nonnegative compile-time integer ranges.
+Parameter-dependent lengths remain required work under B-01.
+
 #### Parameter-dependent function domains
 
 `Functions(from:to:)` accepts typed finite set expressions, including parameter-dependent ranges.
