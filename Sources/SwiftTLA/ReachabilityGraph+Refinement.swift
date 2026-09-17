@@ -53,20 +53,21 @@ extension ReachabilityGraph {
             let checker = try temporalChecker()
             for condition in fairness {
                 try Task.checkCancellation()
-                let taken = successors.mapValues { edges in
-                    Set(edges.compactMap { target, actions in
-                        actions.contains(where: condition.matches) ? target : nil
-                    })
-                }
+                let taken = try Dictionary(uniqueKeysWithValues: successors.map { source, edges in
+                    (source, Set(try edges.compactMap { target, actions in
+                        try actions.contains(where: condition.matches)
+                            && (condition.changes?(source, target) ?? (source != target)) ? target : nil
+                    }))
+                })
                 let enabled = Set(projections.compactMap { state, abstract in
-                    taken[abstract]?.contains(where: { $0 != abstract }) == true ? state : nil
+                    taken[abstract]?.isEmpty == false ? state : nil
                 })
                 if let witness = checker.fairnessViolation(initialStates: Array(initialStates),
                     isStrong: condition.isStrong, enabledStates: enabled,
                     takesAction: { source, target in
                         let from = projections[source]!
                         let to = projections[target]!
-                        return from != to && taken[from]?.contains(to) == true
+                        return taken[from]?.contains(to) == true
                     }) {
                     return .fairness(scope: condition.name, witness: witness)
                 }

@@ -866,7 +866,7 @@ extension ParserSession {
             }
             components.temporalProperties.append(.init(name: declarationName, expr: temporal))
         case "WeakFairness", "StrongFairness", "WeakFairnessNext", "StrongFairnessNext":
-            if let fc = decodeFairness(call) {
+            if let fc = decodeFairness(call, scope: sourceScope) {
                 components.fairness.append(fc)
             } else {
                 let action = call.arguments.first?.expression

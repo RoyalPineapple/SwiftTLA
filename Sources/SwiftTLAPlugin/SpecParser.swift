@@ -2646,21 +2646,31 @@ extension ParserSession {
         }
     }
 
-    func decodeFairness(_ call: FunctionCallExprSyntax) -> FairnessCondition? {
+    func decodeFairness(_ call: FunctionCallExprSyntax, scope: TypedFacadeScope) -> FairnessCondition? {
         guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName else {
             return nil
         }
+        let condition: FairnessCondition
+        let arguments = Array(call.arguments)
+        let hasAction = name == "WeakFairness" || name == "StrongFairness"
+        let offset = hasAction ? 1 : 0
+        guard arguments.count == offset || arguments.count == offset + 1 else { return nil }
+        if hasAction, arguments.first?.label != nil { return nil }
         switch name {
         case "WeakFairness":
             guard let name = actionName(call.arguments.first?.expression) else { return nil }
-            return .weakFairness(name)
+            condition = .weakFairness(name)
         case "StrongFairness":
             guard let name = actionName(call.arguments.first?.expression) else { return nil }
-            return .strongFairness(name)
-        case "WeakFairnessNext": return .weakFairnessNext
-        case "StrongFairnessNext": return .strongFairnessNext
+            condition = .strongFairness(name)
+        case "WeakFairnessNext": condition = .weakFairnessNext
+        case "StrongFairnessNext": condition = .strongFairnessNext
         default: return nil
         }
+        guard arguments.count > offset else { return condition }
+        guard arguments[offset].label?.text == "on",
+              let projection = decodeTypedFacadeValue(arguments[offset].expression, scope: scope) else { return nil }
+        return .projected(condition, projection)
     }
 
     func actionReference(_ expression: ExprSyntax?) -> NamedAction? {

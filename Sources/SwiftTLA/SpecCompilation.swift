@@ -1409,6 +1409,8 @@ private struct CanonicalSpecificationEncoder {
 
     private func canonicalFairness(_ value: FairnessCondition) -> String {
         switch value {
+        case .projected(let condition, let projection):
+            return node("projectedFairness", [canonicalFairness(condition), alphaKey(projection)])
         case .weakFairness(let action): return node("weakFairness", [action])
         case .strongFairness(let action): return node("strongFairness", [action])
         case .weakFairnessNext: return node("weakFairnessNext", [])

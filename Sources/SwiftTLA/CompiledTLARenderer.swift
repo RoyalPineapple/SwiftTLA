@@ -199,6 +199,7 @@ struct CompiledTLARenderer {
         actionCalls: [CompiledActionCall: String]
     ) throws -> String {
         let action: String
+        let vars = try condition.projection.map { "(\(try state($0)))" } ?? vars
         switch condition.scope {
         case .next:
             action = "Next"

@@ -141,6 +141,13 @@ extension TLASpec {
         specialized.invariants = invariants.map { .init(name: $0.name, body: state($0.body), reference: $0.reference) }
         specialized.reachabilityProperties = reachabilityProperties.map { .init(name: $0.name, body: state($0.body), reference: $0.reference) }
         specialized.temporalProperties = temporalProperties.map { $0.substitutingVariables(parameters) }
+        func fairness(_ condition: FairnessCondition) -> FairnessCondition {
+            if case .projected(let base, let projection) = condition {
+                return .projected(fairness(base), state(projection))
+            }
+            return condition
+        }
+        specialized.fairness = self.fairness.map(fairness)
         specialized.assume = assume.map(state)
         specialized.constraint = constraint.map(state)
         specialized.recursiveFuncs = recursiveFuncs.map { $0.substitutingVariables(parameters) }

@@ -40,6 +40,9 @@ struct NativeSwiftEmitter {
         for mapping in program.refinements.flatMap({ $0.variableMappings }) {
             enabledActionIDs.formUnion(mapping.enabledActions)
         }
+        for condition in program.behavior.fairness {
+            enabledActionIDs.formUnion(condition.enabledActions)
+        }
         self.enabledActionIDs = enabledActionIDs
         typeDeclarations = sharedTypes ?? NativeTypeDeclarations(program: program)
         variableNames = Dictionary(uniqueKeysWithValues: program.layout.variables.map { variable in

@@ -40,7 +40,7 @@ package struct CompiledBehavior: Sendable {
                     expression: property.expression.map { try $0.map(transform) },
                     bindings: property.bindings.map { try $0.map(transform) })
             },
-            fairness: fairness,
+            fairness: fairness.map { try $0.map(transform) },
             constraint: constraint.map { try $0.map(transform) },
             assume: assume.map { try $0.map(transform) })
     }

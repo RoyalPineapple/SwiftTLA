@@ -15,7 +15,8 @@ public protocol StateMachine: Sendable {
     static var checksDeadlock: Bool { get }
     func assumptionsHold() throws -> Bool
     func satisfiesStateConstraint() throws -> Bool
-    func fairnessConditions() throws -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)]
+    /// A nil change predicate selects equality of the complete snapshot.
+    func fairnessConditions() throws -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool, changes: (@Sendable (Snapshot, Snapshot) throws -> Bool)?)]
     func temporalProperties(checking: Set<Property>) throws -> [Property: TemporalCondition<@Sendable (Snapshot, Snapshot) throws -> Bool>]
     func violatedInvariants(checking: Set<Property>) throws -> [Property]
     static var reachabilityProperties: [Property] { get }
@@ -194,6 +195,14 @@ extension ReachabilityGraph {
             ($0, String(describing: $0))
         })
         let fairness = behavior == .specification ? try machine.fairnessConditions() : []
+        let progress: [[Machine.Snapshot: Set<Machine.Snapshot>]?] = try fairness.map { condition in
+            guard let changes = condition.changes else { return nil }
+            return try Dictionary(uniqueKeysWithValues: transitions.map { source, successors in
+                (source, Set(try successors.filter {
+                    try condition.matches($0.action) && changes(source, $0.target)
+                }.map(\.target)))
+            })
+        }
         let checker = LivenessChecker<Machine.Snapshot, Machine.Action, Int>(
             states: Set(snapshots),
             transitions: Dictionary(uniqueKeysWithValues: transitions.map { source, successors in
@@ -203,6 +212,10 @@ extension ReachabilityGraph {
             }),
             fairness: fairness.indices.map { ($0, fairness[$0].isStrong) },
             matches: { action, scope in fairness[scope].matches(action) },
+            changes: { source, target, scope in
+                guard let projected = progress[scope] else { return source != target }
+                return projected[source]?.contains(target) == true
+            },
             actionOrder: { actionNames[$0]! < actionNames[$1]! },
             stateOrder: { stateOrder[$0]! < stateOrder[$1]! }
         )

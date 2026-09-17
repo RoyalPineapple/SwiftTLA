@@ -453,7 +453,9 @@ package struct CompiledTypeChecker: Sendable {
             invariants: invariants,
             reachabilityProperties: reachabilityProperties,
             temporalProperties: temporalProperties,
-            fairness: inputs.semantics.behavior.fairness,
+            fairness: try inputs.semantics.behavior.fairness.map { condition in
+                try condition.map { try checkOperand($0, expected: .unknown) }
+            },
             constraint: constraint,
             assume: assume)
         let replacements = try inputs.semantics.formalModuleReplacements.map {

@@ -457,6 +457,19 @@ package struct CompiledFairnessCondition: Sendable {
 
     package let scope: Scope
     package let isStrong: Bool
+    package let projection: CompiledExpression?
+    package let enabledActions: Set<ActionID>
+
+    package init(scope: Scope, isStrong: Bool, projection: CompiledExpression? = nil, enabledActions: Set<ActionID> = []) {
+        self.scope = scope
+        self.isStrong = isStrong
+        self.projection = projection
+        self.enabledActions = enabledActions
+    }
+
+    package func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> Self {
+        try .init(scope: scope, isStrong: isStrong, projection: projection.map(transform), enabledActions: enabledActions)
+    }
 }
 
 package enum CompiledFormalParameter: Hashable, Sendable {

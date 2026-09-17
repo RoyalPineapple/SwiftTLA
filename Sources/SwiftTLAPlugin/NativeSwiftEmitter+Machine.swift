@@ -625,9 +625,21 @@ extension NativeSwiftEmitter {
         """)
         var fairness: [String] = []
         var configuredFairness: [String] = []
-        for condition in program.behavior.fairness {
+        for (index, condition) in program.behavior.fairness.enumerated() {
             let name: String
             let matcher: String
+            let changes: String
+            if let projection = condition.projection {
+                let function = "_fairnessChanges\(index)"
+                declarations += try nativeDeclarations("""
+                private static func \(function)(in state: Snapshot, nextState: Snapshot\(collectionParameters)) throws -> Bool {
+                    \(try expression(projection)) != \(try expression(projection, state: "nextState."))
+                }
+                """)
+                changes = "{ \(captureList)state, nextState in try Self.\(function)(in: state, nextState: nextState\(arguments)) }"
+            } else {
+                changes = "nil"
+            }
             switch condition.scope {
             case .next:
                 name = "Next"
@@ -667,15 +679,15 @@ extension NativeSwiftEmitter {
                 configuredFairness.append(loops.joined(separator: "\n") + "\n" + """
                 let _action: Action = \(value)
                 _fairness.append((name: try formalCall(for: _action).description,
-                    isStrong: \(condition.isStrong), matches: { [ _action ] in $0 == _action }))
+                    isStrong: \(condition.isStrong), matches: { [ _action ] in $0 == _action }, changes: \(changes)))
                 """ + String(repeating: "\n}", count: loops.count))
                 continue
             }
-            fairness.append("(name: \(String(reflecting: name)), isStrong: \(condition.isStrong), matches: \(matcher))")
+            fairness.append("(name: \(String(reflecting: name + (condition.projection == nil ? "" : " [projection \(index)]"))), isStrong: \(condition.isStrong), matches: \(matcher), changes: \(changes))")
         }
         declarations += try nativeDeclarations("""
-        public func fairnessConditions() throws -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)] {
-            \(configuredFairness.isEmpty ? "let" : "var") _fairness: [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool)] = [\(fairness.joined(separator: ",\n"))]
+        public func fairnessConditions() throws -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool, changes: (@Sendable (Snapshot, Snapshot) throws -> Bool)?)] {
+            \(configuredFairness.isEmpty ? "let" : "var") _fairness: [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool, changes: (@Sendable (Snapshot, Snapshot) throws -> Bool)?)] = [\(fairness.joined(separator: ",\n"))]
             \(configuredFairness.joined(separator: "\n"))
             return _fairness.sorted { $0.name < $1.name }
         }

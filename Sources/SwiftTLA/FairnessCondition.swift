@@ -1,4 +1,5 @@
 public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
+    indirect case projected(FairnessCondition, StateExpr)
     case weakFairness(String)
     case strongFairness(String)
     case weakFairnessNext
@@ -14,6 +15,7 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
 
     public var description: String {
         switch self {
+        case .projected(let condition, let projection): return "\(condition) on \(projection)"
         case .weakFairness(let a): return "WF(\(a))"
         case .strongFairness(let a): return "SF(\(a))"
         case .weakFairnessNext: return "WF(Next)"
@@ -27,6 +29,7 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
 
     internal var isStrong: Bool {
         switch self {
+        case .projected(let condition, _): condition.isStrong
         case .strongFairness, .strongFairnessNext, .strongFairnessActionCall, .strongFairnessEachAction: true
         case .weakFairness, .weakFairnessNext, .weakFairnessActionCall, .weakFairnessEachAction: false
         }

@@ -13,7 +13,9 @@ extension FiniteExploration {
 }
 
 extension CompiledSpecification {
-    func livenessChecker(graph: StateGraph) -> LivenessChecker<StateGraph.StateID, CompiledActionCall, CompiledFairnessCondition.Scope> {
+    func livenessChecker(graph: StateGraph, states: [StateGraph.StateID: CompiledState]) throws -> (
+        checker: LivenessChecker<StateGraph.StateID, CompiledActionCall, Int>, fairness: [CompiledFairnessCondition]
+    ) {
         let knownActions = Set(semantics.behavior.actions.map(\.id))
         let calls = Set(graph.transitions.values.flatMap { successors in
             successors.compactMap { successor -> CompiledActionCall? in
@@ -26,13 +28,22 @@ extension CompiledSpecification {
         }
         // An invocation absent from the entire graph is never enabled there,
         // so both its weak and strong fairness obligations are vacuous.
-        let fairness = semantics.behavior.fairness.flatMap { condition -> [(CompiledFairnessCondition.Scope, Bool)] in
+        let fairness = semantics.behavior.fairness.flatMap { condition -> [CompiledFairnessCondition] in
             if case .eachAction(let id) = condition.scope {
-                return calls.filter { $0.action == id }.map { (.actionCall($0), condition.isStrong) }
+                return calls.filter { $0.action == id }.map {
+                    .init(scope: .actionCall($0), isStrong: condition.isStrong,
+                        projection: condition.projection, enabledActions: condition.enabledActions)
+                }
             }
-            return [(condition.scope, condition.isStrong)]
+            return [condition]
         }
-        return LivenessChecker(
+        let runtime = CompiledRuntime(compilation: self)
+        let projections: [[StateGraph.StateID: CompiledValue]?] = try fairness.map { condition in
+            guard let expression = condition.projection else { return nil }
+            let query = CompiledStateQuery(expression: expression, enabledActions: condition.enabledActions)
+            return try states.mapValues { try runtime.evaluate([query], in: $0)[0] }
+        }
+        let checker = LivenessChecker<StateGraph.StateID, CompiledActionCall, Int>(
             states: Set(graph.states.keys),
             transitions: Dictionary(uniqueKeysWithValues: graph.transitions.map { source, successors in
                 (source, successors.map { successor in
@@ -43,14 +54,18 @@ extension CompiledSpecification {
                     return GraphEdge(source: source, action: call, target: successor.target)
                 })
             }),
-            fairness: fairness,
+            fairness: fairness.indices.map { ($0, fairness[$0].isStrong) },
             matches: { call, scope in
-                switch scope {
+                switch fairness[scope].scope {
                 case .next: return true
                 case .action(let action): return call.action == action
                 case .actionCall(let expected): return call == expected
                 case .eachAction: preconditionFailure("Per-instance fairness must be expanded before analysis")
                 }
+            },
+            changes: { source, target, scope in
+                guard let values = projections[scope] else { return source != target }
+                return values[source] != values[target]
             },
             actionOrder: { lhs, rhs in
                 if lhs.action != rhs.action { return lhs.action.ordinal < rhs.action.ordinal }
@@ -58,6 +73,7 @@ extension CompiledSpecification {
             },
             stateOrder: { $0.id < $1.id }
         )
+        return (checker, fairness)
     }
 
     func analyzeTemporalProperties(
@@ -67,7 +83,7 @@ extension CompiledSpecification {
         isComplete: Bool = true
     ) throws -> [TemporalAnalysis<StateGraph.StateID, String?>] {
         let runtime = CompiledRuntime(compilation: self)
-        let checker = livenessChecker(graph: graph)
+        let (checker, fairness) = try livenessChecker(graph: graph, states: states)
         func predicate(_ query: CompiledStateQuery, bindings: CompiledBindings,
                        isTrigger: Bool = false) -> @Sendable (StateGraph.StateID, StateGraph.StateID) throws -> Bool {
             { state, _ in
@@ -112,15 +128,16 @@ extension CompiledSpecification {
                 property.bindings.isEmpty ? predicates(property.expression, bindings: .init())
                     : .all(bindings.map { predicates(property.expression, bindings: $0) }),
                 initialStates: initialStateIDs, isComplete: isComplete,
-                renderScope: { scope in
-                    switch scope {
-                    case .next: return "Next"
-                    case .action(let action): return layout.actions[action.ordinal].declaration.name
+                renderScope: { index in
+                    let suffix = fairness[index].projection == nil ? "" : " [projection \(index)]"
+                    switch fairness[index].scope {
+                    case .next: return "Next" + suffix
+                    case .action(let action): return layout.actions[action.ordinal].declaration.name + suffix
                     case .actionCall(let call):
                         return formalActionCall(
                             named: layout.actions[call.action.ordinal].declaration.name,
                             arguments: try call.arguments.map { try $0.rendered(using: layout) }
-                        )
+                        ) + suffix
                     case .eachAction: preconditionFailure("Per-instance fairness must be expanded before analysis")
                     }
                 }

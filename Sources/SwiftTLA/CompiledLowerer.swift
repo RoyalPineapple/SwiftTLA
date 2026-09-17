@@ -360,7 +360,10 @@ struct CompiledLowerer {
                 invariants: Array(stateProperties.prefix(spec.invariants.count)),
                 reachabilityProperties: Array(stateProperties.dropFirst(spec.invariants.count)),
                 temporalProperties: temporalProperties,
-                fairness: fairness,
+                fairness: fairness.map { condition in
+                    .init(scope: condition.scope, isStrong: condition.isStrong, projection: condition.projection,
+                        enabledActions: condition.projection.map { predicate($0).enabledActions } ?? [])
+                },
                 constraint: constraint,
                 assume: assume.map { .init(expression: $0, enabledActions: []) }),
             operators: operators,
@@ -919,6 +922,10 @@ struct CompiledLowerer {
         let action: ActionID
         let arguments: [CompiledValue]?
         switch condition {
+        case .projected(let condition, let projection):
+            let base = try lower(condition, actions: actions, at: path)
+            let value = try lower(projection, at: "\(path).projection", scope: rootScope)
+            return .init(scope: base.scope, isStrong: base.isStrong, projection: value)
         case .weakFairnessNext:
             return .init(scope: .next, isStrong: false)
         case .strongFairnessNext:

@@ -514,11 +514,18 @@ scheduler.
 
 An explicit promise for a continuously enabled process/action corresponds to
 weak fairness. A stronger promise for one enabled repeatedly, but not continuously,
-is distinct and must also be explicit. The exact syntax and scope references
-remain to be specified. Declared fairness must be preserved in temporal checking
+is distinct and must also be explicit. Independent steps and `Next` use the declarations below.
+Other scope references still require the remaining B-04 decisions. Declared fairness must be preserved in temporal checking
 and TLA+ export; it is not a runtime scheduling mechanism.
 
 Fairness belongs to behavior because it changes allowed executions.
+
+`WeakFairness(step, on: value)` and `StrongFairness(step, on: value)` select a typed current-state projection.
+`WeakFairnessNext(on: value)` and `StrongFairnessNext(on: value)` apply that projection to the complete transition relation.
+An eligible transition must change the projection. Changes to other state do not count as fairness progress.
+Without `on:`, the projection contains the complete execution state.
+The compiler preserves the projection through native checking, refinement checking, and TLA+ export.
+These declarations do not change the generated application transitions or scheduler.
 
 ### Temporal claims for each process member
 
