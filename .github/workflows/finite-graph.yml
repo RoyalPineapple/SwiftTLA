@@ -26,16 +26,69 @@ env:
   SWIFT_TLA_SHA: ${{ inputs.swift_tla_sha || github.sha }}
 
 jobs:
+  prepare:
+    name: Build validator and discover graph cases
+    runs-on: macos-15
+    timeout-minutes: 45
+    outputs:
+      matrix: ${{ steps.cases.outputs.matrix }}
+    steps:
+      - name: Validate SwiftTLA SHA
+        run: |
+          [[ "$SWIFT_TLA_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$ADMISSION_MODE" = candidate || "$ADMISSION_MODE" = admission ]]
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          fetch-depth: 0
+          submodules: false
+
+      - name: Verify SwiftTLA revision
+        run: |
+          test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          if [ "$ADMISSION_MODE" = admission ]; then
+            git merge-base --is-ancestor "$SWIFT_TLA_SHA" refs/remotes/origin/main
+          fi
+
+      - name: Derive one job per complete graph case
+        id: cases
+        run: |
+          matrix=$(jq -ce '
+            if .schema == "FiniteGraphCases"
+              and (.cases | length > 0)
+              and (all(.cases[]; .id | test("^[a-z0-9][a-z0-9-]*$")))
+              and ([.cases[].id] | length == (unique | length))
+            then {include: ([{phase: "scenarios", label: "scenarios", caseID: "all"}]
+              + [.cases[] | {phase: "graphs", label: ("graphs-" + .id), caseID: .id}])}
+            else error("Invalid or duplicate graph case identifiers") end
+          ' Verification/FiniteGraph/cases.json)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+      - name: Build the validator once for this revision
+        run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
+
+      - name: Upload validator
+        uses: actions/upload-artifact@v6
+        with:
+          name: finite-graph-validator-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/release/tlc-validate
+          include-hidden-files: true
+          if-no-files-found: error
+
   validation:
-    name: Validate ${{ matrix.phase }}
+    name: Validate ${{ matrix.label }}
+    needs: prepare
     runs-on: macos-15
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix:
-        phase: [scenarios, graphs]
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     env:
       FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
+      FINITE_GRAPH_CASES: ${{ github.workspace }}/Verification/FiniteGraph/cases.json
+      FINITE_GRAPH_INPUT_ROOT: ${{ github.workspace }}/.build/finite-graph-tools/inputs
     steps:
       - name: Validate SwiftTLA SHA
         run: |
@@ -56,22 +109,31 @@ jobs:
             git merge-base --is-ancestor "$resolved_sha" refs/remotes/origin/main
           fi
 
+      - name: Download validator
+        uses: actions/download-artifact@v5
+        with:
+          name: finite-graph-validator-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/validation-bin
+
+      - name: Prepare pinned TLC tools and inputs
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x .build/validation-bin/tlc-validate
+          ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT"
+
       - name: Validate all model-owned corpus scenarios
         if: matrix.phase == 'scenarios'
         env:
-          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
           SWIFTTLA_SCENARIO_MAXIMUM_STATES: "2000000"
           SWIFTTLA_SCENARIO_TIMEOUT_SECONDS: "600"
-        run: |
-          ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT"
-          unset FINITE_GRAPH_GITHUB_TOKEN
-          swift run --configuration release -Xswiftc -warnings-as-errors -j 1 tlc-validate scenarios run --output .build/scenario-evidence
+        run: .build/validation-bin/tlc-validate scenarios run --output .build/scenario-evidence
 
       - name: Run exact finite graph comparison
         if: matrix.phase == 'graphs'
         env:
-          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
-        run: ./scripts/run_finite_graph_check.sh --case all --output .build/finite-graph-evidence
+          CASE_ID: ${{ matrix.caseID }}
+        run: .build/validation-bin/tlc-validate finite-graph run --case "$CASE_ID" --output ".build/finite-graph-evidence/$CASE_ID"
 
       - name: Stage retained evidence
         if: always()
@@ -87,29 +149,23 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: finite-graph-part-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.phase }}
+          name: finite-graph-part-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.label }}
           path: .build/retained
           include-hidden-files: true
           if-no-files-found: error
 
   finite-graph:
-    needs: validation
+    needs: [prepare, validation]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Download scenario evidence
+      - name: Download all retained case and scenario evidence
         if: always()
         uses: actions/download-artifact@v5
         with:
-          name: finite-graph-part-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-scenarios
-          path: evidence
-
-      - name: Download graph evidence
-        if: always()
-        uses: actions/download-artifact@v5
-        with:
-          name: finite-graph-part-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-graphs
+          pattern: finite-graph-part-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-*
+          merge-multiple: true
           path: evidence
 
       - name: Upload finite-graph evidence
@@ -121,8 +177,20 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
-      - name: Require both validation phases
+      - name: Require the build and every validation job
         if: always()
         env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
           VALIDATION_RESULT: ${{ needs.validation.result }}
-        run: test "$VALIDATION_RESULT" = success
+          CASE_MATRIX: ${{ needs.prepare.outputs.matrix }}
+        run: |
+          test "$PREPARE_RESULT" = success
+          test "$VALIDATION_RESULT" = success
+          while IFS= read -r case_id; do
+            jq -e --arg id "$case_id" '
+              .caseID == $id and .result == "exact"
+              and .swiftComplete == true and .tlcComplete == true
+              and .differences == [] and .generatedDifferences == []
+              and (.checks | all(. == "exact"))
+            ' "evidence/finite-graph-evidence/$case_id/comparison.json"
+          done < <(jq -r '.include[] | select(.phase == "graphs") | .caseID' <<< "$CASE_MATRIX")
