@@ -541,7 +541,10 @@ public struct TupleExpr<Element: TLAValueType>: TLAValueType, Hashable, Sendable
 }
 
 public protocol FormalTupleValue: TLAValueType {}
-extension TupleExpr: FormalTupleValue {}
+public protocol FormalSequenceValue: FormalTupleValue {
+  associatedtype Element: TLAValueType
+}
+extension TupleExpr: FormalSequenceValue {}
 
 /// A typed two-member TLA+ tuple.
 ///
@@ -821,14 +824,12 @@ extension TypedExpression where ExpressionValue: FormalSetValue {
 
 }
 
-extension TypedExpression {
-  public func appending<Element: TypedExpression>(_ element: Element) -> Expr<TupleExpr<Element.ExpressionValue>>
-  where ExpressionValue == TupleExpr<Element.ExpressionValue> {
-    Expr<TupleExpr<Element.ExpressionValue>>(.tupleAppend(stateExpr, element.stateExpr))
+extension TypedExpression where ExpressionValue: FormalSequenceValue {
+  public func appending(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<ExpressionValue> {
+    Expr(.tupleAppend(stateExpr, element.stateExpr))
   }
 
-  public func appending<Element: TLAValueType>(_ element: Element) -> Expr<TupleExpr<Element>>
-  where ExpressionValue == TupleExpr<Element> {
+  public func appending(_ element: ExpressionValue.Element) -> Expr<ExpressionValue> {
     appending(element.expr)
   }
 
@@ -836,27 +837,27 @@ extension TypedExpression {
   ///
   /// The right side may be a finite function selected by `CHOOSE`; TLA+
   /// defines that function as a sequence when its domain is `1..n`.
-  public func concatenating<Element: TLAValueType>(
-    _ other: some TypedExpression<TupleExpr<Element>>
-  ) -> Expr<TupleExpr<Element>> where ExpressionValue == TupleExpr<Element> {
-    Expr<TupleExpr<Element>>(.tupleConcatenate(stateExpr, other.stateExpr))
+  public func concatenating(
+    _ other: some TypedExpression<ExpressionValue>
+  ) -> Expr<ExpressionValue> {
+    Expr(.tupleConcatenate(stateExpr, other.stateExpr))
   }
 
-  public func removing<Element: TLAValueType>(at index: some TypedExpression<Int>) -> Expr<TupleExpr<Element>>
-  where ExpressionValue == TupleExpr<Element> {
+  public func removing(at index: some TypedExpression<Int>) -> Expr<ExpressionValue> {
     Expr(.tupleRemoving(stateExpr, index.stateExpr))
   }
 
-  public func at<Element: TLAValueType>(_ index: Int) -> Expr<Element> where ExpressionValue == TupleExpr<Element> {
-    Expr<Element>(.tupleAccess(stateExpr, index))
+  public func at(_ index: Int) -> Expr<ExpressionValue.Element> {
+    Expr(.tupleAccess(stateExpr, index))
   }
 
   /// Reads a formal sequence at a one-based formal index.
-  public subscript<Element: TLAValueType>(_ index: some TypedExpression<Int>) -> Expr<Element>
-  where ExpressionValue == TupleExpr<Element> {
-    Expr<Element>(.tupleDynamicAccess(stateExpr, index.stateExpr))
+  public subscript(_ index: some TypedExpression<Int>) -> Expr<ExpressionValue.Element> {
+    Expr(.tupleDynamicAccess(stateExpr, index.stateExpr))
   }
+}
 
+extension TypedExpression {
   @_disfavoredOverload
   public subscript<Key: TLAValueType & Hashable, Value: TLAValueType>(
     _ index: some TypedExpression<Key>
@@ -1044,21 +1045,21 @@ extension TypedExpression where ExpressionValue: FormalTupleValue {
   }
 }
 
-extension TypedExpression {
-  public func head<Element: TLAValueType>() -> Expr<Element> where ExpressionValue == TupleExpr<Element> {
-    Expr<Element>(.tupleHead(stateExpr))
+extension TypedExpression where ExpressionValue: FormalSequenceValue {
+  public func head() -> Expr<ExpressionValue.Element> {
+    Expr(.tupleHead(stateExpr))
   }
 }
 
-extension TypedExpression {
+extension TypedExpression where ExpressionValue: FormalSequenceValue {
   /// Selects formal sequence members that satisfy `predicate`.
-  public func selecting<Element: TLAValueType, Predicate: TypedExpression<Bool>>(
+  public func selecting<Predicate: TypedExpression<Bool>>(
     file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
-    where predicate: (WithValue<Element>) -> Predicate
-  ) -> Expr<TupleExpr<Element>> where ExpressionValue == TupleExpr<Element> {
+    where predicate: (WithValue<ExpressionValue.Element>) -> Predicate
+  ) -> Expr<ExpressionValue> {
     let binding = generatedBinderName(file: file, line: line, column: column)
-    let element = WithValue<Element>(expression: .variable(binding))
-    return Expr<TupleExpr<Element>>(.sequenceSelect(stateExpr, binding, predicate(element).stateExpr))
+    let element = WithValue<ExpressionValue.Element>(expression: .variable(binding))
+    return Expr(.sequenceSelect(stateExpr, binding, predicate(element).stateExpr))
   }
 }
 
@@ -1068,15 +1069,15 @@ extension TypedExpression {
 /// selects a function-domain member with `CHOOSE`, so the operation must be
 /// independent of that selection order. Import `FunctionsModule.module`
 /// into the surrounding specification so TLC receives the upstream operator.
-public func Fold<Element: TLAValueType, Result: TLAValueType, Combined: TypedExpression<Result>>(
-  _ sequence: some TypedExpression<TupleExpr<Element>>,
+public func Fold<Sequence: FormalSequenceValue, Result: TLAValueType, Combined: TypedExpression<Result>>(
+  _ sequence: some TypedExpression<Sequence>,
   startingWith initial: some TypedExpression<Result>,
   file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
-  _ combine: (Expr<Element>, Expr<Result>) -> Combined
+  _ combine: (Expr<Sequence.Element>, Expr<Result>) -> Combined
 ) -> Expr<Result> {
   let elementName = generatedBinderName(file: file, line: line, column: column &* 2)
   let resultName = generatedBinderName(file: file, line: line, column: (column &* 2) &+ 1)
-  let element = Expr<Element>(.variable(elementName))
+  let element = Expr<Sequence.Element>(.variable(elementName))
   let accumulated = Expr<Result>(.variable(resultName))
   return Expr<Result>(
     .foldFunction(
@@ -1091,11 +1092,11 @@ public func Fold<Element: TLAValueType, Result: TLAValueType, Combined: TypedExp
 }
 
 /// Starts a formal fold from a concrete formal value.
-public func Fold<Element: TLAValueType, Result: TLAValueType, Combined: TypedExpression<Result>>(
-  _ sequence: some TypedExpression<TupleExpr<Element>>,
+public func Fold<Sequence: FormalSequenceValue, Result: TLAValueType, Combined: TypedExpression<Result>>(
+  _ sequence: some TypedExpression<Sequence>,
   startingWith initial: Result,
   file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
-  _ combine: (Expr<Element>, Expr<Result>) -> Combined
+  _ combine: (Expr<Sequence.Element>, Expr<Result>) -> Combined
 ) -> Expr<Result> {
   Fold(sequence, startingWith: initial.expr, file: file, line: line, column: column, combine)
 }
@@ -1114,13 +1115,14 @@ extension TypedExpression where ExpressionValue == Int {
   }
 }
 
-extension TypedExpression {
+extension TypedExpression where ExpressionValue: FormalSequenceValue {
   /// Reads a formal sequence at a one-based formal index.
-  public func at<Element: TLAValueType>(_ index: some TypedExpression<Int>) -> Expr<Element>
-  where ExpressionValue == TupleExpr<Element> {
-    Expr<Element>(.tupleDynamicAccess(stateExpr, index.stateExpr))
+  public func at(_ index: some TypedExpression<Int>) -> Expr<ExpressionValue.Element> {
+    Expr(.tupleDynamicAccess(stateExpr, index.stateExpr))
   }
+}
 
+extension TypedExpression {
   /// Reads a zero-based formal sequence at a formal index.
   public subscript<Element: TLAValueType>(_ index: some TypedExpression<Int>) -> Expr<Element>
   where ExpressionValue == ZeroBasedSequence<Element> {

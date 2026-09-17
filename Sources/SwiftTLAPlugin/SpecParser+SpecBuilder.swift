@@ -618,7 +618,8 @@ extension ParserSession {
         if let call = expression.as(FunctionCallExprSyntax.self), let record = nominalRecordType(call.calledExpression) {
             return record.swiftType
         }
-        if let call = expression.as(FunctionCallExprSyntax.self), isSwiftSetConstructor(call),
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           (isSwiftCollectionConstructor(call, named: "Set") || isSwiftCollectionConstructor(call, named: "Array")),
            call.calledExpression.is(GenericSpecializationExprSyntax.self) {
             return call.calledExpression.trimmedDescription
         }

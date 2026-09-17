@@ -1266,6 +1266,13 @@ final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil
     ) -> StateExpr? {
+        if let array = expression.as(ArrayExprSyntax.self) {
+            let elements = array.elements.compactMap {
+                decodeTypedFacadeValue($0.expression, scope: scope, expectedEnumType: expectedEnumType)
+            }
+            guard elements.count == array.elements.count else { return nil }
+            return .tupleLiteral(elements)
+        }
         if let dictionary = expression.as(DictionaryExprSyntax.self) {
             return decodeDictionaryLiteral(dictionary, scope: scope)
         }
@@ -1280,7 +1287,15 @@ final class ParserSession {
         if let call = expression.as(FunctionCallExprSyntax.self), nominalRecordType(call.calledExpression) != nil {
             return decodeNominalRecord(call, scope: scope)
         }
-        if let call = expression.as(FunctionCallExprSyntax.self), isSwiftSetConstructor(call) {
+        if let call = expression.as(FunctionCallExprSyntax.self), isSwiftCollectionConstructor(call, named: "Array") {
+            guard call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
+            if call.arguments.isEmpty { return .tupleLiteral([]) }
+            guard call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil,
+                  argument.expression.is(ArrayExprSyntax.self) else { return nil }
+            let element = typedFacadeValueType(expression, scope: scope)?.selectedElement
+            return decodeTypedFacadeValue(argument.expression, scope: scope, expectedEnumType: element?.enumerationType)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self), isSwiftCollectionConstructor(call, named: "Set") {
             guard call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
             if call.arguments.isEmpty { return .setLiteral([]) }
             guard call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil,
@@ -1549,7 +1564,7 @@ final class ParserSession {
             if let key, let value { return .set(.dictionary(key, value)) }
         }
         if let record = nominalRecordType(call.calledExpression) { return record }
-        if isSwiftSetConstructor(call),
+        if (isSwiftCollectionConstructor(call, named: "Set") || isSwiftCollectionConstructor(call, named: "Array")),
            call.calledExpression.is(GenericSpecializationExprSyntax.self) {
             return try? sourceTypeResolver.resolve(call.calledExpression.trimmedDescription)
         }
@@ -1623,10 +1638,10 @@ final class ParserSession {
         return try? sourceTypeResolver.resolve(source)
     }
 
-    func isSwiftSetConstructor(_ call: FunctionCallExprSyntax) -> Bool {
+    func isSwiftCollectionConstructor(_ call: FunctionCallExprSyntax, named name: String) -> Bool {
         let base = call.calledExpression.as(GenericSpecializationExprSyntax.self)?.expression ?? call.calledExpression
         let path = Self.sourceTypePath(base)
-        return path == ["Set"] || path == ["Swift", "Set"]
+        return path == [name] || path == ["Swift", name]
     }
 
     func typedFacadeValueType(_ type: TypeSyntax) -> CompiledValueType? {

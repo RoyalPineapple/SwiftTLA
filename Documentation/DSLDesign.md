@@ -742,6 +742,24 @@ to one formal value. A set declaration does not imply symmetry.
 The next section defines configurable `Each` populations.
 Replacement of fixed `ModelCollection` declarations remains part of B-01.
 
+#### Ordinary Swift arrays
+
+Swift arrays serve directly as model state and configuration values.
+The compiler preserves element order, repeated elements, and nominal element types.
+
+```swift
+let input = scope.parameter(as: [Int].self,
+    in: Set<[Int]>([Array<Int>([]), Array<Int>([2, 1, 2])]))
+let row = scope.sharedVar(initial: Array<Int>([]))
+```
+
+Array expressions support append, concatenation, indexed reads, indexed removal,
+selection, length, head, and folds through the shared sequence operations.
+These operations retain the array type. They do not require a `TupleExpr` value.
+DSL sequence indices start at one, as in TLA+.
+Generated application state uses ordinary Swift arrays, whose indices start at zero.
+The formal boundary rejects invalid element values instead of discarding them.
+
 #### Configured sequence domains
 
 The bounded sequence builders accept typed set expressions for their elements and lengths.
