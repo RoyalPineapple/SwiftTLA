@@ -133,7 +133,9 @@ jobs:
         if: matrix.phase == 'graphs'
         env:
           CASE_ID: ${{ matrix.caseID }}
-        run: .build/validation-bin/tlc-validate finite-graph run --case "$CASE_ID" --output ".build/finite-graph-evidence/$CASE_ID"
+        run: |
+          .build/validation-bin/tlc-validate finite-graph run --case "$CASE_ID" --output ".build/finite-graph-evidence/$CASE_ID"
+          test -f ".build/finite-graph-evidence/$CASE_ID/comparison.json"
 
       - name: Stage retained evidence
         if: always()

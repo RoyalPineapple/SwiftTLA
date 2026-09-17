@@ -120,11 +120,13 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         } else {
             throw FiniteGraphCLIError.unknownCase(options.caseID)
         }
+        fputs("finite-graph: selected \(selected.count) case(s) for \(options.caseID)\n", stderr)
         let preparedCases = try selected.map { declaration in
             let scenario = try declaration.resolveScenario()
             let rendered = try scenario?.render() ?? declaration.sourceModel.spec.compile().render()
             return (declaration, scenario, rendered)
         }
+        fputs("finite-graph: prepared \(preparedCases.count) rendered case(s)\n", stderr)
         let toolRoot = try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", environment)
         let inputRoot = try requiredEnvironment("FINITE_GRAPH_INPUT_ROOT", environment)
         let output = URL(fileURLWithPath: options.output).standardizedFileURL
@@ -169,6 +171,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             directory: projectRoot
         )
         try pin.validate(referenceArtifacts)
+        fputs("finite-graph: reference toolchain validated\n", stderr)
         let runRoot = output.deletingLastPathComponent().appendingPathComponent(
             ".finite-graph-\(UUID().uuidString.lowercased())")
         try FileManager.default.createDirectory(at: runRoot, withIntermediateDirectories: true)
@@ -178,6 +181,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         }
         var exitCode: Int32 = FiniteGraphExitCode.exact.rawValue
         for (declaration, scenario, rendered) in preparedCases {
+            fputs("finite-graph: checking \(declaration.id)\n", stderr)
             let caseOutput = selected.count == 1
                 ? output
                 : output.appendingPathComponent(declaration.id, isDirectory: true)
