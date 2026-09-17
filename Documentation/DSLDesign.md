@@ -742,27 +742,32 @@ to one formal value. A set declaration does not imply symmetry.
 The next section defines configurable `Each` populations.
 Replacement of fixed `ModelCollection` declarations remains part of B-01.
 
-#### Configured sequence elements
+#### Configured sequence domains
 
-The bounded sequence builders accept typed set expressions, including set-valued parameters:
+The bounded sequence builders accept typed set expressions for their elements and lengths.
+Both domains can depend on parameters:
 
 ```swift
-let row = scope.sharedVar(in: Sequences(of: members, lengths: 0...2))
-let sorted = scope.sharedVar(in: SortedSequences(of: members, lengths: 0...2))
-let zeroBased = scope.sharedVar(in: ZeroBasedSequences(of: members, lengths: 0...2))
+let row = scope.sharedVar(in: Sequences(of: members, lengths: IntRange(0, through: limit)))
+let sorted = scope.sharedVar(in: SortedSequences(of: members, lengths: lengths))
+let zeroBased = scope.sharedVar(in: ZeroBasedSequences(of: members, lengths: lengths))
 ```
 
 `SortedSequences` requires integer elements and retains only nondecreasing sequences.
 `ZeroBasedSequences` uses indices from zero. The other builders use TLA+ sequence indices from one.
-An empty element set admits the empty sequence when the length range includes zero.
+An empty element set admits the empty sequence when the length domain includes zero.
 It admits no positive-length sequences.
+An empty length domain admits no sequences.
 
-The compiler retains element expressions and lexical bindings in formal comprehensions.
+The compiler retains both domain expressions and their lexical bindings in formal comprehensions.
 It does not enumerate their Cartesian products during source construction.
 Generated initial states preserve element types, including nominal enums.
+Different configurations retain the same generated types and TLA+ module.
 
-Length ranges remain nonnegative compile-time integer ranges.
-Parameter-dependent lengths remain required work under B-01.
+Lengths must be nonnegative integers. The builders also accept compile-time ranges such as `0...2`.
+Compilation rejects negative lengths in these ranges.
+Evaluation fails if a configured length set contains a negative member, even if other members are valid.
+The compiler does not discard invalid lengths or convert them to zero.
 
 #### Parameter-dependent function domains
 

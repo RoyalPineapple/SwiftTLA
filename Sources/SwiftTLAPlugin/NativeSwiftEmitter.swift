@@ -989,8 +989,8 @@ struct NativeSwiftEmitter {
             let elements = try nativeSequenceElements("_sequenceValue", source: source)
             return """
             (try { () throws -> \(try swiftType(result)) in
-                let _sequenceValue = \(try emit(0))
-                let _appendedValue = \(try emit(1))
+                let _sequenceValue: \(try swiftType(source)) = \(try emit(0))
+                let _appendedValue: \(try swiftType(childType(1))) = \(try emit(1))
                 return \(elements) + [_appendedValue]
             }())
             """
@@ -1001,8 +1001,8 @@ struct NativeSwiftEmitter {
             let right = childType(1)
             return """
             (try { () throws -> \(try swiftType(result)) in
-                let _leftValue = \(try emit(0))
-                let _rightValue = \(try emit(1))
+                let _leftValue: \(try swiftType(left)) = \(try emit(0))
+                let _rightValue: \(try swiftType(right)) = \(try emit(1))
                 let _rightElements = \(try nativeSequenceElements("_rightValue", source: right))
                 let _leftElements = \(try nativeSequenceElements("_leftValue", source: left))
                 return _leftElements + _rightElements

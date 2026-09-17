@@ -683,6 +683,13 @@ public func Sequences<Domain: FormalSetValue>(
   Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths, kind: .sequences))
 }
 
+public func Sequences<Domain: FormalSetValue, Lengths: FormalSetValue>(
+  of elements: some TypedExpression<Domain>,
+  lengths: some TypedExpression<Lengths>
+) -> Expr<SetExpr<TupleExpr<Domain.Element>>> where Lengths.Element == Int {
+  Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths.stateExpr, kind: .sequences))
+}
+
 /// Creates a finite formal set of zero-based sequences for model checking.
 ///
 /// This is the bounded form of a `ZSeq(S)` input domain. The returned values
@@ -692,6 +699,13 @@ public func ZeroBasedSequences<Domain: FormalSetValue>(
   lengths: ClosedRange<Int>
 ) -> Expr<SetExpr<ZeroBasedSequence<Domain.Element>>> {
   Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths, kind: .zeroBased))
+}
+
+public func ZeroBasedSequences<Domain: FormalSetValue, Lengths: FormalSetValue>(
+  of elements: some TypedExpression<Domain>,
+  lengths: some TypedExpression<Lengths>
+) -> Expr<SetExpr<ZeroBasedSequence<Domain.Element>>> where Lengths.Element == Int {
+  Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths.stateExpr, kind: .zeroBased))
 }
 
 /// Creates a finite formal set of nondecreasing integer sequences.
@@ -706,41 +720,58 @@ public func SortedSequences<Domain: FormalSetValue>(
   Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths, kind: .sorted))
 }
 
+public func SortedSequences<Domain: FormalSetValue, Lengths: FormalSetValue>(
+  of elements: some TypedExpression<Domain>,
+  lengths: some TypedExpression<Lengths>
+) -> Expr<SetExpr<TupleExpr<Int>>> where Domain.Element == Int, Lengths.Element == Int {
+  Expr(formalSequenceDomain(elements: elements.stateExpr, lengths: lengths.stateExpr, kind: .sorted))
+}
+
 package enum BoundedSequenceKind: String {
   case sequences = "Sequences"
   case zeroBased = "ZeroBasedSequences"
   case sorted = "SortedSequences"
 }
 
-/// Retains the element expression in scoped comprehensions instead of
-/// enumerating its Cartesian products during source construction.
 package func formalSequenceDomain(
   elements: StateExpr, lengths: ClosedRange<Int>, kind: BoundedSequenceKind
 ) -> StateExpr {
   guard lengths.lowerBound >= 0 else {
     return .sourceIssue(.negativeSequenceLength(operation: kind.rawValue, lowerBound: lengths.lowerBound))
   }
-  var result: StateExpr?
-  let freeNames = elements.freeVariableNames
-  for length in lengths {
-    let names = (0..<length).map {
-      StateExpr.freshBoundName("__sequenceMember\($0)", avoiding: freeNames)
-    }
-    let values = names.map(StateExpr.variable)
-    let sequence: StateExpr = kind == .zeroBased
-      ? formalZeroBasedSequence(values) : .tupleLiteral(values)
-    var domain = StateExpr.setLiteral([sequence])
-    if kind == .sorted, length > 1 {
-      let ordered = zip(values, values.dropFirst()).map(StateExpr.lessOrEqual)
-        .reduce(StateExpr.bool(true), StateExpr.and)
-      domain = .ifThenElse(ordered, domain, .setLiteral([]))
-    }
-    for name in names.reversed() {
-      domain = .unionAll(.setMap(domain, name, elements))
-    }
-    result = result.map { .union($0, domain) } ?? domain
+  return formalSequenceDomain(elements: elements,
+    lengths: .integerRange(.int(lengths.lowerBound), .int(lengths.upperBound)), kind: kind)
+}
+
+/// Keeps both domains symbolic. Concatenation with the empty sequence gives
+/// one-indexed functions their checked native array representation.
+package func formalSequenceDomain(
+  elements: StateExpr, lengths: StateExpr, kind: BoundedSequenceKind
+) -> StateExpr {
+  let freeNames = elements.freeVariableNames.union(lengths.freeVariableNames)
+  let lengthsName = StateExpr.freshBoundName("__sequenceLengths", avoiding: freeNames)
+  let lengthName = StateExpr.freshBoundName("__sequenceLength", avoiding: freeNames)
+  let sequenceName = StateExpr.freshBoundName("__sequenceValue", avoiding: freeNames)
+  let indexName = StateExpr.freshBoundName("__sequenceIndex", avoiding: freeNames)
+  let length = StateExpr.variable(lengthName)
+  let sequence = StateExpr.variable(sequenceName)
+  let index = StateExpr.variable(indexName)
+  let indices = StateExpr.integerRange(.int(kind == .zeroBased ? 0 : 1),
+    kind == .zeroBased ? .subtract(length, .int(1)) : length)
+  var domain = StateExpr.functionSet(indices, elements)
+  if kind != .zeroBased {
+    domain = .setMap(.tupleConcatenate(.tupleLiteral([]), sequence), sequenceName, domain)
   }
-  return result ?? .setLiteral([])
+  if kind == .sorted {
+    domain = .setFilter(domain, sequenceName,
+      .forAll(.integerRange(.int(1), .subtract(.tupleLength(sequence), .int(1))), indexName,
+        .lessOrEqual(.tupleDynamicAccess(sequence, index),
+          .tupleDynamicAccess(sequence, .add(index, .int(1))))))
+  }
+  let source = StateExpr.variable(lengthsName)
+  let valid = StateExpr.forAll(source, lengthName, .greaterOrEqual(length, .int(0)))
+  let sequences = StateExpr.unionAll(.setMap(domain, lengthName, source))
+  return .letValue(lengthsName, lengths, .caseExpr([valid, sequences], nil))
 }
 
 /// The index domain guarantees that exactly one CASE branch matches.

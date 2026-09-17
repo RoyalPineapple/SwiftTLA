@@ -443,9 +443,12 @@ final class ParserSession {
               let lengthSyntax = call.arguments.first(where: { $0.label?.text == "lengths" })?.expression,
               let memberSet = finiteAlgorithmDomain(memberSyntax).map({
                   StateExpr.setLiteral($0.values.map(StateExpr.value))
-              }) ?? decodeTypedFacadeValue(memberSyntax, scope: scope),
-              let lengths = parseIntegerClosedRange(lengthSyntax)
+              }) ?? decodeTypedFacadeValue(memberSyntax, scope: scope)
         else { return nil }
+        if let lengths = parseIntegerClosedRange(lengthSyntax) {
+            return formalSequenceDomain(elements: memberSet, lengths: lengths, kind: kind)
+        }
+        guard let lengths = decodeTypedFacadeValue(lengthSyntax, scope: scope) else { return nil }
         return formalSequenceDomain(elements: memberSet, lengths: lengths, kind: kind)
     }
 
