@@ -4,6 +4,25 @@ import UpstreamParity
 @testable import SwiftTLAPlugin
 
 struct ParameterizedAtomicStepTests {
+    @Test("literal action domains retain empty-set types and discard duplicate set members", arguments: [
+        ("Set<Int>([])", 0), ("Set<Int>([1])", 1), ("Set<Int>([1, 1])", 1)
+    ])
+    func preservesLiteralSetSemantics(_ domain: String, _ count: Int) throws {
+        let source = SpecParser.parseSpecClosure(named: "LiteralDomain", try parseSpecTestClosure("""
+        { scope in
+            let value = scope.sharedVar(initial: 0)
+            Do(Step.select, over: \(domain)) { member in Assign(value, to: member) }
+        }
+        """), sourceTypes: .init(enums: [parserTestEnum("Step", cases: ["select": .string("select")])]))
+        #expect(source.diagnostics.isEmpty)
+        let compilation = try source.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let action = try #require(program.behavior.actions.first)
+        let binding = try #require(action.bindings.first)
+        #expect(program.bindingTypes[binding.binder] == .int)
+        #expect(binding.literalMembers?.count == count)
+    }
+
     @Test("independent action arguments preserve typed dispatch and ordered assignments")
     func dispatchesTypedArguments() throws {
         var machine = try ParameterizedAtomicSteps.makeMachine(configuration: .init(members: [0, 1]))

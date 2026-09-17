@@ -1274,7 +1274,8 @@ final class ParserSession {
                 decodeTypedFacadeValue($0.expression, scope: scope, expectedEnumType: elementType?.enumerationType)
             }
             guard elements.count == array.elements.count else { return nil }
-            return .setLiteral(elements)
+            var seen: Set<StateExpr> = []
+            return .setLiteral(elements.filter { seen.insert($0).inserted })
         }
         let formalMember = expression.as(MemberAccessExprSyntax.self)
             ?? expression.as(FunctionCallExprSyntax.self)?.calledExpression.as(MemberAccessExprSyntax.self)
