@@ -342,6 +342,23 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "queens-four",
+      "sourceModel": "queens-four",
+      "scenario": "FourQueens",
+      "module": "queens-four/MC.tla",
+      "configuration": "queens-four/MC.cfg",
+      "imports": ["queens-four/Queens.tla"],
+      "dependencies": [{"importingModule": "MC", "importedModule": "Queens"}],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/N-Queens/Queens.toolbox/FourQueens/MC.tla",
+        "sha256": "53c5975eab1397e55149cc50337f8914d02f636e96dee291b891ae5f2ca9c23d"
+      },
+      "exploration": {"maximumStateLimit": 5000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "53c5975eab1397e55149cc50337f8914d02f636e96dee291b891ae5f2ca9c23d",
+      "cfgSHA256": "cf988d285bd3f337f9b62c0f17f336ad312c2b1b36cbcaca7d7df95eb15a1b73",
+      "timeoutSeconds": 60
+    },
+    {
       "id": "n-queens-four",
       "sourceModel": "n-queens-four",
       "scenario": "FourQueens",

@@ -297,6 +297,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
                 scenarios = try MajorityModel.validationScenarios()
             case .nQueensFour:
                 scenarios = try NQueensModel.validationScenarios()
+            case .queensFour:
+                scenarios = try QueensModel.validationScenarios()
             default:
                 guard scenario == nil else {
                     throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
@@ -378,6 +380,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case multiCarElevator = "multicar-elevator"
     case tlcmcGraph1 = "tlcmc-graph-1"
     case nQueensFour = "n-queens-four"
+    case queensFour = "queens-four"
     case diningPhilosophers = "dining-philosophers"
     case stringLiterals = "string-literals"
     case actionReferences = "action-references"
@@ -400,7 +403,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .kvsnap: return try explore(KVsnapModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
-        case .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .channel, .asynchInterface, .majority, .nQueensFour:
+        case .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
@@ -423,6 +426,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .multiCarElevator: MultiCarElevator.spec
         case .tlcmcGraph1: TLCMCModel.spec
         case .nQueensFour: NQueensModel.spec
+        case .queensFour: QueensModel.spec
         case .diningPhilosophers: DiningPhilosophersModel.spec
         case .stringLiterals: StringLiteralModel.spec
         case .actionReferences: ActionReferencesModel.spec
