@@ -21,9 +21,9 @@ extension NativeSwiftEmitter {
                     throw unsupported("unresolved export parameter: \(parameter.reference.name)")
                 }
                 let value = try formalValue("configuration.`\(parameter.reference.name)`", type: type)
-                return "\(String(reflecting: "CONSTANT " + name + " = ")) + (\(value)).description"
+                return "(name: \(String(reflecting: name)), value: \(value))"
             }
-            let declarations = module.configuration.declarations.map { String(reflecting: $0) } + parameterBindings
+            let declarations = module.configuration.declarations.map { String(reflecting: $0) }
             let imports = try module.imports.map { imported in
                 guard let owner = module.importedOwnership.first(where: { $0.moduleName == imported.name }) else {
                     throw unsupported("missing imported module ownership: \(imported.name)")
@@ -98,6 +98,7 @@ extension NativeSwiftEmitter {
                 refinements: \(String(reflecting: module.configuration.refinements)),
                 symmetry: \(String(reflecting: module.configuration.symmetry)),
                 actions: _actions, _generatedPlusCal: \(plusCal),
+                _generatedParameters: [\(parameterBindings.joined(separator: ", "))],
                 _generatedImports: [\(imports)], _generatedDependencies: [\(dependencies)],
                 _generatedTemporalObligations: _obligations)
             """

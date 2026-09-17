@@ -1261,6 +1261,17 @@ final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil
     ) -> StateExpr? {
+        if let dictionary = expression.as(DictionaryExprSyntax.self) {
+            return decodeDictionaryLiteral(dictionary, scope: scope)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           typedFacadeType(call.calledExpression)?.name == "Dictionary" {
+            guard call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
+            if call.arguments.isEmpty { return .value(.function([:])) }
+            guard call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil,
+                  let dictionary = argument.expression.as(DictionaryExprSyntax.self) else { return nil }
+            return decodeDictionaryLiteral(dictionary, scope: scope)
+        }
         if let call = expression.as(FunctionCallExprSyntax.self), nominalRecordType(call.calledExpression) != nil {
             return decodeNominalRecord(call, scope: scope)
         }
@@ -1335,6 +1346,38 @@ final class ParserSession {
               expectedEnumType.flatMap({ enumDefinition(named: $0) }) == nil
         else { return nil }
         return decodeStateExpr(expression)
+    }
+
+    private func decodeDictionaryLiteral(_ dictionary: DictionaryExprSyntax, scope: TypedFacadeScope) -> StateExpr? {
+        guard case .elements(let entries) = dictionary.content else { return .value(.function([:])) }
+        var keys: [StateExpr] = []
+        var values: [StateExpr] = []
+        var seen: Set<StateExpr> = []
+        for entry in entries {
+            guard let key = decodeTypedFacadeValue(entry.key, scope: scope),
+                  let value = decodeTypedFacadeValue(entry.value, scope: scope),
+                  seen.insert(key).inserted else { return nil }
+            keys.append(key)
+            values.append(value)
+        }
+        guard !keys.isEmpty else { return .value(.function([:])) }
+        let prefix = generatedBinderName(line: UInt(dictionary.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
+        let keyNames = keys.indices.map { "\(prefix)_key\($0)" }
+        let valueNames = values.indices.map { "\(prefix)_value\($0)" }
+        let selected = "\(prefix)_selected"
+        let domain = StateExpr.setLiteral(keyNames.map(StateExpr.variable))
+        let branches = zip(keyNames, valueNames).flatMap { key, value in
+            [StateExpr.equal(.variable(selected), .variable(key)), .variable(value)]
+        }
+        let function = StateExpr.functionLiteral(domain, selected, .caseExpr(branches, nil))
+        var result = StateExpr.caseExpr([
+            .equal(.cardinality(domain), .int(keys.count)), function
+        ], nil)
+        for index in keys.indices.reversed() {
+            result = .letValue(keyNames[index], keys[index],
+                .letValue(valueNames[index], values[index], result))
+        }
+        return result
     }
 
     private func decodeEnumCase(

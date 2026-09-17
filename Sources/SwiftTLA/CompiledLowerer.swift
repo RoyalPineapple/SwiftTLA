@@ -422,10 +422,13 @@ struct CompiledLowerer {
                     throw invalid(scenario.name, "foreign parameter binding")
                 }
                 let value = try lower(binding.value, at: "validation.\(scenario.name).\(binding.parameter.name)", scope: rootScope)
+                let parameterBinders = Set(layout.parameters.map(\.binder))
                 var pending = [value]
                 while let expression = pending.popLast() {
                     switch expression.operation {
-                    case .stateVariable, .boundValue, .operatorReference, .enabledAction, .call:
+                    case .boundValue(let binder) where parameterBinders.contains(binder):
+                        throw invalid(scenario.name, "scenario bindings require closed values without state, parameter, or operator dependencies")
+                    case .stateVariable, .operatorReference, .enabledAction, .call:
                         throw invalid(scenario.name, "scenario bindings require closed values without state, parameter, or operator dependencies")
                     default: pending.append(contentsOf: expression.children)
                     }

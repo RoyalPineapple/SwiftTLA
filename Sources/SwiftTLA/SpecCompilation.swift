@@ -362,12 +362,37 @@ public struct RenderedSpecification: Sendable {
     public init(_generatedModule name: String, source: String, compilationIdentity: String,
         declarations: [String], checkDeadlock: Bool, invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
         symmetry: [String], actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil,
+        _generatedParameters: [(name: String, value: TLAValue)] = [],
         _generatedImports: [(name: String, source: String, structuralPath: [String])] = [],
         _generatedDependencies: [(importingModule: String, importedModule: String, structuralPath: [String])] = [],
         _generatedTemporalObligations: [String: [_RenderedTemporalObligation]] = [:]) throws {
+        var declarations = declarations
+        var definitions: [String] = []
+        var prefix = "__SwiftTLAParameter"
+        let sources = [source] + _generatedImports.map(\.source)
+            + [(try? _generatedPlusCal?.get()) ?? ""] + declarations + _generatedParameters.map(\.name)
+        while sources.contains(where: { $0.contains(prefix) }) { prefix += "_" }
+        for (index, parameter) in _generatedParameters.enumerated() {
+            if parameter.value.isTLCConfigurationLiteral {
+                declarations.append("CONSTANT \(parameter.name) = \(parameter.value)")
+            } else {
+                let definition = "\(prefix)\(index)"
+                definitions.append("\(definition) == \(parameter.value)")
+                declarations.append("CONSTANT \(parameter.name) <- \(definition)")
+            }
+        }
+        func configuredSource(_ source: String) throws -> String {
+            guard !definitions.isEmpty else { return source }
+            guard let end = source.range(of: "====", options: .backwards) else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "configuration",
+                    expected: "a complete rendered module", actual: "missing module terminator",
+                    nextSafeAction: "Render the resolved model before binding configuration.")
+            }
+            return String(source[..<end.lowerBound]) + definitions.joined(separator: "\n") + "\n" + source[end.lowerBound...]
+        }
         let configuration = TLCConfiguration(declarations: declarations, checkDeadlock: checkDeadlock,
             invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements, symmetry: symmetry)
-        let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
+        let bundle = TLAModuleBundle(root: .init(name: name, tla: try configuredSource(source),
             cfg: configuration.render(usesSymmetryReduction: true)),
             imports: _generatedImports.map { .init(name: $0.name, tla: $0.source) }, provenance: .compiled(
                 identity: .init(value: compilationIdentity),
@@ -381,7 +406,7 @@ public struct RenderedSpecification: Sendable {
             switch result {
             case .failure(let diagnostic): return .failure(diagnostic)
             case .success(let source):
-                let authored = TLAModuleBundle(root: .init(name: name, tla: source, cfg: bundle.root.cfg),
+                let authored = TLAModuleBundle(root: .init(name: name, tla: try configuredSource(source), cfg: bundle.root.cfg),
                     imports: bundle.imports, provenance: bundle.provenance)
                 try authored.validateDeclaredClosure()
                 return .success(authored)

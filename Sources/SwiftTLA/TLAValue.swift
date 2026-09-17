@@ -48,6 +48,17 @@ public enum TLAValue: Hashable, Sendable, CustomStringConvertible {
 
     public var description: String { _tlaForm() }
 
+    package var isTLCConfigurationLiteral: Bool {
+        switch self {
+        case .int(let value): value >= 0
+        case .bool, .constant: true
+        case .string(let value):
+            !value.unicodeScalars.contains { $0 == "\"" || $0 == "\\" || $0.value < 32 }
+        case .set(let values): values.allSatisfy(\.isTLCConfigurationLiteral)
+        case .tuple, .record, .function: false
+        }
+    }
+
     private func _tlaForm(_ depth: Int = 0) -> String {
         let xs = "__tla_fn_\(depth)"
         switch self {

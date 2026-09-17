@@ -774,6 +774,22 @@ let f = algorithm.sharedVar(initial: Dictionary<Int, Int>.mapping(
 The compiler retains the domain, key binding, and body as one typed function expression.
 Native generation and TLA+ export use that expression.
 
+Ordinary dictionary literals can bind function-valued model parameters:
+
+```swift
+let capacity = scope.parameter(as: [String: Int].self,
+    in: Functions(from: jugs, to: Set<Int>([3, 5])))
+Validation("Two jugs") {
+    Bind(jugs, to: Set<String>(["small", "big"]))
+    Bind(capacity, to: ["small": 3, "big": 5])
+}
+```
+
+The parameter type supplies the key and value types, including for `[:]`.
+`Dictionary<String, Int>()` also declares a typed empty dictionary.
+The compiler rejects duplicate literal keys. Configuration validation rejects missing keys, extra keys, and values outside the function range.
+The compiler retains dictionary entries as expressions until formal serialization. It does not turn them into a string-keyed model schema.
+
 #### Configured process populations
 
 `Each` accepts a typed set expression. Its element type supplies the process

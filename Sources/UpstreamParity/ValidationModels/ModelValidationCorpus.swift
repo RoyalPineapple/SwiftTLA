@@ -12,6 +12,7 @@ package func modelValidationScenarios() throws -> [(id: String, scenario: any Mo
         ("transition-property-claims", try TransitionPropertyClaims.validationScenarios()),
         ("independent-atomic-steps", try IndependentAtomicSteps.validationScenarios()),
         ("parameterized-atomic-steps", try ParameterizedAtomicSteps.validationScenarios()),
+        ("configured-dictionary-values", try ConfiguredDictionaryValues.validationScenarios()),
         ("scoped-reachability-claims", try ScopedReachabilityClaims.validationScenarios()),
         ("constant-state-claims", try ConstantStateClaims.validationScenarios()),
         ("labelled-property-claims", try LabelledPropertyClaims.validationScenarios()),
