@@ -183,17 +183,39 @@ package struct TLCPropertyCheck: Sendable {
             bundle = try configuration.bundle(from: original, native: native,
               checking: names, checkDeadlock: check == .deadlock)
           }
-          let request = try capture.request.selecting(bundle: bundle,
-            work: work, runID: UUID(), invocation: .propertyCheck)
           try RetainedFiles.outputDirectory(output, beneath: output.deletingLastPathComponent())
-          let outcome = try processAdapter.run(request, retainingIn: output)
-          if outcome == .temporalTautology, case .property(let name) = check,
-             native.rendered.temporalNames.contains(name) {
-            tlcResult = .satisfied
+          let obligations: [TLAModuleBundle]?
+          if case .generated = source, case .property(let name) = check {
+            obligations = try native.rendered.temporalObligationBundles(checking: name)
           } else {
-            tlcResult = try propertyResult(check: check, outcome: outcome,
-              graph: capture.graph, renderedActions: request.finiteGraphCase.renderedActions, outputDirectory: output)
+            obligations = nil
           }
+          var results: [PropertyResult] = []
+          for (index, input) in (obligations ?? [bundle]).enumerated() {
+            let retained = obligations == nil ? output : output.appendingPathComponent("obligation-\(index)")
+            if obligations != nil {
+              try RetainedFiles.createDirectory(retained, beneath: output)
+              let inputs = try RetainedFiles.createDirectory(retained.appendingPathComponent("inputs"), beneath: retained)
+              for file in input.files {
+                let destination = try RetainedFiles.resolve(inputs.appendingPathComponent("\(file.name).tla"), beneath: inputs)
+                try RetainedFiles.writeText(file.tla, to: destination)
+              }
+              let configuration = try RetainedFiles.resolve(inputs.appendingPathComponent("\(input.root.name).cfg"), beneath: inputs)
+              try RetainedFiles.writeText(input.cfg, to: configuration)
+            }
+            let request = try capture.request.selecting(bundle: input,
+              work: work, runID: UUID(), invocation: .propertyCheck)
+            let outcome = try processAdapter.run(request, retainingIn: retained)
+            if outcome == .temporalTautology, case .property(let name) = check,
+               native.rendered.temporalNames.contains(name) {
+              results.append(.satisfied)
+            } else {
+              results.append(try propertyResult(check: check, outcome: outcome,
+                graph: capture.graph, renderedActions: request.finiteGraphCase.renderedActions, outputDirectory: retained))
+            }
+          }
+          tlcResult = results.contains(.unavailable) ? .unavailable
+            : results.first(where: { if case .violated = $0 { true } else { false } }) ?? .satisfied
         }
         if case .property(let name) = check, native.rendered.reachabilityNames.contains(name) {
           switch tlcResult {

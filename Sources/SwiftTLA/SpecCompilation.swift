@@ -114,6 +114,8 @@ package struct RenderedModule: Sendable, Equatable {
     let refinements: [String]
     let properties: [PropertyID: String]
     let constraint: String?
+    package var temporalObligations: [PropertyID: [_RenderedTemporalObligation]] = [:]
+    package var temporalBindingNames: [BinderID: String] = [:]
 }
 
 public struct RenderedAction: Sendable, Equatable {
@@ -324,7 +326,11 @@ public struct CompiledSpecification: Sendable {
         return RenderedSpecification(
             tlaBundle: renderedBundle,
             configuration: rootModule.configuration,
-            actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle.map { .success($0) }
+            actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle.map { .success($0) },
+            temporalObligations: Dictionary(uniqueKeysWithValues: module.semantics.behavior.temporalProperties.compactMap { property in
+                guard property.bindings.isEmpty, let obligations = rootModule.temporalObligations[property.id] else { return nil }
+                return (property.name, obligations)
+            })
         )
     }
 }
@@ -335,13 +341,20 @@ public struct RenderedSpecification: Sendable {
     fileprivate let configuration: TLCConfiguration
     package let actions: [RenderedAction]
     fileprivate let renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?
+    package let temporalObligations: [String: [_RenderedTemporalObligation]]
 
     init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration, actions: [RenderedAction],
-        renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?) {
+        renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?,
+        temporalObligations: [String: [_RenderedTemporalObligation]] = [:]) {
         self.tlaBundle = tlaBundle
         self.configuration = configuration
         self.actions = actions
         self.renderedPlusCalModuleBundle = renderedPlusCalModuleBundle
+        self.temporalObligations = temporalObligations.mapValues { obligations in
+            obligations.sorted {
+                ($0.initialCondition, $0.property) < ($1.initialCondition, $1.property)
+            }
+        }
     }
 
     /// Final artifact boundary used by generated machines; this does not compile or interpret a model.
@@ -350,7 +363,8 @@ public struct RenderedSpecification: Sendable {
         declarations: [String], checkDeadlock: Bool, invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
         symmetry: [String], actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil,
         _generatedImports: [(name: String, source: String, structuralPath: [String])] = [],
-        _generatedDependencies: [(importingModule: String, importedModule: String, structuralPath: [String])] = []) throws {
+        _generatedDependencies: [(importingModule: String, importedModule: String, structuralPath: [String])] = [],
+        _generatedTemporalObligations: [String: [_RenderedTemporalObligation]] = [:]) throws {
         let configuration = TLCConfiguration(declarations: declarations, checkDeadlock: checkDeadlock,
             invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements, symmetry: symmetry)
         let bundle = TLAModuleBundle(root: .init(name: name, tla: source,
@@ -373,7 +387,8 @@ public struct RenderedSpecification: Sendable {
                 return .success(authored)
             }
         }
-        self.init(tlaBundle: bundle, configuration: configuration, actions: actions, renderedPlusCalModuleBundle: plusCal)
+        self.init(tlaBundle: bundle, configuration: configuration, actions: actions, renderedPlusCalModuleBundle: plusCal,
+            temporalObligations: _generatedTemporalObligations)
     }
 
     package func tlaBundle(
@@ -403,6 +418,34 @@ public struct RenderedSpecification: Sendable {
     package var checksDeadlock: Bool { configuration.checkDeadlock }
     package var behavior: ModelBehavior { configuration.behavior }
 
+    package func temporalObligationBundles(checking name: String) throws -> [TLAModuleBundle]? {
+        _ = try configuration.selecting([name], checkDeadlock: false)
+        guard let obligations = temporalObligations[name], !obligations.isEmpty else { return nil }
+        let source = tlaBundle.root.tla
+        guard let end = source.range(of: "====", options: .backwards) else {
+            throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "temporal obligations",
+                expected: "a complete rendered module", actual: "missing module terminator",
+                nextSafeAction: "Render the resolved model before selecting checks.")
+        }
+        var prefix = "__SwiftTLAObligation"
+        let sources = [source] + tlaBundle.imports.map(\.tla)
+        while sources.contains(where: { $0.contains(prefix) }) { prefix += "_" }
+        return obligations.map { obligation in
+            let behaviorName = prefix + "Behavior"
+            let propertyName = prefix + "Property"
+            let behavior = configuration.behavior == .specification ? "Spec" : "Init"
+            let definitions = "\(behaviorName) == \(behavior) /\\ (\(obligation.initialCondition))\n"
+                + "\(propertyName) == \(obligation.property)\n\n"
+            let directives = configuration.behavior == .specification
+                ? ["SPECIFICATION \(behaviorName)"] : ["INIT \(behaviorName)", "NEXT Next"]
+            let cfg = (directives + ["CHECK_DEADLOCK FALSE"] + configuration.declarations
+                + ["PROPERTY \(propertyName)"]).joined(separator: "\n") + "\n"
+            return TLAModuleBundle(root: .init(name: tlaBundle.root.name,
+                tla: String(source[..<end.lowerBound]) + definitions + source[end.lowerBound...], cfg: cfg),
+                imports: tlaBundle.imports, provenance: tlaBundle.provenance)
+        }
+    }
+
     /// Converts model-owned check identities at the formal export boundary.
     public func selectingChecks<Property: Hashable & Sendable>(_ checks: ModelChecks<Property>, formalPropertyNames: [Property: String],
         behavior: ModelBehavior? = nil) throws -> Self {
@@ -425,7 +468,8 @@ public struct RenderedSpecification: Sendable {
                 cfg: selected.render(usesSymmetryReduction: true)), imports: original.imports, provenance: original.provenance)
         }
         return .init(tlaBundle: bundle(tlaBundle), configuration: selected, actions: actions,
-            renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map { $0.map(bundle) })
+            renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map { $0.map(bundle) },
+            temporalObligations: temporalObligations.filter { names.contains($0.key) })
     }
 
     /// Selects declared checks for an independent validation pass without rendering the model again.
@@ -1689,7 +1733,12 @@ private extension CompiledModuleMetadata {
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
             symbolicActions: behavior.actions.filter { $0.bindings.contains { $0.literalMembers == nil } }.map(\.id),
             definitions: definitions, instances: instances, refinements: renderedRefinements,
-            properties: Dictionary(uniqueKeysWithValues: invariants + temporalProperties), constraint: constraint
+            properties: Dictionary(uniqueKeysWithValues: invariants + temporalProperties), constraint: constraint,
+            temporalObligations: Dictionary(uniqueKeysWithValues: try behavior.temporalProperties.compactMap { property in
+                guard let obligations = try renderer.temporalObligations(property.expression) else { return nil }
+                return (property.id, obligations)
+            }),
+            temporalBindingNames: renderer.bindings.binders
         )
     }
 

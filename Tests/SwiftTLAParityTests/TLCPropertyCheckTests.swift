@@ -5,6 +5,29 @@ import UpstreamParity
 
 @Suite(.serialized)
 struct TLCPropertyCheckTests {
+  @Test("conditional obligations retain every result and never hide unavailable branches",
+    arguments: [(false, false), (true, false), (false, true), (true, true)])
+  func checksConditionalObligations(unavailableBranch: Bool, violatedBranch: Bool) throws {
+    let spec = TLASpec(name: "TemporalFixture", variables: [.init(name: "x", initial: .int(1))],
+      actions: [], invariants: [], temporalProperties: [.init(name: "Conditional", expr:
+        .conditional(.equal(.variable("x"), .int(1)),
+          then: .always(.equal(.variable("x"), .int(1))),
+          else: .eventually(.equal(.variable("x"), .int(2)))))])
+    let rendered = try spec.compile().render()
+    let fixture = try Fixture(check: .property("Conditional"), renderedOverride: rendered)
+    let trace = try TLCTraceParser().parseCounterexample(numberedInitialStateTrace(), states: fixture.swiftRun.graph.states.values)
+    let comparison = try fixture.capture(processAdapter: .init(executor:
+      TLCConditionalPropertyExecutor(unavailableBranch: unavailableBranch, violatedBranch: violatedBranch)),
+      swiftResult: violatedBranch ? .violated(trace) : .satisfied)
+    #expect(comparison.status == (unavailableBranch ? .unavailable : .exact))
+    for index in 0..<2 {
+      #expect(FileManager.default.fileExists(atPath: fixture.output
+        .appendingPathComponent("obligation-\(index)/tlc-process.json").path))
+      #expect(FileManager.default.fileExists(atPath: fixture.output
+        .appendingPathComponent("obligation-\(index)/inputs/TemporalFixture.tla").path))
+    }
+  }
+
   @Test("an unsupported batch isolates every check without accepting unavailable results", arguments: [false, true])
   func isolatesUnsupportedBatch(unsupportedProperty: Bool) throws {
     let x = Var<Int>("x", 1)

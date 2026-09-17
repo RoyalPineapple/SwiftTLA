@@ -54,8 +54,39 @@ extension NativeSwiftEmitter {
                     renderedName: FormalActionCall(name: \(name), arguments: _arguments).description))
                 """ + String(repeating: "\n}", count: loops.count)
             }
+            var obligationMetadata = "var _obligations: [String: [_RenderedTemporalObligation]] = [:]"
+            for property in program.behavior.temporalProperties {
+                guard let obligations = module.temporalObligations[property.id] else { continue }
+                var loops: [String] = []
+                var substitutions: [String] = []
+                for binding in property.bindings {
+                    try program.requireImmutableDomain(binding.domain, path: "export.properties.\(property.name).domain")
+                    guard let name = module.temporalBindingNames[binding.binder],
+                          let type = program.bindingTypes[binding.binder] else {
+                        throw unsupported("unresolved temporal export binding: \(binding.sourceName)")
+                    }
+                    loops.append("for \(binder(binding.binder)) in \(try actionDomain(binding, state: "")) {")
+                    let value = try formalValue(binder(binding.binder), type: type)
+                    substitutions.append("\(String(reflecting: "LET " + name + " == ")) + (\(value)).description + \(String(reflecting: " IN "))")
+                }
+                let prefix = substitutions.isEmpty ? "\"\"" : substitutions.joined(separator: " + ")
+                obligationMetadata += "\n" + loops.joined(separator: "\n")
+                for obligation in obligations {
+                    obligationMetadata += """
+
+                    _obligations[\(String(reflecting: property.name)), default: []].append(
+                        _RenderedTemporalObligation(initialCondition: \(prefix) + \(String(reflecting: obligation.initialCondition)),
+                            property: \(prefix) + \(String(reflecting: obligation.property))))
+                    """
+                }
+                obligationMetadata += String(repeating: "\n}", count: loops.count)
+            }
+            if module.temporalObligations.isEmpty {
+                obligationMetadata = "let _obligations: [String: [_RenderedTemporalObligation]] = [:]"
+            }
             body = """
             \(actionMetadata)
+            \(obligationMetadata)
             return try RenderedSpecification(_generatedModule: \(String(reflecting: program.moduleName)),
                 source: \(String(reflecting: module.renderedModuleSource)),
                 compilationIdentity: \(String(reflecting: program.identity.value)),
@@ -67,7 +98,8 @@ extension NativeSwiftEmitter {
                 refinements: \(String(reflecting: module.configuration.refinements)),
                 symmetry: \(String(reflecting: module.configuration.symmetry)),
                 actions: _actions, _generatedPlusCal: \(plusCal),
-                _generatedImports: [\(imports)], _generatedDependencies: [\(dependencies)])
+                _generatedImports: [\(imports)], _generatedDependencies: [\(dependencies)],
+                _generatedTemporalObligations: _obligations)
             """
         } catch let diagnostic as CompilationDiagnostic {
             body = """

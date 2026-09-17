@@ -46,6 +46,16 @@ An unavailable batch supplies no property verdicts.
 The runner isolates its checks to identify unavailable results and differences.
 Each counterexample must belong to the shared complete graph.
 
+For generated conditional properties, the compiler also emits branch proof obligations.
+Each obligation retains the original transitions, constraints, and fairness, but restricts initial states to the selected branch.
+Configured property bindings retain their typed values until export serializes each member.
+The original exported property and complete graph remain unchanged.
+
+TLC checks each obligation independently under `properties/<name>/obligation-<index>/`.
+Each directory retains the module inputs, configuration, process record, logs, and any counterexample.
+Any unavailable obligation makes the property result unavailable, even if another obligation reports a violation.
+Upstream reference checks still use the independent upstream configuration and source.
+
 Reports in `properties/<name>/` and `deadlock/` retain verdicts and counterexamples.
 Matching violations can establish agreement without hiding other failures.
 An unavailable check cannot pass, including when the scenario expects a violation.
