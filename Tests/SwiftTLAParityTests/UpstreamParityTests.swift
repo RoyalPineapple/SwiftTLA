@@ -144,8 +144,8 @@ struct UpstreamParityTests {
 
     @Test("DieHard actions match upstream names")
     func dieHardNames() throws {
-        let tla = try Example.dieHardTypeOK.spec.compile().render().tlaBundle.tla
-        for name in ["FillSmallJug", "FillBigJug", "EmptySmallJug", "EmptyBigJug", "SmallToBig", "BigToSmall", "TypeOK"] {
+        let tla = try DieHardModel.render().tlaBundle.tla
+        for name in ["FillSmallJug", "FillBigJug", "EmptySmallJug", "EmptyBigJug", "SmallToBig", "BigToSmall", "TypeOK", "NotSolved"] {
             #expect(tla.contains(name), "missing \(name)")
         }
     }

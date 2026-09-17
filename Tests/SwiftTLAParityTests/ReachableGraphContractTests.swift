@@ -18,12 +18,8 @@ import UpstreamParity
 
   @Test("DieHard canonical model has its declared reachable graph")
   func dieHardCanonicalGraph() throws {
-    let fixture = Example.dieHardTypeOK
-    let graph = try ModelChecker(
-      compilation: fixture.spec.compile(),
-      configuration: try .init(maximumStateLimit: fixture.maximumStateLimit, symmetryReduction: .disabled)
-    ).exploreGraph()
-    #expect(graph.states.count == fixture.expectedDistinct)
+    let graph = try ReachabilityGraph(initialMachines: DieHardModel.initialMachines(), maximumStates: 100)
+    #expect(graph.transitions.count == 16)
   }
 
   @Test("Allocator = 4 states")

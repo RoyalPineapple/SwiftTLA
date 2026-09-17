@@ -17,6 +17,14 @@ struct FiniteGraphCheckTests {
 
   @Test("finite model exports retain complete native graphs and every declared check")
   func nativeExportsRetainCompleteGraphsAndChecks() throws {
+    func validate<Scenario: ModelValidationScenario>(_ scenario: Scenario, native: NativeModelRun) throws {
+      for (property, expectation) in scenario.expectations {
+        let name = try #require(scenario.formalPropertyNames[property])
+        let result = try #require(native.checks.properties[name])
+        #expect(expectation.accepts(result), "\(scenario.name): \(name)")
+        if case .violated(let trace) = result { try trace.validate(in: native.graph.graph) }
+      }
+    }
     let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
       from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
     for declaration in manifest.cases {
@@ -31,7 +39,9 @@ struct FiniteGraphCheckTests {
       #expect(Set(native.graph.graph.edges.map(\.action)).isSubset(of: renderedNames))
       #expect(native.graph.isComplete, "\(declaration.id)")
       #expect(!native.graph.graph.initialStateKeys.isEmpty, "\(declaration.id)")
-      if declaration.sourceModel == .nQueensFour {
+      if let scenario {
+        try validate(scenario, native: native)
+      } else if declaration.sourceModel == .nQueensFour {
         guard case .violated(let trace) = native.checks.properties["NoSolutions"] else {
           Issue.record("FourQueens must report the upstream NoSolutions counterexample")
           continue

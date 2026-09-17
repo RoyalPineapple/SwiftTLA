@@ -285,6 +285,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
                 scenarios = try HourClock2Model.validationScenarios()
             case .leastCircularSubstring:
                 scenarios = try LeastCircularSubstringModel.validationScenarios()
+            case .dieHard:
+                scenarios = try DieHardModel.validationScenarios()
             default:
                 guard scenario == nil else {
                     throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
@@ -361,7 +363,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case hourClock = "hour-clock"
     case hourClock2 = "hour-clock-2"
     case leastCircularSubstring = "least-circular-substring"
-    case dieHardTypeOK = "die-hard-type-ok"
+    case dieHard = "die-hard"
     case multiCarElevator = "multicar-elevator"
     case tlcmcGraph1 = "tlcmc-graph-1"
     case nQueensFour = "n-queens-four"
@@ -388,11 +390,10 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .majority: return try explore(MajorityModel.initialMachines())
         case .channel: return try explore(ChannelModel.initialMachines())
         case .asynchInterface: return try explore(AsynchInterfaceModel.initialMachines())
-        case .dieHardTypeOK: return try explore(DieHardModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
         case .nQueensFour: return try explore(NQueensModel.initialMachines())
-        case .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring:
+        case .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
@@ -410,7 +411,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .hourClock: Example.hourClock.spec
         case .hourClock2: HourClock2Model.spec
         case .leastCircularSubstring: LeastCircularSubstringModel.spec
-        case .dieHardTypeOK: Example.dieHardTypeOK.spec
+        case .dieHard: DieHardModel.spec
         case .multiCarElevator: MultiCarElevator.spec
         case .tlcmcGraph1: TLCMCModel.spec
         case .nQueensFour: NQueensModel.spec

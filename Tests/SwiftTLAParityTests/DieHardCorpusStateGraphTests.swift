@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 @testable import UpstreamParity
@@ -37,7 +38,10 @@ struct DieHardCorpusStateGraphTests {
         }
 
         let native = try ReachabilityGraph(initialMachines: DieHardModel.initialMachines(), maximumStates: 100)
-        #expect(native.safetyViolations.isEmpty)
+        #expect(!native.safetyViolations.isEmpty)
+        #expect(native.safetyViolations.allSatisfy { state, failures in
+            state.state.big == 4 && failures == [.invariant(.NotSolved)]
+        })
         #expect(Set(native.initialStates.map(\.state)) == formalInitial)
         let nativeStates = Set(native.transitions.keys.map(\.state))
         let nativeEdges = Set(native.transitions.flatMap { source, transitions in
@@ -51,5 +55,37 @@ struct DieHardCorpusStateGraphTests {
         #expect(throws: GeneratedMachineError.invalidInitialState) {
             try DieHardModel.makeMachine(.init(big: 5, small: 3))
         }
+    }
+
+    @Test("DieHard retains the upstream expected violation and a valid solution trace without truncating the graph")
+    func preservesUpstreamChecks() throws {
+        let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
+            from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
+        let declaration = try #require(manifest.cases.first { $0.id == "die-hard" })
+        #expect(declaration.sourceModel == .dieHard)
+        #expect(try declaration.resolveScenario()?.name == "Upstream")
+        let reference = try Data(contentsOf: projectURL("Verification/FiniteGraph/fixtures/die-hard/DieHard.cfg"))
+        #expect(SHA256.hex(reference) == declaration.cfgSHA256)
+        #expect(String(decoding: reference, as: UTF8.self) == "SPECIFICATION Spec\nINVARIANTS TypeOK NotSolved\n")
+        let scenarios = try DieHardModel.validationScenarios()
+        #expect(scenarios.count == 1)
+        let scenario = try #require(scenarios.first)
+        let run = try NativeScenarioRun(scenario, maximumStates: 100)
+        try run.validateExpectations()
+        #expect(run.coverage.coversCompleteScenario)
+        #expect(run.native.graph.graph.states.count == 16)
+        #expect(run.native.graph.graph.edges.count == 96)
+        #expect(run.native.checks.properties["TypeOK"] == .satisfied)
+        #expect(run.native.checks.deadlock == .satisfied)
+        guard case .violated(let trace) = run.native.checks.properties["NotSolved"] else {
+            Issue.record("Expected the upstream NotSolved counterexample")
+            return
+        }
+        try trace.validate(in: run.native.graph.graph)
+        #expect(trace.cycleStartIndex == nil)
+        let bundle = try scenario.render().tlaBundle
+        #expect(bundle.cfg.contains("INVARIANT TypeOK"))
+        #expect(bundle.cfg.contains("INVARIANT NotSolved"))
+        #expect(!bundle.tla.contains("VARIABLES pc"))
     }
 }

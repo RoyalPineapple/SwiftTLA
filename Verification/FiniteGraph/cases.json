@@ -173,18 +173,23 @@
       "timeoutSeconds": 60
     },
     {
-      "id": "die-hard-type-ok",
-      "sourceModel": "die-hard-type-ok",
-      "module": "die-hard-type-ok/DieHard.tla",
-      "configuration": "die-hard-type-ok/DieHard.cfg",
+      "id": "die-hard",
+      "sourceModel": "die-hard",
+      "scenario": "Upstream",
+      "module": "die-hard/DieHard.tla",
+      "configuration": "die-hard/DieHard.cfg",
       "imports": [],
       "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/DieHard/DieHard.tla",
+        "sha256": "295495de6509d86a82b88757835b95e3f91fad8691d764ece4d98886dcf42b66"
+      },
       "exploration": {
         "maximumStateLimit": 100000,
         "symmetryReduction": "disabled"
       },
       "moduleSHA256": "295495de6509d86a82b88757835b95e3f91fad8691d764ece4d98886dcf42b66",
-      "cfgSHA256": "d653a6add3e94b67cd6ccdc7e7473ab0a381df7931ecaf3c8760fad4bcabdc7d",
+      "cfgSHA256": "59fca38d703a0b17f967b35267fad8581e305b442c72147f1b2a530ea0ba6547",
       "timeoutSeconds": 60
     },
     {
