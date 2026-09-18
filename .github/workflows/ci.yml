@@ -33,7 +33,7 @@ jobs:
             configuration: release
             selection: --filter UpstreamParityTests
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: ${{ matrix.suite == 'finite-graphs' && 75 || 60 }}
     steps:
       - uses: actions/checkout@v5
         with:

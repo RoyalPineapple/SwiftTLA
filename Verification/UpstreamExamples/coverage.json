@@ -22,10 +22,10 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
-    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353",
+    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750",
     "state": "failed",
-    "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353",
-    "lastKnownFailure": "The ordinary suite reported 23 issues across five suites on e7b761d110b22fcdaf48f9ea00146d3f0b9d18f6. Scenario and finite-graph suites reached their 60-minute limits. Their builds took 1930.84 and 1190.75 seconds. Final samples showed 7.6 GB and 8.2 GB peak footprints during canonical edge construction and action-label validation. The upstream suite passed 23 tests. Canonical export and Apple-platform checks also passed.",
+    "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750",
+    "lastKnownFailure": "All four Swift suites reported passing tests on b379f4a0e784a1d7bbb8468dbbdabdbc1d920ee1. The finite-graph job exceeded its 60-minute limit during artifact upload and final cleanup. Its build took 1671.10 seconds and its 25 tests took 1901.069 seconds. GitHub cancelled the job, so the aggregate check failed. Apple-platform validation and canonical export also passed.",
     "upstreamSuiteResult": {
       "sourceSHA": "b379f4a0e784a1d7bbb8468dbbdabdbc1d920ee1",
       "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/job/105560516383",
@@ -36,7 +36,7 @@
       "testsPassed": 23,
       "scope": "Hosted Swift tests passed with Xcode 16.4, optimized code, and assertions enabled. These tests do not establish independent complete TLC comparisons."
     },
-    "failureArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353/artifacts/10539223990",
+    "failureArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/artifacts/10543955902",
     "ordinarySuiteResult": {
       "sourceSHA": "b379f4a0e784a1d7bbb8468dbbdabdbc1d920ee1",
       "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/job/105560516550",
@@ -57,7 +57,18 @@
       "testsPassed": 7,
       "scope": "The scenario suite completed within its unchanged 60-minute limit. Registered native graphs, declared outcomes, and scenario admission contracts passed. These tests do not establish independent TLC agreement."
     },
-    "candidateChange": "Compiler and fixture corrections passed 40 focused diagnostics. Canonical edges now encode action labels only during serialization. Canonical graphs derive observed actions during existing edge validation. Consumers reuse that set, and deadlock witness checks avoid unused full-graph sets. Both graph changes passed focused regressions without changes to model bounds, property checks, or timeouts. Hosted validation remains pending.",
+    "finiteGraphSuiteResult": {
+      "sourceSHA": "b379f4a0e784a1d7bbb8468dbbdabdbc1d920ee1",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/job/105560516479",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/artifacts/10543955902",
+      "artifactDigest": "sha256:936eb615971312bcd898ca9bae122ab2fef7fb73e56af653e19bac59f63b2627",
+      "buildSeconds": 1671.10,
+      "testSeconds": 1901.069,
+      "testsPassed": 25,
+      "jobConclusion": "cancelled",
+      "scope": "All tests passed and diagnostics uploaded, but final job cleanup crossed the one-hour deadline. The hosted check remains failed. These tests do not establish independent TLC agreement."
+    },
+    "candidateChange": "Only the finite-graph CI job receives a 75-minute limit. Its measured build and passing tests consumed 3572.169 seconds before final cleanup. The added headroom changes runner policy, not model bounds, graph completeness, property checks, or TLC process limits. Every other job keeps its existing limit. A green hosted rerun remains required.",
     "timeoutArtifacts": [
       "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10538212552",
       "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10539107234",
