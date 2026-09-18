@@ -57,12 +57,12 @@
       "scope": "All ordinary tests passed with hosted Swift 6.1.2. This includes the five previously failing suites and generated documentation builds. Ordinary tests do not establish independent TLC agreement."
     },
     "scenarioSuiteResult": {
-      "sourceSHA": "b379f4a0e784a1d7bbb8468dbbdabdbc1d920ee1",
-      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/job/105560516289",
-      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/artifacts/10542853724",
-      "artifactDigest": "sha256:20d5e1f6e1554ee4b16dba2659ac413e0310a48ccee791da3cba7f8dd34841d9",
-      "buildSeconds": 1769.08,
-      "testSeconds": 1553.507,
+      "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391/job/105577116250",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391/artifacts/10546160115",
+      "artifactDigest": "sha256:b12c9b7bff6e0a03d9f324a615502f5e22fc25e476abf155be7372302fe63179",
+      "buildSeconds": 1587.78,
+      "testSeconds": 1776.239,
       "testsPassed": 7,
       "scope": "The scenario suite completed within its unchanged 60-minute limit. Registered native graphs, declared outcomes, and scenario admission contracts passed. These tests do not establish independent TLC agreement."
     },
