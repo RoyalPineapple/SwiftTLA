@@ -194,7 +194,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": "specifications/DiningPhilosophers",
+  "nextFamily": "specifications/N-Queens",
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -1781,7 +1781,7 @@
       "path": "specifications/DiningPhilosophers",
       "name": "The Dining Philosophers Problem",
       "audit": "reference inputs audited",
-      "gap": "Both configurations passed focused native graph and property diagnostics with Command Line Tools 16.4. Independent hosted graph and property comparisons remain unverified.",
+      "gap": "Both pinned NP=5 configurations have complete hosted graph and property matches at 983b8191. The Spec case includes per-process weak fairness and NobodyStarves. The INIT/NEXT case preserves its distinct safety-only selection. Both module dispositions and legacy cleanup are complete. Hosted application-dispatch replay covers every native graph edge. No family gap remains at this evidence revision.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -1806,35 +1806,55 @@
       "configurations": [
         {
           "module": "specifications/DiningPhilosophers/APDiningPhilosophers.tla",
-      "configuration": "specifications/DiningPhilosophers/APDiningPhilosophers.cfg",
-      "required": true,
-      "status": "locally checked",
+          "configuration": "specifications/DiningPhilosophers/APDiningPhilosophers.cfg",
+          "required": true,
+          "status": "hosted match",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
             {
               "file": "Sources/UpstreamParity/Examples/DiningPhilosophers.swift",
-          "scenario": "AP NP5",
-          "caseID": "ap-dining-philosophers"
-        }
-      ],
-      "evidence": [{"sourceSHA":"2641959b1ede6e7ef11ab7963820462e027244b3","developerToolsVersion":"16.4","runURL":"local-validation:85523","artifactURL":"Verification/UpstreamExamples/coverage.json#/localDiagnostics/0","completeGraph":true}]
+              "scenario": "AP NP5",
+              "caseID": "ap-dining-philosophers"
+            }
+          ],
+          "evidence": [
+            {
+              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10548771567",
+              "artifactDigest": "sha256:bed195f294d278f4c6c323d1c7f1aaa2ad5b547ea22e3ef26327a02466a86b37",
+              "completeGraph": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 67 states, 335 labeled edges. TypeOK, ExclusiveAccess, and deadlock outcomes match in both TLC comparisons. Both TLC configurations use INIT/NEXT without NobodyStarves. Original module and configuration hashes match the pinned reference."
+            }
+          ]
         },
         {
           "module": "specifications/DiningPhilosophers/DiningPhilosophers.tla",
-      "configuration": "specifications/DiningPhilosophers/DiningPhilosophers.cfg",
-      "required": true,
-      "status": "locally checked",
+          "configuration": "specifications/DiningPhilosophers/DiningPhilosophers.cfg",
+          "required": true,
+          "status": "hosted match",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
             {
               "file": "Sources/UpstreamParity/Examples/DiningPhilosophers.swift",
-          "scenario": "NP5",
-          "caseID": "dining-philosophers"
-        }
-      ],
-      "evidence": [{"sourceSHA":"2641959b1ede6e7ef11ab7963820462e027244b3","developerToolsVersion":"16.4","runURL":"local-validation:85523","artifactURL":"Verification/UpstreamExamples/coverage.json#/localDiagnostics/0","completeGraph":true}]
+              "scenario": "NP5",
+              "caseID": "dining-philosophers"
+            }
+          ],
+          "evidence": [
+            {
+              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10548931445",
+              "artifactDigest": "sha256:46803ced2af2af283c09c677d92f498027d87ce3a4c478d3a6e36c0e867a0d48",
+              "completeGraph": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 67 states, 335 labeled edges. TypeOK, ExclusiveAccess, NobodyStarves, and deadlock outcomes match in both TLC comparisons. Both TLC runs complete temporal checking under Spec. Original module and configuration hashes match the pinned reference. Hosted CI 35337970391 passes configuration, fairness-export, and complete application-dispatch replay tests."
+            }
+          ]
         }
       ],
       "partialCases": []
