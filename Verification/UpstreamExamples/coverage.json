@@ -69,6 +69,16 @@
       "testsPassed": 22,
       "result": "Generated integer-range membership retains bounds instead of allocating a set. Small-domain equivalence, a billion-element range, integer limits, and evaluation failures passed. Function-space and sequence membership contracts passed. The CoffeeCan diagnostic graph and all four configuration pins passed. A stale function-space test now follows the existing non-enumerating membership contract.",
       "scope": "Targets the CoffeeCan timeout path and supports AC-04 and AC-08. No complete large-bound CoffeeCan graph or hosted comparison ran locally. No configuration or DSL criterion gains hosted credit."
+    },
+    {
+      "sourceSHA": "f8b15f1fb21c6aa6ba99517238cfb47bd4947498",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'UpstreamCorpusInventoryTests|CoffeeCanCorpusStateGraphTests|DiningPhilosophersCorpusConfigurationTests|DiningPhilosophersCorpusStateGraphTests'",
+      "localLog": "/tmp/swifttla-audit-regression-validation.log",
+      "buildSeconds": 522.75,
+      "testSeconds": 0.255,
+      "testsPassed": 10,
+      "result": "The ledger retains all pinned families, modules, and configuration pairs. CoffeeCan configuration pins and canonical graph checks passed after duplicate witness removal. Both Dining configurations retained their graph, selected properties, deadlock checks, and application transition replay.",
+      "scope": "Focused local diagnostics only. The temporary log is not durable hosted evidence. Configuration and DSL verification counts remain unchanged."
     }
   ],
   "nextFamily": "specifications/DiningPhilosophers",
