@@ -12,8 +12,10 @@ struct TypedFacadeContractTests {
     let cars = Var<Function<CarID, Int>>("cars")
     let concrete = cars[CarID.carA]
     let symbolic = cars[Expr(CarID.carB)]
-    #expect(read(concrete).stateExpr == cars.expr[CarID.carA].stateExpr)
-    #expect(read(symbolic).stateExpr == cars.expr[Expr(CarID.carB)].stateExpr)
+    let concreteMatches: Bool = read(concrete).stateExpr == cars.expr[CarID.carA].stateExpr
+    let symbolicMatches: Bool = read(symbolic).stateExpr == cars.expr[Expr(CarID.carB)].stateExpr
+    #expect(concreteMatches)
+    #expect(symbolicMatches)
   }
 
   @Test("Boolean expressions and literals compose temporal implications")
