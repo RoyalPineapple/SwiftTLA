@@ -301,34 +301,38 @@
       "path": "specifications/Bakery-Boulangerie",
       "name": "The Boulangerie Algorithm",
       "audit": "reference inputs audited",
-      "gap": "Both published MCBakery and MCBoulanger configurations lack exact reference cases. Boulanger uses two processes instead of upstream N=3. Its modified reference replaces TypeOK and Inv with LocalTypeOK, which checks only max and previous.",
+      "gap": "Both published configurations lack exact cases. MCBakery selects ISpec, whose initial predicate is Inv rather than Init. The Bakery fixture starts from Init. Boulanger uses two processes instead of upstream N=3. Its modified reference replaces TypeOK and Inv with weaker LocalTypeOK. Both ports need model-owned configurations and complete invariant coverage.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/Bakery-Boulangerie/Bakery.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
-          "implementations": [],
+          "role": "behavior dependency",
+          "reason": "This module contains the Bakery algorithm, safety invariants, ISpec, and proofs. MCBakery imports its executable definitions. BakeryN2Model covers only a fixed initial-state model, not the published ISpec configuration.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Bakery.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/Bakery-Boulangerie/Boulanger.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
-          "implementations": [],
+          "role": "behavior dependency",
+          "reason": "This module contains the Boulanger algorithm, safety invariants, and proofs. MCBoulanger imports its executable definitions. BoulangerModel uses two processes and does not retain all selected upstream invariants.",
+          "implementations": [
+            "Sources/UpstreamParity/CanonicalCorpus/Boulanger.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/Bakery-Boulangerie/MCBakery.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration binds N=2 and MaxNat=2, replaces Nat with 0..MaxNat, and selects ISpec. It checks MutualExclusion, TypeOK, and Inv with deadlock checking disabled. DeadlockFree and StarvationFree are commented out.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/Bakery-Boulangerie/MCBoulanger.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration binds N=3 and MaxNat=3, replaces Nat with 0..MaxNat, and selects Spec. StateConstraint requires every ticket to be less than MaxNat. MutualExclusion, TypeOK, Inv, and default deadlock checking remain required.",
           "implementations": [],
           "dispositionComplete": false
         }
