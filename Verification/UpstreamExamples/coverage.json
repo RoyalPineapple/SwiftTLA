@@ -114,6 +114,17 @@
   },
   "localDiagnostics": [
     {
+      "session": "42422",
+      "sourceSHA": "88d7c5e132d8a9c7bd2abe14f523e685d1249ac0",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CompilerPipelineCanonicalizationTests/nestedSameSpellingBindersRetainDistinctCompilerIdentities|LocalOperatorTests/emitsLetInSource|ScopedReachabilityTests/checksOneState|KVsnapCorpusRenderingTests|DictionaryConfigurationTests|UpstreamCorpusInventoryTests'",
+      "exitCode": 0,
+      "buildSeconds": 534.63,
+      "testSeconds": 0.076,
+      "testsPassed": 11,
+      "result": "Empty-dictionary invariants retain the outer equality beyond their existential scopes. Local operators, nested binders, scoped reachability, and KVsnap export retain explicit scope delimiters. Coverage metadata matches retained source, toolchain, and complete property evidence.",
+      "scope": "The updated scenario CLI compiles. Its hosted selection checks and per-scenario workflow remain unverified. These diagnostics do not establish independent TLC agreement."
+    },
+    {
       "session": "30820",
       "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CompiledSpecificationRendererTests|QueensCorpusStateGraphTests|NQueensCorpusStateGraphTests|IndependentAtomicStepTests|ParameterizedAtomicStepTests'",
