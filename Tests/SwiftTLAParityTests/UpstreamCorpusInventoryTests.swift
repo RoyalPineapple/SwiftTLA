@@ -18,6 +18,13 @@ struct UpstreamCorpusInventoryTests {
             let completeGraph: Bool?
             let allPropertiesMatch: Bool?
             let acceptanceComplete: Bool?
+            let environment: [String: String]?
+
+            func matches(sourceSHA: String, developerToolsVersion: String, environment: [String: String]?) -> Bool {
+                self.sourceSHA == sourceSHA
+                    && self.developerToolsVersion == developerToolsVersion
+                    && self.environment == environment
+            }
         }
         struct Configuration: Decodable {
             struct Variant: Decodable {
@@ -157,17 +164,19 @@ struct UpstreamCorpusInventoryTests {
         #expect(Set(coverage.families.map(\.path)) == Set(inventory.families.map(\.path)))
         #expect(coverage.dslCriteria.map(\.id) == (1...19).map { String(format: "AC-%02d", $0) })
         let states = ["missing", "implemented", "locally checked", "hosted match"]
-        func verifyEvidence(_ evidence: [Coverage.Evidence], status: String, requiresGraph: Bool = true) {
+        func verifyEvidence(_ evidence: [Coverage.Evidence], status: String, requiresGraph: Bool = true,
+            environment: [String: String]? = nil) {
             #expect(states.contains(status))
             if status == "locally checked" || status == "hosted match" {
                 #expect(evidence.contains {
-                    $0.sourceSHA == coverage.auditedSwiftSHA && $0.developerToolsVersion == coverage.ci.hostedXcode
+                    $0.matches(sourceSHA: coverage.auditedSwiftSHA,
+                        developerToolsVersion: coverage.ci.hostedXcode, environment: environment)
                 })
             }
             if status == "hosted match" {
                 #expect(evidence.contains {
-                    $0.sourceSHA == coverage.auditedSwiftSHA
-                        && $0.developerToolsVersion == coverage.ci.hostedXcode
+                    $0.matches(sourceSHA: coverage.auditedSwiftSHA,
+                        developerToolsVersion: coverage.ci.hostedXcode, environment: environment)
                         && (requiresGraph ? ($0.completeGraph == true && $0.allPropertiesMatch == true) : $0.acceptanceComplete == true)
                         && $0.runURL.hasPrefix("https://github.com/")
                         && $0.artifactURL.hasPrefix("https://github.com/")
@@ -192,7 +201,7 @@ struct UpstreamCorpusInventoryTests {
                     for variant in variants {
                         #expect(!variant.environment.isEmpty)
                         #expect(variant.environment.allSatisfy { !$0.key.isEmpty && !$0.value.isEmpty })
-                        verifyEvidence(variant.evidence, status: variant.status)
+                        verifyEvidence(variant.evidence, status: variant.status, environment: variant.environment)
                         if variant.status != "missing" { #expect(!variant.implementations.isEmpty) }
                         let aggregateRank = try #require(states.firstIndex(of: configuration.status))
                         let variantRank = try #require(states.firstIndex(of: variant.status))
@@ -237,5 +246,23 @@ struct UpstreamCorpusInventoryTests {
         let reachabilityVariants = try #require(reachabilityHarness.environmentVariants)
         #expect(Set(selectableGraphs.map { ["GRAPH": $0] })
             .isSubset(of: Set(reachabilityVariants.map(\.environment))))
+    }
+
+    @Test("configuration evidence belongs to one exact source, toolchain, and environment binding")
+    func rejectsEvidenceFromDifferentBindings() {
+        let environment = ["GRAPH": "1a", "K": "2"]
+        let evidence = Coverage.Evidence(sourceSHA: "source", developerToolsVersion: "16.4",
+            runURL: "", artifactURL: "", completeGraph: true, allPropertiesMatch: true,
+            acceptanceComplete: nil, environment: environment)
+        #expect(evidence.matches(sourceSHA: "source", developerToolsVersion: "16.4", environment: environment))
+        #expect(!evidence.matches(sourceSHA: "other", developerToolsVersion: "16.4", environment: environment))
+        #expect(!evidence.matches(sourceSHA: "source", developerToolsVersion: "16.3", environment: environment))
+        let otherBindings: [[String: String]?] = [
+            nil, [:], ["GRAPH": "1a"], ["GRAPH": "1a", "K": "1"],
+            ["GRAPH": "DH", "K": "2"], ["GRAPH": "1a", "K": "2", "EXTRA": "1"]
+        ]
+        for binding in otherBindings {
+            #expect(!evidence.matches(sourceSHA: "source", developerToolsVersion: "16.4", environment: binding))
+        }
     }
 }
