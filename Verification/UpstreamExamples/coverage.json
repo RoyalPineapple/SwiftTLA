@@ -2939,63 +2939,69 @@
       "path": "specifications/KeyValueStore",
       "name": "Snapshot Key-Value Store",
       "audit": "reference inputs audited",
-      "gap": "The MCKVsnap fixture removes upstream TxIdSymmetric symmetry. Three MCKVS safety configurations lack exact cases. Manual record schemas and duplicate configuration remain.",
+      "gap": "The MCKVsnap fixture removes upstream TxIdSymmetric symmetry. Three MCKVS safety configurations lack exact cases. Small declares no symmetry, unlike Medium and Large. APKeyValueStore has no configuration at the pin. Helper coverage, manual record schemas, and duplicate configuration remain unresolved.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/KeyValueStore/APKeyValueStore.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured variant",
+          "reason": "This annotation wrapper instantiates KeyValueStore and supplies two KEY, VAL, and TX values. Its referenced APKeyValueStore.cfg is absent from the pinned directory. No configuration or exclusion is invented.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/KeyValueStore/ClientCentric.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "operator helper",
+          "reason": "KVsnap instantiates this isolation library with Key and TxId plus NoVal. The Swift helper supplies isolation predicates. Full helper semantics and unused operators still need an audit.",
+          "implementations": [
+            "Sources/SwiftTLA/ClientCentric.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/KeyValueStore/KeyValueStore_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion proves TypeInvariant and TxLifecycle for initialization, all six action families, and stuttering. It defines no additional model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/KeyValueStore/KeyValueStore.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "This reusable transaction model has OpenTx, Add, Update, Remove, RollbackTx, and CloseTx actions. MCKVS imports it. The finite KVsnap PlusCal port is not its implementation.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/KeyValueStore/KVsnap.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "behavior dependency",
+          "reason": "This PlusCal model uses fair transactions, operation logs, and ClientCentric snapshot-isolation checks. KVsnapModel is a partial port with manual record schemas and no model-owned scenarios.",
+          "implementations": [
+            "Sources/UpstreamParity/CanonicalCorpus/KVsnap.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/KeyValueStore/MCKVS.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "All three configurations select TypeInvariant and TxLifecycle. Key/Val/TxId counts are Small 2/2/3, Medium 3/3/2, and Large 3/2/3. Only Medium and Large select TxIdSymmetric.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/KeyValueStore/MCKVsnap.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration binds two keys, three transaction IDs, and NoVal as model values. It selects TxIdSymmetric, TypeOK, SnapshotIsolation, and Termination. Serialization and BaitInv are commented out.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/KeyValueStore/Util.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "operator helper",
+          "reason": "This helper supplies set reduction, sequence reduction, lookup, intersection, and permutation operators. KeyValueStoreUtil is a partial port. Complete operator coverage and semantic evidence remain unresolved.",
+          "implementations": [
+            "Sources/SwiftTLA/KeyValueStoreUtil.swift"
+          ],
           "dispositionComplete": false
         }
       ],
