@@ -36,12 +36,12 @@
     "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750",
     "lastKnownFailure": "All four Swift suites reported passing tests on b379f4a0e784a1d7bbb8468dbbdabdbc1d920ee1. The finite-graph job exceeded its 60-minute limit during artifact upload and final cleanup. Its build took 1671.10 seconds and its 25 tests took 1901.069 seconds. GitHub cancelled the job, so the aggregate check failed. Apple-platform validation and canonical export also passed.",
     "upstreamSuiteResult": {
-      "sourceSHA": "b379f4a0e784a1d7bbb8468dbbdabdbc1d920ee1",
-      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/job/105560516383",
-      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/artifacts/10542479674",
-      "artifactDigest": "sha256:285554c80d0a795416ad0ff5b93e7c12df889279687b6d88205e009938e22cb4",
-      "buildSeconds": 1863.41,
-      "testSeconds": 904.108,
+      "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391/job/105577116297",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391/artifacts/10545141860",
+      "artifactDigest": "sha256:41c0754642d13d9d1d3851f373f9390c9a727bfd32d32cb9b3a51473b5b049ce",
+      "buildSeconds": 1268.74,
+      "testSeconds": 905.224,
       "testsPassed": 23,
       "scope": "Hosted Swift tests passed with Xcode 16.4, optimized code, and assertions enabled. These tests do not establish independent complete TLC comparisons."
     },
