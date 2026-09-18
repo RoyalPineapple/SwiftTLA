@@ -20,7 +20,7 @@ struct CanonicalGraphTests {
     func edgeOrderingMatchesEncoding() {
         let states = ["", "a", "a!", "a-", "a--", "é", "e\u{301}", "\0", "\u{E000}", "😀"]
             .map { CanonicalStateKey(canonicalEncoding: $0) }
-        let actions = ["", "a", "a!", "aa", "é", "e\u{301}"]
+        let actions = ["", "a", "a!", "aa", "é", "e\u{301}", "\0", String(repeating: "step-", count: 8)]
         let edges = states.flatMap { source in
             actions.flatMap { action in
                 states.map { target in CanonicalEdge(source: source, action: action, target: target) }
@@ -34,7 +34,8 @@ struct CanonicalGraphTests {
         }
         let composed = CanonicalEdge(source: states[1], action: "é", target: states[1])
         let decomposed = CanonicalEdge(source: states[1], action: "e\u{301}", target: states[1])
-        #expect(Set([composed, decomposed]).count == 2)
+        #expect(composed != decomposed)
+        #expect(Set([composed, decomposed, composed]).count == 2)
     }
 
     @Test("canonical graph preserves action labels and collapses repeated witnesses")

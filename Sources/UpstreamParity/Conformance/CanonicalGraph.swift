@@ -181,17 +181,21 @@ package struct CanonicalEdge: Hashable, Sendable, Comparable {
     package let source: CanonicalStateKey
     package let action: String
     package let target: CanonicalStateKey
-    private let encodedAction: String
 
     package init(source: CanonicalStateKey, action: String, target: CanonicalStateKey) {
         self.source = source
         self.action = action
         self.target = target
-        encodedAction = encodedBytes(action)
     }
 
     package var canonicalEncoding: String {
-        "edge:\(source.canonicalEncoding)--\(encodedAction)-->\(target.canonicalEncoding)"
+        "edge:\(source.canonicalEncoding)--\(encodedBytes(action))-->\(target.canonicalEncoding)"
+    }
+
+    package static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.source == rhs.source && lhs.target == rhs.target
+            && lhs.action.utf8.count == rhs.action.utf8.count
+            && compareUTF8Prefixes(lhs.action, rhs.action) == 0
     }
 
     package static func < (lhs: Self, rhs: Self) -> Bool {
@@ -204,8 +208,10 @@ package struct CanonicalEdge: Hashable, Sendable, Comparable {
         if left.utf8.count != right.utf8.count {
             return canonicalBytes(lhs.canonicalEncoding, rhs.canonicalEncoding)
         }
-        // Actions are hex-encoded. Their delimiter sorts before every hex digit.
-        if lhs.encodedAction != rhs.encodedAction { return lhs.encodedAction < rhs.encodedAction }
+        // Hex encoding preserves byte order; its delimiter sorts before every hex digit.
+        let actionOrder = compareUTF8Prefixes(lhs.action, rhs.action)
+        if actionOrder != 0 { return actionOrder < 0 }
+        if lhs.action.utf8.count != rhs.action.utf8.count { return lhs.action.utf8.count < rhs.action.utf8.count }
         return canonicalBytes(lhs.target.canonicalEncoding, rhs.target.canonicalEncoding)
     }
 
