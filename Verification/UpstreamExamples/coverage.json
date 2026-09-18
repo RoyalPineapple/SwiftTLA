@@ -44,8 +44,8 @@
       "scenarioCases": 62,
       "scope": "The hosted release validator built with Xcode 16.4. Discovery and selection checks passed for every identifier, all cases, and unknown identifiers. The workflow created 92 separate comparison jobs. These checks do not establish model equivalence or completion of those jobs."
     },
-    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391",
-    "state": "success",
+    "lastSuccessfulRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391",
+    "lastSuccessfulState": "success",
     "appleAdoptionResult": {
       "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
       "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391/job/105577116179",
@@ -127,7 +127,7 @@
         "caseID": "coffee-can-3000",
         "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10551545058",
         "artifactDigest": "sha256:5bc8bf632e89e872d48fe2585561bebfcf1ff5ac39a24b05dcb69d71f283007e",
-        "reason": "The independent comparison job exceeded its 45-minute limit. Its retained artifact is not a complete comparison and receives no coverage credit. The log does not identify which phase consumed the limit; inspect retained evidence before assigning a cause."
+        "reason": "The 45-minute job limit cancelled upstream TLC capture before generated TLC ran. Retained native output is complete: 4504500 initial states, 4504500 states, 13495502 edges, and all selected checks satisfied. The staged upstream module hash matches its pin, but its event stream contains only 12199276 transitions when closed. There is no complete TLC comparison. The outer job limit is now 120 minutes for sequential native and both TLC captures. Model bounds, process limits, comparison requirements, and four-job concurrency remain unchanged."
       },
       {
         "caseID": "queens-four",
@@ -271,7 +271,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": "specifications/coffee-can",
+  "nextFamily": "specifications/CoffeeCan",
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -1402,7 +1402,7 @@
       "path": "specifications/CoffeeCan",
       "name": "The Coffee Can Bean Problem",
       "audit": "reference inputs audited",
-      "gap": "All four configurations have exact reference inputs. CoffeeCan100Beans has a complete hosted graph and property match. The other three configurations still need reviewed hosted evidence. CoffeeCan_proof is a proof companion, not another configured graph. The duplicate count-only test is removed. The canonical suite retains graph, property, and dispatch checks.",
+      "gap": "All four configurations have exact reference inputs. CoffeeCan100Beans and APCoffeeCan have complete hosted graph and property matches. The 1000- and 3000-bean configurations still need complete hosted comparisons. All three module dispositions and legacy cleanup are complete. CoffeeCan_proof is a proof companion, not another configured graph. The canonical suite retains graph, property, and dispatch checks.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -1412,7 +1412,7 @@
           "implementations": [
             "Sources/UpstreamParity/Examples/CoffeeCan.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/CoffeeCan/CoffeeCan_proof.tla",
@@ -1428,7 +1428,7 @@
           "implementations": [
             "Sources/UpstreamParity/Examples/CoffeeCan.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -1436,7 +1436,7 @@
           "module": "specifications/CoffeeCan/APCoffeeCan.tla",
           "configuration": "specifications/CoffeeCan/APCoffeeCan.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -1446,7 +1446,16 @@
               "caseID": "coffee-can-ap"
             }
           ],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10554130847",
+            "artifactDigest": "sha256:37abecad9faa400bf928a361324c2fdf6e9c9e7ba1179ba673b8b0ae62a3bf7c",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 20 initial states, 20 states, 32 labeled edges. TypeInvariant and deadlock checks are satisfied in both comparisons. The unchanged configuration uses Spec and MaxBeanCount=5, with no temporal properties selected. Original wrapper, imported CoffeeCan module, configuration, and tool pins match."
+          }]
         },
         {
           "module": "specifications/CoffeeCan/CoffeeCan.tla",
