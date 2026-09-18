@@ -747,35 +747,39 @@
       "path": "specifications/byzpaxos",
       "name": "Byzantizing Paxos by Refinement",
       "audit": "reference inputs audited",
-      "gap": "VoteProof replaces upstream model values with strings. BPConProof, Consensus, and PConProof lack exact configuration cases. Existing ports need model-owned scenarios.",
+      "gap": "VoteProof and Consensus replace upstream model values with strings and lack model-owned scenarios. Their configurations explicitly disable deadlock checking. Consensus selects LiveSpec, unlike the other three configurations. BPConProof and PConProof have no exact Swift cases. BPConProof has an unknown published outcome, not an assumed success.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/byzpaxos/BPConProof.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration binds two values, three acceptors, one fake acceptor, four Byzantine quorums, six weak quorums, ballots 0 through 2, and None. It selects Spec and Inv. Deadlock checking remains enabled by default.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/byzpaxos/Consensus.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
+          "reason": "The configuration binds three model values and selects LiveSpec, TypeOK, Inv, and Success with deadlock checking disabled. LiveSpec adds weak fairness to the safety specification. ConsensusModel remains a partial port.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Consensus.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/byzpaxos/PConProof.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration binds two values, three acceptors, all four majority quorums, ballots 0 through 2, and None. It selects Spec, TypeOK, PAccInv, P1bInv, P1cInv, and P2aInv. Deadlock checking remains enabled by default.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/byzpaxos/VoteProof.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
+          "reason": "The configuration binds two values, three acceptors, all four majority quorums, and ballots 0 through 2. It selects Spec, TypeOK, VInv1 through VInv4, and Refines with deadlock checking disabled. VoteProofModel remains a partial port.",
+          "implementations": [
+            "Sources/UpstreamParity/CanonicalCorpus/VoteProof.swift"
+          ],
           "dispositionComplete": false
         }
       ],
