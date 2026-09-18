@@ -4931,10 +4931,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion proves TypeInvariant for initialization, Send, Rcv, and stuttering. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla",
@@ -4947,10 +4947,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/AsynchronousInterface/Channel_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion proves TypeInvariant for initialization, Send, Rcv, and stuttering. Its three copies share upstream blob 9cf3e4942419ae693cc12c048ff1b6e6d568d255. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/AsynchronousInterface/Channel.tla",
@@ -4970,10 +4970,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/CachingMemory/InternalMemory_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion strengthens TypeInvariant with BufConsistent and covers Req, Do, Rsp, and stuttering. Its four copies share upstream blob 5ae8971f5a7128d8671acc1b1a4adb003e790498. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/CachingMemory/InternalMemory.tla",
@@ -5049,10 +5049,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/Channel_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion proves TypeInvariant for initialization, Send, Rcv, and stuttering. Its three copies share upstream blob 9cf3e4942419ae693cc12c048ff1b6e6d568d255. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/Channel.tla",
@@ -5077,10 +5077,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/HourClock_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion proves that HC preserves HCini. Its four copies share upstream blob 6d396e14859760e61f5e23b1513cfdd185d497e7. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/HourClock.tla",
@@ -5091,10 +5091,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/InternalMemory_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion strengthens TypeInvariant with BufConsistent and covers Req, Do, Rsp, and stuttering. Its four copies share upstream blob 5ae8971f5a7128d8671acc1b1a4adb003e790498. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/InternalMemory.tla",
@@ -5149,10 +5149,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/FIFO/Channel_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion proves TypeInvariant for initialization, Send, Rcv, and stuttering. Its three copies share upstream blob 9cf3e4942419ae693cc12c048ff1b6e6d568d255. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/FIFO/Channel.tla",
@@ -5170,10 +5170,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/FIFO/InnerFIFO_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion proves TypeInvariant through input, buffer, output, and stuttering actions. It includes the two Channel instance invariants. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/FIFO/InnerFIFO.tla",
@@ -5216,10 +5216,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/HourClock/HourClock_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion proves that HC preserves HCini. Its four copies share upstream blob 6d396e14859760e61f5e23b1513cfdd185d497e7. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/HourClock/HourClock.tla",
@@ -5253,10 +5253,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/HourClock_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion proves that HC preserves HCini. Its four copies share upstream blob 6d396e14859760e61f5e23b1513cfdd185d497e7. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/HourClock.tla",
@@ -5267,10 +5267,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/InternalMemory_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion strengthens TypeInvariant with BufConsistent and covers Req, Do, Rsp, and stuttering. Its four copies share upstream blob 5ae8971f5a7128d8671acc1b1a4adb003e790498. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/InternalMemory.tla",
@@ -5344,10 +5344,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/HourClock_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion proves that HC preserves HCini. Its four copies share upstream blob 6d396e14859760e61f5e23b1513cfdd185d497e7. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/HourClock.tla",
@@ -5358,10 +5358,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/InternalMemory_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion strengthens TypeInvariant with BufConsistent and covers Req, Do, Rsp, and stuttering. Its four copies share upstream blob 5ae8971f5a7128d8671acc1b1a4adb003e790498. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/InternalMemory.tla",
@@ -5519,10 +5519,10 @@
         },
         {
           "path": "specifications/SpecifyingSystems/TLC/AlternatingBit_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion proves ABTypeInv through send, receive, loss, and stuttering actions. Its lemmas cover append, tail, head, and queue-element removal. It adds no model configuration. No proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/TLC/AlternatingBit.tla",
