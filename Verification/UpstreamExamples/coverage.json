@@ -47,12 +47,12 @@
     },
     "failureArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/artifacts/10543955902",
     "ordinarySuiteResult": {
-      "sourceSHA": "b379f4a0e784a1d7bbb8468dbbdabdbc1d920ee1",
-      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/job/105560516550",
-      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/artifacts/10542461663",
-      "artifactDigest": "sha256:56578dac925d6fb63f663f844a8b410304aaceb0acd6a8a9a8c92124eab8fff6",
-      "buildSeconds": 930.08,
-      "testSeconds": 629.953,
+      "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391/job/105577116431",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391/artifacts/10544547101",
+      "artifactDigest": "sha256:bbbcb478344cc960a7a0b8f44604e765294be3822965693548526a36c74909bd",
+      "buildSeconds": 732.60,
+      "testSeconds": 554.982,
       "testsPassed": 1448,
       "scope": "All ordinary tests passed with hosted Swift 6.1.2. This includes the five previously failing suites and generated documentation builds. Ordinary tests do not establish independent TLC agreement."
     },
