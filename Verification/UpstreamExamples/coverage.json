@@ -6650,21 +6650,21 @@
       "id": "AC-01",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/IndependentAtomicStepTests.swift covers disabled Do guards and all enabled choices. Its IndependentAtomicSteps fixture includes a false guard with division by zero in the body. The suite exercises generated dispatch and native exploration. Full Algorithm coverage and hosted acceptance evidence remain unaudited.",
       "evidence": []
     },
     {
       "id": "AC-02",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/OrderedStepTests.swift covers When after an assignment, choice filtering, and branch rollback. The fixtures retain one choice and reject another after an earlier assignment. Blocked branches leave the complete machine snapshot unchanged. Complete acceptance evidence across all supported block forms remains unaudited.",
       "evidence": []
     },
     {
       "id": "AC-03",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/OrderedStepTests.swift covers sequential reads, repeated writes, saved values, and absence of intermediate reachable states. Tests/SwiftTLATests/GeneratedSavedValueSwapTests.swift covers the swap contract. These source pointers are not hosted acceptance evidence. Full criterion coverage remains unaudited.",
       "evidence": []
     },
     {
