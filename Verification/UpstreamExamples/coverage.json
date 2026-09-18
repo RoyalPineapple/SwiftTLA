@@ -2,7 +2,7 @@
   "schema": "UpstreamCoverageLedger",
   "inventory": "Verification/UpstreamExamples/inventory.json",
   "upstreamRevision": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
-  "auditedSwiftSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+  "auditedSwiftSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
   "rules": {
     "unit": "One upstream module/configuration pair with resolved parameter and environment bindings. Every pinned configuration and required variant remains required until an explicit reviewed exclusion.",
     "configurationBindings": "Published configuration-file pairs form the baseline. Source-defined environment variants need separate bindings and evidence before family completion. The pair count is not the final variant count.",
@@ -22,6 +22,28 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
+    "latestOrdinarySuiteFailure": {
+      "sourceSHA": "40b2cc6c841b65d97c65014b947a205a97aef75e",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35352786406",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35352786406/job/105625158650",
+      "testsRun": 1450,
+      "issues": 3,
+      "reason": "VoteProofCorpusRenderingTests, AlgorithmPlusCalRendererTests, and CompiledLowererTraversalTests still expected unparenthesized quantifier or LET scopes. The retained output has the corrected explicit delimiters. Exact expectations were updated; a new hosted pass remains required. Every other job in this CI run passed."
+    },
+    "infrastructureFailures": [{
+      "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/job/105623344763",
+      "caseID": "voteproof",
+      "reason": "Pinned-tool setup received HTTP 500 from a download. Validation never started, and the empty evidence directory caused artifact upload to fail too. Downloads now use curl's bounded transient-error retries, with all checksum checks unchanged. This is a setup failure, not an observed semantic mismatch. A successful complete hosted comparison is still required."
+    }],
+    "scenarioIsolationResult": {
+      "sourceSHA": "40b2cc6c841b65d97c65014b947a205a97aef75e",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35352805257/job/105624753136",
+      "jobConclusion": "success",
+      "graphCases": 30,
+      "scenarioCases": 62,
+      "scope": "The hosted release validator built with Xcode 16.4. Discovery and selection checks passed for every identifier, all cases, and unknown identifiers. The workflow created 92 separate comparison jobs. These checks do not establish model equivalence or completion of those jobs."
+    },
     "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391",
     "state": "success",
     "appleAdoptionResult": {
@@ -95,6 +117,18 @@
     "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
     "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
     "failures": [
+      {
+        "caseID": "coffee-can-1000",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10550377957",
+        "artifactDigest": "sha256:aaeba9294b22028297e950e64b3b62c23b9009f665be676ea6d05809fe9320c3",
+        "reason": "Upstream graph capture completed, but generated TLC remained at Computing initial states until its 1800-second process limit. No complete comparison exists. The generated Cartesian record domain uses nested mapping and UNION instead of the upstream record-set form. A serialization-only change targets this cost for the unchanged 1000- and 3000-bean configurations, with dependent-domain fallback. Relevant criteria: AC-08, AC-09, and AC-17. Hosted confirmation remains required."
+      },
+      {
+        "caseID": "coffee-can-3000",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10551545058",
+        "artifactDigest": "sha256:5bc8bf632e89e872d48fe2585561bebfcf1ff5ac39a24b05dcb69d71f283007e",
+        "reason": "The independent comparison job exceeded its 45-minute limit. Its retained artifact is not a complete comparison and receives no coverage credit. The log does not identify which phase consumed the limit; inspect retained evidence before assigning a cause."
+      },
       {
         "caseID": "queens-four",
         "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549841774",
@@ -237,7 +271,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": "specifications/N-Queens",
+  "nextFamily": "specifications/coffee-can",
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -1446,11 +1480,11 @@
           ],
           "evidence": [
             {
-              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
               "developerToolsVersion": "16.4",
-              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
-              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549641120",
-              "artifactDigest": "sha256:e1bea249df8b4142692fc2c9ceb4bc64339e985cc22b68945506aa0d85f012d8",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10553585679",
+              "artifactDigest": "sha256:7b64133e78241d0305ac2a14e6afb4cf2456f5bf193c6448d3a8bc717759b8a5",
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 5150 initial states, 5150 states, 14852 labeled edges. TypeInvariant, EventuallyTerminates, MonotonicDecrease, LoopInvariant, TerminationHypothesis, and deadlock outcomes match in both TLC comparisons. Original module and configuration hashes match the pinned reference."
@@ -1699,11 +1733,11 @@
           ],
           "evidence": [
             {
-              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
               "developerToolsVersion": "16.4",
-              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
-              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10547935040",
-              "artifactDigest": "sha256:6d1be63648661d4035e800c5fca545595f376f2e80e09b4472a53a3bec72142f",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10550591489",
+              "artifactDigest": "sha256:517bd41556abd4dc20cf33441b3709b891209c3cdf40aa2db450f7032ff6b91e",
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 16 states, 96 labeled edges. TypeOK and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."
@@ -1726,11 +1760,11 @@
           ],
           "evidence": [
             {
-              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
               "developerToolsVersion": "16.4",
-              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
-              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549251040",
-              "artifactDigest": "sha256:4e40282bbecfffd2ae2c0a65a7938cd372de02a877264b2f3389205cd2d57b88",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10553505178",
+              "artifactDigest": "sha256:887d203fa20b1ee34e05fa818304ec6c55b694784e39217c40be2f6d0d691bc6",
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 16 states, 96 labeled edges. TypeOK, NotSolved, and deadlock outcomes match in both TLC comparisons. Native and both TLC comparisons retain NotSolved counterexamples. Original module and configuration hashes match the pinned reference."
@@ -1753,11 +1787,11 @@
           ],
           "evidence": [
             {
-              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
               "developerToolsVersion": "16.4",
-              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
-              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10547611040",
-              "artifactDigest": "sha256:64dbf048b83dc652e707453ad677050cc9bd361fe3b3a834c86bfe78cfddef50",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10551191278",
+              "artifactDigest": "sha256:8be01fbf2253911ede220822f8957df1d4d030c5ebeaf61674e80ceb118f9308",
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 16 states, 96 labeled edges. TypeOK, NotSolved, and deadlock outcomes match in both TLC comparisons. Native and both TLC comparisons retain NotSolved counterexamples. The original configuration hash matches the pinned reference."
@@ -1887,11 +1921,11 @@
           ],
           "evidence": [
             {
-              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
               "developerToolsVersion": "16.4",
-              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
-              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10548771567",
-              "artifactDigest": "sha256:bed195f294d278f4c6c323d1c7f1aaa2ad5b547ea22e3ef26327a02466a86b37",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10552485888",
+              "artifactDigest": "sha256:008a240220c2285f73067c11f2fa0c14b57abb8c67db639765d6245e0b99bd84",
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 67 states, 335 labeled edges. TypeOK, ExclusiveAccess, and deadlock outcomes match in both TLC comparisons. Both TLC configurations use INIT/NEXT without NobodyStarves. Original module and configuration hashes match the pinned reference."
@@ -1914,11 +1948,11 @@
           ],
           "evidence": [
             {
-              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
               "developerToolsVersion": "16.4",
-              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
-              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10548931445",
-              "artifactDigest": "sha256:46803ced2af2af283c09c677d92f498027d87ce3a4c478d3a6e36c0e867a0d48",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10552620714",
+              "artifactDigest": "sha256:8f4e9e32203f28afd17f2e70dc06360cbaf9d7c548175eb989238be19f6505b5",
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 67 states, 335 labeled edges. TypeOK, ExclusiveAccess, NobodyStarves, and deadlock outcomes match in both TLC comparisons. Both TLC runs complete temporal checking under Spec. Original module and configuration hashes match the pinned reference. Hosted CI 35337970391 passes configuration, fairness-export, and complete application-dispatch replay tests."
@@ -3512,11 +3546,11 @@
           ],
           "evidence": [
             {
-              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
               "developerToolsVersion": "16.4",
-              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
-              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10547310966",
-              "artifactDigest": "sha256:3f3e7a9304f2f5b7db4e08f96218492f6a07febe4b2b099e4926b2b39d4242e3",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10550577567",
+              "artifactDigest": "sha256:997d6774ec10e80a08e761506a513a2296f384e98d72b29bc66425a0a43f09c3",
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 127 initial states, 8554 states, 8554 labeled edges. TypeInvariant, Correctness, and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."
@@ -4103,14 +4137,14 @@
     {
       "path": "specifications/N-Queens",
       "name": "The N-Queens Puzzle",
-      "audit": "reference inputs audited",
-      "gap": "Both FourQueens configurations failed hosted comparison in run 35344286427. Generated TLA+ omits lexical scope delimiters, which causes duplicate placement declarations in both variants and duplicate atomic bindings in Queens. Complete hosted graph and property comparisons remain required, including the expected NoSolutions failures. All six module dispositions and legacy cleanup are complete. Hosted CI 35337970391 passes application-successor and native-graph comparisons for both variants. The retained TLC trace remains a parser regression fixture, not admission evidence.",
+      "audit": "complete",
+      "gap": "Both published FourQueens configurations have complete hosted graph and property matches on the audited SHA. All six module dispositions and legacy cleanup are complete. NoSolutions fails as required, with valid retained native and TLC traces. Direct TLA+ keeps deadlock checking disabled; PlusCal checks deadlock and Termination. The older trace fixture remains a parser regression, not admission evidence.",
       "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/N-Queens/Queens.tla",
           "role": "behavior dependency",
-          "reason": "The direct-TLA FourQueens wrapper imports Queens through an identical Toolbox copy. QueensModel supplies the typed implementation. The configuration still requires independent hosted comparison.",
+          "reason": "The direct-TLA FourQueens wrapper imports Queens through an identical Toolbox copy. QueensModel supplies the typed implementation and has complete independent hosted comparison evidence.",
           "implementations": [
             "Sources/UpstreamParity/Examples/Queens.swift"
           ],
@@ -4167,7 +4201,7 @@
           "module": "specifications/N-Queens/Queens.toolbox/FourQueens/MC.tla",
           "configuration": "specifications/N-Queens/Queens.toolbox/FourQueens/MC.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [
@@ -4177,13 +4211,22 @@
               "caseID": "queens-four"
             }
           ],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10553571763",
+            "artifactDigest": "sha256:d56b74160ab0ab5ad305a39fab3f887cad45f45a2b8efa7de360ce12c3a738fd",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 785 states, 2969 labeled edges. TypeInvariant and Invariant are satisfied. NoSolutions is violated with valid retained traces. Deadlock checking remains disabled and the declared Termination property remains unselected, exactly as upstream requires. Original configuration, module, and tool pins match."
+          }]
         },
         {
           "module": "specifications/N-Queens/QueensPluscal.toolbox/FourQueens/MC.tla",
           "configuration": "specifications/N-Queens/QueensPluscal.toolbox/FourQueens/MC.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [
@@ -4193,7 +4236,16 @@
               "caseID": "n-queens-four"
             }
           ],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10553756734",
+            "artifactDigest": "sha256:8bb67ca1dc72d7497ca1d864641c1b01b2fbd41b7c7b1f447445782c2cbe6a29",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 786 states, 2971 labeled edges, including Done and Terminating. TypeInvariant, Invariant, Termination, and deadlock checks are satisfied. NoSolutions is violated with valid retained traces. Original configuration, module, and tool pins match."
+          }]
         }
       ],
       "partialCases": []
@@ -5857,7 +5909,7 @@
               "caseID": "ap-channel"
             }
           ],
-          "evidence": [{"sourceSHA":"983b819132b07c8bb4634dad2f7c81ff9b9997b5","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10545724368","artifactDigest":"sha256:fb2076db79615c7a608feef9fb3d0bc84ab11cb18a096e4ba24b4252f1a99824","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
+          "evidence": [{"sourceSHA":"5d25e17554a4c0e8d6544c57bfe64b8754cde75d","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10550597321","artifactDigest":"sha256:d1ffb51bca1addab9c91d2f21dfa7f56f9e7070ee8bdf66bf47919fa1fbd2ed3","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
         },
         {
           "module": "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla",
@@ -5935,7 +5987,7 @@
               "caseID": "ap-channel-composing"
             }
           ],
-          "evidence": [{"sourceSHA":"983b819132b07c8bb4634dad2f7c81ff9b9997b5","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10546534767","artifactDigest":"sha256:b646c707c814835fa225aa0504f93cdc9ef888574cd9b98a4895796a5125d245","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
+          "evidence": [{"sourceSHA":"5d25e17554a4c0e8d6544c57bfe64b8754cde75d","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10550871249","artifactDigest":"sha256:53dd435981749b2e377b9b177075bfc8c3713977d235f2571339d2ddf0a69990","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
         },
         {
           "module": "specifications/SpecifyingSystems/Composing/APHourClock.tla",
@@ -5961,7 +6013,7 @@
               "caseID": "ap-channel-fifo"
             }
           ],
-          "evidence": [{"sourceSHA":"983b819132b07c8bb4634dad2f7c81ff9b9997b5","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10546766414","artifactDigest":"sha256:bc827e7ec0b7916869a90d41c2c09028ef62e059198586b9b5273266034c1ef6","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
+          "evidence": [{"sourceSHA":"5d25e17554a4c0e8d6544c57bfe64b8754cde75d","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10551001211","artifactDigest":"sha256:5a4248e8d02283c14dc835d39c5eb502553e3d3c8b1a9588ce90e14f8395c622","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
         },
         {
           "module": "specifications/SpecifyingSystems/FIFO/APInnerFIFO.tla",
@@ -6019,11 +6071,11 @@
           ],
           "evidence": [
             {
-              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
               "developerToolsVersion": "16.4",
-              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
-              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549850663",
-              "artifactDigest": "sha256:ec1c69eb3fd39603059744b7763021621b5fde51f16b7dbeb229d8bb153f1024",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10552626304",
+              "artifactDigest": "sha256:ee08defe0e0c58e6606589078a956f2c3330d6ed77385463a9a965a30fa567ec",
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 12 initial states, 12 states, 12 labeled edges. HCini and deadlock outcomes match in both TLC comparisons. Original module and configuration hashes match the pinned reference."
@@ -6046,11 +6098,11 @@
           ],
           "evidence": [
             {
-              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
               "developerToolsVersion": "16.4",
-              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
-              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549625772",
-              "artifactDigest": "sha256:899f9e7242958f2552aca501d4ea322b98ad586edd534ebc9619c0590e13785a",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10553175850",
+              "artifactDigest": "sha256:2d85a43612dcb3e02ee1bf79e90f0f6360ed3330d516f23a25b9e617bdf251b8",
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 12 initial states, 12 states, 12 labeled edges. HCini and deadlock outcomes match in both TLC comparisons. Original module and configuration hashes match the pinned reference."
@@ -6073,11 +6125,11 @@
           ],
           "evidence": [
             {
-              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
               "developerToolsVersion": "16.4",
-              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
-              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549220910",
-              "artifactDigest": "sha256:d89be0473ebc495ab3b8d91cd134b7bd422ae50828e8ab68577499a36e446e88",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35351358487/artifacts/10553016039",
+              "artifactDigest": "sha256:6a984566b5d70400490f60eaa8fa4aa50ebd5bdae6cea81ce198c902ac9d870a",
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 12 initial states, 12 states, 12 labeled edges. HCini and deadlock outcomes match in both TLC comparisons. Original module and configuration hashes match the pinned reference."
