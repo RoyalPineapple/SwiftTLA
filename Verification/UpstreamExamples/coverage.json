@@ -6756,7 +6756,7 @@
       "id": "AC-09",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/NativeReachabilityTests.swift retains complete graphs after invariant violations, permits normal termination, and reports unfinished blocked machines as deadlocks. Tests/SwiftTLATests/NativeTemporalCheckingTests.swift retains replayable typed temporal cycles. Tests/SwiftTLATests/ProjectedFairnessTests.swift covers stuttering under projected fairness. These tests do not establish agreement with separately executed TLC. Independent hosted evidence for all required cases remains unverified.",
       "evidence": []
     },
     {
@@ -6770,35 +6770,35 @@
       "id": "AC-11",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/GeneratedMachineSendabilityTests.swift requires compiler-checked Sendable conformance for public machines, states, actions, and transitions. Tests/SwiftTLATests/GeneratedSwiftRecordTests.swift rejects missing, duplicate, extra, and incorrectly typed formal fields. Complete projection coverage and hosted acceptance evidence remain unaudited.",
       "evidence": []
     },
     {
       "id": "AC-12",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/NativeCodeGenerationTests.swift rejects interpreter, runtime compilation, and formal-value references in generated counter execution. This contract covers one generated model, not every migrated application or checking path. Tests/SwiftTLAParityTests/TemporalSymmetryCheckTests.swift still uses ModelChecker for symmetry exploration. Each remaining formal-tool consumer requires an explicit boundary justification or migration. Complete caller coverage remains unaudited.",
       "evidence": []
     },
     {
       "id": "AC-13",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Sources/SwiftTLA/TypedValues.swift still exposes manual record schemas and field tables. Application callers remain in Examples/SwiftTLADemos/Sources/ElevatorBank.swift and Examples/SwiftTLADemos/Sources/ChangRoberts.swift. Sources/UpstreamParity/CanonicalCorpus/KVsnap.swift also retains OperationSchema. These callers require migration before the manual schema API can be removed. The remaining replacement and deletion map still requires a complete audit.",
       "evidence": []
     },
     {
       "id": "AC-14",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/ConcreteVerificationGraphTests.swift rejects reduced temporal and refinement analysis, including reused reduction evidence. Tests/SwiftTLATests/SymmetryDomainAdmissionTests.swift rejects composite domains that can collapse distinct function keys. These tests exercise the formal checking path. Generated DSL coverage for default member identity, sound reduction, and checking-mode restrictions remains unaudited. Independent hosted acceptance evidence remains unverified.",
       "evidence": []
     },
     {
       "id": "AC-15",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/ConfiguredProcessTests.swift separates reachable completion from eventual completion without fairness. Explicit weak and strong fairness apply to each configured process and survive TLA+ export. Tests/SwiftTLAParityTests/TemporalSymmetryCheckTests.swift compares the same complete graph across no, weak, and strong fairness cases. Complete generated-model coverage and independent hosted acceptance evidence remain unaudited.",
       "evidence": []
     },
     {
@@ -6812,21 +6812,21 @@
       "id": "AC-17",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/GeneratedSwiftRecordTests.swift executes transitions with original Swift records and typed field access. Tests/SwiftTLATests/SwiftRecordTypeTests.swift preserves nominal identity, nested arrays and sets, and field order without parallel record declarations. It rejects unsupported record shapes instead of guessing. Source-located diagnostics for every supported value category and complete hosted acceptance evidence remain unaudited. KVsnap still uses a manual record schema.",
       "evidence": []
     },
     {
       "id": "AC-18",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/StateDeclarationNamesTests.swift derives state names from Swift bindings, including escaped identifiers. Tests/SwiftTLATests/PropertyDeclarationNamesTests.swift preserves distinct property and refinement identities despite equal labels. Label changes preserve compilation identity, graph semantics, and formal references. The suite also checks source-located errors for invalid labels. Complete declaration-category coverage and hosted acceptance evidence remain unaudited.",
       "evidence": []
     },
     {
       "id": "AC-19",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/NativeTypeDiagnosticTests.swift rejects unresolved collection elements before emission and accepts explicit declaration-local types. Later assignments and initializers cannot supply an earlier missing type. Diagnostics identify the owning variable, missing field, or invalid operation without internal payload dumps. Complete inference coverage, source-located compiler errors, and absence of fallback across all generated paths remain unaudited.",
       "evidence": []
     }
   ],
