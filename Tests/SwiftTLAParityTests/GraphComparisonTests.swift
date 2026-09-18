@@ -126,6 +126,27 @@ struct GraphComparisonTests {
         #expect(edgeReport.nextSafeAction.contains("advance"))
     }
 
+    @Test("identical states and edges cannot hide different initial states")
+    func rejectsDifferentInitialStatesWithEqualCounts() throws {
+        let first = CanonicalState(bindings: ["counter": .integer(1)])
+        let second = CanonicalState(bindings: ["counter": .integer(2)])
+        let edges = [
+            CanonicalEdge(source: first.key, action: "advance", target: second.key),
+            CanonicalEdge(source: second.key, action: "advance", target: first.key)
+        ]
+        let tlc = try GraphRun(isComplete: true,
+            graph: CanonicalGraph(initialStates: [first], states: [first, second], edges: edges),
+            observableActions: ["advance"], outcome: .noViolation)
+        let swift = try GraphRun(isComplete: true,
+            graph: CanonicalGraph(initialStates: [second], states: [first, second], edges: edges),
+            observableActions: ["advance"], outcome: .noViolation)
+
+        let comparison = compareFiniteGraphs(tlc: tlc, swift: swift)
+
+        #expect(!comparison.matches)
+        #expect(comparison.differences == [.initialStates(tlc: [first.key], swift: [second.key])])
+    }
+
     @Test("incomplete outcomes cannot pass")
     func rejectsIncompleteRuns() throws {
         let state = CanonicalState(bindings: ["counter": .integer(1)])
