@@ -110,12 +110,17 @@ public enum _NativeMachineOperations: Sendable {
     }
 
     public static func integerRange(_ lower: Int, _ upper: Int) throws -> Set<Int> {
-        guard lower <= upper else { return [] }
+        guard let bounds = try integerRangeBounds(lower, upper) else { return [] }
+        return Set(bounds)
+    }
+
+    public static func integerRangeBounds(_ lower: Int, _ upper: Int) throws -> ClosedRange<Int>? {
+        guard lower <= upper else { return nil }
         let distance = upper.subtractingReportingOverflow(lower)
         guard !distance.overflow, !distance.partialValue.addingReportingOverflow(1).overflow else {
             throw NativeMachineEvaluationError.collectionCardinalityOverflow(.integerRange, operands: [lower, upper])
         }
-        return Set(lower...upper)
+        return lower...upper
     }
 
     public static func powerSet<Element: Hashable & Sendable>(_ values: Set<Element>) throws -> Set<Set<Element>> {

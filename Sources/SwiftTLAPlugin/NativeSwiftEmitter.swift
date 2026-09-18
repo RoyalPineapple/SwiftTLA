@@ -796,7 +796,7 @@ struct NativeSwiftEmitter {
         var functions: Set<ResolvedFunctionID> = []
         while let node = pending.popLast() {
             switch node.operation {
-            case .functionSet: return true
+            case .functionSet, .integerRange: return true
             case .call(let id) where functions.insert(id).inserted:
                 pending.append(program[id].body)
             case .ifThenElse: pending += node.children.dropFirst()
@@ -831,6 +831,11 @@ struct NativeSwiftEmitter {
         }
         let body: String
         switch node.operation {
+        case .integerRange:
+            body = """
+            let bounds = try _NativeMachineOperations.integerRangeBounds(\(try emit(node.children[0])), \(try emit(node.children[1])))
+            return { candidate in bounds?.contains(candidate) ?? false }
+            """
         case .functionSet:
             body = """
             let domain = \(try emit(node.children[0]))
