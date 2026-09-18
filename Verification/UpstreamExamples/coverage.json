@@ -6150,7 +6150,7 @@
       "path": "specifications/TLC",
       "name": "The TLC Safety Checking Algorithm",
       "audit": "reference inputs audited",
-      "gap": "Neither published configuration has an exact implementation. TestGraphs documents 39 GRAPH/K combinations: graphs 1 through 13 and workers 1 through 3. StateGraphs also defines 1a and DH. These bindings need separate coverage, beyond the two configuration-file pairs. The custom Graph1 port lacks configurable workers, constraints, Live, Termination, and Refinement checks.",
+      "gap": "Neither published configuration has an exact implementation. The ledger requires 45 TestGraphs bindings for all fifteen selectable graphs with documented workers 1...3, plus fifteen TestMCReachability graph bindings. All sixty remain missing. Further variant audit remains open. The custom Graph1 port lacks configurable workers, constraints, Live, Termination, and Refinement checks.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -6202,7 +6202,7 @@
           "implementations": [],
           "evidence": [],
           "variantAuditComplete": false,
-          "variantReason": "The pinned TestGraphs module documents the Cartesian product GRAPH=1...13 and K=1...3. Each binding requires its own implementation and evidence. StateGraphs also defines 1a and DH; their applicability remains unresolved, not excluded.",
+          "variantReason": "The pinned TestGraphs module documents K=1...3. StateGraphs.TestCase selects graphs 1...13, 1a, and DH, so all fifteen graphs require bindings for those worker counts. Each binding requires separate implementation and evidence. Further variant audit remains open.",
           "environmentVariants": [
             { "environment": { "GRAPH": "1", "K": "1" }, "status": "missing", "implementations": [], "evidence": [] },
             { "environment": { "GRAPH": "1", "K": "2" }, "status": "missing", "implementations": [], "evidence": [] },
@@ -6242,7 +6242,13 @@
             { "environment": { "GRAPH": "12", "K": "3" }, "status": "missing", "implementations": [], "evidence": [] },
             { "environment": { "GRAPH": "13", "K": "1" }, "status": "missing", "implementations": [], "evidence": [] },
             { "environment": { "GRAPH": "13", "K": "2" }, "status": "missing", "implementations": [], "evidence": [] },
-            { "environment": { "GRAPH": "13", "K": "3" }, "status": "missing", "implementations": [], "evidence": [] }
+            { "environment": { "GRAPH": "13", "K": "3" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "1a", "K": "1" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "1a", "K": "2" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "1a", "K": "3" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "DH", "K": "1" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "DH", "K": "2" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "DH", "K": "3" }, "status": "missing", "implementations": [], "evidence": [] }
           ]
         },
         {
@@ -6253,7 +6259,26 @@
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [],
-          "evidence": []
+          "evidence": [],
+          "variantAuditComplete": false,
+          "variantReason": "This harness uses StateGraphs.TestCase with all fifteen selectable GRAPH values. It does not use K. Each graph choice requires separate implementation and evidence; the default GRAPH=7 does not cover the others.",
+          "environmentVariants": [
+            { "environment": { "GRAPH": "1" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "2" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "3" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "4" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "5" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "6" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "7" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "8" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "9" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "10" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "11" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "12" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "13" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "1a" }, "status": "missing", "implementations": [], "evidence": [] },
+            { "environment": { "GRAPH": "DH" }, "status": "missing", "implementations": [], "evidence": [] }
+          ]
         }
       ],
       "partialCases": [

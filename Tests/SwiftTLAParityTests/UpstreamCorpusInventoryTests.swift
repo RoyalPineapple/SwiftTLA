@@ -225,10 +225,17 @@ struct UpstreamCorpusInventoryTests {
         let graphHarness = try #require(coverage.families.flatMap(\.configurations).first {
             $0.configuration == "specifications/TLC/TestGraphs.cfg"
         })
-        let documentedBindings = (1...13).flatMap { graph in
-            (1...3).map { workers in ["GRAPH": String(graph), "K": String(workers)] }
+        let selectableGraphs = (1...13).map(String.init) + ["1a", "DH"]
+        let documentedBindings = selectableGraphs.flatMap { graph in
+            (1...3).map { workers in ["GRAPH": graph, "K": String(workers)] }
         }
         let variants = try #require(graphHarness.environmentVariants)
         #expect(Set(documentedBindings).isSubset(of: Set(variants.map(\.environment))))
+        let reachabilityHarness = try #require(coverage.families.flatMap(\.configurations).first {
+            $0.configuration == "specifications/TLC/TestMCReachability.cfg"
+        })
+        let reachabilityVariants = try #require(reachabilityHarness.environmentVariants)
+        #expect(Set(selectableGraphs.map { ["GRAPH": $0] })
+            .isSubset(of: Set(reachabilityVariants.map(\.environment))))
     }
 }
