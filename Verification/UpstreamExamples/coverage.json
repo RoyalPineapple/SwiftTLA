@@ -36,6 +36,16 @@
       "scope": "Hosted Swift tests passed with Xcode 16.4, optimized code, and assertions enabled. These tests do not establish independent complete TLC comparisons."
     },
     "failureArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353/artifacts/10539223990",
+    "ordinarySuiteResult": {
+      "sourceSHA": "b379f4a0e784a1d7bbb8468dbbdabdbc1d920ee1",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/job/105560516550",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/artifacts/10542461663",
+      "artifactDigest": "sha256:56578dac925d6fb63f663f844a8b410304aaceb0acd6a8a9a8c92124eab8fff6",
+      "buildSeconds": 930.08,
+      "testSeconds": 629.953,
+      "testsPassed": 1448,
+      "scope": "All ordinary tests passed with hosted Swift 6.1.2. This includes the five previously failing suites and generated documentation builds. The three large release suites remain pending. Ordinary tests do not establish independent TLC agreement."
+    },
     "candidateChange": "Compiler and fixture corrections passed 40 focused diagnostics. Canonical edges now encode action labels only during serialization. Canonical graphs derive observed actions during existing edge validation. Consumers reuse that set, and deadlock witness checks avoid unused full-graph sets. Both graph changes passed focused regressions without changes to model bounds, property checks, or timeouts. Hosted validation remains pending.",
     "timeoutArtifacts": [
       "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10538212552",
