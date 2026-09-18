@@ -160,7 +160,7 @@ private struct ReachableInvariantFailure {
         #expect(try machine.enabledActions() == [.select])
     }
 
-    @Test("checked arithmetic failure leaves native state and control unchanged")
+    @Test("checked arithmetic failure agrees across dispatch and exploration without changing the snapshot")
     func arithmeticFailureIsTransactional() throws {
         let compilation = try CheckedExecutionOverflow.spec.compile()
         let runtime = CompiledRuntime(compilation: compilation)
@@ -170,12 +170,21 @@ private struct ReachableInvariantFailure {
             try runtime.successors(for: advance, from: initial)
         }
         var machine = try CheckedExecutionOverflow.makeMachine()
-        let before = machine.state
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            try machine.successors(for: .advance)
+        }
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            try machine.isEnabled(.advance)
+        }
+        #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            try ReachabilityGraph(initialMachines: [machine], maximumStates: 2)
+        }
         for _ in 0..<2 {
             #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
                 try machine.send(.advance)
             }
-            #expect(machine.state == before)
+            #expect(machine.snapshot == before)
         }
     }
 

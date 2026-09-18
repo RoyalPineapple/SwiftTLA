@@ -6673,21 +6673,21 @@
       "id": "AC-04",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/NativeMachineExecutionTests.swift and Tests/SwiftTLATests/NativeReachabilityTests.swift cover successors, disabled actions, ambiguity, and complete control-state identity. Tests/SwiftTLATests/NativeExecutionBoundaryTests.swift checks the same overflow through successor enumeration, enabledness, dispatch, and exploration. Failed dispatch preserves the complete snapshot. Full criterion coverage and hosted acceptance evidence remain unaudited.",
       "evidence": []
     },
     {
       "id": "AC-05",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/PositiveReachabilityTests.swift covers positive witnesses, complete graph retention, unreachable outcomes, and incomplete-exploration failures. Tests/SwiftTLATests/ConfiguredProcessTests.swift separates reachable completion from universal eventual completion without fairness. Full criterion coverage and hosted acceptance evidence remain unaudited.",
       "evidence": []
     },
     {
       "id": "AC-06",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLATests/ValidationScenarioTests.swift covers missing, duplicate, and foreign scenario bindings. Tests/SwiftTLATests/ParameterResolutionTests.swift and Tests/SwiftTLATests/DictionaryConfigurationTests.swift cover incompatible types and domains. Tests/SwiftTLATests/ConfiguredCounterExecutionTests.swift and Tests/SwiftTLATests/ConfiguredProcessTests.swift vary configurations and populations without changing generated types. Tests/SwiftTLATests/SetConfigurationTests.swift rejects invalid parameter-dependent domains. Full criterion coverage and hosted acceptance evidence remain unaudited.",
       "evidence": []
     },
     {
