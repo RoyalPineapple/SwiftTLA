@@ -1549,7 +1549,7 @@
       "path": "specifications/DieHard",
       "name": "The Die Hard Problem",
       "audit": "reference inputs audited",
-      "gap": "MCDieHardest has infinitely many reachable states: EmptyJug on an empty jug preserves contents while NextInterleaved increments its counter. Finite complete-graph evidence is impossible without changing this model. An infinite-state evidence contract awaits user direction. No bound or exclusion is invented. Three finite configurations still lack hosted matches.",
+      "gap": "MCDieHardest has infinitely many reachable states: EmptyJug on an empty jug preserves contents while NextInterleaved increments its counter. Finite complete-graph evidence is impossible without changing this model. An infinite-state evidence contract awaits user direction. No bound or exclusion is invented. APDieHarder and MCDieHarder have hosted matches. DieHard still lacks a hosted match. Module dispositions and legacy cleanup remain incomplete.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -1622,7 +1622,7 @@
           "module": "specifications/DieHard/APDieHarder.tla",
           "configuration": "specifications/DieHard/APDieHarder.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -1632,7 +1632,17 @@
               "caseID": "ap-die-harder"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10547935040",
+              "artifactDigest": "sha256:6d1be63648661d4035e800c5fca545595f376f2e80e09b4472a53a3bec72142f",
+              "completeGraph": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 16 states, 96 labeled edges. TypeOK and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."
+            }
+          ]
         },
         {
           "module": "specifications/DieHard/DieHard.tla",
@@ -1654,7 +1664,7 @@
           "module": "specifications/DieHard/MCDieHarder.tla",
           "configuration": "specifications/DieHard/MCDieHarder.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [
@@ -1664,7 +1674,17 @@
               "caseID": "mc-die-harder"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10547611040",
+              "artifactDigest": "sha256:64dbf048b83dc652e707453ad677050cc9bd361fe3b3a834c86bfe78cfddef50",
+              "completeGraph": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 16 states, 96 labeled edges. TypeOK, NotSolved, and deadlock outcomes match in both TLC comparisons. Native and both TLC comparisons retain NotSolved counterexamples. The original configuration hash matches the pinned reference."
+            }
+          ]
         },
         {
           "module": "specifications/DieHard/MCDieHardest.tla",
