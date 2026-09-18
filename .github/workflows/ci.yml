@@ -41,6 +41,9 @@ jobs:
           mkdir -p .build/test-diagnostics
           git rev-parse HEAD > .build/test-diagnostics/source-sha.txt
           test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          swift --version | tee .build/test-diagnostics/swift-version.txt
+          xcodebuild -version | tee .build/test-diagnostics/xcode-version.txt
+          xcrun --sdk macosx --show-sdk-build-version | tee .build/test-diagnostics/sdk-build-version.txt
           (
             while sleep 300; do
               ps -axo pid,ppid,etime,%cpu,rss,command > ".build/test-diagnostics/$(date +%s)-processes.txt"

@@ -2,7 +2,7 @@
   "schema": "UpstreamCoverageLedger",
   "inventory": "Verification/UpstreamExamples/inventory.json",
   "upstreamRevision": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
-  "auditedSwiftSHA": "538cda332365903eb8492fd9ef92265c4de23de8",
+  "auditedSwiftSHA": "2641959b1ede6e7ef11ab7963820462e027244b3",
   "rules": {
     "unit": "One upstream module and configuration pair. Every pinned configuration remains required until an explicit reviewed exclusion.",
     "states": [
@@ -25,9 +25,24 @@
     "state": "pending",
     "lastKnownFailure": "Hosted Swift compilation selected symbolic StateExpr equality in TypedFacadeContractTests. The explicit Bool fix awaits final hosted results.",
     "hostedXcode": "16.4",
-    "localXcode": "27.0 beta 5",
-    "toolchainGap": "Xcode 16.4 is not installed locally. Earlier beta-toolchain passes are not matching-toolchain evidence."
+    "localDeveloperTools": "Command Line Tools 16.4.0.0.1.1747106510",
+    "localSwift": "Apple Swift 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)",
+    "localSDK": "macOS 15.5 (24F74)",
+    "toolchainGap": "Command Line Tools 16.4 supports focused SwiftPM diagnostics with the same SDK build shown in hosted Apple logs. Full Xcode 16.4 is absent locally. Earlier beta-toolchain passes remain uncredited."
   },
+  "localDiagnostics": [
+    {
+      "session": "85523",
+      "sourceSHA": "2641959b1ede6e7ef11ab7963820462e027244b3",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'UpstreamCorpusInventoryTests|DiningPhilosophersCorpusConfigurationTests|DiningPhilosophersCorpusStateGraphTests'",
+      "exitCode": 0,
+      "buildSeconds": 576.32,
+      "testSeconds": 0.270,
+      "testsPassed": 8,
+      "result": "The inventory and ledger contracts passed. Both Dining configurations produced one initial state, 67 states, and 335 edges. Native property checks and graph-edge dispatch replay passed.",
+      "scope": "Local diagnostic summary, not independent TLC evidence or a hosted match."
+    }
+  ],
   "nextFamily": "specifications/DiningPhilosophers",
   "families": [
     {
@@ -1585,7 +1600,7 @@
       "path": "specifications/DiningPhilosophers",
       "name": "The Dining Philosophers Problem",
       "audit": "reference inputs audited",
-      "gap": "Both published configurations map to typed model-owned scenarios. Hosted complete graph, fairness, NobodyStarves, invariant, and deadlock comparisons remain unverified.",
+      "gap": "Both configurations passed focused native graph and property diagnostics with Command Line Tools 16.4. Independent hosted graph and property comparisons remain unverified.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -1610,35 +1625,35 @@
       "configurations": [
         {
           "module": "specifications/DiningPhilosophers/APDiningPhilosophers.tla",
-          "configuration": "specifications/DiningPhilosophers/APDiningPhilosophers.cfg",
-          "required": true,
-          "status": "implemented",
+      "configuration": "specifications/DiningPhilosophers/APDiningPhilosophers.cfg",
+      "required": true,
+      "status": "locally checked",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
             {
               "file": "Sources/UpstreamParity/Examples/DiningPhilosophers.swift",
-              "scenario": "AP NP5",
-              "caseID": "ap-dining-philosophers"
-            }
-          ],
-          "evidence": []
+          "scenario": "AP NP5",
+          "caseID": "ap-dining-philosophers"
+        }
+      ],
+      "evidence": [{"sourceSHA":"2641959b1ede6e7ef11ab7963820462e027244b3","developerToolsVersion":"16.4","runURL":"local-validation:85523","artifactURL":"Verification/UpstreamExamples/coverage.json#/localDiagnostics/0","completeGraph":true}]
         },
         {
           "module": "specifications/DiningPhilosophers/DiningPhilosophers.tla",
-          "configuration": "specifications/DiningPhilosophers/DiningPhilosophers.cfg",
-          "required": true,
-          "status": "implemented",
+      "configuration": "specifications/DiningPhilosophers/DiningPhilosophers.cfg",
+      "required": true,
+      "status": "locally checked",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
             {
               "file": "Sources/UpstreamParity/Examples/DiningPhilosophers.swift",
-              "scenario": "NP5",
-              "caseID": "dining-philosophers"
-            }
-          ],
-          "evidence": []
+          "scenario": "NP5",
+          "caseID": "dining-philosophers"
+        }
+      ],
+      "evidence": [{"sourceSHA":"2641959b1ede6e7ef11ab7963820462e027244b3","developerToolsVersion":"16.4","runURL":"local-validation:85523","artifactURL":"Verification/UpstreamExamples/coverage.json#/localDiagnostics/0","completeGraph":true}]
         }
       ],
       "partialCases": []

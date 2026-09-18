@@ -12,7 +12,7 @@ struct UpstreamCorpusInventoryTests {
         }
         struct Evidence: Decodable {
             let sourceSHA: String
-            let xcodeVersion: String
+            let developerToolsVersion: String
             let runURL: String
             let artifactURL: String
             let completeGraph: Bool?
@@ -152,13 +152,13 @@ struct UpstreamCorpusInventoryTests {
             #expect(states.contains(status))
             if status == "locally checked" || status == "hosted match" {
                 #expect(evidence.contains {
-                    $0.sourceSHA == coverage.auditedSwiftSHA && $0.xcodeVersion == coverage.ci.hostedXcode
+                    $0.sourceSHA == coverage.auditedSwiftSHA && $0.developerToolsVersion == coverage.ci.hostedXcode
                 })
             }
             if status == "hosted match" {
                 #expect(evidence.contains {
                     $0.sourceSHA == coverage.auditedSwiftSHA
-                        && $0.xcodeVersion == coverage.ci.hostedXcode
+                        && $0.developerToolsVersion == coverage.ci.hostedXcode
                         && (requiresGraph ? ($0.completeGraph == true && $0.allPropertiesMatch == true) : $0.acceptanceComplete == true)
                         && $0.runURL.hasPrefix("https://github.com/")
                         && $0.artifactURL.hasPrefix("https://github.com/")
