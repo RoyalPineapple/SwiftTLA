@@ -5716,7 +5716,7 @@
           "module": "specifications/SpecifyingSystems/AsynchronousInterface/APChannel.tla",
           "configuration": "specifications/SpecifyingSystems/AsynchronousInterface/APChannel.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5726,7 +5726,7 @@
               "caseID": "ap-channel"
             }
           ],
-          "evidence": []
+          "evidence": [{"sourceSHA":"983b819132b07c8bb4634dad2f7c81ff9b9997b5","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10545724368","artifactDigest":"sha256:fb2076db79615c7a608feef9fb3d0bc84ab11cb18a096e4ba24b4252f1a99824","completeGraph":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
         },
         {
           "module": "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla",
@@ -5794,7 +5794,7 @@
           "module": "specifications/SpecifyingSystems/Composing/APChannel.tla",
           "configuration": "specifications/SpecifyingSystems/Composing/APChannel.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5804,7 +5804,7 @@
               "caseID": "ap-channel-composing"
             }
           ],
-          "evidence": []
+          "evidence": [{"sourceSHA":"983b819132b07c8bb4634dad2f7c81ff9b9997b5","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10546534767","artifactDigest":"sha256:b646c707c814835fa225aa0504f93cdc9ef888574cd9b98a4895796a5125d245","completeGraph":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
         },
         {
           "module": "specifications/SpecifyingSystems/Composing/APHourClock.tla",
@@ -5820,7 +5820,7 @@
           "module": "specifications/SpecifyingSystems/FIFO/APChannel.tla",
           "configuration": "specifications/SpecifyingSystems/FIFO/APChannel.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5830,7 +5830,7 @@
               "caseID": "ap-channel-fifo"
             }
           ],
-          "evidence": []
+          "evidence": [{"sourceSHA":"983b819132b07c8bb4634dad2f7c81ff9b9997b5","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10546766414","artifactDigest":"sha256:bc827e7ec0b7916869a90d41c2c09028ef62e059198586b9b5273266034c1ef6","completeGraph":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
         },
         {
           "module": "specifications/SpecifyingSystems/FIFO/APInnerFIFO.tla",
