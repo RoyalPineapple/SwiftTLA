@@ -21,10 +21,16 @@ jobs:
       matrix:
         include:
           - suite: ordinary
-            selection: --skip 'FiniteGraphCheckTests|UpstreamParityTests'
+            configuration: debug
+            selection: --skip 'FiniteGraphCheckTests|UpstreamParityTests|ScenarioValidationTests'
           - suite: finite-graphs
+            configuration: release
             selection: --filter FiniteGraphCheckTests
+          - suite: scenarios
+            configuration: release
+            selection: --filter ScenarioValidationTests
           - suite: upstream
+            configuration: release
             selection: --filter UpstreamParityTests
     runs-on: macos-15
     timeout-minutes: 60
@@ -44,6 +50,8 @@ jobs:
           swift --version | tee .build/test-diagnostics/swift-version.txt
           xcodebuild -version | tee .build/test-diagnostics/xcode-version.txt
           xcrun --sdk macosx --show-sdk-build-version | tee .build/test-diagnostics/sdk-build-version.txt
+          echo '${{ matrix.configuration }}' > .build/test-diagnostics/build-configuration.txt
+          echo Debug > .build/test-diagnostics/assertion-configuration.txt
           (
             while sleep 300; do
               ps -axo pid,ppid,etime,%cpu,rss,command > ".build/test-diagnostics/$(date +%s)-processes.txt"
@@ -54,7 +62,7 @@ jobs:
           ) &
           sampler=$!
           trap 'kill "$sampler" 2>/dev/null || true' EXIT
-          swift test -Xswiftc -warnings-as-errors -j 1 --no-parallel ${{ matrix.selection }}
+          swift test --configuration '${{ matrix.configuration }}' -Xswiftc -assert-config -Xswiftc Debug -Xswiftc -warnings-as-errors -j 1 --no-parallel ${{ matrix.selection }}
 
       - name: Retain Swift test stack samples
         if: always()

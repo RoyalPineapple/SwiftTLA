@@ -22,13 +22,15 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
-    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35314406697",
+    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034",
     "state": "timed out",
-    "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35314406697",
-    "lastKnownFailure": "The ordinary and finite-graph jobs again exceeded 60 minutes on 68cb93987b7c8d713b34a1d8777804b9d3f37830. Both reached CanonicalGraph construction after the integer-range membership fix. Final finite-graph samples show edge Set construction; ordinary samples show edge endpoint lookups with 9.2 GB physical footprint. Earlier samples identify CoffeeCan snapshots. Full temporary edge arrays, copied state arrays, and value-copying membership lookups remain on this path. Upstream tests, Apple-platform checks, and canonical export passed. The graph-allocation change has focused diagnostic coverage but still needs hosted validation.",
+    "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034",
+    "lastKnownFailure": "All three Swift suites exceeded 60 minutes on 2c145f294b4c8d5fff06ec4e63174bf65b38a677. Final samples show canonical initial-state mapping and key lookups, with graph-job footprints of 7.8 GB and 8.3 GB. The upstream job sorted nested CompiledValue collections in parallelReachableBoundedPort. Apple-platform checks and canonical export passed. The graph-allocation change did not restore CI.",
+    "candidateChange": "Exhaustive graph, scenario, and upstream suites now select optimized builds with Swift assertions enabled. Ordinary tests remain in debug mode. Every test, model bound, selected property, and job timeout remains required. Hosted validation of this build configuration remains pending.",
     "timeoutArtifacts": [
-      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35314406697/artifacts/10535404307",
-      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35314406697/artifacts/10536650961"
+      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10538212552",
+      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10539107234",
+      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10538962709"
     ],
     "hostedXcode": "16.4",
     "localDeveloperTools": "Command Line Tools 16.4.0.0.1.1747106510",
