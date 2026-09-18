@@ -38,13 +38,6 @@ import UpstreamParity
     #expect({ if case .ok = checkOutcome { true } else { false } }())
   }
 
-  @Test("CoffeeCan MaxBeanCount=5 = 20 states (parity catalog)")
-  func coffeeCanMax5() throws {
-    let scenario = try #require(CoffeeCanModel.validationScenarios().first { $0.name == "APCoffeeCan" })
-    let count = try scenario.explore(maximumStates: 500).transitions.count
-    #expect(count == 20)
-  }
-
   @Test("Chameneos has every typed initial creature-color assignment")
   func chameneosInitialStates() throws {
     let compilation = try Example.chameneosM4N4.spec.compile()

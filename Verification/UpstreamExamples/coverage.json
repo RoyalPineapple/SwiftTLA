@@ -1193,13 +1193,13 @@
       "path": "specifications/CoffeeCan",
       "name": "The Coffee Can Bean Problem",
       "audit": "reference inputs audited",
-      "gap": "All four configurations have exact reference inputs. Complete large-bound graphs and every selected temporal property lack current hosted evidence. CoffeeCan_proof is a proof companion, not another configured graph.",
-      "legacyCleanupComplete": false,
+      "gap": "All four configurations have exact reference inputs. Complete large-bound graphs and every selected temporal property lack current hosted evidence. CoffeeCan_proof is a proof companion, not another configured graph. The duplicate count-only test is removed. The canonical suite retains graph, property, and dispatch checks.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/CoffeeCan/APCoffeeCan.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "This annotation wrapper instantiates CoffeeCan. Its configuration selects Spec and TypeInvariant with MaxBeanCount = 5. The APCoffeeCan scenario retains that selection and weak fairness.",
           "implementations": [
             "Sources/UpstreamParity/Examples/CoffeeCan.swift"
           ],
@@ -1215,7 +1215,7 @@
         {
           "path": "specifications/CoffeeCan/CoffeeCan.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "CoffeeCanModel retains the can record, three picking actions, terminating stutter, and weak fairness for Next. Configurations 100, 1000, and 3000 select TypeInvariant and four temporal properties.",
           "implementations": [
             "Sources/UpstreamParity/Examples/CoffeeCan.swift"
           ],
