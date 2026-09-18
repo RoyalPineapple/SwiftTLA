@@ -22,13 +22,13 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
-    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35308096247",
+    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35314406697",
     "state": "timed out",
-    "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35308096247",
-    "lastKnownFailure": "The ordinary and finite-graph jobs exceeded 60 minutes. Both retained stacks show CoffeeCan initial-state filtering inside integerRange and Set initialization. The generated membership expression rebuilds the integer range for each candidate. The upstream job passed. Stack collection now works. The retained Swift version and SDK build match the local diagnostic toolchain.",
+    "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35314406697",
+    "lastKnownFailure": "The ordinary and finite-graph jobs again exceeded 60 minutes on 68cb93987b7c8d713b34a1d8777804b9d3f37830. Both reached CanonicalGraph construction after the integer-range membership fix. Final finite-graph samples show edge Set construction; ordinary samples show edge endpoint lookups with 9.2 GB physical footprint. Earlier samples identify CoffeeCan snapshots. Full temporary edge arrays, copied state arrays, and value-copying membership lookups remain on this path. Upstream tests, Apple-platform checks, and canonical export passed. The graph-allocation change has focused diagnostic coverage but still needs hosted validation.",
     "timeoutArtifacts": [
-      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35308096247/artifacts/10533474087",
-      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35308096247/artifacts/10533910757"
+      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35314406697/artifacts/10535404307",
+      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35314406697/artifacts/10536650961"
     ],
     "hostedXcode": "16.4",
     "localDeveloperTools": "Command Line Tools 16.4.0.0.1.1747106510",
@@ -79,6 +79,17 @@
       "testsPassed": 10,
       "result": "The ledger retains all pinned families, modules, and configuration pairs. CoffeeCan configuration pins and canonical graph checks passed after duplicate witness removal. Both Dining configurations retained their graph, selected properties, deadlock checks, and application transition replay.",
       "scope": "Focused local diagnostics only. The temporary log is not durable hosted evidence. Configuration and DSL verification counts remain unchanged."
+    },
+    {
+      "session": "95182",
+      "sourceSHA": "e7da8068e3514f69c5578107b0045daf756631c3",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CanonicalGraphTests|NativeGraphExportTests|TLCGraphReaderTests|GraphRunRecordsTests|GraphComparisonTests|CoffeeCanCorpusStateGraphTests|DiningPhilosophersCorpusConfigurationTests|DiningPhilosophersCorpusStateGraphTests'",
+      "exitCode": 0,
+      "buildSeconds": 546.52,
+      "testSeconds": 0.997,
+      "testsPassed": 79,
+      "result": "Canonical conversion builds edge sets directly, consumes state collection views, and uses key-presence lookups. Focused checks preserve complete labeled relations, reject malformed references and state fields, and retain native/TLC-reader/serialization contracts. CoffeeCan and both Dining configuration diagnostics passed.",
+      "scope": "Local semantic regression evidence for the profiled graph-construction path. No large-configuration performance result or hosted match is claimed. No model bounds, checks, or timeout settings changed."
     }
   ],
   "nextFamily": "specifications/DiningPhilosophers",
