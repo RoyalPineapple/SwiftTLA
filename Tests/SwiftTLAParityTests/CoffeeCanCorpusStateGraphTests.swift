@@ -57,6 +57,8 @@ struct CoffeeCanCorpusStateGraphTests {
         for scenario in scenarios {
             let rendered = try scenario.render()
             modules.insert(rendered.tlaBundle.tla)
+            #expect(rendered.tlaBundle.tla.contains("[black: 0..MaxBeanCount, white: 0..MaxBeanCount]"))
+            #expect(!rendered.tlaBundle.tla.contains("UNION"))
             #expect(rendered.checksDeadlock)
             #expect(rendered.tlaBundle.cfg.contains("CONSTANT MaxBeanCount = \(scenario.configuration.MaxBeanCount)"))
             #expect(rendered.checkNames == (scenario.name == "APCoffeeCan"

@@ -4,6 +4,55 @@ import Testing
 
 @Suite("Compiled specification rendering")
 struct CompiledSpecificationRendererTests {
+    @Test("Independent record comprehensions retain their exact Cartesian domain at serialization")
+    func rendersCartesianRecordDomains() throws {
+        let compiled = try TLASpec(name: "RecordDomains", variables: [], actions: [], invariants: []).compile()
+        let first = BinderID(ordinal: 0)
+        let second = BinderID(ordinal: 1)
+        let maximum = BinderID(ordinal: 2)
+        let captured = OperatorID(ordinal: 0)
+        let renderer = CompiledTLARenderer(moduleName: "RecordDomains", reservedNames: [], layout: compiled.layout,
+            bindings: .init(operatorNames: [captured: "Captured"],
+                binders: [first: "first", second: "second", maximum: "maximum"]),
+            operators: compiled.semantics.operators, actions: [], functions: [])
+        let domain = CompiledExpression(operation: .integerRange,
+            children: [.value(.integer(0)), .boundValue(maximum)])
+        let record = CompiledExpression(operation: .recordLiteral(["right", "left"]),
+            children: [.boundValue(second), .boundValue(first)])
+        func product(_ record: CompiledExpression, outer: CompiledExpression,
+                     inner: CompiledExpression) -> CompiledExpression {
+            .init(operation: .unionAll, children: [
+                .setMap(.setMap(record, second, inner), first, outer)
+            ])
+        }
+        #expect(try renderer.state(product(record, outer: domain, inner: domain))
+            == "[right: 0..maximum, left: 0..maximum]")
+        let empty = CompiledExpression.value(.set([]))
+        #expect(try renderer.state(product(record, outer: empty, inner: domain))
+            == "[right: 0..maximum, left: {}]")
+        let converted = CompiledExpression(operation: .convert, children: [record])
+        #expect(try renderer.state(product(converted, outer: domain, inner: empty))
+            == "[right: {}, left: 0..maximum]")
+
+        let dependent = CompiledExpression(operation: .integerRange,
+            children: [.value(.integer(0)), .boundValue(first)])
+        let fallible = CompiledExpression(operation: .integerRange, children: [
+            .value(.integer(0)), .init(operation: .divide, children: [.value(.integer(1)), .value(.integer(0))])
+        ])
+        for inner in [dependent, fallible, .operatorReference(captured)] {
+            #expect(try renderer.state(product(record, outer: empty, inner: inner)).hasPrefix("UNION "))
+        }
+        let duplicate = CompiledExpression(operation: .recordLiteral(["right", "left"]),
+            children: [.boundValue(first), .boundValue(first)])
+        let dropped = CompiledExpression(operation: .recordLiteral(["left"]), children: [.boundValue(first)])
+        let transformed = CompiledExpression(operation: .recordLiteral(["right", "left"]), children: [
+            .init(operation: .add, children: [.boundValue(second), .value(.integer(1))]), .boundValue(first)
+        ])
+        for body in [duplicate, dropped, transformed] {
+            #expect(try renderer.state(product(body, outer: domain, inner: domain)).hasPrefix("UNION "))
+        }
+    }
+
     @Test("Set syntax has the same deterministic ordering as set values without reordering tuples")
     func canonicalSetSerialization() throws {
         let compilation = try TLASpec(name: "Sets", variables: [], actions: [], invariants: []).compile()

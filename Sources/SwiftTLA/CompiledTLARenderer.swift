@@ -315,6 +315,19 @@ struct CompiledTLARenderer {
                 parts.append("(LET \(name) == \(operand) IN CASE \(shape.predicate(for: name)) -> \(name))")
             case .expression(let expression):
                 switch expression.operation {
+                case .setMap, .unionAll:
+                    if let fields = cartesianRecordFields(expression) {
+                        var rendered: [StateRenderingTask] = [.text("[")]
+                        for (index, field) in fields.enumerated() {
+                            if index > 0 { rendered.append(.text(", ")) }
+                            rendered.append(.text("\(field.name): "))
+                            rendered.append(.expression(field.domain))
+                        }
+                        rendered.append(.text("]"))
+                        schedule(rendered)
+                    } else {
+                        try schedule(expression.operation, expression.children)
+                    }
                 case .setLiteral:
                     tasks.append(.finishSet(start: parts.count))
                     tasks.append(contentsOf: expression.children.reversed().map(StateRenderingTask.setMember))
@@ -414,13 +427,57 @@ struct CompiledTLARenderer {
                     rendered.append(.expression(body))
                     rendered.append(.text(")"))
                     schedule(rendered)
-                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .sequenceSelect, .functionApply, .functionSet, .setSum, .integerRange, .negate, .not, .cardinality, .powerSet, .unionAll, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .ifThenElse, .setFilter, .setMap, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
+                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .sequenceSelect, .functionApply, .functionSet, .setSum, .integerRange, .negate, .not, .cardinality, .powerSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
                     try schedule(expression.operation, expression.children)
 
                 }
             }
         }
         return parts.joined()
+    }
+
+    /// Serialize a bijective, independent record comprehension without materializing a UNION of sets.
+    private func cartesianRecordFields(_ expression: CompiledExpression) -> [(name: String, domain: CompiledExpression)]? {
+        var body = expression.computation
+        var domains: [BinderID: CompiledExpression] = [:]
+        while true {
+            let flattened: Bool
+            if case .unionAll = body.operation {
+                body = body.children[0].computation
+                flattened = true
+            } else {
+                flattened = false
+            }
+            guard case .setMap(let binder) = body.operation,
+                  domains[binder] == nil else { return nil }
+            domains[binder] = body.children[1]
+            body = body.children[0].computation
+            if !flattened { break }
+        }
+        guard case .recordLiteral(let names) = body.operation,
+              names.count == domains.count, names.count == body.children.count,
+              Set(names).count == names.count else { return nil }
+        var fields: [(name: String, domain: CompiledExpression)] = []
+        var used: Set<BinderID> = []
+        for (name, value) in zip(names, body.children) {
+            guard case .boundValue(let binder) = value.computation.operation,
+                  let domain = domains[binder], used.insert(binder).inserted else { return nil }
+            fields.append((name, domain))
+        }
+        var pending = Array(domains.values)
+        while let domain = pending.popLast() {
+            switch domain.operation {
+            case .boundValue(let binder):
+                if used.contains(binder) { return nil }
+            case .value, .stateVariable, .integerRange, .convert:
+                break
+            // Moving a fallible domain outside an empty outer iteration can introduce an error.
+            // Other operations can also hide lexical captures outside their expression children.
+            default: return nil
+            }
+            pending.append(contentsOf: domain.children)
+        }
+        return fields
     }
 
     private func formalParameter(_ parameter: CompiledFormalParameter) throws -> String {
