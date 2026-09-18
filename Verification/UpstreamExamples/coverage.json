@@ -23,9 +23,9 @@
   },
   "ci": {
     "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353",
-    "state": "ordinary suite failed; exhaustive suites in progress",
-    "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034",
-    "lastKnownFailure": "The ordinary suite reported 23 issues across five suites on e7b761d110b22fcdaf48f9ea00146d3f0b9d18f6. Failures concern parser diagnostics, formal member parsing, expression rendering tests, documentation fixtures, and mutable action domains. Canonical export and Apple-platform checks passed. The upstream suite passed 23 tests. Scenario and finite-graph suites remain in progress. The previous run exceeded 60 minutes in all three Swift suites.",
+    "state": "failed",
+    "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353",
+    "lastKnownFailure": "The ordinary suite reported 23 issues across five suites on e7b761d110b22fcdaf48f9ea00146d3f0b9d18f6. Scenario and finite-graph suites reached their 60-minute limits. Their builds took 1930.84 and 1190.75 seconds. Final samples showed 7.6 GB and 8.2 GB peak footprints during canonical edge construction and action-label validation. The upstream suite passed 23 tests. Canonical export and Apple-platform checks also passed.",
     "upstreamSuiteResult": {
       "sourceSHA": "e7b761d110b22fcdaf48f9ea00146d3f0b9d18f6",
       "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353/job/105537651127",
@@ -36,11 +36,13 @@
       "scope": "Hosted Swift tests passed with Xcode 16.4, optimized code, and assertions enabled. These tests do not establish independent complete TLC comparisons."
     },
     "failureArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353/artifacts/10539223990",
-    "candidateChange": "Candidate fixes preserve parser diagnostics across module lowering and restore formal member parsing. Rendering tests now use operators instead of invariants. Documentation fixtures infer names. Mutable action domains must fail before emission. All 40 focused diagnostics passed on b2e05c5aa3067f66a92e5782c1b9ddc92f9384fe. Hosted validation of these fixes remains pending. Exhaustive suites use optimized builds with assertions enabled. Every test, model bound, selected property, and timeout remains required.",
+    "candidateChange": "Compiler and fixture corrections passed 40 focused diagnostics. Canonical edges now encode action labels only during serialization. Canonical graphs derive observed actions during existing edge validation. Consumers reuse that set, and deadlock witness checks avoid unused full-graph sets. Both graph changes passed focused regressions without changes to model bounds, property checks, or timeouts. Hosted validation remains pending.",
     "timeoutArtifacts": [
       "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10538212552",
       "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10539107234",
-      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10538962709"
+      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10538962709",
+      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353/artifacts/10540648349",
+      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353/artifacts/10540569176"
     ],
     "hostedXcode": "16.4",
     "localDeveloperTools": "Command Line Tools 16.4.0.0.1.1747106510",
@@ -114,6 +116,30 @@
       "testsPassed": 40,
       "result": "Focused diagnostics passed for all five failing hosted suites. Direct, transitive, and named module imports retain parser diagnostics. Formal expression rendering preserves non-Boolean values. Formal member parsing and early mutable-domain rejection passed. Documentation snippets match fixtures that infer declaration names.",
       "scope": "Local diagnostics only. The external documentation fixture build remains a hosted check. No configuration or DSL criterion gains hosted credit."
+    },
+    {
+      "session": "34291",
+      "sourceSHA": "928a222eeb1a0c34501edb9251d2c71874617879",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CanonicalGraphTests|NativeGraphExportTests|TLCGraphReaderTests|GraphRunRecordsTests|GraphComparisonTests|CoffeeCanCorpusStateGraphTests|DiningPhilosophersCorpusConfigurationTests|DiningPhilosophersCorpusStateGraphTests'",
+      "localLog": "/tmp/swifttla-canonical-edge-storage-validation.log",
+      "exitCode": 0,
+      "buildSeconds": 513.03,
+      "testSeconds": 2.768,
+      "testsPassed": 79,
+      "result": "Canonical edges no longer retain a separately encoded action string. Byte-distinct Unicode labels remain distinct. Edge ordering matches wire bytes for empty, prefix, NUL, Unicode, and long labels. Graph export, serialization, CoffeeCan, and Dining diagnostics passed.",
+      "scope": "Local semantic diagnostics only. Hosted memory and runtime effects remain unverified. Complete upstream configuration comparisons remain required."
+    },
+    {
+      "session": "92768",
+      "sourceSHA": "3ead9dab9a51011509216bfa5018494a654f97bc",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CanonicalGraphTests|NativeGraphExportTests|TLCGraphReaderTests|GraphRunRecordsTests|GraphComparisonTests|GraphMismatchTracingTests|SymmetryOrbitConformanceTests|CoffeeCanCorpusStateGraphTests|DiningPhilosophersCorpusConfigurationTests|DiningPhilosophersCorpusStateGraphTests'",
+      "localLog": "/tmp/swifttla-observed-action-coverage-validation.log",
+      "exitCode": 0,
+      "buildSeconds": 520.78,
+      "testSeconds": 2.798,
+      "testsPassed": 97,
+      "result": "Graph construction derives observed action names during endpoint validation. Native, formal, TLC, and symmetry consumers reuse those names without repeated edge scans. Undeclared actions still fail. Complete graph, serialization, mismatch-trace, symmetry, CoffeeCan, and Dining diagnostics passed.",
+      "scope": "Local semantic diagnostics only. The full FiniteGraphCheckTests suite and large-configuration performance remain hosted checks. No configuration or DSL criterion gains hosted credit."
     }
   ],
   "nextFamily": "specifications/DiningPhilosophers",
