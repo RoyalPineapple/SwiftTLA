@@ -1325,7 +1325,7 @@
       "path": "specifications/CoffeeCan",
       "name": "The Coffee Can Bean Problem",
       "audit": "reference inputs audited",
-      "gap": "All four configurations have exact reference inputs. Complete large-bound graphs and every selected temporal property lack current hosted evidence. CoffeeCan_proof is a proof companion, not another configured graph. The duplicate count-only test is removed. The canonical suite retains graph, property, and dispatch checks.",
+      "gap": "All four configurations have exact reference inputs. CoffeeCan100Beans has a complete hosted graph and property match. The other three configurations still need reviewed hosted evidence. CoffeeCan_proof is a proof companion, not another configured graph. The duplicate count-only test is removed. The canonical suite retains graph, property, and dispatch checks.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -1391,7 +1391,7 @@
           "module": "specifications/CoffeeCan/CoffeeCan.tla",
           "configuration": "specifications/CoffeeCan/CoffeeCan100Beans.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -1401,7 +1401,17 @@
               "caseID": "coffee-can-100"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549641120",
+              "artifactDigest": "sha256:e1bea249df8b4142692fc2c9ceb4bc64339e985cc22b68945506aa0d85f012d8",
+              "completeGraph": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 5150 initial states, 5150 states, 14852 labeled edges. TypeInvariant, EventuallyTerminates, MonotonicDecrease, LoopInvariant, TerminationHypothesis, and deadlock outcomes match in both TLC comparisons. Original module and configuration hashes match the pinned reference."
+            }
+          ]
         },
         {
           "module": "specifications/CoffeeCan/CoffeeCan.tla",
@@ -1560,7 +1570,7 @@
       "path": "specifications/DieHard",
       "name": "The Die Hard Problem",
       "audit": "reference inputs audited",
-      "gap": "MCDieHardest has infinitely many reachable states: EmptyJug on an empty jug preserves contents while NextInterleaved increments its counter. Finite complete-graph evidence is impossible without changing this model. An infinite-state evidence contract awaits user direction. No bound or exclusion is invented. APDieHarder and MCDieHarder have hosted matches. DieHard still lacks a hosted match. Module dispositions and legacy cleanup remain incomplete.",
+      "gap": "MCDieHardest has infinitely many reachable states: EmptyJug on an empty jug preserves contents while NextInterleaved increments its counter. Finite complete-graph evidence is impossible without changing this model. An infinite-state evidence contract awaits user direction. No bound or exclusion is invented. APDieHarder, MCDieHarder, and DieHard have hosted matches. Module dispositions and legacy cleanup remain incomplete.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -1659,7 +1669,7 @@
           "module": "specifications/DieHard/DieHard.tla",
           "configuration": "specifications/DieHard/DieHard.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [
@@ -1669,7 +1679,17 @@
               "caseID": "die-hard"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549251040",
+              "artifactDigest": "sha256:4e40282bbecfffd2ae2c0a65a7938cd372de02a877264b2f3389205cd2d57b88",
+              "completeGraph": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 16 states, 96 labeled edges. TypeOK, NotSolved, and deadlock outcomes match in both TLC comparisons. Native and both TLC comparisons retain NotSolved counterexamples. Original module and configuration hashes match the pinned reference."
+            }
+          ]
         },
         {
           "module": "specifications/DieHard/MCDieHarder.tla",
@@ -5937,7 +5957,7 @@
           "module": "specifications/SpecifyingSystems/HourClock/APHourClock.tla",
           "configuration": "specifications/SpecifyingSystems/HourClock/APHourClock.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5947,13 +5967,23 @@
               "caseID": "ap-hour-clock"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549850663",
+              "artifactDigest": "sha256:ec1c69eb3fd39603059744b7763021621b5fde51f16b7dbeb229d8bb153f1024",
+              "completeGraph": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 12 initial states, 12 states, 12 labeled edges. HCini and deadlock outcomes match in both TLC comparisons. Original module and configuration hashes match the pinned reference."
+            }
+          ]
         },
         {
           "module": "specifications/SpecifyingSystems/HourClock/APHourClock2.tla",
           "configuration": "specifications/SpecifyingSystems/HourClock/APHourClock2.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5963,13 +5993,23 @@
               "caseID": "ap-hour-clock-2"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549625772",
+              "artifactDigest": "sha256:899f9e7242958f2552aca501d4ea322b98ad586edd534ebc9619c0590e13785a",
+              "completeGraph": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 12 initial states, 12 states, 12 labeled edges. HCini and deadlock outcomes match in both TLC comparisons. Original module and configuration hashes match the pinned reference."
+            }
+          ]
         },
         {
           "module": "specifications/SpecifyingSystems/HourClock/HourClock.tla",
           "configuration": "specifications/SpecifyingSystems/HourClock/HourClock.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5979,7 +6019,17 @@
               "caseID": "hour-clock"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549220910",
+              "artifactDigest": "sha256:d89be0473ebc495ab3b8d91cd134b7bd422ae50828e8ab68577499a36e446e88",
+              "completeGraph": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 12 initial states, 12 states, 12 labeled edges. HCini and deadlock outcomes match in both TLC comparisons. Original module and configuration hashes match the pinned reference."
+            }
+          ]
         },
         {
           "module": "specifications/SpecifyingSystems/HourClock/HourClock2.tla",
