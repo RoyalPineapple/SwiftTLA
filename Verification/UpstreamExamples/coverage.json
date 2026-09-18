@@ -4987,8 +4987,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/CachingMemory/InternalMemory.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "ISpec starts from IInit and interleaves Req, Do, and Rsp for each process. buf holds requests, returned values, or NoVal; memory and control use finite function domains. Send and Reply remain supplied operators. No Swift implementation exists. The CachingMemory copy has a different source blob from the other three copies, so each published input identity must remain pinned separately.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5008,15 +5008,15 @@
         },
         {
           "path": "specifications/SpecifyingSystems/CachingMemory/Memory.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured behavioral module",
+          "reason": "Spec existentially hides mem, ctl, and buf from InternalMemory.ISpec while retaining memInt. All three copies have Git blob a0ab89089d0062a5dceac814bfc63d8d2aa615c0. The abstract interface behavior requires temporal hiding, not omission of internal fields during serialization. No standalone configuration or Swift implementation establishes this module; disposition remains open.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/CachingMemory/MemoryInterface.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "interface dependency",
+          "reason": "This interface declares four-argument Send and Reply operator constants, InitMemInt, and Proc/Adr/Val domains. MReq is the union of read and write record shapes; NoVal is chosen outside Val. All four copies have Git blob 4dbed39777baa271154a04d9378fa3d25c36d336. No Swift implementation covers these operator bindings and typed request alternatives.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5112,8 +5112,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/InternalMemory.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "ISpec starts from IInit and interleaves Req, Do, and Rsp for each process. buf holds requests, returned values, or NoVal; memory and control use finite function domains. Send and Reply remain supplied operators. No Swift implementation exists. The CachingMemory copy has a different source blob from the other three copies, so each published input identity must remain pinned separately.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5126,8 +5126,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/MemoryInterface.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "interface dependency",
+          "reason": "This interface declares four-argument Send and Reply operator constants, InitMemInt, and Proc/Adr/Val domains. MReq is the union of read and write record shapes; NoVal is chosen outside Val. All four copies have Git blob 4dbed39777baa271154a04d9378fa3d25c36d336. No Swift implementation covers these operator bindings and typed request alternatives.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5292,8 +5292,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/InternalMemory.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "ISpec starts from IInit and interleaves Req, Do, and Rsp for each process. buf holds requests, returned values, or NoVal; memory and control use finite function domains. Send and Reply remain supplied operators. No Swift implementation exists. The CachingMemory copy has a different source blob from the other three copies, so each published input identity must remain pinned separately.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5341,15 +5341,15 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/Memory.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured behavioral module",
+          "reason": "Spec existentially hides mem, ctl, and buf from InternalMemory.ISpec while retaining memInt. All three copies have Git blob a0ab89089d0062a5dceac814bfc63d8d2aa615c0. The abstract interface behavior requires temporal hiding, not omission of internal fields during serialization. No standalone configuration or Swift implementation establishes this module; disposition remains open.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/MemoryInterface.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "interface dependency",
+          "reason": "This interface declares four-argument Send and Reply operator constants, InitMemInt, and Proc/Adr/Val domains. MReq is the union of read and write record shapes; NoVal is chosen outside Val. All four copies have Git blob 4dbed39777baa271154a04d9378fa3d25c36d336. No Swift implementation covers these operator bindings and typed request alternatives.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5385,8 +5385,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/InternalMemory.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "ISpec starts from IInit and interleaves Req, Do, and Rsp for each process. buf holds requests, returned values, or NoVal; memory and control use finite function domains. Send and Reply remain supplied operators. No Swift implementation exists. The CachingMemory copy has a different source blob from the other three copies, so each published input identity must remain pinned separately.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5406,15 +5406,15 @@
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/Memory.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured behavioral module",
+          "reason": "Spec existentially hides mem, ctl, and buf from InternalMemory.ISpec while retaining memInt. All three copies have Git blob a0ab89089d0062a5dceac814bfc63d8d2aa615c0. The abstract interface behavior requires temporal hiding, not omission of internal fields during serialization. No standalone configuration or Swift implementation establishes this module; disposition remains open.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/MemoryInterface.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "interface dependency",
+          "reason": "This interface declares four-argument Send and Reply operator constants, InitMemInt, and Proc/Adr/Val domains. MReq is the union of read and write record shapes; NoVal is chosen outside Val. All four copies have Git blob 4dbed39777baa271154a04d9378fa3d25c36d336. No Swift implementation covers these operator bindings and typed request alternatives.",
           "implementations": [],
           "dispositionComplete": false
         },
