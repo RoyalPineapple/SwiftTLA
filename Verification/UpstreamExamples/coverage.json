@@ -22,11 +22,12 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
-    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034",
-    "state": "timed out",
+    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353",
+    "state": "ordinary suite failed; exhaustive suites in progress",
     "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034",
-    "lastKnownFailure": "All three Swift suites exceeded 60 minutes on 2c145f294b4c8d5fff06ec4e63174bf65b38a677. Final samples show canonical initial-state mapping and key lookups, with graph-job footprints of 7.8 GB and 8.3 GB. The upstream job sorted nested CompiledValue collections in parallelReachableBoundedPort. Apple-platform checks and canonical export passed. The graph-allocation change did not restore CI.",
-    "candidateChange": "Exhaustive graph, scenario, and upstream suites now select optimized builds with Swift assertions enabled. Ordinary tests remain in debug mode. Every test, model bound, selected property, and job timeout remains required. Hosted validation of this build configuration remains pending.",
+    "lastKnownFailure": "The ordinary suite reported 23 issues across five suites on e7b761d110b22fcdaf48f9ea00146d3f0b9d18f6. Failures concern parser diagnostics, formal member parsing, expression rendering tests, documentation fixtures, and mutable action domains. Canonical export and Apple-platform checks passed. Exhaustive suites remain in progress. The previous run exceeded 60 minutes in all three Swift suites.",
+    "failureArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353/artifacts/10539223990",
+    "candidateChange": "Candidate fixes preserve parser diagnostics across module lowering and restore formal member parsing. Rendering tests now use operators instead of invariants. Documentation fixtures infer names. Mutable action domains must fail before emission. All 40 focused diagnostics passed on b2e05c5aa3067f66a92e5782c1b9ddc92f9384fe. Hosted validation of these fixes remains pending. Exhaustive suites use optimized builds with assertions enabled. Every test, model bound, selected property, and timeout remains required.",
     "timeoutArtifacts": [
       "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10538212552",
       "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10539107234",
@@ -92,6 +93,18 @@
       "testsPassed": 79,
       "result": "Canonical conversion builds edge sets directly, consumes state collection views, and uses key-presence lookups. Focused checks preserve complete labeled relations, reject malformed references and state fields, and retain native/TLC-reader/serialization contracts. CoffeeCan and both Dining configuration diagnostics passed.",
       "scope": "Local semantic regression evidence for the profiled graph-construction path. No large-configuration performance result or hosted match is claimed. No model bounds, checks, or timeout settings changed."
+    },
+    {
+      "session": "35365",
+      "sourceSHA": "b2e05c5aa3067f66a92e5782c1b9ddc92f9384fe",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'VariableOperatorTests|BoundVariableTests|CompilerBoundaryDiagnosticTests|StateExprMemberAccessTests|SymbolicActionExportTests|GeneratedMachineDocumentationTests/readmeClockExamplesMatchCompilingFixtures|GeneratedMachineDocumentationTests/guideExamplesMatchCompilingFixtures'",
+      "localLog": "/tmp/swifttla-ci-contract-fixes-validation.log",
+      "exitCode": 0,
+      "buildSeconds": 517.02,
+      "testSeconds": 0.044,
+      "testsPassed": 40,
+      "result": "Focused diagnostics passed for all five failing hosted suites. Direct, transitive, and named module imports retain parser diagnostics. Formal expression rendering preserves non-Boolean values. Formal member parsing and early mutable-domain rejection passed. Documentation snippets match fixtures that infer declaration names.",
+      "scope": "Local diagnostics only. The external documentation fixture build remains a hosted check. No configuration or DSL criterion gains hosted credit."
     }
   ],
   "nextFamily": "specifications/DiningPhilosophers",
