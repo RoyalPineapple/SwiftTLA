@@ -5022,15 +5022,15 @@
         },
         {
           "path": "specifications/SpecifyingSystems/CachingMemory/WriteThroughCache.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "Spec includes request, response, cache read/write/miss, eviction, and queue actions over nested finite functions and request/value alternatives. Positive QLen bounds queue insertion in the transition relation. The recursive local vmem function folds pending writes, and the module declares coherence and Memory refinement. The RealTime copy has the same Git blob aaa3f3a2be24ce20de4f1236110243acede242f2. No Swift implementation exists.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/CachingMemory/WriteThroughCacheInstanced.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "This module manually expands InternalMemory with mem replaced by wmem, then defines the cache behavior, recursive vmem function, and coherence invariant. Its Memory instantiation and abstract refinement theorem are commented out; selected refinements must come from the actual configured wrapper. The Liveness copy has the same Git blob cfce09ec6a535bf63889df4a3df224f830c19af4. No Swift implementation exists.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5355,8 +5355,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/WriteThroughCacheInstanced.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "Byte-identical to CachingMemory/WriteThroughCacheInstanced.tla at Git blob cfce09ec6a535bf63889df4a3df224f830c19af4. It supplies the cache transition relation to LiveWriteThroughCache. The liveness wrapper adds distinct weak/strong fairness groups, so the base behavior alone cannot establish the liveness configuration. No Swift implementation exists.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5448,8 +5448,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/WriteThroughCache.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "Byte-identical to CachingMemory/WriteThroughCache.tla at Git blob aaa3f3a2be24ce20de4f1236110243acede242f2. It supplies cache transitions and the recursive pending-write memory view to RTWriteThroughCache. The real-time wrapper adds scheduling and temporal bounds; identical base code does not establish those behaviors. No Swift implementation exists.",
           "implementations": [],
           "dispositionComplete": false
         },
