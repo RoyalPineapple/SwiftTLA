@@ -779,10 +779,10 @@ extension CompiledOperation {
             values.append(.integer(try nativeOperation { try _NativeMachineOperations.negate(operand) }))
         case .equal:
             let rhs = try popValue(from: &values)
-            values.append(.boolean(try popValue(from: &values) == rhs))
+            values.append(.boolean(try popValue(from: &values).formallyEquals(rhs)))
         case .notEqual:
             let rhs = try popValue(from: &values)
-            values.append(.boolean(try popValue(from: &values) != rhs))
+            values.append(.boolean(try !popValue(from: &values).formallyEquals(rhs)))
         case .lessThan:
             let rhs = try integer(popValue(from: &values))
             values.append(.boolean(try integer(popValue(from: &values)) < rhs))

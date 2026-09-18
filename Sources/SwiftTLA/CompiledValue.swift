@@ -61,6 +61,41 @@ package indirect enum CompiledValue: Hashable, Sendable, Comparable {
         self = Self.formalValue(value)
     }
 
+    // Compiler identity remains structural. Formal equality treats tuples and
+    // records as functions without replacing their stored representation.
+    // ponytail: set/map comparisons are quadratic; add canonical comparison keys
+    // only if formal-engine profiling shows this boundary is a bottleneck.
+    func formallyEquals(_ other: Self) -> Bool {
+        switch (self, other) {
+        case (.integer(let left), .integer(let right)): return left == right
+        case (.boolean(let left), .boolean(let right)): return left == right
+        case (.string(let left), .string(let right)), (.constant(let left), .constant(let right)):
+            return left.utf8.elementsEqual(right.utf8)
+        case (.controlLocation(let left), .controlLocation(let right)): return left == right
+        case (.set(let left), .set(let right)):
+            return left.allSatisfy { value in right.contains { value.formallyEquals($0) } }
+                && right.allSatisfy { value in left.contains { value.formallyEquals($0) } }
+        case (.tuple(let left), .tuple(let right)):
+            return left.count == right.count && zip(left, right).allSatisfy { $0.formallyEquals($1) }
+        default:
+            guard let left = formalFunctionEntries, let right = other.formalFunctionEntries,
+                  left.count == right.count else { return false }
+            return left.allSatisfy { entry in
+                right.contains { entry.key.formallyEquals($0.key) && entry.value.formallyEquals($0.value) }
+            }
+        }
+    }
+
+    private var formalFunctionEntries: [(key: Self, value: Self)]? {
+        switch self {
+        case .tuple(let elements):
+            elements.enumerated().map { (.integer($0.offset + 1), $0.element) }
+        case .record(let record): record.fields.map { ($0.key, $0.value) }
+        case .function(let entries): entries.map { ($0.key, $0.value) }
+        default: nil
+        }
+    }
+
     package func rendered(using layout: CompiledLayout) throws -> TLAValue {
         switch self {
         case .integer(let value):

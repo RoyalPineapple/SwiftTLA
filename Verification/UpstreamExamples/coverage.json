@@ -158,6 +158,28 @@
   },
   "localDiagnostics": [
     {
+      "session": "31820",
+      "sourceSHA": "384648698efa4e21f0b3cf25ee0f7817bac1828f",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SequenceIndexConversionTests|FormalValueEqualityTests|TLAModuleBundleTests|ImportedModuleConfigurationTests|CompiledExpressionEvaluationTests|ModelCollectionCanonicalizationTests'",
+      "exitCode": 0,
+      "buildSeconds": 525.13,
+      "testSeconds": 44.899,
+      "testsPassed": 46,
+      "result": "The original ZSequences conversion regression passes after formal equality compares tuple, record, and function contents extensionally. Equality and inequality preserve domains, order, byte-exact strings, and model-value identity while compiler equality and stored representations remain structural. Existing imported-module, evaluation, and collection canonicalization checks pass.",
+      "scope": "Base SHA plus the formal-equality fix and regression tests, committed after this clean diagnostic run. This fixes formal-engine equality only; it does not establish typed DSL conversion calls, native conversion checking, other collection operations' extensional semantics, or independent hosted equivalence. No configuration or DSL criterion gains credit."
+    },
+    {
+      "session": "29872",
+      "sourceSHA": "384648698efa4e21f0b3cf25ee0f7817bac1828f",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SequenceIndexConversionTests'",
+      "exitCode": 1,
+      "buildSeconds": 547.56,
+      "testSeconds": 0.068,
+      "testsPassed": 0,
+      "result": "The direct ZSequences conversion test failed ten value/round-trip equality assertions. Index-domain assertions passed. SeqFromZSeq produces a one-indexed function while the formal evaluator compares function and tuple representations structurally. The conversion helper is not verified.",
+      "scope": "Base source SHA plus the then-uncommitted Tests/SwiftTLATests/SequenceIndexConversionTests.swift regression (SHA256 85b5e52547692a658087e6da03a84bd1357ec2e6656e0bea1ab4ecd2dd82d517). No application/native execution or hosted TLC equivalence is established. The formal equality regression is resolved in session 31820; typed DSL calls and native/formal agreement remain missing."
+    },
+    {
       "session": "99959",
       "sourceSHA": "c838511e6e7b4fd35a2a8ed2170d9123b3d973bd",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CompiledSpecificationRendererTests|DependentRecordSetTests|CoffeeCanCorpusStateGraphTests|VoteProofCorpusRenderingTests|AlgorithmPlusCalRendererTests/rendersLegalQuantifiedBinder|CompiledLowererTraversalTests/deepActionBindingsRetainIdentities|UpstreamCorpusInventoryTests'",
@@ -3522,7 +3544,7 @@
       "path": "specifications/LeastCircularSubstring",
       "name": "Minimal Circular Substring",
       "audit": "reference inputs audited",
-      "gap": "Both configurations have complete hosted graph and property matches on the audited SHA, with their published character and length bounds, TypeInvariant, and Correctness unchanged. Neither upstream configuration selects the declared Termination property. ZSequences conversion operators still lack direct semantic tests. Module dispositions and legacy cleanup remain open, so the family is incomplete.",
+      "gap": "Both configurations have complete hosted graph and property matches on the audited SHA, with their published character and length bounds, TypeInvariant, and Correctness unchanged. Neither upstream configuration selects the declared Termination property. Direct ZSequences conversion regressions pass locally after fixing formal equality. Typed conversion calls, native/formal agreement, the helper disposition, and legacy cleanup remain open, so the family is incomplete.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3546,7 +3568,7 @@
         {
           "path": "specifications/LeastCircularSubstring/ZSequences.tla",
           "role": "operator helper",
-          "reason": "This stateless helper has no standalone configuration. Tests/SwiftTLATests/ImportedModuleConfigurationTests.swift covers generated bounded sequence initialization and length preservation after rotation. Tests/SwiftTLATests/TLAModuleBundleTests.swift covers one concrete rotation through the formal runtime and separate module export. No test references ZSeqFromSeq or SeqFromZSeq. Conversion round trips, empty inputs, element identity, and native/formal agreement still need direct acceptance coverage under AC-12 and AC-17.",
+          "reason": "This stateless helper has no standalone configuration. ImportedModuleConfigurationTests covers generated bounded sequence initialization and length preservation after rotation. TLAModuleBundleTests covers one concrete formal rotation and separate module export. SequenceIndexConversionTests covers both conversion directions, round trips, index domains, empty inputs, order, and integer, Boolean, string, and model-value identity. Its ten initial equality failures in session 29872 are resolved by formal-engine equality in session 31820. The operators still lack typed DSL calls and native/formal agreement evidence under AC-12 and AC-17; the helper is not complete.",
           "implementations": [
             "Sources/SwiftTLA/ZSequences.swift",
             "Sources/SwiftTLAMacros/ZSequences+Rotations.swift"
