@@ -20,6 +20,8 @@ struct DictionaryConfigurationTests {
             let bundle = try scenario.render().tlaBundle
             #expect(bundle.cfg.contains("CONSTANT capacity <- __SwiftTLAParameter1"))
             #expect(bundle.tla.contains("__SwiftTLAParameter1 == ["))
+            #expect(bundle.tla.contains(
+                #"hasCapacity == ((\E jug \in jugs : (\E amount \in {3, 5} : (contents[jug] = amount))) = (~(Cardinality(jugs) = 0)))"#))
         }
         let configuration = try ConfiguredDictionaryValues.Configuration(
             jugs: ["small", "big"], capacity: ["small": 3, "big": 5])

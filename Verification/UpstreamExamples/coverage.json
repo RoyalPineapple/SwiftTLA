@@ -108,11 +108,22 @@
       {
         "caseID": "scenarios",
         "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549396911",
-        "reason": "The job exceeded 45 minutes. Before cancellation, both empty-dictionary scenarios reported hasCapacity outcome differences. Both Queens scenarios reported incomplete graphs. CoffeeCan1000Beans exceeded its 600-second TLC limit during initialization. None of these outcomes establishes equivalence."
+        "reason": "The job exceeded 45 minutes. Both empty-dictionary scenarios reported hasCapacity outcome differences because exported existential scopes include the outer equality. The shared scope-delimiter fix targets this defect too. Both Queens scenarios reported incomplete graphs. CoffeeCan1000Beans exceeded its 600-second TLC limit during initialization. None of these outcomes establishes equivalence."
       }
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "30820",
+      "sourceSHA": "5d25e17554a4c0e8d6544c57bfe64b8754cde75d",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CompiledSpecificationRendererTests|QueensCorpusStateGraphTests|NQueensCorpusStateGraphTests|IndependentAtomicStepTests|ParameterizedAtomicStepTests'",
+      "exitCode": 0,
+      "buildSeconds": 526.80,
+      "testSeconds": 18.231,
+      "testsPassed": 31,
+      "result": "Sibling lexical scopes retain explicit delimiters in state and action output. Both Queens variants preserve complete native graphs, generated transitions, and selected properties. Independent and parameterized atomic-step contracts pass.",
+      "scope": "Diagnostic evidence supports the renderer fix for both FourQueens configurations and AC-08/AC-09. Independent hosted comparisons remain pending. No configuration or DSL criterion gains credit."
+    },
     {
       "session": "85523",
       "sourceSHA": "2641959b1ede6e7ef11ab7963820462e027244b3",
