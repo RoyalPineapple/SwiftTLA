@@ -4034,8 +4034,8 @@
       "path": "specifications/N-Queens",
       "name": "The N-Queens Puzzle",
       "audit": "reference inputs audited",
-      "gap": "Both FourQueens configurations have exact reference inputs. Expected NoSolutions failures still need complete hosted graph and property comparisons. The Toolbox module copies exactly match their corresponding root modules. Direct-TLA and PlusCal remain separate required configurations. Legacy cleanup remains open.",
-      "legacyCleanupComplete": false,
+      "gap": "Both FourQueens configurations have exact reference inputs. Complete hosted graph and property comparisons remain required, including the expected NoSolutions failures. All six module dispositions are complete. The Toolbox copies match the pinned root modules. Each variant has one typed implementation and no remaining legacy caller. Hosted CI 35337970391 passes complete application-successor and native-graph comparisons for both variants. The retained TLC trace remains a parser regression fixture, not admission evidence.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/N-Queens/Queens.tla",
@@ -4049,11 +4049,11 @@
         {
           "path": "specifications/N-Queens/Queens.toolbox/FourQueens/MC.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The wrapper binds N=4 and aliases Spec, TypeInvariant, and Invariant. The model-owned FourQueens scenario preserves those checks and NoSolutions. It disables deadlock checking exactly as the pinned configuration requires. The declared Termination property is not selected upstream.",
           "implementations": [
             "Sources/UpstreamParity/Examples/Queens.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/N-Queens/Queens.toolbox/FourQueens/Queens.tla",
@@ -4076,11 +4076,11 @@
         {
           "path": "specifications/N-Queens/QueensPluscal.toolbox/FourQueens/MC.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The wrapper binds N=4 and aliases LiveSpec, TypeInvariant, Invariant, and Termination. The model-owned FourQueens scenario preserves these checks, weak fairness, and NoSolutions. Deadlock checking remains enabled. The complete native graph retains the Done state and Terminating self-loop.",
           "implementations": [
             "Sources/UpstreamParity/Examples/NQueens.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/N-Queens/QueensPluscal.toolbox/FourQueens/QueensPluscal.tla",
