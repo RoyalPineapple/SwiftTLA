@@ -103,7 +103,13 @@ struct CompilerBoundaryDiagnosticTests {
         #expect(expectedDiagnostic.actual == "unknown Algorithm declaration 'UnsupportedAlgorithmConstruct'")
         #expect(expectedDiagnostic.nextSafeAction == "Use a declaration supported by Algorithm.")
 
-        for specification in [parsed, TLASpec("ImportingRejected") { Import(parsed) }] {
+        let imported = TLASpec("ImportingRejected") { Import(parsed) }
+        for specification in [
+            parsed,
+            imported,
+            TLASpec("TransitiveImport") { Import(imported) },
+            TLASpec("InstantiatingRejected") { Instance("RejectedInstance", of: parsed) }
+        ] {
             do {
                 _ = try specification.compile()
                 Issue.record("A parser diagnostic must prevent compilation publication.")

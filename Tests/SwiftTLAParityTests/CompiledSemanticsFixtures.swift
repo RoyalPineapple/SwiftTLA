@@ -42,7 +42,8 @@ func renderedStateExpression(
     name: "StateExpressionRendering",
     variables: variables.map { NamedVar(name: $0, initial: .int(0)) },
     actions: [NamedAction(name: "Tick", body: .guard_(.bool(true)))],
-    invariants: [NamedStatePredicate(name: "Rendered", body: expression)]
+    invariants: [],
+    formalOperatorDefinitions: [FormalOperatorDefinition(name: "Rendered", parameters: [], body: expression)]
   ).compile().render().tlaBundle.tla
 }
 

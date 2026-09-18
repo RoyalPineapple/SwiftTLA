@@ -11,9 +11,9 @@ public struct ClockModel: Sendable {
     public static var spec: TLASpec {
         #spec("Clock") {
             Algorithm("Clock", scoped: { scope in
-                let hour = scope.sharedVar(_name: "hour", in: 0...23)
-                let minute = scope.sharedVar(_name: "minute", in: 0...59)
-                let second = scope.sharedVar(_name: "second", in: 0...59)
+                let hour = scope.sharedVar(in: 0...23)
+                let minute = scope.sharedVar(in: 0...59)
+                let second = scope.sharedVar(in: 0...59)
 
                 While(Step.tick, true) {
                     Either {

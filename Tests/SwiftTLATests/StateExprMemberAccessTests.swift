@@ -13,6 +13,8 @@ import SwiftTLAMacros
         #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression("s.subsets")) == StateExpr.powerSet(s))
         #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression("s.domain")) == StateExpr.domain(s))
         #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression("s.count")) == StateExpr.tupleLength(s))
+        #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression("s.head")) == StateExpr.tupleHead(s))
+        #expect(SpecParser.decodeStateExpr(try parseSpecTestExpression("s.tail")) == StateExpr.tupleTail(s))
     }
 
     @Test func parseUnknownPropertyAsRecordAccess() throws {

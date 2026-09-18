@@ -978,6 +978,10 @@ final class ParserSession {
                 default: return nil
                 }
             case "cardinality": return .cardinality(base)
+            case "flattened": return .unionAll(base)
+            case "domain": return .domain(base)
+            case "head": return .tupleHead(base)
+            case "tail": return .tupleTail(base)
             case "range":
                 return .operatorApplication(.reference("Range", arity: 1), [.value(base)])
             case "isEmpty": return .equal(.cardinality(base), .value(.int(0)))

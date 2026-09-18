@@ -83,6 +83,7 @@ extension TLASpec {
 
 extension TLASpec {
   func loweredSourceModel() throws -> TLASpec {
+    if let diagnostic = diagnostics.first { throw diagnostic }
     guard sourceAlgorithms.count <= 1 else {
       throw CompilationDiagnostic(
         code: .duplicateAlgorithm,

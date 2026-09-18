@@ -44,11 +44,16 @@ struct SymbolicActionExportTests {
                 ActionBinding(name: "member", domain: .integerRange(.int(1), .variable("value")), generatedSwiftType: "Int")
             ])
         ])
-        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: spec.compile()))
-        var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "StateDependent", program: program))
-        let generated = try emitter.exportDeclarations().map(\.description).joined(separator: "\n")
-        #expect(generated.contains("an immutable domain independent of machine state"))
-        #expect(!generated.contains("_actions.append"))
+        do {
+            _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: spec.compile()))
+            Issue.record("A mutable action domain was accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unsupportedGeneratedValueShape)
+            #expect(diagnostic.stage == .lowering)
+            #expect(diagnostic.path == "actions.select.bindings.member.domain")
+            #expect(diagnostic.expected == "an immutable domain independent of machine state")
+            #expect(diagnostic.actual == "stateVariable")
+        }
     }
 
     @Test("per-instance fairness rejects mutable populations before rendering")
