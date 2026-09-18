@@ -3522,7 +3522,7 @@
       "path": "specifications/LeastCircularSubstring",
       "name": "Minimal Circular Substring",
       "audit": "reference inputs audited",
-      "gap": "Both configurations retain their published character and length bounds, TypeInvariant, and Correctness. Neither upstream configuration selects the declared Termination property. Small has a hosted match. Medium still lacks complete hosted graph and property comparisons. ZSequences conversion operators lack direct semantic tests. Legacy cleanup remains open.",
+      "gap": "Both configurations have complete hosted graph and property matches on the audited SHA, with their published character and length bounds, TypeInvariant, and Correctness unchanged. Neither upstream configuration selects the declared Termination property. ZSequences conversion operators still lack direct semantic tests. Module dispositions and legacy cleanup remain open, so the family is incomplete.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3559,7 +3559,7 @@
           "module": "specifications/LeastCircularSubstring/MCLeastCircularSubstring.tla",
           "configuration": "specifications/LeastCircularSubstring/MCLeastCircularSubstringMedium.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -3569,7 +3569,16 @@
               "caseID": "least-circular-substring-medium"
             }
           ],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167/artifacts/10558541916",
+            "artifactDigest": "sha256:83a381fd482f8505f0fe0de2060eff313ca322bda5b83a3e2777109483643396",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 9841 initial states, 1007232 states, 1007232 labeled edges. TypeInvariant, Correctness, and deadlock are satisfied in both TLC comparisons. Original modules, configuration, and pinned tools match. CharSetSize=3 and MaxStringLength=8 are unchanged; the upstream configuration does not select Termination."
+          }]
         },
         {
           "module": "specifications/LeastCircularSubstring/MCLeastCircularSubstring.tla",
