@@ -243,6 +243,7 @@ package struct CanonicalGraph: Equatable, Sendable {
     package let states: [CanonicalStateKey: CanonicalState]
     /// The labeled transition relation; repeated evaluation witnesses add no behavior.
     package let edges: Set<CanonicalEdge>
+    package let observedActions: Set<String>
 
     package init(
         initialStates: [CanonicalState],
@@ -265,6 +266,7 @@ package struct CanonicalGraph: Equatable, Sendable {
         }
 
         let transitions = edges as? Set<CanonicalEdge> ?? Set(edges)
+        var observedActions = Set<String>()
         for edge in transitions {
             guard stateTable.index(forKey: edge.source) != nil else {
                 throw CanonicalGraphError.edgeStateMissing(edge.source)
@@ -272,11 +274,13 @@ package struct CanonicalGraph: Equatable, Sendable {
             guard stateTable.index(forKey: edge.target) != nil else {
                 throw CanonicalGraphError.edgeStateMissing(edge.target)
             }
+            observedActions.insert(edge.action)
         }
 
         self.initialStateKeys = initialKeys
         self.states = stateTable
         self.edges = transitions
+        self.observedActions = observedActions
     }
 
     /// Export native topology only; this does not issue a property-checking verdict.
@@ -462,8 +466,8 @@ package struct GraphRun: Equatable, Sendable {
         outcome: GraphRunOutcome,
         trace: GraphTrace? = nil
     ) throws {
-        for edge in graph.edges where !observableActions.contains(edge.action) {
-            throw GraphRunError.graphActionUndeclared(edge.action)
+        for action in graph.observedActions where !observableActions.contains(action) {
+            throw GraphRunError.graphActionUndeclared(action)
         }
         if case .deadlock(let state) = outcome, graph.states[state] == nil {
             throw GraphRunError.deadlockStateMissing(state)

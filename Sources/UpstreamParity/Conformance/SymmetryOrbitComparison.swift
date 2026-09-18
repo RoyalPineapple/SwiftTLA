@@ -189,7 +189,7 @@ package func compareSymmetryOrbits(
     )])
   }
   let undeclaredActions = Set(runs.flatMap { run in
-    run.graph.edges.map(\.action).filter { !declaredActions.contains($0) }
+    run.graph.observedActions.subtracting(declaredActions)
   })
   guard undeclaredActions.isEmpty else {
     return .difference([SymmetryOrbitDifference(

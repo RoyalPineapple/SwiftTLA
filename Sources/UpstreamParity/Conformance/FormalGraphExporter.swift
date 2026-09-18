@@ -64,7 +64,7 @@ package struct FormalGraphExporter: Sendable {
     return try GraphRun(
       isComplete: exploration.isComplete,
       graph: graph,
-      observableActions: Set(edges.lazy.map(\.action)),
+      observableActions: graph.observedActions,
       outcome: try canonicalOutcome(
         exploration.outcome, states: states),
       trace: try canonicalTrace(

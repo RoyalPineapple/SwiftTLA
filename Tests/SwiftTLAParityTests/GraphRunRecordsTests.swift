@@ -256,7 +256,7 @@ struct GraphRunRecordsTests {
       GraphRun(
         isComplete: true,
         graph: graph,
-        observableActions: Set(graph.edges.map(\.action)),
+        observableActions: graph.observedActions,
         outcome: .noViolation
       ),
       to: url

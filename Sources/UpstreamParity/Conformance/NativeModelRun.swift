@@ -201,7 +201,7 @@ package struct NativeModelRun: Sendable {
     }
     let canonical = try CanonicalGraph(native, states: states, renderedActionNames: renderedNames)
     let graph = try GraphRun(isComplete: true, graph: canonical,
-      observableActions: Set(canonical.edges.lazy.map(\.action)), outcome: .noViolation)
+      observableActions: canonical.observedActions, outcome: .noViolation)
     try self.init(rendered: rendered, graph: graph, checks: .init(properties: properties, deadlock: deadlock),
       reachabilityTargets: reachabilityTargets)
   }

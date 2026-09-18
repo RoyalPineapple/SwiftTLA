@@ -244,7 +244,7 @@ package struct TLCGraphReader: Sendable {
         return try GraphRun(
             isComplete: outcome == .completed,
             graph: graph,
-            observableActions: Set(edges.lazy.map(\.action)),
+            observableActions: graph.observedActions,
             outcome: graphOutcome(outcome)
         )
     }

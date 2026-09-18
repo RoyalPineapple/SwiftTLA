@@ -86,6 +86,14 @@ struct CanonicalGraphTests {
         #expect(setGraph.states == table)
         #expect(setGraph.edges == Set(edges))
         #expect(setGraph.edges.count == 3)
+        #expect(setGraph.observedActions == ["advance", "reset", "stay"])
+        #expect(throws: GraphRunError.graphActionUndeclared("stay")) {
+            try GraphRun(isComplete: true, graph: setGraph, observableActions: ["advance", "reset"], outcome: .noViolation)
+        }
+        let declared = setGraph.observedActions.union(["unused"])
+        let run = try GraphRun(isComplete: true, graph: setGraph, observableActions: declared, outcome: .noViolation)
+        #expect(run.graph == setGraph)
+        #expect(run.observableActions == declared)
     }
 
     @Test("prebuilt edge sets still reject missing initial states and endpoints")

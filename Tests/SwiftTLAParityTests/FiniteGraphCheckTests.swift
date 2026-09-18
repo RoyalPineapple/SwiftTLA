@@ -41,7 +41,7 @@ struct FiniteGraphCheckTests {
     let native = try declaration.sourceModel.nativeRun(rendered: rendered, checkingDeadlock: false,
       scenario: scenario, for: finiteGraphCase)
     let renderedNames = Set(finiteGraphCase.renderedActions.map(\.renderedName))
-    #expect(Set(native.graph.graph.edges.map(\.action)).isSubset(of: renderedNames))
+    #expect(native.graph.graph.observedActions.isSubset(of: renderedNames))
     #expect(native.graph.isComplete, "\(declaration.id)")
     #expect(!native.graph.graph.initialStateKeys.isEmpty, "\(declaration.id)")
     if let scenario {
@@ -52,14 +52,13 @@ struct FiniteGraphCheckTests {
     #expect(Set(native.checks.properties.keys) == rendered.checkNames, "\(declaration.id)")
     #expect((native.checks.deadlock != nil) == rendered.checksDeadlock, "\(declaration.id)")
     if rendered.checksDeadlock {
-      let enabledStates = Set(native.graph.graph.edges.map(\.source))
-      let terminalStates = Set(native.graph.graph.states.keys).subtracting(enabledStates)
       switch try #require(native.checks.deadlock) {
       case .satisfied:
         break
       case .violated(let trace):
         try trace.validate(in: native.graph.graph)
-        #expect(terminalStates.contains(try #require(trace.steps.last?.state)))
+        let final = try #require(trace.steps.last?.state)
+        #expect(!native.graph.graph.edges.contains { $0.source == final })
       case .unavailable:
         Issue.record("Missing deadlock result for \(declaration.id)")
       case .reached, .unreachable:
