@@ -6714,7 +6714,7 @@
       "id": "AC-08",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Sources/UpstreamParity/Conformance/GraphComparison.swift compares complete initial-state sets, state identities, and labeled edges. Tests/SwiftTLAParityTests/GraphComparisonTests.swift rejects equal counts with different edges. Tests/SwiftTLAParityTests/TLCGraphReaderTests.swift rejects early violations as complete graphs. Tests/SwiftTLAParityTests/TLCPropertyCheckTests.swift preserves shared graph bytes and rejects equal property outcomes over different graphs. Independent hosted comparisons for the required configurations remain unverified.",
       "evidence": []
     },
     {
@@ -6728,7 +6728,7 @@
       "id": "AC-10",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Complete acceptance evidence has not been audited. Existing implementation and tests do not establish full verification.",
+      "reason": "Tests/SwiftTLAParityTests/GraphComparisonTests.swift rejects matching timeouts, execution errors, and incomplete graphs. Tests/SwiftTLAParityTests/TLCGraphReaderTests.swift checks process timeouts, malformed streams, closure, counts, and body digests. Tests/SwiftTLAParityTests/TLCPropertyCheckTests.swift rejects unavailable branches and incomplete shared graphs. Tests/SwiftTLAParityTests/ScenarioValidationTests.swift rejects incomplete expected failures and missing comparison results. Complete resource-limit and unsupported-construct acceptance coverage remains unaudited. Independent hosted evidence remains unverified.",
       "evidence": []
     },
     {
