@@ -23,7 +23,7 @@
   },
   "ci": {
     "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391",
-    "state": "in_progress",
+    "state": "success",
     "appleAdoptionResult": {
       "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
       "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391/job/105577116179",
@@ -67,17 +67,17 @@
       "scope": "The scenario suite completed within its unchanged 60-minute limit. Registered native graphs, declared outcomes, and scenario admission contracts passed. These tests do not establish independent TLC agreement."
     },
     "finiteGraphSuiteResult": {
-      "sourceSHA": "b379f4a0e784a1d7bbb8468dbbdabdbc1d920ee1",
-      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/job/105560516479",
-      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/artifacts/10543955902",
-      "artifactDigest": "sha256:936eb615971312bcd898ca9bae122ab2fef7fb73e56af653e19bac59f63b2627",
-      "buildSeconds": 1671.10,
-      "testSeconds": 1901.069,
+      "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391/job/105577116331",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391/artifacts/10546103138",
+      "artifactDigest": "sha256:0edf1ce0c2547f14e162c32b4d56837297640338dcbcc1b679f573bf1b5a4a8c",
+      "buildSeconds": 1995.09,
+      "testSeconds": 2428.853,
       "testsPassed": 25,
-      "jobConclusion": "cancelled",
-      "scope": "All tests passed and diagnostics uploaded, but final job cleanup crossed the one-hour deadline. The hosted check remains failed. These tests do not establish independent TLC agreement."
+      "jobConclusion": "success",
+      "scope": "All tests passed, diagnostics uploaded, and job cleanup completed within the 75-minute limit. The aggregate CI check passed. These tests do not establish independent TLC agreement."
     },
-    "candidateChange": "Only the finite-graph CI job receives a 75-minute limit. Its measured build and passing tests consumed 3572.169 seconds before final cleanup. The added headroom changes runner policy, not model bounds, graph completeness, property checks, or TLC process limits. Every other job keeps its existing limit. A green hosted rerun remains required.",
+    "candidateChange": "Only the finite-graph CI job receives a 75-minute limit. The green rerun used 4423.943 seconds for its build and passing tests before final cleanup. The added headroom changes runner policy, not model bounds, graph completeness, property checks, or TLC process limits. Every other job keeps its existing limit. All CI jobs passed on 983b819132b07c8bb4634dad2f7c81ff9b9997b5.",
     "timeoutArtifacts": [
       "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10538212552",
       "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034/artifacts/10539107234",
