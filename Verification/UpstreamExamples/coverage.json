@@ -3310,7 +3310,7 @@
         {
           "path": "specifications/LeastCircularSubstring/ZSequences.tla",
           "role": "operator helper",
-          "reason": "This stateless module supplies zero-indexed sequences, length, indices, rotations, and lexicographic order. Swift retains ZSeqFromSeq and SeqFromZSeq, but direct semantic tests are missing. No standalone configuration exists.",
+          "reason": "This stateless helper has no standalone configuration. Tests/SwiftTLATests/ImportedModuleConfigurationTests.swift covers generated bounded sequence initialization and length preservation after rotation. Tests/SwiftTLATests/TLAModuleBundleTests.swift covers one concrete rotation through the formal runtime and separate module export. No test references ZSeqFromSeq or SeqFromZSeq. Conversion round trips, empty inputs, element identity, and native/formal agreement still need direct acceptance coverage under AC-12 and AC-17.",
           "implementations": [
             "Sources/SwiftTLA/ZSequences.swift",
             "Sources/SwiftTLAMacros/ZSequences+Rotations.swift"
