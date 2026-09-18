@@ -21,8 +21,9 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
-    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35304163847",
-    "state": "timed out",
+    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35308096247",
+    "state": "in progress",
+    "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35304163847",
     "lastKnownFailure": "The ordinary and finite-graph Swift jobs exceeded 60 minutes. Both test processes sustained one CPU core with roughly 1.4-1.6 GB resident memory. The upstream job passed all 23 tests. The earlier compile error is resolved. The old sampler missed swiftpm-testing-helper, so these artifacts contain process lists but no stacks.",
     "timeoutArtifacts": [
       "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35304163847/artifacts/10531863228",
@@ -45,6 +46,17 @@
       "testsPassed": 8,
       "result": "The inventory and ledger contracts passed. Both Dining configurations produced one initial state, 67 states, and 335 edges. Native property checks and graph-edge dispatch replay passed.",
       "scope": "Local diagnostic summary, not independent TLC evidence or a hosted match."
+    },
+    {
+      "session": "30746",
+      "sourceSHA": "40d946ca906b2df8f04331d9bde6ed89ec77ab21",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test LeastCircularSubstringCorpusModuleContractTests",
+      "exitCode": 0,
+      "buildSeconds": 581.53,
+      "testSeconds": 1.046,
+      "testsPassed": 2,
+      "result": "Both configurations retained typed initial values: 127 for Small and 9,841 for Medium. These checks finished in 1.046 seconds. Module rendering finished in 0.001 seconds. This isolated run did not reproduce a slow initialization or rendering phase.",
+      "scope": "Initialization and rendering only. No complete graph, property comparison, or hosted match. Coverage states remain unchanged."
     }
   ],
   "nextFamily": "specifications/DiningPhilosophers",
