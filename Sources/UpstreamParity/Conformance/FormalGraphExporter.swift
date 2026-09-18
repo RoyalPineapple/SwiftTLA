@@ -39,30 +39,32 @@ package struct FormalGraphExporter: Sendable {
       }
       return state
     }
-    let edges = try exploration.graph.transitions.flatMap { source, transitions in
+    var edges = Set<CanonicalEdge>()
+    edges.reserveCapacity(exploration.graph.transitions.values.reduce(0) { $0 + $1.count })
+    for (source, transitions) in exploration.graph.transitions {
       guard let sourceState = states[source] else {
         throw FormalGraphExportError.transitionStateMissing(source.id)
       }
-      return try transitions.map { transition in
+      for transition in transitions {
         guard let targetState = states[transition.target] else {
           throw FormalGraphExportError.transitionStateMissing(transition.target.id)
         }
-        return CanonicalEdge(
+        edges.insert(CanonicalEdge(
           source: sourceState.key,
           action: renderedActionNames[transition.action] ?? transition.action,
           target: targetState.key
-        )
+        ))
       }
     }
     let graph = try CanonicalGraph(
       initialStates: initialStates,
-      states: Array(states.values),
+      states: states.values,
       edges: edges
     )
     return try GraphRun(
       isComplete: exploration.isComplete,
       graph: graph,
-      observableActions: Set(edges.map(\.action)),
+      observableActions: Set(edges.lazy.map(\.action)),
       outcome: try canonicalOutcome(
         exploration.outcome, states: states),
       trace: try canonicalTrace(
@@ -73,10 +75,12 @@ package struct FormalGraphExporter: Sendable {
   package func canonicalStates(
     _ exploration: FiniteExploration
   ) throws -> [StateGraph.StateID: CanonicalState] {
-    try Dictionary(
-      uniqueKeysWithValues: exploration.graph.states.map { identifier, projection in
-        (identifier, try CanonicalState(projection))
-      })
+    var states: [StateGraph.StateID: CanonicalState] = [:]
+    states.reserveCapacity(exploration.graph.states.count)
+    for (identifier, projection) in exploration.graph.states {
+      states[identifier] = try CanonicalState(projection)
+    }
+    return states
   }
 
   private func canonicalOutcome(

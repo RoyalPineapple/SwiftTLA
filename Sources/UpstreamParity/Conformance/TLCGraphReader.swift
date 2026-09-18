@@ -227,22 +227,24 @@ package struct TLCGraphReader: Sendable {
             return state
         }
         let initialStates = try stream.initialStates.map(canonicalRepresentative)
-        let edges = try stream.transitions.map { transition in
-            CanonicalEdge(
+        var edges = Set<CanonicalEdge>()
+        edges.reserveCapacity(stream.transitions.count)
+        for transition in stream.transitions {
+            edges.insert(CanonicalEdge(
                 source: try canonicalRepresentative(transition.source).key,
                 action: transition.action,
                 target: try canonicalRepresentative(transition.target).key
-            )
+            ))
         }
         let graph = try CanonicalGraph(
             initialStates: initialStates,
-            states: Array(canonicalStatesByFingerprint.values),
+            states: canonicalStatesByFingerprint.values,
             edges: edges
         )
         return try GraphRun(
             isComplete: outcome == .completed,
             graph: graph,
-            observableActions: Set(stream.transitions.map(\.action)),
+            observableActions: Set(edges.lazy.map(\.action)),
             outcome: graphOutcome(outcome)
         )
     }

@@ -116,9 +116,11 @@ package struct NativeModelRun: Sendable {
       let invocation = try native.formalCall(for: action).description
       return renderedNames[invocation] ?? invocation
     }
-    let states = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
-      ($0, try CanonicalState(native.formalProjection(of: $0)))
-    })
+    var states: [Machine.Snapshot: CanonicalState] = [:]
+    states.reserveCapacity(native.transitions.count)
+    for snapshot in native.transitions.keys {
+      states[snapshot] = try CanonicalState(native.formalProjection(of: snapshot))
+    }
     func stateKey(_ snapshot: Machine.Snapshot) throws -> CanonicalStateKey {
       guard let state = states[snapshot] else { throw CanonicalGraphError.missingNativeSnapshot }
       return state.key
@@ -199,7 +201,7 @@ package struct NativeModelRun: Sendable {
     }
     let canonical = try CanonicalGraph(native, states: states, renderedActionNames: renderedNames)
     let graph = try GraphRun(isComplete: true, graph: canonical,
-      observableActions: Set(canonical.edges.map(\.action)), outcome: .noViolation)
+      observableActions: Set(canonical.edges.lazy.map(\.action)), outcome: .noViolation)
     try self.init(rendered: rendered, graph: graph, checks: .init(properties: properties, deadlock: deadlock),
       reachabilityTargets: reachabilityTargets)
   }

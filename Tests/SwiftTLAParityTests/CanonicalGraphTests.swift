@@ -67,6 +67,54 @@ struct CanonicalGraphTests {
         #expect(forward.edges.contains(.init(source: first.key, action: "reset", target: second.key)))
     }
 
+    @Test("prebuilt edge sets and state views preserve the complete labeled relation")
+    func preservesStateViewsAndEdgeSets() throws {
+        let first = CanonicalState(bindings: ["counter": .integer(1)])
+        let second = CanonicalState(bindings: ["counter": .integer(2)])
+        let table = try canonicalStateTable([first, second])
+        let edges = [
+            CanonicalEdge(source: first.key, action: "advance", target: second.key),
+            CanonicalEdge(source: first.key, action: "reset", target: second.key),
+            CanonicalEdge(source: first.key, action: "advance", target: second.key),
+            CanonicalEdge(source: second.key, action: "stay", target: second.key)
+        ]
+        let arrayGraph = try CanonicalGraph(initialStates: [first, second], states: [first, second], edges: edges)
+        let setGraph = try CanonicalGraph(initialStates: [second, first], states: table.values, edges: Set(edges))
+        #expect(setGraph == arrayGraph)
+        #expect(setGraph.initialStateKeys == Set(table.keys))
+        #expect(setGraph.states == table)
+        #expect(setGraph.edges == Set(edges))
+        #expect(setGraph.edges.count == 3)
+    }
+
+    @Test("prebuilt edge sets still reject missing initial states and endpoints")
+    func rejectsMissingStateReferences() throws {
+        let present = CanonicalState(bindings: ["counter": .integer(1)])
+        let missing = CanonicalState(bindings: ["counter": .integer(2)])
+        let table = try canonicalStateTable([present])
+        #expect(throws: CanonicalGraphError.initialStateMissing(missing.key)) {
+            try CanonicalGraph(initialStates: [missing], states: table.values, edges: Set<CanonicalEdge>())
+        }
+        for edge in [CanonicalEdge(source: missing.key, action: "step", target: present.key),
+                     CanonicalEdge(source: present.key, action: "step", target: missing.key)] {
+            #expect(throws: CanonicalGraphError.edgeStateMissing(missing.key)) {
+                try CanonicalGraph(initialStates: [present], states: table.values, edges: Set([edge]))
+            }
+        }
+    }
+
+    @Test("state views reject missing and different variable names")
+    func rejectsInconsistentStateBindings() throws {
+        let first = CanonicalState(bindings: ["counter": .integer(1)])
+        let alternatives: [[String: CanonicalValue]] = [["other": .integer(1)], [:]]
+        for bindings in alternatives {
+            let table = try canonicalStateTable([first, CanonicalState(bindings: bindings)])
+            #expect(throws: CanonicalGraphError.self) {
+                try CanonicalGraph(initialStates: [first], states: table.values, edges: Set<CanonicalEdge>())
+            }
+        }
+    }
+
     @Test("canonical values are stable across unordered collection insertion")
     func canonicalizesNestedUnorderedValues() throws {
         let left = CanonicalValue.record([
