@@ -5056,10 +5056,12 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/Channel.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "behavior dependency",
+          "reason": "This copy matches AsynchronousInterface/Channel.tla at upstream blob e2039c9cb5535894a63c99a4e9263ca96ca7d39a. ChannelModel supplies its typed record and Send/Rcv behavior. Consuming configurations still need their own evidence.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Channel.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/ChannelRefinement.tla",
@@ -5084,10 +5086,12 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/HourClock.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "behavior dependency",
+          "reason": "This copy matches HourClock/HourClock.tla at upstream blob f2b7b242d1db6635ed0721a4a116e465d33c84a9. HourClockModel supplies its twelve-hour transition cycle. Consuming configurations still need their own evidence.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/HourClock.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/InternalMemory_proof.tla",
@@ -5156,10 +5160,12 @@
         },
         {
           "path": "specifications/SpecifyingSystems/FIFO/Channel.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "behavior dependency",
+          "reason": "This copy matches AsynchronousInterface/Channel.tla at upstream blob e2039c9cb5535894a63c99a4e9263ca96ca7d39a. ChannelModel supplies its typed record and Send/Rcv behavior. FIFO composition and its configurations remain separate requirements.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Channel.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/FIFO/FIFO.tla",
@@ -5260,10 +5266,12 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/HourClock.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "behavior dependency",
+          "reason": "This copy matches HourClock/HourClock.tla at upstream blob f2b7b242d1db6635ed0721a4a116e465d33c84a9. HourClockModel supplies the safety behavior without fairness. LiveHourClock adds distinct temporal requirements.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/HourClock.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/InternalMemory_proof.tla",
@@ -5351,10 +5359,12 @@
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/HourClock.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "behavior dependency",
+          "reason": "This copy matches HourClock/HourClock.tla at upstream blob f2b7b242d1db6635ed0721a4a116e465d33c84a9. HourClockModel supplies the discrete clock behavior. Real-time composition and its configuration remain separate requirements.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/HourClock.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/InternalMemory_proof.tla",
