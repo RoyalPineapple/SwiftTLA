@@ -181,6 +181,17 @@
       "testsPassed": 97,
       "result": "Graph construction derives observed action names during endpoint validation. Native, formal, TLC, and symmetry consumers reuse those names without repeated edge scans. Undeclared actions still fail. Complete graph, serialization, mismatch-trace, symmetry, CoffeeCan, and Dining diagnostics passed.",
       "scope": "Local semantic diagnostics only. The full FiniteGraphCheckTests suite and large-configuration performance remain hosted checks. No configuration or DSL criterion gains hosted credit."
+    },
+    {
+      "session": "48029",
+      "sourceSHA": "b9899bc4b648bf9bc466c6188a855822175a28af",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test GraphComparisonTests",
+      "exitCode": 0,
+      "buildSeconds": 746.01,
+      "testSeconds": 0.001,
+      "testsPassed": 8,
+      "result": "The comparison rejects different initial states when all state identities, labeled edges, observable names, counts, and outcomes remain identical. Existing graph-comparison regressions also passed.",
+      "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
   "nextFamily": "specifications/DiningPhilosophers",
@@ -6820,7 +6831,7 @@
       "id": "AC-08",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Sources/UpstreamParity/Conformance/GraphComparison.swift compares complete initial-state sets, state identities, and labeled edges. Tests/SwiftTLAParityTests/GraphComparisonTests.swift rejects equal counts with different edges. Tests/SwiftTLAParityTests/TLCGraphReaderTests.swift rejects early violations as complete graphs. Tests/SwiftTLAParityTests/TLCPropertyCheckTests.swift preserves shared graph bytes and rejects equal property outcomes over different graphs. Independent hosted comparisons for the required configurations remain unverified.",
+      "reason": "Sources/UpstreamParity/Conformance/GraphComparison.swift compares complete initial-state sets, state identities, and labeled edges. Tests/SwiftTLAParityTests/GraphComparisonTests.swift rejects equal counts with different edges or initial states. All eight focused tests passed locally at b9899bc4. Tests/SwiftTLAParityTests/TLCGraphReaderTests.swift rejects early violations as complete graphs. Tests/SwiftTLAParityTests/TLCPropertyCheckTests.swift preserves shared graph bytes and rejects equal property outcomes over different graphs. These three suites passed hosted CI at 983b8191 before the new initial-state regression. MCDieHarder hosted evidence retains its complete graph independently of the NotSolved failure. The new regression and full required acceptance-model coverage still need hosted evidence.",
       "evidence": []
     },
     {
