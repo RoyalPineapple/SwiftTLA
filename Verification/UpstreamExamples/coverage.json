@@ -3379,29 +3379,31 @@
       "path": "specifications/Majority",
       "name": "Boyer-Moore Majority Vote",
       "audit": "reference inputs audited",
-      "gap": "MCMajority has exact reference inputs. The unconfigured APMajority wrapper and MajorityProof still need explicit scope dispositions and current hosted evidence.",
+      "gap": "MCMajority has exact reference inputs but lacks current hosted evidence. APMajority has no published configuration or sequence bound at the pin. Its two VAL elements differ from the three model values in MCMajority. The legacy toy model in ReachableGraphContractTests.majority still needs removal. MajorityProof contains proof lemmas, not another configured model.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/Majority/APMajority.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured variant",
+          "reason": "The Apalache wrapper imports Majority and declares ValueVal as two VAL elements. The referenced APMajority.cfg is absent from the pinned directory. Seq(Value) remains unbounded. Variant support and a justified validation scope remain open. No invented finite configuration or exclusion receives credit.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/Majority/Majority.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "behavior dependency",
+          "reason": "MCMajority imports the Init, Next, Spec, TypeOK, Correct, and Inv definitions. The Swift model implements these definitions for the published bounded configuration. This mapping does not establish semantic equivalence.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Majority.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/Majority/MajorityProof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "The module imports Majority, FiniteSetTheorems, and TLAPS. It proves TypeCorrect and Correctness with auxiliary lemmas about positions and occurrences. It defines no additional transition system or model configuration. The pinned proof remains a reference, not a separate TLC graph or proof-validation claim.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/Majority/MCMajority.tla",
