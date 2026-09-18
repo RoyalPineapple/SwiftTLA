@@ -273,7 +273,7 @@
       "path": "specifications/Bakery-Boulangerie",
       "name": "The Boulangerie Algorithm",
       "audit": "reference inputs audited",
-      "gap": "Both published MCBakery and MCBoulanger configurations lack exact reference cases. Boulanger uses two processes instead of upstream N=3 and a modified root module.",
+      "gap": "Both published MCBakery and MCBoulanger configurations lack exact reference cases. Boulanger uses two processes instead of upstream N=3. Its modified reference replaces TypeOK and Inv with LocalTypeOK, which checks only max and previous.",
       "legacyCleanupComplete": false,
       "modules": [
         {
