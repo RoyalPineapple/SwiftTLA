@@ -4975,7 +4975,7 @@
         {
           "path": "specifications/SpecifyingSystems/AdvancedExamples/InnerSequential.tla",
           "role": "behavior dependency",
-          "reason": "This model keeps per-process operation queues, register files, and memory. It checks request/register correspondence and uses group weak fairness for read/write responses plus weak fairness for RemoveOp. MCInnerSequential selects a queue constraint and AlwaysResponds separately. No Swift implementation covers this complete behavior.",
+          "reason": "This model keeps per-process operation queues, register files, and memory. It checks request/register correspondence and uses group weak fairness for read/write responses plus weak fairness for RemoveOp. Next selects Internal, which adds a read-memory guard to RemoveOp. Fairness still names RemoveOp, so its enabledness must not inherit that extra guard. MCInnerSequential selects a queue constraint and AlwaysResponds separately. No Swift implementation covers this complete behavior.",
           "implementations": [],
           "dispositionComplete": false
         },
