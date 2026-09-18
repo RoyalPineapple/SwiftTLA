@@ -5052,8 +5052,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/BinaryHourClock.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured behavioral module",
+          "reason": "BHC existentially hides hr and conjoins the HourClock behavior with the temporal relation hr = HourVal(bits). HourVal decodes four binary digits through a recursively defined function and returns 99 for invalid representations. The HourClock port alone does not implement this refinement relation or temporal hiding. No standalone configuration is published; required disposition remains open.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5075,15 +5075,15 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/ChannelRefinement.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured behavioral module",
+          "reason": "This module relates a bit channel to a 1...12 channel. Its inner behavior accumulates four bits, maps sends and receives, and handles invalid low-level steps with ErrorVal. IR existentially hides bitsSent. Channel components alone do not implement this relation, recursive decoding, or temporal hiding. No standalone configuration is published; required disposition remains open.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/CompositeFIFO.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured behavioral module",
+          "reason": "Spec conjoins Sender, Buffer, Receiver, channel-shape invariants, and initial handshakes. Buffer existentially hides an unbounded queue. This is temporal composition, not merely interleaving a chosen list of actions. No Swift implementation or standalone configuration exists. Preserve the published formulas; do not introduce a queue bound or substitute the InnerFIFO specification.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5119,8 +5119,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Composing/JointActionMemory.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured behavioral module",
+          "reason": "Spec conjoins separately hidden environment and memory behaviors. Both components share memInt actions; the environment tracks readiness, while memory tracks mem, ctl, and buf. This requires joint-action composition and temporal hiding, not independent transition interleaving. No standalone configuration is published; no Swift implementation establishes this module.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5179,8 +5179,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/FIFO/FIFO.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured behavioral module",
+          "reason": "Spec existentially hides q from an InnerFIFO instance while retaining in and out. Hiding is a temporal operation, not dropping q from a serialized state. No standalone configuration is published. The abstract behavior remains required and has no Swift implementation or evidence.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5200,8 +5200,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/FIFO/InnerFIFOInstanced.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "This module manually expands both Channel instances and defines SSend, BufRcv, BufSend, and RRcv over in, out, and an unbounded queue q. APInnerFIFOInstanced depends on it. Its explanatory comment about old TLC INSTANCE support does not change the declared behavior. No Swift implementation exists; no queue constraint may be inferred.",
           "implementations": [],
           "dispositionComplete": false
         },
