@@ -3537,11 +3537,11 @@
         {
           "path": "specifications/LeastCircularSubstring/MCLeastCircularSubstring.tla",
           "role": "configured root",
-          "reason": "Small binds CharSetSize/MaxStringLength to 2/6. Medium binds them to 3/8. Both replace CharacterSet and the ZSequences-scoped Nat operator. Hosted comparison remains missing.",
+          "reason": "Small binds CharSetSize/MaxStringLength to 2/6. Medium binds them to 3/8. Both replace CharacterSet and the ZSequences-scoped Nat operator. Both configurations have complete hosted initial-state, labeled-graph, and selected-property matches recorded below. LeastCircularSubstringCorpusModuleContractTests covers the separate imported module, scoped Nat replacement, typed initial values, and algorithm labels. The root adds configuration operators, not another transition system.",
           "implementations": [
             "Sources/UpstreamParity/Examples/LeastCircularSubstring.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/LeastCircularSubstring/ZSequences.tla",
