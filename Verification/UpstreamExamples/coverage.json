@@ -27,11 +27,12 @@
     "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353",
     "lastKnownFailure": "The ordinary suite reported 23 issues across five suites on e7b761d110b22fcdaf48f9ea00146d3f0b9d18f6. Scenario and finite-graph suites reached their 60-minute limits. Their builds took 1930.84 and 1190.75 seconds. Final samples showed 7.6 GB and 8.2 GB peak footprints during canonical edge construction and action-label validation. The upstream suite passed 23 tests. Canonical export and Apple-platform checks also passed.",
     "upstreamSuiteResult": {
-      "sourceSHA": "e7b761d110b22fcdaf48f9ea00146d3f0b9d18f6",
-      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353/job/105537651127",
-      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353/artifacts/10540502001",
-      "buildSeconds": 1795.46,
-      "testSeconds": 1085.138,
+      "sourceSHA": "b379f4a0e784a1d7bbb8468dbbdabdbc1d920ee1",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/job/105560516383",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750/artifacts/10542479674",
+      "artifactDigest": "sha256:285554c80d0a795416ad0ff5b93e7c12df889279687b6d88205e009938e22cb4",
+      "buildSeconds": 1863.41,
+      "testSeconds": 904.108,
       "testsPassed": 23,
       "scope": "Hosted Swift tests passed with Xcode 16.4, optimized code, and assertions enabled. These tests do not establish independent complete TLC comparisons."
     },
