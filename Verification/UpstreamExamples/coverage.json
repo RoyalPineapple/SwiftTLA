@@ -148,6 +148,17 @@
   },
   "localDiagnostics": [
     {
+      "session": "99959",
+      "sourceSHA": "c838511e6e7b4fd35a2a8ed2170d9123b3d973bd",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CompiledSpecificationRendererTests|DependentRecordSetTests|CoffeeCanCorpusStateGraphTests|VoteProofCorpusRenderingTests|AlgorithmPlusCalRendererTests/rendersLegalQuantifiedBinder|CompiledLowererTraversalTests/deepActionBindingsRetainIdentities|UpstreamCorpusInventoryTests'",
+      "exitCode": 0,
+      "buildSeconds": 575.91,
+      "testSeconds": 0.039,
+      "testsPassed": 31,
+      "result": "Independent typed record fields serialize as a Cartesian record set. Dependent, transformed, duplicate, dropped, fallible, and opaque domains retain their existing rendering. Every CoffeeCan configuration keeps its bound and selected checks. All three stale-scope CI expectations and the coverage ledger contract pass.",
+      "scope": "This source tree was committed after the clean diagnostic run. Earlier attempts failed during dependency DNS lookup or because test files changed during compilation; they are not passing evidence. Large CoffeeCan hosted comparisons and the new outer job limit remain unverified. No configuration or DSL criterion gains credit from these local tests."
+    },
+    {
       "session": "42422",
       "sourceSHA": "88d7c5e132d8a9c7bd2abe14f523e685d1249ac0",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CompilerPipelineCanonicalizationTests/nestedSameSpellingBindersRetainDistinctCompilerIdentities|LocalOperatorTests/emitsLetInSource|ScopedReachabilityTests/checksOneState|KVsnapCorpusRenderingTests|DictionaryConfigurationTests|UpstreamCorpusInventoryTests'",
