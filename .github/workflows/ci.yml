@@ -47,7 +47,7 @@ jobs:
           (
             while sleep 300; do
               ps -axo pid,ppid,etime,%cpu,rss,command > ".build/test-diagnostics/$(date +%s)-processes.txt"
-              for pid in $(pgrep -f '[/]swiftpm-testing([[:space:]]|$)' || true); do
+              for pid in $(pgrep -f '[/]swiftpm-testing-helper([[:space:]]|$)' || true); do
                 sample "$pid" 1 -file ".build/test-diagnostics/$(date +%s)-$pid.txt" || true
               done
             done
