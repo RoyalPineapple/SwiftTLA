@@ -62,7 +62,7 @@ struct CompiledLowererTraversalTests {
         var renderedBody = "value' = bound127"
         for level in (0..<128).reversed() {
             let value = level == 0 ? "value" : "bound\(level - 1)"
-            renderedBody = "LET bound\(level) == \(value) IN \(renderedBody)"
+            renderedBody = "(LET bound\(level) == \(value) IN \(renderedBody))"
         }
         #expect(try compilation.render().tlaBundle.tla.contains("deep == \(renderedBody)"))
     }

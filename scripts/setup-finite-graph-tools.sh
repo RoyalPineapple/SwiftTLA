@@ -172,6 +172,7 @@ download_locked() {
     local temporary="$destination.partial"
     rm -f "$temporary"
     curl --fail --location --proto '=https' --tlsv1.2 --silent --show-error \
+        --retry 3 --retry-max-time 60 \
         --output "$temporary" "$@" --url "$url"
     [ "$(sha256 "$temporary")" = "$digest" ] || { rm -f "$temporary"; fail "digest mismatch for $(basename "$destination")"; }
     mv "$temporary" "$destination"

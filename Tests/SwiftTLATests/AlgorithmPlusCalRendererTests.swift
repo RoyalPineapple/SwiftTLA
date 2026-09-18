@@ -151,7 +151,7 @@ struct AlgorithmPlusCalRendererTests {
         let rendered = try compilation.render().plusCalBundle().root.tla
         let renderedTLA = try compilation.render().tlaBundle.root.tla
 
-        #expect(rendered.contains("when \\A item_1 \\in {0, 1} : (item_1 >= count);"))
+        #expect(rendered.contains("when (\\A item_1 \\in {0, 1} : (item_1 >= count));"))
         #expect(renderedTLA.contains("\\A item_1 \\in {0, 1}"))
     }
 

@@ -57,7 +57,7 @@ struct VoteProofCorpusRenderingTests {
         #expect(bundle.root.tla.contains("LET RECURSIVE SA") == false)
         #expect(bundle.root.tla.contains("IN SA["))
         #expect(bundle.root.tla.contains("THEN TRUE ELSE (SA["))
-        #expect(bundle.root.tla.contains(")) /\\ \\A "))
+        #expect(bundle.root.tla.contains(")) /\\ (\\A "))
         #expect(bundle.root.tla.contains(" \\in ("))
         #expect(bundle.root.tla.contains("\nChosenIn("))
         #expect(bundle.root.tla.contains("VoteProofTypeOK =="))
