@@ -22,12 +22,12 @@
   },
   "ci": {
     "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35308096247",
-    "state": "in progress",
-    "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35304163847",
-    "lastKnownFailure": "The ordinary and finite-graph Swift jobs exceeded 60 minutes. Both test processes sustained one CPU core with roughly 1.4-1.6 GB resident memory. The upstream job passed all 23 tests. The earlier compile error is resolved. The old sampler missed swiftpm-testing-helper, so these artifacts contain process lists but no stacks.",
+    "state": "timed out",
+    "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35308096247",
+    "lastKnownFailure": "The ordinary and finite-graph jobs exceeded 60 minutes. Both retained stacks show CoffeeCan initial-state filtering inside integerRange and Set initialization. The generated membership expression rebuilds the integer range for each candidate. The upstream job passed. Stack collection now works. The retained Swift version and SDK build match the local diagnostic toolchain.",
     "timeoutArtifacts": [
-      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35304163847/artifacts/10531863228",
-      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35304163847/artifacts/10532357306"
+      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35308096247/artifacts/10533474087",
+      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35308096247/artifacts/10533910757"
     ],
     "hostedXcode": "16.4",
     "localDeveloperTools": "Command Line Tools 16.4.0.0.1.1747106510",
@@ -57,6 +57,17 @@
       "testsPassed": 2,
       "result": "Both configurations retained typed initial values: 127 for Small and 9,841 for Medium. These checks finished in 1.046 seconds. Module rendering finished in 0.001 seconds. This isolated run did not reproduce a slow initialization or rendering phase.",
       "scope": "Initialization and rendering only. No complete graph, property comparison, or hosted match. Coverage states remain unchanged."
+    },
+    {
+      "session": "57383",
+      "sourceSHA": "b2426108648c8e4734455cf7512b0278ca6ab2d3",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'IntegerRangeMembershipTests|CollectionCardinalityBoundaryTests|FunctionSpaceMembershipTests|SequenceMembershipTests|CoffeeCanCorpusStateGraphTests'",
+      "exitCode": 0,
+      "buildSeconds": 529.39,
+      "testSeconds": 0.171,
+      "testsPassed": 22,
+      "result": "Generated integer-range membership retains bounds instead of allocating a set. Small-domain equivalence, a billion-element range, integer limits, and evaluation failures passed. Function-space and sequence membership contracts passed. The CoffeeCan diagnostic graph and all four configuration pins passed. A stale function-space test now follows the existing non-enumerating membership contract.",
+      "scope": "Targets the CoffeeCan timeout path and supports AC-04 and AC-08. No complete large-bound CoffeeCan graph or hosted comparison ran locally. No configuration or DSL criterion gains hosted credit."
     }
   ],
   "nextFamily": "specifications/DiningPhilosophers",
