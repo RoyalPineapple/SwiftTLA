@@ -1182,7 +1182,7 @@
       "path": "specifications/CoffeeCan",
       "name": "The Coffee Can Bean Problem",
       "audit": "reference inputs audited",
-      "gap": "All four configurations have exact reference inputs. Complete large-bound graphs and every selected temporal property lack current hosted evidence. Review the proof-only module.",
+      "gap": "All four configurations have exact reference inputs. Complete large-bound graphs and every selected temporal property lack current hosted evidence. CoffeeCan_proof is a proof companion, not another configured graph.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -1196,10 +1196,10 @@
         },
         {
           "path": "specifications/CoffeeCan/CoffeeCan_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "The module imports CoffeeCan and TLAPS. BeanBound strengthens TypeInvariant for the TypeCorrect proof. The proof covers the three picking actions, Termination, and stuttering. It defines no additional transition system or model configuration. The pinned proof remains a reference, not a separate TLC graph or proof-validation claim.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/CoffeeCan/CoffeeCan.tla",
@@ -3828,15 +3828,17 @@
       "path": "specifications/N-Queens",
       "name": "The N-Queens Puzzle",
       "audit": "reference inputs audited",
-      "gap": "Both FourQueens configurations have exact reference inputs. Verify expected NoSolutions failures without truncating either graph, and audit copied Toolbox modules.",
+      "gap": "Both FourQueens configurations have exact reference inputs. Expected NoSolutions failures still need complete hosted graph and property comparisons. The Toolbox module copies exactly match their corresponding root modules. Direct-TLA and PlusCal remain separate required configurations. Legacy cleanup remains open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/N-Queens/Queens.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "behavior dependency",
+          "reason": "The direct-TLA FourQueens wrapper imports Queens through an identical Toolbox copy. QueensModel supplies the typed implementation. The configuration still requires independent hosted comparison.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Queens.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/N-Queens/Queens.toolbox/FourQueens/MC.tla",
@@ -3849,17 +3851,21 @@
         },
         {
           "path": "specifications/N-Queens/Queens.toolbox/FourQueens/Queens.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "identical Toolbox copy",
+          "reason": "Git blob 6b06b88c0f625a0f4b30c124387389da979b78f6 exactly matches the root Queens.tla. The local MC.tla wrapper imports this copy. It adds no separate model behavior.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Queens.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/N-Queens/QueensPluscal.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "behavior dependency",
+          "reason": "The PlusCal FourQueens wrapper imports QueensPluscal through an identical Toolbox copy. NQueensModel supplies the typed implementation. LiveSpec and Termination remain separate from the direct-TLA configuration.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/NQueens.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/N-Queens/QueensPluscal.toolbox/FourQueens/MC.tla",
@@ -3872,10 +3878,12 @@
         },
         {
           "path": "specifications/N-Queens/QueensPluscal.toolbox/FourQueens/QueensPluscal.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "identical Toolbox copy",
+          "reason": "Git blob a7429621876f35cdafa8f3cf1b0be2e282e59134 exactly matches the root QueensPluscal.tla. The local MC.tla wrapper imports this copy. It adds no separate model behavior.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/NQueens.swift"
+          ],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
