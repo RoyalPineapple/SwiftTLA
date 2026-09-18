@@ -20,12 +20,21 @@ struct UpstreamCorpusInventoryTests {
             let acceptanceComplete: Bool?
         }
         struct Configuration: Decodable {
+            struct Variant: Decodable {
+                let environment: [String: String]
+                let status: String
+                let implementations: [Implementation]
+                let evidence: [Evidence]
+            }
             let module: String
             let configuration: String
             let required: Bool
             let status: String
             let implementations: [Implementation]
             let evidence: [Evidence]
+            let environmentVariants: [Variant]?
+            let variantAuditComplete: Bool?
+            let variantReason: String?
         }
         struct Module: Decodable {
             let path: String
@@ -147,7 +156,7 @@ struct UpstreamCorpusInventoryTests {
         #expect(coverage.families.count == inventory.families.count)
         #expect(Set(coverage.families.map(\.path)) == Set(inventory.families.map(\.path)))
         #expect(coverage.dslCriteria.map(\.id) == (1...19).map { String(format: "AC-%02d", $0) })
-        let states = Set(["missing", "implemented", "locally checked", "hosted match"])
+        let states = ["missing", "implemented", "locally checked", "hosted match"]
         func verifyEvidence(_ evidence: [Coverage.Evidence], status: String, requiresGraph: Bool = true) {
             #expect(states.contains(status))
             if status == "locally checked" || status == "hosted match" {
@@ -176,8 +185,26 @@ struct UpstreamCorpusInventoryTests {
                 #expect(configuration.required)
                 #expect(family.modules.contains { $0.path == configuration.module })
                 verifyEvidence(configuration.evidence, status: configuration.status)
+                if let variants = configuration.environmentVariants {
+                    #expect(!variants.isEmpty)
+                    #expect(configuration.variantReason?.isEmpty == false)
+                    #expect(Set(variants.map(\.environment)).count == variants.count)
+                    for variant in variants {
+                        #expect(!variant.environment.isEmpty)
+                        #expect(variant.environment.allSatisfy { !$0.key.isEmpty && !$0.value.isEmpty })
+                        verifyEvidence(variant.evidence, status: variant.status)
+                        if variant.status != "missing" { #expect(!variant.implementations.isEmpty) }
+                        let aggregateRank = try #require(states.firstIndex(of: configuration.status))
+                        let variantRank = try #require(states.firstIndex(of: variant.status))
+                        #expect(aggregateRank <= variantRank)
+                    }
+                    if configuration.status == "hosted match" {
+                        #expect(configuration.variantAuditComplete == true)
+                    }
+                }
                 if configuration.status != "missing" { #expect(!configuration.implementations.isEmpty) }
-                for implementation in configuration.implementations {
+                for implementation in configuration.implementations
+                    + (configuration.environmentVariants ?? []).flatMap(\.implementations) {
                     #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent(implementation.file).path))
                     let declaration = try #require(manifest.cases.first { $0.id == implementation.caseID })
                     #expect(declaration.scenario == implementation.scenario)
@@ -195,5 +222,13 @@ struct UpstreamCorpusInventoryTests {
         for criterion in coverage.dslCriteria {
             verifyEvidence(criterion.evidence, status: criterion.status, requiresGraph: false)
         }
+        let graphHarness = try #require(coverage.families.flatMap(\.configurations).first {
+            $0.configuration == "specifications/TLC/TestGraphs.cfg"
+        })
+        let documentedBindings = (1...13).flatMap { graph in
+            (1...3).map { workers in ["GRAPH": String(graph), "K": String(workers)] }
+        }
+        let variants = try #require(graphHarness.environmentVariants)
+        #expect(Set(documentedBindings).isSubset(of: Set(variants.map(\.environment))))
     }
 }
