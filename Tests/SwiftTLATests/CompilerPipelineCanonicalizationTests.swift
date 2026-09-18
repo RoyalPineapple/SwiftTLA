@@ -330,7 +330,7 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(Set([outer, inner]).count == 2)
         #expect(outerReference == outer)
         #expect(innerReference == inner)
-        #expect(module.contains("LET value == 1 IN LET value_1 == value IN value_1"))
+        #expect(module.contains("(LET value == 1 IN (LET value_1 == value IN value_1))"))
     }
 
     @Test("macro compilation uses the explicit formal module name")

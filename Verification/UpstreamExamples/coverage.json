@@ -91,6 +91,27 @@
     "localSDK": "macOS 15.5 (24F74)",
     "toolchainGap": "Command Line Tools 16.4 supports focused SwiftPM diagnostics with the same SDK build shown in hosted Apple logs. Full Xcode 16.4 is absent locally. Earlier beta-toolchain passes remain uncredited."
   },
+  "hostedComparisonFailures": {
+    "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
+    "failures": [
+      {
+        "caseID": "queens-four",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549841774",
+        "reason": "Generated TLA+ fails semantic analysis. Missing lexical delimiters cause duplicate placement and atomic binding declarations. The renderer fix must preserve resolved scopes and satisfy AC-08 and AC-09 without changing either model."
+      },
+      {
+        "caseID": "n-queens-four",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549736978",
+        "reason": "Generated TLA+ fails semantic analysis because placement quantifier scopes overlap. This variant needs the same renderer fix and a complete hosted comparison."
+      },
+      {
+        "caseID": "scenarios",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427/artifacts/10549396911",
+        "reason": "The job exceeded 45 minutes. Before cancellation, both empty-dictionary scenarios reported hasCapacity outcome differences. Both Queens scenarios reported incomplete graphs. CoffeeCan1000Beans exceeded its 600-second TLC limit during initialization. None of these outcomes establishes equivalence."
+      }
+    ]
+  },
   "localDiagnostics": [
     {
       "session": "85523",

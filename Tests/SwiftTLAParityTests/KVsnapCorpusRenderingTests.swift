@@ -22,7 +22,7 @@ struct KVsnapCorpusRenderingTests {
         #expect(plusCalBundle.imports.map(\.name).contains("Util"))
         #expect(plusCal.contains("CC == INSTANCE ClientCentric"))
         #expect(plusCal.contains("InitialState =="))
-        #expect(plusCal.contains("SnapshotIsolation == \\A "))
+        #expect(plusCal.contains("SnapshotIsolation == (\\A "))
         #expect(plusCal.contains("CC!SnapshotIsolation(InitialState, Range(ops))"))
         #expect(plusCal.contains("Termination ==") == false)
         let initialState = try #require(plusCal.range(of: "InitialState =="))

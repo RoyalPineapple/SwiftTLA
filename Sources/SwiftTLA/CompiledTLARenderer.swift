@@ -125,16 +125,16 @@ struct CompiledTLARenderer {
                         parts.append("(\(predicate)) = TRUE")
                     }
                 case .existsAction(let binder, let set, let body):
-                    parts.append("\\E \(try binderName(binder)) \\in \(try state(set)): ")
-                    tasks.append(.expression(body))
+                    parts.append("(\\E \(try binderName(binder)) \\in \(try state(set)): ")
+                    schedule([.expression(body), .text(")")])
                 case .ifElse(let condition, let then, let otherwise):
-                    parts.append("IF \(try state(condition)) THEN (")
+                    parts.append("(IF \(try state(condition)) THEN (")
                     schedule([
-                        .expression(then), .text(") ELSE ("), .expression(otherwise), .text(")")
+                        .expression(then), .text(") ELSE ("), .expression(otherwise), .text("))")
                     ])
                 case .define(let binder, let value, let body):
-                    parts.append("LET \(try binderName(binder)) == \(try state(value)) IN ")
-                    tasks.append(.expression(body))
+                    parts.append("(LET \(try binderName(binder)) == \(try state(value)) IN ")
+                    schedule([.expression(body), .text(")")])
                 case .and(let lhs, let rhs):
                     parts.append("(")
                     schedule([.expression(lhs), .text(" /\\ "), .expression(rhs), .text(")")])
@@ -401,7 +401,7 @@ struct CompiledTLARenderer {
                             return operation.parameters.isEmpty ? name : "\(name)(\(slots))"
                         }
                         .joined(separator: ", ")
-                    parts.append("LET ")
+                    parts.append("(LET ")
                     if recursiveDeclarations.isEmpty == false {
                         parts.append("RECURSIVE \(recursiveDeclarations)\n    ")
                     }
@@ -412,6 +412,7 @@ struct CompiledTLARenderer {
                     }
                     rendered.append(.text("\nIN "))
                     rendered.append(.expression(body))
+                    rendered.append(.text(")"))
                     schedule(rendered)
                 case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .sequenceSelect, .functionApply, .functionSet, .setSum, .integerRange, .negate, .not, .cardinality, .powerSet, .unionAll, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .ifThenElse, .setFilter, .setMap, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
                     try schedule(expression.operation, expression.children)
@@ -611,16 +612,16 @@ extension CompiledOperation {
             if hasOtherwise { branches += [.text(" [] OTHER -> "), .operand(branchOperands)] }
             parts = branches
         case .forAll(let binder):
-            parts = [.text("\\A \(try binderName(binder)) \\in "), .operand(0), .text(" : "), .operand(1)]
+            parts = [.text("(\\A \(try binderName(binder)) \\in "), .operand(0), .text(" : "), .operand(1), .text(")")]
         case .exists(let binder):
-            parts = [.text("\\E \(try binderName(binder)) \\in "), .operand(0), .text(" : "), .operand(1)]
+            parts = [.text("(\\E \(try binderName(binder)) \\in "), .operand(0), .text(" : "), .operand(1), .text(")")]
         case .choose(let binder):
-            parts = [.text("CHOOSE \(try binderName(binder)) \\in "), .operand(0), .text(" : "), .operand(1)]
+            parts = [.text("(CHOOSE \(try binderName(binder)) \\in "), .operand(0), .text(" : "), .operand(1), .text(")")]
         case .foldFunction(let binders):
             parts = [.text("FoldFunction(LAMBDA \(try binders.map(binderName).joined(separator: ", ")) : "),
                 .operand(0), .text(", "), .operand(1), .text(", "), .operand(2), .text(")")]
         case .letValue(let binder):
-            parts = [.text("LET \(try binderName(binder)) == "), .operand(0), .text(" IN "), .operand(1)]
+            parts = [.text("(LET \(try binderName(binder)) == "), .operand(0), .text(" IN "), .operand(1), .text(")")]
         default:
             throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
                 path: "compiledRenderer.operation", expected: "an operand syntax template",

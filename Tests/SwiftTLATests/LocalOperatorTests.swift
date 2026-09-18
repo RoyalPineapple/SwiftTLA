@@ -561,7 +561,7 @@ struct LocalOperatorTests {
     }
 
     #expect(try spec.compile().render().tlaBundle.tla.contains(
-      "Answer == LET AddOne(number) == (number + 1)"
+      "Answer == (LET AddOne(number) == (number + 1)"
     ))
     #expect(!(try spec.compile().render().tlaBundle.tla.contains("RECURSIVE AddOne")))
     #expect(try spec.compile().render().tlaBundle.tla.contains("IN AddOne(41)"))

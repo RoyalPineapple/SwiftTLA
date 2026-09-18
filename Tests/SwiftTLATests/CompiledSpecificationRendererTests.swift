@@ -120,12 +120,12 @@ struct CompiledSpecificationRendererTests {
         let binder = BinderID(ordinal: 0)
         let cases: [(CompiledOperation, [String], String)] = [
             (.setMap(binder), ["item + 1", "Items"], "{item + 1 : item \\in Items}"),
-            (.forAll(binder), ["Items", "item > 0"], "\\A item \\in Items : item > 0"),
+            (.forAll(binder), ["Items", "item > 0"], "(\\A item \\in Items : item > 0)"),
             (.functionLiteral(binder), ["Items", "item + 1"], "[item \\in Items |-> item + 1]"),
             (.caseExpr(hasOtherwise: true), ["a", "b", "c", "d", "e"], "CASE a -> b [] c -> d [] OTHER -> e"),
             (.except, ["table", "key", "value"], "[table EXCEPT ![key] = value]"),
             (.foldFunction([binder]), ["body", "initial", "sequence"], "FoldFunction(LAMBDA item : body, initial, sequence)"),
-            (.letValue(binder), ["value", "body"], "LET item == value IN body")
+            (.letValue(binder), ["value", "body"], "(LET item == value IN body)")
         ]
         for (operation, operands, expected) in cases {
             let syntax = try operation.tlaSyntax(operandCount: operands.count,
@@ -167,9 +167,9 @@ struct CompiledSpecificationRendererTests {
                 .and(.assign(variable, one), .unchanged(variable)),
                 .or(.guard_(no), .assign(variable, one)))))
         #expect(try renderer.action(action)
-            == #"\E selected \in {1}: LET saved == 1 IN IF TRUE THEN ((count' = 1 /\ UNCHANGED count)) ELSE ((FALSE \/ count' = 1))"#)
+            == #"(\E selected \in {1}: (LET saved == 1 IN (IF TRUE THEN ((count' = 1 /\ UNCHANGED count)) ELSE ((FALSE \/ count' = 1)))))"#)
         let exists = CompiledExpression(operation: .exists(selected), resultType: .bool, children: [domain, yes])
-        #expect(try renderer.action(.guard_(exists)) == #"(\E selected \in {1} : TRUE) = TRUE"#)
+        #expect(try renderer.action(.guard_(exists)) == #"((\E selected \in {1} : TRUE)) = TRUE"#)
         let trueQuery = CompiledStateQuery(expression: yes, enabledActions: [])
         let falseQuery = CompiledStateQuery(expression: no, enabledActions: [])
         let properties: [(TemporalCondition<CompiledStateQuery>, String)] = [
@@ -180,6 +180,37 @@ struct CompiledSpecificationRendererTests {
         for (property, expected) in properties {
             #expect(try renderer.temporal(property) == expected)
         }
+    }
+
+    @Test("Sibling lexical scopes stay separate in rendered state and action expressions")
+    func delimitsSiblingLexicalScopes() throws {
+        let compiled = try TLASpec(name: "LexicalScopes", variables: [], actions: [], invariants: []).compile()
+        let binder = BinderID(ordinal: 0)
+        let renderer = CompiledTLARenderer(moduleName: "LexicalScopes", reservedNames: [], layout: compiled.layout,
+            bindings: .init(binders: [binder: "item"]), operators: compiled.semantics.operators,
+            actions: [], functions: [])
+        let domain = CompiledExpression.value(.set([.integer(1)]))
+        let yes = CompiledExpression.value(.boolean(true))
+        for operation in [CompiledOperation.forAll(binder), .exists(binder), .choose(binder), .letValue(binder)] {
+            let expression = CompiledExpression(operation: operation, children: [domain, yes])
+            let scoped = try renderer.state(expression)
+            #expect(scoped.first == "(" && scoped.last == ")")
+            #expect(try renderer.state(.init(operation: .equal, children: [expression, expression]))
+                == "(\(scoped) = \(scoped))")
+        }
+        let guardAction = CompiledActionExpr.guard_(yes)
+        for action in [CompiledActionExpr.existsAction(binder, domain, guardAction),
+            .define(binder, yes, guardAction), .ifElse(yes, guardAction, guardAction)] {
+            let scoped = try renderer.action(action)
+            #expect(scoped.first == "(" && scoped.last == ")")
+            #expect(try renderer.action(.and(action, action)) == "(\(scoped) /\\ \(scoped))")
+        }
+        let local = StateExpr.letIn([LocalOperator("item", body: .bool(true))], .variable("item"))
+        let specification = TLASpec(name: "SiblingOperators", variables: [], actions: [], invariants: [
+            .init(name: "Check", body: .and(local, local))
+        ])
+        let rendered = try specification.compile().render().tlaBundle.tla
+        #expect(rendered.contains("Check == ((LET item == TRUE\nIN item) /\\ (LET item == TRUE\nIN item))"))
     }
 
     @Test("Nested checked views render their operands once without capturing source names")

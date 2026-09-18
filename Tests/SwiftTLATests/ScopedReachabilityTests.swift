@@ -22,8 +22,8 @@ struct ScopedReachabilityTests {
             let rendered = try scenario.render()
             #expect(try rendered.plusCalBundle().root.cfg == rendered.tlaBundle.root.cfg)
             #expect(rendered.tlaBundle.tla.contains("AllOwn == ~("))
-            #expect(rendered.tlaBundle.tla.contains("AllOwn == ~(\\A _process \\in members : (owner = _process))"))
-            #expect(rendered.tlaBundle.tla.contains("AllVisited == ~(\\A _process \\in members : visited[_process])"))
+            #expect(rendered.tlaBundle.tla.contains("AllOwn == ~((\\A _process \\in members : (owner = _process)))"))
+            #expect(rendered.tlaBundle.tla.contains("AllVisited == ~((\\A _process \\in members : visited[_process]))"))
             #expect(rendered.reachabilityNames == (scenario.name == "Selected"
                 ? ["AllVisited"] : ["AllOwn", "AllVisited", "EitherOwns", "Initial"]))
         }
