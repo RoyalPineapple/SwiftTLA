@@ -4871,36 +4871,36 @@
       "modules": [
         {
           "path": "specifications/SpecifyingSystems/AdvancedExamples/BNFGrammars.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "language-definition helper",
+          "reason": "Defines languages as sets of token sequences, concatenation/union, unbounded repetition, and a least grammar selected by CHOOSE. The AdvancedExamples, Syntax, and TLC copies share Git blob 626942a76f43be3bc328221a1029e9e1d96dce0c. This is a mathematical language helper, not an executable parser or a finite state graph. No module-level equivalence evidence is established.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/AdvancedExamples/DifferentialEquations.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "mathematical helper",
+          "reason": "Defines derivatives through real-valued limits and Integrate by choosing functions satisfying a differential equation and initial values. This is exact mathematical semantics, not a numerical integration algorithm. No standalone configuration, Swift implementation, or equivalence evidence establishes the module; disposition remains open.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/AdvancedExamples/Graphs.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "mathematical helper",
+          "reason": "Defines directed/undirected graphs, subgraphs, sequence-based paths, connectivity, and trees whose edges point toward the root. Its comment explicitly distinguishes later CommunityModules definitions. Those later definitions or Swift reachability utilities cannot substitute for this pinned helper without semantic evidence; no module-level mapping is established.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/AdvancedExamples/InnerSequential.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "This model keeps per-process operation queues, register files, and memory. It checks request/register correspondence and uses group weak fairness for read/write responses plus weak fairness for RemoveOp. MCInnerSequential selects a queue constraint and AlwaysResponds separately. No Swift implementation covers this complete behavior.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/AdvancedExamples/InnerSerial.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "This model records operations with different record shapes, chosen read sources, and a growing partial operation order. UpdateOpOrder nondeterministically chooses a relation whose primed state is serializable; Spec adds response-group and ordering fairness. MCInnerSerial supplies InitMem and the finite Nat override. No Swift implementation covers these relation choices, primed predicates, and fairness bindings.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -4920,15 +4920,15 @@
         },
         {
           "path": "specifications/SpecifyingSystems/AdvancedExamples/RegisterInterface.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "interface dependency",
+          "reason": "This module declares Adr, Val, Proc, Reg and the regFile variable. Read, write, and free-register values share adr/val/op fields, with distinct operation tags. RegFileTypeInvariant requires nested process/register functions. InnerSequential and InnerSerial consume the interface; no Swift implementation exists.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/AdvancedExamples/SerialMemory.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured behavioral module",
+          "reason": "Spec existentially chooses InitMem from Adr-to-Val functions and temporally hides opQ and opOrder from InnerSerial. Constant choice and temporal hiding are distinct requirements. No standalone configuration or Swift implementation establishes this abstract behavior; disposition remains open.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5204,8 +5204,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/FIFO/InnerFIFO.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "This module composes two Channel instances with an unbounded queue through SSend, BufRcv, BufSend, and RRcv. Spec has no fairness or queue bound. Configured wrappers differ in selected constraints and invariants; those choices must not be injected into this base transition relation. No Swift implementation exists.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5331,8 +5331,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/MCInternalMemory.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "configuration dependency",
+          "reason": "This wrapper defines MCSend and MCReply as newMemInt = <<p, d>>, and MCInitMemInt as one chosen process paired with NoVal. Its comment suggests an alternative unchanged interface for state reduction, but that is not the implemented binding. The CachingMemory copy has the same Git blob adf53da7f7bf4426396427e4fa8d2f4c98a7dd3f. No Swift implementation exists.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5403,8 +5403,8 @@
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/MCRealTime.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "configuration dependency",
+          "reason": "This helper replaces Real with 0...MaxReal, separates time-only and model-only steps, and defines timer resets, minimum bounds, and maximum bounds. RTFairness contains an explicit division by zero; selecting it must preserve the resulting evaluation behavior, not silently repair it. The model-checking wrapper selects its actual uses. No Swift implementation exists.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5431,15 +5431,15 @@
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/RealTime_SS.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "temporal helper",
+          "reason": "RTBound existentially hides a timer, resets it when the non-stuttering action occurs or becomes disabled in the next state, and enforces minimum/maximum temporal bounds. RTnow requires real time to progress beyond every real threshold under weak fairness. These formulas are consumed by RTMemory and RTWriteThroughCache; no Swift implementation establishes them.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/RealTimeHourClock.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured behavioral module",
+          "reason": "RTHC conjoins HourClock, real-valued time progress with weak fairness beyond every real threshold, and an existentially hidden timer. Timer bounds are 3600 minus/plus Rho. This unconfigured real-time behavior is not the finite MCRealTimeHourClock configuration or a runner timeout. No Swift implementation or evidence establishes it.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5473,71 +5473,71 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Standard/Bags.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "mathematical helper",
+          "reason": "Defines bags as positive-integer multiplicity functions, with membership, union, subtraction, subbags, mapped bags, and recursive cardinality. These are distinct from ordinary sets. No module-level mapping or independent semantic evidence has been established; absence of a standalone configuration is not an exclusion.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Standard/FiniteSets.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "mathematical helper",
+          "reason": "Defines finiteness through sequence coverage and cardinality by recursive removal of chosen members. Native finite-set operations need semantic evidence for the uses in the configured models. This helper has no standalone state machine or configuration and remains unverified.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Standard/Integers.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "mathematical helper",
+          "reason": "Extends Naturals and exposes ProtoReals.Int with unary negation. Its mathematical integer domain is not a fixed-width machine integer range. No module-level equivalence evidence has been established; checked native arithmetic alone does not verify the entire helper.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Standard/Naturals.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "mathematical helper",
+          "reason": "Exports natural-number arithmetic, ordering, integer intervals, division, and remainder through ProtoReals. Nat is not a model-specific finite bound. Configured overrides must remain explicit; no module-level equivalence evidence has been established for this foundational helper.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Standard/Peano.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "axiomatic dependency",
+          "reason": "Defines PeanoAxioms, assumes a model exists, and chooses successor, natural-number, and zero objects. This is an axiomatic mathematical foundation, not a finite transition system. Its role and missing semantic evidence are explicit; it is not excluded or counted as an implemented model.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Standard/ProtoReals.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "axiomatic dependency",
+          "reason": "Builds an ordered complete-field model over the Peano foundation, chooses its operations, and defines real/integer domains, infinities, division, and exponentiation. Finite integer or floating-point substitutes would change these definitions. No implementation or equivalence evidence establishes this axiomatic dependency.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Standard/Reals.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "mathematical helper",
+          "reason": "Extends Integers and re-exports the real domain, division, and Infinity from ProtoReals. Real-time modules consume these mathematical values. A finite Real override is valid only where the selected configuration declares it; no module-level semantic evidence is established.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Standard/Sequences.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "mathematical helper",
+          "reason": "Defines finite sequences as functions over 1...n, the unbounded Seq(S) set, length, concatenation, append, head/tail, subsequence, and higher-order SelectSeq through local recursion. Membership can be checked without enumerating Seq(S), but a bounded sequence set is not an equivalent replacement. Exact helper coverage remains unverified.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Syntax/BNFGrammars.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "language-definition helper",
+          "reason": "Defines languages as sets of token sequences, concatenation/union, unbounded repetition, and a least grammar selected by CHOOSE. The AdvancedExamples, Syntax, and TLC copies share Git blob 626942a76f43be3bc328221a1029e9e1d96dce0c. This is a mathematical language helper, not an executable parser or a finite state graph. No module-level equivalence evidence is established.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Syntax/TLAPlusGrammar.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "language-definition module",
+          "reason": "Defines the pinned TLA+ token and expression grammar through LeastGrammar, including module instances, higher-order operator arguments, quantifiers, records, functions, EXCEPT, fairness, and temporal syntax. This is a mathematical language definition, not a finite model-checking configuration. No exact grammar implementation or semantic evidence is established.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5557,22 +5557,22 @@
         },
         {
           "path": "specifications/SpecifyingSystems/TLC/AlternatingBit.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "ABSpec combines seven message/acknowledgment send, receive, resend, and loss action families with weak fairness for resend/ack send and strong fairness for message/ack receive. Message and acknowledgment queues are unbounded in the base module. MCAlternatingBit supplies the selected queue constraint and refinement/progress checks. No Swift implementation establishes this behavior.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/TLC/BNFGrammars.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "language-definition helper",
+          "reason": "Defines languages as sets of token sequences, concatenation/union, unbounded repetition, and a least grammar selected by CHOOSE. The AdvancedExamples, Syntax, and TLC copies share Git blob 626942a76f43be3bc328221a1029e9e1d96dce0c. This is a mathematical language helper, not an executable parser or a finite state graph. No module-level equivalence evidence is established.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/TLC/ConfigFileGrammar.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "language-definition module",
+          "reason": "Defines the pinned configuration language as a least grammar, including specification/init/next/view/symmetry names, constraints, action constraints, invariants, properties, constant replacement, and recursively nested constant values. This historical grammar is not a complete inventory of current TLC switches. No exact implementation or module-level semantic evidence is established.",
           "implementations": [],
           "dispositionComplete": false
         },
