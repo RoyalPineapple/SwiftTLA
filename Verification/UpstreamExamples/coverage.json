@@ -5306,15 +5306,15 @@
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/LiveInternalMemory.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "LISpec combines ISpec with per-process weak fairness for the union Do(p) or Rsp(p), not separate action fairness. The module also declares the separate-action Liveness formula and the busy-leads-to-ready LivenessProperty; MCLiveInternalMemory selects both as properties. The DSL must preserve group fairness and distinguish assumptions from checked temporal claims. No Swift implementation exists.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/LiveWriteThroughCache.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "LSpec adds per-process weak fairness for Rsp or DoRd, strong fairness for RdMiss or DoWr, and weak fairness for the guarded MemQWr or MemQRd union. QCond tests a full queue or a pending read. The alternate unguarded formula after the module terminator is not the specification. MCLiveWriteThroughCache requires these precise fairness groups and the selected memory refinement properties. No Swift implementation exists.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5434,15 +5434,15 @@
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/RTMemory.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured behavioral module",
+          "reason": "RTSpec existentially hides InternalMemory state while bounding each non-ready-to-ready response by positive real Rho and requiring RTnow. This needs real-time temporal bounds and hiding, not a finite timeout on the runner. No standalone configuration or Swift implementation establishes this module.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/RealTime/RTWriteThroughCache.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured behavioral module",
+          "reason": "RTSpec adds lastP and enabledness-based round-robin selection, positive real Delta/Epsilon/Rho bounds, and RTnow. Its theorem refines RTMemory.RTSpec. Timing assumptions constrain the formal behavior; runner timeouts cannot replace them. No standalone configuration or Swift implementation establishes this module.",
           "implementations": [],
           "dispositionComplete": false
         },
