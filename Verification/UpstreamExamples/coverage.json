@@ -25,7 +25,16 @@
     "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353",
     "state": "ordinary suite failed; exhaustive suites in progress",
     "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35320189034",
-    "lastKnownFailure": "The ordinary suite reported 23 issues across five suites on e7b761d110b22fcdaf48f9ea00146d3f0b9d18f6. Failures concern parser diagnostics, formal member parsing, expression rendering tests, documentation fixtures, and mutable action domains. Canonical export and Apple-platform checks passed. Exhaustive suites remain in progress. The previous run exceeded 60 minutes in all three Swift suites.",
+    "lastKnownFailure": "The ordinary suite reported 23 issues across five suites on e7b761d110b22fcdaf48f9ea00146d3f0b9d18f6. Failures concern parser diagnostics, formal member parsing, expression rendering tests, documentation fixtures, and mutable action domains. Canonical export and Apple-platform checks passed. The upstream suite passed 23 tests. Scenario and finite-graph suites remain in progress. The previous run exceeded 60 minutes in all three Swift suites.",
+    "upstreamSuiteResult": {
+      "sourceSHA": "e7b761d110b22fcdaf48f9ea00146d3f0b9d18f6",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353/job/105537651127",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353/artifacts/10540502001",
+      "buildSeconds": 1795.46,
+      "testSeconds": 1085.138,
+      "testsPassed": 23,
+      "scope": "Hosted Swift tests passed with Xcode 16.4, optimized code, and assertions enabled. These tests do not establish independent complete TLC comparisons."
+    },
     "failureArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35325555353/artifacts/10539223990",
     "candidateChange": "Candidate fixes preserve parser diagnostics across module lowering and restore formal member parsing. Rendering tests now use operators instead of invariants. Documentation fixtures infer names. Mutable action domains must fail before emission. All 40 focused diagnostics passed on b2e05c5aa3067f66a92e5782c1b9ddc92f9384fe. Hosted validation of these fixes remains pending. Exhaustive suites use optimized builds with assertions enabled. Every test, model bound, selected property, and timeout remains required.",
     "timeoutArtifacts": [
