@@ -5,6 +5,7 @@
   "auditedSwiftSHA": "2641959b1ede6e7ef11ab7963820462e027244b3",
   "rules": {
     "unit": "One upstream module and configuration pair. Every pinned configuration remains required until an explicit reviewed exclusion.",
+    "configurationBindings": "Published configuration-file pairs form the baseline. Source-defined environment variants need separate bindings and evidence before family completion. The pair count is not the final variant count.",
     "states": [
       "missing",
       "implemented",
@@ -6102,42 +6103,44 @@
       "path": "specifications/TLC",
       "name": "The TLC Safety Checking Algorithm",
       "audit": "reference inputs audited",
-      "gap": "The existing TLCMC Graph1 case does not cover either published TestGraphs or TestMCReachability configuration.",
+      "gap": "Neither published configuration has an exact implementation. TestGraphs documents 39 GRAPH/K combinations: graphs 1 through 13 and workers 1 through 3. StateGraphs also defines 1a and DH. These bindings need separate coverage, beyond the two configuration-file pairs. The custom Graph1 port lacks configurable workers, constraints, Live, Termination, and Refinement checks.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/TLC/MCReachability.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "This model uses an unordered frontier, predecessor pairs, successor triples, and trace reconstruction. TestMCReachability instantiates it. TLCMC uses its Spec as the refinement target. No Swift implementation exists.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/TLC/StateGraphs.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "data helper",
+          "reason": "This module defines graphs 1 through 13, 1a, and DH, with violation sets and expected counterexamples. GRAPH selects the graph through IOEnv and defaults to 7. Swift contains only a custom Graph1 case.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/TLC/TestGraphs.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "This harness instantiates TLCMC with the selected graph, counterexamples, and a true constraint. K selects workers through IOEnv and defaults to 1. The configuration selects Termination, Live, and Refinement and binds null as a model value.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/TLC/TestMCReachability.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "This harness instantiates MCReachability with the selected graph and violation set. The configuration selects Termination and Live. It does not select the TLCMC refinement property.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/TLC/TLCMC.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "behavior dependency",
+          "reason": "This PlusCal model permits dequeue from the first K frontier entries and applies Constraint before recording successors. It defines temporal and refinement properties. The Swift Graph1 port fixes dequeue order and replaces property checks with weaker invariants.",
+          "implementations": [
+            "Sources/UpstreamParity/CanonicalCorpus/TLCMC.swift"
+          ],
           "dispositionComplete": false
         }
       ],
