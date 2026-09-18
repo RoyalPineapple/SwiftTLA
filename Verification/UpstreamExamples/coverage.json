@@ -3198,20 +3198,22 @@
       "path": "specifications/LeastCircularSubstring",
       "name": "Minimal Circular Substring",
       "audit": "reference inputs audited",
-      "gap": "Both published configurations have exact reference inputs. Audit helper semantics, property coverage, legacy paths, and hosted results.",
+      "gap": "Both configurations retain their published character and length bounds, TypeInvariant, and Correctness. Neither upstream configuration selects the declared Termination property. Complete hosted graphs and property comparisons remain missing. ZSequences conversion operators lack direct semantic tests. Legacy cleanup remains open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/LeastCircularSubstring/LeastCircularSubstring.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "behavior dependency",
+          "reason": "The configured root imports this PlusCal algorithm. LeastCircularSubstringModel retains its twelve labels, typed variables, terminating stutter, TypeInvariant, and Correctness. No separate configuration exists.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/LeastCircularSubstring.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/LeastCircularSubstring/MCLeastCircularSubstring.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Small binds CharSetSize/MaxStringLength to 2/6. Medium binds them to 3/8. Both replace CharacterSet and the ZSequences-scoped Nat operator. Hosted comparison remains missing.",
           "implementations": [
             "Sources/UpstreamParity/Examples/LeastCircularSubstring.swift"
           ],
@@ -3219,9 +3221,12 @@
         },
         {
           "path": "specifications/LeastCircularSubstring/ZSequences.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "operator helper",
+          "reason": "This stateless module supplies zero-indexed sequences, length, indices, rotations, and lexicographic order. Swift retains ZSeqFromSeq and SeqFromZSeq, but direct semantic tests are missing. No standalone configuration exists.",
+          "implementations": [
+            "Sources/SwiftTLA/ZSequences.swift",
+            "Sources/SwiftTLAMacros/ZSequences+Rotations.swift"
+          ],
           "dispositionComplete": false
         }
       ],
