@@ -22,8 +22,16 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
-    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750",
-    "state": "failed",
+    "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391",
+    "state": "in_progress",
+    "appleAdoptionResult": {
+      "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391/job/105577116179",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35337970391/artifacts/10544335689",
+      "artifactDigest": "sha256:375cb18a81a15c44d26366f3bc59a887531fce7ba2bd8358ee6cc61806c4070b",
+      "testsPassed": 12,
+      "scope": "The retained source SHA matches the candidate. The camera executable build and both six-test adoption suites passed. The SwiftUI demo build remains pending. These results do not establish independent TLC agreement or complete DSL criteria."
+    },
     "lastFailedRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35332733750",
     "lastKnownFailure": "All four Swift suites reported passing tests on b379f4a0e784a1d7bbb8468dbbdabdbc1d920ee1. The finite-graph job exceeded its 60-minute limit during artifact upload and final cleanup. Its build took 1671.10 seconds and its 25 tests took 1901.069 seconds. GitHub cancelled the job, so the aggregate check failed. Apple-platform validation and canonical export also passed.",
     "upstreamSuiteResult": {
