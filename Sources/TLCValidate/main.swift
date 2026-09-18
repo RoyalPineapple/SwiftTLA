@@ -16,7 +16,8 @@ guard let name = args.first else {
     Usage: tlc-validate <command>
       finite-graph run ...
       temporal-symmetry run ...
-      scenarios run --output <directory>
+      scenarios list
+      scenarios run --case <id-or-all> --output <directory>
     """, stderr)
     exit(1)
 }

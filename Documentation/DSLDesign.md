@@ -958,10 +958,12 @@ cannot excuse an unavailable result or incomplete graph.
 
 The runner uses rendered check metadata without compiling the specification again.
 Temporal and refinement declarations remain distinct until TLC configuration output.
-The hosted `tlc-validate scenarios run --output <directory>` command derives registered model
-runs from those declarations. It retains complete native and TLC graphs, property
-results, expectations, and comparison failures. Missing or disagreeing results fail
-the run. The finite-graph workflow includes this command.
+The `tlc-validate scenarios list` command discovers registered model-owned scenarios.
+The hosted `tlc-validate scenarios run --case <id-or-all> --output <directory>` command runs the selected scenarios.
+It retains complete native and TLC graphs, property results, expectations, and comparison failures.
+Missing or disagreeing results fail the run.
+The finite-graph workflow derives one job per scenario from this list, with at most four validation jobs at once.
+Every discovered scenario must retain an exact result before the aggregate check can pass.
 Independent TLC agreement still requires successful hosted evidence. The toolchain
 pins a hosted rebuild of the original TLC source revision. Restored tool setup
 does not itself establish model agreement.

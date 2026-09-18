@@ -27,7 +27,7 @@ env:
 
 jobs:
   prepare:
-    name: Build validator and discover graph cases
+    name: Build validator and discover configuration cases
     runs-on: macos-15
     timeout-minutes: 45
     outputs:
@@ -51,22 +51,26 @@ jobs:
             git merge-base --is-ancestor "$SWIFT_TLA_SHA" refs/remotes/origin/main
           fi
 
-      - name: Derive one job per complete graph case
+      - name: Build the validator once for this revision
+        run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
+
+      - name: Derive one job per complete graph case and model-owned scenario
         id: cases
         run: |
-          matrix=$(jq -ce '
+          scenarios=$(.build/release/tlc-validate scenarios list)
+          matrix=$(jq -ce --argjson scenarios "$scenarios" '
             if .schema == "FiniteGraphCases"
               and (.cases | length > 0)
               and (all(.cases[]; .id | test("^[a-z0-9][a-z0-9-]*$")))
               and ([.cases[].id] | length == (unique | length))
-            then {include: ([{phase: "scenarios", label: "scenarios", caseID: "all"}]
-              + [.cases[] | {phase: "graphs", label: ("graphs-" + .id), caseID: .id}])}
-            else error("Invalid or duplicate graph case identifiers") end
+              and ($scenarios | length > 0)
+              and (all($scenarios[]; test("^[a-z0-9][a-z0-9-]*$")))
+              and ($scenarios | length == (unique | length))
+            then {include: ([.cases[] | {phase: "graphs", label: ("graphs-" + .id), caseID: .id}]
+              + [$scenarios[] | {phase: "scenarios", label: ("scenarios-" + .), caseID: .}])}
+            else error("Invalid or duplicate case identifiers") end
           ' Verification/FiniteGraph/cases.json)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
-      - name: Build the validator once for this revision
-        run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
 
       - name: Verify release CLI case selection without launching TLC
         env:
@@ -95,6 +99,32 @@ jobs:
           fi
           echo "$output" | grep -F 'unknown finite-graph case: unknown-case'
           test ! -e .build/selection-must-not-run
+
+      - name: Verify release CLI scenario selection without launching TLC
+        run: |
+          scenarios=$(.build/release/tlc-validate scenarios list)
+          while IFS= read -r case_id; do
+            expected=1
+            if [ "$case_id" = all ]; then
+              expected=$(jq 'length' <<< "$scenarios")
+            fi
+            if output=$(env -u FINITE_GRAPH_TOOL_ROOT \
+              .build/release/tlc-validate scenarios run --case "$case_id" \
+              --output .build/scenario-selection-must-not-run 2>&1); then
+              echo "Scenario selection unexpectedly succeeded without TLC prerequisites: $case_id"
+              exit 1
+            fi
+            echo "$output" | grep -F "scenarios: selected $expected case(s) for $case_id"
+            echo "$output" | grep -F 'missing FINITE_GRAPH_TOOL_ROOT'
+          done < <(jq -r '"all", .[]' <<< "$scenarios")
+          if output=$(env -u FINITE_GRAPH_TOOL_ROOT \
+            .build/release/tlc-validate scenarios run --case unknown-case \
+            --output .build/scenario-selection-must-not-run 2>&1); then
+            echo 'Unknown scenario unexpectedly succeeded'
+            exit 1
+          fi
+          echo "$output" | grep -F 'unknown scenario: unknown-case'
+          test ! -e .build/scenario-selection-must-not-run
 
       - name: Upload validator
         uses: actions/upload-artifact@v6
@@ -150,12 +180,13 @@ jobs:
           chmod +x .build/validation-bin/tlc-validate
           ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT"
 
-      - name: Validate all model-owned corpus scenarios
+      - name: Validate one complete model-owned scenario
         if: matrix.phase == 'scenarios'
         env:
           SWIFTTLA_SCENARIO_MAXIMUM_STATES: "5000000"
           SWIFTTLA_SCENARIO_TIMEOUT_SECONDS: "600"
-        run: .build/validation-bin/tlc-validate scenarios run --output .build/scenario-evidence
+          CASE_ID: ${{ matrix.caseID }}
+        run: .build/validation-bin/tlc-validate scenarios run --case "$CASE_ID" --output .build/scenario-evidence
 
       - name: Run exact finite graph comparison
         if: matrix.phase == 'graphs'
@@ -224,3 +255,6 @@ jobs:
               and (.checks | all(. == "exact"))
             ' "evidence/finite-graph-evidence/$case_id/comparison.json"
           done < <(jq -r '.include[] | select(.phase == "graphs") | .caseID' <<< "$CASE_MATRIX")
+          while IFS= read -r case_id; do
+            test "$(cat "evidence/scenario-evidence/$case_id/result.txt")" = exact
+          done < <(jq -r '.include[] | select(.phase == "scenarios") | .caseID' <<< "$CASE_MATRIX")
