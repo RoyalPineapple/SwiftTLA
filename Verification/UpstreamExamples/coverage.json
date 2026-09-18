@@ -4845,7 +4845,7 @@
       "path": "specifications/SpecifyingSystems",
       "name": "Specs from Specifying Systems",
       "audit": "reference inputs audited",
-      "gap": "Only nine of 29 published configurations have exact cases. HourClock2, PrintValues, memory, FIFO, composition, liveness, and other variants remain incomplete.",
+      "gap": "Only nine of 29 published configurations have exact cases. Missing configurations select distinct behavior formulas, constraints, temporal properties, and refinements. PrintValues and SimpleMath are assumption-evaluation modules, not state machines. All module dispositions, helper coverage, and legacy cleanup remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -4886,14 +4886,14 @@
         {
           "path": "specifications/SpecifyingSystems/AdvancedExamples/MCInnerSequential.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration binds one register, one address, two values, two processes, Done, and MaxQLen=2. It selects Spec, AlwaysResponds, Constraint, and DataInvariant.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/AdvancedExamples/MCInnerSerial.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration binds one register, one address, two values, two processes, InitWr, Done, and MaxQLen=1. It replaces InitMem and Nat. Spec, AlwaysResponds, Constraint, and DataInvariant remain required.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -4964,7 +4964,7 @@
         {
           "path": "specifications/SpecifyingSystems/AsynchronousInterface/PrintValues.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The empty configuration runs assumption evaluation. PrintVal prints an arithmetic result and an updated record in conjunction order. This module has no state variables or transition specification. Evaluation evidence remains missing, not excluded.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -4985,14 +4985,14 @@
         {
           "path": "specifications/SpecifyingSystems/CachingMemory/MCInternalMemory.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration selects ISpec and TypeInvariant. It binds two processes, three addresses, two values, and NoVal. Send, Reply, and InitMemInt use the published MC replacements.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/CachingMemory/MCWriteThroughCache.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration selects Spec, TypeInvariant, Coherence, LM_Inner_TypeInvariant, and refinement LM_Inner_ISpec. It binds two processes, one address, two values, NoVal, and QLen=1. Send, Reply, and InitMemInt use MC replacements.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5036,7 +5036,7 @@
         {
           "path": "specifications/SpecifyingSystems/Composing/APHourClock.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration selects HC and invariant HCini. Its module path remains a distinct required binding, even when another HourClock configuration selects the same names.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5129,21 +5129,21 @@
         {
           "path": "specifications/SpecifyingSystems/FIFO/APInnerFIFO.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration replaces Message with MessageVal and selects Spec and ChannelTypeInvariants. Upstream deliberately omits TypeInvariant because it references Seq(Message). No queue constraint appears in this configuration.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/FIFO/APInnerFIFOInstanced.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration replaces Message with MessageVal and selects Spec and ChannelTypeInvariants. It does not select TypeInvariant or a queue constraint.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/FIFO/APMCInnerFIFO.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration replaces Message with MessageVal, binds qLen=3, and selects Spec and ChannelTypeInvariants. Unlike MCInnerFIFO.cfg, it does not select qConstraint. The parameter alone must not imply a checking constraint.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5192,7 +5192,7 @@
         {
           "path": "specifications/SpecifyingSystems/FIFO/MCInnerFIFO.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration binds three Message model values and qLen=3. It selects Spec, TypeInvariant, and state constraint qConstraint. Constraint semantics must match TLC without removing the selected check.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5233,21 +5233,21 @@
         {
           "path": "specifications/SpecifyingSystems/HourClock/HourClock2.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "HourClock2.cfg selects HC as the behavior and HC2 as the property. APHourClock2 instead selects HC2 with invariant HCini. These selections require separate evidence despite their equivalent clock transitions.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/APHourClock.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration selects HC and invariant HCini. It does not select the LiveHourClock temporal properties.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/APLiveHourClock.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration selects INIT HCini, NEXT HCnxt, and invariant HCini. It does not select LSpec or its weak fairness. Importing LiveHourClock must not silently add that fairness.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5282,7 +5282,7 @@
         {
           "path": "specifications/SpecifyingSystems/Liveness/LiveHourClock.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration selects LSpec and all three temporal properties: AlwaysTick, AllTimes, and TypeInvariance. The annotation wrapper's invariant-only configuration cannot substitute for these checks.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5310,14 +5310,14 @@
         {
           "path": "specifications/SpecifyingSystems/Liveness/MCLiveInternalMemory.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration selects LISpec, LivenessProperty, and Liveness. It binds two processes, three addresses, two values, and NoVal. Send, Reply, and InitMemInt use MC replacements.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SpecifyingSystems/Liveness/MCLiveWriteThroughCache.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration selects LSpec, refinement LM_Inner_LISpec, and LM_Inner_Liveness. It binds two processes, one address, two values, NoVal, and QLen=1. Send, Reply, and InitMemInt use MC replacements.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5380,7 +5380,7 @@
         {
           "path": "specifications/SpecifyingSystems/RealTime/MCRealTimeHourClock.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration binds Rho=1, MaxReal=5, and SecondsPerHour=2. It selects INIT BigInit, NEXT BigNext, and ErrorTemporal. Fairness, NonZeno, and ImpliedTemporal are commented out, not selected checks.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5436,7 +5436,7 @@
         {
           "path": "specifications/SpecifyingSystems/SimpleMath/SimpleMath.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration binds seven distinct model values, a through g. The module checks logical and set-theoretic assumptions without state variables or a transition specification. Evaluation evidence remains missing, not excluded.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5513,7 +5513,7 @@
         {
           "path": "specifications/SpecifyingSystems/TLC/ABCorrectness.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration binds two Data model values and selects ABCSpec with invariant TypeInv. It is distinct from the queue-bounded MCAlternatingBit configuration.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5548,7 +5548,7 @@
         {
           "path": "specifications/SpecifyingSystems/TLC/MCAlternatingBit.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration binds two Data model values, msgQLen=2, and ackQLen=2. It selects ABSpec, ABTypeInv, SeqConstraint, ABCSpec, and SentLeadsToRcvd. DataPerm symmetry and the extra temporal directives are commented out.",
           "implementations": [],
           "dispositionComplete": false
         }
