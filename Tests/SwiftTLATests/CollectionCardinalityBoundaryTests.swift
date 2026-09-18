@@ -40,12 +40,12 @@ import Testing
         #expect(try compiledValue(.functionSet(.setLiteral([.int(1)]), .setLiteral([]))) == .set([]))
     }
 
-    @Test("function-space membership validates the space before evaluating its candidate")
+    @Test("function-space membership evaluates domains before the candidate without enumerating the space")
     func membershipFailureOrder() {
         let candidate = StateExpr.functionLiteral(.setLiteral([.int(0)]), "key", .divide(.int(1), .int(0)))
         let count = Int.bitWidth - 1
         let largeDomain = StateExpr.setLiteral((0..<count).map { .int($0) })
-        #expect(throws: EvalError.collectionCardinalityOverflow(.functionSet, operands: [count, 2])) {
+        #expect(throws: EvalError.divisionByZero) {
             try compiledValue(.in(candidate, .functionSet(largeDomain, .setLiteral([.int(0), .int(1)]))))
         }
         #expect(throws: EvalError.integerOverflow(.addition, operands: [Int.max, 1])) {
