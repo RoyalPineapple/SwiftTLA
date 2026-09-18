@@ -1437,13 +1437,13 @@
       "path": "specifications/DieHard",
       "name": "The Die Hard Problem",
       "audit": "reference inputs audited",
-      "gap": "MCDieHardest is missing. Its unbounded counters need a complete-result strategy, not an invented bound. Review unconfigured variants and the proof module.",
+      "gap": "MCDieHardest has infinitely many reachable states: EmptyJug on an empty jug preserves contents while NextInterleaved increments its counter. Finite complete-graph evidence is impossible without changing this model. An infinite-state evidence contract awaits user direction. No bound or exclusion is invented. Three finite configurations still lack hosted matches.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/DieHard/APADieHardest.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured variant",
+          "reason": "This Apalache wrapper selects ConstInit, NextInterleaved, and NotSolved through a documented command with length 13. It compares 5/3 and 5/3/3 jug capacities. It has no TLC configuration file. The bounded command is not complete-graph evidence.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -1458,10 +1458,10 @@
         },
         {
           "path": "specifications/DieHard/DieHard_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "This TLAPS companion proves TypeOK for initialization, the six jug actions, and stuttering. It deliberately does not prove NotSolved, the search invariant. No additional transition system or proof-validation claim is introduced.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/DieHard/DieHard.tla",
@@ -1474,15 +1474,17 @@
         },
         {
           "path": "specifications/DieHard/DieHarder.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "behavior dependency",
+          "reason": "This parameterized jug model supplies FillJug, EmptyJug, and JugToJug. Both finite wrappers and the two DieHardest instances use it. DieHarderModel supplies the finite configured port.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/DieHarder.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/DieHard/DieHardest.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "This module composes two DieHarder instances. Spec selects interleaved steps with unbounded counters and requires single-worker BFS. Other sections define parallel, per-behavior freeze, and TLC-register freeze variants. None has a Swift port.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -1498,7 +1500,7 @@
         {
           "path": "specifications/DieHard/MCDieHardest.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The configuration selects Spec and NotSolved, with Goal=4 and capacities 5/3 versus 5/3/3. The expected counterexample records step counts 6 and 5. That finite witness does not complete its infinite graph.",
           "implementations": [],
           "dispositionComplete": false
         }
