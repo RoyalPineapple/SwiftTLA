@@ -22,8 +22,12 @@
   },
   "ci": {
     "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35304163847",
-    "state": "pending",
-    "lastKnownFailure": "Hosted Swift compilation selected symbolic StateExpr equality in TypedFacadeContractTests. The explicit Bool fix awaits final hosted results.",
+    "state": "timed out",
+    "lastKnownFailure": "The ordinary and finite-graph Swift jobs exceeded 60 minutes. Both test processes sustained one CPU core with roughly 1.4-1.6 GB resident memory. The upstream job passed all 23 tests. The earlier compile error is resolved. The old sampler missed swiftpm-testing-helper, so these artifacts contain process lists but no stacks.",
+    "timeoutArtifacts": [
+      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35304163847/artifacts/10531863228",
+      "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35304163847/artifacts/10532357306"
+    ],
     "hostedXcode": "16.4",
     "localDeveloperTools": "Command Line Tools 16.4.0.0.1.1747106510",
     "localSwift": "Apple Swift 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)",
