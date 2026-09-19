@@ -52,7 +52,17 @@
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647",
       "boulangerDiagnosticJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/job/105977930719",
-      "scope": "Pushed after the preceding main CI became terminal. Includes complete-snapshot reuse, validated fingerprint reuse, AC-01 through AC-04 local contract checks, Majority toy-model removal, and scenario phase markers. Independent candidate validation includes the opt-in unchanged upstream Boulanger diagnostic. Jobs are pending; no hosted recovery or additional configuration match is established. PR 394 remains draft."
+      "completedJobs": [
+        {
+          "name": "canonical-corpus-export",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/job/105977911544",
+          "conclusion": "success",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/artifacts/10593826821",
+          "artifactSHA256": "acd6c7072e7e83d0b500cb5a81710d0ee9ba7b9a37d4e4d5d70b1bc01587236f",
+          "scope": "The downloaded manifest binds to 0b86465f. All 21 declared file hashes match, and its complete case/file inventory and digests equal the audited f667b679 export. This confirms unchanged emitted bundles for the four canonical cases, not native graph equivalence or upstream completion."
+        }
+      ],
+      "scope": "Pushed after the preceding main CI became terminal. Includes complete-snapshot reuse, validated fingerprint reuse, AC-01 through AC-04 local contract checks, Majority toy-model removal, and scenario phase markers. Independent candidate validation includes the opt-in unchanged upstream Boulanger diagnostic. Canonical export passed; remaining jobs are pending. No hosted graph recovery or additional configuration match is established. PR 394 remains draft."
     },
     "queueRepairCandidate": {
       "sourceSHA": "f667b67983a51f800ee03dd90d0903cc705db7a8",
