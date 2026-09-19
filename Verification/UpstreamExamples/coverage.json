@@ -2052,6 +2052,16 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/artifacts/10590412423",
+              "artifactDigest": "sha256:e570f95ac519576fa47f04e48b12e6dafc06899d6a9283d41ca51efbf00d94ec",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Downloaded and compared all 408,320,529 bytes of the canonical native graph against both upstream and generated TLC graphs; all three files are identical. Parsed every canonical record and checked completion footers: 501500 initial states, 501500 states, 1498502 labeled edges. All 12 retained comparisons establish TypeInvariant, EventuallyTerminates, MonotonicDecrease, LoopInvariant, TerminationHypothesis, and deadlock satisfaction for both TLC sources. Original configuration, module digest, successful process outcomes, and TLC/Java/bridge source pins were checked. This refreshes an existing configuration match at ff01cbc7, not an additional configuration or evidence for subsequent reader changes."
+            },
             {"sourceSHA":"3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10587084179","artifactDigest":"sha256:5b3626a125ba165c97d1cd1e0536bb59c4349d021cd248cac889b9efecdfb9d2","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 501500 initial states, 501500 states, 1498502 labeled edges. Completion footers and every record count agree. TypeInvariant, EventuallyTerminates, MonotonicDecrease, LoopInvariant, TerminationHypothesis, and deadlock are satisfied in both comparisons. Module, dependency, original configuration, TLC, Java, and bridge pins match. This refreshes an existing configuration match, not an additional configuration."},
             {
               "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
@@ -2080,6 +2090,16 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/artifacts/10590561637",
+              "artifactDigest": "sha256:14ae3e9c547ce593d104b1deb2a5341a6751dbd5f39d44b7c98d25a4781a9729",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Downloaded and compared all 4,004,517 bytes of the canonical native graph against both upstream and generated TLC graphs; all three files are identical. Parsed every canonical record and checked completion footers: 5150 initial states, 5150 states, 14852 labeled edges. All 12 retained comparisons establish TypeInvariant, EventuallyTerminates, MonotonicDecrease, LoopInvariant, TerminationHypothesis, and deadlock satisfaction for both TLC sources. Original configuration, module digest, successful process outcomes, and TLC/Java/bridge source pins were checked. This refreshes an existing configuration match at ff01cbc7, not an additional configuration or evidence for subsequent reader changes."
+            },
             {"sourceSHA":"3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10587636247","artifactDigest":"sha256:ae2ef6602c1a8186a74c3bad47b57067aed4cb807437db7535eaf4bfcff4fcff","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 5150 initial states, 5150 states, 14852 labeled edges. Completion footers and every record count agree. TypeInvariant, EventuallyTerminates, MonotonicDecrease, LoopInvariant, TerminationHypothesis, and deadlock are satisfied in both comparisons. Module, dependency, original configuration, TLC, Java, and bridge pins match. This refreshes an existing configuration match, not an additional configuration."},
             {
               "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
