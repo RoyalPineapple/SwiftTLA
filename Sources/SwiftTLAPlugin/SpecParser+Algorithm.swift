@@ -350,7 +350,7 @@ extension ParserSession {
             }
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
-               let value = parseAlgorithmLexicalValue(variable) {
+               let value = parseAlgorithmLexicalValue(variable, scope: sourceScope) {
                 sourceScope = sourceScope.extending(binding: value.name,
                     to: value.value,
                     shape: value.shape)
@@ -782,6 +782,13 @@ extension ParserSession {
                     shape: parsedVariable.shape)
                 continue
             }
+            if case .decl(let declaration) = statement.item,
+               let variable = declaration.as(VariableDeclSyntax.self),
+               let binding = parseAlgorithmLexicalValue(variable, scope: processScope) {
+                processScope = processScope.extending(binding: binding.name,
+                    to: binding.value, shape: binding.shape)
+                continue
+            }
             guard case .expr(let expression) = statement.item,
                   let componentCall = expression.as(FunctionCallExprSyntax.self)
             else {
@@ -964,7 +971,8 @@ extension ParserSession {
     }
 
     private func parseAlgorithmLexicalValue(
-        _ declaration: VariableDeclSyntax
+        _ declaration: VariableDeclSyntax,
+        scope: TypedFacadeScope
     ) -> (name: String, value: StateExpr, shape: CompiledValueType?)? {
         guard declaration.bindings.count == 1,
               let binding = declaration.bindings.first,
@@ -976,13 +984,13 @@ extension ParserSession {
             algorithmParseFailure = "Algorithm values must be immutable let bindings. Use scope.sharedVar and Assign for mutable state."
             return nil
         }
-        guard let expression = decodeTypedFacadeValue(initializer, scope: sourceScope)
+        guard let expression = decodeTypedFacadeValue(initializer, scope: scope)
             ?? decodeStateExpr(initializer) else {
             algorithmParseFailure = algorithmParseFailure
                 ?? "Algorithm let '\(name)' requires a supported formal expression."
             return nil
         }
-        return (name, expression, typedFacadeValueType(initializer, scope: sourceScope))
+        return (name, expression, typedFacadeValueType(initializer, scope: scope))
     }
 
     private func parseEachComponent(

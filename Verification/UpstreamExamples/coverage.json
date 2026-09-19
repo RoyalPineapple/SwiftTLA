@@ -39,6 +39,28 @@
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754",
       "completedJobs": [
         {
+          "name": "upstream",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/job/105929392214",
+          "conclusion": "success",
+          "testsPassed": 23,
+          "buildSeconds": 1281.33,
+          "testSeconds": 885.360,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/artifacts/10588144137",
+          "artifactDigest": "sha256:878db1db04f2ef5985edd041211aafe3ba8a196b5cc080253c347beeb8366051",
+          "scope": "The terminal log reports all 23 upstream suite tests passing, followed by successful diagnostic upload and job completion. This covers the pushed candidate only; it does not qualify subsequent local-family changes or establish independent upstream configuration equivalence."
+        },
+        {
+          "name": "ordinary",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/job/105929392211",
+          "conclusion": "success",
+          "testsPassed": 1469,
+          "buildSeconds": 633.75,
+          "testSeconds": 577.130,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/artifacts/10587759720",
+          "artifactDigest": "sha256:671eca67db9d3798aacdca5b3b9abdba7ff56765c51346c1393cce6a7e34b7c3",
+          "scope": "The terminal log reports all 1469 tests passing, including ProcessFairnessExemptionTests. Diagnostic upload and the job completed successfully. This covers the pushed fairness candidate, not the later configured-family or process lexical-binding changes, aggregate CI, or independent upstream configuration equivalence."
+        },
+        {
           "name": "apple-platform-examples",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/job/105929392152",
           "conclusion": "success",
@@ -292,6 +314,19 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "31852",
+      "sourceSHA": "efc2cc2b6cecdcd20954bb409dfc13a0c976a73f",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ConfiguredLocalFamilyTests|AlgorithmBuilderTests|AlgorithmBuilderParsingTests|ConfiguredProcessTests|GeneratedProcessLocalInvariantTests|ScopedInvariantTests|LexicalBindingTests|KVsnapCorpusRenderingTests|KVsnapCorpusExecutionTests|CompilerPipelineCanonicalizationTests'",
+      "exitCode": 0,
+      "buildSeconds": 566.30,
+      "testSeconds": 14.366,
+      "testsRun": 232,
+      "result": "Process-scoped immutable expressions reuse the existing Algorithm lexical-binding parser with the process scope and value shape preserved. A named family dictionary and named predicate retain configured members, cross-member indexing, and live local-state reads. Initial invariant checks pass; changes to process-local values produce the expected typed Family violation. Complete exploration retains all reachable control states after violations, including empty and sparse populations. Existing lexical, scoped-invariant, parser, canonicalization, and KVsnap contracts pass.",
+      "unblocks": "MCBoulanger.cfg requires TypeOK within both its selected TypeOK invariant and Inv. Process-scoped named predicates permit expression reuse without duplicating the predicate body or introducing a second model schema.",
+      "review": "Ponytail and cleanliness review reused one lexical-binding helper. No runtime path or compatibility API was added. The approved static wrapper passed.",
+      "scope": "The starting SHA plus the process lexical-binding patch committed with this entry. Workflow timeout and evidence-ledger changes during the build do not alter compiled source. This is local diagnostic evidence, not an upstream hosted match or complete DSL-criterion credit."
+    },
     {
       "session": "38872",
       "sourceSHA": "b0755df76872000d9e6d50bff1a13bc9bb2b8dab",
@@ -900,6 +935,14 @@
         },
         {
           "path": "specifications/Bakery-Boulangerie/Boulanger.tla",
+          "externalHelperAudit": {
+            "module": "TLAPS",
+            "reason": "The byte-identical upstream Boulanger module extends TLAPS. That helper is absent from the pinned Examples tree and the pinned TLC standard-module directory. An exact reference must retain this import and supply a pinned upstream helper, not remove proofs or substitute an empty module.",
+            "candidateSource": "https://github.com/tlaplus/tlapm/blob/f14d23363a6409ee616cb6ee12edd53b07660011/library/TLAPS.tla",
+            "gitBlobSHA": "d99c4bb1be3d09f9cd17504e0af2fa53dea16d07",
+            "sha256": "9afe54984062748a0568966434cc0945d682f8cd89fdbc38f73b5579751b0c55",
+            "status": "Located and hashed read-only. Helper staging, dependency registration, and hosted SANY/TLC acceptance remain required; no TLAPS proof-verification claim is made."
+          },
           "role": "behavior dependency",
           "reason": "This module contains the Boulanger algorithm, safety invariants, and proofs. MCBoulanger imports its executable definitions. BoulangerModel uses two processes and does not retain all selected upstream invariants. Source audit at the pinned revision confirms Spec requires WF_vars((pc[self] # ncs) /\\ p(self)), not fairness for ncs. At the audited pushed SHA, AlgorithmLowering assigns the Each fairness policy to every generated atomic action. The pending step exemption needs native and export evidence for AC-15. TypeOK checks seven complete function domains and ranges; Inv also includes all nine IInv clauses and Before. These read other members' unchecked, max, nxt, and previous values. The existing LocalVariable.family(for:) accessor can expose family state, but its Function return type requires a fixed FiniteTLAValueDomain and does not accept the configured integer population. Preserve this existing lowering path while supplying a typed configured-domain view; do not substitute weaker local predicates or a hard-coded two-member domain.",
           "implementations": [

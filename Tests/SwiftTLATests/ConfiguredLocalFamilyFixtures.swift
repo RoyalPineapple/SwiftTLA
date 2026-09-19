@@ -13,15 +13,13 @@ struct ConfiguredLocalFamilyModel: Sendable {
             Algorithm("Publish") {
                 Each(members, scoped: { member, process in
                     let value = process.localVar(initial: member + 10)
+                    let family = value.family(for: Int.self)
+                    let familyValid = family.keys == members
+                        && ForAll(in: members) { other in family[other] == other + 10 }
                     Do(Step.publish) {
-                        Assign(value, to: member + 10)
+                        Assign(value, to: member + 11)
                     }
-                    Family {
-                        value.family(for: Int.self).keys == members
-                            && ForAll(in: members) { other in
-                                value.family(for: Int.self)[other] == other + 10
-                            }
-                    }
+                    Family { familyValid }
                 })
             }
             Validation("Empty") { Bind(members, to: Set<Int>([])) }

@@ -11,11 +11,11 @@ struct ConfiguredLocalFamilyTests {
             #expect(try machine.violatedInvariants().isEmpty)
             for action in try machine.enabledActions() {
                 _ = try machine.send(action)
-                #expect(try machine.violatedInvariants().isEmpty)
+                #expect(try machine.violatedInvariants() == (members.isEmpty ? [] : [.Family]))
             }
             let graph = try scenario.explore(maximumStates: 10)
             #expect(graph.transitions.count == 1 << members.count)
-            #expect(graph.safetyViolations.isEmpty)
+            #expect(graph.safetyViolations.isEmpty == members.isEmpty)
             let rendered = try scenario.render()
             #expect(rendered.tlaBundle.tla.contains("DOMAIN value"))
             #expect(try rendered.plusCalBundle().tla.contains("DOMAIN value"))
