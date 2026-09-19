@@ -77,6 +77,33 @@ struct ScenarioValidationTests {
         }
     }
 
+    @Test("expected temporal outcomes leave initialization, transitions, fairness, and results unchanged")
+    func expectationsPreserveFairBehavior() throws {
+        let original = try #require(WeaklyFairConfiguredProcessMachine.validationScenarios()
+            .first { $0.configuration.nodes == [1] && $0.behavior == .specification })
+        let changed = WeaklyFairConfiguredProcessMachine.ValidationScenario(
+            name: original.name, configuration: original.configuration,
+            checking: original.checking, behavior: original.behavior,
+            expectations: [.AllVisited: .violated], deadlockExpectation: original.deadlockExpectation)
+        #expect(try Set(original.initialMachines().map(\.snapshot)) == Set(changed.initialMachines().map(\.snapshot)))
+        let originalRun = try NativeScenarioRun(original, maximumStates: 10)
+        let changedRun = try NativeScenarioRun(changed, maximumStates: 10)
+        #expect(originalRun.native.graph == changedRun.native.graph)
+        #expect(originalRun.native.checks == changedRun.native.checks)
+        #expect(originalRun.native.checks.properties["AllVisited"] == .satisfied)
+        #expect(originalRun.native.checks.deadlock == .satisfied)
+        let originalBundle = try original.render().tlaBundle
+        let changedBundle = try changed.render().tlaBundle
+        #expect(originalBundle.tla == changedBundle.tla)
+        #expect(originalBundle.cfg == changedBundle.cfg)
+        #expect(originalBundle.tla.contains("WF_<<selected, pc>>(visit(_process))"))
+        try originalRun.validateExpectations()
+        #expect(throws: ScenarioExpectationError.unexpectedOutcome(
+            check: .property("AllVisited"), expected: .violated, actual: .satisfied)) {
+            try changedRun.validateExpectations()
+        }
+    }
+
     @Test("Counter scenarios derive canonical graphs and every property result without runtime compilation")
     func derivesCompleteCounterEvidence() throws {
         for scenario in try ConfiguredCounter.validationScenarios() {

@@ -562,6 +562,18 @@
   },
   "localDiagnostics": [
     {
+      "session": "11919",
+      "sourceSHA": "82f99dbf2d9c8b9b92960503f1583926bea87a24",
+      "sourcePatchSHA256": "c63e0334cc47198310198d01ae9d9255ce5acb81468044e1b01abcfac7ced40a",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'expectationsPreserveFairBehavior|distinguishesExpectedDeadlock|validatesIndependentResults|rejectsMissingExpectations|rejectsIncompleteExpectedFailure'",
+      "exitCode": 0,
+      "buildSeconds": 604.35,
+      "testSeconds": 0.007,
+      "testsRun": 5,
+      "result": "All five focused tests pass. Changing the expected temporal result preserves complete initial snapshots, graphs, actual property and deadlock results, and identical TLA/CFG including weak fairness. Only expectation validation fails. Existing paired deadlock expectations and omitted, incomplete, or disagreeing result rejection also pass.",
+      "scope": "Source stayed unchanged during the build; only hosted evidence changed in the ledger. Ponytail review reuses the existing weakly fair configured-process model without adding a model, schema, or execution path. AC-07 has local implementation evidence, not hosted acceptance or additional upstream coverage."
+    },
+    {
       "session": "18575",
       "sourceSHA": "a560dab2259f11c5fe7c5ae2c1d1680deaf35313",
       "sourcePatchSHA256": "4da9f155f293ed29bd4506fecab7bf7f8c9824d4783cfed7f81ae29a3e556ab3",
@@ -8108,9 +8120,9 @@
     },
     {
       "id": "AC-07",
-      "status": "missing",
+      "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Sources/SwiftTLA/ValidationScenario.swift excludes expectations from exploration inputs. Sources/SwiftTLAPlugin/NativeSwiftEmitter+Validation.swift excludes expectations from initialization and export inputs. Tests/SwiftTLAParityTests/ScenarioValidationTests.swift compares complete graphs and check results for paired deadlock expectations. Tests/SwiftTLATests/ValidationScenarioTests.swift retains positive reachability semantics with an expected failure. Paired property expectations with explicit fairness and independent hosted comparisons remain unaudited.",
+      "reason": "Local diagnostic 11919 passes paired temporal and deadlock expectation tests. The weakly fair process retains identical complete initial snapshots, graphs, actual property results, deadlock results, and TLA/CFG after only its expectation changes; only the validation verdict differs. Missing checks, incomplete exploration, and disagreeing comparisons remain failures. Hosted acceptance for this strengthened scope remains pending; this is not a verified DSL criterion.",
       "evidence": []
     },
     {
