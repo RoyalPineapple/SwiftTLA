@@ -153,6 +153,12 @@
       "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798",
+      "comparisonConclusion": "failure",
+      "comparisonGate": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105977340537",
+        "conclusion": "failure",
+        "scope": "GitHub reports this independent run and its finite-graph aggregate gate terminal with failure. The four failed case jobs are CoffeeCan3000 and Boulanger graphs and scenarios, documented separately below. The aggregate log endpoint returned BlobNotFound during inspection, so no additional failure cause is inferred from it. Later candidates remain independent pending runs; this terminal result supplies no coverage credit."
+      },
       "coffeeCan3000ScenarioFailure": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948649034",
         "conclusion": "failure",
