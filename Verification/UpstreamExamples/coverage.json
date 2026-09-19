@@ -53,6 +53,28 @@
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479",
       "completedJobs": [
         {
+          "name": "ordinary",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/job/105959910787",
+          "conclusion": "success",
+          "testsPassed": 1475,
+          "buildSeconds": 671.62,
+          "testSeconds": 558.293,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/artifacts/10592944853",
+          "artifactSHA256": "364bc1bbf69ce6c9cb837b77d7c70796cfa26ad74aa9a453e6c1f0b49216d663",
+          "scope": "The terminal hosted log reports all 1475 ordinary tests passing on f667b679, including the inventory correction. Artifact identity comes from GitHub metadata; its contents have not been downloaded or audited. The result excludes dedicated graph, scenario, and upstream suites and predates the later local guard, snapshot, reader, cleanup, and replay changes. It establishes no additional complete upstream configuration match."
+        },
+        {
+          "name": "upstream",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/job/105959910699",
+          "conclusion": "success",
+          "testsPassed": 23,
+          "buildSeconds": 1397.40,
+          "testSeconds": 984.082,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/artifacts/10593670471",
+          "artifactSHA256": "e90117c78fbbb0aeb7a9404f1c5d4e75dca92daf56c3937fcaf8bda3f2496acb",
+          "scope": "The terminal hosted log reports all 23 upstream suite tests passing on f667b679. Artifact identity comes from GitHub metadata; its contents have not been downloaded or audited. This is suite evidence for the pushed candidate, not a complete independent configuration match or evidence for later source changes."
+        },
+        {
           "name": "canonical-corpus-export",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/job/105959910687",
           "conclusion": "success",
