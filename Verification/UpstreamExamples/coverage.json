@@ -1242,6 +1242,7 @@
       "capacityInvestigation": {
         "upstreamManifest": "https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Bakery-Boulangerie/manifest.json",
         "observation": "The pinned MCBoulanger entry records successful exhaustive search with runtime 00:01:00, but supplies no state count. MCBakery's separate 655200-state figure must not be attributed to MCBoulanger.",
+        "diagnostic": "The candidate-only diagnose_boulanger dispatch input in .github/workflows/finite-graph.yml adds an opt-in upstream TLC run before any native export prerequisite. It preserves the original configuration and pinned tools, retains source and input hashes, command, Java version, timing and TLC output, and uploads under a separate diagnostic artifact prefix. Existing comparison jobs and admission requirements remain unchanged. Wrapper static checks pass; hosted execution is pending. This diagnostic earns no coverage credit.",
         "remaining": "Run the unchanged upstream MCBoulanger configuration in hosted TLC before choosing a larger native runner limit. Retain source, tool, configuration, timing, and state-count evidence. The historical runtime is not a comparable benchmark. Native overhead and semantic mismatch remain distinct possibilities. An upstream-only diagnostic cannot establish graph or property equivalence."
       },
       "pendingMigration": {

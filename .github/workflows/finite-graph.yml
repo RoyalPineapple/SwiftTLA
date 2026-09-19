@@ -15,6 +15,10 @@ on:
         default: admission
         type: choice
         options: [candidate, admission]
+      diagnose_boulanger:
+        description: Retain an upstream-only Boulanger capacity diagnostic (candidate only; not parity evidence)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,6 +30,63 @@ env:
   SWIFT_TLA_SHA: ${{ inputs.swift_tla_sha || github.sha }}
 
 jobs:
+  boulanger-reference-diagnostic:
+    if: ${{ inputs.diagnose_boulanger && inputs.admission_mode == 'candidate' }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
+      DIAGNOSTIC_ROOT: ${{ github.workspace }}/.build/boulanger-reference-diagnostic
+    steps:
+      - name: Validate SwiftTLA SHA
+        run: '[[ "$SWIFT_TLA_SHA" =~ ^[0-9a-f]{40}$ ]]'
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          submodules: false
+
+      - name: Retain pinned diagnostic inputs
+        run: |
+          test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          mkdir -p "$DIAGNOSTIC_ROOT"
+          git rev-parse HEAD > "$DIAGNOSTIC_ROOT/source-sha.txt"
+          cp Verification/FiniteGraph/toolchain.json "$DIAGNOSTIC_ROOT/"
+          cp -R Verification/FiniteGraph/fixtures/boulanger "$DIAGNOSTIC_ROOT/inputs"
+          jq -e '[.cases[] | select(.id == "boulanger")] | if length == 1 then .[0] else error("Expected one Boulanger case") end' \
+            Verification/FiniteGraph/cases.json > "$DIAGNOSTIC_ROOT/case.json"
+          cd "$DIAGNOSTIC_ROOT/inputs"
+          shasum -a 256 *.tla *.cfg > "$DIAGNOSTIC_ROOT/input-sha256.txt"
+          test "$(shasum -a 256 MCBoulanger.tla | cut -d ' ' -f 1)" = "$(jq -r .moduleSHA256 "$DIAGNOSTIC_ROOT/case.json")"
+          test "$(shasum -a 256 MCBoulanger.cfg | cut -d ' ' -f 1)" = "$(jq -r .cfgSHA256 "$DIAGNOSTIC_ROOT/case.json")"
+
+      - name: Prepare pinned TLC tools
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+        run: ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT"
+
+      - name: Run unchanged upstream configuration (diagnostic only)
+        timeout-minutes: 30
+        run: |
+          set -o pipefail
+          java_bin="$FINITE_GRAPH_TOOL_ROOT/java-$(uname -m)/Contents/Home/bin/java"
+          "$java_bin" -version > "$DIAGNOSTIC_ROOT/java-version.txt" 2>&1
+          command=("$java_bin" -cp "$FINITE_GRAPH_TOOL_ROOT/downloads/tla2tools.jar"
+            tlc2.TLC -workers 1 -fp 1 -config MCBoulanger.cfg
+            -metadir "$GITHUB_WORKSPACE/.build/boulanger-tlc-state" MCBoulanger)
+          printf '%q ' "${command[@]}" > "$DIAGNOSTIC_ROOT/command.txt"
+          cd "$DIAGNOSTIC_ROOT/inputs"
+          /usr/bin/time -p "${command[@]}" 2>&1 | tee "$DIAGNOSTIC_ROOT/tlc.log"
+
+      - name: Upload upstream-only diagnostic
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: boulanger-reference-diagnostic-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/boulanger-reference-diagnostic
+          include-hidden-files: true
+          if-no-files-found: error
+
   prepare:
     name: Build validator and discover configuration cases
     runs-on: macos-15
