@@ -138,8 +138,8 @@ jobs:
     name: Validate ${{ matrix.label }}
     needs: prepare
     runs-on: macos-15
-    # Native exploration precedes two independent TLC captures; each retains its own process limit.
-    timeout-minutes: 120
+    # Reserve time for retained evidence after the comparison step times out.
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -183,18 +183,25 @@ jobs:
 
       - name: Validate one complete model-owned scenario
         if: matrix.phase == 'scenarios'
+        timeout-minutes: 120
         env:
           SWIFTTLA_SCENARIO_MAXIMUM_STATES: "5000000"
           SWIFTTLA_SCENARIO_TIMEOUT_SECONDS: "600"
           CASE_ID: ${{ matrix.caseID }}
-        run: .build/validation-bin/tlc-validate scenarios run --case "$CASE_ID" --output .build/scenario-evidence
+        run: |
+          set -o pipefail
+          mkdir -p .build/retained
+          .build/validation-bin/tlc-validate scenarios run --case "$CASE_ID" --output .build/scenario-evidence 2>&1 | tee .build/retained/validation.log
 
       - name: Run exact finite graph comparison
         if: matrix.phase == 'graphs'
+        timeout-minutes: 120
         env:
           CASE_ID: ${{ matrix.caseID }}
         run: |
-          .build/validation-bin/tlc-validate finite-graph run --case "$CASE_ID" --output ".build/finite-graph-evidence/$CASE_ID"
+          set -o pipefail
+          mkdir -p .build/retained
+          .build/validation-bin/tlc-validate finite-graph run --case "$CASE_ID" --output ".build/finite-graph-evidence/$CASE_ID" 2>&1 | tee .build/retained/validation.log
           test -f ".build/finite-graph-evidence/$CASE_ID/comparison.json"
 
       - name: Stage retained evidence

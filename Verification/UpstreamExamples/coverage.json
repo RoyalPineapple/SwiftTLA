@@ -22,6 +22,14 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
+    "latestScenarioTimeout": {
+      "sourceSHA": "d30c0c0832c7ecb7dcdee61a1327c9fcb370b1f5",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35375110820/job/105698244593",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35375110820/artifacts/10562695229",
+      "conclusion": "cancelled",
+      "reason": "The check annotation reports that the scenario suite exceeded its one-hour job limit. The aggregate gate failed. Other suites passed.",
+      "sample": "The retained sample 1789756261-37774.txt shows CoffeeCan native graph canonicalization in CanonicalGraph.init, called from NativeModelRun.init. The process footprint was 6.1 GB. This sample identifies active work, not the complete cause of the timeout."
+    },
     "auditedRun": {
       "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364040583",
@@ -30,7 +38,7 @@
       "scenarioTestsPassed": 7,
       "finiteGraphTestsPassed": 25,
       "upstreamTestsPassed": 23,
-      "scope": "All four Swift test suites, Apple-platform examples, canonical corpus export, and the aggregate gate passed. Terminal logs were inspected. This CI result is separate from the still-running independent comparison workflow and does not establish full corpus or DSL completion."
+      "scope": "All four Swift test suites, Apple-platform examples, canonical corpus export, and the aggregate gate passed. Terminal logs were inspected. This historical CI result is separate from independent comparisons and does not establish full corpus or DSL completion."
     },
     "latestOrdinarySuiteFailure": {
       "sourceSHA": "40b2cc6c841b65d97c65014b947a205a97aef75e",
@@ -124,6 +132,14 @@
     "toolchainGap": "Command Line Tools 16.4 supports focused SwiftPM diagnostics with the same SDK build shown in hosted Apple logs. Full Xcode 16.4 is absent locally. Earlier beta-toolchain passes remain uncredited."
   },
   "hostedComparisonFailures": {
+    "latestCoffeeCan3000Attempt": {
+      "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167/job/105666154688",
+      "conclusion": "cancelled",
+      "reason": "The check annotation reports that the job exceeded its two-hour execution limit. Cancellation occurred during the exact comparison step. Evidence staging completed, but the run lists no artifact for this job. The log endpoint returned BlobNotFound. The failed phase within comparison remains unknown. No complete comparison or verification credit exists.",
+      "retentionChange": "Each comparison step now has a two-hour limit within a 150-minute job. The remaining time permits evidence staging and upload. Both commands retain their output in validation.log and preserve failure exit codes with pipefail. YAML and shell syntax checks passed. Hosted retention after timeout remains unproven. No model bound, property, or TLC process limit changed."
+    },
     "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
     "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35344286427",
     "failures": [
@@ -157,6 +173,30 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "5439",
+      "sourceSHA": "d30c0c0832c7ecb7dcdee61a1327c9fcb370b1f5",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SequenceIndexConversionTests|FormalValueEqualityTests|ImportedModuleConfigurationTests|LeastCircularSubstringCorpusModuleContractTests|CompilerPipelineCanonicalizationTests|GeneratedProcessLocalInvariantTests|ProcedureLoweringTests'",
+      "exitCode": 1,
+      "reason": "Compilation rejected process-local initialization because the patch represented primitive Int as a nominal type. The agent stopped the wrapper after this diagnostic. Tests did not run. Cleanup reported a nonempty scratch directory. A process inspection confirmed that no compiler remained active.",
+      "scope": "The base SHA plus the uncommitted type-preservation patch. The next patch retains resolved process element types. No hosted credit applies."
+    },
+    {
+      "session": "78286",
+      "sourceSHA": "d30c0c0832c7ecb7dcdee61a1327c9fcb370b1f5",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SequenceIndexConversionTests|FormalValueEqualityTests|ImportedModuleConfigurationTests|LeastCircularSubstringCorpusModuleContractTests'",
+      "exitCode": 1,
+      "reason": "The generated enum array became [String]. The fixture also omitted the enum value conformance required by the builder. Compilation failed before tests ran.",
+      "scope": "The base SHA plus the uncommitted typed conversion patch. The next patch retains resolved state types through lowering. No hosted credit applies."
+    },
+    {
+      "session": "28273",
+      "sourceSHA": "d30c0c0832c7ecb7dcdee61a1327c9fcb370b1f5",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SequenceIndexConversionTests|FormalValueEqualityTests|ImportedModuleConfigurationTests|LeastCircularSubstringCorpusModuleContractTests'",
+      "exitCode": 1,
+      "reason": "The parser rejected the agrees invariant because the new conversion calls lacked result types in parser scope. Compilation failed before tests ran.",
+      "scope": "The base SHA plus the first uncommitted typed conversion patch. The next patch added conversion result types to parser scope. No hosted credit applies."
+    },
     {
       "session": "31820",
       "sourceSHA": "384648698efa4e21f0b3cf25ee0f7817bac1828f",
