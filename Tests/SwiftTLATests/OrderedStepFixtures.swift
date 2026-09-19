@@ -3,16 +3,19 @@ import SwiftTLAMacros
 
 @TLAModel
 struct OrderedCopyModel {
-    enum Step: String, CaseIterable { case copy }
+    enum Step: String, CaseIterable { case copy, repeatWrites }
 
     static var spec: TLASpec {
         #spec("OrderedCopy") {
             Algorithm("OrderedCopy", scoped: { scope in
-                let x = scope.sharedVar(_name: "x", initial: 1)
-                let y = scope.sharedVar(_name: "y", initial: 0)
+                let x = scope.sharedVar(initial: 1)
+                let y = scope.sharedVar(initial: 0)
                 Do(Step.copy) {
                     Assign(x, to: x + 1)
                     Assign(y, to: x)
+                }
+                Do(Step.repeatWrites) {
+                    Assign(x, to: x + 1)
                     Assign(x, to: x + 1)
                 }
             })

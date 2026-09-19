@@ -30,7 +30,7 @@ package struct IndependentAtomicSteps {
             }
             Do(Step.rollback) {
                 Assign(value, to: 42)
-                When(false)
+                When(value == 0)
                 Assign(copied, to: value)
             }
             ordered { value == copied && value >= 0 && value <= 2 }

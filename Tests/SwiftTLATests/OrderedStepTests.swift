@@ -7,12 +7,17 @@ import Testing
         var machine = try OrderedCopyModel.makeMachine()
         let transition = try machine.send(.copy)
         #expect(transition.before.x == 1)
-        #expect(transition.after.x == 3)
+        #expect(transition.before.y == 0)
+        #expect(transition.after.x == 2)
         #expect(transition.after.y == 2)
+        let repeated = try machine.send(.repeatWrites)
+        #expect(repeated.before == transition.after)
+        #expect(repeated.after.x == 4)
+        #expect(repeated.after.y == 2)
         let graph = try ReachabilityGraph(
             initialMachines: OrderedCopyModel.initialMachines(), maximumStates: 4)
-        #expect(graph.transitions.count == 2)
-        #expect(graph.transitions.keys.allSatisfy { $0.state.x != 2 })
+        #expect(graph.transitions.count == 3)
+        #expect(Set(graph.transitions.keys.map { [$0.state.x, $0.state.y] }) == [[1, 0], [2, 2], [4, 2]])
     }
 
     @Test("Choices and following statements read their current branch values")

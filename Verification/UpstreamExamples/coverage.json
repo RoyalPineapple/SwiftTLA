@@ -58,6 +58,15 @@
       "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798",
+      "coffeeCan3000GraphFailure": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948644772",
+        "conclusion": "failure",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/artifacts/10592496877",
+        "artifactSHA256": "078b6179f5df6431f9fa071355fcb3ee6fd614ed1749ff0393b4799aa295aff4",
+        "artifactBytes": 2036604456,
+        "reason": "The terminal log confirms the comparison step exceeded 120 minutes. Native export completed before TLC execution started at 1528.459 seconds. No complete comparison result was reported.",
+        "scope": "The retained artifact is available remotely but has not been downloaded or audited. The log does not identify the remaining bottleneck within TLC execution and graph handling. This source predates the file-backed reader and failed-batch capture fixes. Those changes still require a complete hosted rerun. No model bound or check changed, and no completion credit is assigned."
+      },
       "comparisonDiscovery": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105945024178",
         "conclusion": "success",
@@ -439,6 +448,18 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "5499",
+      "sourceSHA": "372c871a86ca49fe9ec62b2ff9049fe5f41d88ac",
+      "sourcePatchSHA256": "496fe91609c7661ef149c38aa739341df52fd4a754cf927207bddd962f57efa7",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'GuardedStepExecutionTests|OrderedStepTests|IndependentAtomicStepTests|GeneratedSavedValueSwapTests'",
+      "exitCode": 0,
+      "buildSeconds": 598.88,
+      "testSeconds": 0.019,
+      "testsRun": 14,
+      "result": "All 14 focused tests pass. The top-level rollback guard now reads an earlier assignment instead of a constant. Ordered copying produces x=2 and y=2. Repeated writes then produce x=4 without exposing intermediate updates. Saved-value swaps and nested process and procedure guard checks pass.",
+      "scope": "Source stayed unchanged during the build; only the hosted-failure ledger changed. Existing fixtures supply the acceptance examples without duplicate models. The copy fixture now derives variable names from Swift declarations. Ponytail and cleanliness reviews pass. Static diagnostics pass. AC-02 and AC-03 have local implementation evidence, not hosted verification."
+    },
     {
       "session": "8903",
       "sourceSHA": "376bb6cb0f14e826f045ace42b4374348d6cff6d",
@@ -7862,16 +7883,16 @@
     },
     {
       "id": "AC-02",
-      "status": "missing",
+      "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "OrderedStepTests covers sequential assignment reads, choice filtering, and branch rollback. Local diagnostic 30688 adds nested process and procedure assignment reads and rejected-choice rollback through GuardedStepExecutionTests. Top-level dynamic guard coverage and complete hosted acceptance remain unaudited.",
+      "reason": "Local diagnostics 30688 and 5499 cover sequential, process, procedure, and top-level assignment reads and rejected-branch rollback. OrderedStepTests and GuardedStepExecutionTests retain enabled choices without committing rejected updates. IndependentAtomicStepTests checks a dynamic top-level guard after assignment. Complete hosted acceptance remains pending. This status does not count as a verified DSL criterion.",
       "evidence": []
     },
     {
       "id": "AC-03",
-      "status": "missing",
+      "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLATests/OrderedStepTests.swift covers sequential reads, repeated writes, saved values, and absence of intermediate reachable states. Tests/SwiftTLATests/GeneratedSavedValueSwapTests.swift covers the swap contract. These source pointers are not hosted acceptance evidence. Full criterion coverage remains unaudited.",
+      "reason": "Local diagnostic 5499 passes the exact x=1 to x=2,y=2 copy contract and ordered repeated writes. The complete fixture graph contains only (1,0), (2,2), and (4,2), excluding intermediate updates. GeneratedSavedValueSwapTests proves saved-value swaps; OrderedStepTests also checks saved-value capture and shadowing. Complete hosted acceptance remains pending. This status does not count as a verified DSL criterion.",
       "evidence": []
     },
     {
