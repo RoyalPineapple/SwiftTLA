@@ -4261,6 +4261,21 @@
       "name": "Snapshot Key-Value Store",
       "audit": "reference inputs audited",
       "gap": "The MCKVsnap fixture removes upstream TxIdSymmetric symmetry. Three MCKVS safety configurations lack exact cases. Small declares no symmetry, unlike Medium and Large. APKeyValueStore has no configuration at the pin. Helper coverage, manual record schemas, and duplicate configuration remain unresolved.",
+      "recordMigrationPrerequisite": {
+        "configuration": "specifications/KeyValueStore/MCKVsnap.cfg",
+        "criteria": ["AC-13", "AC-17", "AC-19"],
+        "status": "missing",
+        "finding": "KVsnap OperationFields.value declares OneOf<Transaction, NoValue>. SourceTypeResolver resolves OneOf through normalizedUnion, which merges these named finite domains into one anonymous finite type. NativeSwiftEmitter then names that type through NativeTypeDeclarations instead of retaining the declared Swift OneOf field type. Merely replacing OperationSchema with an ordinary Operation struct cannot preserve the field's native type through this path.",
+        "requiredChange": "Retain ordered typed OneOf alternatives through resolved types, projections, constructors, hashing, ordering, and formal emission. Use typed native conversions, not a TLAValue round trip. Then replace the operation-log schema with an ordinary Swift record and array, preserving upstream op/key/value fields, enum/model-value identities, and all transitions. Validate generated read/write operation records and strict boundary conversion before claiming schema removal.",
+        "evidence": [
+          "Sources/UpstreamParity/CanonicalCorpus/KVsnap.swift",
+          "Sources/SwiftTLAPlugin/SourceTypes.swift",
+          "Sources/SwiftTLA/CompiledValueType.swift",
+          "Sources/SwiftTLAPlugin/NativeTypeDeclarations.swift",
+          "Sources/SwiftTLAPlugin/NativeSwiftEmitter.swift"
+        ],
+        "scope": "Read-only source audit at 7f402cfb. This identifies a lowering requirement; no migration or compiler experiment has passed, and no coverage credit is assigned. OneOf currently has conditional Equatable but no Hashable conformance, another requirement for the ordinary native operation record. Overlapping alternatives must not be silently flattened or guessed."
+      },
       "legacyCleanupComplete": false,
       "modules": [
         {
