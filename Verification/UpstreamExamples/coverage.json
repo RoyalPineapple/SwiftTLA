@@ -432,6 +432,18 @@
   },
   "localDiagnostics": [
     {
+      "session": "34192",
+      "sourceSHA": "11eaee734839a7f2f9d2b7bc1d96955f89db48d9",
+      "sourcePatchSHA256": "b9339c60ea5b147fa702589ebbef50d46717a8e667c8daacbfbad549a70d79c8",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'GuardedStepExecutionTests|IndependentAtomicStepTests|NativeReachabilityTests'",
+      "exitCode": 0,
+      "buildSeconds": 594.01,
+      "testSeconds": 0.016,
+      "testsRun": 11,
+      "result": "All 11 focused tests pass. A false Algorithm guard suppresses division by zero, assignments, and control transfer. A true guard retains both choices. Ambiguous dispatch preserves the snapshot. Generated dispatch and exploration agree on initial successors, and the blocked state produces a deadlock.",
+      "scope": "The worktree stayed unchanged throughout this diagnostic. One generated fixture closes a sequential Algorithm test gap under AC-01 without production changes or a new corpus family. Ponytail and cleanliness reviews kept source-derived names and separate fixture declarations. Static diagnostics pass. Full AC-01 acceptance and hosted evidence remain incomplete."
+    },
+    {
       "session": "93658",
       "sourceSHA": "a8394a670f18085749373deca270a89b6c258dac",
       "sourcePatchSHA256": "2fc4f854a266d07197d81ccb54b383d631277b4f1d88f09bfba5210b2cd15b7b",
@@ -7792,7 +7804,7 @@
       "id": "AC-01",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLATests/IndependentAtomicStepTests.swift covers disabled Do guards and all enabled choices. Its IndependentAtomicSteps fixture includes a false guard with division by zero in the body. The suite exercises generated dispatch and native exploration. Full Algorithm coverage and hosted acceptance evidence remain unaudited.",
+      "reason": "IndependentAtomicStepTests covers top-level guards and choices. GuardedStepExecutionTests covers sequential Algorithm guards, body-evaluation failure suppression, control transfer, ambiguity, and complete native exploration. Local diagnostic 34192 passed both guard values and the existing suites. Process and procedure contexts still require complete acceptance audits. Hosted acceptance evidence remains incomplete.",
       "evidence": []
     },
     {
