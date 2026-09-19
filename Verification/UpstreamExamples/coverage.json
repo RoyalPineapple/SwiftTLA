@@ -2467,42 +2467,42 @@
     {
       "path": "specifications/dijkstra-mutex",
       "name": "Dijkstra's Mutual Exclusion Algorithm",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "reference inputs audited",
+      "gap": "The existing Swift model has three processes and ordinary per-process weak fairness. LSpec-model requires three processes, an ncs fairness exemption, MutualExclusion, and temporal DeadlockFreedom. Safety-4-processors requires four processes, Spec fairness, and MutualExclusion. Neither configuration has a model-owned scenario or an independent reference case. The existing test checks only 90882 native states. Both configurations remain missing, and legacy cleanup remains incomplete.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
+          "role": "algorithm source",
+          "reason": "Defines the 13 labeled actions, Spec, LSpec, MutualExclusion, DeadlockFree, StarvationFree, and DeadlockFreedom. The Toolbox copies differ only in comments. Source-defined property variants still need disposition.",
+          "implementations": ["Sources/UpstreamParity/Examples/DijkstraMutex.swift"],
           "dispositionComplete": false
         },
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/DijkstraMutex.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "Pinned snapshot d25e4aa00a765366f20b0281441599c09e4e9460 supplies LSpec and DeadlockFreedom to the adjacent MC wrapper. LSpec exempts ncs from per-process weak fairness. The Swift model lacks this exemption and temporal property.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/MC.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The wrapper selects Proc={p1,p2,p3}, LSpec, MutualExclusion, and DeadlockFreedom. The configuration uses opaque model values and defaultInitValue. It does not disable TLC deadlock checks. Temporal DeadlockFreedom is a separate check.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/DijkstraMutex.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "behavior dependency",
+          "reason": "This snapshot has the same blob as the LSpec-model dependency. Its adjacent MC wrapper selects Spec, which retains weak fairness at ncs.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/MC.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The wrapper selects Proc={p1,p2,p3,p4}, Spec, and MutualExclusion. The configuration uses opaque model values and defaultInitValue, selects no temporal property, and does not disable TLC deadlock checks. The Swift model has only three processes.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -2529,7 +2529,12 @@
           "evidence": []
         }
       ],
-      "partialCases": []
+      "partialCases": [
+        {
+          "implementation": "Sources/UpstreamParity/Examples/DijkstraMutex.swift",
+          "reason": "DijkstraMutexModel uses three string-valued process identifiers, legacy Function and SetExpr values, and unqualified weak fairness. Its header incorrectly says four processes. UpstreamParityTests.dijkstraMutexParity checks a native state count, not complete graph or property agreement. No registered finite-graph case or model-owned scenario covers either published configuration. No completion credit."
+        }
+      ]
     },
     {
       "path": "specifications/DiningPhilosophers",
