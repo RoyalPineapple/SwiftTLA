@@ -3820,7 +3820,7 @@
       "path": "specifications/LeastCircularSubstring",
       "name": "Minimal Circular Substring",
       "audit": "reference inputs audited",
-      "gap": "Both configurations have historical complete hosted graph and property matches, with their published character and length bounds, TypeInvariant, and Correctness unchanged. Neither upstream configuration selects the declared Termination property. Typed conversions, predicates, ordinary set inputs and results, empty-sequence projections, and legacy caller cleanup now have focused local coverage. Family credit remains withheld until complete current-source Small and Medium comparisons are inspected and the helper disposition is finalized against that evidence.",
+      "gap": "No family gap remains at source SHA 3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217. Small and Medium have complete independent hosted graph and selected-property matches at that SHA. The pinned manifest lists exactly these two configurations; neither selects Termination or defines an environment variant. All three module dispositions and legacy cleanup are complete. Family completion does not establish full DSL acceptance or qualify subsequent source changes.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -3861,12 +3861,12 @@
             ],
             "boundaryCheck": "Session 59023 passes FormalValueProjectionTests and related contracts: upstream EmptyZSeq projects as an empty zero-based sequence, including nested collections and generated records. Lossy element decoders, invalid domains, projection collisions, changed string bytes, and model-value/string conflation are rejected. This closes the identified local projection gap, not current-source hosted equivalence or full helper acceptance."
           },
-          "reason": "This stateless helper has no standalone upstream configuration; it is included in both configured roots' pinned dependency closures, not excluded. The operator audit maps every upstream definition. SequenceIndexConversionTests covers generated conversions, transition/checking agreement, nominal element types, order, repetitions, and empty inputs. ImportedModuleConfigurationTests covers generated bounded initialization and rotation invariants. TLAModuleBundleTests covers separate module export, finite Nat replacement, typed set domains, indices, rotations, and lexicographic cases. FormalValueProjectionTests covers empty representations, nested records and collections, and malformed or lossy projections. Sessions 59023 and 10635 passed these focused checks. The remaining disposition gate is inspection of complete independent Small and Medium comparisons at the updated source SHA; these local checks are not universal operator proofs or additional upstream configurations.",
+          "reason": "This stateless helper has no standalone upstream configuration; it is included in both configured roots' pinned dependency closures, not excluded. The operator audit maps every upstream definition. SequenceIndexConversionTests covers generated conversions, transition/checking agreement, nominal element types, order, repetitions, and empty inputs. ImportedModuleConfigurationTests covers generated bounded initialization and rotation invariants. TLAModuleBundleTests covers separate module export, finite Nat replacement, typed set domains, indices, rotations, and lexicographic cases. FormalValueProjectionTests covers empty representations, nested records and collections, and malformed or lossy projections. Sessions 59023 and 10635 passed these focused checks. Complete independent Small and Medium comparisons at 3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217 now close the configured dependency evidence gate. All five reference module/configuration files match the inventory's pinned Git blobs. This disposition covers the declared corpus dependency, not universal operator proofs or additional configurations.",
           "implementations": [
             "Sources/SwiftTLA/ZSequences.swift",
             "Sources/SwiftTLAMacros/ZSequences+Rotations.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -3884,7 +3884,8 @@
               "caseID": "least-circular-substring-medium"
             }
           ],
-          "evidence": [{
+          "evidence": [
+            {"sourceSHA":"3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10587049818","artifactDigest":"sha256:6144342633381d281962a3713e71f82c4450129e856fb757eacc548aedfc3840","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 9841 initial states, 1007232 states, 1007232 labeled edges. Completion footers and every record count agree. TypeInvariant, Correctness, and deadlock are satisfied in both comparisons. Module, dependency, original configuration, TLC, Java, and bridge pins match. CharSetSize=3 and MaxStringLength=8 are unchanged; the upstream configuration does not select Termination."},{
             "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
             "developerToolsVersion": "16.4",
             "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167",
