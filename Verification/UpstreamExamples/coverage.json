@@ -485,6 +485,18 @@
   },
   "localDiagnostics": [
     {
+      "session": "8864",
+      "sourceSHA": "410308a40282759a7972a8aedcf09bb46581ee91",
+      "sourcePatchSHA256": "4180a91616d0f85cb175d7c98ed99aed8e102432d1aa3dcab68c7970667a4275",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'identifiesRegisteredScenarios|validatesIndependentResults|distinguishesExpectedDeadlock|rejectsMissingExpectations|derivesCompleteCounterEvidence|rejectsIncompleteExpectedFailure'",
+      "exitCode": 0,
+      "buildSeconds": 599.15,
+      "testSeconds": 0.007,
+      "testsRun": 6,
+      "result": "The scenario CLI compiles with elapsed-time markers before native scenario construction, request preparation, and comparison/retention. Six existing contract tests pass for scenario identity, complete comparison coverage, expectations, and incomplete exploration rejection.",
+      "scope": "Source stayed unchanged during the build; only the export-evidence ledger changed. Ponytail review reuses stderr and ContinuousClock without a new logging framework, evidence schema, or changed checking behavior. These tests do not execute the CLI markers or hosted TLC; retained hosted output remains required. No new coverage credit is assigned."
+    },
+    {
       "session": "20764",
       "sourceSHA": "a2316d6e7b528d64703fda3cadd7e03db6e35940",
       "sourcePatchSHA256": "fd6707aa344f5c7fd324b045ba90c345e57b76311118ef3c102b67a37efc3db7",

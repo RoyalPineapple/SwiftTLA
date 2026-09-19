@@ -37,8 +37,11 @@ func runScenarios(arguments: [String]) -> Never {
         var failed = false
         for (id, scenario) in selected {
             let directory = output.appendingPathComponent(id)
+            let started = ContinuousClock.now
             do {
+                fputs("scenario \(id): native-scenario at \(started.duration(to: .now))\n", stderr)
                 let run = try NativeScenarioRun(scenario, maximumStates: maximumStates)
+                fputs("scenario \(id): request-preparation at \(started.duration(to: .now))\n", stderr)
                 let bundle = try run.native.rendered.tlaBundle(checking: [], checkDeadlock: false)
                 let work = try RetainedFiles.createDirectory(output.appendingPathComponent("work-\(id)"), beneath: output)
                 let launch = try FiniteGraphCase(id: scenario.name,
@@ -51,6 +54,7 @@ func runScenarios(arguments: [String]) -> Never {
                     traceOutput: work.appendingPathComponent("counterexample.json"), workingDirectory: work,
                     finiteGraphCase: launch, runID: UUID(), timeout: timeout, invocation: .finiteGraph,
                     referenceArtifacts: tools.artifacts)
+                fputs("scenario \(id): comparison-and-retention at \(started.duration(to: .now))\n", stderr)
                 try TLCScenarioCheck().run(run, request: request, in: directory)
                 print("scenario \(id) (\(scenario.name)): exact")
             } catch {
