@@ -814,9 +814,16 @@ extension ParserSession {
             components.append(component)
         }
         let fairness: AlgorithmFairness
+        var fairnessExcludedLabels: [AlgorithmLabelModel] = []
         if let expression = call.arguments.first(where: { $0.label?.text == "fairness" })?.expression {
-            guard let access = expression.as(MemberAccessExprSyntax.self) else {
-                algorithmParseFailure = "Each fairness must be .none, .weak, or .strong."
+            let factory = expression.as(FunctionCallExprSyntax.self)
+            guard let access = (factory?.calledExpression ?? expression).as(MemberAccessExprSyntax.self) else {
+                algorithmParseFailure = "Each fairness must be .none, .weak, .strong, or a weak/strong policy excluding typed labels."
+                return nil
+            }
+            if let base = access.base?.trimmedDescription,
+               base != "ProcessFairness" && base != "SwiftTLA.ProcessFairness" {
+                algorithmParseFailure = "Each fairness must use ProcessFairness."
                 return nil
             }
             switch access.declName.baseName.sourceIdentifierName {
@@ -827,11 +834,25 @@ extension ParserSession {
                 algorithmParseFailure = "Each fairness must be .none, .weak, or .strong."
                 return nil
             }
+            if let factory {
+                guard fairness != .none, factory.trailingClosure == nil,
+                      factory.arguments.count == 1,
+                      let argument = factory.arguments.first, argument.label?.text == "excluding",
+                      let labels = argument.expression.as(ArrayExprSyntax.self) else {
+                    algorithmParseFailure = "Fairness exclusions require .weak(excluding: [Step.label]) or .strong(excluding: [Step.label])."
+                    return nil
+                }
+                for element in labels.elements {
+                    guard let name = algorithmLabel(element.expression) else { return nil }
+                    fairnessExcludedLabels.append(.init(name: name))
+                }
+            }
         } else {
             fairness = .none
         }
         return .process(.init(typeName: typeName, domain: domain, fairness: fairness,
-            components: components, resolvedElementType: elementType))
+            components: components, resolvedElementType: elementType,
+            fairnessExcludedLabels: fairnessExcludedLabels))
     }
 
     /// Parses one PlusCal-shaped state declaration into the source model.

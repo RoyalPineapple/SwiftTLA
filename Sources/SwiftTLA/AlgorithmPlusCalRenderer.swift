@@ -103,7 +103,8 @@ internal struct AlgorithmPlusCalRenderer {
         }
         lines.append("{")
         for step in process.steps {
-            lines += try render(step: step, indent: "  ")
+            lines += try render(step: step, indent: "  ",
+                fairnessExcluded: process.fairnessExcludedSteps.contains(step.label))
         }
         lines.append("}")
         return lines
@@ -126,16 +127,17 @@ internal struct AlgorithmPlusCalRenderer {
         }
     }
 
-    private func render(step: CompiledAuthoredPlusCalStep, indent: String) throws -> [String] {
+    private func render(step: CompiledAuthoredPlusCalStep, indent: String, fairnessExcluded: Bool = false) throws -> [String] {
+        let suffix = fairnessExcluded ? ":-" : ":"
         if let condition = step.loopCondition {
             let label = try formalRenderer.controlLocationSourceName(step.label)
-            var lines = ["\(indent)\(label): while (\(try expression(condition))) {"]
+            var lines = ["\(indent)\(label)\(suffix) while (\(try expression(condition))) {"]
             lines += try render(statements: step.statements, indent: indent + "  ")
             lines.append("\(indent)};")
             return lines
         }
         let label = try formalRenderer.controlLocationSourceName(step.label)
-        var lines = ["\(indent)\(label):"]
+        var lines = ["\(indent)\(label)\(suffix)"]
         lines += try render(statements: step.statements, indent: indent + "  ")
         return lines
     }

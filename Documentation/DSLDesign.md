@@ -527,6 +527,19 @@ Without `on:`, the projection contains the complete execution state.
 The compiler preserves the projection through native checking, refinement checking, and TLA+ export.
 These declarations do not change the generated application transitions or scheduler.
 
+Process fairness can exempt named steps. The forms are
+`ProcessFairness.weak(excluding: [Step])` and `ProcessFairness.strong(excluding: [Step])`,
+where `Step` is a `Sendable`, `CaseIterable`, string-backed enum.
+For example, `Each(members, fairness: .weak(excluding: [Step.ncs]))` permits indefinite waiting at `ncs`.
+Other steps retain the process fairness policy. Exemptions do not change guards, transitions, initialization, or selected properties.
+
+Each exemption must name a step in the same `Each` declaration. Duplicate and unknown exemptions produce compiler diagnostics.
+For example, `.weak(excluding: [Step.ncs, Step.ncs])` is invalid.
+An empty exemption list preserves the original policy. `.none` does not accept exemptions.
+The compiler preserves resolved control-location identities through native checking and both export paths.
+PlusCal export marks each exempt label with `:-`, including `While` labels.
+This contract supplies the fairness exemption required by upstream Boulanger's `ncs:-` declaration.
+
 ### Temporal claims for each process member
 
 A temporal declaration inside `Each` applies separately to every member of that

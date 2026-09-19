@@ -103,7 +103,8 @@ package struct AlgorithmModel: Sendable {
             case .process(let process):
                 return .process(.init(typeName: process.typeName, domain: process.domain,
                     fairness: process.fairness, components: process.components.map(component),
-                    resolvedElementType: process.resolvedElementType))
+                    resolvedElementType: process.resolvedElementType,
+                    fairnessExcludedLabels: process.fairnessExcludedLabels))
             case .procedure(let procedure):
                 return .procedure(.init(name: procedure.name, parameters: procedure.parameters,
                     components: procedure.components.map(component)))
@@ -185,7 +186,8 @@ package struct AlgorithmModel: Sendable {
                         domain: expression(process.domain),
                         fairness: process.fairness,
                         components: process.components.map(component),
-                        resolvedElementType: process.resolvedElementType
+                        resolvedElementType: process.resolvedElementType,
+                        fairnessExcludedLabels: process.fairnessExcludedLabels
                     )
                 )
             case .procedure(let procedure):
@@ -286,6 +288,7 @@ internal struct AuthoredPlusCalProcessPlan: Sendable {
     let swiftType: String
     let domain: StateExpr
     let fairness: AlgorithmFairness
+    let fairnessExcludedLabels: [AlgorithmLabelModel]
     let locals: [AlgorithmStateModel]
     let steps: [AlgorithmStepModel]
 
@@ -295,6 +298,7 @@ internal struct AuthoredPlusCalProcessPlan: Sendable {
         swiftType = process.typeName
         domain = process.domain
         fairness = process.fairness
+        fairnessExcludedLabels = process.fairnessExcludedLabels
         locals = process.components.compactMap {
             guard case .local(let declaration) = $0 else { return nil }
             return declaration
@@ -338,6 +342,7 @@ internal struct CompiledAuthoredPlusCalProcess: Sendable {
     let swiftType: String
     let domain: CompiledExpression
     let fairness: AlgorithmFairness
+    let fairnessExcludedSteps: Set<ControlLocationID>
     let locals: [CompiledAuthoredPlusCalState]
     let steps: [CompiledAuthoredPlusCalStep]
 }
@@ -486,6 +491,7 @@ package struct AlgorithmProcessModel: Sendable {
     package let resolvedElementType: CompiledValueType?
     package let domain: StateExpr
     package let fairness: AlgorithmFairness
+    package let fairnessExcludedLabels: [AlgorithmLabelModel]
     package let components: [AlgorithmComponentModel]
 
     package var steps: [AlgorithmStepModel] {
@@ -496,11 +502,13 @@ package struct AlgorithmProcessModel: Sendable {
     }
 
     package init(typeName: String, domain: StateExpr, fairness: AlgorithmFairness,
-        components: [AlgorithmComponentModel], resolvedElementType: CompiledValueType? = nil) {
+        components: [AlgorithmComponentModel], resolvedElementType: CompiledValueType? = nil,
+        fairnessExcludedLabels: [AlgorithmLabelModel] = []) {
         self.typeName = typeName
         self.resolvedElementType = resolvedElementType
         self.domain = domain
         self.fairness = fairness
+        self.fairnessExcludedLabels = fairnessExcludedLabels
         self.components = components
     }
 }

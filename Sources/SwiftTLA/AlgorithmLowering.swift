@@ -306,7 +306,9 @@ enum AlgorithmLowerer {
                     generatedAssertionInvariants += assertionInvariants(loweredStatements.assertions,
                         enabled: enabled, domain: process.domain)
                 }
-                fairness += fairnessConditions(for: generatedAction, domain: process.domain, policy: process.fairness)
+                if !process.fairnessExcludedLabels.contains(atomic.label) {
+                    fairness += fairnessConditions(for: generatedAction, domain: process.domain, policy: process.fairness)
+                }
                 return generatedAction
             }
         }

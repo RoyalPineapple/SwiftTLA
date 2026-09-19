@@ -244,6 +244,17 @@
   },
   "localDiagnostics": [
     {
+      "session": "28897",
+      "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ProcessFairnessExemptionTests|ProjectedFairnessTests|AlgorithmBuilderParsingTests|AlgorithmPlusCalRendererTests|CompilerPipelineCanonicalizationTests|ConfiguredProcessTests|GeneratedProcessLocalInvariantTests|ProcedureLoweringTests'",
+      "exitCode": 0,
+      "buildSeconds": 579.17,
+      "testSeconds": 0.297,
+      "testsRun": 183,
+      "result": "Typed weak and strong step exemptions preserve transitions and initialization while removing only the named fairness obligation. Empty typed lists preserve the original obligations. The generated machine and compiled checker retain the exempt-entry stuttering counterexample. Direct TLA omits the exempt obligation; PlusCal marks exempt Do and While labels with :- and preserves other labels. Duplicate, unknown, and malformed exclusions are rejected. Existing process, procedure, projection, parser, and compilation-identity contracts pass.",
+      "scope": "The starting SHA plus the process-fairness exemption patch committed with this entry. Only ledger files changed during the build. Local diagnostics do not establish a complete Boulanger configuration match or full AC-15 acceptance; the upstream port and independent hosted checks remain required."
+    },
+    {
       "session": "90612",
       "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ProcessFairnessExemptionTests|ProjectedFairnessTests|AlgorithmBuilderParsingTests|AlgorithmPlusCalRendererTests|CompilerPipelineCanonicalizationTests|ConfiguredProcessTests|GeneratedProcessLocalInvariantTests|ProcedureLoweringTests'",

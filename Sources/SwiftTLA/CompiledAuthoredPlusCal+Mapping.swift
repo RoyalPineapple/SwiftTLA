@@ -42,7 +42,9 @@ extension CompiledAuthoredPlusCalAlgorithmPlan {
                     locals: $0.locals.map(state), steps: $0.steps.map(step))
             }, processes: processes.map {
                 try .init(name: $0.name, binder: $0.binder, swiftType: $0.swiftType,
-                    domain: transform($0.domain), fairness: $0.fairness, locals: $0.locals.map(state), steps: $0.steps.map(step))
+                    domain: transform($0.domain), fairness: $0.fairness,
+                    fairnessExcludedSteps: $0.fairnessExcludedSteps,
+                    locals: $0.locals.map(state), steps: $0.steps.map(step))
             }, sequentialSteps: sequentialSteps.map(step), properties: properties,
             translatorOwnedPropertyNames: translatorOwnedPropertyNames)
     }

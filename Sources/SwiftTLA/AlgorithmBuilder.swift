@@ -351,18 +351,30 @@ public struct LocalVariable<Value: TLAValueType>: TypedExpression {
 /// Scheduling policy for one `Each` process family.
 ///
 /// `.weak` is the PlusCal `fair process` spelling. The lowerer applies it to
-/// every generated atomic action for every concrete process identifier.
-public enum ProcessFairness: Sendable {
-    case none
-    case weak
-    case strong
+/// every participating atomic action for every concrete process identifier.
+public struct ProcessFairness: Sendable {
+    fileprivate let model: AlgorithmFairness
+    fileprivate let excludedLabels: [AlgorithmLabelModel]
 
-    fileprivate var model: AlgorithmFairness {
-        switch self {
-        case .none: .none
-        case .weak: .weak
-        case .strong: .strong
-        }
+    private init(model: AlgorithmFairness, excludedLabels: [AlgorithmLabelModel] = []) {
+        self.model = model
+        self.excludedLabels = excludedLabels
+    }
+
+    public static let none = Self(model: .none)
+    public static let weak = Self(model: .weak)
+    public static let strong = Self(model: .strong)
+
+    public static func weak<Label: CaseIterable & RawRepresentable & Sendable>(
+        excluding labels: [Label]
+    ) -> Self where Label.RawValue == String {
+        Self(model: .weak, excludedLabels: labels.map { .init(name: $0.rawValue) })
+    }
+
+    public static func strong<Label: CaseIterable & RawRepresentable & Sendable>(
+        excluding labels: [Label]
+    ) -> Self where Label.RawValue == String {
+        Self(model: .strong, excludedLabels: labels.map { .init(name: $0.rawValue) })
     }
 }
 
@@ -735,7 +747,7 @@ public func Each<Domain: FormalSetValue>(
     fairness: ProcessFairness = .none,
     @AlgorithmBuilder _ body: (ProcessIdentifier<Domain.Element>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
-    process(domain, fairness: fairness.model, body)
+    process(domain, fairness: fairness, body)
 }
 
 public func Each<Domain: FormalSetValue>(
@@ -750,13 +762,14 @@ public func Each<Domain: FormalSetValue>(
         typeName: swiftSurfaceTypeName(for: Domain.Element.self),
         domain: domain.stateExpr,
         fairness: fairness.model,
-        components: scope.declarations.map(\.model) + components.map(\.model)
+        components: scope.declarations.map(\.model) + components.map(\.model),
+        fairnessExcludedLabels: fairness.excludedLabels
     )))
 }
 
 private func process<Domain: FormalSetValue>(
     _ domain: some TypedExpression<Domain>,
-    fairness: AlgorithmFairness,
+    fairness: ProcessFairness,
     @AlgorithmBuilder _ body: (ProcessIdentifier<Domain.Element>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
     let identifier = ProcessIdentifier<Domain.Element>(expression: .currentProcess)
@@ -765,8 +778,9 @@ private func process<Domain: FormalSetValue>(
             AlgorithmProcessModel(
                 typeName: swiftSurfaceTypeName(for: Domain.Element.self),
                 domain: domain.stateExpr,
-                fairness: fairness,
-                components: body(identifier).map(\.model)
+                fairness: fairness.model,
+                components: body(identifier).map(\.model),
+                fairnessExcludedLabels: fairness.excludedLabels
             )
         )
     )
@@ -1523,6 +1537,14 @@ package enum AlgorithmValidator {
         }
         if Set(labels).count != labels.count {
             diagnostics.append(AlgorithmDiagnostic(.duplicateLabel, at: processAnchor))
+        }
+
+        let exemptions = process.fairnessExcludedLabels.map(\.name)
+        if Set(exemptions).count != exemptions.count {
+            diagnostics.append(.init(.duplicateFairnessExemption, at: processAnchor))
+        }
+        for label in exemptions where !labels.contains(label) || process.fairness == .none {
+            diagnostics.append(.init(.invalidFairnessExemption, at: .step(process: index, label: label)))
         }
 
         for component in process.components {

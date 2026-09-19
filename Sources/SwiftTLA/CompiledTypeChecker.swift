@@ -502,6 +502,7 @@ package struct CompiledTypeChecker: Sendable {
             actionBinders.insert(process.binder)
             return try CompiledAuthoredPlusCalProcess(name: process.name, binder: process.binder, swiftType: process.swiftType,
                 domain: domain, fairness: process.fairness,
+                fairnessExcludedSteps: process.fairnessExcludedSteps,
                 locals: process.locals.map { try checkAuthoredState($0) },
                 steps: process.steps.map { try checkAuthoredStep($0, procedures: plan.procedures) })
         }

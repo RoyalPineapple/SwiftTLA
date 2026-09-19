@@ -538,6 +538,9 @@ struct CompiledLowerer {
                     swiftType: process.swiftType,
                     domain: domain,
                     fairness: process.fairness,
+                    fairnessExcludedSteps: Set(try process.fairnessExcludedLabels.map {
+                        try controlLocation(.init($0.name), owner: process.owner, at: "\(path).fairness.excluding")
+                    }),
                     locals: try process.locals.enumerated().map {
                         try authoredPlusCalState($0.element, at: "\(path).locals[\($0.offset)]", scope: scope)
                     },
