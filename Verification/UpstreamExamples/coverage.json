@@ -53,6 +53,14 @@
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479",
       "completedJobs": [
         {
+          "name": "canonical-corpus-export",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/job/105959910687",
+          "conclusion": "success",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/artifacts/10592938504",
+          "artifactSHA256": "554f0d3fac53dc2193ed457b466b3b9a80b80623d0bfc75e51dbd9c0d8248746",
+          "scope": "The downloaded manifest binds to f667b679 and all 21 declared file hashes match. Four canonical cases retain direct TLA, authored PlusCal, configurations, and imports. The Boulanger direct configuration retains N=3, MaxNat=3, StateConstraint, deadlock checking, MutualExclusion, TypeOK, and Inv. Export integrity is not independent semantic comparison or a new verified configuration. Later local source changes remain outside this evidence."
+        },
+        {
           "name": "finite-graphs",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/job/105959910510",
           "conclusion": "cancelled",
