@@ -149,9 +149,9 @@ public enum ZSequences {
   ///
   /// `Import(ZSequences.module, configuring: ...)` supplies the finite `Nat`
   /// domain used by the upstream `ZSeq` definition.
-  public static func sequences<Element: TLAValueType>(
-    over elements: some TypedExpression<SetExpr<Element>>
-  ) -> Expr<SetExpr<ZeroBasedSequence<Element>>> {
+  public static func sequences<Domain: FormalSetValue>(
+    over elements: some TypedExpression<Domain>
+  ) -> Expr<SetExpr<ZeroBasedSequence<Domain.Element>>> {
     Expr(.recursiveCall("ZSeq", [elements.stateExpr]))
   }
 
@@ -189,8 +189,8 @@ public enum ZSequences {
   public static func lexicographicallyPrecedesOrEquals(
     _ left: some TypedExpression<ZeroBasedSequence<Int>>,
     _ right: some TypedExpression<ZeroBasedSequence<Int>>
-  ) -> StateExpr {
-    .recursiveCall("LexicographicallyPrecedesOrEquals", [left.stateExpr, right.stateExpr])
+  ) -> Expr<Bool> {
+    Expr(.recursiveCall("LexicographicallyPrecedesOrEquals", [left.stateExpr, right.stateExpr]))
   }
 
   /// Gives the imported module's `Nat` operator a finite TLC model domain.

@@ -30,7 +30,7 @@ struct ConfiguredSequenceMachine {
             let rotationsPreserveLength = Invariant()
             Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: maximum))
             Algorithm("Worker", scoped: { algorithm in
-                let sequence = algorithm.sharedVar(in: ZSequences.sequences(over: SetExpr<Int>.literal(0, 1)))
+                let sequence = algorithm.sharedVar(in: ZSequences.sequences(over: Set<Int>([0, 1])))
                 let length = algorithm.sharedVar(initial: ZSequences.length(of: sequence))
                 Do(Step.rotate) {
                     Assign(sequence, to: ZSequences.rotation(of: sequence, leftBy: 1))

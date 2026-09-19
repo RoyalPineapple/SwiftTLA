@@ -156,6 +156,25 @@ struct TLAModuleBundleTests {
     #expect(parsed == .recursiveCall("Rotation", [.variable("corpus"), .int(1)]))
   }
 
+  @Test("typed lexicographic predicates preserve empty, prefix, and element ordering")
+  func typedLexicographicPredicates() throws {
+    let consumer = TLASpec("TypedLexicographicPredicates") {
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 3))
+    }
+    let functions = try FormalModuleClosure.resolve(root: consumer).linkedOperators.recursiveFunctions
+    let cases: [([Int], [Int], Bool)] = [
+      ([], [], true), ([], [0], true), ([0], [], false),
+      ([0], [0, 1], true), ([0, 1], [0], false),
+      ([1, 1, 1], [1, 1, 1], true),
+      ([-1, 2], [0, -2], true), ([0, 2], [0, 1], false)
+    ]
+    for (left, right, expected) in cases {
+      let predicate: Expr<Bool> = ZSequences.lexicographicallyPrecedesOrEquals(
+        ZSequences.zeroBased(from: left.expr), ZSequences.zeroBased(from: right.expr))
+      #expect(try compiledValue(predicate.stateExpr, recursiveFunctions: functions) == .bool(expected))
+    }
+  }
+
   @Test("ZSequences keeps the upstream operators in its own importable module")
   func zeroBasedSequenceModuleIsExecutable() throws {
     let sequence = ZeroBasedSequence<Int>.literal(3, 1, 2)
@@ -211,8 +230,9 @@ struct TLAModuleBundleTests {
     #expect(bundle.imports.map(\.name) == ["ZSequences"])
     #expect(!bundle.root.tla.contains("ZSeq(elements) =="))
 
+    let domain = ZSequences.sequences(over: Set<Int>([0, 1]))
     let sequences = try compiledValue(
-      .recursiveCall("ZSeq", [.setLiteral([.int(0), .int(1)])]),
+      domain.stateExpr,
       recursiveFunctions: try FormalModuleClosure.resolve(root: consumer)
         .linkedOperators.recursiveFunctions
     )
@@ -225,7 +245,7 @@ struct TLAModuleBundleTests {
     let corpus = Var<ZeroBasedSequence<Int>>("corpus", .init())
     let initialized = TLASpec("InitializedZSequences") {
       Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 2))
-      Variable(corpus, in: ZSequences.sequences(over: SetExpr<Int>.literal(0, 1)))
+      Variable(corpus, in: ZSequences.sequences(over: Set<Int>([0, 1])))
     }
     let compilation = try initialized.compile()
     #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 7)

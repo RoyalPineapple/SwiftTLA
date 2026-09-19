@@ -67,15 +67,15 @@ package struct LeastCircularSubstringModel: Sendable {
                     ZSequences.sequences(over: IntRange(0, through: CharSetSize - 1)).contains(b)
                         && n == ZSequences.length(of: b)
                         && Functions(from: IntRange(0, through: n * 2),
-                            to: IntRange(0, through: n * 2).union(SetExpr<Int>.literal(-1))).contains(f)
-                        && IntRange(0, through: n * 2).union(SetExpr<Int>.literal(-1)).contains(i)
-                        && IntRange(0, through: n * 2).union(SetExpr<Int>.literal(1)).contains(j)
-                        && ZSequences.indices(of: b).union(SetExpr<Int>.literal(0)).contains(k)
+                            to: IntRange(0, through: n * 2).inserting(-1)).contains(f)
+                        && IntRange(0, through: n * 2).inserting(-1).contains(i)
+                        && IntRange(0, through: n * 2).inserting(1).contains(j)
+                        && ZSequences.indices(of: b).inserting(0).contains(k)
                 }
                 Correctness {
                     !Finished() || ForAll(in: ZSequences.rotations(of: b)) { other in
-                        Expr<Bool>(ZSequences.lexicographicallyPrecedesOrEquals(
-                            ZSequences.rotation(of: b, leftBy: k), other.seq))
+                        ZSequences.lexicographicallyPrecedesOrEquals(
+                            ZSequences.rotation(of: b, leftBy: k), other.seq)
                             && (ZSequences.rotation(of: b, leftBy: k) != other.seq || k <= other.shift)
                     }
                 }

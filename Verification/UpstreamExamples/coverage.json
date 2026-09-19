@@ -186,6 +186,28 @@
   },
   "localDiagnostics": [
     {
+      "session": "18388",
+      "sourceSHA": "3f62e103fc6758e554da01f4526499edf8f44ab8",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLAModuleBundleTests|ImportedModuleConfigurationTests|SequenceIndexConversionTests|SequenceMembershipTests|LeastCircularSubstringCorpusModuleContractTests|UpstreamCorpusInventoryTests'",
+      "exitCode": 0,
+      "buildSeconds": 548.51,
+      "testSeconds": 1.130,
+      "testsRun": 44,
+      "result": "The ZSequences domain helper accepts ordinary Swift sets through its existing generic formal-set contract. All callers use typed set values or expressions. Lexicographic predicates remain typed, and LeastCircularSubstring no longer wraps raw expressions or constructs singleton sets through legacy spellings. Membership error propagation, both published configurations, module export, and the coverage ledger checks pass.",
+      "scope": "The starting SHA plus the cleanup patch committed with this entry. No model bound, selected property, pinned reference, or transition changed. Hosted equivalence for the new source remains required, and the empty-sequence projection gap remains open."
+    },
+    {
+      "session": "37385",
+      "sourceSHA": "3f62e103fc6758e554da01f4526499edf8f44ab8",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLAModuleBundleTests|ImportedModuleConfigurationTests|SequenceIndexConversionTests|LeastCircularSubstringCorpusModuleContractTests'",
+      "exitCode": 0,
+      "buildSeconds": 550.55,
+      "testSeconds": 1.061,
+      "testsRun": 36,
+      "result": "The lexicographic helper returns a typed Boolean expression. Empty, prefix, repeated-element, and signed-element ordering cases pass. LeastCircularSubstring uses the typed predicate and singleton insertion without raw expression wrappers. Existing configuration, initial-state, conversion, and module-boundary checks pass.",
+      "scope": "The starting SHA plus the cleanup patch before generalizing the sequence helper's set input. No hosted equivalence or family completion credit."
+    },
+    {
       "session": "96220",
       "sourceSHA": "d0392111ee75ce2937c0661a21788f07d3ce9ac4",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SequenceIndexConversionTests|FormalValueEqualityTests|ImportedModuleConfigurationTests|LeastCircularSubstringCorpusModuleContractTests|CompilerPipelineCanonicalizationTests|GeneratedProcessLocalInvariantTests|ProcedureLoweringTests|StateDeclarationNamesTests|ConfiguredProcessTests|SpecVariableDeclarationParsingTests|AlgorithmBuilderParsingTests|CompilerBoundaryDiagnosticTests'",
@@ -3650,8 +3672,8 @@
       "path": "specifications/LeastCircularSubstring",
       "name": "Minimal Circular Substring",
       "audit": "reference inputs audited",
-      "gap": "Both configurations have complete hosted graph and property matches on the audited SHA, with their published character and length bounds, TypeInvariant, and Correctness unchanged. Neither upstream configuration selects the declared Termination property. Typed ZSequences conversion calls now have focused local coverage for generated state, transitions, checking, and formal evaluation. Independent hosted helper equivalence, the helper disposition, and legacy cleanup remain open, so the family is incomplete.",
-      "legacyCleanupComplete": false,
+      "gap": "Both configurations have complete hosted graph and property matches on the audited SHA, with their published character and length bounds, TypeInvariant, and Correctness unchanged. Neither upstream configuration selects the declared Termination property. Typed conversions, predicates, ordinary set inputs, and legacy caller cleanup have focused local coverage. The empty-sequence projection boundary, complete helper disposition, and hosted equivalence for the updated source remain open, so the family is incomplete.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/LeastCircularSubstring/LeastCircularSubstring.tla",
@@ -3674,6 +3696,23 @@
         {
           "path": "specifications/LeastCircularSubstring/ZSequences.tla",
           "role": "operator helper",
+          "operatorAudit": {
+            "upstreamGitBlobSHA": "2ef9629709baecc38451b5bcb7861f4665d5967e",
+            "scope": "Source mapping against the pinned fixture. Test names identify coverage, not universal proofs or new upstream configurations. Runtime results remain recorded separately in localDiagnostics and configuration evidence.",
+            "mappings": [
+              { "upstream": "EmptyZSeq", "swift": "Empty tuple branches in ZSequences.module; ZeroBasedSequence.literal() denotes the equivalent empty function.", "checks": "SequenceIndexConversionTests empty-input cases" },
+              { "upstream": "ZIndices", "swift": "ZSequences.indices(of:)", "checks": "Generated rotation transitions exercise ZIndices; configured TypeInvariant checks" },
+              { "upstream": "LOCAL ZSeqOfLength", "swift": "ZSequences.module ZSeqOfLength definition", "checks": "TLAModuleBundleTests.importedModuleUsesScopedFiniteReplacement; generated bounded initialization" },
+              { "upstream": "ZSeq", "swift": "ZSequences.sequences(over:)", "checks": "ImportedModuleConfigurationTests.executesConfiguredSequenceDomains; SequenceMembershipTests" },
+              { "upstream": "ZLen", "swift": "ZSequences.length(of:)", "checks": "Generated length-preservation invariants; LeastCircularSubstringCorpusModuleContractTests" },
+              { "upstream": "ZSeqFromSeq", "swift": "ZSequences.zeroBased(from:)", "checks": "SequenceIndexConversionTests formal and generated conversion cases" },
+              { "upstream": "SeqFromZSeq", "swift": "ZSequences.oneBased(from:)", "checks": "SequenceIndexConversionTests formal and generated conversion cases" },
+              { "upstream": "infix preceq with local recursive IsLexLeq", "swift": "ZSequences.lexicographicallyPrecedesOrEquals(_:_:), backed by LexicographicallyPrecedesOrEquals and IsLexLeq", "checks": "TLAModuleBundleTests.typedLexicographicPredicates; configured Correctness checks" },
+              { "upstream": "Rotation", "swift": "ZSequences.rotation(of:leftBy:)", "checks": "TLAModuleBundleTests.zeroBasedSequenceModuleIsExecutable; generated rotation transitions" },
+              { "upstream": "Rotations", "swift": "ZSequences.rotations(of:)", "checks": "ImportedModuleConfigurationTests.projectsRotationRecords; generated rotation-record predicates; configured Correctness checks" }
+            ],
+            "openBoundaryCheck": "Source inspection shows that ZeroBasedSequence.init(formalValue:) accepts function values but rejects the empty tuple used by upstream EmptyZSeq. The formal engine treats these as equal. Add a focused regression and audit nested typed collection projections before calling this boundary complete."
+          },
           "reason": "This stateless helper has no standalone configuration. ImportedModuleConfigurationTests covers generated bounded sequence initialization and length preservation after rotation. TLAModuleBundleTests covers one concrete formal rotation and separate module export. SequenceIndexConversionTests covers both conversion directions, round trips, index domains, empty inputs, order, and integer, Boolean, string, and model-value identity. Session 52646 adds passing typed conversion, generated transition/checking agreement, nominal element preservation, and formal evaluation diagnostics. These checks support AC-12 and AC-17 but do not establish independent hosted helper equivalence or complete operator acceptance. The helper is not complete.",
           "implementations": [
             "Sources/SwiftTLA/ZSequences.swift",
