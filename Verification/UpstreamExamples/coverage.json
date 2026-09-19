@@ -551,6 +551,17 @@
   },
   "localDiagnostics": [
     {
+      "session": "18575",
+      "sourceSHA": "a560dab2259f11c5fe7c5ae2c1d1680deaf35313",
+      "sourcePatchSHA256": "4da9f155f293ed29bd4506fecab7bf7f8c9824d4783cfed7f81ae29a3e556ab3",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ValidationScenarioTests|ParameterResolutionTests|DictionaryConfigurationTests|SetConfigurationTests|ConfiguredCounterExecutionTests|ConfiguredProcessTests'",
+      "exitCode": 0,
+      "testSeconds": 0.023,
+      "testsRun": 32,
+      "result": "All 32 focused tests pass. Scalar scenario bindings reject missing, duplicate, foreign, and incompatible values through typed compilation. Existing suites cover dictionary keys and values, parameter-dependent set domains, resolved identities, mixed-configuration rejection, and stable generated types across settings and process populations.",
+      "scope": "Source stayed unchanged during the build; only Apple evidence changed in the ledger. Ponytail review extends the existing invalid-binding test instead of adding another fixture or checking path. Static diagnostics pass. AC-06 has local implementation evidence, not hosted acceptance or new upstream coverage."
+    },
+    {
       "session": "80472",
       "sourceSHA": "b9349cdb0f8a68dc47d39072e64f60573a306221",
       "sourcePatchSHA256": "537e8c06d905a721d6c46e52352f0da73e98188183cff87cb7a416d0c2c46d8a",
@@ -8079,9 +8090,9 @@
     },
     {
       "id": "AC-06",
-      "status": "missing",
+      "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLATests/ValidationScenarioTests.swift covers missing, duplicate, and foreign scenario bindings. Tests/SwiftTLATests/ParameterResolutionTests.swift and Tests/SwiftTLATests/DictionaryConfigurationTests.swift cover incompatible types and domains. Tests/SwiftTLATests/ConfiguredCounterExecutionTests.swift and Tests/SwiftTLATests/ConfiguredProcessTests.swift vary configurations and populations without changing generated types. Tests/SwiftTLATests/SetConfigurationTests.swift rejects invalid parameter-dependent domains. Full criterion coverage and hosted acceptance evidence remain unaudited.",
+      "reason": "Local diagnostic 18575 passes 32 configuration tests. ValidationScenarioTests rejects missing, duplicate, foreign, and incompatible scalar bindings. ParameterResolutionTests and DictionaryConfigurationTests retain typed identities and reject incompatible domains, keys, and values. ConfiguredCounterExecutionTests, ConfiguredProcessTests, and SetConfigurationTests vary settings and populations with unchanged generated API types and reject invalid dependent domains or mixed configurations. Hosted acceptance for the strengthened scope remains pending; this is not a verified DSL criterion.",
       "evidence": []
     },
     {

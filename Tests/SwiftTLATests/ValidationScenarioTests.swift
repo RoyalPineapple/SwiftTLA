@@ -43,7 +43,7 @@ struct ValidationScenarioTests {
         #expect(binding.operation == .value(.integer(2)))
     }
 
-    @Test("scenario bindings reject missing, duplicate, and foreign parameters", arguments: [0, 1, 2])
+    @Test("scenario bindings reject missing, duplicate, foreign, and incompatible values", arguments: [0, 1, 2, 3])
     func rejectsInvalidBindings(variant: Int) throws {
         var spec = ConfiguredCounter.spec
         let original = try #require(spec.validationScenarios.first)
@@ -51,10 +51,14 @@ struct ValidationScenarioTests {
         switch variant {
         case 0: bindings.removeLast()
         case 1: bindings.append(bindings[0])
-        default: bindings[0] = .init(parameter: .init(name: "limit"), value: .value(.int(2)))
+        case 2: bindings[0] = .init(parameter: .init(name: "limit"), value: .value(.int(2)))
+        default: bindings[0] = .init(parameter: bindings[0].parameter, value: .value(.bool(true)))
         }
         spec.validationScenarios = [.init(name: original.name, bindings: bindings)]
-        #expect(throws: CompilationDiagnostic.self) { try spec.compile() }
+        #expect(throws: CompilationDiagnostic.self) {
+            let compilation = try spec.compile()
+            _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        }
     }
 
     @Test("scenario expectations require registered property identity and reject duplicate overrides")
