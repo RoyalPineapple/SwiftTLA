@@ -126,6 +126,33 @@ struct GraphComparisonTests {
         #expect(edgeReport.nextSafeAction.contains("advance"))
     }
 
+    @Test("equal counts and action names cannot hide changed edge endpoints", arguments: [false, true])
+    func rejectsChangedConnectivity(changeSource: Bool) throws {
+        let first = CanonicalState(bindings: ["counter": .integer(1)])
+        let second = CanonicalState(bindings: ["counter": .integer(2)])
+        let common = CanonicalEdge(source: first.key, action: "advance", target: second.key)
+        let original = CanonicalEdge(source: second.key, action: "advance", target: first.key)
+        let changed = CanonicalEdge(source: changeSource ? first.key : second.key,
+            action: "advance", target: changeSource ? first.key : second.key)
+        let tlc = try GraphRun(isComplete: true,
+            graph: CanonicalGraph(initialStates: [first], states: [first, second], edges: [common, original]),
+            observableActions: ["advance"], outcome: .noViolation)
+        let swift = try GraphRun(isComplete: true,
+            graph: CanonicalGraph(initialStates: [first], states: [first, second], edges: [common, changed]),
+            observableActions: ["advance"], outcome: .noViolation)
+
+        let comparison = compareFiniteGraphs(tlc: tlc, swift: swift)
+
+        #expect(!comparison.matches)
+        #expect(comparison.differences == [.edges(tlc: [common, original], swift: [common, changed])])
+        let traces = try graphMismatchTraces(tlc: tlc, swift: swift)
+        try #require(traces.count == 2)
+        try traces[0].validate(in: tlc.graph)
+        try traces[1].validate(in: swift.graph)
+        #expect(traces[0].steps.last?.state == original.target)
+        #expect(traces[1].steps.last?.state == changed.target)
+    }
+
     @Test("identical states and edges cannot hide different initial states")
     func rejectsDifferentInitialStatesWithEqualCounts() throws {
         let first = CanonicalState(bindings: ["counter": .integer(1)])
