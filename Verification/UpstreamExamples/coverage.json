@@ -4115,28 +4115,28 @@
     {
       "path": "specifications/LearnProofs",
       "name": "Learn TLA⁺ Proofs",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "reference inputs audited",
+      "gap": "MCFindHighest requires separate Nat and Seq substitutions, MCConstraint, and all four published invariants. The Swift port folds the constraint into initialization and omits parts of TypeOK. It has no model-owned scenario or independent reference case. AddTwo adds an upstream-absent x < 10 constraint. Module dispositions, complete hosted evidence, and legacy cleanup remain incomplete.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/LearnProofs/AddTwo.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
-          "implementations": [],
+          "role": "unconfigured proof example",
+          "reason": "Defines unbounded x'=x+2 and proofs of TypeOK and Even. It has no TLC configuration. AddTwoModel adds x < 10, which changes the graph. Its source-faithful claim lacks equivalent evidence. No exclusion or finite bound qualifies this module as complete.",
+          "implementations": ["Sources/UpstreamParity/Examples/AddTwo.swift"],
           "dispositionComplete": false
         },
         {
           "path": "specifications/LearnProofs/FindHighest.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
-          "implementations": [],
+          "role": "behavior dependency",
+          "reason": "Defines the Highest algorithm, terminating stutter, four invariants, Termination, and TLAPS proofs. Spec has no fairness. MCFindHighest selects the four invariants but not Termination. A pinned TLAPS dependency remains necessary for the original reference bundle.",
+          "implementations": ["Sources/UpstreamParity/Examples/FindHighest.swift"],
           "dispositionComplete": false
         },
         {
           "path": "specifications/LearnProofs/MCFindHighest.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Selects MaxLength=3, MaxNat=4, Nat<-MCNat, Seq<-MCSeq, and MCConstraint. MCSeq uses the substituted Nat, so its domain includes sequences of length four. MCConstraint separately restricts Len(f) to three. TypeOK retains finite-domain membership for f, i, and h. The configuration does not disable TLC deadlock checks.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -4153,7 +4153,16 @@
           "evidence": []
         }
       ],
-      "partialCases": []
+      "partialCases": [
+        {
+          "implementation": "Sources/UpstreamParity/Examples/FindHighest.swift",
+          "reason": "FindHighestModel limits initial sequence lengths to 0...3 instead of retaining the upstream domain and separate constraint. TypeOK omits f membership, i membership in the substituted Nat, and the upper bound for h. UpstreamParityTests.findHighestParity checks only 742 native states. No completion credit."
+        },
+        {
+          "implementation": "Sources/UpstreamParity/Examples/AddTwo.swift",
+          "reason": "The added x < 10 constraint makes the unbounded upstream algorithm finite. A builder or parser check cannot establish the upstream proofs or graph equivalence. No completion credit."
+        }
+      ]
     },
     {
       "path": "specifications/LeastCircularSubstring",
