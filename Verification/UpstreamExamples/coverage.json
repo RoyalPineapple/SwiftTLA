@@ -22,6 +22,32 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
+    "currentCandidate": {
+      "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451791172",
+      "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508",
+      "upstreamSuiteResult": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451791172/job/105920114077",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451791172/artifacts/10586899667",
+        "artifactDigest": "sha256:f1f60f4566ae0b63ff512c611d8df4b44af71952cbb19714a161273777995cd9",
+        "buildSeconds": 1308.70,
+        "testSeconds": 930.845,
+        "testsPassed": 23,
+        "jobConclusion": "success",
+        "scope": "The terminal job log reports all 23 upstream suite tests passing at this source SHA. Cleanup and diagnostic retention succeeded. This does not establish independent TLC equivalence, complete upstream-family coverage, or aggregate CI completion."
+      },
+      "scenarioSuiteResult": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451791172/job/105920114057",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451791172/artifacts/10587134376",
+        "artifactDigest": "sha256:b5b9a85f4e0843fa0d0efca84c020820e9d6d90c1c839b4a0d87a94e29b589bc",
+        "buildSeconds": 1103.25,
+        "testSeconds": 1149.303,
+        "testsPassed": 7,
+        "jobConclusion": "success",
+        "scope": "The terminal job log reports all seven scenario tests passing. Cleanup and diagnostic upload also completed successfully. Retained diagnostics identify this source SHA, release configuration, Swift 6.1.2, and Xcode 16.4. This confirms a successful hosted scenario run after the timeout-headroom change; it does not establish that headroom caused this faster run, independent TLC equivalence, or aggregate CI completion."
+      },
+      "scope": "Hosted CI and independent candidate comparisons target this exact pushed SHA. Ordinary, scenario, upstream, Apple-platform, and corpus-export jobs passed. The finite-graph suite and aggregate result are not yet terminal. Inspected configuration evidence is recorded separately below."
+    },
     "candidateScenarioSuiteResult": {
       "sourceSHA": "d0392111ee75ce2937c0661a21788f07d3ce9ac4",
       "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35446757795/job/105906969830",
@@ -217,6 +243,28 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "90612",
+      "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ProcessFairnessExemptionTests|ProjectedFairnessTests|AlgorithmBuilderParsingTests|AlgorithmPlusCalRendererTests|CompilerPipelineCanonicalizationTests|ConfiguredProcessTests|GeneratedProcessLocalInvariantTests|ProcedureLoweringTests'",
+      "exitCode": 1,
+      "buildSeconds": 581.83,
+      "testSeconds": 0.291,
+      "testsRun": 183,
+      "reason": "The generated exporter uses the concrete action name cs__0 for this finite fixture. One assertion incorrectly expected cs(...); the other 182 tests passed, including weak/strong transition preservation, PlusCal exempt labels, malformed-policy diagnostics, and native/compiled stuttering outcomes. The correction asserts the actual concrete fairness action and checks empty typed exemption lists.",
+      "scope": "The starting SHA plus the uncommitted process-fairness exemption implementation. This failed diagnostic run gives no configuration or DSL acceptance credit."
+    },
+    {
+      "session": "54938",
+      "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ProcessFairnessExemptionTests|ProjectedFairnessTests|AlgorithmBuilderParsingTests|AlgorithmPlusCalRendererTests|CompilerPipelineCanonicalizationTests|ConfiguredProcessTests|GeneratedProcessLocalInvariantTests|ProcedureLoweringTests'",
+      "exitCode": 1,
+      "buildSeconds": 580.28,
+      "testSeconds": 0.298,
+      "testsRun": 183,
+      "reason": "Two new fairness tests reached export through the unconfigured compilation API with symbolic process domains. Both threw unsupportedGeneratedValueShape before their rendering assertions. Native and compiled stuttering checks passed. The correction uses the generated model export API and a literal formal domain in the lowerer fixture; session 90612 reruns the same focused scope.",
+      "scope": "The starting SHA plus the uncommitted process-fairness exemption implementation. This failed diagnostic run gives no configuration or DSL acceptance credit."
+    },
     {
       "session": "10635",
       "sourceSHA": "32558474a8ab783795b0733fc47d7398178b4547",
@@ -742,7 +790,7 @@
       "path": "specifications/Bakery-Boulangerie",
       "name": "The Boulangerie Algorithm",
       "audit": "reference inputs audited",
-      "gap": "Both published configurations lack exact cases. MCBakery selects ISpec, whose initial predicate is Inv rather than Init. The Bakery fixture starts from Init. Boulanger uses two processes instead of upstream N=3. Its modified reference replaces TypeOK and Inv with weaker LocalTypeOK. Both ports need model-owned configurations and complete invariant coverage.",
+      "gap": "Both published configurations lack exact cases. MCBakery selects ISpec, whose initial predicate is Inv rather than Init. The Bakery fixture starts from Init. Boulanger uses two processes instead of upstream N=3. Its modified reference replaces TypeOK and Inv with weaker LocalTypeOK. Upstream Boulanger also exempts ncs from process fairness (ncs:-); the port's Each(..., fairness: .weak) applies fairness to every generated label, including ncs. Both ports need model-owned configurations and complete invariant coverage; Boulanger additionally requires the upstream fairness exemption to be preserved.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -757,7 +805,7 @@
         {
           "path": "specifications/Bakery-Boulangerie/Boulanger.tla",
           "role": "behavior dependency",
-          "reason": "This module contains the Boulanger algorithm, safety invariants, and proofs. MCBoulanger imports its executable definitions. BoulangerModel uses two processes and does not retain all selected upstream invariants.",
+          "reason": "This module contains the Boulanger algorithm, safety invariants, and proofs. MCBoulanger imports its executable definitions. BoulangerModel uses two processes and does not retain all selected upstream invariants. Source audit at the pinned revision confirms Spec requires WF_vars((pc[self] # ncs) /\\ p(self)), not fairness for ncs. At the audited pushed SHA, AlgorithmLowering assigns the Each fairness policy to every generated atomic action. The pending step exemption needs native and export evidence for AC-15. TypeOK checks seven complete function domains and ranges; Inv also includes all nine IInv clauses and Before. These read other members' unchecked, max, nxt, and previous values. The existing LocalVariable.family(for:) accessor can expose family state, but its Function return type requires a fixed FiniteTLAValueDomain and does not accept the configured integer population. Preserve this existing lowering path while supplying a typed configured-domain view; do not substitute weaker local predicates or a hard-coded two-member domain.",
           "implementations": [
             "Sources/UpstreamParity/CanonicalCorpus/Boulanger.swift"
           ],
@@ -2048,6 +2096,16 @@
           ],
           "evidence": [
             {
+              "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10587207764",
+              "artifactDigest": "sha256:58850c5ecd46b0f308bfe8b8e06fef5b69c1e0c06df2379d029f5b28d42af351",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 16 states, 96 labeled edges. Completion footers and record counts agree. TypeOK, expected NotSolved violation, and deadlock outcomes match in both comparisons, with retained counterexamples. Module, dependency, original configuration, TLC, Java, and bridge pins match. This refreshes an existing configuration match, not an additional configuration."
+            },
+            {
               "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
               "developerToolsVersion": "16.4",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167",
@@ -2182,6 +2240,16 @@
           ],
           "evidence": [
             {
+              "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10586838428",
+              "artifactDigest": "sha256:94265cb9df847f7157d3377db613f8b4bfe24912c9eca61dc924bceb1feea438",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 67 states, 335 labeled edges. TypeOK, ExclusiveAccess, and deadlock are satisfied in both comparisons. The published NP=5 and INIT/NEXT selection remain unchanged. Completion footers and record counts agree. Module, dependency, original configuration, TLC, Java, and bridge pins match. This refreshes an existing configuration match, not an additional configuration."
+            },
+            {
               "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
               "developerToolsVersion": "16.4",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167",
@@ -2208,6 +2276,16 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10586858267",
+              "artifactDigest": "sha256:d370e7676965fe0be5dd4c31e9b3c89a73de26609a8442c3e40d4cf2fb0e52f8",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 67 states, 335 labeled edges. TypeOK, ExclusiveAccess, NobodyStarves, and deadlock are satisfied in both comparisons. The published NP=5 and Spec fairness remain unchanged. Completion footers and record counts agree. Module, dependency, original configuration, TLC, Java, and bridge pins match. This refreshes an existing configuration match, not an additional configuration."
+            },
             {
               "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
               "developerToolsVersion": "16.4",
@@ -3742,7 +3820,7 @@
       "path": "specifications/LeastCircularSubstring",
       "name": "Minimal Circular Substring",
       "audit": "reference inputs audited",
-      "gap": "Both configurations have complete hosted graph and property matches on the audited SHA, with their published character and length bounds, TypeInvariant, and Correctness unchanged. Neither upstream configuration selects the declared Termination property. Typed conversions, predicates, ordinary set inputs, and legacy caller cleanup have focused local coverage. The empty-sequence projection boundary, complete helper disposition, and hosted equivalence for the updated source remain open, so the family is incomplete.",
+      "gap": "Both configurations have historical complete hosted graph and property matches, with their published character and length bounds, TypeInvariant, and Correctness unchanged. Neither upstream configuration selects the declared Termination property. Typed conversions, predicates, ordinary set inputs and results, empty-sequence projections, and legacy caller cleanup now have focused local coverage. Family credit remains withheld until complete current-source Small and Medium comparisons are inspected and the helper disposition is finalized against that evidence.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -3783,7 +3861,7 @@
             ],
             "boundaryCheck": "Session 59023 passes FormalValueProjectionTests and related contracts: upstream EmptyZSeq projects as an empty zero-based sequence, including nested collections and generated records. Lossy element decoders, invalid domains, projection collisions, changed string bytes, and model-value/string conflation are rejected. This closes the identified local projection gap, not current-source hosted equivalence or full helper acceptance."
           },
-          "reason": "This stateless helper has no standalone configuration. ImportedModuleConfigurationTests covers generated bounded sequence initialization and length preservation after rotation. TLAModuleBundleTests covers one concrete formal rotation and separate module export. SequenceIndexConversionTests covers both conversion directions, round trips, index domains, empty inputs, order, and integer, Boolean, string, and model-value identity. Session 52646 adds passing typed conversion, generated transition/checking agreement, nominal element preservation, and formal evaluation diagnostics. These checks support AC-12 and AC-17 but do not establish independent hosted helper equivalence or complete operator acceptance. The helper is not complete.",
+          "reason": "This stateless helper has no standalone upstream configuration; it is included in both configured roots' pinned dependency closures, not excluded. The operator audit maps every upstream definition. SequenceIndexConversionTests covers generated conversions, transition/checking agreement, nominal element types, order, repetitions, and empty inputs. ImportedModuleConfigurationTests covers generated bounded initialization and rotation invariants. TLAModuleBundleTests covers separate module export, finite Nat replacement, typed set domains, indices, rotations, and lexicographic cases. FormalValueProjectionTests covers empty representations, nested records and collections, and malformed or lossy projections. Sessions 59023 and 10635 passed these focused checks. The remaining disposition gate is inspection of complete independent Small and Medium comparisons at the updated source SHA; these local checks are not universal operator proofs or additional upstream configurations.",
           "implementations": [
             "Sources/SwiftTLA/ZSequences.swift",
             "Sources/SwiftTLAMacros/ZSequences+Rotations.swift"
@@ -3832,6 +3910,16 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10586988068",
+              "artifactDigest": "sha256:ff2e96c68125c5454e94bc41c0bdcef29c5bfd50011d668e131f0b8e9f7f3c8a",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Complete native, upstream TLC, and generated TLC graph files are byte-identical: 127 initial states, 8554 states, 8554 labeled edges. Completion footers and record counts agree. TypeInvariant, Correctness, and deadlock are satisfied in both comparisons. Module, dependency, original configuration, TLC, Java, and bridge pins match. CharSetSize=2 and MaxStringLength=6 are unchanged; the upstream configuration does not select Termination. This refreshes an existing configuration match, not an additional configuration."
+            },
             {
               "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
               "developerToolsVersion": "16.4",
@@ -6218,7 +6306,7 @@
               "caseID": "ap-channel"
             }
           ],
-          "evidence": [{"sourceSHA":"1b8c58c83be97b8b0279a1da268406f6992afda3","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167/artifacts/10556631578","artifactDigest":"sha256:fd302729ec9eb2ff96a97047201a33e8f9b370204bdae16528e46176c192bb5c","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
+          "evidence": [{"sourceSHA":"3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10587197926","artifactDigest":"sha256:d9b5c5cf2ce0bf17e4924879aa8673a4977cf61e862e0baaad4a7dce323bb431","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock are satisfied in both comparisons. Completion footers and record counts agree. Module, dependency, original configuration, TLC, Java, and bridge pins match. This refreshes an existing configuration match, not an additional configuration."},{"sourceSHA":"1b8c58c83be97b8b0279a1da268406f6992afda3","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167/artifacts/10556631578","artifactDigest":"sha256:fd302729ec9eb2ff96a97047201a33e8f9b370204bdae16528e46176c192bb5c","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
         },
         {
           "module": "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla",
@@ -6318,7 +6406,7 @@
               "caseID": "ap-channel-composing"
             }
           ],
-          "evidence": [{"sourceSHA":"1b8c58c83be97b8b0279a1da268406f6992afda3","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167/artifacts/10556319145","artifactDigest":"sha256:ed6790b3f396219a762adef8246ef408bbb1fafaaeef4331913c1be52ce17a19","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
+          "evidence": [{"sourceSHA":"3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10586968047","artifactDigest":"sha256:aceb945b2ff46183958f780ca2fb029519032805a995de8d5112afdaa6f7aa26","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock are satisfied in both comparisons. Completion footers and record counts agree. Module, dependency, original configuration, TLC, Java, and bridge pins match. This refreshes an existing configuration match, not an additional configuration."},{"sourceSHA":"1b8c58c83be97b8b0279a1da268406f6992afda3","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167/artifacts/10556319145","artifactDigest":"sha256:ed6790b3f396219a762adef8246ef408bbb1fafaaeef4331913c1be52ce17a19","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
         },
         {
           "module": "specifications/SpecifyingSystems/Composing/APHourClock.tla",
@@ -6344,7 +6432,10 @@
               "caseID": "ap-channel-fifo"
             }
           ],
-          "evidence": [{"sourceSHA":"1b8c58c83be97b8b0279a1da268406f6992afda3","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167/artifacts/10556556517","artifactDigest":"sha256:b9b5372bb8da29ee3095d7e4bb7c15ca3bdcaa28f79a306edcd7d1f8c4fd118f","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}]
+          "evidence": [
+            {"sourceSHA":"3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10587062996","artifactDigest":"sha256:ab603d572573b44ec8e468e1235e12ee45f928790d1a23e11c72716a2c64c6d8","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. Completion footers and record counts agree. TypeInvariant and deadlock outcomes match in both comparisons. Module, dependency, original configuration, TLC, Java, and bridge pins match. This refreshes an existing configuration match, not an additional configuration."},
+            {"sourceSHA":"1b8c58c83be97b8b0279a1da268406f6992afda3","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167/artifacts/10556556517","artifactDigest":"sha256:b9b5372bb8da29ee3095d7e4bb7c15ca3bdcaa28f79a306edcd7d1f8c4fd118f","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 4 initial states, 8 states, 12 labeled edges. TypeInvariant and deadlock outcomes match in both TLC comparisons. The original configuration hash matches the pinned reference."}
+          ]
         },
         {
           "module": "specifications/SpecifyingSystems/FIFO/APInnerFIFO.tla",
@@ -6401,6 +6492,7 @@
             }
           ],
           "evidence": [
+            {"sourceSHA":"3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10587013373","artifactDigest":"sha256:c3e637d70bdb91c1b5f1c5cab174a6553f6686aa55c1bd7281a45d0e64707f22","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 12 initial states, 12 states, 12 labeled edges. Completion footers and record counts agree. HCini and deadlock are satisfied in both comparisons. Module, dependency, original configuration, TLC, Java, and bridge pins match. This refreshes an existing configuration match, not an additional configuration."},
             {
               "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
               "developerToolsVersion": "16.4",
@@ -6428,6 +6520,7 @@
             }
           ],
           "evidence": [
+            {"sourceSHA":"3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10587820833","artifactDigest":"sha256:44af33e02aa959beddc501d3d5045d8b8cda8962c84b30509bc55d6a0db93cca","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 12 initial states, 12 states, 12 labeled edges. Completion footers and record counts agree. HCini and deadlock are satisfied in both comparisons. Module, dependency, original configuration, TLC, Java, and bridge pins match. This refreshes an existing configuration match, not an additional configuration."},
             {
               "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
               "developerToolsVersion": "16.4",
@@ -6455,6 +6548,7 @@
             }
           ],
           "evidence": [
+            {"sourceSHA":"3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10586958481","artifactDigest":"sha256:e803f7cda05d291850a2ebb7f2f0d07f046eeacf10c35867331531840536bbfb","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 12 initial states, 12 states, 12 labeled edges. Completion footers and record counts agree. HCini and deadlock are satisfied in both comparisons. Module, dependency, original configuration, TLC, Java, and bridge pins match. This refreshes an existing configuration match, not an additional configuration."},
             {
               "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
               "developerToolsVersion": "16.4",
