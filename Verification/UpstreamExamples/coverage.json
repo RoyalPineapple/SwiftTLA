@@ -31,7 +31,7 @@
       "comparisonCompletedAt": "2026-09-19T18:02:43Z",
       "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10589308743",
       "artifactDigest": "sha256:4ec780587ee876f6a79940c49bdb690728d4d2dcf939c7822df3b214c8c76fe9",
-      "scope": "The terminal log and check annotation confirm the 120-minute comparison-step timeout. Native export finished after 1799.335 seconds, then the validator entered tlc-execution and reported no later phase before cancellation. That phase includes reference graph capture and decoding, so the log alone does not identify the remaining bottleneck. The 1.74 GB evidence artifact uploaded successfully and the job failed. Its contents still require inspection. No complete graph or property match is established, and no coverage credit is assigned."
+      "scope": "The terminal log and check annotation confirm the 120-minute comparison-step timeout. Native export finished after 1799.335 seconds. Retained checked-graph logs report Java heap exhaustion during five-branch liveness checking. The subsequent graph-only capture completed at 17:14:09 UTC in 170 seconds, with 18,000,002 generated states, 4,504,500 distinct states, and an empty queue. The validator never reached its post-decoding phase before cancellation at 18:02:43 UTC. Thus the artifact identifies both a TLC liveness memory failure and an unfinished graph decoding stage. The 1.74 GB artifact was downloaded and these logs inspected; no complete graph or property match is established, and no coverage credit is assigned."
     },
     "latestIndependentScenarioFailure": {
       "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
@@ -48,7 +48,19 @@
     "currentCandidate": {
       "sourceSHA": "b0755df76872000d9e6d50bff1a13bc9bb2b8dab",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754",
+      "conclusion": "success",
       "completedJobs": [
+        {
+          "name": "finitegraphs",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/job/105929392247",
+          "conclusion": "success",
+          "testsPassed": 25,
+          "buildSeconds": 2256.80,
+          "testSeconds": 2159.934,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/artifacts/10589328971",
+          "artifactDigest": "sha256:f90ad04d21aea622e24f00a7224a5cecebc50e70ca7036792ed7932157156bdd",
+          "scope": "All 25 finite-graph suite tests and aggregate CI passed. This is suite evidence for b0755df7, not independent complete upstream equivalence or evidence for later commits."
+        },
         {
           "name": "scenarios",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/job/105929392232",
@@ -100,7 +112,7 @@
           "scope": "The retained manifest names this source SHA. Every exported file was checked against its manifest digest. This verifies retained export integrity for the four registered corpus entries, not complete family coverage, TLC semantic equivalence, or the uncommitted local-family feature."
         }
       ],
-      "scope": "This pushed candidate contains the tested fairness exemptions and recorded corpus evidence. Its hosted CI run is active, not verified. The uncommitted configured local-family patch is not included. Independent comparisons in run 35451794508 remain pinned to 3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217."
+      "scope": "All six constituent jobs and aggregate CI succeeded for this pushed fairness candidate. Later configured-family, lexical-predicate, range, and Boulanger commits are not included. Independent comparisons in run 35451794508 remain pinned to 3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217 and do not establish complete CoffeeCan coverage."
     },
     "verifiedCandidate": {
       "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
