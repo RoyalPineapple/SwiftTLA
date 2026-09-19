@@ -405,6 +405,17 @@
   },
   "localDiagnostics": [
     {
+      "session": "13804",
+      "sourceSHA": "dfb4207dcbc37489a38903b3c176c3b3341c65c9",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'UpstreamCorpusInventoryTests'",
+      "exitCode": 0,
+      "buildSeconds": 587.86,
+      "testSeconds": 0.017,
+      "testsRun": 4,
+      "result": "All four inventory tests pass with the latest CoffeeCan evidence and Dijkstra and LearnProofs audits. The ledger retains all 78 families, published configurations, declared environment variants, and complete-evidence requirements. The audited gaps remain incomplete.",
+      "scope": "The worktree stayed unchanged throughout this focused local diagnostic. This result does not establish hosted CI recovery, upstream equivalence, or additional coverage credit."
+    },
+    {
       "session": "87981",
       "sourceSHA": "fd2812f13c9966d318275cd8dbbcc577b88e23a4",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'UpstreamCorpusInventoryTests'",
