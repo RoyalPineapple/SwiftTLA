@@ -432,6 +432,18 @@
   },
   "localDiagnostics": [
     {
+      "session": "30688",
+      "sourceSHA": "cc47b7776503492bda8a9afcf6a69f26bcef596c",
+      "sourcePatchSHA256": "e6e803386685890f67b030ae2ecf9a5428ba4c4aed08d80a3e38c945753d68e0",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'GuardedStepExecutionTests|OrderedStepTests|IndependentAtomicStepTests'",
+      "exitCode": 0,
+      "buildSeconds": 597.69,
+      "testSeconds": 0.017,
+      "testsRun": 13,
+      "result": "All 13 focused tests pass. Nested process and procedure guards read earlier assignments and discard rejected choices without partial updates. All four entry and body guard combinations pass.",
+      "scope": "Source stayed unchanged throughout the build. Existing fixtures cover the added contracts without production changes or duplicate schemas. Ponytail and cleanliness reviews pass. Static diagnostics pass. Hosted acceptance remains pending."
+    },
+    {
       "session": "61394",
       "sourceSHA": "ca5774c928126066cb3c3007a2acb4170cab8176",
       "sourcePatchSHA256": "c901d71e0e001dd9e70bb882dea5fc8acb81600d52f4e0c026a5cce719598010",
@@ -7832,7 +7844,7 @@
       "id": "AC-02",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLATests/OrderedStepTests.swift covers When after an assignment, choice filtering, and branch rollback. The fixtures retain one choice and reject another after an earlier assignment. Blocked branches leave the complete machine snapshot unchanged. Complete acceptance evidence across all supported block forms remains unaudited.",
+      "reason": "OrderedStepTests covers sequential assignment reads, choice filtering, and branch rollback. Local diagnostic 30688 adds nested process and procedure assignment reads and rejected-choice rollback through GuardedStepExecutionTests. Top-level dynamic guard coverage and complete hosted acceptance remain unaudited.",
       "evidence": []
     },
     {

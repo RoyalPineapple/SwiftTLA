@@ -2,7 +2,7 @@ import Testing
 import SwiftTLA
 
 struct GuardedStepExecutionTests {
-    @Test("Process and procedure guards suppress failing bodies without changing other process control",
+    @Test("Process and procedure guards suppress failing bodies and discard only blocked choice updates",
         arguments: [0, 1], [0, 1])
     func guardsProcessAndProcedure(entryReady: Int, bodyReady: Int) throws {
         let initial = try #require(try GuardedProcesses.initialMachines().first {
@@ -10,6 +10,7 @@ struct GuardedStepExecutionTests {
         })
         let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 100)
         #expect(graph.deadlockedStates.isEmpty == (entryReady == 1 && bodyReady == 1))
+        #expect(graph.transitions.keys.filter { $0.state.value == 0 }.count == 1)
         for node in GuardedProcesses.Node.allCases {
             var machine = initial
             let enter = GuardedProcesses.Action.enter(process: node)
@@ -21,6 +22,7 @@ struct GuardedStepExecutionTests {
                 continue
             }
             _ = try machine.send(enter)
+            #expect(machine.state.value == 1)
             let before = machine.snapshot
             let body = GuardedProcesses.Action.procedure_choose_body(process: node)
             let successors = try machine.successors(for: body)

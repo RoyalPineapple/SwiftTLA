@@ -36,13 +36,20 @@ struct GuardedProcesses {
                 Procedure(Routine.choose, parameters: Int.self) { divisor in
                     Do(Step.body, when: divisor > 0) {
                         Assign(value, to: 1 / divisor)
-                        Choose(1...2) { choice in Assign(value, to: value * choice) }
+                        Choose(0...2) { choice in
+                            Assign(value, to: value * choice)
+                            When(value > 0)
+                        }
                         Return()
                     }
                 }
                 Each(Node.all) { _ in
                     Do(Step.enter, when: entryReady == 1) {
                         Assign(value, to: 1 / entryReady)
+                        Choose(0...1) { choice in
+                            Assign(value, to: value * choice)
+                            When(value == 1)
+                        }
                         Call(Routine.choose, with: bodyReady.expr)
                     }
                     Do(Step.finish) { Stop() }
