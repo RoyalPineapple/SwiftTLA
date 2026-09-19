@@ -54,6 +54,15 @@
       "boulangerDiagnosticJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/job/105977930719",
       "completedJobs": [
         {
+          "name": "apple-platform-examples",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/job/105977911648",
+          "conclusion": "success",
+          "testsRun": 12,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/artifacts/10594211238",
+          "artifactSHA256": "1cf88533bd5651dc12dd9cbcfb88a05b1765185c0d10c5caed1b0c9d6f71a708",
+          "scope": "The terminal hosted log reports 12 tests with zero failures, successful camera build/test, and a successful demo app build on 0b86465f. Artifact metadata is retained; its contents have not been downloaded or audited. This is Apple consumer evidence, not complete upstream configuration equivalence or acceptance of later local changes."
+        },
+        {
           "name": "canonical-corpus-export",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/job/105977911544",
           "conclusion": "success",
@@ -62,7 +71,7 @@
           "scope": "The downloaded manifest binds to 0b86465f. All 21 declared file hashes match, and its complete case/file inventory and digests equal the audited f667b679 export. This confirms unchanged emitted bundles for the four canonical cases, not native graph equivalence or upstream completion."
         }
       ],
-      "scope": "Pushed after the preceding main CI became terminal. Includes complete-snapshot reuse, validated fingerprint reuse, AC-01 through AC-04 local contract checks, Majority toy-model removal, and scenario phase markers. Independent candidate validation includes the opt-in unchanged upstream Boulanger diagnostic. Canonical export passed; remaining jobs are pending. No hosted graph recovery or additional configuration match is established. PR 394 remains draft."
+      "scope": "Pushed after the preceding main CI became terminal. Includes complete-snapshot reuse, validated fingerprint reuse, AC-01 through AC-04 local contract checks, Majority toy-model removal, and scenario phase markers. Independent candidate validation includes the opt-in unchanged upstream Boulanger diagnostic. Canonical export and Apple examples passed; remaining jobs are pending. No hosted graph recovery or additional configuration match is established. PR 394 remains draft."
     },
     "queueRepairCandidate": {
       "sourceSHA": "f667b67983a51f800ee03dd90d0903cc705db7a8",
