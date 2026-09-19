@@ -542,6 +542,18 @@
   },
   "localDiagnostics": [
     {
+      "session": "80472",
+      "sourceSHA": "b9349cdb0f8a68dc47d39072e64f60573a306221",
+      "sourcePatchSHA256": "537e8c06d905a721d6c46e52352f0da73e98188183cff87cb7a416d0c2c46d8a",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'PositiveReachabilityTests|ConfiguredProcessTests'",
+      "exitCode": 0,
+      "buildSeconds": 602.73,
+      "testSeconds": 0.014,
+      "testsRun": 10,
+      "result": "All 10 focused tests pass. Positive counter and configured-process witnesses replay through generated application dispatch with complete snapshot equality. Both initially satisfied and absent goals reject incomplete exploration. A completed finite graph establishes absence. Nonempty unfair populations retain a completion witness and a separate violating liveness cycle that never reaches completion.",
+      "scope": "Source stayed unchanged during the build; only canonical export evidence changed in the ledger. Ponytail and cleanliness reviews reuse existing fixtures, preserve all model behavior and graph capture, and remove the explicit state-name argument. AC-05 has local implementation evidence, not hosted acceptance or new upstream coverage."
+    },
+    {
       "session": "63984",
       "sourceSHA": "b77e82a2bbea9c77543ffa588bb8e4eb76ad6e68",
       "sourcePatchSHA256": "345fded045d56aa34abb27b9aa28d117c550c1027d01d13ab887455bc6fb910e",
@@ -8051,9 +8063,9 @@
     },
     {
       "id": "AC-05",
-      "status": "missing",
+      "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLATests/PositiveReachabilityTests.swift covers positive witnesses, complete graph retention, unreachable outcomes, and incomplete-exploration failures. Tests/SwiftTLATests/ConfiguredProcessTests.swift separates reachable completion from universal eventual completion without fairness. Full criterion coverage and hosted acceptance evidence remain unaudited.",
+      "reason": "Local diagnostic 80472 passes positive witness replay through generated dispatch, complete graph retention, unreachable outcomes only after complete exploration, and resource-limit rejection for found and absent goals. ConfiguredProcessTests retains both a replayable completion witness and a separate noncompleting liveness cycle for nonempty unfair populations. Hosted acceptance for this complete test scope remains pending; this is not a verified DSL criterion.",
       "evidence": []
     },
     {

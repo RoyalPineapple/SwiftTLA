@@ -29,7 +29,16 @@ struct PositiveReachabilityTests {
                 continue
             }
             #expect(state.state.count == target)
-            #expect(try graph.trace(to: state).map { $0.state.state.count } == Array(0...target))
+            let trace = try graph.trace(to: state)
+            #expect(trace.map { $0.state.state.count } == Array(0...target))
+            var application = try ReachabilityCounter.makeMachine(
+                configuration: .init(target: target, exploredThrough: 2))
+            #expect(trace.first?.state == application.snapshot)
+            for step in trace.dropFirst() {
+                _ = try application.send(#require(step.action))
+                #expect(application.snapshot == step.state)
+            }
+            #expect(application.snapshot == state)
             #expect(graph.transitions.count == 3)
             #expect(graph.transitions.values.flatMap { $0 }.count == 2)
             #expect(graph.deadlockedStates.map { $0.state.count } == [2])
@@ -42,9 +51,12 @@ struct PositiveReachabilityTests {
             configuration: .init(target: 3, exploredThrough: 2)), maximumStates: 10)
         #expect(graph.reachabilityResults[.Target] == .unreachable)
         #expect(graph.transitions.count == 3)
-        #expect(throws: ExplorationError.stateLimitExceeded(1)) {
-            try ReachabilityGraph(initialMachines: ReachabilityCounter.initialMachines(
-                configuration: .init(target: 0, exploredThrough: 2)), maximumStates: 1)
+        #expect(graph.transitions.values.flatMap { $0 }.count == 2)
+        for target in [0, 3] {
+            #expect(throws: ExplorationError.stateLimitExceeded(1)) {
+                try ReachabilityGraph(initialMachines: ReachabilityCounter.initialMachines(
+                    configuration: .init(target: target, exploredThrough: 2)), maximumStates: 1)
+            }
         }
     }
 

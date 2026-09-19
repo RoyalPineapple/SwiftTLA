@@ -21,9 +21,26 @@ struct ConfiguredProcessTests {
             #expect(graph.transitions.count == 1 << population.count)
             #expect(graph.deadlockedStates.isEmpty)
             #expect(graph.temporalResults[.AllVisited]?.status == (population.isEmpty ? .satisfied : .violated))
-            guard case .reached = graph.reachabilityResults[.Complete] else {
+            guard case .reached(let completed) = graph.reachabilityResults[.Complete] else {
                 Issue.record("Missing completed-population witness")
                 continue
+            }
+            #expect(completed.state.selected == population)
+            var replay = try #require(scenario.initialMachines().first)
+            let completionTrace = try graph.trace(to: completed)
+            #expect(completionTrace.first?.state == replay.snapshot)
+            for step in completionTrace.dropFirst() {
+                _ = try replay.send(#require(step.action))
+                #expect(replay.snapshot == step.state)
+            }
+            #expect(replay.snapshot == completed)
+            if !population.isEmpty {
+                let progress = try #require(graph.temporalResults[.AllVisited])
+                #expect(progress.reason == .violatingFairLasso)
+                let lasso = try #require(progress.witness)
+                #expect(!lasso.cycle.isEmpty)
+                #expect(lasso.cycle.first == lasso.cycle.last)
+                #expect(lasso.cycle.allSatisfy { $0.state.selected != population })
             }
             let rendered = try scenario.render()
             let visits = rendered.actions.filter { $0.sourceName == "visit" }
