@@ -49,6 +49,36 @@
       "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798",
+      "completedJobs": [
+        {
+          "name": "ordinary",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/job/105944975893",
+          "conclusion": "failure",
+          "testsRun": 1473,
+          "issues": 1,
+          "testSeconds": 592.483,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/artifacts/10590575864",
+          "artifactDigest": "sha256:67b12dd223e2c38ff3d27a3d7419f2cc8452e02f971b31798d8ae038f9b03cde",
+          "scope": "The terminal log identifies one failure in UpstreamCorpusInventoryTests.preservesConfigurationCoverage: MCBoulanger implementations contains a string instead of the required file/scenario/case object. Its locally checked status also lacks configuration-bound evidence. The correction uses the registered MCBoulanger scenario and boulanger case, leaves status at implemented, and preserves the separate 330-test local diagnostic. A green hosted rerun remains required."
+        },
+        {
+          "name": "canonical-corpus-export",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/job/105944975806",
+          "conclusion": "success",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/artifacts/10589309959",
+          "artifactDigest": "sha256:6cb2b3a9a26cc6406ada2134785f5426519c2edacfcf00105941f0e86e9fabbf",
+          "scope": "Downloaded the artifact and checked its source SHA and all 21 exported files against manifest digests. Boulanger configuration contains N=3, MaxNat=3, StateConstraint, MutualExclusion, TypeOK, Inv, and deadlock checking. Export integrity is established, not independent upstream equivalence or a full DSL criterion."
+        },
+        {
+          "name": "apple-platform-examples",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/job/105944975700",
+          "conclusion": "success",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/artifacts/10590030230",
+          "artifactDigest": "sha256:3fe8b0ec34d4f52c83b170791aff64c079b3c2b3a985446eac5fcf59ba27373d",
+          "testsPassed": 12,
+          "scope": "Downloaded the retained artifact and verified source-sha.txt. The camera executable build succeeded and adoption logs report 12 tests with zero failures. This is Apple-platform evidence, not independent upstream equivalence."
+        }
+      ],
       "scope": "Submitted configured local families, lexical predicates, typed range and mapping results, and the MCBoulanger port for CI and independent candidate comparisons. This submission excludes the subsequent file-backed TLC graph reader change. No hosted match is assigned before retained complete evidence is audited."
     },
     "completedCandidate": {
@@ -1050,10 +1080,16 @@
           "module": "specifications/Bakery-Boulangerie/MCBoulanger.tla",
           "configuration": "specifications/Bakery-Boulangerie/MCBoulanger.cfg",
           "required": true,
-          "status": "locally checked",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": ["Sources/UpstreamParity/CanonicalCorpus/Boulanger.swift"],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/CanonicalCorpus/Boulanger.swift",
+              "scenario": "MCBoulanger",
+              "caseID": "boulanger"
+            }
+          ],
           "evidence": []
         }
       ],
