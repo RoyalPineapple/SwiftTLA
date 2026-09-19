@@ -51,7 +51,48 @@
       "sourceSHA": "0b86465f165584983dbcca910a9fb56d6865aca4",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647",
-      "boulangerDiagnosticJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/job/105977930719",
+    "boulangerDiagnosticJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/job/105977930719",
+    "auditedComparisonCases": {
+      "scope": "Downloaded per-case artifacts from the run bound to 0b86465f. All four comparisons report exact complete Swift/reference graphs, no generated-graph differences, and exact selected property/deadlock outcomes. The complete retained Swift/reference JSONL records also compare equal after order normalization. These refresh existing configuration evidence, not family completion or validation of later local edits.",
+      "cases": [
+        {
+          "caseID": "ap-channel",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/artifacts/10594336344",
+          "artifactSHA256": "42eb5592a635880b70d257fbf415cb19b95a57e275a4471c02d74aa732aa7e93",
+          "initialStates": 4,
+          "states": 8,
+          "edges": 12,
+          "checks": "TypeInvariant and deadlock satisfied in both engines."
+        },
+        {
+          "caseID": "ap-channel-fifo",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/artifacts/10594760689",
+          "artifactSHA256": "b9bdb949d3f1b4cdfce34ea1871332cf5160f23e5f158ca3e26ad43386f46ebc",
+          "initialStates": 4,
+          "states": 8,
+          "edges": 12,
+          "checks": "TypeInvariant and deadlock satisfied in both engines."
+        },
+        {
+          "caseID": "ap-channel-composing",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/artifacts/10595030092",
+          "artifactSHA256": "e4c845699e420adbc6ad311c94e0b80669c814a4e9f34bbe9f96e2a01234a434",
+          "initialStates": 4,
+          "states": 8,
+          "edges": 12,
+          "checks": "TypeInvariant and deadlock satisfied in both engines."
+        },
+        {
+          "caseID": "mc-die-harder",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/artifacts/10593579115",
+          "artifactSHA256": "180d0c00961844600120708863b6ec47946a04cc0f9f2ab9bb7041a61feeca0a",
+          "initialStates": 1,
+          "states": 16,
+          "edges": 96,
+          "checks": "TypeOK and deadlock satisfied; NotSolved violated in both engines with retained witnesses. Complete graphs are compared separately from property counterexamples."
+        }
+      ]
+    },
       "boulangerReferenceDiagnostic": {
         "conclusion": "success",
         "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/artifacts/10593119201",
@@ -591,6 +632,26 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "20676",
+      "sourceSHA": "a816824166011554f88e8c963958f2983fc1ce49",
+      "sourcePatchSHA256": "5fd0a3dafd5766ec0a8702f44f20a9dd461893832a234851aaf0dec44a4f6596",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SwiftRecordTypeTests|KVsnapCorpusExecutionTests|KVsnapCorpusRenderingTests|FormalUnionTests|NativeTypeDiagnosticTests|GeneratedSwiftRecordTests|FormalValueEqualityTests|SpecificationSourceAuthorityTests'",
+      "exitCode": 1,
+      "testsRun": 0,
+      "result": "KVsnap READ lowering accepted the explicit checked record projection. UPDATE then failed because conditional reconciliation narrowed OneOf<Transaction, NoValue> to Transaction. The next patch preserves an existing union context before considering scalar alternative types, while retaining subsequent projection checks.",
+      "scope": "Failed local diagnostic, not acceptance. No source changed during the build."
+    },
+    {
+      "session": "6446",
+      "sourceSHA": "ec8e7615b09a9ef29fd1260fb98d191b3bfc603f",
+      "sourcePatchSHA256": "1dbea94b5018c0ba8318ff798dfe321d7ecb391d47e2a17a5bac3d1f19740ddf",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SwiftRecordTypeTests|KVsnapCorpusExecutionTests|KVsnapCorpusRenderingTests|FormalUnionTests|NativeTypeDiagnosticTests|GeneratedSwiftRecordTests|FormalValueEqualityTests|SpecificationSourceAuthorityTests'",
+      "exitCode": 1,
+      "testsRun": 0,
+      "result": "Compilation reached KVsnap READ lowering and rejected an anonymous imported record as a replacement for the declared Operation constructor. The next patch adds an explicit checked ModuleCall(as:) record projection; implicit structural-to-nominal substitution remains rejected.",
+      "scope": "Failed local diagnostic, not implementation acceptance or upstream coverage. Source remained fixed during the build."
+    },
     {
       "session": "15190",
       "sourceSHA": "09db926d486ed41cd24c4b5ae529ecbdb321d0ab",
