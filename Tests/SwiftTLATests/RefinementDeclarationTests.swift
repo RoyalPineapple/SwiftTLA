@@ -1,3 +1,4 @@
+@testable import SwiftTLAPlugin
 import SwiftParser
 import SwiftSyntax
 import Testing
@@ -5,6 +6,116 @@ import Testing
 
 @Suite("typed refinement declarations")
 struct RefinementDeclarationTests {
+  @Test("scenario expectations reject a foreign refinement with the same display name")
+  func rejectsForeignRefinementExpectation() throws {
+    let value = Var<Int>("value")
+    let abstract = TLASpec("Abstract") {
+      Variable(value, 0)
+      Action("stay") { value.stays }
+    }
+    let instance = Instance("Target", of: abstract)
+    let claim = Refinement(_name: "Refines", instance: instance, mappings: [.init(value, from: value)])
+    let foreign = Refinement(_name: "Refines", instance: instance, mappings: [.init(value, from: value)])
+    let source = TLASpec("Concrete") {
+      Variable(value, 0)
+      Action("stay") { value.stays }
+      instance
+      claim
+      Validation("Foreign expectation") {}.expect(foreign, .violated)
+    }
+    do {
+      _ = try source.compile()
+      Issue.record("A distinct refinement handle must not resolve by name")
+    } catch let diagnostic as CompilationDiagnostic {
+      #expect(diagnostic.code == .unknownReference)
+      #expect(diagnostic.path == "validation.Foreign expectation")
+    }
+  }
+
+  @Test("refinement typing preserves resolved instance identities independently of property order")
+  func preservesResolvedTargets() throws {
+    let value = Var<Int>("value")
+    let abstract = TLASpec("AbstractTarget") {
+      Variable(value, 0)
+      Action("stay") { value.stays }
+    }
+    let first = Instance("First", of: abstract)
+    let second = Instance("Second", of: abstract)
+    let count = Var<Int>("count")
+    let source = TLASpec("ConcreteTargets") {
+      Variable(count, 0)
+      Action("stay") { count.stays }
+      first
+      second
+      Refinement(_name: "SecondClaim", instance: second, mappings: [.init(value, from: count)])
+      Refinement(_name: "FirstClaim", instance: first, mappings: [.init(value, from: count)])
+    }
+    let compilation = try source.compile()
+    let inputs = try SourceTypeResolver().resolve(in: compilation)
+    let program = try CompiledProgram(inputs: inputs)
+    for refinements in [inputs.refinements, program.refinements] {
+      #expect(refinements.map(\.name) == ["SecondClaim", "FirstClaim"])
+      #expect(refinements.map(\.id) == compilation.refinements.map(\.id))
+      #expect(refinements.map(\.id) == program.layout.properties.map(\.id))
+      #expect(refinements.map(\.instance) == compilation.refinements.map(\.instance))
+      #expect(refinements.map(\.operator) == compilation.refinements.map(\.operator))
+      let namespaces = try refinements.map { refinement in
+        try #require(program.layout.moduleInstances.first { $0.id == refinement.instance }).namespace
+      }
+      #expect(namespaces == ["Second", "First"])
+      #expect(refinements.allSatisfy { $0.operator == .spec })
+    }
+  }
+
+  @Test("native refinement inputs retain typed abstract state and resolved mappings")
+  func resolvesAbstractProgramAndMappings() throws {
+    let value = Var<Int>("value")
+    let abstract = TLASpec("AbstractCounter") {
+      Variable(value, 0)
+      Action("advance") { value.becomes(value + 1).when(value < 2) }
+    }
+    let count = Var<Int>("count")
+    let instance = Instance("Counter", of: abstract)
+    let concrete = TLASpec("ConcreteCounter") {
+      Variable(count, 0)
+      Action("advance") { count.becomes(count + 1).when(count < 2) }
+      instance
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(value, from: count)])
+    }
+    let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: concrete.compile()))
+    let refinement = try #require(program.refinements.first)
+    #expect(refinement.name == "Refines")
+    #expect(refinement.abstract.variableTypes.values.allSatisfy { $0 == .int })
+    #expect(refinement.variableMappings.count == 1)
+    #expect(refinement.variableMappings.first?.expression.resultType == .int)
+    #expect(refinement.abstract.behavior.actions.count == 1)
+  }
+
+  @Test("abstract specialization substitutes parameters in every temporal predicate")
+  func specializesTemporalPredicates() throws {
+    let value = Var<Int>("value")
+    let limit = Var<Int>("Limit")
+    let abstract = TLASpec("AbstractTemporal") {
+      Parameter("Limit")
+      Variable(value, 3)
+      Action("stay") { value.stays }
+      Always("Always", value == limit)
+      Eventually("Eventually", value == limit)
+      AlwaysEventually("Recurring", value == limit)
+      EventuallyAlways("Stable", value == limit)
+      LeadsTo("Progress", value < limit, value == limit)
+    }
+    let specialized = abstract.specializing(parameters: ["Limit": .value(.int(3))])
+    let compilation = try specialized.compile()
+    let runtime = CompiledRuntime(compilation: compilation)
+    let initial = try #require(try runtime.initialStates().first)
+    let results = try Dictionary(uniqueKeysWithValues: compilation.semantics.behavior.temporalProperties.map { property in
+      (property.name, try property.expression.predicates.map { try runtime.predicateHolds($0, in: initial) })
+    })
+    #expect(results == ["Always": [true], "Eventually": [true], "Recurring": [true],
+      "Stable": [true], "Progress": [false, true]])
+  }
+
   @Test("direct module rendering follows linked instance declarations")
   func rendersLinkedTarget() throws {
     let state = Var<Int>("state", 0)
@@ -15,10 +126,10 @@ struct RefinementDeclarationTests {
     let instance = Instance("C", of: abstract)
     let concrete = TLASpec("Concrete") {
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(state, from: 0)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(state, from: 0)])
     }
 
-    let source = try concrete.compile().renderedTLAModuleBundle().tla
+    let source = try concrete.compile().render().tlaBundle.tla
     let instanceRange = try #require(source.range(of: "C == INSTANCE Abstract WITH state <- 0"))
     let refinementRange = try #require(source.range(of: "Refines == C!Spec"))
     #expect(instanceRange.lowerBound < refinementRange.lowerBound)
@@ -31,7 +142,7 @@ struct RefinementDeclarationTests {
     }
     let instance = Instance("C", of: abstract)
     let concrete = TLASpec("Concrete") {
-      Refinement(name: "Refines", instance: instance, mappings: [])
+      Refinement(_name: "Refines", instance: instance, mappings: [])
     }
 
     do {
@@ -52,7 +163,7 @@ struct RefinementDeclarationTests {
     let instance = Instance("C", of: abstract)
     let concrete = TLASpec("Concrete") {
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [])
+      Refinement(_name: "Refines", instance: instance, mappings: [])
     }
 
     do {
@@ -77,11 +188,11 @@ struct RefinementDeclarationTests {
       }
       let C = Instance("C", of: abstractProtocol)
       C
-      Refinement(name: "Refines", instance: C, operator: .spec, mappings: [.init(FormalModuleParameter("Value"), from: SetExpr<Int>(0)), .init(Var<SetExpr<Int>>("chosen"), from: SetExpr<Int>())])
+      Refinement(_name: "Refines", instance: C, operator: .spec, mappings: [.init(FormalModuleParameter("Value"), from: SetExpr<Int>(0)), .init(Var<SetExpr<Int>>("chosen"), from: SetExpr<Int>())])
     }
     """
     let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.moduleInstances.count == 1)
@@ -99,13 +210,13 @@ struct RefinementDeclarationTests {
     let instance = Instance("C", of: abstractProtocol)
     let builder = TLASpec("Parsed") {
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [
+      Refinement(_name: "Refines", instance: instance, mappings: [
         .init(value, from: SetExpr<Int>(0)),
         .init(chosen, from: SetExpr<Int>())
       ])
     }
     #expect(parsed.moduleInstances == builder.moduleInstances)
-    let parsedCompilation = try parsed.compile(specificationName: "Parsed")
+    let parsedCompilation = try parsed.compile()
     let builderCompilation = try builder.compile()
     #expect(parsedCompilation.identity == builderCompilation.identity)
   }
@@ -121,11 +232,11 @@ struct RefinementDeclarationTests {
       }
       let C = Instance("C", of: abstractProtocol)
       C
-      Refinement(name: "Refines", instance: C, operator: .liveSpec, mappings: [])
+      Refinement(_name: "Refines", instance: C, operator: .liveSpec, mappings: [])
     }
     """
     let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
-    let parsed = SpecParser.parseSpecClosure(closure)
+    let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
     #expect(parsed.diagnostics.isEmpty)
     #expect(parsed.refinements.first?.operator == .liveSpec)
@@ -148,13 +259,14 @@ struct RefinementDeclarationTests {
         concreteValue.becomes(concreteValue + 1).when(concreteValue < 1)
       }
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
-    guard case .ok = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check() else {
-      Issue.record("Expected the mapped concrete model to refine the abstract model.")
-      return
-    }
+    let compilation = try concrete.compile()
+    let exploration = try ModelChecker(compilation: compilation, configuration: .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
+    #expect(try RefinementChecker(compilation: compilation).check(exploration) == nil)
   }
 
   @Test("refinement mappings use compiled action enabledness")
@@ -167,28 +279,45 @@ struct RefinementDeclarationTests {
       }
     }
     let concreteValue = Var<Int>("concreteValue", 0)
+    let concreteReady = Action("ready") {
+      ActionExpr.unchanged(.named(concreteValue.name)).when(concreteValue < 1)
+    }
     let concreteAdvance = Action("advance") {
-      concreteValue.becomes(concreteValue + 1).when(concreteValue < 1)
+      ActionExpr.and(.guard_(StateExpr.enabled(concreteReady)), concreteValue.becomes(concreteValue + 1))
     }
     let instance = Instance("C", of: abstract)
     let concrete = TLASpec("Concrete") {
       Variable(concreteValue)
+      concreteReady
       concreteAdvance
+      FormalDefinition("CanAdvance", parameters: [], body: StateExpr.enabled(concreteAdvance))
       instance
       Refinement(
-        name: "Refines",
+        _name: "Refines",
         instance: instance,
-        mappings: [.init(abstractEnabled, from: StateExpr.enabled(concreteAdvance))]
+        mappings: [.init(abstractEnabled, from: StateExpr.letIn([
+          LocalOperator("Here", parameters: [], body: FormalCall(as: Bool.self, "CanAdvance").stateExpr)
+        ], .recursiveCall("Here", [])))]
       )
     }
 
-    guard case .ok = try ModelChecker(
-      compilation: try concrete.compile(),
+    let compilation = try concrete.compile()
+    let refinement = try #require(compilation.refinements.first)
+    let mapping = try #require(refinement.variableMappings.first)
+    #expect(mapping.enabledActions == Set(compilation.semantics.behavior.actions.map(\.id)))
+    let runtime = CompiledRuntime(compilation: compilation)
+    let initial = try #require(try runtime.initialStates().first)
+    #expect(try runtime.evaluate(refinement.variableMappings, in: initial) == [.boolean(true)])
+    let advanced = try #require(try runtime.successors(from: initial).first { $0.state != initial })
+    #expect(try runtime.evaluate(refinement.variableMappings, in: advanced.state) == [.boolean(false)])
+
+    let exploration = try ModelChecker(
+      compilation: compilation,
       configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled)
-    ).check() else {
-      Issue.record("Expected action enabledness to preserve the abstract transition.")
-      return
-    }
+    ).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
+    #expect(try RefinementChecker(compilation: compilation).check(exploration) == nil)
   }
 
   @Test("bounded refinement reports a concrete edge outside the abstract relation")
@@ -208,7 +337,7 @@ struct RefinementDeclarationTests {
         concreteValue.becomes(concreteValue + 2).when(concreteValue < 1)
       }
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
     let outcome = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
@@ -236,7 +365,7 @@ struct RefinementDeclarationTests {
         concreteValue.becomes(concreteValue + 1).when(concreteValue < 1)
       }
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
     let outcome = try ModelChecker(
@@ -259,9 +388,9 @@ struct RefinementDeclarationTests {
     let declaration = TLASpec("ConcreteFailureEvidence") {
       Variable(concreteValue)
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
-    let failures: [(ModelCheckingFailureKind, [NamedInvariant], StateExpr?, Bool, VariableInitialization)] = [
+    let failures: [(ModelCheckingFailureKind, [NamedStatePredicate], StateExpr?, Bool, VariableInitialization)] = [
       (.invariantViolated, [.init(name: "safe", body: false)], nil, false, .value(.int(0))),
       (.deadlock, [], nil, true, .value(.int(0))),
       (.assumption, [], false, false, .value(.int(0))),
@@ -301,16 +430,16 @@ struct RefinementDeclarationTests {
       let concrete = TLASpec("ConcreteAssumption") {
         Variable(concreteValue)
         instance
-        Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+        Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
       }
-      let outcome = try ModelChecker(
-        compilation: concrete.compile(), configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)
-      ).check()
+      let compilation = try concrete.compile()
+      let checker = ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled))
+      let outcome = try checker.check()
       if assumption {
-        guard case .ok = outcome else {
-          Issue.record("Expected valid abstract assumptions to permit refinement.")
-          continue
-        }
+        #expect(outcome.diagnostic?.kind == .deadlock)
+        let exploration = try checker.explore()
+        #expect(exploration.isComplete)
+        #expect(try RefinementChecker(compilation: compilation).check(exploration) == nil)
       } else {
         #expect(outcome.diagnostic?.kind == .assumption)
       }
@@ -329,7 +458,7 @@ struct RefinementDeclarationTests {
     let concrete = TLASpec("Concrete") {
       Variable(concreteValue)
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
     }
 
     do {
@@ -358,7 +487,7 @@ struct RefinementDeclarationTests {
       Variable(concreteValue)
       FormalDefinition("Current", parameters: [], body: concreteValue)
       instance
-      Refinement(name: "Refines", instance: instance, mappings: [
+      Refinement(_name: "Refines", instance: instance, mappings: [
         .init(parameter, from: current),
         .init(abstractValue, from: concreteValue)
       ])

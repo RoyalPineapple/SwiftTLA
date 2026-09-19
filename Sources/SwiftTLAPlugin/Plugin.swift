@@ -7,6 +7,7 @@ struct SwiftTLAPlugin: CompilerPlugin {
         ModelMacro.self,
         FiniteEnumMacro.self,
         ValueEnumMacro.self,
+        RecordValueMacro.self,
         SpecExpressionMacro.self
     ]
 }

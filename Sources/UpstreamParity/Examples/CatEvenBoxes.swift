@@ -13,9 +13,9 @@ package struct CatEvenBoxesModel: Sendable {
     package static var spec: TLASpec {
         #spec("Cat") { scope in
             Extends(.naturals)
-            let catBox = scope.sharedVar("catBox", in: 1...6)
-            let observedBox = scope.sharedVar("observedBox", in: 2...5)
-            let direction = scope.sharedVar("direction", in: SetExpr<Direction>.literal(.left, .right))
+            let catBox = scope.sharedVar(in: 1...6)
+            let observedBox = scope.sharedVar(in: 2...5)
+            let direction = scope.sharedVar(in: SetExpr<Direction>.literal(.left, .right))
 
             Invariant("TypeOK") {
                 catBox >= 1 && catBox <= 6
@@ -46,9 +46,9 @@ package struct CatOddBoxesModel: Sendable {
     package static var spec: TLASpec {
         #spec("Cat") { scope in
             Extends(.naturals)
-            let catBox = scope.sharedVar("catBox", in: 1...5)
-            let observedBox = scope.sharedVar("observedBox", in: 2...4)
-            let direction = scope.sharedVar("direction", in: SetExpr<Direction>.literal(.left, .right))
+            let catBox = scope.sharedVar(in: 1...5)
+            let observedBox = scope.sharedVar(in: 2...4)
+            let direction = scope.sharedVar(in: SetExpr<Direction>.literal(.left, .right))
 
             Invariant("TypeOK") {
                 catBox >= 1 && catBox <= 5

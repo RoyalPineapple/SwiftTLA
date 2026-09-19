@@ -62,7 +62,11 @@ let package = Package(
       dependencies: [.product(name: "SwiftTLA", package: "SwiftTLA")]
     ),
     .executableTarget(
-      name: "ReadmeSymmetricCollectionMacro",
+      name: "InvalidModelProperty",
+      dependencies: generatedMachineDependencies
+    ),
+    .executableTarget(
+      name: "ReadmeModelCollectionMacro",
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(

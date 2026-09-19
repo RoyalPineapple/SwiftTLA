@@ -1,0 +1,3412 @@
+{
+  "repository": "tlaplus/Examples",
+  "revision": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
+  "membership": {
+    "path": "README.md",
+    "gitBlobSHA": "0e4a22cb95dee4366980168d7241967f4faa214c",
+    "section": "Validated Examples Included Here",
+    "column": "TLC Model"
+  },
+  "families": [
+    {
+      "name": "Asynchronous Byzantine Consensus",
+      "path": "specifications/aba-asyn-byz",
+      "files": [
+        {
+          "path": "specifications/aba-asyn-byz/aba_asyn_byz.cfg",
+          "gitBlobSHA": "bfc4bce7e1b2b5b5d22da59cd1e6e994bb65daec"
+        },
+        {
+          "path": "specifications/aba-asyn-byz/aba_asyn_byz.tla",
+          "gitBlobSHA": "27079913dada086d6415f4a98c164487682f5022"
+        },
+        {
+          "path": "specifications/aba-asyn-byz/manifest.json",
+          "gitBlobSHA": "e3e693dec80552b7c7dcdd1128db681c03da36da"
+        }
+      ]
+    },
+    {
+      "name": "Atomic Commitment Protocol",
+      "path": "specifications/acp",
+      "files": [
+        {
+          "path": "specifications/acp/ACP_NB_TLC.cfg",
+          "gitBlobSHA": "4e09b6e99501d4a923f655c7d19252a5b119a48a"
+        },
+        {
+          "path": "specifications/acp/ACP_NB_TLC.tla",
+          "gitBlobSHA": "480e2c9fbcdc298bb8b11df0fca0dee3d0c086a3"
+        },
+        {
+          "path": "specifications/acp/ACP_NB_WRONG_TLC.cfg",
+          "gitBlobSHA": "aec43a26d313c74d80d206ecdb99e6de8a72b3f0"
+        },
+        {
+          "path": "specifications/acp/ACP_NB_WRONG_TLC.tla",
+          "gitBlobSHA": "d4e77f91e81ff0b2c08b1ab468e5f0a63c365c53"
+        },
+        {
+          "path": "specifications/acp/ACP_NB.tla",
+          "gitBlobSHA": "01543bce7b1c2ac28756e7bc2c0ea5b977b1e3a7"
+        },
+        {
+          "path": "specifications/acp/ACP_SB_TLC.cfg",
+          "gitBlobSHA": "057d87eb5f96f0b1538555d2dab0b26b42c4944f"
+        },
+        {
+          "path": "specifications/acp/ACP_SB_TLC.tla",
+          "gitBlobSHA": "e18f7c9be6808b46d308600f46a0667c7b6e0e1e"
+        },
+        {
+          "path": "specifications/acp/ACP_SB.tla",
+          "gitBlobSHA": "6f35067a5c8acff9ba4936862991d1a71e78a17a"
+        },
+        {
+          "path": "specifications/acp/APACP_SB.cfg",
+          "gitBlobSHA": "09966314490900c51999c785a09d4c6f1812717d"
+        },
+        {
+          "path": "specifications/acp/APACP_SB.tla",
+          "gitBlobSHA": "5a66cb8173d2d48d53e3e3cd46dcd2eb2098d138"
+        },
+        {
+          "path": "specifications/acp/manifest.json",
+          "gitBlobSHA": "10a097a145d8c131842e0094aa102acb2d07266b"
+        }
+      ]
+    },
+    {
+      "name": "Resource Allocator",
+      "path": "specifications/allocator",
+      "files": [
+        {
+          "path": "specifications/allocator/AllocatorImplementation_proof.tla",
+          "gitBlobSHA": "7c06db209f6a58f64ef7b956d980abe578090ff0"
+        },
+        {
+          "path": "specifications/allocator/AllocatorImplementation.cfg",
+          "gitBlobSHA": "efc0569122e3bfbbd4ba9e6ba96a543e4d761f54"
+        },
+        {
+          "path": "specifications/allocator/AllocatorImplementation.tla",
+          "gitBlobSHA": "87283be402577451631256ab2015fcfac3ae4831"
+        },
+        {
+          "path": "specifications/allocator/AllocatorRefinement.cfg",
+          "gitBlobSHA": "bf98a4239e8d473b853e4dd4ed6e155dfcc481aa"
+        },
+        {
+          "path": "specifications/allocator/AllocatorRefinement.tla",
+          "gitBlobSHA": "37eb64bdff91c8d4d1e08073061cfadb71efd5ac"
+        },
+        {
+          "path": "specifications/allocator/manifest.json",
+          "gitBlobSHA": "5f88d65013b31acd78028ffdabd78a03b1d5118d"
+        },
+        {
+          "path": "specifications/allocator/SchedulingAllocator_proof.tla",
+          "gitBlobSHA": "28af807b87ecea552143ca4f78fcfb1c2ea1afdb"
+        },
+        {
+          "path": "specifications/allocator/SchedulingAllocator.cfg",
+          "gitBlobSHA": "a7345253ab6b3c12f63a70cd27065992b1978cbb"
+        },
+        {
+          "path": "specifications/allocator/SchedulingAllocator.tla",
+          "gitBlobSHA": "026e3c44a882d36e646d752a3f112fc941ace46a"
+        },
+        {
+          "path": "specifications/allocator/SimpleAllocator_proof.tla",
+          "gitBlobSHA": "438507798f9dd634a698181fad6afab4eeafec3a"
+        },
+        {
+          "path": "specifications/allocator/SimpleAllocator.cfg",
+          "gitBlobSHA": "41b68f5205beec8b107f249656962bb816dab07c"
+        },
+        {
+          "path": "specifications/allocator/SimpleAllocator.tla",
+          "gitBlobSHA": "65db89884b2ec2bb750eb6001d7dd5adea59d9f9"
+        }
+      ]
+    },
+    {
+      "name": "The Boulangerie Algorithm",
+      "path": "specifications/Bakery-Boulangerie",
+      "files": [
+        {
+          "path": "specifications/Bakery-Boulangerie/Bakery.tla",
+          "gitBlobSHA": "7f9329e1e3e9360b3939abb2713f638e7a2cbc72"
+        },
+        {
+          "path": "specifications/Bakery-Boulangerie/Boulanger.tla",
+          "gitBlobSHA": "52ef212ed49c0a0e162c541420e88acc75cf5548"
+        },
+        {
+          "path": "specifications/Bakery-Boulangerie/manifest.json",
+          "gitBlobSHA": "6e007e2a7afeb9f8a45a706baf5b24a133167df8"
+        },
+        {
+          "path": "specifications/Bakery-Boulangerie/MCBakery.cfg",
+          "gitBlobSHA": "b0af6112a142d531d26c36dd06ff3b5dea258d74"
+        },
+        {
+          "path": "specifications/Bakery-Boulangerie/MCBakery.tla",
+          "gitBlobSHA": "d9f40ecf2cb3cfb04e412dbe92265c803117766d"
+        },
+        {
+          "path": "specifications/Bakery-Boulangerie/MCBoulanger.cfg",
+          "gitBlobSHA": "5aae39a397719a2bd1805555da9e689c8e35c23f"
+        },
+        {
+          "path": "specifications/Bakery-Boulangerie/MCBoulanger.tla",
+          "gitBlobSHA": "a3c6142da4780d00a9971ae63533908b5f0dbdfb"
+        }
+      ]
+    },
+    {
+      "name": "Barrier Synchronization",
+      "path": "specifications/barriers",
+      "files": [
+        {
+          "path": "specifications/barriers/APBarrier.cfg",
+          "gitBlobSHA": "07670df61ce2ee2e552e6183f815868f57ce3ffd"
+        },
+        {
+          "path": "specifications/barriers/APBarrier.tla",
+          "gitBlobSHA": "becead8e82ef13e4b0e62ce55b50560d062118e1"
+        },
+        {
+          "path": "specifications/barriers/Barrier.cfg",
+          "gitBlobSHA": "9cd85b6eb151b6fa408b3e777dc304777c952043"
+        },
+        {
+          "path": "specifications/barriers/Barrier.tla",
+          "gitBlobSHA": "71b3007605d667ef3ab380664d677a87a6903e3e"
+        },
+        {
+          "path": "specifications/barriers/Barriers.cfg",
+          "gitBlobSHA": "47ce272a6061aa335f90eb3b91b910682a3f6bdd"
+        },
+        {
+          "path": "specifications/barriers/Barriers.tla",
+          "gitBlobSHA": "0ee8d9b9b8b9d11c78efceae1162e92072fa556d"
+        },
+        {
+          "path": "specifications/barriers/manifest.json",
+          "gitBlobSHA": "dfac6499a0b869c0fb2730bf7a91eaa9c402e86c"
+        }
+      ]
+    },
+    {
+      "name": "Asynchronous Reliable Broadcast",
+      "path": "specifications/bcastByz",
+      "files": [
+        {
+          "path": "specifications/bcastByz/bcastByz.cfg",
+          "gitBlobSHA": "581bb993876c429d03468fd9c80d8fb814dccacf"
+        },
+        {
+          "path": "specifications/bcastByz/bcastByz.tla",
+          "gitBlobSHA": "43ce7814f6b14c9b75244b2122a20687ecaad708"
+        },
+        {
+          "path": "specifications/bcastByz/bcastByzNoBcast.cfg",
+          "gitBlobSHA": "f7a5ab49ee70822409b0df47099c084e63137c05"
+        },
+        {
+          "path": "specifications/bcastByz/manifest.json",
+          "gitBlobSHA": "2ef08ff451bac909586f7b86a70e580b6c049791"
+        }
+      ]
+    },
+    {
+      "name": "Folklore Reliable Broadcast",
+      "path": "specifications/bcastFolklore",
+      "files": [
+        {
+          "path": "specifications/bcastFolklore/APbcastFolklore.cfg",
+          "gitBlobSHA": "3f83f34215768d5122a4134761bae19fce5120ab"
+        },
+        {
+          "path": "specifications/bcastFolklore/APbcastFolklore.tla",
+          "gitBlobSHA": "c45519c409c47d539a9bd34921dc6b23dbc553f7"
+        },
+        {
+          "path": "specifications/bcastFolklore/bcastFolklore.cfg",
+          "gitBlobSHA": "5371d27c907634b383171f3a055843f01301d4ea"
+        },
+        {
+          "path": "specifications/bcastFolklore/bcastFolklore.tla",
+          "gitBlobSHA": "73025013c96f925933d9aeefb7a6eeb37754f6bc"
+        },
+        {
+          "path": "specifications/bcastFolklore/manifest.json",
+          "gitBlobSHA": "cd21833dbd384c612461ee4592140d247a01aaeb"
+        }
+      ]
+    },
+    {
+      "name": "The Bosco Byzantine Consensus Algorithm",
+      "path": "specifications/bosco",
+      "files": [
+        {
+          "path": "specifications/bosco/APbosco.cfg",
+          "gitBlobSHA": "863926f329ae3820805661b02bfc8fa7204c732a"
+        },
+        {
+          "path": "specifications/bosco/APbosco.tla",
+          "gitBlobSHA": "4588b2b2e5866228ca992bca8c17f569c922ac56"
+        },
+        {
+          "path": "specifications/bosco/bosco.cfg",
+          "gitBlobSHA": "30694dce4cbd0f7f2594fdbd9be98783230cbf86"
+        },
+        {
+          "path": "specifications/bosco/bosco.tla",
+          "gitBlobSHA": "d50004eae8fee25de3deec53077525a1304ca53c"
+        },
+        {
+          "path": "specifications/bosco/manifest.json",
+          "gitBlobSHA": "b1cb3fea27fcafeaf5ab2c1a466a2274fb31e616"
+        }
+      ]
+    },
+    {
+      "name": "Buffered Random Access File",
+      "path": "specifications/braf",
+      "files": [
+        {
+          "path": "specifications/braf/BufferedRandomAccessFile.cfg",
+          "gitBlobSHA": "1a717dccbc8692a1b5639a83998e674eb9644aac"
+        },
+        {
+          "path": "specifications/braf/BufferedRandomAccessFile.tla",
+          "gitBlobSHA": "9f5b94a8b13cc4cbcbfd39c02c14a4d26fb0cf53"
+        },
+        {
+          "path": "specifications/braf/manifest.json",
+          "gitBlobSHA": "aa7920e00077374965c0d5b1537360827c0bbd41"
+        }
+      ]
+    },
+    {
+      "name": "B-trees",
+      "path": "specifications/btree",
+      "files": [
+        {
+          "path": "specifications/btree/btree.tla",
+          "gitBlobSHA": "64c9a761fc0f1a87625d3710246dedc38aaf57d7"
+        },
+        {
+          "path": "specifications/btree/kvstore.cfg",
+          "gitBlobSHA": "b2a7eaa08edfee455ddf6a416bad6bc42f0843cd"
+        },
+        {
+          "path": "specifications/btree/kvstore.tla",
+          "gitBlobSHA": "8f21cc9eb3192fb245ab653663456bd825d06a3d"
+        },
+        {
+          "path": "specifications/btree/manifest.json",
+          "gitBlobSHA": "3a4ce2454c39bfc6128f99152fb6b79ad6c67806"
+        },
+        {
+          "path": "specifications/btree/MCbtree.cfg",
+          "gitBlobSHA": "be7dbb22f6c99b5a61a380da9558f97c247f753c"
+        },
+        {
+          "path": "specifications/btree/MCbtree.tla",
+          "gitBlobSHA": "d9f31ef8f26d9b9a6d377cc40a77cb1e5b06e2bc"
+        }
+      ]
+    },
+    {
+      "name": "RFC 3506: Voucher Transaction System",
+      "path": "specifications/byihive",
+      "files": [
+        {
+          "path": "specifications/byihive/manifest.json",
+          "gitBlobSHA": "89e5c7fabe2ce195822ab4909357b2c7890abb73"
+        },
+        {
+          "path": "specifications/byihive/VoucherCancel.cfg",
+          "gitBlobSHA": "9ad82d70de69f1cfc3716e11b11c007c4724d4bc"
+        },
+        {
+          "path": "specifications/byihive/VoucherCancel.tla",
+          "gitBlobSHA": "991e7ef320b3ba9dc92378e58193cf0e08d04cd2"
+        },
+        {
+          "path": "specifications/byihive/VoucherIssue.cfg",
+          "gitBlobSHA": "10183c3c50cf2cc704cccc066bb71c8b6103a26d"
+        },
+        {
+          "path": "specifications/byihive/VoucherIssue.tla",
+          "gitBlobSHA": "ff05ec3eb5a18d1952f968d953359eb1368d78c0"
+        },
+        {
+          "path": "specifications/byihive/VoucherLifeCycle_proof.tla",
+          "gitBlobSHA": "6cb42cb0a42d9ecca2f401b5ad84f043638b6a66"
+        },
+        {
+          "path": "specifications/byihive/VoucherLifeCycle.cfg",
+          "gitBlobSHA": "918527b3dc2895c88882272f6e279ce39852881e"
+        },
+        {
+          "path": "specifications/byihive/VoucherLifeCycle.tla",
+          "gitBlobSHA": "dab3db346e1b676530f3d04cd471b76099766f80"
+        },
+        {
+          "path": "specifications/byihive/VoucherRedeem.cfg",
+          "gitBlobSHA": "48319f0627a162f1e252a279537ae37f8aaff003"
+        },
+        {
+          "path": "specifications/byihive/VoucherRedeem.tla",
+          "gitBlobSHA": "cbc1c63b6fa5c25b9069dd9fdd1483fe35d3423c"
+        },
+        {
+          "path": "specifications/byihive/VoucherTransfer.cfg",
+          "gitBlobSHA": "fefd1c0db43dad2667c64a5dc59f044f1f7428e5"
+        },
+        {
+          "path": "specifications/byihive/VoucherTransfer.tla",
+          "gitBlobSHA": "691efda5f51b8a9265cccb92c1bf24cfe838c0a7"
+        }
+      ]
+    },
+    {
+      "name": "Byzantizing Paxos by Refinement",
+      "path": "specifications/byzpaxos",
+      "files": [
+        {
+          "path": "specifications/byzpaxos/BPConProof.cfg",
+          "gitBlobSHA": "6de296dbd8a789422b327a7437034e19eab1daa3"
+        },
+        {
+          "path": "specifications/byzpaxos/BPConProof.tla",
+          "gitBlobSHA": "6c8ec407fe80b7f0928cab00d657a74a9c4a4658"
+        },
+        {
+          "path": "specifications/byzpaxos/Consensus.cfg",
+          "gitBlobSHA": "9adf3c1a6310fde32a4c91b87bec0751863ad8f6"
+        },
+        {
+          "path": "specifications/byzpaxos/Consensus.tla",
+          "gitBlobSHA": "304f36429cac51887183b6dd838a64ecbdcdeec6"
+        },
+        {
+          "path": "specifications/byzpaxos/manifest.json",
+          "gitBlobSHA": "82dc824bd26d86621af102241c9d557d127a16e2"
+        },
+        {
+          "path": "specifications/byzpaxos/PConProof.cfg",
+          "gitBlobSHA": "d76fb4bf88b60050b96379ca32fe58db753f0b96"
+        },
+        {
+          "path": "specifications/byzpaxos/PConProof.tla",
+          "gitBlobSHA": "be07358e896aaf963a2f451a80b54858e1a28d28"
+        },
+        {
+          "path": "specifications/byzpaxos/VoteProof.cfg",
+          "gitBlobSHA": "23ffb857c7260848a85a066930a3c1470912b65e"
+        },
+        {
+          "path": "specifications/byzpaxos/VoteProof.tla",
+          "gitBlobSHA": "31baf8b69d14c71687ebcfdd09a9867450cd0791"
+        }
+      ]
+    },
+    {
+      "name": "Consensus in One Communication Step",
+      "path": "specifications/c1cs",
+      "files": [
+        {
+          "path": "specifications/c1cs/APc1cs.cfg",
+          "gitBlobSHA": "80789985197511efd272de0392435d7dd0df1c8b"
+        },
+        {
+          "path": "specifications/c1cs/APc1cs.tla",
+          "gitBlobSHA": "a8df0750cf9002a130464eff062bdf338b0f9683"
+        },
+        {
+          "path": "specifications/c1cs/c1cs.cfg",
+          "gitBlobSHA": "35c98675ad2d8d6fec0f6e7801aa1edf0d82e23f"
+        },
+        {
+          "path": "specifications/c1cs/c1cs.tla",
+          "gitBlobSHA": "c1152a419816a56eafca1280376b80c72d92c8e1"
+        },
+        {
+          "path": "specifications/c1cs/manifest.json",
+          "gitBlobSHA": "801b2160a78c0261c1ab5d66a3b102d27c3ec6f3"
+        }
+      ]
+    },
+    {
+      "name": "The Car Talk Puzzle",
+      "path": "specifications/CarTalkPuzzle",
+      "files": [
+        {
+          "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.tla",
+          "gitBlobSHA": "4cda175bd1c70ae702f18dafedc453e7846dcb1a"
+        },
+        {
+          "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_1/CarTalkPuzzle.tla",
+          "gitBlobSHA": "9ae1a790b5a547546a63a1a13a164569f018502b"
+        },
+        {
+          "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_1/MC.cfg",
+          "gitBlobSHA": "df9b1c459b34c5a5ad9d5ac2da820185c19533a5"
+        },
+        {
+          "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_1/MC.tla",
+          "gitBlobSHA": "fb7794be411449b1ff9ff30511bfe0d72a0aca3c"
+        },
+        {
+          "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_2/CarTalkPuzzle.tla",
+          "gitBlobSHA": "8cf47246694b13cd124b6a3f487d635f425ed027"
+        },
+        {
+          "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_2/MC.cfg",
+          "gitBlobSHA": "5bb0e317f06a9d4a501aac7156419820b6143faa"
+        },
+        {
+          "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_2/MC.tla",
+          "gitBlobSHA": "1834f4abad7ea7d092214a017a9f0a58db1c840c"
+        },
+        {
+          "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_3/CarTalkPuzzle.tla",
+          "gitBlobSHA": "17038e66007003480ddf6b54a1dac3d869616f7a"
+        },
+        {
+          "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_3/MC.cfg",
+          "gitBlobSHA": "58901de0c1b5a56599e21bb1293999874b09b456"
+        },
+        {
+          "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_3/MC.tla",
+          "gitBlobSHA": "77f7d42bfcc0a4a49c2340db971c389f9261a42b"
+        },
+        {
+          "path": "specifications/CarTalkPuzzle/manifest.json",
+          "gitBlobSHA": "fe1b3437d23b51f20ba1b34453aa310e0e410b3f"
+        }
+      ]
+    },
+    {
+      "name": "One-Step Consensus with Zero-Degradation",
+      "path": "specifications/cf1s-folklore",
+      "files": [
+        {
+          "path": "specifications/cf1s-folklore/APcf1s_folklore.tla",
+          "gitBlobSHA": "73737abb7b41295e1696f075e4bf5de7ef04fcad"
+        },
+        {
+          "path": "specifications/cf1s-folklore/cf1s_folklore.cfg",
+          "gitBlobSHA": "b887499284be13b493641a6c844c044a5169cfe8"
+        },
+        {
+          "path": "specifications/cf1s-folklore/cf1s_folklore.tla",
+          "gitBlobSHA": "53c2b7aa5b9591ef87ed08879c7eb6abc94fe32f"
+        },
+        {
+          "path": "specifications/cf1s-folklore/manifest.json",
+          "gitBlobSHA": "2224949bb5417311fc5678ca640654dbada4b653"
+        }
+      ]
+    },
+    {
+      "name": "Chameneos, a Concurrency Game",
+      "path": "specifications/Chameneos",
+      "files": [
+        {
+          "path": "specifications/Chameneos/APChameneos.tla",
+          "gitBlobSHA": "613d2c886850a803636ae856a608be178eec2d40"
+        },
+        {
+          "path": "specifications/Chameneos/Chameneos.cfg",
+          "gitBlobSHA": "82980ea07da9a6c1ed751de579356b18f92e8e95"
+        },
+        {
+          "path": "specifications/Chameneos/Chameneos.tla",
+          "gitBlobSHA": "90d7f41475781f30ccfeb56f632383fd3114c04e"
+        },
+        {
+          "path": "specifications/Chameneos/manifest.json",
+          "gitBlobSHA": "cf71a42a72c6c43878680646de9a909766c0c567"
+        }
+      ]
+    },
+    {
+      "name": "Chang-Roberts Algorithm for Leader Election in a Ring",
+      "path": "specifications/chang_roberts",
+      "files": [
+        {
+          "path": "specifications/chang_roberts/APChangRoberts.cfg",
+          "gitBlobSHA": "5f2fe859effd9bfae60819ca2757cfbd409e16e8"
+        },
+        {
+          "path": "specifications/chang_roberts/APChangRoberts.tla",
+          "gitBlobSHA": "486b51834f6c5bb6ad5f91e0874d5dbfd14bb944"
+        },
+        {
+          "path": "specifications/chang_roberts/ChangRoberts.tla",
+          "gitBlobSHA": "70d0a3b68340bcff7ddd26af3b97c008c65e0dac"
+        },
+        {
+          "path": "specifications/chang_roberts/manifest.json",
+          "gitBlobSHA": "fd8e0e05fa7ec7706519fae4cd272d4da6d9e3c9"
+        },
+        {
+          "path": "specifications/chang_roberts/MCChangRoberts.cfg",
+          "gitBlobSHA": "a2f9cfcf05fb0e78288064acef7513610c2b3a68"
+        },
+        {
+          "path": "specifications/chang_roberts/MCChangRoberts.tla",
+          "gitBlobSHA": "b779661509ce3850dfb3e01c7b9aa1254f8806c9"
+        }
+      ]
+    },
+    {
+      "name": "Checkpoint Coordination",
+      "path": "specifications/CheckpointCoordination",
+      "files": [
+        {
+          "path": "specifications/CheckpointCoordination/CheckpointCoordination.tla",
+          "gitBlobSHA": "0d41777a376b9b15f328fd0510eedc8c7fb8e688"
+        },
+        {
+          "path": "specifications/CheckpointCoordination/manifest.json",
+          "gitBlobSHA": "5438a55e201e8abeb59f36eb0026e0d48f9a0e4b"
+        },
+        {
+          "path": "specifications/CheckpointCoordination/MCCheckpointCoordination.cfg",
+          "gitBlobSHA": "853964ae74e472f55d1bdcfac0d2664d04b7d63b"
+        },
+        {
+          "path": "specifications/CheckpointCoordination/MCCheckpointCoordination.tla",
+          "gitBlobSHA": "44679af103b3b3e05e21a7ec689d199f27575c36"
+        },
+        {
+          "path": "specifications/CheckpointCoordination/MCCheckpointCoordinationFailure.cfg",
+          "gitBlobSHA": "e65cd8974c126725bf7cabec86ec3caf4ea634e8"
+        }
+      ]
+    },
+    {
+      "name": "The Cigarette Smokers Problem",
+      "path": "specifications/CigaretteSmokers",
+      "files": [
+        {
+          "path": "specifications/CigaretteSmokers/APCigaretteSmokers.cfg",
+          "gitBlobSHA": "9aae159347213195cfb5904500bf8d19e06e0f27"
+        },
+        {
+          "path": "specifications/CigaretteSmokers/APCigaretteSmokers.tla",
+          "gitBlobSHA": "6253a19cdb35905ac98d1848e240160ed9697c1e"
+        },
+        {
+          "path": "specifications/CigaretteSmokers/CigaretteSmokers_proof.tla",
+          "gitBlobSHA": "ecf15d055f68dbb56d37c9d5db8d5718cd478aec"
+        },
+        {
+          "path": "specifications/CigaretteSmokers/CigaretteSmokers.cfg",
+          "gitBlobSHA": "b568ea646d7e4d886fa76da685c82a357f2949c7"
+        },
+        {
+          "path": "specifications/CigaretteSmokers/CigaretteSmokers.tla",
+          "gitBlobSHA": "d282c159a9f7a755de1b22e6c0ce9ff40acdf645"
+        },
+        {
+          "path": "specifications/CigaretteSmokers/manifest.json",
+          "gitBlobSHA": "3b90e7827c7148eea07ed823a1005997d4730212"
+        }
+      ]
+    },
+    {
+      "name": "The Coffee Can Bean Problem",
+      "path": "specifications/CoffeeCan",
+      "files": [
+        {
+          "path": "specifications/CoffeeCan/APCoffeeCan.cfg",
+          "gitBlobSHA": "a5c6a3bc6c2dd63d14393367245bb0f83efe3058"
+        },
+        {
+          "path": "specifications/CoffeeCan/APCoffeeCan.tla",
+          "gitBlobSHA": "5c719f0919eb17f082364a9858ef8ca204e9c2da"
+        },
+        {
+          "path": "specifications/CoffeeCan/CoffeeCan_proof.tla",
+          "gitBlobSHA": "48ffb7805f5061a705be5f941f8749dae7c239ec"
+        },
+        {
+          "path": "specifications/CoffeeCan/CoffeeCan.tla",
+          "gitBlobSHA": "f5486fc5ded47ac67c1b6a3665a4ede52a6f8fd6"
+        },
+        {
+          "path": "specifications/CoffeeCan/CoffeeCan1000Beans.cfg",
+          "gitBlobSHA": "31f0957ab7d2b11f6cfceff84a17f069f09292d9"
+        },
+        {
+          "path": "specifications/CoffeeCan/CoffeeCan100Beans.cfg",
+          "gitBlobSHA": "710e6501c2993949e79b0aae208577c9913ffcac"
+        },
+        {
+          "path": "specifications/CoffeeCan/CoffeeCan3000Beans.cfg",
+          "gitBlobSHA": "4f4bebbe72c5fb8ec137aeae35757ac68c8d5660"
+        },
+        {
+          "path": "specifications/CoffeeCan/manifest.json",
+          "gitBlobSHA": "c18f9632640693acdea9bbf0969bf31ec65431ca"
+        }
+      ]
+    },
+    {
+      "name": "DAG-based Consensus",
+      "path": "specifications/dag-consensus",
+      "files": [
+        {
+          "path": "specifications/dag-consensus/BlockDag.tla",
+          "gitBlobSHA": "ed6730123c975ca302dd33fc83df92077b7fd84d"
+        },
+        {
+          "path": "specifications/dag-consensus/BlockDagTest.cfg",
+          "gitBlobSHA": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+        },
+        {
+          "path": "specifications/dag-consensus/BlockDagTest.tla",
+          "gitBlobSHA": "d71a8a3817008c7479210110f358c20776aa47d4"
+        },
+        {
+          "path": "specifications/dag-consensus/Digraph.tla",
+          "gitBlobSHA": "26fe1dbebb879cdc96295e05cdec18050cbd7767"
+        },
+        {
+          "path": "specifications/dag-consensus/manifest.json",
+          "gitBlobSHA": "b331049dad96b798a91afc51708fca8593317c4a"
+        },
+        {
+          "path": "specifications/dag-consensus/Sailfish.tla",
+          "gitBlobSHA": "d80499b677e5f8664708c0220568c1b73aa2bb06"
+        },
+        {
+          "path": "specifications/dag-consensus/TLCSailfish1.cfg",
+          "gitBlobSHA": "e44e6acea7c0c71283ceed6118cdc34d3e107123"
+        },
+        {
+          "path": "specifications/dag-consensus/TLCSailfish1.tla",
+          "gitBlobSHA": "9f70d2787d5f77ea3b6eefb5c4176f7107fa6773"
+        },
+        {
+          "path": "specifications/dag-consensus/TLCSailfish2.cfg",
+          "gitBlobSHA": "b029d4770fd44eb028819ea2177ca8aefff38261"
+        },
+        {
+          "path": "specifications/dag-consensus/TLCSailfish2.tla",
+          "gitBlobSHA": "2a3facdcfdd219d8483ea85dca08bf92a2f76729"
+        },
+        {
+          "path": "specifications/dag-consensus/Utils.tla",
+          "gitBlobSHA": "2596af594a1253fdb1415f89b7f06c36b7bd0982"
+        }
+      ]
+    },
+    {
+      "name": "Failure Detector",
+      "path": "specifications/detector_chan96",
+      "files": [
+        {
+          "path": "specifications/detector_chan96/Age_Channel.tla",
+          "gitBlobSHA": "e825485c3cf34de4cb30e6124dba038424ee5bc2"
+        },
+        {
+          "path": "specifications/detector_chan96/EnvironmentController.cfg",
+          "gitBlobSHA": "43202d46bf46c263da288aba456a95a7faac8179"
+        },
+        {
+          "path": "specifications/detector_chan96/EnvironmentController.tla",
+          "gitBlobSHA": "0a7fe2344fb51c5069eb22d50cc5bc4e4387da56"
+        },
+        {
+          "path": "specifications/detector_chan96/EPFailureDetector.tla",
+          "gitBlobSHA": "8ba49106e1b20a141c6e7bc51bb9653fb259d629"
+        },
+        {
+          "path": "specifications/detector_chan96/manifest.json",
+          "gitBlobSHA": "2b50ec2c627f9e342ee1e63ecb36550d4fd6cde5"
+        }
+      ]
+    },
+    {
+      "name": "The Die Hard Problem",
+      "path": "specifications/DieHard",
+      "files": [
+        {
+          "path": "specifications/DieHard/APADieHardest.tla",
+          "gitBlobSHA": "9f40580849411152d63260783e3970e90ba7fdad"
+        },
+        {
+          "path": "specifications/DieHard/APDieHarder.cfg",
+          "gitBlobSHA": "afc9d36b6c1d5cbc00693cdb6315969fd5b99193"
+        },
+        {
+          "path": "specifications/DieHard/APDieHarder.tla",
+          "gitBlobSHA": "690b04d74dc9f7a8ee40742f1f51fe496a7527dc"
+        },
+        {
+          "path": "specifications/DieHard/DieHard_proof.tla",
+          "gitBlobSHA": "5462cae619c1de2b5e764388be7e4ec20c1ba303"
+        },
+        {
+          "path": "specifications/DieHard/DieHard.cfg",
+          "gitBlobSHA": "088d126588d8d33cd88e652643703d7ffdefa032"
+        },
+        {
+          "path": "specifications/DieHard/DieHard.tla",
+          "gitBlobSHA": "7e6eb7155f7c4a36c2a753217f9558f6ec39946f"
+        },
+        {
+          "path": "specifications/DieHard/DieHarder.tla",
+          "gitBlobSHA": "354ca867aaa482f780f38c7efa8418bc2a44c356"
+        },
+        {
+          "path": "specifications/DieHard/DieHardest.tla",
+          "gitBlobSHA": "6e415419656f577d12d1d58c15362541e5f9d83e"
+        },
+        {
+          "path": "specifications/DieHard/manifest.json",
+          "gitBlobSHA": "c8176e871b92cccbf7949903c3ac847671252dcf"
+        },
+        {
+          "path": "specifications/DieHard/MCDieHarder.cfg",
+          "gitBlobSHA": "2e38d93e721429f850aacba12a9712bcc21c504b"
+        },
+        {
+          "path": "specifications/DieHard/MCDieHarder.tla",
+          "gitBlobSHA": "bf1a00885572acd4d41830f7b591f94c9ccbbde4"
+        },
+        {
+          "path": "specifications/DieHard/MCDieHardest.cfg",
+          "gitBlobSHA": "7d30a664abc61860d48acf3ce8195373362ce96c"
+        },
+        {
+          "path": "specifications/DieHard/MCDieHardest.tla",
+          "gitBlobSHA": "a74a67ff71af702c0ceb15921a1e2709e8d8adaa"
+        }
+      ]
+    },
+    {
+      "name": "Dijkstra's Mutual Exclusion Algorithm",
+      "path": "specifications/dijkstra-mutex",
+      "files": [
+        {
+          "path": "specifications/dijkstra-mutex/DijkstraMutex.tla",
+          "gitBlobSHA": "bf8d1d68df119cc8d69ddba3955edd66641f8b1d"
+        },
+        {
+          "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/DijkstraMutex.tla",
+          "gitBlobSHA": "d25e4aa00a765366f20b0281441599c09e4e9460"
+        },
+        {
+          "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/MC.cfg",
+          "gitBlobSHA": "123b9d13e48a5a58ced8ba58252e63605daac572"
+        },
+        {
+          "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/MC.tla",
+          "gitBlobSHA": "d419552d84e141eeaead0f37a81068f63643a9ec"
+        },
+        {
+          "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/DijkstraMutex.tla",
+          "gitBlobSHA": "d25e4aa00a765366f20b0281441599c09e4e9460"
+        },
+        {
+          "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/MC.cfg",
+          "gitBlobSHA": "c287ceb1db3ba9d79c113b285875bd04eca8c9aa"
+        },
+        {
+          "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/MC.tla",
+          "gitBlobSHA": "19d46aae5e5e0c0996532db1bbdd48bfd72aab22"
+        },
+        {
+          "path": "specifications/dijkstra-mutex/manifest.json",
+          "gitBlobSHA": "10a52eec554303c2c7cd76a18278575fafb115de"
+        }
+      ]
+    },
+    {
+      "name": "The Dining Philosophers Problem",
+      "path": "specifications/DiningPhilosophers",
+      "files": [
+        {
+          "path": "specifications/DiningPhilosophers/APDiningPhilosophers.cfg",
+          "gitBlobSHA": "523ba28d2f05054ed35abecd1eeec11b97e0e85b"
+        },
+        {
+          "path": "specifications/DiningPhilosophers/APDiningPhilosophers.tla",
+          "gitBlobSHA": "0f8ac5a7951f07fc2c7711fb6d6962a6fde47433"
+        },
+        {
+          "path": "specifications/DiningPhilosophers/DiningPhilosophers.cfg",
+          "gitBlobSHA": "836605abad6496ba2f50a44aef8fc11497e01888"
+        },
+        {
+          "path": "specifications/DiningPhilosophers/DiningPhilosophers.tla",
+          "gitBlobSHA": "2fbce81ff169773201486da2723fa9c2b0e0bc3c"
+        },
+        {
+          "path": "specifications/DiningPhilosophers/manifest.json",
+          "gitBlobSHA": "f71b9010353992c00af2fa523cd88126ed4f0df4"
+        }
+      ]
+    },
+    {
+      "name": "SWMR Shared Memory Disk Paxos",
+      "path": "specifications/diskpaxos",
+      "files": [
+        {
+          "path": "specifications/diskpaxos/DiskSynod.tla",
+          "gitBlobSHA": "685ed6f1f31377fa4844bc9d6591a3ba6276ce5d"
+        },
+        {
+          "path": "specifications/diskpaxos/HDiskSynod.tla",
+          "gitBlobSHA": "7f709f0c118b53822a37200c1f13b52301242bf8"
+        },
+        {
+          "path": "specifications/diskpaxos/manifest.json",
+          "gitBlobSHA": "b5d582ed33d5b0a33c279ea1932cea5b90bbe8da"
+        },
+        {
+          "path": "specifications/diskpaxos/MC_HDiskSynod.cfg",
+          "gitBlobSHA": "185d4ec500e26042a26892290f1ced20f33bb19c"
+        },
+        {
+          "path": "specifications/diskpaxos/MC_HDiskSynod.tla",
+          "gitBlobSHA": "0a6bad4ee709e5e9b8afc2336a2e752c6e1e9a66"
+        },
+        {
+          "path": "specifications/diskpaxos/Synod.tla",
+          "gitBlobSHA": "65e08a51834c9c5f0d029f2a9bba345ef0900026"
+        }
+      ]
+    },
+    {
+      "name": "Disruptor",
+      "path": "specifications/Disruptor",
+      "files": [
+        {
+          "path": "specifications/Disruptor/APDisruptor_MPMC.cfg",
+          "gitBlobSHA": "8ab90bf49681413e096a7b78457d08a4cb1923b6"
+        },
+        {
+          "path": "specifications/Disruptor/APDisruptor_MPMC.tla",
+          "gitBlobSHA": "69258806b81ca75ccbc0c5782cf505e43d82fd46"
+        },
+        {
+          "path": "specifications/Disruptor/APDisruptor_SPMC.cfg",
+          "gitBlobSHA": "8ab90bf49681413e096a7b78457d08a4cb1923b6"
+        },
+        {
+          "path": "specifications/Disruptor/APDisruptor_SPMC.tla",
+          "gitBlobSHA": "57fc1e5462fdc210dffb1aa7668a9848ddeae8d6"
+        },
+        {
+          "path": "specifications/Disruptor/APRingBuffer.tla",
+          "gitBlobSHA": "f266c22a8e7d763fd68856d5babab327d43c68c9"
+        },
+        {
+          "path": "specifications/Disruptor/Disruptor_MPMC.tla",
+          "gitBlobSHA": "94ac26c135c17e38742830e4b47ef6e1b1017f8d"
+        },
+        {
+          "path": "specifications/Disruptor/Disruptor_SPMC.tla",
+          "gitBlobSHA": "cb24e231b6c540f30f5272e748abb7c0cfb4eb91"
+        },
+        {
+          "path": "specifications/Disruptor/manifest.json",
+          "gitBlobSHA": "0ef19190be7705526167699fc45212b38295e598"
+        },
+        {
+          "path": "specifications/Disruptor/MCDisruptor_MPMC_liveliness.cfg",
+          "gitBlobSHA": "5b62b673d1a786f641c6a20d1d84bede774b5608"
+        },
+        {
+          "path": "specifications/Disruptor/MCDisruptor_MPMC.cfg",
+          "gitBlobSHA": "259204a427734490ddc06ea384c9fce9cf78a052"
+        },
+        {
+          "path": "specifications/Disruptor/MCDisruptor_MPMC.tla",
+          "gitBlobSHA": "f3e5b9278a9f6abec4292bcf93223bc6b0e7cc43"
+        },
+        {
+          "path": "specifications/Disruptor/MCDisruptor_SPMC.cfg",
+          "gitBlobSHA": "afeaddb179c3e40052bd5e28775863c733a177ef"
+        },
+        {
+          "path": "specifications/Disruptor/MCDisruptor_SPMC.tla",
+          "gitBlobSHA": "06843a805c9c72ef2a25eef8cae6121e24d7ab3a"
+        },
+        {
+          "path": "specifications/Disruptor/RingBuffer.tla",
+          "gitBlobSHA": "f0721e4ae31253b9ebaeaf02bf9583c18561ccba"
+        }
+      ]
+    },
+    {
+      "name": "The Echo Algorithm",
+      "path": "specifications/echo",
+      "files": [
+        {
+          "path": "specifications/echo/Echo.tla",
+          "gitBlobSHA": "4d496beee31402bc33bc2f87512c3f4f4365e9fd"
+        },
+        {
+          "path": "specifications/echo/manifest.json",
+          "gitBlobSHA": "72aa7b1b4c368d66602dae4125b90033818000bb"
+        },
+        {
+          "path": "specifications/echo/MCEcho.cfg",
+          "gitBlobSHA": "ad18e5050ce1269cdc1d2b2a970156bcdc0dd237"
+        },
+        {
+          "path": "specifications/echo/MCEcho.tla",
+          "gitBlobSHA": "37cc4873cd93f4553506921e91275229a1c16231"
+        },
+        {
+          "path": "specifications/echo/Relation.tla",
+          "gitBlobSHA": "74038057b2ff369708ce9d4eaece54d3b1d75903"
+        }
+      ]
+    },
+    {
+      "name": "EWD 426: Token Stabilization",
+      "path": "specifications/ewd426",
+      "files": [
+        {
+          "path": "specifications/ewd426/APTokenRing.cfg",
+          "gitBlobSHA": "481a5a32d663dd0bf777f0be6f2689651e68e0f3"
+        },
+        {
+          "path": "specifications/ewd426/APTokenRing.tla",
+          "gitBlobSHA": "168e0fef42379683987b904c13086e17fc1670e0"
+        },
+        {
+          "path": "specifications/ewd426/manifest.json",
+          "gitBlobSHA": "9864bf9d0bcc066da834d0cad7d954a7aaef18c8"
+        },
+        {
+          "path": "specifications/ewd426/SimTokenRing.cfg",
+          "gitBlobSHA": "3051ac2fe572e1e9cc974e7cc943a643653024d7"
+        },
+        {
+          "path": "specifications/ewd426/SimTokenRing.tla",
+          "gitBlobSHA": "cb28700a28f0be022b8c875904bc8a7258dba006"
+        },
+        {
+          "path": "specifications/ewd426/TokenRing.cfg",
+          "gitBlobSHA": "41613bba55dc5b9726229986af38f819f644f3c5"
+        },
+        {
+          "path": "specifications/ewd426/TokenRing.tla",
+          "gitBlobSHA": "729333f5b63d3d0f8bae7d39860c03505f30f1e9"
+        }
+      ]
+    },
+    {
+      "name": "EWD687a: Detecting Termination in Distributed Computations",
+      "path": "specifications/ewd687a",
+      "files": [
+        {
+          "path": "specifications/ewd687a/EWD687a_anim.cfg",
+          "gitBlobSHA": "dd6e14224fdf61acdd9e025219d8e2e294e39d81"
+        },
+        {
+          "path": "specifications/ewd687a/EWD687a_anim.tla",
+          "gitBlobSHA": "1b17e8040df6496859a66b2c9669dd43b4d7c236"
+        },
+        {
+          "path": "specifications/ewd687a/EWD687a_proof.tla",
+          "gitBlobSHA": "17f56ecde39264070c4e965caf31f072ed540bcb"
+        },
+        {
+          "path": "specifications/ewd687a/EWD687a.tla",
+          "gitBlobSHA": "a6c0978d90111e552785038b38b4285c44f0da6c"
+        },
+        {
+          "path": "specifications/ewd687a/EWD687aPlusCal.tla",
+          "gitBlobSHA": "c229cfeb1934ad896d5d46d4579eae7fdd1f5d90"
+        },
+        {
+          "path": "specifications/ewd687a/manifest.json",
+          "gitBlobSHA": "7216fed73d517277eb459503aa338d45be77ee20"
+        },
+        {
+          "path": "specifications/ewd687a/MCEWD687a.cfg",
+          "gitBlobSHA": "be75ce8f8d09df1c3089dd199c08b0dc3f42988e"
+        },
+        {
+          "path": "specifications/ewd687a/MCEWD687a.tla",
+          "gitBlobSHA": "e2378685291b7723cd12bf4b912493ac75e782c2"
+        }
+      ]
+    },
+    {
+      "name": "EWD840: Termination Detection in a Ring",
+      "path": "specifications/ewd840",
+      "files": [
+        {
+          "path": "specifications/ewd840/APEWD840.cfg",
+          "gitBlobSHA": "28a6a45d06865c8384a796a8b87de5d7b9fb9102"
+        },
+        {
+          "path": "specifications/ewd840/APEWD840.tla",
+          "gitBlobSHA": "fc760cef12086ca19376c6c9bcbc7e76f0adae5c"
+        },
+        {
+          "path": "specifications/ewd840/APSyncTerminationDetection.cfg",
+          "gitBlobSHA": "1cef4991f78f0e9929714df47504755f253fb8e8"
+        },
+        {
+          "path": "specifications/ewd840/APSyncTerminationDetection.tla",
+          "gitBlobSHA": "512cd8622f875b6ae6dcc71dec2ff99c38bd4d7d"
+        },
+        {
+          "path": "specifications/ewd840/EWD840_anim.cfg",
+          "gitBlobSHA": "5ce67c18fb10e5396f46351ebddbe1e32da22381"
+        },
+        {
+          "path": "specifications/ewd840/EWD840_anim.tla",
+          "gitBlobSHA": "80c22aa5eddb596b747feac8e152aa06b2bbee53"
+        },
+        {
+          "path": "specifications/ewd840/EWD840_json.cfg",
+          "gitBlobSHA": "a21b5511fa64518514ba1aebcb3c81529cfbcf52"
+        },
+        {
+          "path": "specifications/ewd840/EWD840_json.tla",
+          "gitBlobSHA": "341cfb1af49cb291e79502e8ed5fca7e0601d2d1"
+        },
+        {
+          "path": "specifications/ewd840/EWD840_proof.tla",
+          "gitBlobSHA": "1cb8ef4f5eb9560dfb2546d2d8136564dea523eb"
+        },
+        {
+          "path": "specifications/ewd840/EWD840.cfg",
+          "gitBlobSHA": "d970500b569f804085de945b6aef20a75b46313f"
+        },
+        {
+          "path": "specifications/ewd840/EWD840.tla",
+          "gitBlobSHA": "36618d334530c5b99a6b7677433b7aeaa2210003"
+        },
+        {
+          "path": "specifications/ewd840/manifest.json",
+          "gitBlobSHA": "93c380277966f229e173a354e82d873a4171b5ac"
+        },
+        {
+          "path": "specifications/ewd840/SyncTerminationDetection_proof.tla",
+          "gitBlobSHA": "008616e05a3671707a4221d1278d59258e5d939a"
+        },
+        {
+          "path": "specifications/ewd840/SyncTerminationDetection.cfg",
+          "gitBlobSHA": "2533b4cf6e03acde056cda5fe13fe6ca3fe25f00"
+        },
+        {
+          "path": "specifications/ewd840/SyncTerminationDetection.tla",
+          "gitBlobSHA": "86c3dd6a2f5e9aca70e93e70837a9eb3e2c46675"
+        }
+      ]
+    },
+    {
+      "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
+      "path": "specifications/ewd998",
+      "files": [
+        {
+          "path": "specifications/ewd998/AsyncTerminationDetection_proof.tla",
+          "gitBlobSHA": "167da3428383b8908cef71a4907b1c18b200842d"
+        },
+        {
+          "path": "specifications/ewd998/AsyncTerminationDetection.cfg",
+          "gitBlobSHA": "2f190c7182a613a1f95fa29c43e92dd536ddb5aa"
+        },
+        {
+          "path": "specifications/ewd998/AsyncTerminationDetection.tla",
+          "gitBlobSHA": "a28c7e84c7606ac4df30b0f9f1bc9f89129f27dc"
+        },
+        {
+          "path": "specifications/ewd998/EWD998_anim.tla",
+          "gitBlobSHA": "c08efaa16007564f82bab81a31cbcd8cbd12a37d"
+        },
+        {
+          "path": "specifications/ewd998/EWD998_opts.tla",
+          "gitBlobSHA": "f26e0eaca8397c0509ddbf1e55de13932078b215"
+        },
+        {
+          "path": "specifications/ewd998/EWD998_optsSC.tla",
+          "gitBlobSHA": "d56a2b078f95e444e3c04ce9d73cc27797699e69"
+        },
+        {
+          "path": "specifications/ewd998/EWD998_proof.tla",
+          "gitBlobSHA": "9515d5548a456eac9bb9e457a970a863e84915a6"
+        },
+        {
+          "path": "specifications/ewd998/EWD998.cfg",
+          "gitBlobSHA": "247761267fcb0096c833b3f8cca4f61728c83735"
+        },
+        {
+          "path": "specifications/ewd998/EWD998.tla",
+          "gitBlobSHA": "f0b172c8dd85ca4ad945cd62c63e8ecf23674753"
+        },
+        {
+          "path": "specifications/ewd998/EWD998Chan_opts.tla",
+          "gitBlobSHA": "b44b08abb69a683f82ae8b254a5b3070e08bbecb"
+        },
+        {
+          "path": "specifications/ewd998/EWD998Chan.cfg",
+          "gitBlobSHA": "9ebfc9763833408ed68274b599f9c3b645e4e9e3"
+        },
+        {
+          "path": "specifications/ewd998/EWD998Chan.tla",
+          "gitBlobSHA": "c3f932bf0460bdadb730e6b6a0a18b3f70e2e87d"
+        },
+        {
+          "path": "specifications/ewd998/EWD998ChanID_export.cfg",
+          "gitBlobSHA": "c76d2e1c71d88111106e5efbd849156f5e3a0558"
+        },
+        {
+          "path": "specifications/ewd998/EWD998ChanID_export.tla",
+          "gitBlobSHA": "69ffa9567d88b0ea4b39d51ad5c1d23e93faa670"
+        },
+        {
+          "path": "specifications/ewd998/EWD998ChanID_shiviz.cfg",
+          "gitBlobSHA": "626a7482ad494c9d8505504cc786e7daa69483b8"
+        },
+        {
+          "path": "specifications/ewd998/EWD998ChanID_shiviz.tla",
+          "gitBlobSHA": "ec0f50c212804821e82f16be2ad4ed361149d287"
+        },
+        {
+          "path": "specifications/ewd998/EWD998ChanID.cfg",
+          "gitBlobSHA": "cfa3ee5ecb8f46f2b45a82587a24bd2c12d887c5"
+        },
+        {
+          "path": "specifications/ewd998/EWD998ChanID.tla",
+          "gitBlobSHA": "2993fdcec4a33669e26dc2e34842e6360ad3c986"
+        },
+        {
+          "path": "specifications/ewd998/EWD998ChanTrace.cfg",
+          "gitBlobSHA": "c5b31feacce51c6ca0804e401dff50858de001eb"
+        },
+        {
+          "path": "specifications/ewd998/EWD998ChanTrace.tla",
+          "gitBlobSHA": "ca3ba7aa14c322c7faa959ae43a5c26a28280f12"
+        },
+        {
+          "path": "specifications/ewd998/EWD998PCal_proof.tla",
+          "gitBlobSHA": "06f4d9ae713edf88514f869a981ae06799ec5f93"
+        },
+        {
+          "path": "specifications/ewd998/EWD998PCal.cfg",
+          "gitBlobSHA": "efed388797d2da0017a89af96b3c8a9bfd50d786"
+        },
+        {
+          "path": "specifications/ewd998/EWD998PCal.tla",
+          "gitBlobSHA": "67a023740abcda535cfce4e92fbd6fde961d2384"
+        },
+        {
+          "path": "specifications/ewd998/EWD998Small.cfg",
+          "gitBlobSHA": "0d664ddb9553cecf4194701526ea37b4d3084be5"
+        },
+        {
+          "path": "specifications/ewd998/Folds.tla",
+          "gitBlobSHA": "d98ad1322fcc1ff0fff57fce892a0622ebbc633f"
+        },
+        {
+          "path": "specifications/ewd998/manifest.json",
+          "gitBlobSHA": "5e4ee6aa27581c1fcb46d4ca9bba00ca1e88cab2"
+        },
+        {
+          "path": "specifications/ewd998/SmokeEWD998_SC.cfg",
+          "gitBlobSHA": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+        },
+        {
+          "path": "specifications/ewd998/SmokeEWD998_SC.tla",
+          "gitBlobSHA": "b6da7708d4b8430e5bed9abeea684a14ba4c6ad7"
+        },
+        {
+          "path": "specifications/ewd998/SmokeEWD998.cfg",
+          "gitBlobSHA": "fd09f9d02b49b54812f34ef0c440b2ab7b47b715"
+        },
+        {
+          "path": "specifications/ewd998/SmokeEWD998.tla",
+          "gitBlobSHA": "25c9d431cfa80e16a6a8e80ceef4a71f5228f1ff"
+        },
+        {
+          "path": "specifications/ewd998/Utils.tla",
+          "gitBlobSHA": "bd7f7ca31c7c3165ddbaa65520d75bbbb020397c"
+        }
+      ]
+    },
+    {
+      "name": "Finitizing Monotonic Systems",
+      "path": "specifications/FiniteMonotonic",
+      "files": [
+        {
+          "path": "specifications/FiniteMonotonic/APCRDT.cfg",
+          "gitBlobSHA": "b96429ca504f2ba63341b64cc729bf312bb182f4"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/APCRDT.tla",
+          "gitBlobSHA": "2531ac1fed4d0d444158b2bb22bd3ee33080b21c"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/APDistributedReplicatedLog.tla",
+          "gitBlobSHA": "27041be143f00c50c4caf27cc62d0a3d20a46f43"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/APReplicatedLog.cfg",
+          "gitBlobSHA": "e9ffec41610a17f0162d1f0e00141ddb14afde78"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/APReplicatedLog.tla",
+          "gitBlobSHA": "37d4063ba59e178368ed038963a06d7a4444bfe0"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/CRDT_proof.tla",
+          "gitBlobSHA": "7e4d016a8341530f0bca3cdf3292ddf06e09c55c"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/CRDT.tla",
+          "gitBlobSHA": "a337cb447011a1771ceaf75a4bcab22f1a4b5686"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/DistributedReplicatedLog.tla",
+          "gitBlobSHA": "36e7414c8913821fc0b10ab1c3640ade792a7475"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/manifest.json",
+          "gitBlobSHA": "114add7e78a882e634c72c6e6dc1b0842d75cfd3"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/MCCRDT.cfg",
+          "gitBlobSHA": "6af2780073889bc90f04ce3d03470b94009ed160"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/MCCRDT.tla",
+          "gitBlobSHA": "3151ead220927ad980885b8694b1c5f38cb169d2"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/MCDistributedReplicatedLog.cfg",
+          "gitBlobSHA": "579257b2cc44baa95ce0446534ac655613650f75"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/MCDistributedReplicatedLog.tla",
+          "gitBlobSHA": "56575877ec6f08cb9c506c8daf3d6c8491fadf00"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/MCReplicatedLog.cfg",
+          "gitBlobSHA": "53ca9e55b321e5c5cb55de218d8bd163263c16cf"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/MCReplicatedLog.tla",
+          "gitBlobSHA": "65f8000feb60310cb42d1c7f103bcadf5e75f52e"
+        },
+        {
+          "path": "specifications/FiniteMonotonic/ReplicatedLog.tla",
+          "gitBlobSHA": "4997c9c80f3ce8987a64f752251f30593f0f73bc"
+        }
+      ]
+    },
+    {
+      "name": "FLASH Cache-Coherence Protocol",
+      "path": "specifications/FlashProtocol",
+      "files": [
+        {
+          "path": "specifications/FlashProtocol/APFlashWithMutex.cfg",
+          "gitBlobSHA": "f8b4110900487e3cbd10dd5be9108f656a351f74"
+        },
+        {
+          "path": "specifications/FlashProtocol/APFlashWithMutex.tla",
+          "gitBlobSHA": "5aeb2da88170d8de1ef4668f6b704e1d92bfcc6e"
+        },
+        {
+          "path": "specifications/FlashProtocol/FlashWithMutex.tla",
+          "gitBlobSHA": "cf67397bb0830cf90d9752b0f92fad18047bcce8"
+        },
+        {
+          "path": "specifications/FlashProtocol/FlashWithMutexCMP.tla",
+          "gitBlobSHA": "bd843e8f3a53e08ccefa17dc61c5328b55acb6a3"
+        },
+        {
+          "path": "specifications/FlashProtocol/manifest.json",
+          "gitBlobSHA": "be4a0bd309d8ff6e7cd8e981a768ffbcd084e047"
+        },
+        {
+          "path": "specifications/FlashProtocol/MCFlashWithMutex.cfg",
+          "gitBlobSHA": "0352d62f90e0a049d31b6e87be120875e688819b"
+        },
+        {
+          "path": "specifications/FlashProtocol/MCFlashWithMutex.tla",
+          "gitBlobSHA": "270b714ce1fa33f67333b9752e592807b07018e6"
+        },
+        {
+          "path": "specifications/FlashProtocol/MCFlashWithMutexLive.cfg",
+          "gitBlobSHA": "305fa79b1b9545589e403aeb1f17b5e3174d2084"
+        },
+        {
+          "path": "specifications/FlashProtocol/MCFlashWithMutexLive.tla",
+          "gitBlobSHA": "95e263e7b5ef153b298b343a1cc76a52e428a0ef"
+        }
+      ]
+    },
+    {
+      "name": "Conway's Game of Life",
+      "path": "specifications/GameOfLife",
+      "files": [
+        {
+          "path": "specifications/GameOfLife/GameOfLife.cfg",
+          "gitBlobSHA": "521c6e6a11a821db0a86477a0501807fabf1087a"
+        },
+        {
+          "path": "specifications/GameOfLife/GameOfLife.tla",
+          "gitBlobSHA": "2664cf344f9b48f3a7d8ca6499f42ce77c16481c"
+        },
+        {
+          "path": "specifications/GameOfLife/manifest.json",
+          "gitBlobSHA": "40182828f06c9337b5468ace1bd2e32679b10e29"
+        }
+      ]
+    },
+    {
+      "name": "German Cache-Coherence Protocol",
+      "path": "specifications/GermanProtocol",
+      "files": [
+        {
+          "path": "specifications/GermanProtocol/APGermanCMPWithMutex.cfg",
+          "gitBlobSHA": "a655b707b52477dfc06998c258d80c647abfc05e"
+        },
+        {
+          "path": "specifications/GermanProtocol/APGermanCMPWithMutex.tla",
+          "gitBlobSHA": "e4c4977bb0310cfbf161d67410cbfa4b25d059d6"
+        },
+        {
+          "path": "specifications/GermanProtocol/APGermanControl.cfg",
+          "gitBlobSHA": "400dfd0e6725e879536f6c623f92de94f706409a"
+        },
+        {
+          "path": "specifications/GermanProtocol/APGermanControl.tla",
+          "gitBlobSHA": "d4118387221a6ba281c36bb066ea47769dbfb4ad"
+        },
+        {
+          "path": "specifications/GermanProtocol/APGermanData.cfg",
+          "gitBlobSHA": "138f50d767ce6a665f9b14cd545a468691411108"
+        },
+        {
+          "path": "specifications/GermanProtocol/APGermanData.tla",
+          "gitBlobSHA": "1600dc7242b1d3432c13ac3aec0441786c141e93"
+        },
+        {
+          "path": "specifications/GermanProtocol/GermanCMPWithMutex.tla",
+          "gitBlobSHA": "e02ff40c2df6f98c93ebb3218d13555b15a5e82f"
+        },
+        {
+          "path": "specifications/GermanProtocol/GermanControl.tla",
+          "gitBlobSHA": "46c2c77be982bf5073062f0e77276a453257d43f"
+        },
+        {
+          "path": "specifications/GermanProtocol/GermanData.tla",
+          "gitBlobSHA": "bb77d10dcb273639106b07a0cde027f739ac370b"
+        },
+        {
+          "path": "specifications/GermanProtocol/manifest.json",
+          "gitBlobSHA": "8b75121de8cef55ae3e9def2f4befde6ffe0fdd8"
+        },
+        {
+          "path": "specifications/GermanProtocol/MCGermanCMPWithMutex.cfg",
+          "gitBlobSHA": "c7f4e6fbfc16549bcdb55ca6840a8a436638a17a"
+        },
+        {
+          "path": "specifications/GermanProtocol/MCGermanCMPWithMutex.tla",
+          "gitBlobSHA": "54e684b4471c3223749dc15fc10c8b983d96e5c2"
+        },
+        {
+          "path": "specifications/GermanProtocol/MCGermanControl.cfg",
+          "gitBlobSHA": "28ecdc1dc76e2524cf558de76fde5254595205ac"
+        },
+        {
+          "path": "specifications/GermanProtocol/MCGermanControl.tla",
+          "gitBlobSHA": "ddf8cf5213b494a01155c9d80e09b73aaa93b73b"
+        },
+        {
+          "path": "specifications/GermanProtocol/MCGermanData.cfg",
+          "gitBlobSHA": "10d0f945f210577a6f4f7a893444230bb21f3b2d"
+        },
+        {
+          "path": "specifications/GermanProtocol/MCGermanData.tla",
+          "gitBlobSHA": "d4df03e63f8e565b6034eefcd68425e40220a468"
+        }
+      ]
+    },
+    {
+      "name": "PCR Testing for Snippets of DNA",
+      "path": "specifications/glowingRaccoon",
+      "files": [
+        {
+          "path": "specifications/glowingRaccoon/APclean.cfg",
+          "gitBlobSHA": "e0fb50481173defdc8ea385aefae4ac0070d9c58"
+        },
+        {
+          "path": "specifications/glowingRaccoon/APclean.tla",
+          "gitBlobSHA": "a26cb0e0b40c854e13f2eb2bed43ab63a4077c65"
+        },
+        {
+          "path": "specifications/glowingRaccoon/APstages.cfg",
+          "gitBlobSHA": "e6832c2c9241f5bdc80c2f9754aab4c1a8918773"
+        },
+        {
+          "path": "specifications/glowingRaccoon/APstages.tla",
+          "gitBlobSHA": "26b2d80e9024f4ef00b9b10cd554d6067419383d"
+        },
+        {
+          "path": "specifications/glowingRaccoon/clean_proof.tla",
+          "gitBlobSHA": "9392a4b8c28f3b0b7c2ecc610cdcfa5adf40a977"
+        },
+        {
+          "path": "specifications/glowingRaccoon/clean.cfg",
+          "gitBlobSHA": "bff775062498266657867d20aec243e2f595a361"
+        },
+        {
+          "path": "specifications/glowingRaccoon/clean.tla",
+          "gitBlobSHA": "6d2e640b947f1ca38e73e79a009b7c2a0b365af1"
+        },
+        {
+          "path": "specifications/glowingRaccoon/manifest.json",
+          "gitBlobSHA": "c3dab157e6b64c9870e2a3a971738cef27c6b9c1"
+        },
+        {
+          "path": "specifications/glowingRaccoon/product.cfg",
+          "gitBlobSHA": "4da412491ccb4ff8dc260105ced8cbe59bb81515"
+        },
+        {
+          "path": "specifications/glowingRaccoon/product.tla",
+          "gitBlobSHA": "3752c5729c4c19888c23b52644fbddb186dcb771"
+        },
+        {
+          "path": "specifications/glowingRaccoon/stages_proof.tla",
+          "gitBlobSHA": "84d709d64e31a40ee73c45f046d1738adbe47d48"
+        },
+        {
+          "path": "specifications/glowingRaccoon/stages.cfg",
+          "gitBlobSHA": "30194aae3631d1c78d6fd483509771b8b1b63350"
+        },
+        {
+          "path": "specifications/glowingRaccoon/stages.tla",
+          "gitBlobSHA": "6243f0abb8eabc3dfa2dfed27ba4dbcf6cb74789"
+        }
+      ]
+    },
+    {
+      "name": "Huang's Algorithm",
+      "path": "specifications/Huang",
+      "files": [
+        {
+          "path": "specifications/Huang/Huang.cfg",
+          "gitBlobSHA": "8c19b74824b1eb1c49b84de1442bae6c0b1ec668"
+        },
+        {
+          "path": "specifications/Huang/Huang.tla",
+          "gitBlobSHA": "e2ecd81facdecf2587d7b5b96a638a5c5424b525"
+        },
+        {
+          "path": "specifications/Huang/manifest.json",
+          "gitBlobSHA": "0aa1999f6110bc9d3c8a094674f90ec194d38f31"
+        }
+      ]
+    },
+    {
+      "name": "Snapshot Key-Value Store",
+      "path": "specifications/KeyValueStore",
+      "files": [
+        {
+          "path": "specifications/KeyValueStore/APKeyValueStore.tla",
+          "gitBlobSHA": "fa1897eb225ae68a9e75ae85bf97569fca3622f4"
+        },
+        {
+          "path": "specifications/KeyValueStore/ClientCentric.tla",
+          "gitBlobSHA": "2911190c3283f8f9d90069272a8b31ca1fc685bd"
+        },
+        {
+          "path": "specifications/KeyValueStore/KeyValueStore_proof.tla",
+          "gitBlobSHA": "4fe98b0e80753aa7fbdf70b9cf68939a38d04023"
+        },
+        {
+          "path": "specifications/KeyValueStore/KeyValueStore.tla",
+          "gitBlobSHA": "319d75771d41e09811299b377319f8e634023db9"
+        },
+        {
+          "path": "specifications/KeyValueStore/KVsnap.tla",
+          "gitBlobSHA": "1ef48f57e23e603b31dec9c5906eb618c801596e"
+        },
+        {
+          "path": "specifications/KeyValueStore/manifest.json",
+          "gitBlobSHA": "b7b663739698390e1e5b44aa281d05c09d0cc32c"
+        },
+        {
+          "path": "specifications/KeyValueStore/MCKVS.tla",
+          "gitBlobSHA": "09b326dc1c66b9a4949ea1f07edb53825e301e09"
+        },
+        {
+          "path": "specifications/KeyValueStore/MCKVsnap.cfg",
+          "gitBlobSHA": "a1ecb2cd862cff0fc2a60e95df10eb4e36dc6840"
+        },
+        {
+          "path": "specifications/KeyValueStore/MCKVsnap.tla",
+          "gitBlobSHA": "c04cd5fb777f087e4c66e79ce3993f893c29aa6c"
+        },
+        {
+          "path": "specifications/KeyValueStore/MCKVSSafetyLarge.cfg",
+          "gitBlobSHA": "d37beb78a84493d0c45e0a860f330517657ac1b9"
+        },
+        {
+          "path": "specifications/KeyValueStore/MCKVSSafetyMedium.cfg",
+          "gitBlobSHA": "964c78dc01e2dafa04231251a9a8c2ecd2dc5ab0"
+        },
+        {
+          "path": "specifications/KeyValueStore/MCKVSSafetySmall.cfg",
+          "gitBlobSHA": "0c3231f2ec90a80a983aa13360159b65105ec881"
+        },
+        {
+          "path": "specifications/KeyValueStore/Util.tla",
+          "gitBlobSHA": "e29c78281166de51b38ebd0850c1b2023c6c4e67"
+        }
+      ]
+    },
+    {
+      "name": "The Knuth-Yao Method",
+      "path": "specifications/KnuthYao",
+      "files": [
+        {
+          "path": "specifications/KnuthYao/KnuthYao.tla",
+          "gitBlobSHA": "796ead16c00df8f640e5549edaa586d3401f85a6"
+        },
+        {
+          "path": "specifications/KnuthYao/manifest.json",
+          "gitBlobSHA": "ae89e92d3e479e5f363cf2cfc6c571b213477293"
+        },
+        {
+          "path": "specifications/KnuthYao/Prob.tla",
+          "gitBlobSHA": "f42bfa792d625e2f6902d1d0585f9423e813bf57"
+        },
+        {
+          "path": "specifications/KnuthYao/SimKnuthYao.cfg",
+          "gitBlobSHA": "2b2dec8e2ebb2a741cc9dd5db1fab2e75f414394"
+        },
+        {
+          "path": "specifications/KnuthYao/SimKnuthYao.tla",
+          "gitBlobSHA": "23207add2743f1e3a98e1cffe95396d4ca55cbbe"
+        }
+      ]
+    },
+    {
+      "name": "Distributed Mutual Exclusion",
+      "path": "specifications/lamport_mutex",
+      "files": [
+        {
+          "path": "specifications/lamport_mutex/APLamportMutex.cfg",
+          "gitBlobSHA": "0f0945910fce68d3436ebfb00fe44394a1f90ad6"
+        },
+        {
+          "path": "specifications/lamport_mutex/APLamportMutex.tla",
+          "gitBlobSHA": "ac6d9e25d3b7fc69c754311cafb9cdb3b089eb5d"
+        },
+        {
+          "path": "specifications/lamport_mutex/LamportMutex_proofs.tla",
+          "gitBlobSHA": "bd6f8ce6560d619891f8fe7c3dd8af26d70bb274"
+        },
+        {
+          "path": "specifications/lamport_mutex/LamportMutex.tla",
+          "gitBlobSHA": "d02a7bc579a3036cb9f94517daefb5e86856e954"
+        },
+        {
+          "path": "specifications/lamport_mutex/manifest.json",
+          "gitBlobSHA": "2cf5848f0f00b1d66f5229d7825507c3a0f47b70"
+        },
+        {
+          "path": "specifications/lamport_mutex/MCLamportMutex.cfg",
+          "gitBlobSHA": "2d47c2cf0884d458418308b066ede95e5ae41727"
+        },
+        {
+          "path": "specifications/lamport_mutex/MCLamportMutex.tla",
+          "gitBlobSHA": "e385e0f59ed89efeaa2514dfb7f6d96408282449"
+        }
+      ]
+    },
+    {
+      "name": "Learn TLA⁺ Proofs",
+      "path": "specifications/LearnProofs",
+      "files": [
+        {
+          "path": "specifications/LearnProofs/AddTwo.tla",
+          "gitBlobSHA": "804204a6a58a12a2c3ef3c0f53e97b507e8a2ee2"
+        },
+        {
+          "path": "specifications/LearnProofs/FindHighest.tla",
+          "gitBlobSHA": "505179696eadf85705ba4f10b6a2e0867a0b206c"
+        },
+        {
+          "path": "specifications/LearnProofs/manifest.json",
+          "gitBlobSHA": "a4eaa9ec4d92339f6e1aa0ff612ad924456fed80"
+        },
+        {
+          "path": "specifications/LearnProofs/MCFindHighest.cfg",
+          "gitBlobSHA": "76bb9ddcf7e0308ccc12609dcd147cdf05d23498"
+        },
+        {
+          "path": "specifications/LearnProofs/MCFindHighest.tla",
+          "gitBlobSHA": "60bb7f018e2b0612abd04d5cd459dd624538826d"
+        }
+      ]
+    },
+    {
+      "name": "Minimal Circular Substring",
+      "path": "specifications/LeastCircularSubstring",
+      "files": [
+        {
+          "path": "specifications/LeastCircularSubstring/LeastCircularSubstring.tla",
+          "gitBlobSHA": "f7e633970d5be0d995d70343ad07b6047ee9f402"
+        },
+        {
+          "path": "specifications/LeastCircularSubstring/manifest.json",
+          "gitBlobSHA": "e8df81bca147ea0171f259b5b34be879bcb78966"
+        },
+        {
+          "path": "specifications/LeastCircularSubstring/MCLeastCircularSubstring.tla",
+          "gitBlobSHA": "a9b1ffee6ae04c7762d83b3de89639f58e0df5cc"
+        },
+        {
+          "path": "specifications/LeastCircularSubstring/MCLeastCircularSubstringMedium.cfg",
+          "gitBlobSHA": "f1d2d915686afc880cc61dcefb4f907668603fb0"
+        },
+        {
+          "path": "specifications/LeastCircularSubstring/MCLeastCircularSubstringSmall.cfg",
+          "gitBlobSHA": "e7b268dc28524710da07b5866ecb38fd4598dde6"
+        },
+        {
+          "path": "specifications/LeastCircularSubstring/ZSequences.tla",
+          "gitBlobSHA": "2ef9629709baecc38451b5bcb7861f4665d5967e"
+        }
+      ]
+    },
+    {
+      "name": "Peterson Lock Refinement With Auxiliary Variables",
+      "path": "specifications/locks_auxiliary_vars",
+      "files": [
+        {
+          "path": "specifications/locks_auxiliary_vars/Lock.cfg",
+          "gitBlobSHA": "edc71178b91fe5d3a1d065ccfcdcbb5f82832d26"
+        },
+        {
+          "path": "specifications/locks_auxiliary_vars/Lock.tla",
+          "gitBlobSHA": "d8ce7721d26ab726bf9a1f163a16b186f01931eb"
+        },
+        {
+          "path": "specifications/locks_auxiliary_vars/LockHS.cfg",
+          "gitBlobSHA": "4d7b91bad540784dce39dd3d9c9bcf60aada33e4"
+        },
+        {
+          "path": "specifications/locks_auxiliary_vars/LockHS.tla",
+          "gitBlobSHA": "0143a31f6be13ce18c773b12ffdb042fae3f4769"
+        },
+        {
+          "path": "specifications/locks_auxiliary_vars/manifest.json",
+          "gitBlobSHA": "6d6c7b8d71cbc6d981b93efc117a0a0bf8cec2b5"
+        },
+        {
+          "path": "specifications/locks_auxiliary_vars/Peterson.cfg",
+          "gitBlobSHA": "ae8a5c6b21ea19334c8d019deb0a1ed5ea5c44f4"
+        },
+        {
+          "path": "specifications/locks_auxiliary_vars/Peterson.tla",
+          "gitBlobSHA": "1c56470b957d680e7989d460c92738019a87a4b4"
+        },
+        {
+          "path": "specifications/locks_auxiliary_vars/Stuttering.tla",
+          "gitBlobSHA": "a8294d40141479b6b961a002db13af1ba94072dc"
+        }
+      ]
+    },
+    {
+      "name": "Loop Invariance",
+      "path": "specifications/LoopInvariance",
+      "files": [
+        {
+          "path": "specifications/LoopInvariance/BinarySearch.tla",
+          "gitBlobSHA": "48383673fa03d540f16116f448f34a0a013d82ab"
+        },
+        {
+          "path": "specifications/LoopInvariance/manifest.json",
+          "gitBlobSHA": "f5432fa510df222e485ea3bf6b92aa361f870dd5"
+        },
+        {
+          "path": "specifications/LoopInvariance/MCBinarySearch.cfg",
+          "gitBlobSHA": "5b46fac392f813bfd15589737cd946a050a2a623"
+        },
+        {
+          "path": "specifications/LoopInvariance/MCBinarySearch.tla",
+          "gitBlobSHA": "1a1b63ddb3305b06eb1d97980c9c27165f0e6e3a"
+        },
+        {
+          "path": "specifications/LoopInvariance/MCQuicksort.cfg",
+          "gitBlobSHA": "bd23c2beb039c8b929fd52d0785f1a5a56631d22"
+        },
+        {
+          "path": "specifications/LoopInvariance/MCQuicksort.tla",
+          "gitBlobSHA": "e3f5d31fa41acc38fc5807c2cdb4762f64fd1b0e"
+        },
+        {
+          "path": "specifications/LoopInvariance/Quicksort.tla",
+          "gitBlobSHA": "76bb5a495eda730dd38fb1306a008c6fcc38ca80"
+        },
+        {
+          "path": "specifications/LoopInvariance/SumSequence.tla",
+          "gitBlobSHA": "c4aed7910f2f34cdd5530b970f2ac28c935f80ad"
+        }
+      ]
+    },
+    {
+      "name": "Boyer-Moore Majority Vote",
+      "path": "specifications/Majority",
+      "files": [
+        {
+          "path": "specifications/Majority/APMajority.tla",
+          "gitBlobSHA": "18357b41bdc935fb29b35ebb5b8359892354819f"
+        },
+        {
+          "path": "specifications/Majority/Majority.tla",
+          "gitBlobSHA": "709c5840a92177b5f9ff2cfb58465aae845fe7de"
+        },
+        {
+          "path": "specifications/Majority/MajorityProof.tla",
+          "gitBlobSHA": "b1feeb2549c2028f299a6b40a403393227ef1414"
+        },
+        {
+          "path": "specifications/Majority/manifest.json",
+          "gitBlobSHA": "75e5b808081a3ea360a385a704f037a544517ad0"
+        },
+        {
+          "path": "specifications/Majority/MCMajority.cfg",
+          "gitBlobSHA": "3ff66b49182444e7e41d557f125f34dc7272dfc3"
+        },
+        {
+          "path": "specifications/Majority/MCMajority.tla",
+          "gitBlobSHA": "120ca53731f3b4dfa6673ffa407f623ff76be4fc"
+        }
+      ]
+    },
+    {
+      "name": "Misra Reachability Algorithm",
+      "path": "specifications/MisraReachability",
+      "files": [
+        {
+          "path": "specifications/MisraReachability/APParReach.cfg",
+          "gitBlobSHA": "ca83400e0c2314e6b9afcfa9ca1b7d3bf1fe4cd8"
+        },
+        {
+          "path": "specifications/MisraReachability/APParReach.tla",
+          "gitBlobSHA": "f65a422c3f7741d79b044b08e2ad3278df104269"
+        },
+        {
+          "path": "specifications/MisraReachability/APReachable.tla",
+          "gitBlobSHA": "1a45bc616b8d326faffbadc1f93529587780eb53"
+        },
+        {
+          "path": "specifications/MisraReachability/manifest.json",
+          "gitBlobSHA": "85be147e1c4bab40c83a8a19a0df846bc88a1adb"
+        },
+        {
+          "path": "specifications/MisraReachability/MCParReach.cfg",
+          "gitBlobSHA": "7c58b89ecf24a1ada37fc0eecf59cab49ee95caa"
+        },
+        {
+          "path": "specifications/MisraReachability/MCParReach.tla",
+          "gitBlobSHA": "a519a1548595eed067d1670fbcc0a33ea02001d1"
+        },
+        {
+          "path": "specifications/MisraReachability/MCReachabilityTest.tla",
+          "gitBlobSHA": "96ebeb00af56c3ca059067e9689e3ec01f1282e6"
+        },
+        {
+          "path": "specifications/MisraReachability/MCReachabilityTestAllGraphs.cfg",
+          "gitBlobSHA": "7c117757aba59eaa7a275d307548a233d173ffc8"
+        },
+        {
+          "path": "specifications/MisraReachability/MCReachabilityTestRandomGraphs.cfg",
+          "gitBlobSHA": "da2eb97643a03c99a43d0ff518a3cbf91f4ec427"
+        },
+        {
+          "path": "specifications/MisraReachability/MCReachable.cfg",
+          "gitBlobSHA": "efe6ec3075fb93b52cfd0f7274b09749f1d9de57"
+        },
+        {
+          "path": "specifications/MisraReachability/MCReachable.tla",
+          "gitBlobSHA": "7904842731a9ac4ab54d4fad79aa6a1c30f97eb9"
+        },
+        {
+          "path": "specifications/MisraReachability/ParReach.tla",
+          "gitBlobSHA": "d218066c5400b9b2f6601b149dade36bb08d4270"
+        },
+        {
+          "path": "specifications/MisraReachability/ParReachProofs.tla",
+          "gitBlobSHA": "4cba9ba27b941d1030eedc3f2dffc2d5c5d57482"
+        },
+        {
+          "path": "specifications/MisraReachability/Reachability.tla",
+          "gitBlobSHA": "eebdfe9e09a53b43679ec2fbe96f7358a12e2590"
+        },
+        {
+          "path": "specifications/MisraReachability/ReachabilityProofs.tla",
+          "gitBlobSHA": "a9010ab575912f9b2ef0705e35c3f6a774ea25c7"
+        },
+        {
+          "path": "specifications/MisraReachability/ReachabilityTest.tla",
+          "gitBlobSHA": "8f38a92416816e6e94bed9c7fe645c4921305696"
+        },
+        {
+          "path": "specifications/MisraReachability/Reachable.tla",
+          "gitBlobSHA": "30fec9bc8bdf17ddbf6e3a15125691228cd42630"
+        },
+        {
+          "path": "specifications/MisraReachability/ReachableProofs.tla",
+          "gitBlobSHA": "5015bd06636cce7aa533241dca79c9ca11d9650e"
+        }
+      ]
+    },
+    {
+      "name": "Missionaries and Cannibals",
+      "path": "specifications/MissionariesAndCannibals",
+      "files": [
+        {
+          "path": "specifications/MissionariesAndCannibals/APMissionariesAndCannibals.cfg",
+          "gitBlobSHA": "738bc4e41e8384d953d71abbe58f71083b955238"
+        },
+        {
+          "path": "specifications/MissionariesAndCannibals/APMissionariesAndCannibals.tla",
+          "gitBlobSHA": "81b3add1406c448de19fd20c56f842ec304a3a76"
+        },
+        {
+          "path": "specifications/MissionariesAndCannibals/manifest.json",
+          "gitBlobSHA": "a7c75cf407df99f1a1dbcd8c741f214bd7de6ae8"
+        },
+        {
+          "path": "specifications/MissionariesAndCannibals/MissionariesAndCannibals_proof.tla",
+          "gitBlobSHA": "36c710ced53e2651b309fc936f85b988e0cb547e"
+        },
+        {
+          "path": "specifications/MissionariesAndCannibals/MissionariesAndCannibals.cfg",
+          "gitBlobSHA": "aed7a6e3159843bee583893a95e82fba3c28128c"
+        },
+        {
+          "path": "specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla",
+          "gitBlobSHA": "4df7c4f04a68e36ed6d26c4fcd1c095984f6df5b"
+        }
+      ]
+    },
+    {
+      "name": "The Moving Cat Puzzle",
+      "path": "specifications/Moving_Cat_Puzzle",
+      "files": [
+        {
+          "path": "specifications/Moving_Cat_Puzzle/APCat.cfg",
+          "gitBlobSHA": "85b433e05b84095126ad145419565fdf00df00f0"
+        },
+        {
+          "path": "specifications/Moving_Cat_Puzzle/APCat.tla",
+          "gitBlobSHA": "4e1b980450f4815b44bf42db68dd66f458c421b3"
+        },
+        {
+          "path": "specifications/Moving_Cat_Puzzle/Cat.tla",
+          "gitBlobSHA": "f41d4d96ecac61c7d9a26a026d3aeba9e3e4b674"
+        },
+        {
+          "path": "specifications/Moving_Cat_Puzzle/CatEvenBoxes.cfg",
+          "gitBlobSHA": "5e55b569e11cd7ec6f06021a54fbac28d7ad2992"
+        },
+        {
+          "path": "specifications/Moving_Cat_Puzzle/CatOddBoxes.cfg",
+          "gitBlobSHA": "11495b423028878a0f438860ce987b9922396cee"
+        },
+        {
+          "path": "specifications/Moving_Cat_Puzzle/manifest.json",
+          "gitBlobSHA": "f6cc66e89e58b6e57fd31993501d06ac2936fa65"
+        }
+      ]
+    },
+    {
+      "name": "Multi-Car Elevator System",
+      "path": "specifications/MultiCarElevator",
+      "files": [
+        {
+          "path": "specifications/MultiCarElevator/Elevator_proof.tla",
+          "gitBlobSHA": "7d24e971a2794ce4c15bd92160e78ce334d41c01"
+        },
+        {
+          "path": "specifications/MultiCarElevator/Elevator.tla",
+          "gitBlobSHA": "62389aa56a0cd91427ae265b1e103c16a78ab49d"
+        },
+        {
+          "path": "specifications/MultiCarElevator/ElevatorLivenessLarge.cfg",
+          "gitBlobSHA": "ac94beca791c658f75508ceedd319d24db81de6e"
+        },
+        {
+          "path": "specifications/MultiCarElevator/ElevatorLivenessMedium.cfg",
+          "gitBlobSHA": "2f1bb6ebb9acd7ea036c78266249e0ba604e6ce1"
+        },
+        {
+          "path": "specifications/MultiCarElevator/ElevatorSafetyLarge.cfg",
+          "gitBlobSHA": "8980f9a4cfbc2319c7f57a0a17b8b61f75b55635"
+        },
+        {
+          "path": "specifications/MultiCarElevator/ElevatorSafetyMedium.cfg",
+          "gitBlobSHA": "e9700eae70bf369b88b0027039e92fb457541afb"
+        },
+        {
+          "path": "specifications/MultiCarElevator/ElevatorSafetySmall.cfg",
+          "gitBlobSHA": "2a6dcaa77aa8c0824d8f674eb84866128dee1483"
+        },
+        {
+          "path": "specifications/MultiCarElevator/manifest.json",
+          "gitBlobSHA": "216badd4239fa527cf111c85c376529a7ac85b3d"
+        }
+      ]
+    },
+    {
+      "name": "MultiPaxos in SMR-Style",
+      "path": "specifications/MultiPaxos-SMR",
+      "files": [
+        {
+          "path": "specifications/MultiPaxos-SMR/manifest.json",
+          "gitBlobSHA": "72eb0029e8f7db9086e1a8fc71e7dedcc02a24a7"
+        },
+        {
+          "path": "specifications/MultiPaxos-SMR/MultiPaxos_MC_small.cfg",
+          "gitBlobSHA": "ef5d8faee898cdfb7f7f54bb1ce96ef70616f237"
+        },
+        {
+          "path": "specifications/MultiPaxos-SMR/MultiPaxos_MC.cfg",
+          "gitBlobSHA": "e4765af4aebbf962d11dfbbe3d1ac1679289b36c"
+        },
+        {
+          "path": "specifications/MultiPaxos-SMR/MultiPaxos_MC.tla",
+          "gitBlobSHA": "244c3420e7d79523218a0f8147e445e688603d13"
+        },
+        {
+          "path": "specifications/MultiPaxos-SMR/MultiPaxos.tla",
+          "gitBlobSHA": "bd13bd90022a6376603d6c4467db2bb9f3273599"
+        }
+      ]
+    },
+    {
+      "name": "The N-Queens Puzzle",
+      "path": "specifications/N-Queens",
+      "files": [
+        {
+          "path": "specifications/N-Queens/manifest.json",
+          "gitBlobSHA": "b86ce5b63a543aac93e21e046049d6f225ae143e"
+        },
+        {
+          "path": "specifications/N-Queens/Queens.tla",
+          "gitBlobSHA": "6b06b88c0f625a0f4b30c124387389da979b78f6"
+        },
+        {
+          "path": "specifications/N-Queens/Queens.toolbox/FourQueens/MC.cfg",
+          "gitBlobSHA": "bb61dedc2d5e8a1cd479154d2826a4c4f7bd9298"
+        },
+        {
+          "path": "specifications/N-Queens/Queens.toolbox/FourQueens/MC.tla",
+          "gitBlobSHA": "56f9b10f034069df7663f620bf325fbc5fa45295"
+        },
+        {
+          "path": "specifications/N-Queens/Queens.toolbox/FourQueens/Queens.tla",
+          "gitBlobSHA": "6b06b88c0f625a0f4b30c124387389da979b78f6"
+        },
+        {
+          "path": "specifications/N-Queens/QueensPluscal.tla",
+          "gitBlobSHA": "a7429621876f35cdafa8f3cf1b0be2e282e59134"
+        },
+        {
+          "path": "specifications/N-Queens/QueensPluscal.toolbox/FourQueens/MC.cfg",
+          "gitBlobSHA": "fbc8ba12585fde9025a7882384c615a7bfcaf33c"
+        },
+        {
+          "path": "specifications/N-Queens/QueensPluscal.toolbox/FourQueens/MC.tla",
+          "gitBlobSHA": "d39d333285d8cae16acf4af91796d9f81beca3c0"
+        },
+        {
+          "path": "specifications/N-Queens/QueensPluscal.toolbox/FourQueens/QueensPluscal.tla",
+          "gitBlobSHA": "a7429621876f35cdafa8f3cf1b0be2e282e59134"
+        }
+      ]
+    },
+    {
+      "name": "Nano Blockchain Protocol",
+      "path": "specifications/NanoBlockchain",
+      "files": [
+        {
+          "path": "specifications/NanoBlockchain/manifest.json",
+          "gitBlobSHA": "65587af72d3184a1b2573a06eedc415c32765166"
+        },
+        {
+          "path": "specifications/NanoBlockchain/MCNano.tla",
+          "gitBlobSHA": "fcc80df4216572c90c1197f2ed4a2a8d5c7e5ca6"
+        },
+        {
+          "path": "specifications/NanoBlockchain/MCNanoLarge.cfg",
+          "gitBlobSHA": "47c65e53a1834c0781b434af4334e9107e776547"
+        },
+        {
+          "path": "specifications/NanoBlockchain/MCNanoMedium.cfg",
+          "gitBlobSHA": "cd5dc8a02f13354e9b15c56d9b7229655e761926"
+        },
+        {
+          "path": "specifications/NanoBlockchain/MCNanoSmall.cfg",
+          "gitBlobSHA": "3aaef1456a87177f4dfcb280f118b6a0c9c92015"
+        },
+        {
+          "path": "specifications/NanoBlockchain/Nano.tla",
+          "gitBlobSHA": "f7fa5b53b80abcf1cb07ce644341cf00b91b99db"
+        }
+      ]
+    },
+    {
+      "name": "Asynchronous Non-Blocking Atomic Commit",
+      "path": "specifications/nbacc_ray97",
+      "files": [
+        {
+          "path": "specifications/nbacc_ray97/manifest.json",
+          "gitBlobSHA": "01585b2e688597eb5a73f4a3310fe763e98355f2"
+        },
+        {
+          "path": "specifications/nbacc_ray97/nbacc_ray97.cfg",
+          "gitBlobSHA": "0b5e4e0f4522e7e0c225be551df82716715bdcab"
+        },
+        {
+          "path": "specifications/nbacc_ray97/nbacc_ray97.tla",
+          "gitBlobSHA": "6887515df48aaaaaf71c5d826cd6e113ea4fa58c"
+        }
+      ]
+    },
+    {
+      "name": "Asynchronous Non-Blocking Atomic Commitment with Failure Detectors",
+      "path": "specifications/nbacg_guer01",
+      "files": [
+        {
+          "path": "specifications/nbacg_guer01/APnbacg_guer01.cfg",
+          "gitBlobSHA": "d4140596efec665bfd1c783964ce5d5aa2be770e"
+        },
+        {
+          "path": "specifications/nbacg_guer01/APnbacg_guer01.tla",
+          "gitBlobSHA": "c1e2342d1eca6bc2658954f60cd37022753fa2ec"
+        },
+        {
+          "path": "specifications/nbacg_guer01/manifest.json",
+          "gitBlobSHA": "725096788fd40931da34bf3db6d7158467e5a9bf"
+        },
+        {
+          "path": "specifications/nbacg_guer01/nbacg_guer01.cfg",
+          "gitBlobSHA": "061169d83cb506cf69221bb3aa5c70b07df62a36"
+        },
+        {
+          "path": "specifications/nbacg_guer01/nbacg_guer01.tla",
+          "gitBlobSHA": "f33e840f0a7c4887f563b13327c6383ba47bb6c0"
+        }
+      ]
+    },
+    {
+      "name": "The Paxos Protocol",
+      "path": "specifications/Paxos",
+      "files": [
+        {
+          "path": "specifications/Paxos/Consensus.tla",
+          "gitBlobSHA": "a23c65ae303edc172ed68446c3462c6388850600"
+        },
+        {
+          "path": "specifications/Paxos/manifest.json",
+          "gitBlobSHA": "2f7627d3d54aa807c46b4521359bde2df473a223"
+        },
+        {
+          "path": "specifications/Paxos/MCConsensus.cfg",
+          "gitBlobSHA": "275c00d783e44407fefaf874c5e6c277ea15a1c8"
+        },
+        {
+          "path": "specifications/Paxos/MCConsensus.tla",
+          "gitBlobSHA": "03fe5039916d7c32d57e65766ba8ee997f285f6a"
+        },
+        {
+          "path": "specifications/Paxos/MCPaxos.cfg",
+          "gitBlobSHA": "bd17bddeff2a3502575efbd86631209db0eaa809"
+        },
+        {
+          "path": "specifications/Paxos/MCPaxos.tla",
+          "gitBlobSHA": "a8c51d645d2c486061d95283988cfadac7186959"
+        },
+        {
+          "path": "specifications/Paxos/MCVoting.cfg",
+          "gitBlobSHA": "a93f3c97867ea7bf03c15aa5436f52c530e59f63"
+        },
+        {
+          "path": "specifications/Paxos/MCVoting.tla",
+          "gitBlobSHA": "da9c4be3329974b2be4b63e4b2d9c42b934cadb6"
+        },
+        {
+          "path": "specifications/Paxos/Paxos.tla",
+          "gitBlobSHA": "6ef2b670ccf260181113f87eff28f43f3086dbee"
+        },
+        {
+          "path": "specifications/Paxos/Voting.tla",
+          "gitBlobSHA": "3f3a74207d0d6b6bb8fee7a86f54bf5f1ae3663f"
+        }
+      ]
+    },
+    {
+      "name": "Paxos (How to Win a Turing Award)",
+      "path": "specifications/PaxosHowToWinATuringAward",
+      "files": [
+        {
+          "path": "specifications/PaxosHowToWinATuringAward/Consensus.tla",
+          "gitBlobSHA": "54f4d20a6c984bef23ed05cc176e980fde7cc1df"
+        },
+        {
+          "path": "specifications/PaxosHowToWinATuringAward/manifest.json",
+          "gitBlobSHA": "760e532556def7a7984a50f10bc5080f8f53b587"
+        },
+        {
+          "path": "specifications/PaxosHowToWinATuringAward/MCConsensus.cfg",
+          "gitBlobSHA": "cd8b671b7e26c37da8df49c0a00b2a92ae6dd18d"
+        },
+        {
+          "path": "specifications/PaxosHowToWinATuringAward/MCConsensus.tla",
+          "gitBlobSHA": "8883dd77c47f67e3029a2b14d0c52b362b17ce02"
+        },
+        {
+          "path": "specifications/PaxosHowToWinATuringAward/MCPaxos.tla",
+          "gitBlobSHA": "368f5ddfd52dd3d462e14706178cbc638ceb7a12"
+        },
+        {
+          "path": "specifications/PaxosHowToWinATuringAward/MCPaxosSmall.cfg",
+          "gitBlobSHA": "53a0208c5cbe0a7c64f9e714a59ca34173743e07"
+        },
+        {
+          "path": "specifications/PaxosHowToWinATuringAward/MCPaxosTiny.cfg",
+          "gitBlobSHA": "520e0d6983a470ff99d1b3c2c201499edf97090a"
+        },
+        {
+          "path": "specifications/PaxosHowToWinATuringAward/MCVoting.cfg",
+          "gitBlobSHA": "05eeacc6ab1bbe9ece7507edfcf19a8dc7721d69"
+        },
+        {
+          "path": "specifications/PaxosHowToWinATuringAward/MCVoting.tla",
+          "gitBlobSHA": "f05125cd7cba25355f9b5084cb546d889b6ba83b"
+        },
+        {
+          "path": "specifications/PaxosHowToWinATuringAward/Paxos.tla",
+          "gitBlobSHA": "8d30862ecc0f93097244c6f4448c475f0c4cd98f"
+        },
+        {
+          "path": "specifications/PaxosHowToWinATuringAward/Voting_proof.tla",
+          "gitBlobSHA": "504ce146ee0e381ad44432089d04e6a01bdf9cc5"
+        },
+        {
+          "path": "specifications/PaxosHowToWinATuringAward/Voting.tla",
+          "gitBlobSHA": "e1e98494b095b96c216497c5453178047910ad8f"
+        }
+      ]
+    },
+    {
+      "name": "The Prisoners & Switches Puzzle",
+      "path": "specifications/Prisoners",
+      "files": [
+        {
+          "path": "specifications/Prisoners/APPrisoners.tla",
+          "gitBlobSHA": "10273703caf2e96b59219f0594b0fa204a6e6c42"
+        },
+        {
+          "path": "specifications/Prisoners/manifest.json",
+          "gitBlobSHA": "1ba3305d44bba981f6f0d89d9bd92457c63fa6f3"
+        },
+        {
+          "path": "specifications/Prisoners/MCPrisoners.tla",
+          "gitBlobSHA": "edde9c4e569566e6c34297994ff903ca6d445c4d"
+        },
+        {
+          "path": "specifications/Prisoners/Prisoners.cfg",
+          "gitBlobSHA": "7772b15742a70c176cac91a690f3c6cb435c0308"
+        },
+        {
+          "path": "specifications/Prisoners/Prisoners.tla",
+          "gitBlobSHA": "6a4471dff0a97d6c04408dffdc709942f461948b"
+        }
+      ]
+    },
+    {
+      "name": "The Prisoners & Switch Puzzle",
+      "path": "specifications/Prisoners_Single_Switch",
+      "files": [
+        {
+          "path": "specifications/Prisoners_Single_Switch/APPrisoner.tla",
+          "gitBlobSHA": "d62519de63041888367e6d281c88a65e95190b1e"
+        },
+        {
+          "path": "specifications/Prisoners_Single_Switch/manifest.json",
+          "gitBlobSHA": "cac6e888cc8ba5109fbd171cf762c12489af6932"
+        },
+        {
+          "path": "specifications/Prisoners_Single_Switch/Prisoner.cfg",
+          "gitBlobSHA": "9f349d0d08298f4d8e221f9de2f15416174e5615"
+        },
+        {
+          "path": "specifications/Prisoners_Single_Switch/Prisoner.tla",
+          "gitBlobSHA": "09ac8c2ca33655a040eb944023bbda8f62bcd375"
+        },
+        {
+          "path": "specifications/Prisoners_Single_Switch/PrisonerLightUnknown.cfg",
+          "gitBlobSHA": "86e4b9bf28dc39d658646071c020865138e54e5b"
+        },
+        {
+          "path": "specifications/Prisoners_Single_Switch/PrisonerSolo.cfg",
+          "gitBlobSHA": "28ad3318dec76ee35310a29a89dabe3ef2b06b73"
+        },
+        {
+          "path": "specifications/Prisoners_Single_Switch/PrisonerSoloLightUnknown.cfg",
+          "gitBlobSHA": "369c2ed48163fbdb9804b00e92bffc7a5f599d88"
+        }
+      ]
+    },
+    {
+      "name": "The Readers-Writers Problem",
+      "path": "specifications/ReadersWriters",
+      "files": [
+        {
+          "path": "specifications/ReadersWriters/APReadersWriters.cfg",
+          "gitBlobSHA": "93266ed8e574d4559dcfea06e65346aa86b927aa"
+        },
+        {
+          "path": "specifications/ReadersWriters/APReadersWriters.tla",
+          "gitBlobSHA": "860fc2f35ffd3a8c4fc20667661ee74336f298ab"
+        },
+        {
+          "path": "specifications/ReadersWriters/manifest.json",
+          "gitBlobSHA": "76c3193697b38f548effab58fedcff3bc76dd17e"
+        },
+        {
+          "path": "specifications/ReadersWriters/MC.cfg",
+          "gitBlobSHA": "d7cee91c3d2016ff5b9e3733f1185a4c13428c75"
+        },
+        {
+          "path": "specifications/ReadersWriters/MC.tla",
+          "gitBlobSHA": "dbb98b3424f52db790917c077d75285972894d56"
+        },
+        {
+          "path": "specifications/ReadersWriters/ReadersWriters_proof.tla",
+          "gitBlobSHA": "83a62b93624d9aaefee59cf8479a5268e2036f31"
+        },
+        {
+          "path": "specifications/ReadersWriters/ReadersWriters.tla",
+          "gitBlobSHA": "3159d9c5d50d6c9c342cf6a4f3171927e4e82fd3"
+        }
+      ]
+    },
+    {
+      "name": "Software-Defined Perimeter",
+      "path": "specifications/SDP_Verification",
+      "files": [
+        {
+          "path": "specifications/SDP_Verification/manifest.json",
+          "gitBlobSHA": "c05320935afeac65370be904bee1b02e156d9258"
+        },
+        {
+          "path": "specifications/SDP_Verification/SDP_Attack_New_Solution_Spec/MC.cfg",
+          "gitBlobSHA": "2430a94d659678ed42ea49d5d72b648ea6321b7a"
+        },
+        {
+          "path": "specifications/SDP_Verification/SDP_Attack_New_Solution_Spec/MC.tla",
+          "gitBlobSHA": "d4d4aa24edcf21747431d901fb6fd44a936cd879"
+        },
+        {
+          "path": "specifications/SDP_Verification/SDP_Attack_New_Solution_Spec/SPA_Attack_New.tla",
+          "gitBlobSHA": "8c77a1e2414e74223039a1a94a4d8008b0936a65"
+        },
+        {
+          "path": "specifications/SDP_Verification/SDP_Attack_Spec/MC.cfg",
+          "gitBlobSHA": "26445eb94b149b75e26c6ba5f9c4ea9b32aca09c"
+        },
+        {
+          "path": "specifications/SDP_Verification/SDP_Attack_Spec/MC.tla",
+          "gitBlobSHA": "28fe5076e5da5a6f4fb974e273a102ab64657423"
+        },
+        {
+          "path": "specifications/SDP_Verification/SDP_Attack_Spec/SPA_Attack.tla",
+          "gitBlobSHA": "0edec0a7da7bbe545fb3a32e31cd98d1d536da0b"
+        }
+      ]
+    },
+    {
+      "name": "Simplified Fast Paxos",
+      "path": "specifications/SimplifiedFastPaxos",
+      "files": [
+        {
+          "path": "specifications/SimplifiedFastPaxos/FastPaxos.cfg",
+          "gitBlobSHA": "cd67d89a910cca2cc8bd7e284732e1de88886e13"
+        },
+        {
+          "path": "specifications/SimplifiedFastPaxos/FastPaxos.tla",
+          "gitBlobSHA": "ea4d160077a1116a60884f1440ae0cb08c69cf44"
+        },
+        {
+          "path": "specifications/SimplifiedFastPaxos/manifest.json",
+          "gitBlobSHA": "e5771e50dda7de8a59738ee60e33c07b74f2351d"
+        },
+        {
+          "path": "specifications/SimplifiedFastPaxos/Paxos.cfg",
+          "gitBlobSHA": "891f8973f46c0ea2322f13fadc904e622829b30c"
+        },
+        {
+          "path": "specifications/SimplifiedFastPaxos/Paxos.tla",
+          "gitBlobSHA": "b12449054f67c41c26a8ce75975614a8e9049646"
+        }
+      ]
+    },
+    {
+      "name": "Single-Lane Bridge Problem",
+      "path": "specifications/SingleLaneBridge",
+      "files": [
+        {
+          "path": "specifications/SingleLaneBridge/APSingleLaneBridge.tla",
+          "gitBlobSHA": "12300ba0aaba0d6544fc5f78a546050765b56388"
+        },
+        {
+          "path": "specifications/SingleLaneBridge/manifest.json",
+          "gitBlobSHA": "da6dfd0fe875673ab543030866f06685c5de1961"
+        },
+        {
+          "path": "specifications/SingleLaneBridge/MC.cfg",
+          "gitBlobSHA": "c89c9a801bb6dd7481dd913862285e6022b0d136"
+        },
+        {
+          "path": "specifications/SingleLaneBridge/MC.tla",
+          "gitBlobSHA": "672f4af8819b6e2d2702f9fd9638e5430087a046"
+        },
+        {
+          "path": "specifications/SingleLaneBridge/SingleLaneBridge.tla",
+          "gitBlobSHA": "1351b0fe1adf2ee3f7803b6eed2b1c7b67abc0d5"
+        }
+      ]
+    },
+    {
+      "name": "Sliding Block Puzzle",
+      "path": "specifications/SlidingPuzzles",
+      "files": [
+        {
+          "path": "specifications/SlidingPuzzles/manifest.json",
+          "gitBlobSHA": "9a81b5968d0d5aaaf8038d45040e00aa6e577747"
+        },
+        {
+          "path": "specifications/SlidingPuzzles/SlidingPuzzles_anim.cfg",
+          "gitBlobSHA": "b19c8301060d45e0470aeb785eb2fad9410a0f1e"
+        },
+        {
+          "path": "specifications/SlidingPuzzles/SlidingPuzzles_anim.tla",
+          "gitBlobSHA": "11da864790776474ca91bf96dbb79430cb9a900f"
+        },
+        {
+          "path": "specifications/SlidingPuzzles/SlidingPuzzles.cfg",
+          "gitBlobSHA": "9ff342344bfa27c29aecaa0c332fcf6ae22e7e69"
+        },
+        {
+          "path": "specifications/SlidingPuzzles/SlidingPuzzles.tla",
+          "gitBlobSHA": "a141d27c78eb5f264cc13425238995dcc2802fe0"
+        }
+      ]
+    },
+    {
+      "name": "The Slush Protocol",
+      "path": "specifications/SlushProtocol",
+      "files": [
+        {
+          "path": "specifications/SlushProtocol/manifest.json",
+          "gitBlobSHA": "aa67e957105d7a090bc859213d2d1d8bde7569b2"
+        },
+        {
+          "path": "specifications/SlushProtocol/Slush.tla",
+          "gitBlobSHA": "05e8d34454f62d4fc92052f07d5a006ba3612889"
+        },
+        {
+          "path": "specifications/SlushProtocol/SlushLarge.cfg",
+          "gitBlobSHA": "e7d6cea87bc1653ffdbacc8ae920bffbc702f168"
+        },
+        {
+          "path": "specifications/SlushProtocol/SlushMedium.cfg",
+          "gitBlobSHA": "208ea206809d9f083e0289f8e3ab86bbd586d417"
+        },
+        {
+          "path": "specifications/SlushProtocol/SlushSmall.cfg",
+          "gitBlobSHA": "5bfa5422c4572ee2d4a189a92ec4b27b0b9eba7b"
+        }
+      ]
+    },
+    {
+      "name": "Spanning Tree Broadcast Algorithm",
+      "path": "specifications/spanning",
+      "files": [
+        {
+          "path": "specifications/spanning/APspanning.cfg",
+          "gitBlobSHA": "f4d4177ff0e84d30cbebe7fb6f39d377e14af491"
+        },
+        {
+          "path": "specifications/spanning/APspanning.tla",
+          "gitBlobSHA": "fc0b0f9d140b6ff9a35c677c534a0b12f0cb2d17"
+        },
+        {
+          "path": "specifications/spanning/manifest.json",
+          "gitBlobSHA": "c8dbf05ea5b5bff69d1992cc8f4621ddfc80f378"
+        },
+        {
+          "path": "specifications/spanning/MC_spanning.cfg",
+          "gitBlobSHA": "dbfa893528e05a4a94c5058ee33dbd490ddac6c1"
+        },
+        {
+          "path": "specifications/spanning/MC_spanning.tla",
+          "gitBlobSHA": "c969b1d8e9c83f30ad466725b5d2642b052b1ac1"
+        },
+        {
+          "path": "specifications/spanning/spanning_proof.tla",
+          "gitBlobSHA": "51d7d7857ef2989c1c06a6f46c97452abd9655d9"
+        },
+        {
+          "path": "specifications/spanning/spanning.tla",
+          "gitBlobSHA": "aaf4bca22caea3568a842f73fa476f3f5b9ac68c"
+        }
+      ]
+    },
+    {
+      "name": "Span Tree Exercise",
+      "path": "specifications/SpanningTree",
+      "files": [
+        {
+          "path": "specifications/SpanningTree/APSpanTree.cfg",
+          "gitBlobSHA": "39d64b252f8d910ca5cfd702ce662054a9294bed"
+        },
+        {
+          "path": "specifications/SpanningTree/APSpanTree.tla",
+          "gitBlobSHA": "c9b5ab6e162eff8565a72f3887dcdb66f4c05a9c"
+        },
+        {
+          "path": "specifications/SpanningTree/manifest.json",
+          "gitBlobSHA": "c910fe202fdd2c85ce456cc32373458f7b7009fa"
+        },
+        {
+          "path": "specifications/SpanningTree/SpanTree_proof.tla",
+          "gitBlobSHA": "55837a29ad20f4859e8a0d634540e686a384a7fe"
+        },
+        {
+          "path": "specifications/SpanningTree/SpanTree.cfg",
+          "gitBlobSHA": "36a00d294072b34f25e07c46ba082b939c45169a"
+        },
+        {
+          "path": "specifications/SpanningTree/SpanTree.tla",
+          "gitBlobSHA": "a5ba73c40af37d666a847c53fbbf16afdbf6bb3e"
+        },
+        {
+          "path": "specifications/SpanningTree/SpanTreeRandom.cfg",
+          "gitBlobSHA": "d52b2fe96d319ba15025d2016657ed28092f79b4"
+        },
+        {
+          "path": "specifications/SpanningTree/SpanTreeRandom.tla",
+          "gitBlobSHA": "d36209e3a79c5850dafee1ddc4e6d23dacac4244"
+        },
+        {
+          "path": "specifications/SpanningTree/SpanTreeTest.tla",
+          "gitBlobSHA": "22f7ce53dae8e17e194f11b61c0126c1191d4c5e"
+        },
+        {
+          "path": "specifications/SpanningTree/SpanTreeTest4Nodes.cfg",
+          "gitBlobSHA": "c1bf5c582fd3767ab2a449e0169388e36ca2dcad"
+        },
+        {
+          "path": "specifications/SpanningTree/SpanTreeTest5Nodes.cfg",
+          "gitBlobSHA": "d68ffd0932196f736f2e46c26df7f736efcdd205"
+        }
+      ]
+    },
+    {
+      "name": "Specs from Specifying Systems",
+      "path": "specifications/SpecifyingSystems",
+      "files": [
+        {
+          "path": "specifications/SpecifyingSystems/AdvancedExamples/BNFGrammars.tla",
+          "gitBlobSHA": "626942a76f43be3bc328221a1029e9e1d96dce0c"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AdvancedExamples/DifferentialEquations.tla",
+          "gitBlobSHA": "963360c98825b48db586e6c112abc94d192e9756"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AdvancedExamples/Graphs.tla",
+          "gitBlobSHA": "1d55569916257e20b8e0e728636356d2e6928dfd"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AdvancedExamples/InnerSequential.tla",
+          "gitBlobSHA": "8981d40f2b4c1a745e1973f4d1c6e2f480fa7ff6"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AdvancedExamples/InnerSerial.tla",
+          "gitBlobSHA": "dc5a11104980028b9059690154c43c9913425aab"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AdvancedExamples/MCInnerSequential.cfg",
+          "gitBlobSHA": "e148854f4d1992d77133c3094d43dc0914456e9b"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AdvancedExamples/MCInnerSequential.tla",
+          "gitBlobSHA": "f656ddebe0610c9cca42654b6838da38fae542e0"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AdvancedExamples/MCInnerSerial.cfg",
+          "gitBlobSHA": "3d7c7ccbe798a8b8bae99aeb6d5d6715970d680c"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AdvancedExamples/MCInnerSerial.tla",
+          "gitBlobSHA": "ed1230a4107e39791c7aa304682f2e9780bd492e"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AdvancedExamples/RegisterInterface.tla",
+          "gitBlobSHA": "a5e2654474233ab3c00ac02a5c051419c7d02700"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AdvancedExamples/SerialMemory.tla",
+          "gitBlobSHA": "dee894f49752e89c6dd8a4cb4e0249acc7afc191"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AsynchronousInterface/APAsynchInterface.cfg",
+          "gitBlobSHA": "1870483851ed5dbc8efd44accd44e72a2a27c8e9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AsynchronousInterface/APAsynchInterface.tla",
+          "gitBlobSHA": "d391c977e57bc0a471e22900eefc98af2db00ec5"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AsynchronousInterface/APChannel.cfg",
+          "gitBlobSHA": "1870483851ed5dbc8efd44accd44e72a2a27c8e9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AsynchronousInterface/APChannel.tla",
+          "gitBlobSHA": "78314affbeef7be10893bf2f0644e3b00cea321a"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface_proof.tla",
+          "gitBlobSHA": "52d61c3e3cfd133c101e80a12d60cbb1f2601aaf"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.cfg",
+          "gitBlobSHA": "23c906fe01189a269d8cc178b43c37f6935a7c33"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.tla",
+          "gitBlobSHA": "67be7285742f36e66dbc821a4f4a23e08ff79390"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AsynchronousInterface/Channel_proof.tla",
+          "gitBlobSHA": "9cf3e4942419ae693cc12c048ff1b6e6d568d255"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AsynchronousInterface/Channel.cfg",
+          "gitBlobSHA": "23c906fe01189a269d8cc178b43c37f6935a7c33"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AsynchronousInterface/Channel.tla",
+          "gitBlobSHA": "e2039c9cb5535894a63c99a4e9263ca96ca7d39a"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AsynchronousInterface/PrintValues.cfg",
+          "gitBlobSHA": "26ea79b0ca42ba8c5e917e998c288e4fe95ca980"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/AsynchronousInterface/PrintValues.tla",
+          "gitBlobSHA": "d1e02ff2f7985db71ab2b73cdeffe5a21a7872de"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/CachingMemory/InternalMemory_proof.tla",
+          "gitBlobSHA": "5ae8971f5a7128d8671acc1b1a4adb003e790498"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/CachingMemory/InternalMemory.tla",
+          "gitBlobSHA": "818c2dea3edc7225cfaa739f335ce87133212ccf"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/CachingMemory/MCInternalMemory.cfg",
+          "gitBlobSHA": "28937aa5295513c40cce861ee0b8f3a8aae3a479"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/CachingMemory/MCInternalMemory.tla",
+          "gitBlobSHA": "adf53da7f7bf4426396427e4fa8d2f4c98a7dd3f"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/CachingMemory/MCWriteThroughCache.cfg",
+          "gitBlobSHA": "8d3adcba69ff8665dac4cf4a330c4762efe4d854"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/CachingMemory/MCWriteThroughCache.tla",
+          "gitBlobSHA": "fcd292fd89474db9346f088b9d23dfdb576681c9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/CachingMemory/Memory.tla",
+          "gitBlobSHA": "a0ab89089d0062a5dceac814bfc63d8d2aa615c0"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/CachingMemory/MemoryInterface.tla",
+          "gitBlobSHA": "4dbed39777baa271154a04d9378fa3d25c36d336"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/CachingMemory/WriteThroughCache.tla",
+          "gitBlobSHA": "aaa3f3a2be24ce20de4f1236110243acede242f2"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/CachingMemory/WriteThroughCacheInstanced.tla",
+          "gitBlobSHA": "cfce09ec6a535bf63889df4a3df224f830c19af4"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/APChannel.cfg",
+          "gitBlobSHA": "1870483851ed5dbc8efd44accd44e72a2a27c8e9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/APChannel.tla",
+          "gitBlobSHA": "c2b4252832dbacf17b64bec48d669d0d04e7122c"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/APHourClock.cfg",
+          "gitBlobSHA": "280d6243db7469d9213426ca05ca60e21cc90667"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/APHourClock.tla",
+          "gitBlobSHA": "6ac4892cca55a24cf5dc06fe3bea657e422af270"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/BinaryHourClock.tla",
+          "gitBlobSHA": "59a4b88e4c68a06e8a3b55bca3eb9b39f264ba19"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/Channel_proof.tla",
+          "gitBlobSHA": "9cf3e4942419ae693cc12c048ff1b6e6d568d255"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/Channel.tla",
+          "gitBlobSHA": "e2039c9cb5535894a63c99a4e9263ca96ca7d39a"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/ChannelRefinement.tla",
+          "gitBlobSHA": "95e05810c28f0f02e831a5bf5e542c90e0dfb9a2"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/CompositeFIFO.tla",
+          "gitBlobSHA": "eec17798f3baa0f0f5eb6aa16141c016850acc64"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/HourClock_proof.tla",
+          "gitBlobSHA": "6d396e14859760e61f5e23b1513cfdd185d497e7"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/HourClock.tla",
+          "gitBlobSHA": "f2b7b242d1db6635ed0721a4a116e465d33c84a9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/InternalMemory_proof.tla",
+          "gitBlobSHA": "5ae8971f5a7128d8671acc1b1a4adb003e790498"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/InternalMemory.tla",
+          "gitBlobSHA": "9dee3417c5a4f2f21f0ff9c0547a42549bc77bb0"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/JointActionMemory.tla",
+          "gitBlobSHA": "d5dfb226003742566cfab996a3a95c924ccc499e"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Composing/MemoryInterface.tla",
+          "gitBlobSHA": "4dbed39777baa271154a04d9378fa3d25c36d336"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/APChannel.cfg",
+          "gitBlobSHA": "1870483851ed5dbc8efd44accd44e72a2a27c8e9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/APChannel.tla",
+          "gitBlobSHA": "95b14b3c5b66d171885b1d291e8b7f1fa62c27be"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/APInnerFIFO.cfg",
+          "gitBlobSHA": "ef3928b59a51ac08d0788ee290d21d5a9858c480"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/APInnerFIFO.tla",
+          "gitBlobSHA": "f7f6b1d59022801643d409e136de7fef4bd4cc1f"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/APInnerFIFOInstanced.cfg",
+          "gitBlobSHA": "fb8042828523690c7103749bb9ad6dd28ad6b339"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/APInnerFIFOInstanced.tla",
+          "gitBlobSHA": "b30c31d97cf6fc588a105d857436c9084399eacf"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/APMCInnerFIFO.cfg",
+          "gitBlobSHA": "e872439136ccce00b1d9dcfd930205fe305ac0f9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/APMCInnerFIFO.tla",
+          "gitBlobSHA": "98623e4cedd15e8fa24fca3feb49fc7738ab3a39"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/Channel_proof.tla",
+          "gitBlobSHA": "9cf3e4942419ae693cc12c048ff1b6e6d568d255"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/Channel.tla",
+          "gitBlobSHA": "e2039c9cb5535894a63c99a4e9263ca96ca7d39a"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/FIFO.tla",
+          "gitBlobSHA": "57d97ea864489d6a368f72f80c94b783cf7d2920"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/InnerFIFO_proof.tla",
+          "gitBlobSHA": "b90dd86e6e42cf8e0a5c1b740ae856498edda14a"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/InnerFIFO.tla",
+          "gitBlobSHA": "780e61d4a9c0962b14942fd0108811fb45e4bfd1"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/InnerFIFOInstanced.tla",
+          "gitBlobSHA": "510bc998875e581edb3d06e9353b1794f9250b18"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/MCInnerFIFO.cfg",
+          "gitBlobSHA": "c2ca38c430d7a72b4282df07c6312ec5f7a724ab"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/FIFO/MCInnerFIFO.tla",
+          "gitBlobSHA": "83cc4e10629ce4560f2d2bc6d098338c84d52187"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/HourClock/APHourClock.cfg",
+          "gitBlobSHA": "280d6243db7469d9213426ca05ca60e21cc90667"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/HourClock/APHourClock.tla",
+          "gitBlobSHA": "6dd463da8fb5ee73d7d9c0d5803244579a23b395"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/HourClock/APHourClock2.cfg",
+          "gitBlobSHA": "01eaf286065aa1a8bb4aa354bd899b083709bf4b"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/HourClock/APHourClock2.tla",
+          "gitBlobSHA": "8c00257a03d23e4c64f2736614c1d79f4dcde343"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/HourClock/HourClock_proof.tla",
+          "gitBlobSHA": "6d396e14859760e61f5e23b1513cfdd185d497e7"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/HourClock/HourClock.cfg",
+          "gitBlobSHA": "5ccc6e07f7566fe6da8ad8b56d3d808cdf2d1a4a"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/HourClock/HourClock.tla",
+          "gitBlobSHA": "f2b7b242d1db6635ed0721a4a116e465d33c84a9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/HourClock/HourClock2.cfg",
+          "gitBlobSHA": "0560b4bf077cbf2fa7310386cdc66b56852efa7e"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/HourClock/HourClock2.tla",
+          "gitBlobSHA": "2942755993b3329d45928206e313bc09695f72fd"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/APHourClock.cfg",
+          "gitBlobSHA": "280d6243db7469d9213426ca05ca60e21cc90667"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/APHourClock.tla",
+          "gitBlobSHA": "6a507f6f8b36ebab93b952da43761fd08164d9f0"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/APLiveHourClock.cfg",
+          "gitBlobSHA": "bfb6eac30291a02da49269b4549946fca0388dd8"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/APLiveHourClock.tla",
+          "gitBlobSHA": "33e1a5acc68dc30bc5e48ecbdcea76c674e12dbb"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/HourClock_proof.tla",
+          "gitBlobSHA": "6d396e14859760e61f5e23b1513cfdd185d497e7"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/HourClock.tla",
+          "gitBlobSHA": "f2b7b242d1db6635ed0721a4a116e465d33c84a9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/InternalMemory_proof.tla",
+          "gitBlobSHA": "5ae8971f5a7128d8671acc1b1a4adb003e790498"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/InternalMemory.tla",
+          "gitBlobSHA": "9dee3417c5a4f2f21f0ff9c0547a42549bc77bb0"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/LiveHourClock.cfg",
+          "gitBlobSHA": "fea17dabaace3ddb8f56d739c298be548ed38a11"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/LiveHourClock.tla",
+          "gitBlobSHA": "d7c223dd915a789b241f304b7f57ba1a081626e0"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/LiveInternalMemory.tla",
+          "gitBlobSHA": "afa356d09831ddf886ad887926d9de1f75995aa9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/LiveWriteThroughCache.tla",
+          "gitBlobSHA": "666ebc45fa6b4b834b4e89d6d7a16550c9a6a06d"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/MCInternalMemory.tla",
+          "gitBlobSHA": "adf53da7f7bf4426396427e4fa8d2f4c98a7dd3f"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/MCLiveInternalMemory.cfg",
+          "gitBlobSHA": "f416fa29743a50380f8d6c2b8cdd160d04f8a515"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/MCLiveInternalMemory.tla",
+          "gitBlobSHA": "ba90eab580494a207989ad02b234fb75b69f2a15"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/MCLiveWriteThroughCache.cfg",
+          "gitBlobSHA": "86263545a857996b35909ef7943a18b66900219e"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/MCLiveWriteThroughCache.tla",
+          "gitBlobSHA": "be77a893c329b6e392edfd003e3d1da2c7cf02f0"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/Memory.tla",
+          "gitBlobSHA": "a0ab89089d0062a5dceac814bfc63d8d2aa615c0"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/MemoryInterface.tla",
+          "gitBlobSHA": "4dbed39777baa271154a04d9378fa3d25c36d336"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Liveness/WriteThroughCacheInstanced.tla",
+          "gitBlobSHA": "cfce09ec6a535bf63889df4a3df224f830c19af4"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/manifest.json",
+          "gitBlobSHA": "bbe041f713b0da7df682bcd0ddc15f4bbeb86db4"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/HourClock_proof.tla",
+          "gitBlobSHA": "6d396e14859760e61f5e23b1513cfdd185d497e7"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/HourClock.tla",
+          "gitBlobSHA": "f2b7b242d1db6635ed0721a4a116e465d33c84a9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/InternalMemory_proof.tla",
+          "gitBlobSHA": "5ae8971f5a7128d8671acc1b1a4adb003e790498"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/InternalMemory.tla",
+          "gitBlobSHA": "9dee3417c5a4f2f21f0ff9c0547a42549bc77bb0"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/MCRealTime.tla",
+          "gitBlobSHA": "2d2780013d65df98b7764a8da0f2a4dc9714886d"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/MCRealTimeHourClock.cfg",
+          "gitBlobSHA": "a8d0d5443f1baa04700ebc5ad4fe46dc49219f17"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/MCRealTimeHourClock.tla",
+          "gitBlobSHA": "88f0eefef38cba659b5f29073de87f38bff40ad8"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/Memory.tla",
+          "gitBlobSHA": "a0ab89089d0062a5dceac814bfc63d8d2aa615c0"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/MemoryInterface.tla",
+          "gitBlobSHA": "4dbed39777baa271154a04d9378fa3d25c36d336"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/RealTime_SS.tla",
+          "gitBlobSHA": "dd3de69c8e915dab8e39da80b61302816dbe1c5d"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/RealTimeHourClock.tla",
+          "gitBlobSHA": "85f4dc5f4c310c651cbf7605270fcc707133cb3d"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/RTMemory.tla",
+          "gitBlobSHA": "91d0fcd466112f1bb24bc346d82c1417254063b5"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/RTWriteThroughCache.tla",
+          "gitBlobSHA": "069d1b443db5d8eb05516a4d86f03b0c557bda39"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/RealTime/WriteThroughCache.tla",
+          "gitBlobSHA": "aaa3f3a2be24ce20de4f1236110243acede242f2"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/SimpleMath/SimpleMath.cfg",
+          "gitBlobSHA": "576894220e5a6386792aa36ef7503cb2f0349a9b"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/SimpleMath/SimpleMath.tla",
+          "gitBlobSHA": "4f303cddf334753413eb52927596ca83a65bea0a"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Standard/Bags.tla",
+          "gitBlobSHA": "e05dccb010eecc8be3046969ef1053e4819bb0ee"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Standard/FiniteSets.tla",
+          "gitBlobSHA": "57ac40235075b64119e4ab2ddf92abeab9120a5a"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Standard/Integers.tla",
+          "gitBlobSHA": "a889516f3d7d334bd67f990a59d82489bd4f956c"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Standard/Naturals.tla",
+          "gitBlobSHA": "eab4c521915bea5ce88628e6a58061769213f03e"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Standard/Peano.tla",
+          "gitBlobSHA": "bcf219d621f0eeb7627e8bf3b50bd7a0bfe615c3"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Standard/ProtoReals.tla",
+          "gitBlobSHA": "c63e91bde68c52855b43969cdde5c46a132db2a5"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Standard/Reals.tla",
+          "gitBlobSHA": "0cabfd0ceea9634a55eaa25393445cd9ad224577"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Standard/Sequences.tla",
+          "gitBlobSHA": "2d248483b6b6d28b14870547f1493b53fba9d495"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Syntax/BNFGrammars.tla",
+          "gitBlobSHA": "626942a76f43be3bc328221a1029e9e1d96dce0c"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/Syntax/TLAPlusGrammar.tla",
+          "gitBlobSHA": "d7e15c307ea9b4e0dc6437cdd2246ce1301897a9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/TLC/ABCorrectness.cfg",
+          "gitBlobSHA": "5b1adce9d53a95b023831a16b7366f2366257721"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/TLC/ABCorrectness.tla",
+          "gitBlobSHA": "15728f03f503acf380126b6565bd2dae1ae380bf"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/TLC/AlternatingBit_proof.tla",
+          "gitBlobSHA": "48977b21f54925e0a07528c01e98bd4d7ef124a0"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/TLC/AlternatingBit.tla",
+          "gitBlobSHA": "bafcc3abfeea28abb7fee20ac38efa5692551d8e"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/TLC/BNFGrammars.tla",
+          "gitBlobSHA": "626942a76f43be3bc328221a1029e9e1d96dce0c"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/TLC/ConfigFileGrammar.tla",
+          "gitBlobSHA": "fbc0542d3dbd2474cf6b82afb3f16d8c29f0f612"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/TLC/MCAlternatingBit.cfg",
+          "gitBlobSHA": "c593bdbb7f053979d4190bcf002a41f571412ba9"
+        },
+        {
+          "path": "specifications/SpecifyingSystems/TLC/MCAlternatingBit.tla",
+          "gitBlobSHA": "0e3096f8b08303456fe8d5d3a2f24e3c88571c64"
+        }
+      ]
+    },
+    {
+      "name": "Stone Scale Puzzle",
+      "path": "specifications/Stones",
+      "files": [
+        {
+          "path": "specifications/Stones/manifest.json",
+          "gitBlobSHA": "ce4fac137da02c0976afbb5a2e767e386dc35606"
+        },
+        {
+          "path": "specifications/Stones/Stones.cfg",
+          "gitBlobSHA": "51c16a85adcf4c3b21819330560badaf59e27d4d"
+        },
+        {
+          "path": "specifications/Stones/Stones.tla",
+          "gitBlobSHA": "2036c26b1672c9e737253c1b9f0c4f1addfe3d88"
+        }
+      ]
+    },
+    {
+      "name": "Proof x+x is Even",
+      "path": "specifications/sums_even",
+      "files": [
+        {
+          "path": "specifications/sums_even/manifest.json",
+          "gitBlobSHA": "9a6dfbed42dda86307314b6f29b41b726ba2d927"
+        },
+        {
+          "path": "specifications/sums_even/MC_sums_even.cfg",
+          "gitBlobSHA": "1969570a8957315de52e575e9c07e140d80040d7"
+        },
+        {
+          "path": "specifications/sums_even/MC_sums_even.tla",
+          "gitBlobSHA": "fe79a735828907065ebe3a052435831e9b521a60"
+        },
+        {
+          "path": "specifications/sums_even/sums_even.tla",
+          "gitBlobSHA": "4205795513f2cb6df723115e52a444312af8cfab"
+        }
+      ]
+    },
+    {
+      "name": "TCP as defined in RFC 9293",
+      "path": "specifications/tcp",
+      "files": [
+        {
+          "path": "specifications/tcp/APtcp.cfg",
+          "gitBlobSHA": "8d6a52ef4050c569cbc8fa58a6b5560d1b538f59"
+        },
+        {
+          "path": "specifications/tcp/APtcp.tla",
+          "gitBlobSHA": "7bed4c541ad2fe3f6f187283a44c8498899d09f6"
+        },
+        {
+          "path": "specifications/tcp/IndInv_apa_init.cfg",
+          "gitBlobSHA": "1ea5d6c45dad637ea3d5d18801978c32aecaa2c0"
+        },
+        {
+          "path": "specifications/tcp/IndInv_apa.cfg",
+          "gitBlobSHA": "1d6676a66ee108690c5e34fb4eddb1b386276287"
+        },
+        {
+          "path": "specifications/tcp/IndInv_apa.tla",
+          "gitBlobSHA": "7d2482869621ff4b80eb95bb86b59c295818bea6"
+        },
+        {
+          "path": "specifications/tcp/manifest.json",
+          "gitBlobSHA": "eb9caa028e619755d726f041ee6b2c01352dd34e"
+        },
+        {
+          "path": "specifications/tcp/MCtcp.cfg",
+          "gitBlobSHA": "0b4087b2b9c456a86dd269dbcb59c744fdf21e99"
+        },
+        {
+          "path": "specifications/tcp/MCtcp.tla",
+          "gitBlobSHA": "e0cee03e137e8317c9d2c2fadc47bf2cc4cbc409"
+        },
+        {
+          "path": "specifications/tcp/tcp_proof.tla",
+          "gitBlobSHA": "34f40de9edf23214a24bb4c2853805741b06ed35"
+        },
+        {
+          "path": "specifications/tcp/tcp.tla",
+          "gitBlobSHA": "7d2635a83201c886c5ea2575f9192a946847a686"
+        }
+      ]
+    },
+    {
+      "name": "Teaching Concurrency",
+      "path": "specifications/TeachingConcurrency",
+      "files": [
+        {
+          "path": "specifications/TeachingConcurrency/manifest.json",
+          "gitBlobSHA": "0a6b1f623546cee0b1edfd129bbe5daf29f49653"
+        },
+        {
+          "path": "specifications/TeachingConcurrency/Simple_proof.tla",
+          "gitBlobSHA": "1db861e4b3221946518a25b06b7be359bef96ae1"
+        },
+        {
+          "path": "specifications/TeachingConcurrency/Simple.cfg",
+          "gitBlobSHA": "8372dbb5558fcbbb8f6c191192869a4a59ebef1d"
+        },
+        {
+          "path": "specifications/TeachingConcurrency/Simple.tla",
+          "gitBlobSHA": "cb894a98a2288865f6fb885cf44debed6e41cda1"
+        },
+        {
+          "path": "specifications/TeachingConcurrency/SimpleRegular_proof.tla",
+          "gitBlobSHA": "7fea2154404d4f2a723ff2203c815d9c23127e01"
+        },
+        {
+          "path": "specifications/TeachingConcurrency/SimpleRegular.cfg",
+          "gitBlobSHA": "a3d615fdde306c591d6f8af333a637521dde0f01"
+        },
+        {
+          "path": "specifications/TeachingConcurrency/SimpleRegular.tla",
+          "gitBlobSHA": "84b9ae7ff510260fc07d038a78e73ab0ce3e68ce"
+        }
+      ]
+    },
+    {
+      "name": "The TLC Safety Checking Algorithm",
+      "path": "specifications/TLC",
+      "files": [
+        {
+          "path": "specifications/TLC/manifest.json",
+          "gitBlobSHA": "ca382e9c49a35357ab12559c4b7089b00f276d7c"
+        },
+        {
+          "path": "specifications/TLC/MCReachability.tla",
+          "gitBlobSHA": "b19f5be3d95b6c13ec8f365ca9dbb00c1ed4e50e"
+        },
+        {
+          "path": "specifications/TLC/StateGraphs.tla",
+          "gitBlobSHA": "ae53c7a6a928b0f53a0972cefd4cf5ad0acfea8c"
+        },
+        {
+          "path": "specifications/TLC/TestGraphs.cfg",
+          "gitBlobSHA": "cc9fad8094505dbe92e29de49b498522c1eb0895"
+        },
+        {
+          "path": "specifications/TLC/TestGraphs.tla",
+          "gitBlobSHA": "e414863da575efa933ec3da549ba88f57d5f7a65"
+        },
+        {
+          "path": "specifications/TLC/TestMCReachability.cfg",
+          "gitBlobSHA": "af806502bb70186a0303eacc58962d0bb701becd"
+        },
+        {
+          "path": "specifications/TLC/TestMCReachability.tla",
+          "gitBlobSHA": "92f1e1968f3e959775c16a90d1e886c835e8662e"
+        },
+        {
+          "path": "specifications/TLC/TLCMC.tla",
+          "gitBlobSHA": "89cd1750c132a2f75ebaee41e58b7c5679ffe10e"
+        }
+      ]
+    },
+    {
+      "name": "The Tower of Hanoi Puzzle",
+      "path": "specifications/tower_of_hanoi",
+      "files": [
+        {
+          "path": "specifications/tower_of_hanoi/Bits.tla",
+          "gitBlobSHA": "b3a9dae9c71e8e0086f63a417db80aa9f683fd5f"
+        },
+        {
+          "path": "specifications/tower_of_hanoi/Hanoi_anim.cfg",
+          "gitBlobSHA": "de251154442d60585df898d25209b9613796d972"
+        },
+        {
+          "path": "specifications/tower_of_hanoi/Hanoi_anim.tla",
+          "gitBlobSHA": "574398613202f6b574cf34422dc7ee72701615b6"
+        },
+        {
+          "path": "specifications/tower_of_hanoi/Hanoi.tla",
+          "gitBlobSHA": "835953685398dcdb05f5b712e30f303ae3722017"
+        },
+        {
+          "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/Bits.tla",
+          "gitBlobSHA": "b3a9dae9c71e8e0086f63a417db80aa9f683fd5f"
+        },
+        {
+          "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/Hanoi.tla",
+          "gitBlobSHA": "835953685398dcdb05f5b712e30f303ae3722017"
+        },
+        {
+          "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/MC.cfg",
+          "gitBlobSHA": "f2dd92d1cb3064866d95fcc9bfaefb30c907485a"
+        },
+        {
+          "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/MC.tla",
+          "gitBlobSHA": "9579f7efe36734dd243f633da5c5eb5810ad3386"
+        },
+        {
+          "path": "specifications/tower_of_hanoi/HanoiSeq.tla",
+          "gitBlobSHA": "01cdf683b4bb8772bd0c0edd7c79a6f7c6968ebe"
+        },
+        {
+          "path": "specifications/tower_of_hanoi/manifest.json",
+          "gitBlobSHA": "67527435d7e91f99d14a7d7a588cbb62b6200794"
+        }
+      ]
+    },
+    {
+      "name": "Transaction Commit Models",
+      "path": "specifications/transaction_commit",
+      "files": [
+        {
+          "path": "specifications/transaction_commit/2PCwithBTM.cfg",
+          "gitBlobSHA": "abb23179450b24e8d470994264015c48f7063c07"
+        },
+        {
+          "path": "specifications/transaction_commit/2PCwithBTM.tla",
+          "gitBlobSHA": "4cfec75f3d7430c0f91df2e5f2c99db9df2fbd0b"
+        },
+        {
+          "path": "specifications/transaction_commit/APTCommit.cfg",
+          "gitBlobSHA": "0d42e82d949bddfc8f3ec7b92bdc7973ce146caf"
+        },
+        {
+          "path": "specifications/transaction_commit/APTCommit.tla",
+          "gitBlobSHA": "14b1f5b50b4e69755310c7618c8417e9e5e19139"
+        },
+        {
+          "path": "specifications/transaction_commit/manifest.json",
+          "gitBlobSHA": "860067396b3c11dc85a8de558a3edee9e6b555a9"
+        },
+        {
+          "path": "specifications/transaction_commit/PaxosCommit_proof.tla",
+          "gitBlobSHA": "54ab326f3fc817672acd6859bb166a8d00184d93"
+        },
+        {
+          "path": "specifications/transaction_commit/PaxosCommit.cfg",
+          "gitBlobSHA": "aa4ba0a8da9c62a2651e2ebb7a39f5c13211839e"
+        },
+        {
+          "path": "specifications/transaction_commit/PaxosCommit.tla",
+          "gitBlobSHA": "552fced3b4c668721f6969702fc3da9703508567"
+        },
+        {
+          "path": "specifications/transaction_commit/TCommit_proof.tla",
+          "gitBlobSHA": "0b91ed62f373c1cba20071afe6bd4ddfb75a56c9"
+        },
+        {
+          "path": "specifications/transaction_commit/TCommit.cfg",
+          "gitBlobSHA": "62f56f2e762ec8fcead2c79b32d9cc2fe1dd803a"
+        },
+        {
+          "path": "specifications/transaction_commit/TCommit.tla",
+          "gitBlobSHA": "7ae1b4960a383eb4a3ab0e4c4de96449fd55ec85"
+        },
+        {
+          "path": "specifications/transaction_commit/TwoPhase_proof.tla",
+          "gitBlobSHA": "76c92dc64f946e3212366a4a7fe1887f109634af"
+        },
+        {
+          "path": "specifications/transaction_commit/TwoPhase.cfg",
+          "gitBlobSHA": "5bda57d95beea8e76df1f9d56860e23f697cd95e"
+        },
+        {
+          "path": "specifications/transaction_commit/TwoPhase.tla",
+          "gitBlobSHA": "99a44ed2c1a656be89f30b37e568f6ff6539c757"
+        }
+      ]
+    },
+    {
+      "name": "Transitive Closure",
+      "path": "specifications/TransitiveClosure",
+      "files": [
+        {
+          "path": "specifications/TransitiveClosure/manifest.json",
+          "gitBlobSHA": "2070fe23184ae73808d15b943fb2e8514b01e0e8"
+        },
+        {
+          "path": "specifications/TransitiveClosure/TransitiveClosure.cfg",
+          "gitBlobSHA": "8b137891791fe96927ad78e64b0aad7bded08bdc"
+        },
+        {
+          "path": "specifications/TransitiveClosure/TransitiveClosure.tla",
+          "gitBlobSHA": "63c4deb6cbc996ff8cfefc021ccb5f5787d6071f"
+        }
+      ]
+    },
+    {
+      "name": "Two-Phase Handshaking",
+      "path": "specifications/TwoPhase",
+      "files": [
+        {
+          "path": "specifications/TwoPhase/Alternate.tla",
+          "gitBlobSHA": "6c45ec755eafc3156cc35d58b380134719df550b"
+        },
+        {
+          "path": "specifications/TwoPhase/manifest.json",
+          "gitBlobSHA": "3f5fd6260cffcb0135ce52c34bd1033b80f8a61a"
+        },
+        {
+          "path": "specifications/TwoPhase/MCTwoPhase.cfg",
+          "gitBlobSHA": "ceec4fe0b31f0dac36d33a18588a64fbf8a097c2"
+        },
+        {
+          "path": "specifications/TwoPhase/MCTwoPhase.tla",
+          "gitBlobSHA": "15bb98270a56b9e5790f46976eca477363fcab9b"
+        },
+        {
+          "path": "specifications/TwoPhase/TwoPhase_proof.tla",
+          "gitBlobSHA": "10c845c12314fa38175d1ac715abd0a7d133e252"
+        },
+        {
+          "path": "specifications/TwoPhase/TwoPhase.tla",
+          "gitBlobSHA": "cf9bd63240a557dd9d123cb7bc29f4b69c6b6173"
+        }
+      ]
+    },
+    {
+      "name": "Yo-Yo Leader Election",
+      "path": "specifications/YoYo",
+      "files": [
+        {
+          "path": "specifications/YoYo/manifest.json",
+          "gitBlobSHA": "5bc2ffde6f29002ad797f834c1a919f44c44df74"
+        },
+        {
+          "path": "specifications/YoYo/MCYoYoNoPruning.cfg",
+          "gitBlobSHA": "06ee7bf9a48b4a96216311740cd555443da915d1"
+        },
+        {
+          "path": "specifications/YoYo/MCYoYoNoPruning.tla",
+          "gitBlobSHA": "6cf6d9dbe0d75f8a4206c4f6765c7090f410119c"
+        },
+        {
+          "path": "specifications/YoYo/MCYoYoPruning.cfg",
+          "gitBlobSHA": "306c7590f9f6d4d7aaaf77d421cb8f8e8a2f9a89"
+        },
+        {
+          "path": "specifications/YoYo/MCYoYoPruning.tla",
+          "gitBlobSHA": "dbcc4cc7f61ed0af8d1c166a8b4409f2a51d76b1"
+        },
+        {
+          "path": "specifications/YoYo/YoYoAllGraphs.cfg",
+          "gitBlobSHA": "713a25554e049bca2451ac3aebf4cb2e82b9ffcf"
+        },
+        {
+          "path": "specifications/YoYo/YoYoAllGraphs.tla",
+          "gitBlobSHA": "f4a5740496e5b5f3418e57902ff7173652372c16"
+        },
+        {
+          "path": "specifications/YoYo/YoYoNoPruning.tla",
+          "gitBlobSHA": "5f8f3f4dce201a761d3542e5e2e9041603d178be"
+        },
+        {
+          "path": "specifications/YoYo/YoYoPruning.tla",
+          "gitBlobSHA": "38277c32e26772b662b0b0c684135d74fa86b0ea"
+        }
+      ]
+    }
+  ]
+}

@@ -23,7 +23,6 @@ private struct Manifest: Codable {
 private enum ExportError: Error, CustomStringConvertible {
     case usage
     case outputExists(String)
-    case undeclaredModuleInputs(entryID: String, modules: [String])
 
     var description: String {
         switch self {
@@ -31,8 +30,6 @@ private enum ExportError: Error, CustomStringConvertible {
             return "Usage: canonical-corpus-export --output <directory> --swift-tla-sha <sha>"
         case .outputExists(let path):
             return "Output directory already exists: \(path)"
-        case let .undeclaredModuleInputs(entryID, modules):
-            return "Canonical corpus entry '\(entryID)' declares \(modules.joined(separator: ", ")), but its compiled module closure does not contain those modules. Declare them in the source model before export."
         }
     }
 }
@@ -85,20 +82,18 @@ do {
     try FileManager.default.createDirectory(at: options.output, withIntermediateDirectories: true)
 
     let cases = try CanonicalCorpus.entries.map { item -> Manifest.Case in
-        let specification = item.specification()
-        let compilation = try specification.compile()
-        try item.validateConfigurationReferences(in: compilation)
-        let bundle = compilation.renderedTLAModuleBundle()
-        let plusCalBundle = try compilation.renderedPlusCalBundle()
+        let rendered = try item.rendered()
+        let bundle = rendered.tlaBundle
+        let plusCalBundle = try rendered.plusCalBundle()
 
         var files = [Manifest.Case.File]()
         files.append(try write(bundle.root.tla, relativePath: "\(item.id)/swift/\(bundle.root.name).tla", under: options.output))
-        files.append(try write(item.swiftConfiguration.tlaText, relativePath: "\(item.id)/swift/\(bundle.root.name).cfg", under: options.output))
+        files.append(try write(bundle.cfg, relativePath: "\(item.id)/swift/\(bundle.root.name).cfg", under: options.output))
         for imported in bundle.imports {
             files.append(try write(imported.tla, relativePath: "\(item.id)/imports/\(imported.name).tla", under: options.output))
         }
         files.append(try write(plusCalBundle.root.tla, relativePath: "\(item.id)/pluscal/\(plusCalBundle.root.name).tla", under: options.output))
-        files.append(try write(item.plusCalConfiguration.tlaText, relativePath: "\(item.id)/pluscal/\(bundle.root.name).cfg", under: options.output))
+        files.append(try write(plusCalBundle.cfg, relativePath: "\(item.id)/pluscal/\(bundle.root.name).cfg", under: options.output))
         return .init(id: item.id, module: bundle.root.name, files: files.sorted { $0.path < $1.path })
     }
 

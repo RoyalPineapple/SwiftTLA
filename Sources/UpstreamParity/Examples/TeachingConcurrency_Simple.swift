@@ -25,10 +25,10 @@ package struct TeachingSimpleN2Model: Sendable {
         #spec("Simple") {
             Extends(.integers)
             Algorithm("Simple", scoped: { scope in
-                let x = scope.sharedVar("x", initial: Function<Process, Int>.literal(
+                let x = scope.sharedVar(initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0)
                 ))
-                let y = scope.sharedVar("y", initial: Function<Process, Int>.literal(
+                let y = scope.sharedVar(initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0)
                 ))
 
@@ -78,10 +78,10 @@ package struct TeachingSimpleN3Model: Sendable {
         #spec("Simple") {
             Extends(.integers)
             Algorithm("Simple", scoped: { scope in
-                let x = scope.sharedVar("x", initial: Function<Process, Int>.literal(
+                let x = scope.sharedVar(initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0), (.p2, 0)
                 ))
-                let y = scope.sharedVar("y", initial: Function<Process, Int>.literal(
+                let y = scope.sharedVar(initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0), (.p2, 0)
                 ))
 

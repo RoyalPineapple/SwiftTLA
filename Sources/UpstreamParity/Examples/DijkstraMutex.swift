@@ -52,16 +52,16 @@ package struct DijkstraMutexModel: Sendable {
         #spec("DijkstraMutex") {
             Extends(.integers)
             Algorithm("Mutex", scoped: { scope in
-                let b = scope.sharedVar("b", initial: Function<Process, Bool>.literal(
+                let b = scope.sharedVar(initial: Function<Process, Bool>.literal(
                     (.one, true), (.two, true), (.three, true)
                 ))
-                let c = scope.sharedVar("c", initial: Function<Process, Bool>.literal(
+                let c = scope.sharedVar(initial: Function<Process, Bool>.literal(
                     (.one, true), (.two, true), (.three, true)
                 ))
-                let k = scope.sharedVar("k", in: SetExpr<Process>.literal(.one, .two, .three))
+                let k = scope.sharedVar(in: SetExpr<Process>.literal(.one, .two, .three))
 
                 Each(Process.all, fairness: .weak, scoped: { selfID, scope in
-                    let temporary = scope.localVar("temporary", initial: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.first(.notAssigned)
+                    let temporary = scope.localVar(initial: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.first(.notAssigned)
                     )
 
                     Do(Label.li0) {
@@ -90,8 +90,8 @@ package struct DijkstraMutexModel: Sendable {
                     }
 
                     Do(Label.li3b) {
-                        let active = temporary.expr.assumingSecond(ActiveTemporary.self)
-                        let owner = active.assumingFirst(Process.self)
+                        let active = temporary.expr.assuming(ActiveTemporary.self)
+                        let owner = active.assuming(Process.self)
                         If(b[owner]) {
                             Goto(Label.li3c)
                         } else: {
@@ -119,8 +119,8 @@ package struct DijkstraMutexModel: Sendable {
                     }
 
                     Do(Label.li4b) {
-                        let active = temporary.expr.assumingSecond(ActiveTemporary.self)
-                        let remaining = active.assumingSecond(SetExpr<Process>.self)
+                        let active = temporary.expr.assuming(ActiveTemporary.self)
+                        let remaining = active.assuming(SetExpr<Process>.self)
                         If(!remaining.isEmpty) {
                             With(remaining) { process in
                                 Assign(
@@ -148,8 +148,8 @@ package struct DijkstraMutexModel: Sendable {
                 })
 
                 Invariant("MutualExclusion") {
-                    All(Process.all) { first in
-                        All(Process.all) { second in
+                    ForAll(Process.all) { first in
+                        ForAll(Process.all) { second in
                             first == second || !(At(Label.critical, first) && At(Label.critical, second))
                         }
                     }

@@ -6,6 +6,7 @@ import SwiftTLA
 /// execution, and a typed actor that owns the generated machine.
 @attached(member, names: arbitrary)
 @attached(memberAttribute)
+@attached(extension, conformances: StateMachine)
 public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
 
 @attached(member, names: named(defaultValue), named(finiteValues))
@@ -13,6 +14,10 @@ public macro _TLAFiniteEnum() = #externalMacro(module: "SwiftTLAPlugin", type: "
 
 @attached(member, names: named(defaultValue))
 public macro _TLAValueEnum() = #externalMacro(module: "SwiftTLAPlugin", type: "ValueEnumMacro")
+
+@attached(member, names: named(expression))
+@attached(extension, conformances: _GeneratedRecordValue, names: named(defaultValue), named(formalValueShape), named(tlaValue), named(init), named(_formalRecordFieldName))
+public macro _TLARecordValue() = #externalMacro(module: "SwiftTLAPlugin", type: "RecordValueMacro")
 
 /// Declares a source model for `@TLAModel`.
 ///

@@ -56,7 +56,7 @@ public struct CameraWorkflow {
     public static var spec: TLASpec {
         #spec("CameraWorkflow") {
             Algorithm("CameraWorkflow", scoped: { scope in
-                let phase = scope.sharedVar("phase", initial: Phase.starting)
+                let phase = scope.sharedVar(initial: Phase.starting)
                 Each(ReadyProcess.all) { _ in
                     Do(Step.ready) { When(phase == Phase.starting); Assign(phase, to: Phase.live); Goto(Step.ready) }
                 }

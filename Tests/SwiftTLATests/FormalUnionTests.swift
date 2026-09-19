@@ -34,11 +34,11 @@ private struct GeneratedFormalUnionAlgorithm {
         #spec("GeneratedFormalUnion") {
             Algorithm("GeneratedFormalUnion") {
                 Each(Node.all, scoped: { _, scope in
-                    let temporary: LocalVariable<OneOf<Node, SetExpr<Node>>> = scope.localVar("temporary", initial: OneOf<Node, SetExpr<Node>>.first(.first)
+                    let temporary: LocalVariable<OneOf<Node, SetExpr<Node>>> = scope.localVar(_name: "temporary", initial: OneOf<Node, SetExpr<Node>>.first(.first)
                     )
 
                     Do(Label.inspect) {
-                        let member = temporary.expr.assumingFirst(Node.self)
+                        let member = temporary.expr.assuming(Node.self)
                         Assert(member == Node.first)
                     }
                     Do(Label.collect) {
@@ -50,7 +50,7 @@ private struct GeneratedFormalUnionAlgorithm {
                         )
                     }
                     Do(Label.finish) {
-                        let remaining = temporary.expr.assumingSecond(SetExpr<Node>.self)
+                        let remaining = temporary.expr.assuming(SetExpr<Node>.self)
                         When(!remaining.isEmpty)
                     }
                 })

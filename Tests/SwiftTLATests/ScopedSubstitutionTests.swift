@@ -1,8 +1,135 @@
-import SwiftTLA
+@testable import SwiftTLA
 import Testing
 
 @Suite("Scoped substitution")
 struct ScopedSubstitutionTests {
+    @Test("Specialization rewrites dependent action domains without replacing bound members")
+    func specializesActionDomains() throws {
+        let spec = canonicalTestSpec(variables: [("value", .value(.int(0)))], actions: [
+            ("select", .assign(.named("value"), .variable("other")), [
+                ActionBinding(name: "member", domain: .integerRange(.int(1), .variable("limit")), generatedSwiftType: "Int"),
+                ActionBinding(name: "other", domain: .integerRange(.int(1), .variable("member")), generatedSwiftType: "Int")
+            ])
+        ])
+        let specialized = spec.specializing(parameters: ["limit": .int(3), "member": .int(99), "other": .int(99)])
+        let action = try #require(specialized.actions.first)
+        #expect(action.bindings[0].domain == .integerRange(.int(1), .int(3)))
+        #expect(action.bindings[1].domain == .integerRange(.int(1), .variable("member")))
+        #expect(action.body == spec.actions[0].body)
+        #expect(action.bindings.map(\.generatedSwiftType) == ["Int", "Int"])
+        #expect(spec.actions[0].bindings[0].domain == .integerRange(.int(1), .variable("limit")))
+        _ = try specialized.compile()
+    }
+
+    @Test("Action specialization avoids capture across dependent domains and preserves metadata")
+    func specializesActionScopes() {
+        let action = NamedAction(name: "select", body: .guard_(.equal(.variable("target"), .variable("member"))), bindings: [
+            ActionBinding(name: "member", domain: .variable("member"), generatedSwiftType: "Int"),
+            ActionBinding(name: "other", domain: .setLiteral([.variable("member")]), generatedSwiftType: "Int")
+        ], isTermination: true)
+        let result = action.substitutingVariables(["target": .variable("member"), "member": .setLiteral([.int(3)])])
+        #expect(result.name == action.name)
+        #expect(result.isTermination)
+        #expect(result.bindings[0].name == "member_1")
+        #expect(result.bindings[0].domain == .setLiteral([.int(3)]))
+        #expect(result.bindings[1].domain == .setLiteral([.variable("member_1")]))
+        #expect(result.body == .guard_(.equal(.variable("member"), .variable("member_1"))))
+        #expect(result.bindings.map(\.generatedSwiftType) == ["Int", "Int"])
+    }
+
+    @Test("Substitution preserves malformed signatures for diagnostics")
+    func malformedSignaturesRemainInvalid() {
+        let body = StateExpr.add(.variable("number"), .variable("Base"))
+        let values: [String: StateExpr] = ["Base": .variable("number")]
+        let definition = FormalOperatorDefinition(name: "Invalid", parameters: [.value("number"), .value("number")], body: body)
+        #expect(definition.substitutingVariables(values) == definition)
+        let invalidAction = NamedAction(name: "Invalid", body: .guard_(body), bindings: [
+            ActionBinding(name: "number", values: [.int(1)]),
+            ActionBinding(name: "number", values: [.int(2)])
+        ])
+        #expect(invalidAction.substitutingVariables(values) == invalidAction)
+        let recursive = RecursiveFunc(name: "Invalid", params: ["number", "number"], body: body)
+        #expect(recursive.substitutingVariables(values) == recursive)
+        let lambda = FormalLambda(parameters: ["number", "number"], body: body)
+        let expression = StateExpr.operatorApplication(.lambda(lambda), [.value(.value(.int(1))), .value(.value(.int(2)))])
+        #expect(StateExpr.renamingRecursiveCalls(in: expression, using: { $0 }, lowerAnonymousLambdaApplications: true) == expression)
+        guard case .operatorApplication(.lambda(let substituted), _) = StateExpr.substituteVariables(values, in: expression) else {
+            Issue.record("Expected the invalid lambda to remain available to validation")
+            return
+        }
+        #expect(substituted.sourceIssue != nil)
+        #expect(substituted.parameters == lambda.parameters)
+    }
+
+    @Test("Function specialization preserves parameter scope and declaration metadata")
+    func functionSpecializationPreservesScope() {
+        let body = StateExpr.add(.variable("number"), .variable("Base"))
+        let values: [String: StateExpr] = ["number": .value(.int(99)), "Base": .variable("number")]
+        let recursive = RecursiveFunc(name: "AddBase", params: ["number"], body: body).substitutingVariables(values)
+        let definition = FormalOperatorDefinition(name: "AddBase", parameters: [.value("number")], body: body,
+            plusCalPhase: .define, plusCalDependencies: ["Base"]).substitutingVariables(values)
+        #expect(recursive.params == ["number_1"])
+        #expect(definition.parameters == [.value("number_1")])
+        #expect(recursive.body == .add(.variable("number_1"), .variable("number")))
+        #expect(definition.body == recursive.body)
+        #expect(definition.plusCalPhase == .define)
+        #expect(definition.plusCalDependencies == ["Base"])
+    }
+
+    @Test("Action substitution preserves caller references under existential and local binders")
+    func actionSubstitutionAvoidsCapture() {
+        let body = ActionExpr.guard_(.equal(.variable("first"), .variable("second")))
+        let replacements: [String: StateExpr] = ["first": .variable("second"), "second": .value(.int(7))]
+        let expectedBody = ActionExpr.guard_(.equal(.variable("second"), .variable("second_1")))
+        let existential = ActionExpr.existsAction("second", .variable("second"), body)
+        let local = ActionExpr.define("second", .variable("second"), body)
+        #expect(existential.substitutingVariables(replacements) == .existsAction("second_1", .value(.int(7)), expectedBody))
+        #expect(local.substitutingVariables(replacements) == .define("second_1", .value(.int(7)), expectedBody))
+        #expect(body.substitutingVariables(replacements) == .guard_(.equal(.variable("second"), .value(.int(7)))))
+    }
+
+    @Test("Simultaneous substitution respects shadowing and avoids capturing inserted arguments")
+    func simultaneousSubstitutionPreservesScope() {
+        let expression = StateExpr.forAll(.variable("domain"), "second",
+            .equal(.variable("first"), .variable("second")))
+        let result = StateExpr.substituteVariables([
+            "domain": .setLiteral([.value(.int(1))]),
+            "first": .variable("second"),
+            "second": .value(.int(7))
+        ], in: expression)
+        #expect(result == .forAll(.setLiteral([.value(.int(1))]), "second_1",
+            .equal(.variable("second"), .variable("second_1"))))
+    }
+
+    @Test("Anonymous lambda arguments are substituted simultaneously")
+    func lambdaArgumentsPreserveCallerBindings() {
+        let lambda = FormalLambda(parameters: ["first", "second"], body: .subtract(.variable("first"), .variable("second")))
+        let expression = StateExpr.operatorApplication(.lambda(lambda), [
+            .value(.variable("second")), .value(.value(.int(7)))
+        ])
+        let lowered = StateExpr.renamingRecursiveCalls(in: expression, using: { $0 }, lowerAnonymousLambdaApplications: true)
+        #expect(lowered == .subtract(.variable("second"), .value(.int(7))))
+    }
+
+    @Test("Statement macro arguments cannot rewrite earlier caller arguments")
+    func macroArgumentsPreserveCallerBindings() {
+        let compare = Macro { (first: MacroParameter<Int>, second: MacroParameter<Int>) in
+            Assert(first != second)
+        }
+        let argument = Expr<Int>(.variable("__pcal_macro_parameter_1"))
+        enum Label: String, CaseIterable, Sendable { case check }
+        let algorithm = Algorithm("ArgumentScope") {
+            Do(Label.check) { compare(argument, Expr<Int>(7)) }
+        }
+        guard case .step(let step) = algorithm.model.components.first else {
+            Issue.record("Expected the expanded atomic step")
+            return
+        }
+        #expect(step.statements == [
+            .assert(.notEqual(.variable("__pcal_macro_parameter_1"), .value(.int(7))))
+        ])
+    }
+
   @Test("Action parameters do not replace a shadowing existential")
   func actionParameterRespectsExistentialScope() {
     let action: ActionExpr = .existsAction(
@@ -122,12 +249,9 @@ struct ScopedSubstitutionTests {
     let all = ForAll(in: values, and: values) { left, right in
       left.expr <= 2 && right.expr <= 2
     }
-    let condition = All(in: values, and: values) { left, right in
-      left.expr + right.expr <= 4
-    }
+
 
     #expect(try compiledValue(exists.raw) == .bool(true))
     #expect(try compiledValue(all.raw) == .bool(true))
-    #expect(try compiledValue(condition) == .bool(true))
   }
 }

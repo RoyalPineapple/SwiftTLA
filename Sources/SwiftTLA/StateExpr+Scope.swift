@@ -5,13 +5,13 @@ extension StateExpr {
     /// bound names. Substitution uses this set to avoid binder capture.
     var freeVariableNames: Set<String> {
         return switch self {
-        case .sourceIssue, .value, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
+        case .sourceIssue, .value, .parameter, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
             []
         case .variable(let name):
             [name]
         case .processLocalFamily(let name):
             [name]
-        case .add(let lhs, let rhs), .subtract(let lhs, let rhs),
+        case .stutteringStep(let lhs, let rhs), .add(let lhs, let rhs), .subtract(let lhs, let rhs),
              .multiply(let lhs, let rhs), .divide(let lhs, let rhs),
              .modulo(let lhs, let rhs), .integerDivide(let lhs, let rhs),
              .equal(let lhs, let rhs), .notEqual(let lhs, let rhs),
@@ -23,7 +23,7 @@ extension StateExpr {
              .tupleAppend(let lhs, let rhs), .tupleConcatenate(let lhs, let rhs),
              .functionApply(let lhs, let rhs), .functionSet(let lhs, let rhs):
             lhs.freeVariableNames.union(rhs.freeVariableNames)
-        case .negate(let value), .not(let value), .cardinality(let value),
+        case .assertView(let value, _), .nextState(let value), .negate(let value), .not(let value), .cardinality(let value),
              .powerSet(let value), .unionAll(let value), .tupleLength(let value),
              .tupleHead(let value), .tupleTail(let value), .domain(let value),
              .sequenceFromSet(let value):

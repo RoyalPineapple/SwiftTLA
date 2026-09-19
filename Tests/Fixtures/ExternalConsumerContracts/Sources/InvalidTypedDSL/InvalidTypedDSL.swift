@@ -15,20 +15,6 @@ enum CarID: String, FiniteTLAValueDomain {
   static let finiteValues = [Self.carA, .carB]
 }
 
-struct CarFields {
-  let floor: Int
-}
-
-enum CarSchema: TLARecordSchema {
-  typealias Fields = CarFields
-  static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
-    field as AnyKeyPath == \CarFields.floor ? "floor" : nil
-  }
-
-  static let floor = field(\CarFields.floor)
-  static let fields = [TLARecordFieldDeclaration(floor, default: 0)]
-}
-
 @TLAModel
 struct InvalidTypedFirstParameter {
   static let dynamicPeople = PersonID.finiteValues
@@ -82,6 +68,22 @@ struct InvalidTypedThirdParameter {
 
 @TLAModel
 struct InvalidTypedUpdate {
+  struct CarFields {
+    let floor: Int
+  }
+
+  enum CarSchema: TLARecordSchema {
+    typealias Fields = CarFields
+    static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
+      let key = field as AnyKeyPath
+      if key == \CarFields.floor { return "floor" }
+      return nil
+    }
+
+    static let floor = field(\CarFields.floor)
+    static let fields = [TLARecordFieldDeclaration(floor, default: 0)]
+  }
+
   static let dynamicKeyPath: KeyPath<CarFields, Int> = \CarFields.floor
 
   static var spec: TLASpec {

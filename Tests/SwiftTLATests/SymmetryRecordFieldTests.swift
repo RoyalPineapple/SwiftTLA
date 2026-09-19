@@ -21,7 +21,7 @@ struct SymmetryRecordFieldTests {
         }
         #expect(record.fields.map(\.name) == ["a"])
         #expect(record.fields.map(\.value) == [.string("a")])
-        let renamed = try CompiledState(values: [.init(formal: .record(["a": .string("a")]))], compilation: compilation)
+        let renamed = try CompiledState(values: [.init(formal: .record(["a": .string("a")]))], layout: compilation.layout, identity: compilation.identity)
         #expect(try plan.canonicalState(renamed) == canonical)
     }
 }

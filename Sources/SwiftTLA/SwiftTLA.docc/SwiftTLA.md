@@ -33,11 +33,13 @@ the compiler stage, source path, expected fact, and actual fact.
 
 ## Render a linked bundle
 
-The compiler resolves the module closure before it renders text.
+Compilation resolves and validates the module closure. Rendering is an explicit
+consumer of that compiled program.
 
 ```swift
 let compilation = try Counter.spec.compile()
-let bundle = compilation.renderedTLAModuleBundle()
+let rendered = try compilation.render()
+let bundle = rendered.tlaBundle
 let rootModule = bundle.root
 let importedModules = bundle.imports
 ```
@@ -47,7 +49,7 @@ ownership, and provenance. A compilation with one authored `Algorithm` also
 provides a PlusCal bundle.
 
 ```swift
-let plusCal = try compilation.renderedPlusCalBundle()
+let plusCal = try rendered.plusCalBundle()
 ```
 
 ## Execute generated Swift

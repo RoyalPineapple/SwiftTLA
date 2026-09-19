@@ -29,7 +29,7 @@ package struct ConsensusModel: Sendable {
             Extends(.finiteSets)
             Extends(.integers)
             Algorithm("Consensus", fairness: .weak, scoped: { scope in
-                let chosen = scope.sharedVar("chosen", initial: SetExpr<Value>())
+                let chosen = scope.sharedVar(initial: SetExpr<Value>())
 
                 let choose = Macro {
                     When(chosen.isEmpty)

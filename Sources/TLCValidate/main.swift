@@ -2,6 +2,9 @@ import SwiftTLA
 import UpstreamParity
 import Foundation
 let args = Array(CommandLine.arguments.dropFirst())
+if args.first == "scenarios" {
+    runScenarios(arguments: Array(args.dropFirst()))
+}
 if args.first == "finite-graph" {
     runFiniteGraphCheck(arguments: Array(args.dropFirst()))
 }
@@ -13,6 +16,8 @@ guard let name = args.first else {
     Usage: tlc-validate <command>
       finite-graph run ...
       temporal-symmetry run ...
+      scenarios list
+      scenarios run --case <id-or-all> --output <directory>
     """, stderr)
     exit(1)
 }
@@ -26,7 +31,7 @@ struct PinnedTLCToolchain: Decodable {
     struct TLC: Decodable {
         let tag: String
         let commit: String
-        let jar: GitHubAsset
+        let jar: GitHubBuildArtifact
     }
     struct Java: Decodable {
         let distribution: String
@@ -35,26 +40,28 @@ struct PinnedTLCToolchain: Decodable {
     }
     struct Bridge: Decodable {
         let `class`: String
-        let source: String
-        let sourceSha256: String
-        let binarySha256: String
+        let sources: [String: String]
     }
     struct Download: Decodable {
         let url: String
         let sha256: String
     }
-    struct GitHubAsset: Decodable {
+    struct GitHubBuildArtifact: Decodable {
         let repository: String
-        let assetID: Int
+        let artifactID: Int
+        let archiveSHA256: String
+        let buildRunID: Int
+        let buildRevision: String
         let sha256: String
     }
 }
 
-private func referencePin(
+func referencePin(
     from toolchain: PinnedTLCToolchain,
-    javaArchive: PinnedTLCToolchain.Download
+    javaArchive: PinnedTLCToolchain.Download, toolRoot: URL
 ) throws -> TLCReferencePin {
-    try TLCReferencePin(
+    let binary = toolRoot.appendingPathComponent("bridge.jar")
+    return try TLCReferencePin(
         tag: toolchain.tlc.tag,
         commit: toolchain.tlc.commit,
         jarSHA256: toolchain.tlc.jar.sha256,
@@ -62,8 +69,8 @@ private func referencePin(
         javaVersion: toolchain.java.version,
         javaArchiveSHA256: javaArchive.sha256,
         bridgeClass: toolchain.bridge.class,
-        bridgeSourceSHA256: toolchain.bridge.sourceSha256,
-        bridgeBinarySHA256: toolchain.bridge.binarySha256
+        bridgeSourceHashes: toolchain.bridge.sources,
+        bridgeBinarySHA256: SHA256.hex(try Data(contentsOf: binary))
     )
 }
 
@@ -106,18 +113,20 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         let environment = ProcessInfo.processInfo.environment
         let casesPath = try requiredEnvironment("FINITE_GRAPH_CASES", environment)
         let manifest = try decode(FiniteGraphManifest.self, at: URL(fileURLWithPath: casesPath))
-        let selected: [FiniteGraphManifest.Case]
-        if options.caseID == "all" {
-            selected = manifest.cases
-        } else if let declaration = manifest.cases.first(where: { $0.id == options.caseID }) {
-            selected = [declaration]
-        } else {
+        let selected = manifest.cases.filter { options.caseID == "all" || $0.id == options.caseID }
+        guard !selected.isEmpty else {
             throw FiniteGraphCLIError.unknownCase(options.caseID)
         }
-        let preparedCases = try selected.map { declaration in
-            let compilation = try declaration.sourceModel.spec.compile()
-            return (declaration, compilation, compilation.renderedActions())
+        guard options.caseID == "all" || selected.count == 1 else {
+            throw FiniteGraphCLIError.invalidManifest("case selection is not unique")
         }
+        fputs("finite-graph: selected \(selected.count) case(s) for \(options.caseID)\n", stderr)
+        let preparedCases = try selected.map { declaration in
+            let scenario = try declaration.resolveScenario()
+            let rendered = try scenario?.render() ?? declaration.sourceModel.spec.compile().render()
+            return (declaration, scenario, rendered)
+        }
+        fputs("finite-graph: prepared \(preparedCases.count) rendered case(s)\n", stderr)
         let toolRoot = try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", environment)
         let inputRoot = try requiredEnvironment("FINITE_GRAPH_INPUT_ROOT", environment)
         let output = URL(fileURLWithPath: options.output).standardizedFileURL
@@ -135,15 +144,15 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         guard let javaArchive = lock.java.archives[architecture] else {
             throw FiniteGraphCLIError.invalidManifest("no locked archive for \(architecture)")
         }
-        let pin = try referencePin(from: lock, javaArchive: javaArchive)
+        let pin = try referencePin(from: lock, javaArchive: javaArchive, toolRoot: URL(fileURLWithPath: toolRoot))
         let toolDirectory = URL(fileURLWithPath: toolRoot)
         let jar = toolDirectory.appendingPathComponent("downloads/tla2tools.jar")
         let java = toolDirectory.appendingPathComponent("java-\(architecture)/Contents/Home/bin/java")
-        let bridgeClasses = toolDirectory.appendingPathComponent("bridge-classes")
+        let bridgeJar = toolDirectory.appendingPathComponent("bridge.jar")
         let javaArchivePath = toolDirectory.appendingPathComponent(
             "downloads/temurin-\(architecture).tar.gz")
-        let bridgeSource = projectRoot.appendingPathComponent(lock.bridge.source)
-        for artifact in [jar, java, bridgeClasses, javaArchivePath, bridgeSource] where
+        let bridgeSources = Dictionary(uniqueKeysWithValues: lock.bridge.sources.keys.map { ($0, projectRoot.appendingPathComponent($0)) })
+        for artifact in [jar, java, bridgeJar, javaArchivePath] + Array(bridgeSources.values) where
             !FileManager.default.fileExists(atPath: artifact.path) {
             throw FiniteGraphCLIError.missingFile(artifact.path)
         }
@@ -151,10 +160,8 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             artifacts: TLCReferenceArtifacts(
                 jar: jar,
                 javaArchive: javaArchivePath,
-                bridgeSource: bridgeSource,
-                bridgeBinary: bridgeClasses
-                    .appendingPathComponent(pin.bridgeClass.replacingOccurrences(of: ".", with: "/"))
-                    .appendingPathExtension("class"),
+                bridgeSources: bridgeSources,
+                bridgeBinary: bridgeJar,
                 jarManifest: "",
                 runtime: TLCJavaRuntimeIdentity(
                     version: "", vendor: "", architecture: architecture, properties: [:]
@@ -164,6 +171,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             directory: projectRoot
         )
         try pin.validate(referenceArtifacts)
+        fputs("finite-graph: reference toolchain validated\n", stderr)
         let runRoot = output.deletingLastPathComponent().appendingPathComponent(
             ".finite-graph-\(UUID().uuidString.lowercased())")
         try FileManager.default.createDirectory(at: runRoot, withIntermediateDirectories: true)
@@ -172,7 +180,8 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false)
         }
         var exitCode: Int32 = FiniteGraphExitCode.exact.rawValue
-        for (declaration, compilation, renderedActions) in preparedCases {
+        for (declaration, scenario, rendered) in preparedCases {
+            fputs("finite-graph: checking \(declaration.id)\n", stderr)
             let caseOutput = selected.count == 1
                 ? output
                 : output.appendingPathComponent(declaration.id, isDirectory: true)
@@ -185,7 +194,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 arguments: arguments,
                 environment: [:],
                 pin: pin,
-                renderedActions: renderedActions
+                renderedActions: rendered.actions
             )
             let bundle = try TLCProcessRequest.declaredBundle(
                 root: inputPath(declaration.module, within: inputRoot),
@@ -202,19 +211,23 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
             let request = TLCProcessRequest(
                 javaExecutable: java,
                 jar: jar,
-                bridgeClasses: bridgeClasses,
+                bridgeJar: bridgeJar,
                 bundle: bundle,
                 graphEvents: runRoot.appendingPathComponent("\(declaration.id).events.jsonl"),
                 traceOutput: runRoot.appendingPathComponent("\(declaration.id).counterexample.json"),
                 workingDirectory: runRoot,
                 finiteGraphCase: finiteGraphCase,
                 runID: options.runID ?? UUID(),
+                timeout: declaration.timeoutSeconds,
                 invocation: .finiteGraph,
                 referenceArtifacts: referenceArtifacts
             )
+            let referenceConfiguration = try TLCReferenceConfiguration.parse(request, checking: rendered.checkNames)
             let check = FiniteGraphCheck().run(
-                compilation: compilation,
+                nativeRun: { try declaration.sourceModel.nativeRun(rendered: rendered,
+                    checkingDeadlock: referenceConfiguration.checksDeadlock, scenario: scenario, for: finiteGraphCase) },
                 tlcRequest: request,
+                referenceConfiguration: referenceConfiguration,
                 outputDirectory: caseOutput
             )
             let label = "finite-graph \(declaration.id)"
@@ -301,7 +314,7 @@ private func runTemporalSymmetry(arguments: [String]) -> Never {
             projectRoot: projectRoot,
             outputDirectory: options.output,
             toolRoot: toolRoot,
-            referencePin: try referencePin(from: lock, javaArchive: javaArchive)
+            referencePin: try referencePin(from: lock, javaArchive: javaArchive, toolRoot: toolRoot)
         ))
         for record in records {
             print("temporal-symmetry \(record.caseID): \(record.outcome.rawValue) \(record.diagnostic)")

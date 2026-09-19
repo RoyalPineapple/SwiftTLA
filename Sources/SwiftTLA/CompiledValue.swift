@@ -1,14 +1,14 @@
-struct CompiledRecord: Hashable, Sendable {
-    struct Field: Hashable, Sendable, Comparable {
-        let key: CompiledValue
-        let value: CompiledValue
+package struct CompiledRecord: Hashable, Sendable {
+    package struct Field: Hashable, Sendable, Comparable {
+        package let key: CompiledValue
+        package let value: CompiledValue
 
-        static func < (lhs: Field, rhs: Field) -> Bool {
+        package static func < (lhs: Field, rhs: Field) -> Bool {
             lhs.key == rhs.key ? lhs.value < rhs.value : lhs.key < rhs.key
         }
     }
 
-    let fields: [Field]
+    package let fields: [Field]
 
     init(_ fields: [Field]) {
         self.fields = fields.sorted()
@@ -26,7 +26,7 @@ struct CompiledRecord: Hashable, Sendable {
     }
 }
 
-indirect enum CompiledValue: Hashable, Sendable, Comparable {
+package indirect enum CompiledValue: Hashable, Sendable, Comparable {
     case integer(Int)
     case boolean(Bool)
     case string(String)
@@ -37,11 +37,66 @@ indirect enum CompiledValue: Hashable, Sendable, Comparable {
     case function([CompiledValue: CompiledValue])
     case constant(String)
 
-    init(formal value: TLAValue) {
+    package static func modelValueNames(in values: some Sequence<CompiledValue>) -> Set<String> {
+        var pending = Array(values)
+        var names: Set<String> = []
+        var visited: Set<CompiledValue> = []
+        while let value = pending.popLast() {
+            guard visited.insert(value).inserted else { continue }
+            switch value {
+            case .constant(let name): names.insert(name)
+            case .set(let members): pending.append(contentsOf: members)
+            case .tuple(let members): pending.append(contentsOf: members)
+            case .record(let record): pending.append(contentsOf: record.fields.map(\.value))
+            case .function(let entries):
+                pending.append(contentsOf: entries.keys)
+                pending.append(contentsOf: entries.values)
+            case .integer, .boolean, .string, .controlLocation: break
+            }
+        }
+        return names
+    }
+
+    package init(formal value: TLAValue) {
         self = Self.formalValue(value)
     }
 
-    func rendered(using layout: CompiledLayout) throws -> TLAValue {
+    // Compiler identity remains structural. Formal equality treats tuples and
+    // records as functions without replacing their stored representation.
+    // ponytail: set/map comparisons are quadratic; add canonical comparison keys
+    // only if formal-engine profiling shows this boundary is a bottleneck.
+    func formallyEquals(_ other: Self) -> Bool {
+        switch (self, other) {
+        case (.integer(let left), .integer(let right)): return left == right
+        case (.boolean(let left), .boolean(let right)): return left == right
+        case (.string(let left), .string(let right)), (.constant(let left), .constant(let right)):
+            return left.utf8.elementsEqual(right.utf8)
+        case (.controlLocation(let left), .controlLocation(let right)): return left == right
+        case (.set(let left), .set(let right)):
+            return left.allSatisfy { value in right.contains { value.formallyEquals($0) } }
+                && right.allSatisfy { value in left.contains { value.formallyEquals($0) } }
+        case (.tuple(let left), .tuple(let right)):
+            return left.count == right.count && zip(left, right).allSatisfy { $0.formallyEquals($1) }
+        default:
+            guard let left = formalFunctionEntries, let right = other.formalFunctionEntries,
+                  left.count == right.count else { return false }
+            return left.allSatisfy { entry in
+                right.contains { entry.key.formallyEquals($0.key) && entry.value.formallyEquals($0.value) }
+            }
+        }
+    }
+
+    private var formalFunctionEntries: [(key: Self, value: Self)]? {
+        switch self {
+        case .tuple(let elements):
+            elements.enumerated().map { (.integer($0.offset + 1), $0.element) }
+        case .record(let record): record.fields.map { ($0.key, $0.value) }
+        case .function(let entries): entries.map { ($0.key, $0.value) }
+        default: nil
+        }
+    }
+
+    package func rendered(using layout: CompiledLayout) throws -> TLAValue {
         switch self {
         case .integer(let value):
             return .int(value)
@@ -133,7 +188,7 @@ indirect enum CompiledValue: Hashable, Sendable, Comparable {
         values.sorted()
     }
 
-    static func < (lhs: CompiledValue, rhs: CompiledValue) -> Bool {
+    package static func < (lhs: CompiledValue, rhs: CompiledValue) -> Bool {
         let lhsKind = lhs.orderingKind
         let rhsKind = rhs.orderingKind
         guard lhsKind == rhsKind else { return lhsKind < rhsKind }
@@ -164,7 +219,7 @@ indirect enum CompiledValue: Hashable, Sendable, Comparable {
         }
     }
 
-    private var orderingKind: Int {
+    package var orderingKind: Int {
         switch self {
         case .integer: 0
         case .boolean: 1

@@ -1,4 +1,4 @@
-package enum RefinementFailureEvidence: Sendable, Equatable {
+package enum FormalRefinementFailure: Sendable, Equatable {
     case initialState(
         mapped: TLAStateProjection,
         abstractInitialStates: [TLAStateProjection]
@@ -18,11 +18,11 @@ struct RefinementChecker {
 
     func check(_ exploration: FiniteExploration) throws -> ModelCheckOutcome? {
         guard !compilation.refinements.isEmpty else { return nil }
-        try exploration.requireValidEvidence(in: compilation)
+        try exploration.validate(for: compilation)
         guard exploration.isComplete else {
-            guard case .depthExceeded = exploration.outcome else { return nil }
+            guard case .depthExceeded = exploration.completion else { return nil }
             return compilation.refinements.first.map {
-                .refinementUnproven(refinement: $0.name, exploration: exploration.outcome)
+                .refinementUnproven(refinement: $0.name, exploration: exploration.completion)
             }
         }
         for refinement in compilation.refinements {
@@ -68,7 +68,7 @@ struct RefinementChecker {
             guard abstractInitialStates.contains(mapped) else {
                 return .refinementViolated(
                     refinement: refinement.name,
-                    evidence: .initialState(
+                    failure: .initialState(
                         mapped: try mapped.projection(using: refinement.abstract.layout),
                         abstractInitialStates: try abstractInitialStates.map { try $0.projection(using: refinement.abstract.layout) }
                     )
@@ -85,7 +85,7 @@ struct RefinementChecker {
                 guard mappedTarget == mappedSource || abstractSuccessors.contains(mappedTarget) else {
                     return .refinementViolated(
                         refinement: refinement.name,
-                        evidence: .transition(
+                        failure: .transition(
                             action: transition.label.description,
                             source: try source.projection(using: compilation.layout),
                             target: try target.projection(using: compilation.layout),
@@ -117,7 +117,7 @@ struct RefinementChecker {
     private func mappedState(_ refinement: CompiledRefinement, source: CompiledState) throws -> CompiledState {
         try CompiledState(
             values: CompiledRuntime(compilation: compilation).evaluate(refinement.variableMappings, in: source),
-            compilation: refinement.abstract
+            layout: refinement.abstract.layout, identity: refinement.abstract.identity
         )
     }
 }
@@ -125,14 +125,7 @@ struct RefinementChecker {
 extension TLASpec {
     func specializing(parameters: [String: StateExpr]) -> TLASpec {
         func state(_ expression: StateExpr) -> StateExpr {
-            parameters.reduce(expression) { substitutedExpression, binding in
-                StateExpr.substituteVariable(binding.key, with: binding.value, in: substitutedExpression)
-            }
-        }
-        func action(_ expression: ActionExpr) -> ActionExpr {
-            parameters.reduce(expression) { substitutedExpression, binding in
-                substitutedExpression.substitutingVariable(binding.key, with: binding.value)
-            }
+            StateExpr.substituteVariables(parameters, in: expression)
         }
         func initialization(_ value: VariableInitialization) -> VariableInitialization {
             switch value {
@@ -141,21 +134,34 @@ extension TLASpec {
             case .memberOf(let set): return .memberOf(state(set))
             }
         }
-        var specialized = TLASpec(
-            name: name,
-            variables: variables.map { .init(name: $0.name, initialization: initialization($0.initialization), collectionType: $0.collectionType, generatedSwiftType: $0.generatedSwiftType, origin: $0.origin) },
-            actions: actions.map { .init(name: $0.name, body: action($0.body), bindings: $0.bindings, controlOwner: $0.controlOwner) },
-            invariants: invariants.map { .init(name: $0.name, body: state($0.body)) }, temporalProperties: temporalProperties,
-            fairness: fairness, assume: assume.map(state), checkDeadlock: checkDeadlock,
-            extendsModules: extendsModules, constraint: constraint.map(state),
-            recursiveFuncs: recursiveFuncs.map { .init(name: $0.name, params: $0.params, body: state($0.body)) },
-            formalOperatorDefinitions: formalOperatorDefinitions.map { .init(name: $0.name, parameters: $0.parameters, body: state($0.body), plusCalPhase: $0.plusCalPhase, plusCalDependencies: $0.plusCalDependencies) },
-            imports: imports, importConfigurations: importConfigurations, moduleInstances: moduleInstances, refinements: [],
-            symmetrySets: symmetrySets, symmetricCollections: symmetricCollections,
-            sourceAlgorithms: sourceAlgorithms
-        )
-        specialized.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
-        specialized.algorithmPhase = algorithmPhase
+        var specialized = self
+        specialized.formalParameters.removeAll { parameters[$0.name] != nil }
+        specialized.variables = variables.map { .init(name: $0.name, initialization: initialization($0.initialization), collectionType: $0.collectionType, generatedSwiftType: $0.generatedSwiftType, resolvedValueType: $0.resolvedValueType, origin: $0.origin) }
+        specialized.actions = actions.map { $0.substitutingVariables(parameters) }
+        specialized.invariants = invariants.map { .init(name: $0.name, body: state($0.body), reference: $0.reference) }
+        specialized.reachabilityProperties = reachabilityProperties.map { .init(name: $0.name, body: state($0.body), reference: $0.reference) }
+        specialized.temporalProperties = temporalProperties.map { $0.substitutingVariables(parameters) }
+        func fairness(_ condition: FairnessCondition) -> FairnessCondition {
+            if case .projected(let base, let projection) = condition {
+                return .projected(fairness(base), state(projection))
+            }
+            return condition
+        }
+        specialized.fairness = self.fairness.map(fairness)
+        specialized.assume = assume.map(state)
+        specialized.constraint = constraint.map(state)
+        specialized.recursiveFuncs = recursiveFuncs.map { $0.substitutingVariables(parameters) }
+        specialized.formalOperatorDefinitions = formalOperatorDefinitions.map { $0.substitutingVariables(parameters) }
+        specialized.importConfigurations = importConfigurations.map { configuration in
+            .init(moduleName: configuration.moduleName, replacements: configuration.replacements.map {
+                .init(operatorName: $0.operatorName, definitionName: $0.definitionName, expression: state($0.expression))
+            })
+        }
+        specialized.refinements = refinements.map { refinement in
+            .init(name: refinement.name, instance: refinement.instance, operator: refinement.operator,
+                mappings: refinement.mappings.map { .init(target: $0.target, source: state($0.source)) },
+                reference: refinement.reference)
+        }
         return specialized
     }
 }

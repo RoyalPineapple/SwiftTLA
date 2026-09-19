@@ -24,9 +24,6 @@ struct ConcreteVerificationGraphTests {
         #expect(throws: FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly) {
             _ = try reduced.explore()
         }
-        #expect(throws: FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly) {
-            _ = try reduced.checkLiveness()
-        }
         let concrete = ModelChecker(
             compilation: compilation,
             configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled)
@@ -36,15 +33,12 @@ struct ConcreteVerificationGraphTests {
         #expect(try exploration.analyzeTemporalProperties(in: compilation).first?.status == .satisfied)
         let reductionEvidence = FiniteExploration(
             graph: exploration.graph, initialStateIDs: exploration.initialStateIDs,
-            outcome: exploration.outcome, compilationIdentity: compilation.identity,
+            completion: exploration.completion, safetyViolations: exploration.safetyViolations,
+            compilationIdentity: compilation.identity,
             configuration: reduced.configuration, compiledStates: exploration.compiledStates
         )
         #expect(throws: FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly) {
             _ = try reductionEvidence.analyzeTemporalProperties(in: compilation)
-        }
-        guard case .ok(statesCount: 2) = try concrete.checkLiveness() else {
-            Issue.record("Expected fairness to force both concrete member states to recur.")
-            return
         }
         let safetyOnly = TLASpec(
             name: specification.name, variables: specification.variables,
@@ -69,7 +63,7 @@ struct ConcreteVerificationGraphTests {
             Action("advance") { concreteValue.becomes("b").when(concreteValue == "a") }
             Symmetry("Members", Set(["a", "b"]))
             instance
-            Refinement(name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
+            Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
         }
         let compilation = try concrete.compile()
         #expect(throws: FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly) {

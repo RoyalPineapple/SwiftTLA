@@ -26,18 +26,18 @@ struct CompilerBundleOwnershipTests {
   func closureRetainsEdgePayloads() throws {
     let library = TLASpec(name: "Library", variables: [], formalParameters: [.init("Base")], actions: [], invariants: [])
     let root = TLASpec("Root") {
-      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(0...2))
+      Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 2))
       Instance("Library", of: library, with: [ModuleArgument("Base", value: 1)])
     }
     let closure = try FormalModuleClosure.resolve(root: root)
 
-    #expect(closure.edges.contains { if case .importModule(let configuration) = $0.kind { configuration == ZSequences.boundedNaturalNumbers(0...2) } else { false } })
+    #expect(closure.edges.contains { if case .importModule(let configuration) = $0.kind { configuration == ZSequences.boundedNaturalNumbers(through: 2) } else { false } })
     #expect(closure.edges.contains { if case .namedInstance("Library", let arguments) = $0.kind { arguments == [ModuleArgument("Base", value: 1)] } else { false } })
   }
 
   @Test("an imported module plan uses its linked incoming configuration")
   func importedModulePlanUsesLinkedIncomingConfiguration() throws {
-    let configuration = ZSequences.boundedNaturalNumbers(0...2)
+    let configuration = ZSequences.boundedNaturalNumbers(through: 2)
     let root = TLASpec("Root") {
       Import(ZSequences.module, configuring: configuration)
     }
@@ -45,7 +45,7 @@ struct CompilerBundleOwnershipTests {
     let closure = try FormalModuleClosure.resolve(root: root)
     let imported = try #require(closure.entries.first { $0.module.name == ZSequences.module.name })
     let context = closure.planContext(for: imported)
-    let bundle = try root.compile().renderedTLAModuleBundle()
+    let bundle = try root.compile().render().tlaBundle
 
     #expect(context.closure.entries.map(\.module.name) == ["ZSequences"])
     #expect(context.incomingModuleParameters == configuration.replacements)

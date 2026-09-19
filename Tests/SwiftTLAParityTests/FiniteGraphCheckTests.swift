@@ -2,9 +2,72 @@ import Foundation
 import os
 import SwiftTLA
 import Testing
-import UpstreamParity
+@testable import UpstreamParity
 struct FiniteGraphCheckTests {
-  @Test("finite graph staging consumes declared source model identities")
+  @Test("Finite enum model values are declared in generated upstream modules")
+  func declaresFiniteEnumModelValues() throws {
+    let channel = try #require(ChannelModel.validationScenarios().first)
+    let asynch = try #require(AsynchInterfaceModel.validationScenarios().first)
+    for rendered in [try asynch.render(), try channel.render()] {
+      #expect(rendered.tlaBundle.tla.contains("CONSTANTS Data, d1, d2, d3\n"))
+      for name in ["d1", "d2", "d3"] {
+        #expect(rendered.tlaBundle.cfg.contains("CONSTANT \(name) = \(name)\n"))
+      }
+    }
+  }
+
+  private static func declaredCases() throws -> [FiniteGraphManifest.Case] {
+    try JSONDecoder().decode(FiniteGraphManifest.self,
+      from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json"))).cases
+  }
+
+  @Test("finite model exports retain complete native graphs and every declared check",
+    arguments: try declaredCases().map(\.id))
+  func nativeExportsRetainCompleteGraphsAndChecks(id: String) throws {
+    func validate<Scenario: ModelValidationScenario>(_ scenario: Scenario, native: NativeModelRun) throws {
+      for (property, expectation) in scenario.expectations {
+        let name = try #require(scenario.formalPropertyNames[property])
+        let result = try #require(native.checks.properties[name])
+        #expect(expectation.accepts(result), "\(scenario.name): \(name)")
+        if case .violated(let trace) = result { try trace.validate(in: native.graph.graph) }
+      }
+    }
+    let declaration = try #require(Self.declaredCases().first { $0.id == id })
+    let scenario = try declaration.resolveScenario()
+    let rendered = try scenario?.render() ?? declaration.sourceModel.spec.compile().render()
+    let finiteGraphCase = try FiniteGraphCase(id: declaration.id, exploration: declaration.exploration,
+      moduleSHA256: declaration.moduleSHA256, cfgSHA256: declaration.cfgSHA256,
+      arguments: [], environment: [:], pin: testReferencePin(), renderedActions: rendered.actions)
+    let native = try declaration.sourceModel.nativeRun(rendered: rendered, checkingDeadlock: false,
+      scenario: scenario, for: finiteGraphCase)
+    let renderedNames = Set(finiteGraphCase.renderedActions.map(\.renderedName))
+    #expect(native.graph.graph.observedActions.isSubset(of: renderedNames))
+    #expect(native.graph.isComplete, "\(declaration.id)")
+    #expect(!native.graph.graph.initialStateKeys.isEmpty, "\(declaration.id)")
+    if let scenario {
+      try validate(scenario, native: native)
+    } else {
+      #expect(native.checks.properties.values.allSatisfy { $0 == .satisfied }, "\(declaration.id)")
+    }
+    #expect(Set(native.checks.properties.keys) == rendered.checkNames, "\(declaration.id)")
+    #expect((native.checks.deadlock != nil) == rendered.checksDeadlock, "\(declaration.id)")
+    if rendered.checksDeadlock {
+      switch try #require(native.checks.deadlock) {
+      case .satisfied:
+        break
+      case .violated(let trace):
+        try trace.validate(in: native.graph.graph)
+        let final = try #require(trace.steps.last?.state)
+        #expect(!native.graph.graph.edges.contains { $0.source == final })
+      case .unavailable:
+        Issue.record("Missing deadlock result for \(declaration.id)")
+      case .reached, .unreachable:
+        Issue.record("Unexpected reachability result for deadlock in \(declaration.id)")
+      }
+    }
+  }
+
+  @Test("finite graph staging consumes declared case identities")
   func stagesDeclaredSourceModels() throws {
     let output = Pipe()
     let process = Process()
@@ -18,15 +81,19 @@ struct FiniteGraphCheckTests {
     #expect(process.terminationStatus == 0, "\(message)")
   }
 
-  @Test("TLC setup uses an immutable GitHub asset coordinate")
-  func usesImmutableTLCAsset() throws {
+  @Test("TLC setup pins the rebuilt binary and its hosted provenance")
+  func usesImmutableTLCBuild() throws {
     let data = try Data(contentsOf: projectURL("Verification/FiniteGraph/toolchain.json"))
     let lock = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     let tlc = try #require(lock["tlc"] as? [String: Any])
     let jar = try #require(tlc["jar"] as? [String: Any])
 
-    #expect(jar["repository"] as? String == "tlaplus/tlaplus")
-    #expect(jar["assetID"] as? Int == 544648411)
+    #expect(jar["repository"] as? String == "RoyalPineapple/SwiftTLA")
+    #expect(try #require(jar["artifactID"] as? Int) > 0)
+    #expect(try #require(jar["buildRunID"] as? Int) > 0)
+    #expect(try #require(jar["archiveSHA256"] as? String).count == 64)
+    #expect(try #require(jar["buildRevision"] as? String).count == 40)
+    #expect(jar["assetID"] == nil)
     #expect(jar["url"] == nil)
   }
 
@@ -58,12 +125,11 @@ struct FiniteGraphCheckTests {
     }
   }
 
-  @Test("declared finite graph cases resolve every source model exactly once")
-  func resolvesDeclaredSourceModelsExactlyOnce() throws {
+  @Test("declared finite graph cases cover registered source models")
+  func resolvesDeclaredSourceModels() throws {
     let data = try Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json"))
     let manifest = try JSONDecoder().decode(FiniteGraphManifest.self, from: data)
     let sources = manifest.cases.map(\.sourceModel)
-    #expect(sources.count == FiniteGraphSourceModel.allCases.count)
     #expect(Set(sources) == Set(FiniteGraphSourceModel.allCases))
     for source in sources {
       _ = source.spec
@@ -72,10 +138,7 @@ struct FiniteGraphCheckTests {
 
   @Test("finite graph manifests reject unknown dependency fields")
   func rejectsUnknownDependencyFields() {
-    #expect(throws: EvidenceFormatError.invalidField(
-      record: "decode",
-      field: "unknown field inferred"
-    )) {
+    #expect(throws: DecodingError.self) {
       try JSONDecoder().decode(FiniteGraphManifest.self, from: manifest(
         dependencies: """
           [{
@@ -107,16 +170,31 @@ struct FiniteGraphCheckTests {
     }
   }
 
+  @Test("finite graph cases require a positive process timeout")
+  func rejectsInvalidTimeouts() {
+    for timeout in [0, -1] {
+      #expect(throws: EvidenceFormatError.invalidField(record: "fixture", field: "timeoutSeconds")) {
+        try JSONDecoder().decode(FiniteGraphManifest.self, from: manifest(timeoutSeconds: timeout,
+          exploration: """
+            {"maximumStateLimit": 10, "symmetryReduction": "disabled"}
+            """))
+      }
+    }
+  }
+
   private func manifest(
     sourceModel: String = "hour-clock",
     dependencies: String = "[]",
+    timeoutSeconds: Int = 60,
     exploration: String
   ) -> Data {
     Data("""
       {
         "schema": "FiniteGraphCases",
         "cases": [{
+          "id": "fixture",
           "sourceModel": "\(sourceModel)",
+          "timeoutSeconds": \(timeoutSeconds),
           "module": "Fixture.tla",
           "configuration": "Fixture.cfg",
           "imports": [],
@@ -136,13 +214,12 @@ struct FiniteGraphCheckTests {
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = try temporaryRequest(in: root)
-    let executor = FixtureTLCExecutor(
-      stream: try graphStream(for: request.finiteGraphCase, runID: request.runID))
+    let executor = FixtureTLCExecutor()
     let check = FiniteGraphCheck(tlcProcess: TLCProcessAdapter(executor: executor))
     let output = root.appendingPathComponent("evidence")
     let checkOutput = check.run(
-      compilation: try fixtureCompilation(),
-      tlcRequest: request,
+      nativeRun: { try fixtureRun() },
+      tlcRequest: request, referenceConfiguration: fixtureConfiguration(request),
       outputDirectory: output
     )
     #expect(checkOutput.exitCode == .semanticDifference)
@@ -151,17 +228,19 @@ struct FiniteGraphCheckTests {
       at: output.appendingPathComponent("swift-graph.jsonl"))
     let tlcCompletion = try graphCompletion(
       at: output.appendingPathComponent("tlc-graph.jsonl"))
-    #expect(swiftCompletion["eligible"] as? Bool == true)
-    #expect(tlcCompletion["eligible"] as? Bool == true)
+    #expect(swiftCompletion["isComplete"] as? Bool == true)
+    #expect(tlcCompletion["isComplete"] as? Bool == true)
     #expect(fileManager.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
     let process = try json(at: output.appendingPathComponent("tlc-process.json"))
     #expect(process["caseID"] as? String == request.finiteGraphCase.id)
     #expect(process["runID"] as? String == request.runID.uuidString.lowercased())
     let inputs = try #require(process["inputs"] as? [[String: String]])
     #expect(Set(inputs.compactMap { $0["file"] }) == ["Fixture.tla", "Fixture.cfg"])
-    #expect(Set(inputs.compactMap { $0["sha256"] }) == [SHA256.hex(Data())])
+    #expect(Set(inputs.compactMap { $0["sha256"] }) ==
+      [request.finiteGraphCase.moduleSHA256, SHA256.hex(Data(try fixtureConfiguration(request)
+        .bundle(from: request.bundle, native: fixtureRun(), checking: [], checkDeadlock: false).cfg.utf8))])
     #expect(process["toolPin"] != nil)
-    let primary = try #require(process["primary"] as? [String: Any])
+    let primary = try #require(process["invocation"] as? [String: Any])
     let arguments = try #require(primary["arguments"] as? [String])
     #expect(arguments.contains("-workers"))
     #expect(arguments.contains(where: { $0.hasSuffix("/Fixture.cfg") }))
@@ -170,10 +249,10 @@ struct FiniteGraphCheckTests {
     #expect(try json(at: output.appendingPathComponent("comparison.json"))["result"] as? String == "difference")
     let comparison = try #require(checkOutput.comparison)
     let report = try #require(comparison.failureReports.first {
-      $0.whatFailed == "The labeled transition multisets differ."
+      $0.whatFailed == "The labeled transition relations differ."
     })
     #expect(report.expected.contains("TLC permits"))
-    #expect(report.actual.contains("SwiftTLA permits"))
+    #expect(report.actual.contains("SwiftTLA does not permit"))
     #expect(report.nextSafeAction.contains("guard"))
   }
 
@@ -188,8 +267,8 @@ struct FiniteGraphCheckTests {
       tlcProcess: TLCProcessAdapter(executor: FailingTLCExecutor()))
     let output = root.appendingPathComponent("failed-evidence")
     let checkOutput = check.run(
-      compilation: try fixtureCompilation(),
-      tlcRequest: request,
+      nativeRun: { try fixtureRun() },
+      tlcRequest: request, referenceConfiguration: fixtureConfiguration(request),
       outputDirectory: output
     )
     #expect(checkOutput.exitCode == .failure)
@@ -229,11 +308,11 @@ struct FiniteGraphCheckTests {
     let check = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(
         executor: FixtureTLCExecutor(
-          stream: try graphStream(for: request.finiteGraphCase, runID: otherRun))))
+          runID: otherRun)))
     let output = root.appendingPathComponent("wrong-tlc-run")
     let checkOutput = check.run(
-      compilation: try fixtureCompilation(),
-      tlcRequest: request,
+      nativeRun: { try fixtureRun() },
+      tlcRequest: request, referenceConfiguration: fixtureConfiguration(request),
       outputDirectory: output
     )
     #expect(checkOutput.exitCode == .failure)
@@ -250,19 +329,18 @@ struct FiniteGraphCheckTests {
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = try temporaryRequest(in: root)
     try Data("stale graph stream".utf8).write(to: request.graphEvents)
-    let stream = try graphStream(for: request.finiteGraphCase, runID: request.runID)
     let output = root.appendingPathComponent("exact-evidence")
     let checkOutput = FiniteGraphCheck(
-      tlcProcess: TLCProcessAdapter(executor: FixtureTLCExecutor(stream: stream))
+      tlcProcess: TLCProcessAdapter(executor: FixtureTLCExecutor())
     ).run(
-      compilation: try fixtureCompilation(action: "Next"),
-      tlcRequest: request,
+      nativeRun: { try fixtureRun(action: "Next") },
+      tlcRequest: request, referenceConfiguration: fixtureConfiguration(request),
       outputDirectory: output
     )
     #expect(checkOutput.exitCode == .exact)
-    #expect(try Data(contentsOf: output.appendingPathComponent("graph-events.jsonl")) == stream)
+    #expect(try Data(contentsOf: output.appendingPathComponent("graph-events.jsonl")) == graphStream(for: request.finiteGraphCase, runID: request.runID))
     let tlcGraph = output.appendingPathComponent("tlc-graph.jsonl")
-    #expect(try graphCompletion(at: tlcGraph)["eligible"] as? Bool == true)
+    #expect(try graphCompletion(at: tlcGraph)["isComplete"] as? Bool == true)
     let graphRecords = try graphRecords(at: tlcGraph)
     #expect(graphRecords.filter { $0["type"] as? String == "state" }.count == 2)
     #expect(graphRecords.filter { $0["type"] as? String == "edge" }.count == 1)
@@ -278,10 +356,10 @@ struct FiniteGraphCheckTests {
     let output = root.appendingPathComponent("matching-evidence")
     let checkOutput = FiniteGraphCheck(
       tlcProcess: TLCProcessAdapter(
-        executor: FixtureTLCExecutor(stream: try graphStream(for: request.finiteGraphCase, runID: request.runID))
+        executor: FixtureTLCExecutor()
     )).run(
-      compilation: try fixtureCompilation(action: "Next"),
-      tlcRequest: request,
+      nativeRun: { try fixtureRun(action: "Next") },
+      tlcRequest: request, referenceConfiguration: fixtureConfiguration(request),
       outputDirectory: output
     )
 
@@ -292,75 +370,191 @@ struct FiniteGraphCheckTests {
       at: output.appendingPathComponent("swift-graph.jsonl"))
     let tlcCompletion = try graphCompletion(
       at: output.appendingPathComponent("tlc-graph.jsonl"))
-    #expect(swiftCompletion["eligible"] as? Bool == true)
-    #expect(tlcCompletion["eligible"] as? Bool == true)
+    #expect(swiftCompletion["isComplete"] as? Bool == true)
+    #expect(tlcCompletion["isComplete"] as? Bool == true)
     #expect(try json(at: output.appendingPathComponent("comparison.json"))["result"] as? String == "exact")
   }
 }
 
 extension FiniteGraphCheckTests {
-  @Test("finite graph check preserves primary logs and the trace stream after a thrown trace execution failure")
-  func retainsThrownTraceExecutionEvidenceByPhase() throws {
-    let fileManager = FileManager.default
-    let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? fileManager.removeItem(at: root) }
-    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-    let request = try temporaryRequest(in: root)
-    let output = root.appendingPathComponent("trace-execution-failure")
-    let check = FiniteGraphCheck(
-      tlcProcess: TLCProcessAdapter(
-        executor: ThrowingFollowupTLCExecutor(
-          stream: try graphStream(for: request.finiteGraphCase, runID: request.runID),
-          failure: .trace
-        )
-      )
-    )
-    let checkOutput = check.run(
-      compilation: try fixtureCompilation(),
-      tlcRequest: request,
-      outputDirectory: output
-    )
-    #expect(checkOutput.exitCode == .failure)
-    let primaryLog = try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))
-    let traceLog = try String(contentsOf: output.appendingPathComponent("logs/tlc.trace.stdout.log"))
-    #expect(primaryLog.contains("primary stdout"))
-    #expect(!primaryLog.contains("primary-secret"))
-    #expect(traceLog.contains("trace partial stdout"))
-    #expect(!traceLog.contains("trace-secret"))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.jsonl").path))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.trace.jsonl").path))
-    let process = try json(at: output.appendingPathComponent("tlc-process.json"))
-    #expect((process["primary"] as? [String: Any])?["exitStatus"] as? Int == 12)
-    #expect((process["trace"] as? [String: Any])?["executionError"] as? String != nil)
+  private func fixtureConfiguration(_ request: TLCProcessRequest) -> TLCReferenceConfiguration {
+    // These fixtures emit one declaration per line; production uses TLC's parser.
+    let lines = request.bundle.cfg.split(separator: "\n").map(String.init)
+    return TLCReferenceConfiguration(
+      declarations: lines.filter {
+        !$0.hasPrefix("INVARIANT ") && !$0.hasPrefix("PROPERTY ") && !$0.hasPrefix("CHECK_DEADLOCK ")
+      }.joined(separator: "\n") + "\n",
+      invariants: lines.filter { $0.hasPrefix("INVARIANT ") }.map { String($0.dropFirst("INVARIANT ".count)) },
+      properties: lines.filter { $0.hasPrefix("PROPERTY ") }.map { String($0.dropFirst("PROPERTY ".count)) },
+      checksDeadlock: !lines.contains("CHECK_DEADLOCK FALSE"))
   }
-  @Test("finite graph check retains completed primary evidence after an arbitrary trace execution error")
-  func retainsArbitraryTraceExecutionEvidenceByPhase() throws {
+  @Test("failed TLC execution retains partial output and the graph stream", arguments: [true, false])
+  func retainsFailedExecution(timedOut: Bool) throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? fileManager.removeItem(at: root) }
     try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
     let request = try temporaryRequest(in: root)
-    let output = root.appendingPathComponent("arbitrary-trace-execution-failure")
+    let output = root.appendingPathComponent("failed-run")
     let checkOutput = FiniteGraphCheck(
-      tlcProcess: TLCProcessAdapter(
-        executor: ArbitraryFollowupFailureTLCExecutor(
-          stream: try graphStream(for: request.finiteGraphCase, runID: request.runID),
-          failure: .trace
-        )
-      )
-    ).run(
-      compilation: try fixtureCompilation(),
-      tlcRequest: request,
-      outputDirectory: output
-    )
+      tlcProcess: TLCProcessAdapter(executor: InterruptedTLCExecutor(
+        stream: try graphStream(for: request.finiteGraphCase, runID: request.runID), timedOut: timedOut))
+    ).run(nativeRun: { try fixtureRun() }, tlcRequest: request, referenceConfiguration: fixtureConfiguration(request), outputDirectory: output)
     #expect(checkOutput.exitCode == .failure)
-    #expect((try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))).contains("primary stdout"))
-    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.trace.failure.log").path))
-    #expect(!fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.failure.log").path))
-    let process = try json(at: output.appendingPathComponent("tlc-process.json"))
-    #expect((process["primary"] as? [String: Any])?["exitStatus"] as? Int == 12)
-    #expect((process["trace"] as? [String: Any])?["executionError"] as? String != nil)
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("graph-events.jsonl").path))
+    #expect(fileManager.fileExists(atPath: output.appendingPathComponent("logs/tlc.failure.log").path))
+    let invocation = try #require(json(at: output.appendingPathComponent("tlc-process.json"))["invocation"] as? [String: Any])
+    #expect(invocation["executionError"] as? String != nil)
+    #expect(invocation["exitStatus"] == nil)
+    if timedOut {
+      let stdout = try String(contentsOf: output.appendingPathComponent("logs/tlc.stdout.log"))
+      #expect(stdout.contains("partial stdout"))
+      #expect(!stdout.contains("private-secret"))
+    }
   }
+  @Test("every declared check runs independently, including matching violations", arguments: [false, true])
+  func comparesEveryCheck(unavailable: Bool) throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let request = try temporaryRequest(in: root, checks: ["Failed", "Unknown"], checkDeadlock: true)
+    let output = root.appendingPathComponent("checks")
+    let first = CanonicalState(bindings: ["x": .integer(1)]).key
+    let second = CanonicalState(bindings: ["x": .integer(2)]).key
+    let failure = GraphTrace(id: "invariant", steps: [.init(state: first, action: nil)])
+    let deadlock = GraphTrace(id: "deadlock", steps: [.init(state: first, action: nil), .init(state: second, action: "Next")])
+    let result = FiniteGraphCheck(tlcProcess: TLCProcessAdapter(executor: PerCheckExecutor()))
+      .run(nativeRun: { try fixtureRun(action: "Next",
+        checks: ["Failed": .violated(failure), "Unknown": unavailable ? .unavailable : .satisfied],
+        deadlock: .violated(deadlock)) }, tlcRequest: request, referenceConfiguration: fixtureConfiguration(request), outputDirectory: output)
+    #expect(result.comparison?.matches == true)
+    #expect(result.exitCode == (unavailable ? .failure : .exact))
+    let comparison = try json(at: output.appendingPathComponent("comparison.json"))
+    let checks = try #require(comparison["checks"] as? [String: String])
+    #expect(checks == ["properties/Failed": "exact", "properties/Unknown": unavailable ? "unavailable" : "exact", "deadlock": "exact", "reference/deadlock": "exact", "reference/properties/Failed": "exact", "reference/properties/Unknown": unavailable ? "unavailable" : "exact"])
+    #expect(comparison["result"] as? String == (unavailable ? "unavailable" : "exact"))
+    for path in checks.keys {
+      #expect(FileManager.default.fileExists(atPath: output.appendingPathComponent(path).appendingPathComponent("property-comparison.json").path))
+      #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent(path).appendingPathComponent("swift-graph.jsonl").path))
+    }
+  }
+
+  @Test("an original-reference property disagreement fails matching generated results")
+  func rejectsOriginalPropertyDisagreement() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let request = try temporaryRequest(in: root, checks: ["Unknown"])
+    let output = root.appendingPathComponent("checks")
+    let result = FiniteGraphCheck(tlcProcess: TLCProcessAdapter(
+      executor: PerCheckExecutor(referenceDisagrees: true))).run(
+        nativeRun: { try fixtureRun(action: "Next", checks: ["Unknown": .satisfied]) },
+        tlcRequest: request, referenceConfiguration: fixtureConfiguration(request), outputDirectory: output)
+    #expect(result.exitCode == .semanticDifference)
+    let checks = try json(at: output.appendingPathComponent("comparison.json"))["checks"] as? [String: String]
+    #expect(checks == ["properties/Unknown": "exact", "reference/properties/Unknown": "propertyOutcomeDifference"])
+    let retained = try json(at: output.appendingPathComponent("reference/properties/Unknown/property-comparison.json"))
+    #expect((retained["tlcResult"] as? [String: Any])?["status"] as? String == "violated")
+  }
+
+  @Test("a batch timeout fails without inventing individual property verdicts")
+  func rejectsTimedOutBatch() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let request = try temporaryRequest(in: root, checks: ["Failed", "Unknown"])
+    let output = root.appendingPathComponent("checks")
+    let result = FiniteGraphCheck(tlcProcess: TLCProcessAdapter(executor: PerCheckExecutor(failFirst: true)))
+      .run(nativeRun: { try fixtureRun(action: "Next", checks: ["Failed": .satisfied, "Unknown": .satisfied]) },
+        tlcRequest: request, referenceConfiguration: fixtureConfiguration(request), outputDirectory: output)
+    #expect(result.exitCode == .failure)
+    #expect(result.diagnostic != nil)
+    #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
+    #expect(FileManager.default.fileExists(atPath:
+      output.appendingPathComponent("checked-graph/logs/tlc.failure.log").path))
+  }
+
+  @Test("a property verdict difference fails matching complete graphs")
+  func rejectsDifferentPropertyVerdicts() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let request = try temporaryRequest(in: root, checks: ["Failed"])
+    let result = FiniteGraphCheck(tlcProcess: TLCProcessAdapter(executor: PerCheckExecutor()))
+      .run(nativeRun: { try fixtureRun(action: "Next", checks: ["Failed": .satisfied]) },
+        tlcRequest: request, referenceConfiguration: fixtureConfiguration(request), outputDirectory: root.appendingPathComponent("checks"))
+    #expect(result.comparison?.matches == true)
+    #expect(result.exitCode == .semanticDifference)
+  }
+
+  @Test("missing native results cannot silently drop declared checks")
+  func rejectsMissingCheckResults() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let request = try temporaryRequest(in: root, checks: ["Failed"])
+    let native = try fixtureRun(action: "Next", checks: ["Failed": .satisfied])
+    let result = FiniteGraphCheck(tlcProcess: TLCProcessAdapter(executor: PerCheckExecutor()))
+      .run(nativeRun: { try NativeModelRun(rendered: native.rendered, graph: native.graph,
+        checks: .init(properties: [:], deadlock: nil)) }, tlcRequest: request, referenceConfiguration: fixtureConfiguration(request), outputDirectory: root.appendingPathComponent("checks"))
+    #expect(result.exitCode == .failure)
+    #expect(result.diagnostic != nil)
+  }
+
+  @Test("reference graph selection removes failing checks while preserving the model")
+  func selectsReferenceChecksExplicitly() throws {
+    let native = try fixtureRun(checks: ["Failed": .satisfied], deadlock: .satisfied)
+    let declarations = "CONSTANT Limit = 4\nSPECIFICATION OriginalSpec\nCONSTRAINT Bounded\n"
+    let original = TLAModuleBundle.external(root: .init(name: "Original", tla: "original source",
+      cfg: declarations + "INVARIANT Failed\nCHECK_DEADLOCK TRUE\n"))
+    let configuration = TLCReferenceConfiguration(declarations: declarations,
+      invariants: ["Failed"], properties: [], checksDeadlock: true)
+    try configuration.validateCoverage(native)
+    let graph = try configuration.bundle(from: original, native: native, checking: [], checkDeadlock: false)
+    #expect(graph.cfg.hasPrefix(declarations))
+    #expect(!graph.cfg.contains("INVARIANT"))
+    #expect(!graph.cfg.contains("SYMMETRY"))
+    #expect(graph.cfg.contains("CHECK_DEADLOCK FALSE"))
+    #expect(graph.tla == original.tla)
+    #expect(graph.provenance == original.provenance)
+    let property = try configuration.bundle(from: original, native: native, checking: ["Failed"], checkDeadlock: false)
+    #expect(property.cfg.contains("INVARIANT Failed"))
+    #expect(property.cfg.contains("CHECK_DEADLOCK FALSE"))
+  }
+
+  @Test("reference check selection honors upstream properties and deadlock configuration", arguments: [false, true])
+  func honorsReferenceCheckSelection(deadlock: Bool) throws {
+    let native = try fixtureRun(checks: ["Selected": .satisfied, "Additional": .satisfied], deadlock: .satisfied)
+    let original = native.rendered.tlaBundle
+    let configuration = TLCReferenceConfiguration(declarations: "SPECIFICATION Spec\n",
+      invariants: ["Selected"], properties: [], checksDeadlock: deadlock)
+    let source = TLCPropertySource.reference(original, configuration)
+    let checks = try source.checks(for: native)
+    #expect(checks.properties == ["Selected": .satisfied])
+    #expect(checks.deadlock == (deadlock ? .satisfied : nil))
+    let checked = try source.bundle(for: native, checkingSatisfied: true)
+    #expect(checked.cfg.contains("INVARIANT Selected"))
+    #expect(!checked.cfg.contains("INVARIANT Additional"))
+    #expect(checked.cfg.contains("CHECK_DEADLOCK \(deadlock ? "TRUE" : "FALSE")"))
+    let graph = try source.bundle(for: native, checkingSatisfied: false)
+    #expect(!graph.cfg.contains("INVARIANT"))
+    #expect(graph.cfg.contains("CHECK_DEADLOCK FALSE"))
+    #expect(graph.tla == original.tla)
+    #expect(try TLCPropertySource.generated.checks(for: native) == native.checks)
+  }
+
+  @Test("reference checks cannot disappear when native coverage is missing", arguments: [false, true])
+  func rejectsUncoveredReferenceChecks(deadlock: Bool) throws {
+    let native = try fixtureRun()
+    let configuration = TLCReferenceConfiguration(declarations: "SPECIFICATION Spec\n",
+      invariants: deadlock ? [] : ["Missing"], properties: [], checksDeadlock: deadlock)
+    let problems = deadlock ? ["Missing native deadlock result"]
+      : ["Missing native result: Missing", "No matching native invariant: Missing"]
+    #expect(throws: TLCPropertyCheckError.uncoveredReferenceChecks(problems)) {
+      try TLCPropertySource.reference(native.rendered.tlaBundle, configuration).checks(for: native)
+    }
+  }
+
   @Test("finite graph check rejects an existing output without touching it")
   func rejectsExistingOutput() throws {
     let fileManager = FileManager.default
@@ -372,8 +566,8 @@ extension FiniteGraphCheckTests {
     try fileManager.createDirectory(at: output, withIntermediateDirectories: true)
     try Data("keep".utf8).write(to: output.appendingPathComponent("existing.txt"))
     let checkOutput = FiniteGraphCheck().run(
-      compilation: try fixtureCompilation(),
-      tlcRequest: request,
+      nativeRun: { try fixtureRun() },
+      tlcRequest: request, referenceConfiguration: fixtureConfiguration(request),
       outputDirectory: output
     )
     #expect(checkOutput.exitCode == .failure)
@@ -384,23 +578,29 @@ extension FiniteGraphCheckTests {
 }
 
 extension FiniteGraphCheckTests {
-  private func fixtureCompilation(action: String = "SwiftNext") throws -> CompiledSpecification {
-    let value = Var<Int>("x")
-    return try TLASpec("Fixture") {
-      Variable(value, 1)
-      Action(action) { value.becomes(2).when(value == 1) }
-    }.compile()
+  private func fixtureRun(action: String = "SwiftNext", checks: [String: PropertyResult] = [:], deadlock: PropertyResult? = nil) throws -> NativeModelRun {
+    let first = CanonicalState(bindings: ["x": .integer(1)])
+    let second = CanonicalState(bindings: ["x": .integer(2)])
+    let graph = try GraphRun(
+      isComplete: true,
+      graph: CanonicalGraph(initialStates: [first], states: [first, second],
+        edges: [CanonicalEdge(source: first.key, action: action, target: second.key)]),
+      observableActions: [action], outcome: .noViolation)
+    return try NativeModelRun(rendered: fixtureRendered(checks: Set(checks.keys), checkDeadlock: deadlock != nil), graph: graph,
+      checks: .init(properties: checks, deadlock: deadlock))
   }
-  private func temporaryRequest(in root: URL) throws -> TLCProcessRequest {
+  private func temporaryRequest(in root: URL, checks: Set<String> = [], checkDeadlock: Bool = false) throws -> TLCProcessRequest {
     let module = root.appendingPathComponent("Fixture.tla")
     let configuration = root.appendingPathComponent("Fixture.cfg")
-    try Data().write(to: module)
-    try Data().write(to: configuration)
+    let bundle = try fixtureRendered(checks: checks, checkDeadlock: checkDeadlock).tlaBundle
+    let originalTLA = bundle.tla + "\n\\* Original reference fixture\n"
+    try Data(originalTLA.utf8).write(to: module)
+    try Data(bundle.cfg.utf8).write(to: configuration)
     let finiteGraphCase = try FiniteGraphCase(
       id: "fixture",
       exploration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled),
-      moduleSHA256: String(repeating: "c", count: 64),
-      cfgSHA256: String(repeating: "d", count: 64),
+      moduleSHA256: SHA256.hex(Data(originalTLA.utf8)),
+      cfgSHA256: SHA256.hex(Data(bundle.cfg.utf8)),
       arguments: ["-workers", "1"],
       environment: [:],
       pin: try testReferencePin()
@@ -408,7 +608,7 @@ extension FiniteGraphCheckTests {
     return TLCProcessRequest(
       javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
       jar: root.appendingPathComponent("tla2tools.jar"),
-      bridgeClasses: root.appendingPathComponent("bridge"),
+      bridgeJar: root.appendingPathComponent("bridge"),
       bundle: try TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
       graphEvents: root.appendingPathComponent("events.jsonl"),
       traceOutput: root.appendingPathComponent("trace.json"),
@@ -419,20 +619,68 @@ extension FiniteGraphCheckTests {
     )
   }
 }
+private func fixtureRendered(checks: Set<String>, checkDeadlock: Bool) throws -> RenderedSpecification {
+  let x = Var<Int>("x")
+  var specification = TLASpec("Fixture") {
+    Variable(x, 1)
+    SwiftTLA.Action("Next") { x == 1 && x.becomes(2) }
+    for name in checks.sorted() {
+      Invariant(name) { name == "Failed" ? x > 1 : x > 0 }
+    }
+  }
+  specification.checkDeadlock = checkDeadlock
+  return try specification.compile().render()
+}
+
+private struct PerCheckExecutor: TLCProcessExecuting {
+  var failFirst = false
+  var referenceDisagrees = false
+
+  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
+    if request.invocation == .finiteGraph {
+      try graphStream(for: request.finiteGraphCase, runID: request.runID).write(to: request.graphEvents)
+    }
+    var status: Int32 = 0
+    if request.bundle.cfg.contains("INVARIANT") || request.bundle.cfg.contains("CHECK_DEADLOCK TRUE") {
+      let first: [Any] = [1, ["x": 1]]
+      let second: [Any] = [2, ["x": 2]]
+      var states: [Any] = []
+      var actions: [Any] = []
+      if referenceDisagrees && request.bundle.cfg.contains("INVARIANT Unknown") && request.bundle.tla.contains("Original reference fixture") {
+        status = 12
+        states = [first]
+      } else if request.bundle.cfg.contains("INVARIANT Failed") {
+        if failFirst { throw TLCProcessError.timedOut(partialStdout: "timed out", partialStderr: "") }
+        status = 12
+        states = [first]
+      } else if request.bundle.cfg.contains("CHECK_DEADLOCK TRUE") {
+        status = 11
+        states = [first, second]
+        actions = [[first, ["name": "Next"], second]]
+      }
+      if status != 0 {
+        let trace: [String: Any] = ["vars": ["x"], "counterexample": ["state": states, "action": actions]]
+        try JSONSerialization.data(withJSONObject: trace).write(to: request.traceOutput)
+      }
+    }
+    return TLCProcessResult(status: status, stdout: "fixture result", stderr: "")
+  }
+}
+
 private struct FixtureTLCExecutor: TLCProcessExecuting {
-  let stream: Data
+  let runID: UUID?
   let status: Int32
   let stdout: String
   init(
-    stream: Data, status: Int32 = 0,
+    runID: UUID? = nil, status: Int32 = 0,
     stdout: String = "Model checking completed. No error has been found."
   ) {
-    self.stream = stream
+    self.runID = runID
     self.status = status
     self.stdout = stdout
   }
   func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
-    try stream.write(to: request.graphEvents)
+    try graphStream(for: request.finiteGraphCase, runID: runID ?? request.runID).write(to: request.graphEvents)
     return TLCProcessResult(
       status: status,
       stdout: stdout,
@@ -446,49 +694,16 @@ private struct FailingTLCExecutor: TLCProcessExecuting {
       partialStdout: "partial stdout TOKEN=secret", partialStderr: "partial stderr")
   }
 }
-private enum FollowupFailure: Sendable {
-  case trace
-}
-private final class ThrowingFollowupTLCExecutor: TLCProcessExecuting, Sendable {
+private struct InterruptedTLCExecutor: TLCProcessExecuting {
   let stream: Data
-  let failure: FollowupFailure
-  init(stream: Data, failure: FollowupFailure) {
-    self.stream = stream
-    self.failure = failure
-  }
+  let timedOut: Bool
+
   func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     try stream.write(to: request.graphEvents)
-    switch request.traceMode {
-    case .none:
-      return TLCProcessResult(status: 12, stdout: "Error: primary stdout TOKEN=primary-secret", stderr: "")
-    case .dumpJSON where failure == .trace:
-      throw TLCProcessError.timedOut(
-        partialStdout: "trace partial stdout TOKEN=trace-secret", partialStderr: "trace partial stderr")
-    case .dumpJSON:
-      return TLCProcessResult(status: 12, stdout: "Error: trace stdout", stderr: "")
+    if timedOut {
+      throw TLCProcessError.timedOut(partialStdout: "partial stdout TOKEN=private-secret", partialStderr: "partial stderr")
     }
-  }
-}
-private enum ArbitraryTLCExecutorFailure: Error, Sendable {
-  case launchValidation
-}
-private final class ArbitraryFollowupFailureTLCExecutor: TLCProcessExecuting, Sendable {
-  let stream: Data
-  let failure: FollowupFailure
-  init(stream: Data, failure: FollowupFailure) {
-    self.stream = stream
-    self.failure = failure
-  }
-  func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
-    try stream.write(to: request.graphEvents)
-    switch request.traceMode {
-    case .none:
-      return TLCProcessResult(status: 12, stdout: "Error: primary stdout", stderr: "")
-    case .dumpJSON where failure == .trace:
-      throw ArbitraryTLCExecutorFailure.launchValidation
-    case .dumpJSON:
-      return TLCProcessResult(status: 12, stdout: "Error: trace stdout", stderr: "")
-    }
+    throw TLCProcessError.failedToStart("launch validation failed")
   }
 }
 private func json(at url: URL) throws -> [String: Any] {
@@ -510,7 +725,7 @@ private func graphStream(for finiteGraphCase: FiniteGraphCase, runID: UUID) thro
   let second = state(fingerprint: "2", value: "2")
   let common: [String: Any] = [
     "schema": "swifttla.tlc.graph-events",
-    "version": 2,
+    "version": 3,
     "runId": runID.uuidString.lowercased(),
     "caseId": finiteGraphCase.id
   ]
@@ -521,6 +736,7 @@ private func graphStream(for finiteGraphCase: FiniteGraphCase, runID: UUID) thro
       "type": "transition", "callback": "writeState.action", "seq": 2,
       "source": first, "target": second,
       "action": ["name": "Next", "location": "Fixture:1", "named": true],
+      "resolvedActions": [["name": "Next", "location": "Fixture:1", "named": true]],
       "stateFlags": ["raw": 0, "seen": false, "notInModel": false],
       "visualization": "none", "predicateLocation": NSNull(), "reachable": "reachable"
     ]) { $1 }

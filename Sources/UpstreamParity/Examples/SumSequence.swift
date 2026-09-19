@@ -15,12 +15,12 @@ package struct SumSequenceModel: Sendable {
         #spec("SumSequence") {
             Extends(.integers)
             Algorithm("SumSequence", fairness: .weak, scoped: { scope in
-                let sequence = scope.sharedVar("sequence", in: Sequences(
+                let sequence = scope.sharedVar(in: Sequences(
                     of: SetExpr<Int>.literal(-1, 0, 1),
                     lengths: 0...3
                 ))
-                let sum = scope.sharedVar("sum", initial: 0)
-                let index = scope.sharedVar("index", initial: 1)
+                let sum = scope.sharedVar(initial: 0)
+                let index = scope.sharedVar(initial: 1)
 
                 While(Step.a, index <= sequence.count) {
                     Assign(sum, to: sum + sequence[index])

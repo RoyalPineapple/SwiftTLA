@@ -8,8 +8,17 @@ private enum StateLoweringTask {
 }
 
 private struct LoweredStateExpression {
-    let expression: CompiledStateExpr
+    let expression: CompiledExpression
     let operatorReferences: Set<OperatorID>
+    let bindingReferences: Set<BinderID>
+    let declarations: [CompiledOperatorDefinition]
+
+    init(expression: CompiledExpression, operatorReferences: Set<OperatorID>, bindingReferences: Set<BinderID> = [], declarations: [CompiledOperatorDefinition] = []) {
+        self.expression = expression
+        self.operatorReferences = operatorReferences
+        self.bindingReferences = bindingReferences
+        self.declarations = declarations
+    }
 }
 
 private enum ActionLoweringTask {
@@ -24,11 +33,12 @@ private enum ActionLoweringTask {
 private struct BindingScope {
     var values: [String: BinderID] = [:]
     var operators: [String: OperatorID] = [:]
+    var allowsNextState = false
 }
 
 private enum FormalOperatorLoweringPlan {
     case reference(OperatorID, arity: Int)
-    case lambda([BinderID])
+    case lambda(OperatorID, [BinderID], enclosingBindings: Set<BinderID>)
 }
 
 private enum FormalArgumentLoweringPlan {
@@ -47,7 +57,6 @@ struct CompiledLowerer {
     let layout: CompiledLayout
     private let constants: [ConstantDecl]
     private let formalParameters: Set<String>
-    private let symmetricMembers: [CompiledValue]
     private let incomingModuleParameters: [FormalModuleReplacement]
     private let authoredAlgorithm: AlgorithmModel?
     private let reservedRenderedNames: Set<String>
@@ -59,6 +68,9 @@ struct CompiledLowerer {
     private var knownBinderNames: Set<String> = []
     private var operatorNames: [OperatorID: String]
     private var boundedLocalOperators: Set<OperatorID> = []
+    private(set) var operators = CompiledOperators()
+    private(set) var modelValueNames: Set<String> = []
+    private(set) var requiredStandardModules: Set<StandardModule> = []
 
     init(
         spec: TLASpec,
@@ -68,13 +80,15 @@ struct CompiledLowerer {
     ) {
         self.closure = closure
         self.layout = layout
+        nextBinderOrdinal = layout.parameters.count
+        binderNames = Dictionary(uniqueKeysWithValues: layout.parameters.map { ($0.binder, $0.reference.name) })
+        knownBinderNames = Set(binderNames.values)
         constants = spec.constants
         formalParameters = Set(spec.formalParameters.map(\.name))
-        symmetricMembers = layout.variables.compactMap(\.collection).flatMap(\.members)
         self.incomingModuleParameters = incomingModuleParameters
         authoredAlgorithm = spec.sourceAlgorithms.first?.model
         var renderedNames = spec.renderedDeclarationNames()
-        renderedNames.formUnion(spec.symmetricCollections.flatMap(\.metadata.generatedSymbols))
+        renderedNames.formUnion(spec.collections.flatMap(\.metadata.generatedSymbols))
         renderedNames.formUnion(spec.symmetrySets.map { "Symm\($0.variableName)" })
         renderedNames.formUnion(incomingModuleParameters.map(\.operatorName))
         reservedRenderedNames = renderedNames
@@ -96,7 +110,17 @@ struct CompiledLowerer {
     }
 
     var bindings: CompiledBindingTable {
-        .init(operatorNames: operatorNames, binders: binderNames)
+        var names = binderNames
+        var unavailable = reservedRenderedNames.union(modelValueNames)
+            .union(binderNames.values).union(operatorNames.values)
+        let parameterIDs = Set(layout.parameters.map(\.binder))
+        for (binder, name) in binderNames.sorted(by: { $0.key.ordinal < $1.key.ordinal })
+            where modelValueNames.contains(name) || (parameterIDs.contains(binder) && reservedRenderedNames.contains(name)) {
+            let renamed = StateExpr.freshBoundName(name, avoiding: unavailable)
+            names[binder] = renamed
+            unavailable.insert(renamed)
+        }
+        return .init(operatorNames: operatorNames, binders: names)
     }
 
     private var rootScope: BindingScope {
@@ -104,20 +128,35 @@ struct CompiledLowerer {
     }
 
     mutating func lower(spec: TLASpec) throws -> CompiledSemantics {
+        guard spec.parameters.allSatisfy({ !$0.reference.name.isEmpty }),
+              Set(spec.parameters.map(\.reference)).count == spec.parameters.count,
+              Set(spec.parameters.map { $0.reference.name }).count == spec.parameters.count else {
+            throw CompilationDiagnostic(code: .unknownReference, stage: .binding, path: "parameters",
+                expected: "distinct parameter declarations and nonempty source names", actual: "duplicate or unnamed parameter declaration",
+                nextSafeAction: "Declare each model parameter once with a unique let binding inside #spec.")
+        }
+        var parameterDomains: [BinderID: CompiledExpression] = [:]
+        for (declaration, parameter) in zip(spec.parameters, layout.parameters) {
+            parameterDomains[parameter.binder] = try lower(declaration.domain,
+                at: "parameters.\(declaration.reference.name).domain", scope: rootScope)
+        }
         for constant in spec.constants {
+            if let issue = constant.sourceIssue {
+                throw issue.compilationDiagnostic(stage: .lowering, path: "constants.\(constant.name)")
+            }
             try validateValue(constant.value, at: "constants.\(constant.name)")
         }
         guard spec.variables.count == layout.variables.count,
               spec.actions.count == layout.actions.count,
-              spec.invariants.count == layout.stateProperties.count,
+              spec.invariants.count + spec.reachabilityProperties.count == layout.stateProperties.count,
               spec.temporalProperties.count == layout.temporalProperties.count
         else {
             throw CompilationDiagnostic(
                 code: .compilationIdentityMismatch,
                 stage: .lowering,
                 path: "layout.declarations",
-                expected: "layout counts matching variables \(spec.variables.count), actions \(spec.actions.count), invariants \(spec.invariants.count), and temporal properties \(spec.temporalProperties.count)",
-                actual: "variables \(layout.variables.count), actions \(layout.actions.count), invariants \(layout.stateProperties.count), and temporal properties \(layout.temporalProperties.count)",
+                expected: "layout counts matching variables \(spec.variables.count), actions \(spec.actions.count), state properties \(spec.invariants.count + spec.reachabilityProperties.count), and temporal properties \(spec.temporalProperties.count)",
+                actual: "variables \(layout.variables.count), actions \(layout.actions.count), state properties \(layout.stateProperties.count), and temporal properties \(layout.temporalProperties.count)",
                 nextSafeAction: "Compile the model again from its current source."
             )
         }
@@ -125,7 +164,7 @@ struct CompiledLowerer {
         for (declaration, variableLayout) in zip(spec.variables, layout.variables) {
             let path = "variables.\(declaration.name)"
             if case .value(let value) = declaration.initialization,
-               spec.symmetricCollections.contains(where: { $0.name == declaration.name }) == false {
+               spec.collections.contains(where: { $0.name == declaration.name }) == false {
                 try validateValue(value, at: "\(path).initialization")
             }
             initializations[variableLayout.id] = try lower(
@@ -138,48 +177,49 @@ struct CompiledLowerer {
             try lower($0.0, id: $0.1.id)
         }
         let actionsByID = Dictionary(uniqueKeysWithValues: actions.map { ($0.id, $0) })
-        let invariants: [CompiledInvariant] = try zip(spec.invariants, layout.stateProperties).map {
-            CompiledInvariant(
+        let statePropertyBodies = try zip(spec.invariants + spec.reachabilityProperties, layout.stateProperties).map {
+            (
                 id: $0.1.id,
                 name: $0.0.name,
-                body: try lower($0.0.body, at: "invariants.\($0.0.name).body", scope: rootScope)
+                body: try lower($0.0.body,
+                    at: "\($0.1.declaration.kind == .invariant ? "invariants" : "reachabilityProperties").\($0.0.name).body", scope: rootScope)
             )
         }
-        let temporalProperties = try zip(spec.temporalProperties, layout.temporalProperties).map {
-            CompiledTemporal(
-                id: $0.1.id,
-                name: $0.0.name,
-                expression: try lower(
-                    $0.0.expr,
-                    at: "temporalProperties.\($0.0.name)",
-                    scope: rootScope
-                )
-            )
+        let temporalBodies = try zip(spec.temporalProperties, layout.temporalProperties).map { property, declaration in
+            var scope = rootScope
+            let path = "temporalProperties.\(property.name)"
+            let bindings = try lowerBindings(property.bindings, at: path, scope: &scope)
+            return CompiledTemporal<CompiledExpression>(id: declaration.id, name: property.name,
+                expression: try lower(property.expr, at: path, scope: scope), bindings: bindings)
         }
         let fairness = try spec.fairness.enumerated().map { offset, condition in
             try lower(condition, actions: actionsByID, at: "fairness[\(offset)]")
         }
-        let formalOperators: [CompiledFormalOperatorDefinition] = try spec.formalOperatorDefinitions.map { definition in
+        let formalOperators: [CompiledOperatorDefinition] = try spec.formalOperatorDefinitions.map { definition in
             let path = "formalOperators.\(definition.name)"
             if let issue = definition.sourceIssue {
                 throw issue.compilationDiagnostic(stage: .binding, path: path)
             }
             guard let id = rootScope.operators[definition.name] else { throw diagnostic(path: path) }
             let scope = try bind(definition.parameters, at: "\(path).parameters", scope: rootScope)
-            return CompiledFormalOperatorDefinition(
+            return CompiledOperatorDefinition(
                 id: id,
                 parameters: try compiledParameters(definition.parameters, scope: scope, at: "\(path).parameters"),
-                body: try lower(definition.body, at: "\(path).body", scope: scope)
+                domain: nil,
+                body: try lower(definition.body, at: "\(path).body", scope: scope),
+                isRecursive: false, capturedBindings: [], referencedOperators: []
             )
         }
-        let recursiveFunctions: [CompiledRecursiveFunction] = try spec.recursiveFuncs.map { function in
+        let recursiveFunctions: [CompiledOperatorDefinition] = try spec.recursiveFuncs.map { function in
             let path = "recursiveFunctions.\(function.name)"
             guard let id = rootScope.operators[function.name] else { throw diagnostic(path: path) }
             let scope = try bind(function.params, at: "\(path).parameters", scope: rootScope)
-            return CompiledRecursiveFunction(
+            return CompiledOperatorDefinition(
                 id: id,
-                parameters: try function.params.map { try bound($0, in: scope, at: "\(path).parameters") },
-                body: try lower(function.body, at: "\(path).body", scope: scope)
+                parameters: try function.params.map { .value(try bound($0, in: scope, at: "\(path).parameters")) },
+                domain: nil,
+                body: try lower(function.body, at: "\(path).body", scope: scope),
+                isRecursive: true, capturedBindings: [], referencedOperators: []
             )
         }
         let formalModuleReplacements = try spec.importConfigurations.flatMap { configuration in
@@ -222,10 +262,12 @@ struct CompiledLowerer {
                 }
                 guard let id = rootScope.operators[definition.name] else { throw diagnostic(path: path) }
                 let scope = try bind(definition.parameters, at: "\(path).parameters", scope: rootScope)
-                return CompiledFormalOperatorDefinition(
+                return CompiledOperatorDefinition(
                     id: id,
                     parameters: try compiledParameters(definition.parameters, scope: scope, at: "\(path).parameters"),
-                    body: try lower(definition.body, at: "\(path).body", scope: scope)
+                    domain: nil,
+                    body: try lower(definition.body, at: "\(path).body", scope: scope),
+                    isRecursive: false, capturedBindings: [], referencedOperators: []
                 )
             }
         let localRecursiveNames = Set(spec.recursiveFuncs.map(\.name))
@@ -235,20 +277,24 @@ struct CompiledLowerer {
                 let path = "linkedRecursiveFunctions.\(function.name)"
                 guard let id = rootScope.operators[function.name] else { throw diagnostic(path: path) }
                 let scope = try bind(function.params, at: "\(path).parameters", scope: rootScope)
-                return CompiledRecursiveFunction(
+                return CompiledOperatorDefinition(
                     id: id,
-                    parameters: try function.params.map { try bound($0, in: scope, at: "\(path).parameters") },
-                    body: try lower(function.body, at: "\(path).body", scope: scope)
+                    parameters: try function.params.map { .value(try bound($0, in: scope, at: "\(path).parameters")) },
+                    domain: nil,
+                    body: try lower(function.body, at: "\(path).body", scope: scope),
+                    isRecursive: true, capturedBindings: [], referencedOperators: []
                 )
             }
         let allFormalOperators = formalOperators + linkedFormalOperators
         let allRecursiveFunctions = recursiveFunctions + linkedRecursiveFunctions
+        for function in allFormalOperators + allRecursiveFunctions {
+            operators.register(function)
+        }
+        operators.formalDefinitionIDs = allFormalOperators.map(\.id)
+        operators.recursiveFunctionIDs = allRecursiveFunctions.map(\.id)
         let assume = try lowerOptional(spec.assume, at: "assume", scope: rootScope)
         if let assume {
-            let requirements = assume.stateRequirements(
-                formalOperators: allFormalOperators,
-                recursiveFunctions: allRecursiveFunctions
-            )
+            let requirements = assume.stateRequirements(operators: operators)
             guard requirements.variables.isEmpty && requirements.requiresCompleteState == false else {
                 throw CompilationDiagnostic(
                     code: .stateDependentAssumption,
@@ -264,42 +310,149 @@ struct CompiledLowerer {
         }
         let orderedInitializations = try orderedInitializations(
             initializations,
-            formalOperators: allFormalOperators,
-            recursiveFunctions: allRecursiveFunctions
+            operators: operators
         )
+        let enabledActions = try orderedEnabledActions(actions, operators: operators)
+        func predicate(_ expression: CompiledExpression) -> CompiledStateQuery {
+            .init(expression: expression, operators: operators,
+                actionDependencies: enabledActions.dependencies)
+        }
+        let stateProperties = statePropertyBodies.map { property in
+            CompiledStatePredicate(id: property.id, name: property.name, predicate: predicate(property.body))
+        }
+        let temporalProperties = try temporalBodies.map { property in
+            for binding in property.bindings {
+                let requirements = binding.domain.stateRequirements(operators: operators)
+                guard requirements.variables.isEmpty && !requirements.requiresCompleteState else {
+                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .binding,
+                        path: "temporalProperties.\(property.name).bindings.\(binding.sourceName)",
+                        expected: "a state-independent temporal domain", actual: "a domain that reads state or enabledness",
+                        nextSafeAction: "Use a constant or configured population for a temporal quantifier.")
+                }
+            }
+            return property.map(predicate)
+        }
+        let constraintExpression = try lowerOptional(spec.constraint, at: "constraint", scope: rootScope)
+        let constraint = constraintExpression.map(predicate)
+        let scenarios = try lowerValidationScenarios(spec)
+        for replacement in formalModuleReplacements {
+            let requirements = replacement.expression.stateRequirements(operators: operators)
+            guard requirements.variables.isEmpty && !requirements.requiresCompleteState else {
+                throw CompilationDiagnostic(
+                    code: .stateDependentFormalModuleReplacement,
+                    stage: .binding,
+                    path: "importConfigurations.\(replacement.moduleName).\(replacement.operatorName)",
+                    expected: "a state-independent module configuration",
+                    actual: "a replacement that reads model state",
+                    nextSafeAction: "Use model parameters or constants for the imported module configuration."
+                )
+            }
+        }
         return CompiledSemantics(
-            checkDeadlock: spec.checkDeadlock,
-            variableInitializations: orderedInitializations,
-            actions: actions,
-            invariants: invariants,
-            temporalProperties: temporalProperties,
-            fairness: fairness,
-            constraint: try lowerOptional(spec.constraint, at: "constraint", scope: rootScope),
-            assume: assume,
-            formalOperatorDefinitions: allFormalOperators,
-            recursiveFunctions: allRecursiveFunctions,
+            behavior: .init(
+                checkDeadlock: spec.checkDeadlock,
+                parameterDomains: parameterDomains,
+                validationScenarios: scenarios,
+                initializations: orderedInitializations,
+                actions: actions,
+                enabledActionIndices: enabledActions.indices,
+                enabledActionDependencies: enabledActions.dependencies,
+                invariants: Array(stateProperties.prefix(spec.invariants.count)),
+                reachabilityProperties: Array(stateProperties.dropFirst(spec.invariants.count)),
+                temporalProperties: temporalProperties,
+                fairness: fairness.map { condition in
+                    .init(scope: condition.scope, isStrong: condition.isStrong, projection: condition.projection,
+                        enabledActions: condition.projection.map { predicate($0).enabledActions } ?? [])
+                },
+                constraint: constraint,
+                assume: assume.map { .init(expression: $0, enabledActions: []) }),
+            operators: operators,
             formalModuleReplacements: formalModuleReplacements,
             moduleInstances: moduleInstances,
             symmetrySets: spec.symmetrySets.map { symmetry in
                 .init(values: Set(symmetry.values.map(CompiledValue.init(formal:))))
-            },
-            symmetricCollections: try spec.symmetricCollections.map { collection in
-                let variable = try variable(named: collection.name, at: "variables.\(collection.name).declaration")
-                guard layout.variables.indices.contains(variable.ordinal),
-                      let compiledCollection = layout.variables[variable.ordinal].collection else {
-                    throw diagnostic(path: "variables.\(collection.name).declaration")
-                }
-                return .init(
-                    variable: variable,
-                    members: compiledCollection.members,
-                    domainSymbol: collection.metadata.domainSymbol,
-                    initial: .init(formal: collection.metadata.initial)
-                )
             }
         )
     }
 
-    mutating func refinementExpression(_ expression: StateExpr, at path: String) throws -> CompiledStateExpr {
+    private mutating func lowerValidationScenarios(_ spec: TLASpec) throws -> [CompiledValidationScenario] {
+        func invalid(_ name: String, _ actual: String) -> CompilationDiagnostic {
+            .init(code: .unknownReference, stage: .binding, path: "validation.\(name)",
+                expected: "complete, unique model-owned bindings and property expectations", actual: actual,
+                nextSafeAction: "Bind every parameter once and reference only properties registered in this model.")
+        }
+        let names = spec.validationScenarios.map(\.name)
+        guard names.allSatisfy({ !$0.isEmpty }), Set(names).count == names.count else {
+            throw invalid("declarations", "duplicate or empty scenario name")
+        }
+        let parameters = Set(spec.parameters.map(\.reference))
+        let properties = layout.properties
+        let propertyReferences = properties.compactMap(\.reference)
+        guard Set(propertyReferences).count == propertyReferences.count else {
+            throw invalid("declarations", "duplicate property registration")
+        }
+        var scenarios: [CompiledValidationScenario] = []
+        for scenario in spec.validationScenarios {
+            guard scenario.propertySelections.count <= 1, scenario.deadlockSelections.count <= 1,
+                  scenario.behaviorSelections.count <= 1 else {
+                throw invalid(scenario.name, "duplicate check selection")
+            }
+            let selectedReferences = scenario.propertySelections.first
+            if let selectedReferences {
+                guard Set(selectedReferences).count == selectedReferences.count,
+                      Set(selectedReferences).isSubset(of: Set(propertyReferences)) else {
+                    throw invalid(scenario.name, "duplicate or foreign selected property")
+                }
+            }
+            let checks = Set(properties.filter { property in
+                selectedReferences.map { selected in property.reference.map(selected.contains) ?? false } ?? true
+            }.map(\.id))
+            let checkDeadlock = scenario.deadlockSelections.first ?? spec.checkDeadlock
+            let references = scenario.bindings.map(\.parameter)
+            guard Set(references) == parameters, references.count == parameters.count else {
+                throw invalid(scenario.name, "missing, duplicate, or foreign parameter binding")
+            }
+            let expectedProperties = scenario.expectations.map(\.property)
+            guard Set(expectedProperties).count == expectedProperties.count,
+                  Set(expectedProperties).isSubset(of: Set(selectedReferences ?? propertyReferences)),
+                  scenario.deadlockExpectations.count <= 1,
+                  scenario.deadlockExpectations.isEmpty || checkDeadlock else {
+                throw invalid(scenario.name, "duplicate, unregistered, or disabled check expectation")
+            }
+            var bindings: [BinderID: CompiledExpression] = [:]
+            for binding in scenario.bindings {
+                guard let parameter = layout.parameters.first(where: { $0.reference == binding.parameter }) else {
+                    throw invalid(scenario.name, "foreign parameter binding")
+                }
+                let value = try lower(binding.value, at: "validation.\(scenario.name).\(binding.parameter.name)", scope: rootScope)
+                let parameterBinders = Set(layout.parameters.map(\.binder))
+                var pending = [value]
+                while let expression = pending.popLast() {
+                    switch expression.operation {
+                    case .boundValue(let binder) where parameterBinders.contains(binder):
+                        throw invalid(scenario.name, "scenario bindings require closed values without state, parameter, or operator dependencies")
+                    case .stateVariable, .operatorReference, .enabledAction, .call:
+                        throw invalid(scenario.name, "scenario bindings require closed values without state, parameter, or operator dependencies")
+                    default: pending.append(contentsOf: expression.children)
+                    }
+                }
+                bindings[parameter.binder] = value
+            }
+            var expectations: [PropertyID: ValidationExpectation] = [:]
+            for expectation in scenario.expectations {
+                guard let property = properties.first(where: { $0.reference == expectation.property }) else {
+                    throw invalid(scenario.name, "unresolved property expectation")
+                }
+                expectations[property.id] = expectation.expected
+            }
+            scenarios.append(.init(name: scenario.name, bindings: bindings, expectations: expectations,
+                deadlockExpectation: scenario.deadlockExpectations.first, checks: checks, checkDeadlock: checkDeadlock,
+                behavior: scenario.behaviorSelections.first ?? .specification))
+        }
+        return scenarios
+    }
+
+    mutating func refinementExpression(_ expression: StateExpr, at path: String) throws -> CompiledExpression {
         try lower(expression, at: path, scope: rootScope)
     }
 
@@ -346,6 +499,9 @@ struct CompiledLowerer {
                     parameters: try procedure.parameters.map {
                         try bound($0.root, in: scope, at: "\(path).parameters")
                     },
+                    parameterVariables: try procedure.parameters.map {
+                        try variable(named: $0.root, at: "\(path).parameters")
+                    },
                     locals: try procedure.locals.enumerated().map {
                         try authoredPlusCalState($0.element, at: "\(path).locals[\($0.offset)]", scope: scope)
                     },
@@ -368,10 +524,23 @@ struct CompiledLowerer {
                     in: scope,
                     at: "\(path).binders"
                 )
+                let domain = try lower(process.domain, at: "\(path).domain", scope: rootScope)
+                let requirements = domain.stateRequirements(operators: operators)
+                guard requirements.variables.isEmpty, !requirements.requiresCompleteState else {
+                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                        path: "\(path).domain", expected: "an immutable process population",
+                        actual: "a domain that reads state or action enabledness",
+                        nextSafeAction: "Declare the population with immutable parameters or values.")
+                }
                 return .init(
                     name: process.name,
-                    domain: process.domain.map(CompiledValue.init(formal:)),
+                    binder: try bound("self", in: scope, at: "\(path).binders"),
+                    swiftType: process.swiftType,
+                    domain: domain,
                     fairness: process.fairness,
+                    fairnessExcludedSteps: Set(try process.fairnessExcludedLabels.map {
+                        try controlLocation(.init($0.name), owner: process.owner, at: "\(path).fairness.excluding")
+                    }),
                     locals: try process.locals.enumerated().map {
                         try authoredPlusCalState($0.element, at: "\(path).locals[\($0.offset)]", scope: scope)
                     },
@@ -400,12 +569,23 @@ struct CompiledLowerer {
 
     private func authoredPlusCalProperties(
         in algorithm: AlgorithmModel
-    ) throws -> (properties: [CompiledAuthoredPlusCalProperty], translatorOwnedNames: Set<String>) {
+    ) throws -> (properties: [CompiledPropertyLayout], translatorOwnedNames: Set<String>) {
         func isTranslatorTermination(_ temporal: NamedTemporal) -> Bool {
-            guard temporal.name == "Termination", algorithm.processes.count == 1,
-                  case .eventually(let expression) = temporal.expr,
+            guard temporal.name == "Termination",
+                  case .eventually(let expression) = temporal.expr
+            else { return false }
+            if algorithm.processes.isEmpty {
+                switch expression {
+                case .equal(.programCounter, .controlLocation(let location)),
+                     .equal(.controlLocation(let location), .programCounter):
+                    return location.sourceName == CompilerControlSymbol.done.rawValue
+                default:
+                    return false
+                }
+            }
+            guard algorithm.processes.count == 1,
                   case .forAll(let domain, let binding, let predicate) = expression,
-                  domain == .setLiteral(algorithm.processes[0].domain.map(StateExpr.value))
+                  domain == algorithm.processes[0].domain
             else { return false }
             switch predicate {
             case .equal(.functionApply(.programCounter, .variable(let process)), .controlLocation(let location)),
@@ -416,32 +596,31 @@ struct CompiledLowerer {
             }
         }
 
-        func propertyID(
+        func property(
             kind: CompiledDeclaration.Kind,
             named name: String,
             at path: String
-        ) throws -> PropertyID {
-            let properties = kind == .invariant ? layout.stateProperties : layout.temporalProperties
+        ) throws -> CompiledPropertyLayout {
+            let properties = kind == .temporalProperty ? layout.temporalProperties : layout.stateProperties
             guard let property = properties.first(where: { $0.declaration.name == name }) else {
                 throw diagnostic(path: path, actual: "unresolved property '\(name)'")
             }
-            return property.id
+            return property
         }
 
         func collect(
             _ components: [AlgorithmComponentModel],
             path: String
-        ) throws -> (properties: [CompiledAuthoredPlusCalProperty], translatorOwnedNames: Set<String>) {
-            var properties: [CompiledAuthoredPlusCalProperty] = []
+        ) throws -> (properties: [CompiledPropertyLayout], translatorOwnedNames: Set<String>) {
+            var properties: [CompiledPropertyLayout] = []
             var translatorOwnedNames: Set<String> = []
             for (index, component) in components.enumerated() {
                 let componentPath = "\(path)[\(index)]"
                 switch component {
                 case .invariant(let invariant):
-                    properties.append(.invariant(
-                        id: try propertyID(kind: .invariant, named: invariant.name, at: componentPath),
-                        name: invariant.name
-                    ))
+                    properties.append(try property(kind: .invariant, named: invariant.name, at: componentPath))
+                case .reachable(let predicate):
+                    properties.append(try property(kind: .reachability, named: predicate.name, at: componentPath))
                 case .temporal(let temporal):
                     if isTranslatorTermination(temporal) {
                         translatorOwnedNames.insert(temporal.name)
@@ -455,10 +634,7 @@ struct CompiledLowerer {
                             nextSafeAction: "Give the property a distinct name, or declare the standard process termination property."
                         )
                     } else {
-                        properties.append(.temporal(
-                            id: try propertyID(kind: .temporalProperty, named: temporal.name, at: componentPath),
-                            name: temporal.name
-                        ))
+                        properties.append(try property(kind: .temporalProperty, named: temporal.name, at: componentPath))
                     }
                 case .process(let process):
                     let nested = try collect(process.components, path: "\(componentPath).components")
@@ -522,8 +698,8 @@ struct CompiledLowerer {
             switch statement {
             case .rejected(let diagnostic):
                 throw invalidAuthoredPlusCalStatement(diagnostic.rawValue, at: statementPath)
-            case .await(let expression):
-                return .await(try lower(expression, at: "\(statementPath).condition", scope: scope))
+            case .when(let expression):
+                return .when(try lower(expression, at: "\(statementPath).condition", scope: scope))
             case .assert(let expression):
                 return .assert(try lower(expression, at: "\(statementPath).condition", scope: scope))
             case .set(let target, let value):
@@ -579,7 +755,9 @@ struct CompiledLowerer {
                     }
                 )
             case .return: return .return
-            case .stop: throw invalidAuthoredPlusCalStatement("stop", at: statementPath)
+            case .stop:
+                return .goto(try controlLocation(.init(CompilerControlSymbol.done.rawValue),
+                    owner: owner, at: "\(statementPath).label"))
             case .skip: return .skip
             }
         }
@@ -592,9 +770,11 @@ struct CompiledLowerer {
     ) throws -> CompiledAuthoredPlusCalLValue {
         switch target {
         case .root(let name): return .root(try variable(named: name, at: "\(path).root"))
-        case .function(let name, let key):
+        case .field(let base, let name):
+            return .field(try authoredPlusCalLValue(base, at: "\(path).base", scope: scope), name)
+        case .function(let base, let key):
             return .function(
-                root: try variable(named: name, at: "\(path).root"),
+                base: try authoredPlusCalLValue(base, at: "\(path).base", scope: scope),
                 key: try lower(key, at: "\(path).key", scope: scope)
             )
         }
@@ -614,24 +794,54 @@ struct CompiledLowerer {
         )
     }
 
+    private func orderedEnabledActions(
+        _ actions: [CompiledAction],
+        operators: CompiledOperators
+    ) throws -> (indices: [Int], dependencies: [ActionID: Set<ActionID>]) {
+        let dependencies = actions.map {
+            $0.bindings.reduce(into: $0.body.enabledActionDependencies(operators: operators)) {
+                $0.formUnion($1.domain.stateRequirements(operators: operators).enabledActions)
+            }
+        }
+        var remaining = Array(actions.indices)
+        var resolved: Set<ActionID> = []
+        var ordered: [Int] = []
+        var transitive: [ActionID: Set<ActionID>] = [:]
+        while !remaining.isEmpty {
+            guard let position = remaining.firstIndex(where: { dependencies[$0].isSubset(of: resolved) }) else {
+                let unresolved = Set(remaining.map { actions[$0].id })
+                let names = layout.actions.filter { unresolved.contains($0.id) }.map(\.declaration.name)
+                throw CompilationDiagnostic(
+                    code: .cyclicActionEnabledness,
+                    stage: .lowering,
+                    path: "actions",
+                    expected: "acyclic ENABLED action dependencies",
+                    actual: "unresolved ENABLED dependencies among actions \(names.joined(separator: ", "))",
+                    nextSafeAction: "Break the ENABLED dependency cycle between actions."
+                )
+            }
+            let index = remaining.remove(at: position)
+            transitive[actions[index].id] = dependencies[index].reduce(into: dependencies[index]) {
+                $0.formUnion(transitive[$1] ?? [])
+            }
+            ordered.append(index)
+            resolved.insert(actions[index].id)
+        }
+        return (ordered, transitive)
+    }
+
     private func orderedInitializations(
         _ initializations: [VariableID: CompiledVariableInitialization],
-        formalOperators: [CompiledFormalOperatorDefinition],
-        recursiveFunctions: [CompiledRecursiveFunction]
+        operators: CompiledOperators
     ) throws -> [(variable: VariableID, initialization: CompiledVariableInitialization)] {
         let declarationOrder = layout.variables.map(\.id)
         let declared = Set(declarationOrder)
         var dependencies: [VariableID: Set<VariableID>] = [:]
         for variable in declarationOrder {
-            let analysis: (variables: Set<VariableID>, requiresCompleteState: Bool)
+            let analysis: CompiledStateRequirements
             switch initializations[variable] {
-            case .value:
-                analysis = ([], false)
-            case .expression(let expression), .memberOf(let expression):
-                analysis = expression.stateRequirements(
-                    formalOperators: formalOperators,
-                    recursiveFunctions: recursiveFunctions
-                )
+            case .value(let expression), .memberOf(let expression):
+                analysis = expression.stateRequirements(operators: operators)
             case nil:
                 let name = layout.variables.first { $0.id == variable }?.declaration.name ?? "unknown"
                 throw CompilationDiagnostic(
@@ -707,7 +917,7 @@ struct CompiledLowerer {
         return ordered
     }
 
-    private func lower(
+    private mutating func lower(
         _ condition: FairnessCondition,
         actions: [ActionID: CompiledAction],
         at path: String
@@ -715,10 +925,27 @@ struct CompiledLowerer {
         let action: ActionID
         let arguments: [CompiledValue]?
         switch condition {
+        case .projected(let condition, let projection):
+            let base = try lower(condition, actions: actions, at: path)
+            let value = try lower(projection, at: "\(path).projection", scope: rootScope)
+            return .init(scope: base.scope, isStrong: base.isStrong, projection: value)
         case .weakFairnessNext:
             return .init(scope: .next, isStrong: false)
         case .strongFairnessNext:
             return .init(scope: .next, isStrong: true)
+        case .weakFairnessEachAction(let name), .strongFairnessEachAction(let name):
+            let id = try self.action(named: name, at: "\(path).action")
+            guard let compiled = actions[id] else { throw diagnostic(path: path) }
+            for binding in compiled.bindings {
+                let requirements = binding.domain.stateRequirements(operators: operators)
+                guard requirements.variables.isEmpty, !requirements.requiresCompleteState else {
+                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                        path: "\(path).domain", expected: "immutable per-instance fairness domains",
+                        actual: "a domain that reads state or action enabledness",
+                        nextSafeAction: "Declare fairness populations with immutable parameters or values.")
+                }
+            }
+            return .init(scope: .eachAction(id), isStrong: condition.isStrong)
         case .weakFairness(let name):
             action = try self.action(named: name, at: "\(path).action")
             arguments = nil
@@ -760,27 +987,13 @@ struct CompiledLowerer {
             throw issue.compilationDiagnostic(stage: .binding, path: "actions.\(action.name).bindings")
         }
         var scope = rootScope
-        let bindings = try action.bindings.map {
-            for (index, value) in $0.values.enumerated() {
-                try validateValue(value, at: "actions.\(action.name).bindings.\($0.name)[\(index)]")
-            }
-            let binder = try allocateBinder(
-                $0.name,
-                in: scope,
-                at: "actions.\(action.name).bindings.\($0.name)"
-            )
-            scope.values[$0.name] = binder
-            return CompiledActionBinding(
-                binder: binder,
-                sourceName: $0.name,
-                values: $0.values.map(CompiledValue.init(formal:)),
-                generatedSwiftType: $0.generatedSwiftType
-            )
-        }
+        let bindings = try lowerBindings(action.bindings, at: "actions.\(action.name)", scope: &scope)
         let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope)
         if bindings.isEmpty,
            case .existsAction(let sourceMember, _, _) = action.body,
-           case .existsAction(let member, .domain(.stateVariable(let variable)), let memberBody) = body,
+           case .existsAction(let member, let domain, let memberBody) = body,
+           case .domain = domain.operation,
+           case .stateVariable(let variable) = domain.children[0].operation,
            layout.variables.indices.contains(variable.ordinal),
            let collection = layout.variables[variable.ordinal].collection {
             return CompiledAction(
@@ -788,7 +1001,9 @@ struct CompiledLowerer {
                 bindings: [CompiledActionBinding(
                     binder: member,
                     sourceName: sourceMember,
-                    values: collection.members,
+                    domain: .init(operation: .setLiteral, children: collection.members.map {
+                        .init(operation: .value($0), children: [])
+                    }),
                     generatedSwiftType: collection.elementType.map { "\($0).ID" }
                 )],
                 body: memberBody,
@@ -803,10 +1018,21 @@ struct CompiledLowerer {
         )
     }
 
+    private mutating func lowerBindings(_ bindings: [ActionBinding], at path: String,
+                                       scope: inout BindingScope) throws -> [CompiledActionBinding] {
+        try bindings.map { binding in
+            let domain = try lower(binding.domain, at: "\(path).bindings.\(binding.name).domain", scope: scope)
+            let binder = try allocateBinder(binding.name, in: scope, at: "\(path).bindings.\(binding.name)")
+            scope.values[binding.name] = binder
+            return CompiledActionBinding(binder: binder, sourceName: binding.name,
+                domain: domain, generatedSwiftType: binding.generatedSwiftType)
+        }
+    }
+
     private func accepts(_ arguments: [CompiledValue], for action: CompiledAction) -> Bool {
         arguments.count == action.bindings.count
             && zip(arguments, action.bindings).allSatisfy { argument, binding in
-                binding.values.contains(argument)
+                binding.literalMembers?.contains(argument) == true
             }
     }
 
@@ -814,7 +1040,7 @@ struct CompiledLowerer {
         _ expression: StateExpr?,
         at path: String,
         scope: BindingScope
-    ) throws -> CompiledStateExpr? {
+    ) throws -> CompiledExpression? {
         guard let expression else { return nil }
         return try lower(expression, at: path, scope: scope)
     }
@@ -823,7 +1049,7 @@ struct CompiledLowerer {
         _ expression: StateExpr,
         at path: String,
         scope: BindingScope
-    ) throws -> CompiledStateExpr {
+    ) throws -> CompiledExpression {
         try lowerWithReferences(expression, at: path, scope: scope).expression
     }
 
@@ -831,7 +1057,7 @@ struct CompiledLowerer {
         _ expression: StateExpr,
         at path: String,
         scope: BindingScope
-    ) throws -> (expression: CompiledStateExpr, operatorReferences: Set<OperatorID>) {
+    ) throws -> (expression: CompiledExpression, operatorReferences: Set<OperatorID>) {
         var tasks = [StateLoweringTask.expression(expression, path: path, scope: scope)]
         var lowered: [LoweredStateExpression] = []
         while let task = tasks.popLast() {
@@ -869,9 +1095,22 @@ struct CompiledLowerer {
                 case .variable(let name):
                     let expression = try value(named: name, scope: scope, at: path)
                     let references: Set<OperatorID>
-                    if case .operatorReference(let operation) = expression { references = [operation] }
+                    if case .operatorReference(let operation) = expression.operation { references = [operation] }
                     else { references = [] }
-                    lowered.append(.init(expression: expression, operatorReferences: references))
+                    let bindings: Set<BinderID>
+                    if case .boundValue(let binder) = expression.operation { bindings = [binder] }
+                    else { bindings = [] }
+                    lowered.append(.init(expression: expression, operatorReferences: references, bindingReferences: bindings))
+                case .parameter(let reference):
+                    guard let parameter = layout.parameters.first(where: { $0.reference == reference }) else {
+                        throw CompilationDiagnostic(
+                            code: .unknownReference, stage: .binding, path: path,
+                            expected: "a parameter owned by this model",
+                            actual: "foreign or undeclared parameter '\(reference.name)'",
+                            nextSafeAction: "Use a parameter declared in this model's specification scope.")
+                    }
+                    lowered.append(.init(expression: .boundValue(parameter.binder), operatorReferences: [],
+                        bindingReferences: [parameter.binder]))
                 case .controlLocation(let reference):
                     let matches = layout.controlLocations.filter { location in
                         location.sourceName == reference.sourceName
@@ -893,42 +1132,75 @@ struct CompiledLowerer {
                         expression: .enabledAction(try action(named: name, at: path)),
                         operatorReferences: []
                     ))
-                case .negate(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.negate, on: &tasks)
-                case .not(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.not, on: &tasks)
-                case .cardinality(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.cardinality, on: &tasks)
-                case .powerSet(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.powerSet, on: &tasks)
-                case .unionAll(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.unionAll, on: &tasks)
-                case .tupleLength(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.tupleLength, on: &tasks)
-                case .tupleHead(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.tupleHead, on: &tasks)
-                case .tupleTail(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.tupleTail, on: &tasks)
-                case .domain(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.domain, on: &tasks)
-                case .sequenceFromSet(let value): scheduleUnary(value, at: path, scope: scope, build: CompiledStateExpr.sequenceFromSet, on: &tasks)
-                case .add(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.add, on: &tasks)
-                case .subtract(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.subtract, on: &tasks)
-                case .multiply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.multiply, on: &tasks)
-                case .divide(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.divide, on: &tasks)
-                case .modulo(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.modulo, on: &tasks)
-                case .integerDivide(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.integerDivide, on: &tasks)
-                case .equal(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.equal, on: &tasks)
-                case .notEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.notEqual, on: &tasks)
-                case .lessThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.lessThan, on: &tasks)
-                case .lessOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.lessOrEqual, on: &tasks)
-                case .greaterThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.greaterThan, on: &tasks)
-                case .greaterOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.greaterOrEqual, on: &tasks)
-                case .and(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.and, on: &tasks)
-                case .or(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.or, on: &tasks)
-                case .in(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.in, on: &tasks)
-                case .subset(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.subset, on: &tasks)
-                case .union(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.union, on: &tasks)
-                case .intersection(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.intersection, on: &tasks)
-                case .setDifference(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.setDifference, on: &tasks)
-                case .tupleDynamicAccess(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.tupleDynamicAccess, on: &tasks)
-                case .tupleAppend(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.tupleAppend, on: &tasks)
-                case .tupleConcatenate(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.tupleConcatenate, on: &tasks)
-                case .tupleRemoving(let tuple, let index): scheduleBinary(tuple, index, at: path, scope: scope, build: CompiledStateExpr.tupleRemoving, on: &tasks)
+                case .assertView(let value, let shape):
+                    guard shape.isSupported else {
+                        throw CompilationDiagnostic(
+                            code: .unsupportedGeneratedValueShape, stage: .validation, path: path,
+                            expected: "a supported explicit formal value shape",
+                            actual: "unsupported explicit view shape '\(shape)'",
+                            nextSafeAction: "Use a supported value shape for this explicit union view."
+                        )
+                    }
+                    requiredStandardModules.formUnion(shape.requiredStandardModules)
+                    scheduleUnary(value, at: path, scope: scope, operation: .assertView(shape), on: &tasks)
+                case .negate(let value): scheduleUnary(value, at: path, scope: scope, operation: .negate, on: &tasks)
+                case .stutteringStep(let value, let predicate):
+                    guard scope.allowsNextState else {
+                        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                            path: path, expected: "a stuttering step inside an always transition predicate",
+                            actual: "a stuttering step in a state-only or primed expression",
+                            nextSafeAction: "Use alwaysStep to declare a transition property.")
+                    }
+                    var valueScope = scope
+                    valueScope.allowsNextState = false
+                    schedule([(value, "\(path).value"), (predicate, "\(path).predicate")],
+                        at: path, scope: scope, childScopes: [valueScope, scope],
+                        build: { .init(operation: .stutteringStep, children: $0.map(\.expression)) }, on: &tasks)
+                case .nextState(let value):
+                    guard scope.allowsNextState else {
+                        throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                            path: path, expected: "one successor-state read inside an always transition predicate",
+                            actual: "a successor-state read in a state-only or already primed expression",
+                            nextSafeAction: "Use before and after values inside an alwaysStep predicate.")
+                    }
+                    var successorScope = scope
+                    successorScope.allowsNextState = false
+                    scheduleUnary(value, at: path, scope: successorScope, operation: .nextState, on: &tasks)
+                case .not(let value): scheduleUnary(value, at: path, scope: scope, operation: .not, on: &tasks)
+                case .cardinality(let value): scheduleUnary(value, at: path, scope: scope, operation: .cardinality, on: &tasks)
+                case .powerSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .powerSet, on: &tasks)
+                case .unionAll(let value): scheduleUnary(value, at: path, scope: scope, operation: .unionAll, on: &tasks)
+                case .tupleLength(let value): scheduleUnary(value, at: path, scope: scope, operation: .tupleLength, on: &tasks)
+                case .tupleHead(let value): scheduleUnary(value, at: path, scope: scope, operation: .tupleHead, on: &tasks)
+                case .tupleTail(let value): scheduleUnary(value, at: path, scope: scope, operation: .tupleTail, on: &tasks)
+                case .domain(let value): scheduleUnary(value, at: path, scope: scope, operation: .domain, on: &tasks)
+                case .sequenceFromSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .sequenceFromSet, on: &tasks)
+                case .add(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .add, on: &tasks)
+                case .subtract(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .subtract, on: &tasks)
+                case .multiply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .multiply, on: &tasks)
+                case .divide(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .divide, on: &tasks)
+                case .modulo(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .modulo, on: &tasks)
+                case .integerDivide(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .integerDivide, on: &tasks)
+                case .equal(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .equal, on: &tasks)
+                case .notEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .notEqual, on: &tasks)
+                case .lessThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .lessThan, on: &tasks)
+                case .lessOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .lessOrEqual, on: &tasks)
+                case .greaterThan(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .greaterThan, on: &tasks)
+                case .greaterOrEqual(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .greaterOrEqual, on: &tasks)
+                case .and(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .and, on: &tasks)
+                case .or(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .or, on: &tasks)
+                case .in(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .in, on: &tasks)
+                case .subset(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .subset, on: &tasks)
+                case .union(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .union, on: &tasks)
+                case .intersection(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .intersection, on: &tasks)
+                case .setDifference(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .setDifference, on: &tasks)
+                case .tupleDynamicAccess(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleDynamicAccess, on: &tasks)
+                case .tupleAppend(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleAppend, on: &tasks)
+                case .tupleConcatenate(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleConcatenate, on: &tasks)
+                case .tupleRemoving(let tuple, let index): scheduleBinary(tuple, index, at: path, scope: scope, operation: .tupleRemoving, on: &tasks)
                 case .sequenceSelect(let sequence, let name, let predicate):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
-                    scheduleBinding(sequence, predicate, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledStateExpr.sequenceSelect, on: &tasks)
+                    scheduleBinding(sequence, predicate, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.sequenceSelect, on: &tasks)
                 case .functionApply(.variable(let name), let argument)
                     where scope.values[name] == nil && scope.operators.keys.contains(name):
                     let operation = try operatorID(named: name, arity: 1, scope: scope, at: path)
@@ -940,24 +1212,24 @@ struct CompiledLowerer {
                         operatorReferences: [operation],
                         build: {
                             isBounded
-                                ? .functionApply(.operatorReference(operation), $0[0])
-                                : .recursiveCall(operation, [$0[0]])
+                                ? .init(operation: .functionApply, children: [.operatorReference(operation), $0[0].expression])
+                                : .operatorApplication(.reference(operation, arity: 1), [.value($0[0].expression)])
                         },
                         on: &tasks
                     )
-                case .functionApply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.functionApply, on: &tasks)
-                case .functionSet(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.functionSet, on: &tasks)
-                case .setSum(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, build: CompiledStateExpr.setSum, on: &tasks)
+                case .functionApply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .functionApply, on: &tasks)
+                case .functionSet(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .functionSet, on: &tasks)
+                case .setSum(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .setSum, on: &tasks)
                 case .integerRange(let lower, let upper):
-                    schedule([(lower, "\(path).lower"), (upper, "\(path).upper")], at: path, scope: scope, build: { .integerRange($0[0], $0[1]) }, on: &tasks)
+                    schedule([(lower, "\(path).lower"), (upper, "\(path).upper")], at: path, scope: scope, build: { .integerRange($0[0].expression, $0[1].expression) }, on: &tasks)
                 case .ifThenElse(let condition, let then, let otherwise):
-                    schedule([(condition, "\(path).condition"), (then, "\(path).then"), (otherwise, "\(path).else")], at: path, scope: scope, build: { .ifThenElse($0[0], $0[1], $0[2]) }, on: &tasks)
+                    schedule([(condition, "\(path).condition"), (then, "\(path).then"), (otherwise, "\(path).else")], at: path, scope: scope, build: { .ifThenElse($0[0].expression, $0[1].expression, $0[2].expression) }, on: &tasks)
                 case .setLiteral(let values):
-                    schedule(indexed(values, at: path), at: path, scope: scope, build: CompiledStateExpr.setLiteral, on: &tasks)
+                    schedule(indexed(values, at: path), at: path, scope: scope, build: { .setLiteral($0.map(\.expression)) }, on: &tasks)
                 case .tupleLiteral(let values):
-                    schedule(indexed(values, at: path), at: path, scope: scope, build: CompiledStateExpr.tupleLiteral, on: &tasks)
+                    schedule(indexed(values, at: path), at: path, scope: scope, build: { .tupleLiteral($0.map(\.expression)) }, on: &tasks)
                 case .tupleAccess(let value, let index):
-                    schedule([(value, path)], at: path, scope: scope, build: { .tupleAccess($0[0], index) }, on: &tasks)
+                    schedule([(value, path)], at: path, scope: scope, build: { .tupleAccess($0[0].expression, index) }, on: &tasks)
                 case .recordLiteral(let record):
                     var seen: Set<String> = []
                     let fields = try record.fields.enumerated().map { index, item in
@@ -973,22 +1245,21 @@ struct CompiledLowerer {
                             )
                         }
                         return (
-                            id: try field(named: item.name, at: "\(fieldPath).declaration"),
-                            key: CompiledValue.string(item.name),
+                            name: try fieldName(item.name, at: "\(fieldPath).declaration"),
                             expression: item.value,
                             path: "\(fieldPath).value"
                         )
                     }
                     schedule(fields.map { ($0.expression, $0.path) }, at: path, scope: scope, build: { values in
-                        .recordLiteral(.init(zip(fields, values).map { field, value in
-                            .init(id: field.id, key: field.key, value: value)
-                        }))
+                        .recordLiteral(zip(fields, values).map { field, value in
+                            .init(name: field.name, value: value.expression)
+                        }, type: record.nativeType ?? .unknown)
                     }, on: &tasks)
                 case .recordAccess(let value, let name):
-                    let id = try field(named: name, at: "\(path).field")
-                    schedule([(value, "\(path).value")], at: path, scope: scope, build: { .recordAccess($0[0], id, .string(name)) }, on: &tasks)
+                    let name = try fieldName(name, at: "\(path).field")
+                    schedule([(value, "\(path).value")], at: path, scope: scope, build: { .recordAccess($0[0].expression, name) }, on: &tasks)
                 case .except(let function, let key, let value):
-                    schedule([(function, "\(path).function"), (key, "\(path).key"), (value, "\(path).value")], at: path, scope: scope, build: { .except($0[0], $0[1], $0[2]) }, on: &tasks)
+                    schedule([(function, "\(path).function"), (key, "\(path).key"), (value, "\(path).value")], at: path, scope: scope, build: { .except($0[0].expression, $0[1].expression, $0[2].expression) }, on: &tasks)
                 case .caseExpr(let branches, let otherwise):
                     guard branches.isEmpty == false, branches.count.isMultiple(of: 2) else {
                         throw CompilationDiagnostic(
@@ -1005,13 +1276,13 @@ struct CompiledLowerer {
                     schedule(children, at: path, scope: scope, build: { values in
                         var compiledBranches: [CompiledCaseBranch] = []
                         for index in stride(from: 0, to: branches.count, by: 2) {
-                            compiledBranches.append(.init(condition: values[index], value: values[index + 1]))
+                            compiledBranches.append(.init(condition: values[index].expression, value: values[index + 1].expression))
                         }
                         guard let first = compiledBranches.first else { throw Self.invalidTraversal(at: path) }
                         return .caseExpr(
                             first,
                             Array(compiledBranches.dropFirst()),
-                            otherwise: values.count == branches.count ? nil : values.last
+                            otherwise: values.count == branches.count ? nil : values.last?.expression
                         )
                     }, on: &tasks)
                 case .setFilter(let domain, let name, let body):
@@ -1023,7 +1294,7 @@ struct CompiledLowerer {
                         at: path,
                         scope: scope,
                         bodyScope: nested,
-                        build: CompiledStateExpr.setFilter,
+                        build: CompiledExpression.setFilter,
                         on: &tasks
                     )
                 case .setMap(let body, let name, let domain):
@@ -1034,21 +1305,21 @@ struct CompiledLowerer {
                         at: path,
                         scope: scope,
                         childScopes: [nested, scope],
-                        build: { .setMap($0[0], binder, $0[1]) },
+                        build: { .setMap($0[0].expression, binder, $0[1].expression) },
                         on: &tasks
                     )
                 case .functionLiteral(let domain, let name, let body):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
-                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledStateExpr.functionLiteral, on: &tasks)
+                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.functionLiteral, on: &tasks)
                 case .forAll(let domain, let name, let body):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
-                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledStateExpr.forAll, on: &tasks)
+                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.forAll, on: &tasks)
                 case .exists(let domain, let name, let body):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
-                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledStateExpr.exists, on: &tasks)
+                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.exists, on: &tasks)
                 case .choose(let domain, let name, let body):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
-                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledStateExpr.choose, on: &tasks)
+                    scheduleBinding(domain, body, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.choose, on: &tasks)
                 case .foldFunction(let lambda, let initial, let sequence):
                     if let issue = lambda.sourceIssue {
                         throw issue.compilationDiagnostic(stage: .binding, path: "\(path).operator")
@@ -1056,7 +1327,7 @@ struct CompiledLowerer {
                     let nested = try bind(lambda.parameters, at: "\(path).parameters", scope: scope)
                     let parameters = try lambda.parameters.map { try bound($0, in: nested, at: path) }
                     schedule([(lambda.body, "\(path).body"), (initial, "\(path).initial"), (sequence, "\(path).sequence")], at: path, scope: scope, childScopes: [nested, scope, scope], build: {
-                        .foldFunction(.init(parameters: parameters, body: $0[0]), initial: $0[1], sequence: $0[2])
+                        .foldFunction(parameters: parameters, body: $0[0].expression, initial: $0[1].expression, sequence: $0[2].expression)
                     }, on: &tasks)
                 case .operatorApplication(let operation, let arguments):
                     guard operation.arity == arguments.count else {
@@ -1073,6 +1344,7 @@ struct CompiledLowerer {
                         }
                         let nested = try bind(lambda.parameters, at: "\(path).operator.parameters", scope: scope)
                         let parameters = try lambda.parameters.map { try bound($0, in: nested, at: path) }
+                        let identity = allocateLambda(arity: parameters.count)
                         let valueArguments = try arguments.enumerated().map { index, argument in
                             guard case .value(let value) = argument else {
                                 throw invalidOperatorApplication(
@@ -1085,20 +1357,21 @@ struct CompiledLowerer {
                         }
                         let children = [(lambda.body, "\(path).operator.body")]
                             + indexed(valueArguments, at: "\(path).arguments")
-                        schedule(
-                            children,
-                            at: path,
-                            scope: scope,
-                            childScopes: [nested] + Array(repeating: scope, count: valueArguments.count),
-                            build: { values in
-                                guard let body = values.first else { throw Self.invalidTraversal(at: path) }
-                                return .lambdaApplication(
-                                    .init(parameters: parameters, body: body),
-                                    Array(values.dropFirst())
-                                )
-                            },
-                            on: &tasks
-                        )
+                        tasks.append(.build(childCount: children.count, path: path) { values in
+                            guard let body = values.first else { throw Self.invalidTraversal(at: path) }
+                            let declaration = Self.lambda(id: identity, parameters: parameters, body: body,
+                                enclosingBindings: Set(scope.values.values))
+                            return .init(
+                                expression: .operatorApplication(.lambda(identity, arity: parameters.count),
+                                    values.dropFirst().map { .value($0.expression) }),
+                                operatorReferences: Set(values.flatMap(\.operatorReferences)).union([identity]),
+                                bindingReferences: Set(values.flatMap(\.bindingReferences)),
+                                declarations: [declaration])
+                        })
+                        let scopes = [nested] + Array(repeating: scope, count: valueArguments.count)
+                        for (index, child) in children.enumerated().reversed() {
+                            tasks.append(.expression(child.0, path: child.1, scope: scopes[index]))
+                        }
                     case .reference(let name, let arity):
                         let operation = try operatorID(named: name, arity: arity, scope: scope, at: "\(path).operator")
                         let argumentPlans = try arguments.enumerated().map {
@@ -1112,14 +1385,23 @@ struct CompiledLowerer {
                             argumentPlans.flatMap(\.operatorReferences)
                         )
                         let formal = formalChildren(arguments: arguments, plans: argumentPlans, scope: scope, at: path)
-                        schedule(formal.children, at: path, scope: scope, childScopes: formal.scopes, operatorReferences: references, build: { values in
+                        tasks.append(.build(childCount: formal.children.count, path: path) { values in
                             var index = 0
+                            var declarations: [CompiledOperatorDefinition] = []
                             let compiledArguments = try argumentPlans.map {
-                                try Self.materialize($0.lowering, from: values, index: &index, at: path)
+                                try Self.materialize($0.lowering, from: values, index: &index,
+                                    declarations: &declarations, at: path)
                             }
                             guard index == values.count else { throw Self.invalidTraversal(at: path) }
-                            return .operatorApplication(operation, compiledArguments)
-                        }, on: &tasks)
+                            return .init(
+                                expression: .operatorApplication(.reference(operation, arity: compiledArguments.count), compiledArguments),
+                                operatorReferences: references.union(values.flatMap(\.operatorReferences)).union(declarations.map(\.id)),
+                                bindingReferences: Set(values.flatMap(\.bindingReferences)),
+                                declarations: declarations)
+                        })
+                        for (index, child) in formal.children.enumerated().reversed() {
+                            tasks.append(.expression(child.0, path: child.1, scope: formal.scopes[index]))
+                        }
                     }
                 case .recursiveCall(let name, let arguments):
                     let id = try operatorID(named: name, arity: arguments.count, scope: scope, at: path)
@@ -1131,16 +1413,16 @@ struct CompiledLowerer {
                         operatorReferences: [id],
                         build: {
                             if isBounded, let argument = $0.first {
-                                return .functionApply(.operatorReference(id), argument)
+                                return .init(operation: .functionApply, children: [.operatorReference(id), argument.expression])
                             }
-                            return .recursiveCall(id, $0)
+                            return .operatorApplication(.reference(id, arity: $0.count), $0.map { .value($0.expression) })
                         },
                         on: &tasks
                     )
                 case .letValue(let name, let value, let body):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
                     let binder = try bound(name, in: nested, at: path)
-                    schedule([(value, "\(path).value"), (body, "\(path).body")], at: path, scope: scope, childScopes: [scope, nested], build: { .letValue(binder, $0[0], $0[1]) }, on: &tasks)
+                    schedule([(value, "\(path).value"), (body, "\(path).body")], at: path, scope: scope, childScopes: [scope, nested], build: { .letValue(binder, $0[0].expression, $0[1].expression) }, on: &tasks)
                 case .letIn(let operators, let body):
                     try requireDistinct(operators.map(\.name), at: "\(path).operators")
                     var nested = scope
@@ -1166,11 +1448,12 @@ struct CompiledLowerer {
                     var childScopes: [BindingScope] = []
                     for (operation, id) in declarations {
                         let operationPath = "\(path).\(operation.name)"
-                        let parameterScope = try bind(
+                        var parameterScope = try bind(
                             operation.parameters,
                             at: "\(operationPath).parameters",
                             scope: nested
                         )
+                        parameterScope.allowsNextState = false
                         let parameters = try operation.parameters.map {
                             try bound($0, in: parameterScope, at: operationPath)
                         }
@@ -1188,14 +1471,16 @@ struct CompiledLowerer {
                     }
                     children.append((body, "\(path).body"))
                     childScopes.append(nested)
+                    let enclosingBindings = Set(scope.values.values)
                     tasks.append(.build(childCount: children.count, path: path) { plans in
                         var index = 0
                         var declarations: [(
                             id: OperatorID,
                             parameters: [BinderID],
-                            domain: CompiledStateExpr?,
-                            body: CompiledStateExpr,
-                            references: Set<OperatorID>
+                            domain: CompiledExpression?,
+                            body: CompiledExpression,
+                            references: Set<OperatorID>,
+                            captures: Set<BinderID>
                         )] = []
                         for binding in bindings {
                             let domain: LoweredStateExpression?
@@ -1212,7 +1497,8 @@ struct CompiledLowerer {
                                 binding.parameters,
                                 domain?.expression,
                                 body.expression,
-                                body.operatorReferences.union(domain?.operatorReferences ?? [])
+                                body.operatorReferences.union(domain?.operatorReferences ?? []),
+                                body.bindingReferences.union(domain?.bindingReferences ?? []).intersection(enclosingBindings)
                             ))
                         }
                         guard index == plans.count - 1, let body = plans.last else {
@@ -1237,19 +1523,14 @@ struct CompiledLowerer {
                             references.formUnion(declaration.references.subtracting(localIDs))
                         }
                         return .init(
-                            expression: .letIn(
-                                declarations.map {
-                                    .init(
-                                        id: $0.id,
-                                        parameters: $0.parameters,
-                                        domain: $0.domain,
-                                        body: $0.body,
-                                        isRecursive: recursive.contains($0.id)
-                                    )
-                                },
-                                body.expression
-                            ),
-                            operatorReferences: references
+                            expression: .letIn(declarations.map(\.id), body.expression),
+                            operatorReferences: references,
+                            bindingReferences: plans.reduce(into: Set<BinderID>()) { $0.formUnion($1.bindingReferences) },
+                            declarations: declarations.map {
+                                .init(id: $0.id, parameters: $0.parameters.map { .value($0) }, domain: $0.domain,
+                                    body: $0.body, isRecursive: recursive.contains($0.id),
+                                    capturedBindings: $0.captures, referencedOperators: $0.references)
+                            }
                         )
                     })
                     for (index, child) in children.enumerated().reversed() {
@@ -1266,7 +1547,11 @@ struct CompiledLowerer {
                 let range = start..<lowered.endIndex
                 let children = Array(lowered[range])
                 lowered.removeSubrange(range)
-                lowered.append(try build(children))
+                let result = try build(children)
+                for declaration in result.declarations {
+                    operators.register(declaration)
+                }
+                lowered.append(result)
             }
         }
         guard lowered.count == 1, let root = lowered.first else {
@@ -1281,17 +1566,20 @@ struct CompiledLowerer {
         scope: BindingScope,
         childScopes: [BindingScope]? = nil,
         operatorReferences: Set<OperatorID> = [],
-        build: @escaping ([CompiledStateExpr]) throws -> CompiledStateExpr,
+        build: @escaping ([LoweredStateExpression]) throws -> CompiledExpression,
         on tasks: inout [StateLoweringTask]
     ) {
         tasks.append(.build(childCount: children.count, path: path) { children in
             var references = operatorReferences
+            var bindings: Set<BinderID> = []
             for child in children {
                 references.formUnion(child.operatorReferences)
+                bindings.formUnion(child.bindingReferences)
             }
             return .init(
-                expression: try build(children.map(\.expression)),
-                operatorReferences: references
+                expression: try build(children),
+                operatorReferences: references,
+                bindingReferences: bindings
             )
         })
         for (index, child) in children.enumerated().reversed() {
@@ -1307,10 +1595,10 @@ struct CompiledLowerer {
         _ value: StateExpr,
         at path: String,
         scope: BindingScope,
-        build: @escaping (CompiledStateExpr) -> CompiledStateExpr,
+        operation: CompiledOperation,
         on tasks: inout [StateLoweringTask]
     ) {
-        schedule([(value, path)], at: path, scope: scope, build: { build($0[0]) }, on: &tasks)
+        schedule([(value, path)], at: path, scope: scope, build: { .init(operation: operation, children: $0.map(\.expression)) }, on: &tasks)
     }
 
     private func scheduleBinary(
@@ -1318,14 +1606,14 @@ struct CompiledLowerer {
         _ rhs: StateExpr,
         at path: String,
         scope: BindingScope,
-        build: @escaping (CompiledStateExpr, CompiledStateExpr) -> CompiledStateExpr,
+        operation: CompiledOperation,
         on tasks: inout [StateLoweringTask]
     ) {
         schedule(
             [(lhs, "\(path).left"), (rhs, "\(path).right")],
             at: path,
             scope: scope,
-            build: { build($0[0], $0[1]) },
+            build: { .init(operation: operation, children: $0.map(\.expression)) },
             on: &tasks
         )
     }
@@ -1337,7 +1625,7 @@ struct CompiledLowerer {
         at path: String,
         scope: BindingScope,
         bodyScope: BindingScope,
-        build: @escaping (CompiledStateExpr, BinderID, CompiledStateExpr) -> CompiledStateExpr,
+        build: @escaping (CompiledExpression, BinderID, CompiledExpression) -> CompiledExpression,
         on tasks: inout [StateLoweringTask]
     ) {
         schedule(
@@ -1345,7 +1633,7 @@ struct CompiledLowerer {
             at: path,
             scope: scope,
             childScopes: [scope, bodyScope],
-            build: { build($0[0], binder, $0[1]) },
+            build: { build($0[0].expression, binder, $0[1].expression) },
             on: &tasks
         )
     }
@@ -1371,7 +1659,7 @@ struct CompiledLowerer {
             }
             let nested = try bind(lambda.parameters, at: "\(path).parameters", scope: scope)
             return (
-                .lambda(try lambda.parameters.map { try bound($0, in: nested, at: path) }),
+                .lambda(allocateLambda(arity: lambda.parameters.count), try lambda.parameters.map { try bound($0, in: nested, at: path) }, enclosingBindings: Set(scope.values.values)),
                 nested
             )
         }
@@ -1423,36 +1711,49 @@ struct CompiledLowerer {
         return (children, scopes)
     }
 
+    private static func lambda(
+        id: OperatorID, parameters: [BinderID], body: LoweredStateExpression,
+        enclosingBindings: Set<BinderID>
+    ) -> CompiledOperatorDefinition {
+        .init(id: id, parameters: parameters.map { .value($0) }, domain: nil, body: body.expression, isRecursive: false,
+            capturedBindings: body.bindingReferences.intersection(enclosingBindings),
+            referencedOperators: body.operatorReferences)
+    }
+
     private static func materialize(
         _ plan: FormalOperatorLoweringPlan,
-        from children: [CompiledStateExpr],
+        from children: [LoweredStateExpression],
         index: inout Int,
+        declarations: inout [CompiledOperatorDefinition],
         at path: String
     ) throws -> CompiledFormalOperator {
         switch plan {
         case .reference(let id, let arity): return .reference(id, arity: arity)
-        case .lambda(let parameters):
-            return .lambda(.init(parameters: parameters, body: try child(from: children, index: &index, at: path)))
+        case .lambda(let identity, let parameters, let enclosingBindings):
+            declarations.append(lambda(id: identity, parameters: parameters,
+                body: try child(from: children, index: &index, at: path), enclosingBindings: enclosingBindings))
+            return .lambda(identity, arity: parameters.count)
         }
     }
 
     private static func materialize(
         _ plan: FormalArgumentLoweringPlan,
-        from children: [CompiledStateExpr],
+        from children: [LoweredStateExpression],
         index: inout Int,
+        declarations: inout [CompiledOperatorDefinition],
         at path: String
     ) throws -> CompiledFormalCallArgument {
         switch plan {
-        case .value: return .value(try child(from: children, index: &index, at: path))
-        case .operator(let operation): return .operator(try materialize(operation, from: children, index: &index, at: path))
+        case .value: return .value(try child(from: children, index: &index, at: path).expression)
+        case .operator(let operation): return .operator(try materialize(operation, from: children, index: &index, declarations: &declarations, at: path))
         }
     }
 
     private static func child(
-        from children: [CompiledStateExpr],
+        from children: [LoweredStateExpression],
         index: inout Int,
         at path: String
-    ) throws -> CompiledStateExpr {
+    ) throws -> LoweredStateExpression {
         guard children.indices.contains(index) else { throw invalidTraversal(at: path) }
         let expression = children[index]
         index += 1
@@ -1471,13 +1772,15 @@ struct CompiledLowerer {
     }
 
     private mutating func lower(
-        _ expression: TemporalExpr,
+        _ expression: TemporalCondition<StateExpr>,
         at path: String,
         scope: BindingScope
-    ) throws -> CompiledTemporalExpr {
+    ) throws -> TemporalCondition<CompiledExpression> {
         switch expression {
         case .always(let predicate):
-            return .always(try lower(predicate, at: "\(path).body", scope: scope))
+            var transitionScope = scope
+            transitionScope.allowsNextState = true
+            return .always(try lower(predicate, at: "\(path).body", scope: transitionScope))
         case .eventually(let predicate):
             return .eventually(try lower(predicate, at: "\(path).body", scope: scope))
         case .alwaysEventually(let predicate):
@@ -1489,6 +1792,14 @@ struct CompiledLowerer {
                 try lower(from, at: "\(path).from", scope: scope),
                 try lower(to, at: "\(path).to", scope: scope)
             )
+        case .all(let conditions):
+            return .all(try conditions.enumerated().map {
+                try lower($0.element, at: "\(path).all[\($0.offset)]", scope: scope)
+            })
+        case .conditional(let predicate, let yes, let no):
+            return .conditional(try lower(predicate, at: "\(path).condition", scope: scope),
+                then: try lower(yes, at: "\(path).then", scope: scope),
+                else: try lower(no, at: "\(path).else", scope: scope))
         }
     }
 
@@ -1593,8 +1904,8 @@ struct CompiledLowerer {
         scope: BindingScope
     ) throws -> CompiledVariableInitialization {
         switch initialization {
-        case .value(let value): return .value(.init(formal: value))
-        case .expression(let expression): return .expression(try lower(expression, at: path, scope: scope))
+        case .value(let value): return .value(.value(.init(formal: value)))
+        case .expression(let expression): return .value(try lower(expression, at: path, scope: scope))
         case .memberOf(let set): return .memberOf(try lower(set, at: path, scope: scope))
         }
     }
@@ -1603,7 +1914,7 @@ struct CompiledLowerer {
         named name: String,
         scope: BindingScope,
         at path: String
-    ) throws -> CompiledStateExpr {
+    ) throws -> CompiledExpression {
         if let binder = scope.values[name] { return .boundValue(binder) }
         if let variable = layout.variables.first(where: { $0.declaration.name == name })?.id {
             return .stateVariable(variable)
@@ -1717,7 +2028,7 @@ struct CompiledLowerer {
         return location
     }
 
-    private func field(named name: String, at path: String) throws -> FieldID {
+    private func fieldName(_ name: String, at path: String) throws -> String {
         guard isFormalIdentifier(name) else {
             throw CompilationDiagnostic(
                 code: .invalidFormalDeclaration,
@@ -1728,10 +2039,7 @@ struct CompiledLowerer {
                 nextSafeAction: "Use an ASCII identifier beginning with a letter or underscore."
             )
         }
-        guard let field = layout.fields.first(where: { $0.renderedName == name })?.id else {
-            throw diagnostic(path: path, actual: "unresolved field '\(name)'")
-        }
-        return field
+        return name
     }
 
     private func operatorID(
@@ -1793,7 +2101,7 @@ struct CompiledLowerer {
                 )
             }
             switch parameter {
-            case .value(let name):
+            case .value(let name, _):
                 nested.values[name] = try allocateBinder(name, in: nested, at: path)
             case .operator(let name, let arity):
                 let operation = allocateOperator(name, arity: arity)
@@ -1810,7 +2118,7 @@ struct CompiledLowerer {
     ) throws -> [CompiledFormalParameter] {
         try parameters.map { parameter in
             switch parameter {
-            case .value(let name): return .value(try bound(name, in: scope, at: path))
+            case .value(let name, let typeName): return .value(try bound(name, in: scope, at: path), typeName: typeName)
             case .operator(let name, let arity):
                 return .operator(try operatorID(named: name, arity: arity, scope: scope, at: path), arity: arity)
             }
@@ -1850,6 +2158,13 @@ struct CompiledLowerer {
         return binder
     }
 
+    private mutating func allocateLambda(arity: Int) -> OperatorID {
+        let operation = OperatorID(ordinal: nextOperatorOrdinal)
+        nextOperatorOrdinal += 1
+        operatorArities[operation] = arity
+        return operation
+    }
+
     private mutating func allocateOperator(_ name: String, arity: Int) -> OperatorID {
         let operation = OperatorID(ordinal: nextOperatorOrdinal)
         nextOperatorOrdinal += 1
@@ -1865,18 +2180,23 @@ struct CompiledLowerer {
         return binder
     }
 
-    private func validateValue(_ value: TLAValue, at path: String) throws {
+    private mutating func validateValue(_ value: TLAValue, at path: String) throws {
         let compiled = CompiledValue(formal: value)
-        guard let member = symmetricMembers.first(where: { compiled.contains($0) }) else { return }
-        let renderedMember = try member.rendered(using: layout)
-        throw CompilationDiagnostic(
-            code: .invalidSymmetricCollection,
-            stage: .binding,
-            path: path,
-            expected: "logic invariant under exchangeable member renaming",
-            actual: "authored expression names compiler-owned symmetric member '\(renderedMember)'",
-            nextSafeAction: "Use the symmetric collection declaration instead of a concrete member."
-        )
+        let names = CompiledValue.modelValueNames(in: [compiled])
+        for name in names.subtracting(modelValueNames).sorted() {
+            try requireDeclarationName(name, kind: "model value", at: path)
+            let isIdentityConstant = constants.contains { $0.name == name && $0.value == .constant(name) }
+            guard !reservedRenderedNames.contains(name) || isIdentityConstant else {
+                throw CompilationDiagnostic(
+                    code: .invalidFormalDeclaration, stage: .binding, path: path,
+                    expected: "a model value distinct from module declarations",
+                    actual: "model value '\(name)' conflicts with a declared symbol",
+                    nextSafeAction: "Rename the model value or the conflicting declaration."
+                )
+            }
+        }
+        modelValueNames.formUnion(names)
+
     }
 
     private func requireDistinct(_ names: [String], at path: String) throws {

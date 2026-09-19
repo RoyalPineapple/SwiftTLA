@@ -50,15 +50,14 @@ struct Counter {
     static var spec: TLASpec {
         #spec("Counter") {
             Algorithm("Counter", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
-                let cars = scope.sharedVar("cars", initial: Function<CarID, Record<CarSchema>>.literal(
+                let value = scope.sharedVar(_name: "value", initial: 0)
+                let cars = scope.sharedVar(_name: "cars", initial: Function<CarID, Record<CarSchema>>.literal(
                     (.one, Record<CarSchema>.literal(.init(CarSchema.floor, 1), .init(CarSchema.doorsOpen, false))),
                     (.two, Record<CarSchema>.literal(.init(CarSchema.floor, 2), .init(CarSchema.doorsOpen, false)))
                 ))
                 Each(Node.all, scoped: { _, scope in
-                    let visits = scope.localVar("visits", initial: 0)
-                    Do(Step.advance) {
-                        When(value < 1)
+                    let visits = scope.localVar(_name: "visits", initial: 0)
+                    Do(Step.advance, when: value < 1) {
                         Assign(value, to: value + 1)
                         Assign(cars, to: cars.updating(.one) { car in
                             car.updating(CarSchema.floor, to: 2)
@@ -75,10 +74,8 @@ struct Counter {
 var counter = try Counter.makeMachine()
 let transition = try counter.send(.advance)
 guard transition.after.value == 1,
-      transition.after.cars[.one]?.tlaValue == .record([
-        "floor": .int(2),
-        "doorsOpen": .bool(false)
-      ]) else {
+      transition.after.cars[.one]?.floor == 2,
+      transition.after.cars[.one]?.doorsOpen == false else {
     throw FixtureError.invalidTransition
 }
 

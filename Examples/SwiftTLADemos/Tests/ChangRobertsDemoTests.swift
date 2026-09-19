@@ -8,16 +8,16 @@ struct ChangRobertsDemoTests {
         var machine = try ChangRoberts.makeMachine()
 
         #expect(machine.state.leader == 0)
-        #expect(machine.state.messages.elements.count == 12)
+        #expect(machine.state.messages.count == 12)
         #expect(try machine.isEnabled(.deliver(process: .six)))
 
         _ = try machine.send(.deliver(process: .six))
 
-        let forwarded = try #require(machine.state.messages.elements.first {
-            $0.value(for: ChangRoberts.MessageSchema.candidate) == 12 &&
-                $0.value(for: ChangRoberts.MessageSchema.from) == .six
+        let forwarded = try #require(machine.state.messages.first {
+            $0.candidate == 12 &&
+                $0.from == .six
         })
-        #expect(forwarded.value(for: ChangRoberts.MessageSchema.to) == .seven)
+        #expect(forwarded.to == .seven)
         #expect(machine.state.leader == 0)
     }
 
@@ -27,10 +27,10 @@ struct ChangRobertsDemoTests {
         _ = try await actor.send(.deliver(process: .six))
 
         let state = await actor.state
-        let forwarded = try #require(state.messages.elements.first {
-            $0.value(for: ChangRoberts.MessageSchema.candidate) == 12
+        let forwarded = try #require(state.messages.first {
+            $0.candidate == 12
         })
-        #expect(forwarded.value(for: ChangRoberts.MessageSchema.from) == .six)
-        #expect(forwarded.value(for: ChangRoberts.MessageSchema.to) == .seven)
+        #expect(forwarded.from == .six)
+        #expect(forwarded.to == .seven)
     }
 }

@@ -8,6 +8,5 @@ public enum GeneratedMachineError: Error, Sendable {
 }
 
 public enum GeneratedMachineStateDiagnostic: Error, Sendable, Equatable {
-    case missingRequiredValue(path: String, expected: String)
     case typeMismatch(path: String, expected: String, actual: String)
 }

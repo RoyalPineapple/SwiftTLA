@@ -207,14 +207,10 @@ package struct NanoBlockchainModel: Sendable {
     package static var spec: TLASpec {
         #spec("NanoBlockchain") { scope in
             Extends(.integers)
-            let lastHash = scope.sharedVar("lastHash", initial: HashReference.none)
-            let distributedLedger: SharedVariable<DistributedLedger> = scope.sharedVar(
-                "distributedLedger",
-                initial: DistributedLedger()
+            let lastHash = scope.sharedVar(initial: HashReference.none)
+            let distributedLedger: SharedVariable<DistributedLedger> = scope.sharedVar(initial: DistributedLedger()
             )
-            let received: SharedVariable<ReceivedBlocks> = scope.sharedVar(
-                "received",
-                initial: ReceivedBlocks()
+            let received: SharedVariable<ReceivedBlocks> = scope.sharedVar(initial: ReceivedBlocks()
             )
 
             Invariant("TypeInvariant") {
@@ -257,15 +253,13 @@ package struct NanoBlockchainModel: Sendable {
 
             for (node, privateKey) in zip(Node.finiteValues, PrivateKey.finiteValues) {
                 SwiftTLA.Action("CreateSend_\(node.rawValue)") {
-                    StateExpr.not(lastHash == HashReference.none)
+                    lastHash != HashReference.none
                         && ActionExpr.exists(
                             "prev",
                             from: SetExpr<BlockHash>.literal(.h1, .h2, .h3)
                         ) { formalPrevious in
                             let previous = Expr<BlockHash>(formalPrevious)
-                            return StateExpr.not(
-                                distributedLedger[node][previous] == SignedBlock.defaultValue
-                            )
+                            return distributedLedger[node][previous] != SignedBlock.defaultValue
                                 && ActionExpr.exists(
                                     "dest",
                                     from: SetExpr<PublicKey>.literal(.pub1, .pub2)

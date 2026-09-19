@@ -5,23 +5,41 @@ Each case declares its model, configuration, tool identity, and state limits.
 
 ## Temporal cases
 
-SwiftTLA compiles the typed model from `TemporalCaseConfiguration`. TLC runs
-the pinned `TemporalMatrix.tla` module with the same property and fairness
-values.
+The manifest supplies finite exploration bounds and fairness configurations.
+Each configuration selects a typed DSL model. Native checking explores its
+generated Swift transitions once, then validation checks every declared temporal
+property. The native property results must cover exactly the compiler's declared
+properties. There is no separate property registry or per-case stuttering flag.
 
-The comparison requires these facts:
+TLC receives the TLA+ exported from that same model. Each comparison requires:
 
-- both property runs produce the same result.
-- both complete graphs have the same initial states.
-- both complete graphs have the same states.
-- both complete graphs have the same labeled edge multiplicities.
-- each TLC lasso starts from a TLC initial state and follows ordered labeled
-  edges in the TLC graph.
-- each SwiftTLA lasso starts from a SwiftTLA initial state and follows ordered
-  labeled edges in the SwiftTLA graph.
+- matching property verdicts;
+- complete graphs with identical initial states, states, and labeled edges;
+- native and TLC counterexamples that start at initial states and follow their
+  graph's transitions or implicit stuttering, as allowed by the generated
+  specification's `[Next]_vars` semantics.
 
-Each case uses one TLC run for the complete graph and one TLC run for the
-property. A property violation also captures its trace.
+Safety counterexamples remain finite. Liveness counterexamples retain their
+closed cycles. Counterexamples need not be identical between engines.
+
+Each finite configuration captures its complete TLC graph once in a property-free
+pass. All property comparisons reuse that graph, bound to its original module,
+exploration bounds, arguments, environment, and tool pin. A failed shared capture
+makes every property comparison unavailable; it is not retried per property.
+
+Each TLC property invocation captures graph events and any counterexample
+together. A completed property graph must agree with the shared graph. Timeouts,
+malformed data, and incomplete comparisons cannot succeed.
+
+These finite configurations provide bounded validation, not a universal proof
+of compiler correctness.
+
+Artifacts are grouped by finite model configuration. Each model directory owns
+one `source-input`, one `swift-graph.jsonl`, and the independently captured
+`complete-graph/tlc-graph.jsonl`. Property reports live below
+`properties/<property-name>/`; their comparison JSON contains both verdicts and
+any native or TLC counterexamples. Graphs are not copied into property folders.
+Native graph artifacts remain available even if the TLC toolchain is unavailable.
 
 ## Symmetry cases
 

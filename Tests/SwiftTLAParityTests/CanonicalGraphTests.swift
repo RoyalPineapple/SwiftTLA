@@ -3,8 +3,43 @@ import Testing
 import UpstreamParity
 
 struct CanonicalGraphTests {
-    @Test("canonical graph preserves labels and repeated edge occurrences")
-    func preservesParallelLabelsAndMultiplicityAcrossTraversalOrder() throws {
+    @Test("large shared state prefixes retain deterministic edge ordering")
+    func sortsLongStateKeys() {
+        let count = 16_384
+        let prefix = String(repeating: "x", count: 4096)
+        let target = CanonicalStateKey(canonicalEncoding: "target")
+        let edges = (0..<count).map { index in
+            CanonicalEdge(source: .init(canonicalEncoding: prefix + String(count + (index * 4051) % count)),
+                action: "step", target: target)
+        }
+        let ordered = edges.sorted().map { $0.source.canonicalEncoding.suffix(5) }
+        #expect(ordered == (count..<(2 * count)).map { Substring(String($0)) })
+    }
+
+    @Test("Edge ordering preserves wire bytes, including prefix keys and Unicode actions")
+    func edgeOrderingMatchesEncoding() {
+        let states = ["", "a", "a!", "a-", "a--", "é", "e\u{301}", "\0", "\u{E000}", "😀"]
+            .map { CanonicalStateKey(canonicalEncoding: $0) }
+        let actions = ["", "a", "a!", "aa", "é", "e\u{301}", "\0", String(repeating: "step-", count: 8)]
+        let edges = states.flatMap { source in
+            actions.flatMap { action in
+                states.map { target in CanonicalEdge(source: source, action: action, target: target) }
+            }
+        }
+        for left in edges {
+            for right in edges {
+                let wireOrder = left.canonicalEncoding.utf8.lexicographicallyPrecedes(right.canonicalEncoding.utf8)
+                #expect((left < right) == wireOrder)
+            }
+        }
+        let composed = CanonicalEdge(source: states[1], action: "é", target: states[1])
+        let decomposed = CanonicalEdge(source: states[1], action: "e\u{301}", target: states[1])
+        #expect(composed != decomposed)
+        #expect(Set([composed, decomposed, composed]).count == 2)
+    }
+
+    @Test("canonical graph preserves action labels and collapses repeated witnesses")
+    func preservesParallelLabelsAcrossTraversalOrder() throws {
         let first = CanonicalState(bindings: ["counter": .integer(1)])
         let second = CanonicalState(bindings: ["counter": .integer(2)])
 
@@ -28,9 +63,65 @@ struct CanonicalGraphTests {
         )
 
         #expect(forward == reversed)
-        #expect(forward.edgeOccurrences.count == 2)
-        #expect(forward.edgeOccurrences[.init(source: first.key, action: "advance", target: second.key)] == 2)
-        #expect(forward.edgeOccurrences[.init(source: first.key, action: "reset", target: second.key)] == 1)
+        #expect(forward.edges.count == 2)
+        #expect(forward.edges.contains(.init(source: first.key, action: "advance", target: second.key)))
+        #expect(forward.edges.contains(.init(source: first.key, action: "reset", target: second.key)))
+    }
+
+    @Test("prebuilt edge sets and state views preserve the complete labeled relation")
+    func preservesStateViewsAndEdgeSets() throws {
+        let first = CanonicalState(bindings: ["counter": .integer(1)])
+        let second = CanonicalState(bindings: ["counter": .integer(2)])
+        let table = try canonicalStateTable([first, second])
+        let edges = [
+            CanonicalEdge(source: first.key, action: "advance", target: second.key),
+            CanonicalEdge(source: first.key, action: "reset", target: second.key),
+            CanonicalEdge(source: first.key, action: "advance", target: second.key),
+            CanonicalEdge(source: second.key, action: "stay", target: second.key)
+        ]
+        let arrayGraph = try CanonicalGraph(initialStates: [first, second], states: [first, second], edges: edges)
+        let setGraph = try CanonicalGraph(initialStates: [second, first], states: table.values, edges: Set(edges))
+        #expect(setGraph == arrayGraph)
+        #expect(setGraph.initialStateKeys == Set(table.keys))
+        #expect(setGraph.states == table)
+        #expect(setGraph.edges == Set(edges))
+        #expect(setGraph.edges.count == 3)
+        #expect(setGraph.observedActions == ["advance", "reset", "stay"])
+        #expect(throws: GraphRunError.graphActionUndeclared("stay")) {
+            try GraphRun(isComplete: true, graph: setGraph, observableActions: ["advance", "reset"], outcome: .noViolation)
+        }
+        let declared = setGraph.observedActions.union(["unused"])
+        let run = try GraphRun(isComplete: true, graph: setGraph, observableActions: declared, outcome: .noViolation)
+        #expect(run.graph == setGraph)
+        #expect(run.observableActions == declared)
+    }
+
+    @Test("prebuilt edge sets still reject missing initial states and endpoints")
+    func rejectsMissingStateReferences() throws {
+        let present = CanonicalState(bindings: ["counter": .integer(1)])
+        let missing = CanonicalState(bindings: ["counter": .integer(2)])
+        let table = try canonicalStateTable([present])
+        #expect(throws: CanonicalGraphError.initialStateMissing(missing.key)) {
+            try CanonicalGraph(initialStates: [missing], states: table.values, edges: Set<CanonicalEdge>())
+        }
+        for edge in [CanonicalEdge(source: missing.key, action: "step", target: present.key),
+                     CanonicalEdge(source: present.key, action: "step", target: missing.key)] {
+            #expect(throws: CanonicalGraphError.edgeStateMissing(missing.key)) {
+                try CanonicalGraph(initialStates: [present], states: table.values, edges: Set([edge]))
+            }
+        }
+    }
+
+    @Test("state views reject missing and different variable names")
+    func rejectsInconsistentStateBindings() throws {
+        let first = CanonicalState(bindings: ["counter": .integer(1)])
+        let alternatives: [[String: CanonicalValue]] = [["other": .integer(1)], [:]]
+        for bindings in alternatives {
+            let table = try canonicalStateTable([first, CanonicalState(bindings: bindings)])
+            #expect(throws: CanonicalGraphError.self) {
+                try CanonicalGraph(initialStates: [first], states: table.values, edges: Set<CanonicalEdge>())
+            }
+        }
     }
 
     @Test("canonical values are stable across unordered collection insertion")
@@ -46,6 +137,31 @@ struct CanonicalGraphTests {
 
         #expect(left == right)
         #expect(left.canonicalEncoding == right.canonicalEncoding)
+    }
+
+    @Test("formal strings retain distinct Unicode encodings in nested collections")
+    func preservesUnicodeValueIdentity() throws {
+        let composed = CanonicalValue.string("é")
+        let decomposed = CanonicalValue.string("e\u{301}")
+        #expect(composed != decomposed)
+        #expect(Set([composed, decomposed]).count == 2)
+        let members = CanonicalValue.set([composed, decomposed, composed])
+        guard case .orderedSet(let values) = members else {
+            Issue.record("Expected a canonical set")
+            return
+        }
+        #expect(values.count == 2)
+        let function = try CanonicalValue.function([
+            .init(key: composed, value: .integer(1)),
+            .init(key: decomposed, value: .integer(2))
+        ])
+        guard case .orderedRecord(let fields) = function else {
+            Issue.record("Expected a canonical string-keyed function")
+            return
+        }
+        #expect(fields.count == 2)
+        #expect(CanonicalValue.set([.tuple([composed]), .tuple([decomposed])])
+            != .set([.tuple([composed])]))
     }
 
     @Test("canonical functions reject duplicate keys")
@@ -155,12 +271,12 @@ struct CanonicalGraphTests {
                 ]
             ),
             initialStateIDs: [first],
-            outcome: .ok(statesCount: 2),
+            completion: .ok(statesCount: 2),
             compilationIdentity: compilation.identity,
             configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled),
             compiledStates: [
-                first: try CompiledState(values: [.init(formal: firstCars)], compilation: compilation),
-                second: try CompiledState(values: [.init(formal: secondCars)], compilation: compilation)
+                first: try CompiledState(values: [.init(formal: firstCars)], layout: compilation.layout, identity: compilation.identity),
+                second: try CompiledState(values: [.init(formal: secondCars)], layout: compilation.layout, identity: compilation.identity)
             ]
         )
         let finiteGraphCase = try FiniteGraphCase(
@@ -176,7 +292,7 @@ struct CanonicalGraphTests {
             ]
         )
 
-        let run = try SwiftGraphExporter().export(exploration, for: finiteGraphCase)
+        let run = try FormalGraphExporter().export(exploration, for: finiteGraphCase)
         let expectedFirst = CanonicalState(bindings: [
             "cars": .record(["carA": .integer(0), "carB": .integer(1)])
         ])
@@ -186,8 +302,8 @@ struct CanonicalGraphTests {
 
         #expect(Set(run.graph.states.values) == Set([expectedFirst, expectedSecond]))
         #expect(run.graph.initialStateKeys == Set([expectedFirst.key]))
-        #expect(run.graph.edgeOccurrences == [
-            CanonicalEdge(source: expectedFirst.key, action: "Move", target: expectedSecond.key): 1
+        #expect(run.graph.edges == [
+            CanonicalEdge(source: expectedFirst.key, action: "Move", target: expectedSecond.key)
         ])
     }
 
@@ -217,7 +333,7 @@ struct CanonicalGraphTests {
         let cases: [(TLASpec, GraphRunOutcome)] = [
             (
                 TLASpec("EmptyInitialStateRelation") {
-                    Variable(value, in: [Int]())
+                    Variable(value, in: Set<Int>())
                 },
                 .executionError("the compiled initial-state relation is empty")
             ),
@@ -235,7 +351,7 @@ struct CanonicalGraphTests {
                 compilation: specification.compile(),
                 configuration: configuration
             ).explore()
-            #expect(try SwiftGraphExporter().export(exploration).outcome == expected)
+            #expect(try FormalGraphExporter().export(exploration).outcome == expected)
         }
     }
 }

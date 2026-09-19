@@ -54,7 +54,7 @@ package struct EchoModel: Sendable {
         #spec("Echo") {
             Extends(.finiteSets)
             Algorithm("Echo", scoped: { scope in
-                let inbox = scope.sharedVar("inbox", initial: Function<Node, SetExpr<Record<MessageSchema>>>.literal(
+                let inbox = scope.sharedVar(initial: Function<Node, SetExpr<Record<MessageSchema>>>.literal(
                     (.a, SetExpr<Record<MessageSchema>>()),
                     (.b, SetExpr<Record<MessageSchema>>()),
                     (.c, SetExpr<Record<MessageSchema>>())
@@ -63,9 +63,9 @@ package struct EchoModel: Sendable {
                 Each(Node.all, scoped: { selfID, scope in
                     // The root's concrete `parent` default keeps the Swift value
                     // type finite while matching the algorithm.
-                    let parent: LocalVariable<Node> = scope.localVar("parent", initial: .a)
-                    let children: LocalVariable<SetExpr<Node>> = scope.localVar("children", initial: SetExpr<Node>())
-                    let received: LocalVariable<Int> = scope.localVar("received", initial: 0)
+                    let parent: LocalVariable<Node> = scope.localVar(initial: .a)
+                    let children: LocalVariable<SetExpr<Node>> = scope.localVar(initial: SetExpr<Node>())
+                    let received: LocalVariable<Int> = scope.localVar(initial: 0)
 
                     Do(Step.n0) {
                         If(selfID == .a) {
@@ -83,7 +83,6 @@ package struct EchoModel: Sendable {
                     While(Step.n1, received.expr < SetExpr<Node>.literal(.a, .b, .c).removing(selfID).cardinality) {
                         With(inbox[selfID]) { message in
                             Let(inbox.updating(selfID, to: inbox[selfID].removing(message))) { networkAfterReceive in
-                                Assign(received, to: received.expr + 1)
                                 If(selfID != .a && received.expr == 0) {
                                     Assert(message[MessageSchema.kind] == .message)
                                     Assign(parent, to: message[MessageSchema.sender])
@@ -98,6 +97,7 @@ package struct EchoModel: Sendable {
                                 } else: {
                                     Assign(inbox, to: networkAfterReceive.expr)
                                 }
+                                Assign(received, to: received.expr + 1)
                                 If(message[MessageSchema.kind] == .acknowledgement) {
                                     Assign(children, to: children.expr.inserting(message[MessageSchema.sender]))
                                 }

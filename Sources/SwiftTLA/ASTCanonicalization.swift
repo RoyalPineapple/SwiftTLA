@@ -1,3 +1,47 @@
+private func typeKeyNode(_ tag: String, _ fields: [String] = []) -> String {
+    tag + "[" + fields.map { "\($0.utf8.count):\($0)" }.joined() + "]"
+}
+
+func nativeTypeKey(_ type: CompiledValueType) -> String {
+    func fields(_ values: [CompiledFieldType]) -> [String] {
+        values.map { typeKeyNode("field", [$0.name, nativeTypeKey($0.type)]) }
+    }
+    switch type {
+    case .unknown: return typeKeyNode("unknown")
+    case .int: return typeKeyNode("int")
+    case .bool: return typeKeyNode("bool")
+    case .string: return typeKeyNode("string")
+    case .modelValue: return typeKeyNode("modelValue")
+    case .controlLocation: return typeKeyNode("controlLocation")
+    case .named(let name): return typeKeyNode("named", [name])
+    case .finite(let values): return typeKeyNode("finite", values.map(typeValueKey))
+    case .union(let types): return typeKeyNode("union", types.map(nativeTypeKey))
+    case .collectionMember(let id, let name): return typeKeyNode("member", [String(id.ordinal), name])
+    case .set(let element): return typeKeyNode("set", [nativeTypeKey(element)])
+    case .array(let element): return typeKeyNode("array", [nativeTypeKey(element)])
+    case .dictionary(let key, let value): return typeKeyNode("dictionary", [nativeTypeKey(key), nativeTypeKey(value)])
+    case .record(let members): return typeKeyNode("record", fields(members))
+    case .nominalRecord(let name, let members): return typeKeyNode("nominalRecord", [name] + fields(members))
+    case .tuple(let elements): return typeKeyNode("tuple", elements.map(nativeTypeKey))
+    }
+}
+
+private func typeValueKey(_ value: CompiledValue) -> String {
+    switch value {
+    case .integer(let value): return typeKeyNode("int", [String(value)])
+    case .boolean(let value): return typeKeyNode("bool", [String(value)])
+    case .string(let value): return typeKeyNode("string", [value])
+    case .constant(let value): return typeKeyNode("constant", [value])
+    case .controlLocation(let id): return typeKeyNode("location", [String(id.ordinal)])
+    case .set(let values): return typeKeyNode("set", values.sorted().map(typeValueKey))
+    case .tuple(let values): return typeKeyNode("tuple", values.map(typeValueKey))
+    case .record(let record):
+        return typeKeyNode("record", record.fields.map { typeKeyNode("field", [typeValueKey($0.key), typeValueKey($0.value)]) })
+    case .function(let values):
+        return typeKeyNode("function", values.keys.sorted().map { typeKeyNode("entry", [typeValueKey($0), typeValueKey(values[$0]!)]) })
+    }
+}
+
 func alphaKey(_ action: ActionExpr) -> String {
     alphaKey(action, bindingNames: [])
 }
@@ -9,69 +53,8 @@ func alphaKey(_ action: ActionExpr, bindingNames: [String]) -> String {
         let (_, extended) = fresh(name, environment: environment, next: &next)
         environment = extended
     }
-    let branches = semanticBranches(action)
+    let branches = ActionNormalization.branches(of: action) { semanticStateBranches($0).map(ActionExpr.guard_) }
     return "or[\(branches.map { actionKey($0, environment: environment, next: &next) }.joined(separator: ","))]"
-}
-
-/// Gives action disjunction one canonical representation. In particular,
-/// `(a \/ b) /\ c` and `(a /\ c) \/ (b /\ c)` are the same transition
-/// relation, whether the disjunction originated as a Swift boolean guard or
-/// as an `ActionBuilder` branch.
-private enum SemanticActionBranchTask {
-    case expression(ActionExpr)
-    case concatenate
-    case conjoin
-    case wrapExistential(String, StateExpr)
-    case wrapDefinition(String, StateExpr)
-}
-
-private func semanticBranches(_ action: ActionExpr) -> [ActionExpr] {
-    var tasks = [SemanticActionBranchTask.expression(action)]
-    var branches: [[ActionExpr]] = []
-    while let task = tasks.popLast() {
-        switch task {
-        case .expression(let expression):
-            switch expression {
-            case .or(let left, let right):
-                tasks.append(.concatenate)
-                tasks.append(.expression(right))
-                tasks.append(.expression(left))
-            case .guard_(let condition):
-                branches.append(semanticStateBranches(condition).map(ActionExpr.guard_))
-            case .and(let left, let right):
-                tasks.append(.conjoin)
-                tasks.append(.expression(right))
-                tasks.append(.expression(left))
-            case .ifElse(let condition, let then, let otherwise):
-                tasks.append(.concatenate)
-                tasks.append(.expression(.and(.guard_(.not(condition)), otherwise)))
-                tasks.append(.expression(.and(.guard_(condition), then)))
-            case .existsAction(let variable, let set, let body):
-                tasks.append(.wrapExistential(variable, set))
-                tasks.append(.expression(body))
-            case .define(let variable, let value, let body):
-                tasks.append(.wrapDefinition(variable, value))
-                tasks.append(.expression(body))
-            default:
-                branches.append([expression])
-            }
-        case .concatenate:
-            let right = branches.removeLast()
-            let left = branches.removeLast()
-            branches.append(left + right)
-        case .conjoin:
-            let right = branches.removeLast()
-            let left = branches.removeLast()
-            branches.append(left.flatMap { leftBranch in
-                right.map { rightBranch in .and(leftBranch, rightBranch) }
-            })
-        case .wrapExistential(let variable, let set):
-            branches.append(branches.removeLast().map { .existsAction(variable, set, $0) })
-        case .wrapDefinition(let variable, let value):
-            branches.append(branches.removeLast().map { .define(variable, value, $0) })
-        }
-    }
-    return branches[0]
 }
 
 /// Splits only disjunctions that occur inside a Boolean guard. Swift can group
@@ -122,13 +105,16 @@ func alphaKey(_ expression: StateExpr) -> String {
     return stateKey(expression, environment: [:], next: &next)
 }
 
-func alphaKey(_ expression: TemporalExpr) -> String {
+func alphaKey(_ expression: TemporalCondition<StateExpr>) -> String {
     switch expression {
     case .always(let state): return "always(\(alphaKey(state)))"
     case .eventually(let state): return "eventually(\(alphaKey(state)))"
     case .alwaysEventually(let state): return "alwaysEventually(\(alphaKey(state)))"
     case .eventuallyAlways(let state): return "eventuallyAlways(\(alphaKey(state)))"
     case .leadsTo(let from, let to): return "leadsTo(\(alphaKey(from)),\(alphaKey(to)))"
+    case .all(let conditions): return "all[" + conditions.map { alphaKey($0) }.joined(separator: ",") + "]"
+    case .conditional(let predicate, let yes, let no):
+        return "conditional(\(alphaKey(predicate)),\(alphaKey(yes)),\(alphaKey(no)))"
     }
 }
 
@@ -387,7 +373,10 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .functionApply(let lhs, let rhs): schedule("apply", [lhs, rhs], environment: environment)
             case .setSum(let lhs, let rhs): schedule("sum", [lhs, rhs], environment: environment)
             case .functionSet(let lhs, let rhs): schedule("functionSet", [lhs, rhs], environment: environment)
+            case .assertView(let value, let shape): schedule("assertView[\(shape)]", [value], environment: environment)
             case .negate(let value): schedule("negate", [value], environment: environment)
+            case .nextState(let value): schedule("nextState", [value], environment: environment)
+            case .stutteringStep(let value, let predicate): schedule("stutteringStep", [value, predicate], environment: environment)
             case .not(let value): schedule("not", [value], environment: environment)
             case .cardinality(let value): schedule("cardinality", [value], environment: environment)
             case .powerSet(let value): schedule("powerSet", [value], environment: environment)
@@ -417,6 +406,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .sourceIssue(let issue): parts.append("sourceIssue(\(issue))")
             case .value(let value): parts.append("value(\(value))")
             case .variable(let name): parts.append("var(\(environment[name] ?? name))")
+            case .parameter(let reference): parts.append("parameter(\(reference.name))")
             case .processLocalFamily(let name): parts.append("processLocalFamily(\(environment[name] ?? name))")
             case .currentProcess: parts.append("currentProcess")
             case .programCounter: parts.append("programCounter")
@@ -438,7 +428,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .recordLiteral(let fields):
                 let names = fields.fields.map(\.name)
                 schedule(fields.fields.map(\.value), environment: environment) { values in
-                    "record[\(zip(names, values).map { "\($0):\($1)" }.joined(separator: ","))]"
+                    "record\(fields.nativeType.map { "<\(nativeTypeKey($0))>" } ?? "")[\(zip(names, values).map { "\($0):\($1)" }.joined(separator: ","))]"
                 }
             case .recordAccess(let record, let field):
                 schedule([record], environment: environment) { "recordAccess(\($0[0]),\(field))" }

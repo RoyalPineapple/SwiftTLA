@@ -1,0 +1,307 @@
+import Testing
+import SwiftSyntax
+import SwiftTLAMacros
+@testable import SwiftTLA
+@testable import SwiftTLAPlugin
+
+struct ImportedModuleConfigurationTests {
+    @Test("sets retain contextual empty functions without admitting nonempty tuples")
+    func contextualFunctionSets() throws {
+        for empty in [true, false] {
+            let candidate = StateExpr.functionLiteral(.integerRange(0, 1), "key", 0)
+            for tuple in [StateExpr.tupleLiteral(empty ? [] : [.int(1)]),
+                          StateExpr.value(.tuple(empty ? [] : [.int(1)]))] {
+                let domain = StateExpr.ifThenElse(.bool(true), .setLiteral([tuple]), .setLiteral([candidate]))
+                let result = Var<Bool>("result")
+                let spec = TLASpec("ContextualFunctionSets") {
+                    Variable(result, Expr<Bool>(.in(candidate, domain)))
+                }
+                let compilation = try spec.compile()
+                if empty {
+                    _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+                } else {
+                    #expect(throws: CompilationDiagnostic.self) {
+                        try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+                    }
+                }
+            }
+        }
+    }
+
+    @Test("imported record fields resolve from operator results and reject unknown fields")
+    func resolvesImportedRecordFields() throws {
+        let parser = ParserSession()
+        parser.allowsUnboundValueNames = false
+        let scope = ParserSession.TypedFacadeScope.empty.extending(binding: "input",
+            to: .variable("input"), shape: .dictionary(.int, .int))
+        for field in ["shift", "missing"] {
+            let expression = try #require(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral:
+                "ForAll(in: ZSequences.rotations(of: input)) { rotation in rotation.\(field) >= 0 }"), scope: scope))
+            let input = Var<ZeroBasedSequence<Int>>("input")
+            let result = Var<Bool>("result")
+            let spec = TLASpec("ImportedFields") {
+                Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 2))
+                Variable(input, ZeroBasedSequence<Int>.literal(0, 1))
+                Variable(result, Expr<Bool>(expression))
+            }
+            let compilation = try spec.compile()
+            if field == "shift" {
+                _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+            } else {
+                #expect(throws: CompilationDiagnostic.self) {
+                    try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+                }
+            }
+        }
+    }
+
+    @Test("rotation records use generated validated projections")
+    func projectsRotationRecords() throws {
+        let raw = TLAValue.record(TLARecord([
+            .init("shift", .int(1)), .init("seq", .function([.int(0): .int(7)]))
+        ]))
+        let rotation = try #require(ZSequences.Rotation<Int>(formalValue: raw))
+        #expect(rotation.shift == 1)
+        #expect(rotation.seq.tlaValue == .function([.int(0): .int(7)]))
+        #expect(rotation.tlaValue == raw)
+        #expect(ZSequences.Rotation<Int>(formalValue: .record(TLARecord([
+            .init("shift", .int(1)), .init("seq", .bool(false))
+        ]))) == nil)
+        #expect(ZSequences.Rotation<Int>(formalValue: .record(TLARecord([
+            .init("shift", .int(1))
+        ]))) == nil)
+    }
+
+    @Test("imported sequence calls retain lexical bindings and reject malformed arguments")
+    func parsesScopedSequenceCalls() throws {
+        let parser = ParserSession()
+        parser.allowsUnboundValueNames = false
+        let scope = ParserSession.TypedFacadeScope.empty.extending(binding: "input",
+            to: .variable("resolvedInput"), shape: .dictionary(.int, .int))
+        #expect(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral:
+            "SwiftTLA.ZSequences.rotation(of: input, leftBy: 1)"), scope: scope) ==
+            .recursiveCall("Rotation", [.variable("resolvedInput"), .int(1)]))
+        #expect(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral:
+            "ZSequences.zeroBased(from: input)"), scope: scope) ==
+            .recursiveCall("ZSeqFromSeq", [.variable("resolvedInput")]))
+        #expect(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral:
+            "ZSequences.oneBased(from: input)"), scope: scope) ==
+            ZSequences.oneBasedExpression(from: .variable("resolvedInput")))
+        for source in ["ZSequences.rotation(of: input)",
+                       "ZSequences.rotation(of: input, leftBy: 1, extra: 2)",
+                       "ZSequences.sequences(of: input)",
+                       "ZSequences.zeroBased(of: input)",
+                       "ZSequences.oneBased(from: input, extra: 1)",
+                       "ZSequences.length(of: missing)"] {
+            #expect(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral: source), scope: scope) == nil)
+        }
+    }
+
+    @Test("sequence conversions retain explicitly declared element types even for empty inputs")
+    func conversionResultTypes() {
+        let parser = ParserSession()
+        let scope = ParserSession.TypedFacadeScope.empty
+            .extending(binding: "array", to: .variable("array"), shape: .array(.named("Member")))
+            .extending(binding: "zero", to: .variable("zero"), shape: .dictionary(.int, .named("Member")))
+        #expect(parser.typedFacadeValueType("ZSequences.zeroBased(from: array)", scope: scope)
+            == .dictionary(.int, .named("Member")))
+        #expect(parser.typedFacadeValueType("ZSequences.oneBased(from: zero)", scope: scope)
+            == .array(.named("Member")))
+        #expect(parser.typedFacadeValueType("ZSequences.zeroBased(from: Array<Int>([]))", scope: scope)
+            == .dictionary(.int, .int))
+        #expect(parser.typedFacadeValueType(
+            "ZSequences.oneBased(from: ZSequences.zeroBased(from: Array<Int>([])))", scope: scope) == .array(.int))
+        #expect(parser.typedFacadeValueType("ZSequences.zeroBased(from: missing)", scope: scope) == nil)
+        #expect(parser.typedFacadeValueType("ZSequences.oneBased(from: array)", scope: scope) == nil)
+    }
+
+    @Test("only an empty formal tuple admits a contextual function representation")
+    func contextualEmptyFunctions() throws {
+        let target = Var<ZeroBasedSequence<Int>>("target")
+        for expression in [StateExpr.tupleLiteral([]), StateExpr.value(.tuple([])),
+                           StateExpr.tupleLiteral([.int(1)]), StateExpr.value(.tuple([.int(1)]))] {
+            let specification = TLASpec("ContextualFunction") {
+                Variable(target, Expr<ZeroBasedSequence<Int>>(expression))
+            }
+            let compilation = try specification.compile()
+            if expression == .tupleLiteral([]) || expression == .value(.tuple([])) {
+                let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+                #expect(try program.renderModule().renderedModuleSource.contains("<<>>"))
+            } else {
+                #expect(throws: CompilationDiagnostic.self) {
+                    try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+                }
+            }
+        }
+    }
+
+    @Test("parameter-bound imported sequence domains execute as generated Swift")
+    func executesConfiguredSequenceDomains() throws {
+        let scenarios = try ConfiguredSequenceMachine.validationScenarios()
+        for (scenario, expectedCount) in zip(scenarios, [1, 7]) {
+            let machines = try scenario.initialMachines()
+            #expect(machines.count == expectedCount)
+            for machine in machines {
+                #expect(machine.state.sequence.count == machine.state.length)
+                let successor = try #require(machine.successors().first)
+                #expect(successor.machine.state.sequence.count == machine.state.length)
+            }
+            #expect(try scenario.render().tlaBundle.imports.map(\.name) == ["ZSequences"])
+        }
+    }
+
+    @Test("refinement instances retain independent imported module configurations")
+    func isolatesRefinementConfigurations() throws {
+        let value = Var<Int>("value", 0)
+        let abstract = TLASpec("Abstract") {
+            Parameter("Limit")
+            Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(
+                through: Expr<Int>(.variable("Limit"))))
+            Variable(value)
+            Action("stay") { value.stays }
+        }
+        let first = Instance("First", of: abstract)
+        let second = Instance("Second", of: abstract)
+        let root = TLASpec("Root") {
+            Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 1))
+            Variable(value)
+            Action("stay") { value.stays }
+            first
+            second
+            Refinement(_name: "FirstClaim", instance: first, mappings: [
+                .init(value, from: value), .init(FormalModuleParameter("Limit"), from: 2)
+            ])
+            Refinement(_name: "SecondClaim", instance: second, mappings: [
+                .init(value, from: value), .init(FormalModuleParameter("Limit"), from: 3)
+            ])
+        }
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: root.compile()))
+        let rendered = try program.renderModule()
+        #expect(rendered.configuration.declarations.contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
+        for (index, bound) in [2, 3].enumerated() {
+            let owner = "Root__Refinement\(index)"
+            #expect(rendered.configuration.declarations.contains(
+                "CONSTANT Nat <- [\(owner)__Import0]\(owner)__Configuration0"))
+            let module = try #require(rendered.imports.first { $0.name == owner })
+            #expect(module.tla.contains("ZSequencesNat == 0..\(bound)"))
+            #expect(module.tla.contains("\(owner)__Import0"))
+            #expect(rendered.imports.contains { $0.name == "\(owner)__Import0" })
+        }
+        #expect(rendered.renderedModuleSource.contains("Root__Refinement0__Configuration0 == First!ZSequencesNat"))
+        #expect(rendered.renderedModuleSource.contains("Root__Refinement1__Configuration0 == Second!ZSequencesNat"))
+        let bundle = TLAModuleBundle(root: .init(name: "Root", tla: rendered.renderedModuleSource),
+            imports: rendered.imports,
+            provenance: .compiled(identity: program.identity, ownership: [
+                .init(moduleName: "Root", owningRoot: "Root", structuralPath: [])
+            ] + rendered.importedOwnership, dependencies: rendered.dependencies))
+        try bundle.validateDeclaredClosure()
+    }
+
+    @Test("refinement specialization substitutes imported module bounds")
+    func specializesImportedBounds() throws {
+        let source = TLASpec("Abstract") {
+            Parameter("Limit")
+            Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(
+                through: Expr<Int>(.variable("Limit"))))
+        }
+        let specialized = source.specializing(parameters: ["Limit": .int(3)])
+        #expect(specialized.importConfigurations.first?.replacements.first?.expression ==
+            .integerRange(.int(0), .int(3)))
+        #expect(throws: Never.self) { try specialized.compile() }
+    }
+
+    @Test("concrete and abstract models share one unchanged formal dependency")
+    func retainsSharedRefinementImport() throws {
+        let value = Var<Int>("value", 0)
+        let abstract = TLASpec("Abstract") {
+            Import(Folds.module)
+            Variable(value)
+            Action("stay") { value.stays }
+        }
+        let instance = Instance("Abstract", of: abstract)
+        let root = TLASpec("Root") {
+            Import(Folds.module)
+            Variable(value)
+            Action("stay") { value.stays }
+            instance
+            Refinement(_name: "Refines", instance: instance, mappings: [.init(value, from: value)])
+        }
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: root.compile()))
+        let rendered = try program.renderModule()
+        #expect(rendered.imports.filter { $0.name == "Folds" }.count == 1)
+        #expect(rendered.dependencies.contains { $0.importingModule == "Root__Refinement0" && $0.importedModule == "Folds" })
+        let bundle = TLAModuleBundle(root: .init(name: "Root", tla: rendered.renderedModuleSource),
+            imports: rendered.imports,
+            provenance: .compiled(identity: program.identity, ownership: [
+                .init(moduleName: "Root", owningRoot: "Root", structuralPath: [])
+            ] + rendered.importedOwnership, dependencies: rendered.dependencies))
+        try bundle.validateDeclaredClosure()
+    }
+
+    @Test("imported module bounds retain resolved model parameter identities")
+    func retainsParameterIdentity() throws {
+        let compilation = try ConfiguredModuleMachine.spec.compile()
+        let parameter = try #require(compilation.layout.parameters.first)
+        let replacement = try #require(compilation.semantics.formalModuleReplacements.first)
+        #expect(replacement.expression.children[1].operation == .boundValue(parameter.binder))
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let resolved = try #require(program.formalModuleReplacements.first)
+        #expect(resolved.expression.resultType == .set(.int))
+        #expect(resolved.expression.children[1].resultType == .int)
+        #expect(resolved.expression.children[1].operation == .boundValue(parameter.binder))
+    }
+
+    @Test("typed export retains transitive formal module dependencies")
+    func retainsTransitiveDependencies() throws {
+        let leaf = TLASpec("Leaf") {
+            DefineRecursive("Identity", params: ["argument"]) { .variable("argument") }
+        }
+        let middle = TLASpec("Middle") { Import(leaf) }
+        let value = Var<Int>("value", 0)
+        let root = TLASpec("Root") {
+            Import(middle)
+            Variable(value)
+            Action("stay") { value.stays }
+        }
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: root.compile()))
+        let rendered = try program.renderModule()
+        #expect(Set(rendered.imports.map(\.name)) == ["Leaf", "Middle"])
+        let bundle = TLAModuleBundle(root: .init(name: "Root", tla: rendered.renderedModuleSource),
+            imports: rendered.imports,
+            provenance: .compiled(identity: program.identity, ownership: [
+                .init(moduleName: "Root", owningRoot: "Root", structuralPath: [])
+            ] + rendered.importedOwnership, dependencies: rendered.dependencies))
+        try bundle.validateDeclaredClosure()
+    }
+
+    @Test("model scenarios configure module exports and generated machines together")
+    func variesModuleConfiguration() throws {
+        let scenarios = try ConfiguredModuleMachine.validationScenarios()
+        #expect(scenarios.count == 2)
+        for (scenario, maximum) in zip(scenarios, [0, 3]) {
+            let rendered = try scenario.render().tlaBundle
+            #expect(rendered.tla.contains("ZSequencesNat == 0..maximum"))
+            #expect(rendered.cfg.contains("CONSTANT maximum = \(maximum)"))
+            #expect(rendered.cfg.contains("CONSTANT Nat <- [ZSequences]ZSequencesNat"))
+            #expect(rendered.imports.map(\.name) == ["ZSequences"])
+            let machine = try #require(scenario.initialMachines().first)
+            #expect(machine.state.value == maximum)
+            #expect(try machine.successors().first?.machine.state.value == maximum)
+        }
+    }
+
+    @Test("imported module configuration cannot depend on changing state")
+    func rejectsStateDependentConfiguration() throws {
+        let spec = TLASpec("InvalidModuleConfiguration", scoped: { scope in
+            let bound = scope.sharedVar(_name: "bound", initial: 2)
+            Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: bound))
+        })
+        do {
+            _ = try spec.compile()
+            Issue.record("Accepted a state-dependent module configuration")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .stateDependentFormalModuleReplacement)
+            #expect(diagnostic.path == "importConfigurations.ZSequences.Nat")
+        }
+    }
+}

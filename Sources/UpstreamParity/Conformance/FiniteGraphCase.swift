@@ -21,7 +21,7 @@ package struct TLCReferencePin: Equatable, Sendable {
     package let javaVersion: String
     package let javaArchiveSHA256: String
     package let bridgeClass: String
-    package let bridgeSourceSHA256: String
+    package let bridgeSourceHashes: [String: String]
     package let bridgeBinarySHA256: String
 
     package init(
@@ -32,7 +32,7 @@ package struct TLCReferencePin: Equatable, Sendable {
         javaVersion: String,
         javaArchiveSHA256: String,
         bridgeClass: String,
-        bridgeSourceSHA256: String,
+        bridgeSourceHashes: [String: String],
         bridgeBinarySHA256: String
     ) throws {
         guard !tag.isEmpty, Self.isRevision(commit) else {
@@ -46,9 +46,15 @@ package struct TLCReferencePin: Equatable, Sendable {
         }
         for (field, value) in [
             ("jarSHA256", jarSHA256), ("javaArchiveSHA256", javaArchiveSHA256),
-            ("bridgeSourceSHA256", bridgeSourceSHA256), ("bridgeBinarySHA256", bridgeBinarySHA256)
+            ("bridgeBinarySHA256", bridgeBinarySHA256)
         ] where !Self.isSHA256(value) {
             throw FiniteGraphCaseError.invalidSHA256(field: field)
+        }
+        guard !bridgeSourceHashes.isEmpty else { throw FiniteGraphCaseError.missingArtifact("bridge sources") }
+        for (path, hash) in bridgeSourceHashes {
+            guard !path.isEmpty, Self.isSHA256(hash) else {
+                throw FiniteGraphCaseError.invalidSHA256(field: "bridge source " + path)
+            }
         }
         self.tag = tag
         self.commit = commit
@@ -57,7 +63,7 @@ package struct TLCReferencePin: Equatable, Sendable {
         self.javaVersion = javaVersion
         self.javaArchiveSHA256 = javaArchiveSHA256
         self.bridgeClass = bridgeClass
-        self.bridgeSourceSHA256 = bridgeSourceSHA256
+        self.bridgeSourceHashes = bridgeSourceHashes
         self.bridgeBinarySHA256 = bridgeBinarySHA256
     }
 
@@ -84,7 +90,13 @@ package struct TLCReferencePin: Equatable, Sendable {
         }
         try Self.verify(artifacts.javaArchive, expected: javaArchiveSHA256, name: "Java archive")
         try Self.verify(artifacts.bridgeBinary, expected: bridgeBinarySHA256, name: "bridge binary")
-        try Self.verify(artifacts.bridgeSource, expected: bridgeSourceSHA256, name: "bridge source")
+        guard Set(artifacts.bridgeSources.keys) == Set(bridgeSourceHashes.keys) else {
+            throw FiniteGraphCaseError.pinMismatch("bridge source inventory")
+        }
+        for (path, hash) in bridgeSourceHashes {
+            guard let source = artifacts.bridgeSources[path] else { throw FiniteGraphCaseError.missingArtifact(path) }
+            try Self.verify(source, expected: hash, name: "bridge source " + path)
+        }
     }
 
     package func validateReportedTLCBanner(_ output: String) throws {
@@ -211,7 +223,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
 
     package struct Case: Decodable, Sendable {
         package let sourceModel: FiniteGraphSourceModel
-        package var id: String { sourceModel.rawValue }
+        package let scenario: String?
+        package let id: String
         package let module: String
         package let configuration: String
         package let imports: [String]
@@ -220,9 +233,10 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package let moduleSHA256: String
         package let cfgSHA256: String
         package let exploration: FiniteExplorationConfiguration
+        package let timeoutSeconds: TimeInterval
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case sourceModel, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration
+            case id, sourceModel, scenario, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration, timeoutSeconds
         }
 
         package struct Dependency: Decodable, Sendable {
@@ -234,15 +248,17 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             }
 
             package init(from decoder: Decoder) throws {
-                let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+                let container = try decoder.container(validatingKeys: CodingKeys.self)
                 importingModule = try container.decode(String.self, forKey: .importingModule)
                 importedModule = try container.decode(String.self, forKey: .importedModule)
             }
         }
 
         package init(from decoder: Decoder) throws {
-            let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+            let container = try decoder.container(validatingKeys: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
             sourceModel = try container.decode(FiniteGraphSourceModel.self, forKey: .sourceModel)
+            scenario = try container.decodeIfPresent(String.self, forKey: .scenario)
             module = try container.decode(String.self, forKey: .module)
             configuration = try container.decode(String.self, forKey: .configuration)
             imports = try container.decode([String].self, forKey: .imports)
@@ -250,6 +266,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             sourceInput = try container.decodeIfPresent(SourceInputPin.self, forKey: .sourceInput)
             moduleSHA256 = try container.decode(String.self, forKey: .moduleSHA256)
             cfgSHA256 = try container.decode(String.self, forKey: .cfgSHA256)
+            timeoutSeconds = try container.decode(TimeInterval.self, forKey: .timeoutSeconds)
             exploration = try container.decode(
                 FiniteExplorationConfiguration.self,
                 forKey: .exploration
@@ -257,7 +274,56 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             try validate()
         }
 
-        package func validate() throws {
+        package func resolveScenario() throws -> (any ModelValidationScenario)? {
+            let scenarios: [any ModelValidationScenario]
+            switch sourceModel {
+            case .boulanger:
+                scenarios = try BoulangerModel.validationScenarios()
+            case .diningPhilosophers:
+                scenarios = try DiningPhilosophersModel.validationScenarios()
+            case .hourClock:
+                scenarios = try HourClockModel.validationScenarios()
+            case .hourClock2:
+                scenarios = try HourClock2Model.validationScenarios()
+            case .leastCircularSubstring:
+                scenarios = try LeastCircularSubstringModel.validationScenarios()
+            case .dieHard:
+                scenarios = try DieHardModel.validationScenarios()
+            case .dieHarder:
+                scenarios = try DieHarderModel.validationScenarios()
+            case .channel:
+                scenarios = try ChannelModel.validationScenarios()
+            case .asynchInterface:
+                scenarios = try AsynchInterfaceModel.validationScenarios()
+            case .majority:
+                scenarios = try MajorityModel.validationScenarios()
+            case .nQueensFour:
+                scenarios = try NQueensModel.validationScenarios()
+            case .queensFour:
+                scenarios = try QueensModel.validationScenarios()
+            case .coffeeCan:
+                scenarios = try CoffeeCanModel.validationScenarios()
+            default:
+                guard scenario == nil else {
+                    throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
+                }
+                return nil
+            }
+            let matches = scenarios.filter { $0.name == scenario }
+            guard matches.count == 1 else {
+                throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
+            }
+            return matches[0]
+        }
+
+        private func validate() throws {
+            let allowedIDCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-_")
+            guard !id.isEmpty, id != "all", id.unicodeScalars.allSatisfy(allowedIDCharacters.contains) else {
+                throw FiniteGraphCaseError.invalidIdentifier("case ID")
+            }
+            guard timeoutSeconds.isFinite, timeoutSeconds > 0 else {
+                throw EvidenceFormatError.invalidField(record: id, field: "timeoutSeconds")
+            }
             guard module.isEmpty == false, configuration.isEmpty == false,
                   Set(imports).count == imports.count, imports.allSatisfy({ $0.isEmpty == false }),
                   dependencies.allSatisfy({
@@ -280,7 +346,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey, CaseIterable { case schema, cases }
 
     package init(from decoder: Decoder) throws {
-        let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+        let container = try decoder.container(validatingKeys: CodingKeys.self)
         schema = try container.decode(String.self, forKey: .schema)
         cases = try container.decode([Case].self, forKey: .cases)
         try validate()
@@ -290,13 +356,12 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         guard schema == Self.schema, !cases.isEmpty else {
             throw EvidenceFormatError.invalidSchema(schema)
         }
-        var sourceModels = Set<FiniteGraphSourceModel>()
+        var caseIDs = Set<String>()
         for finiteGraphCase in cases {
-            try finiteGraphCase.validate()
-            guard sourceModels.insert(finiteGraphCase.sourceModel).inserted else {
+            guard caseIDs.insert(finiteGraphCase.id).inserted else {
                 throw EvidenceFormatError.duplicateID(
-                    kind: "source model",
-                    id: finiteGraphCase.sourceModel.rawValue
+                    kind: "finite graph case",
+                    id: finiteGraphCase.id
                 )
             }
         }
@@ -305,17 +370,71 @@ package struct FiniteGraphManifest: Decodable, Sendable {
 }
 
 package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, Sendable {
+    case channel
+    case majority
+    case boulanger
+    case voteProof = "voteproof"
+    case kvsnap
+    case asynchInterface = "asynch-interface"
     case hourClock = "hour-clock"
-    case dieHardTypeOK = "die-hard-type-ok"
+    case hourClock2 = "hour-clock-2"
+    case leastCircularSubstring = "least-circular-substring"
+    case dieHard = "die-hard"
+    case dieHarder = "die-harder"
     case multiCarElevator = "multicar-elevator"
     case tlcmcGraph1 = "tlcmc-graph-1"
+    case nQueensFour = "n-queens-four"
+    case queensFour = "queens-four"
+    case coffeeCan = "coffee-can"
+    case diningPhilosophers = "dining-philosophers"
+    case stringLiterals = "string-literals"
+    case actionReferences = "action-references"
+
+    package func nativeRun(rendered: RenderedSpecification, checkingDeadlock: Bool,
+        scenario: (any ModelValidationScenario)? = nil, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {
+        func exploreScenario<Scenario: ModelValidationScenario>(_ scenario: Scenario) throws -> NativeModelRun {
+            try NativeModelRun(scenario.explore(maximumStates: finiteGraphCase.exploration.maximumStateLimit),
+                rendered: rendered, checkingDeadlock: checkingDeadlock, for: finiteGraphCase)
+        }
+        if let scenario { return try exploreScenario(scenario) }
+        func explore<Machine: StateMachine>(_ initial: [Machine]) throws -> NativeModelRun {
+            try NativeModelRun(ReachabilityGraph(initialMachines: initial,
+                maximumStates: finiteGraphCase.exploration.maximumStateLimit),
+                rendered: rendered, checkingDeadlock: checkingDeadlock, for: finiteGraphCase)
+        }
+        switch self {
+        case .voteProof: return try explore(VoteProofModel.initialMachines())
+        case .kvsnap: return try explore(KVsnapModel.initialMachines())
+        case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
+        case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
+        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
+            throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
+        case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
+        case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
+        }
+    }
 
     package var spec: TLASpec {
         switch self {
+        case .boulanger: BoulangerModel.spec
+        case .voteProof: VoteProofModel.spec
+        case .kvsnap: KVsnapModel.spec
+        case .majority: MajorityModel.spec
+        case .channel: ChannelModel.spec
+        case .asynchInterface: AsynchInterfaceModel.spec
         case .hourClock: Example.hourClock.spec
-        case .dieHardTypeOK: Example.dieHardTypeOK.spec
+        case .hourClock2: HourClock2Model.spec
+        case .leastCircularSubstring: LeastCircularSubstringModel.spec
+        case .dieHard: DieHardModel.spec
+        case .dieHarder: DieHarderModel.spec
         case .multiCarElevator: MultiCarElevator.spec
         case .tlcmcGraph1: TLCMCModel.spec
+        case .nQueensFour: NQueensModel.spec
+        case .queensFour: QueensModel.spec
+        case .coffeeCan: CoffeeCanModel.spec
+        case .diningPhilosophers: DiningPhilosophersModel.spec
+        case .stringLiterals: StringLiteralModel.spec
+        case .actionReferences: ActionReferencesModel.spec
         }
     }
 }
@@ -323,15 +442,15 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
 package struct TLCReferenceArtifacts: Equatable, Sendable {
     package let jar: URL
     package let javaArchive: URL
-    package let bridgeSource: URL
+    package let bridgeSources: [String: URL]
     package let bridgeBinary: URL
     package let jarManifest: String
     package let runtime: TLCJavaRuntimeIdentity
 
-    package init(jar: URL, javaArchive: URL, bridgeSource: URL, bridgeBinary: URL, jarManifest: String, runtime: TLCJavaRuntimeIdentity) {
+    package init(jar: URL, javaArchive: URL, bridgeSources: [String: URL], bridgeBinary: URL, jarManifest: String, runtime: TLCJavaRuntimeIdentity) {
         self.jar = jar
         self.javaArchive = javaArchive
-        self.bridgeSource = bridgeSource
+        self.bridgeSources = bridgeSources
         self.bridgeBinary = bridgeBinary
         self.jarManifest = jarManifest
         self.runtime = runtime

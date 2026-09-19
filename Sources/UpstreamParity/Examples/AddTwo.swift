@@ -18,7 +18,7 @@ package struct AddTwoModel: Sendable {
         #spec("AddTwo") {
             Extends(.naturals)
             Algorithm("Increase", scoped: { scope in
-                let x = scope.sharedVar("x", initial: 0)
+                let x = scope.sharedVar(initial: 0)
 
                 Do(Label.increase) {
                     Assign(x, to: x + 2)

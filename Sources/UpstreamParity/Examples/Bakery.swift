@@ -33,13 +33,13 @@ package struct BakeryN2Model: Sendable {
         #spec("Bakery") {
             Extends(.integers)
             Algorithm("Bakery", scoped: { scope in
-                let num = scope.sharedVar("num", initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
-                let flag = scope.sharedVar("flag", initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
+                let num = scope.sharedVar(initial: Function<Process, Int>.literal((.one, 0), (.two, 0)))
+                let flag = scope.sharedVar(initial: Function<Process, Bool>.literal((.one, false), (.two, false)))
 
                 Each(Process.all, fairness: .weak, scoped: { process, scope in
-                    let unchecked: LocalVariable<SetExpr<Process>> = scope.localVar("unchecked", initial: SetExpr<Process>())
-                    let maxSeen = scope.localVar("maxSeen", initial: 0)
-                    let next: LocalVariable<Process> = scope.localVar("next", initial: .one)
+                    let unchecked: LocalVariable<SetExpr<Process>> = scope.localVar(initial: SetExpr<Process>())
+                    let maxSeen = scope.localVar(initial: 0)
+                    let next: LocalVariable<Process> = scope.localVar(initial: .one)
 
                     Do(Step.ncs) {
                         Skip()
@@ -114,7 +114,7 @@ package struct BakeryN2Model: Sendable {
                                 Goto(Step.w1)
                             } or: {
                                 When(num[process] == num[next.expr])
-                                When(process.stateExpr < next.expr)
+                                When(process < next)
                                 Assign(unchecked, to: unchecked.expr.removing(next.expr))
                                 Goto(Step.w1)
                             }

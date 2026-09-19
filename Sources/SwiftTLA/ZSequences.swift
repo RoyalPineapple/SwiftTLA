@@ -4,32 +4,6 @@
 /// zero. Import `ZSequences.module` into a model before using these calls.
 /// The generated bundle emits `ZSequences.tla` as a separate dependency.
 public enum ZSequences {
-  public struct RotationFields<Element: TLAValueType> {
-    public let shift: Int
-    public let sequence: ZeroBasedSequence<Element>
-  }
-
-  public enum Rotation<Element: TLAValueType>: TLARecordSchema {
-    public typealias Fields = RotationFields<Element>
-
-    public static var fields: [TLARecordFieldDeclaration<Self>] {
-      [
-        .init(shift, default: 0),
-        .init(sequence, default: ZeroBasedSequence<Element>()),
-      ]
-    }
-
-    public static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String? {
-      let key = field as AnyKeyPath
-      if key == \Fields.shift { return "shift" }
-      if key == \Fields.sequence { return "seq" }
-      return nil
-    }
-
-    public static var shift: TLAField<Self, Int> { field(\Fields.shift) }
-    public static var sequence: TLAField<Self, ZeroBasedSequence<Element>> { field(\Fields.sequence) }
-  }
-
   /// The formal module exported as `ZSequences.tla`.
   ///
   /// `ZSeq` follows the upstream definition and ranges over `Nat`. A model
@@ -166,52 +140,62 @@ public enum ZSequences {
   }
 
   public static func indices<Element: TLAValueType>(
-    of sequence: Expr<ZeroBasedSequence<Element>>
-  ) -> Expr<SetExpr<Int>> {
-    Expr(.recursiveCall("ZIndices", [sequence.raw]))
+    of sequence: some TypedExpression<ZeroBasedSequence<Element>>
+  ) -> Expr<Set<Int>> {
+    Expr(.recursiveCall("ZIndices", [sequence.stateExpr]))
   }
 
   /// The bounded set of zero-indexed sequences over `elements`.
   ///
   /// `Import(ZSequences.module, configuring: ...)` supplies the finite `Nat`
   /// domain used by the upstream `ZSeq` definition.
-  public static func sequences<Element: TLAValueType>(
-    over elements: Expr<SetExpr<Element>>
-  ) -> Expr<SetExpr<ZeroBasedSequence<Element>>> {
-    Expr(.recursiveCall("ZSeq", [elements.raw]))
+  public static func sequences<Domain: FormalSetValue>(
+    over elements: some TypedExpression<Domain>
+  ) -> Expr<Set<ZeroBasedSequence<Domain.Element>>> {
+    Expr(.recursiveCall("ZSeq", [elements.stateExpr]))
   }
 
   public static func length<Element: TLAValueType>(
-    of sequence: Expr<ZeroBasedSequence<Element>>
+    of sequence: some TypedExpression<ZeroBasedSequence<Element>>
   ) -> Expr<Int> {
-    Expr(.recursiveCall("ZLen", [sequence.raw]))
+    Expr(.recursiveCall("ZLen", [sequence.stateExpr]))
+  }
+
+  public static func zeroBased<Element: TLAValueType>(
+    from sequence: some TypedExpression<[Element]>
+  ) -> Expr<ZeroBasedSequence<Element>> {
+    Expr(.recursiveCall("ZSeqFromSeq", [sequence.stateExpr]))
+  }
+
+  /// Produces an ordinary Swift array; DSL indexing remains one-based.
+  public static func oneBased<Element: TLAValueType>(
+    from sequence: some TypedExpression<ZeroBasedSequence<Element>>
+  ) -> Expr<[Element]> {
+    Expr(oneBasedExpression(from: sequence.stateExpr))
+  }
+
+  package static func oneBasedExpression(from sequence: StateExpr) -> StateExpr {
+    // Selection retains every element while giving the function a sequence view.
+    .sequenceSelect(.recursiveCall("SeqFromZSeq", [sequence]), "__zSequenceElement", .bool(true))
   }
 
   public static func rotation<Element: TLAValueType>(
-    of sequence: Expr<ZeroBasedSequence<Element>>,
-    leftBy shift: Expr<Int>
+    of sequence: some TypedExpression<ZeroBasedSequence<Element>>,
+    leftBy shift: some TypedExpression<Int>
   ) -> Expr<ZeroBasedSequence<Element>> {
-    Expr(.recursiveCall("Rotation", [sequence.raw, shift.raw]))
-  }
-
-  /// Every left rotation of a zero-indexed sequence, as the upstream record
-  /// set `{ [shift |-> r, seq |-> Rotation(s, r)] : r \in ZIndices(s) }`.
-  public static func rotations<Element: TLAValueType>(
-    of sequence: Expr<ZeroBasedSequence<Element>>
-  ) -> Expr<SetExpr<Record<Rotation<Element>>>> {
-    Expr(.recursiveCall("Rotations", [sequence.raw]))
+    Expr(.recursiveCall("Rotation", [sequence.stateExpr, shift.stateExpr]))
   }
 
   public static func lexicographicallyPrecedesOrEquals(
-    _ left: Expr<ZeroBasedSequence<Int>>,
-    _ right: Expr<ZeroBasedSequence<Int>>
-  ) -> StateExpr {
-    .recursiveCall("LexicographicallyPrecedesOrEquals", [left.raw, right.raw])
+    _ left: some TypedExpression<ZeroBasedSequence<Int>>,
+    _ right: some TypedExpression<ZeroBasedSequence<Int>>
+  ) -> Expr<Bool> {
+    Expr(.recursiveCall("LexicographicallyPrecedesOrEquals", [left.stateExpr, right.stateExpr]))
   }
 
   /// Gives the imported module's `Nat` operator a finite TLC model domain.
   public static func boundedNaturalNumbers(
-    _ range: ClosedRange<Int>
+    through upperBound: some TypedExpression<Int>
   ) -> FormalModuleConfiguration {
     FormalModuleConfiguration(
       moduleName: module.name,
@@ -219,9 +203,13 @@ public enum ZSequences {
         FormalModuleReplacement(
           operatorName: "Nat",
           definitionName: "ZSequencesNat",
-          expression: .integerRange(.int(range.lowerBound), .int(range.upperBound))
+          expression: IntRange(0, through: upperBound).stateExpr
         )
       ]
     )
+  }
+
+  public static func boundedNaturalNumbers(through upperBound: Int) -> FormalModuleConfiguration {
+    boundedNaturalNumbers(through: Expr(upperBound))
   }
 }
