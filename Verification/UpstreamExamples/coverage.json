@@ -592,6 +592,16 @@
   },
   "localDiagnostics": [
     {
+      "session": "15190",
+      "sourceSHA": "09db926d486ed41cd24c4b5ae529ecbdb321d0ab",
+      "sourcePatchSHA256": "38a5aeae64fb97faa41cb6569caacc0f241fa889237223a539cd9952f641b3bd",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SwiftRecordTypeTests|KVsnapCorpusExecutionTests|KVsnapCorpusRenderingTests|FormalUnionTests|NativeTypeDiagnosticTests|GeneratedSwiftRecordTests|FormalValueEqualityTests|SpecificationSourceAuthorityTests'",
+      "exitCode": 1,
+      "testsRun": 0,
+      "result": "Compilation failed while parsing KVsnap Each, before tests. Session 79361 first reported this failure with truncated diagnostics; session 15190 repeated the same patch with deduplicated error output. Source inspection identifies the unsupported [Operation]() constructor spelling: the parser accepts explicit Array constructors and array literals. The next patch uses [] with the existing explicit LocalVariable<[Operation]> annotation. Typed-union and record migration validation remains pending.",
+      "scope": "Only diagnostic output filtering changed between attempts; no source was edited during either build. This records a failed local experiment, not implementation acceptance or upstream coverage."
+    },
+    {
       "session": "64107",
       "sourceSHA": "28e1fc1cd04bb157d6bc0c596f3a69f659ce29d6",
       "sourcePatchSHA256": "97479b28fa907c98a8749bed24f16271ac09ab91301541e2504b52b8f287356f",
