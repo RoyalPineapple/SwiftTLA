@@ -60,6 +60,15 @@
       },
       "completedJobs": [
         {
+          "name": "finite-graphs",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/job/105944975936",
+          "conclusion": "cancelled",
+          "buildSeconds": 1593.78,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/artifacts/10590708115",
+          "artifactDigest": "sha256:947f13bc59262d9e6a7e4528ed52dce44e378610ccaad12e27f4d7b6cffb7f5d",
+          "scope": "The 75-minute suite step ended during native exploration, after compilation succeeded. Downloaded diagnostics bind to ff01cbc7. The final sample at 19:38:39 UTC shows Boulanger exploration in ReachabilityGraph.discover, ArraySlice.append, buffer copying, and model destruction. Physical footprint peaked at 6.7 GB. The sample identifies queue storage as a performance investigation target, not a proven sole cause. No complete suite result or upstream equivalence follows. Model bounds and checks remain unchanged."
+        },
+        {
           "name": "upstream",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/job/105944975813",
           "conclusion": "success",
