@@ -1564,6 +1564,17 @@ final class ParserSession {
         }
         guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
         if compilerGrammarName(in: call.calledExpression) == "IntRange" { return .set(.int) }
+        if decodeProcessLocalFamily(call) != nil,
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           let local = member.base,
+           let metatype = call.arguments.first?.expression.as(MemberAccessExprSyntax.self),
+           metatype.declName.baseName.sourceIdentifierName == "self",
+           let typeSyntax = metatype.base,
+           let typeName = typedFacadeType(typeSyntax)?.renderedSourceName
+                ?? Self.sourceTypePath(typeSyntax)?.joined(separator: "."),
+           let key = try? sourceTypeResolver.resolve(typeName) {
+            return .dictionary(key, typedFacadeValueType(local, scope: scope) ?? .unknown)
+        }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            compilerGrammarName(in: member.base) == "ZSequences",
            member.declName.baseName.sourceIdentifierName == "sequences",

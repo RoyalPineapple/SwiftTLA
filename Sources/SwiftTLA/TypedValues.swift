@@ -337,9 +337,9 @@ public struct PartialFunction<Domain: FiniteTLAValueDomain, Range: TLAValueType>
 
 /// The formal range of a finite function, using the upstream `Functions.Range`
 /// operator when that module is imported by the surrounding specification.
-public func Range<Domain: FiniteTLAValueDomain, Value: TLAValueType>(
-  _ function: some TypedExpression<Function<Domain, Value>>
-) -> Expr<SetExpr<Value>> {
+public func Range<Mapping: FormalDictionaryValue>(
+  _ function: some TypedExpression<Mapping>
+) -> Expr<Set<Mapping.Value>> where Mapping.Value: Hashable {
   FormalCall("Range", function)
 }
 

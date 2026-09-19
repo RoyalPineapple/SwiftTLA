@@ -325,9 +325,9 @@ public struct LocalVariable<Value: TLAValueType>: TypedExpression {
 
     /// Views this process-local declaration as the total function over its
     /// process family for properties such as `Range(ops)`.
-    public func family<Process: FiniteTLAValueDomain>(
+    public func family<Process: TLAValueType & Hashable>(
         for _: Process.Type
-    ) -> Expr<Function<Process, Value>> {
+    ) -> Expr<[Process: Value]> {
         Expr(.processLocalFamily(name))
     }
 

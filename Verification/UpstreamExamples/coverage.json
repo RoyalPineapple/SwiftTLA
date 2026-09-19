@@ -22,6 +22,30 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
+    "currentCandidate": {
+      "sourceSHA": "b0755df76872000d9e6d50bff1a13bc9bb2b8dab",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754",
+      "completedJobs": [
+        {
+          "name": "apple-platform-examples",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/job/105929392152",
+          "conclusion": "success",
+          "testsPassed": 12,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/artifacts/10588371933",
+          "artifactDigest": "sha256:e6294e2146b15679f601bbeafb40d7957ce216e0363067049963d63ed35fd15c",
+          "scope": "The terminal log reports successful example builds, 12 Apple-platform adoption tests with zero failures, and a successful demo-app build. This is not aggregate CI or independent upstream equivalence evidence."
+        },
+        {
+          "name": "canonical-corpus-export",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/job/105929392190",
+          "conclusion": "success",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/artifacts/10587928036",
+          "artifactDigest": "sha256:8560617c1f0d6798aad1f876020665e52f1da7feeb191527ddea4f04303b2c39",
+          "scope": "The retained manifest names this source SHA. Every exported file was checked against its manifest digest. This verifies retained export integrity for the four registered corpus entries, not complete family coverage, TLC semantic equivalence, or the uncommitted local-family feature."
+        }
+      ],
+      "scope": "This pushed candidate contains the tested fairness exemptions and recorded corpus evidence. Its hosted CI run is active, not verified. The uncommitted configured local-family patch is not included. Independent comparisons in run 35451794508 remain pinned to 3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217."
+    },
     "verifiedCandidate": {
       "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451791172",
@@ -256,6 +280,34 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "38872",
+      "sourceSHA": "b0755df76872000d9e6d50bff1a13bc9bb2b8dab",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ConfiguredLocalFamilyTests|AlgorithmBuilderTests|AlgorithmBuilderParsingTests|ConfiguredProcessTests|GeneratedProcessLocalInvariantTests|KVsnapCorpusRenderingTests|KVsnapCorpusExecutionTests|CompilerPipelineCanonicalizationTests'",
+      "exitCode": 0,
+      "buildSeconds": 572.22,
+      "testSeconds": 14.491,
+      "testsRun": 228,
+      "result": "Configured process-local families use ordinary typed dictionaries without requiring a fixed enum. Empty, singleton, and sparse integer populations compile and explore completely. Generated invariant checks retain exact domains and cross-member values; direct TLA and authored PlusCal retain family-domain access. Range has an ordinary typed-set result. Existing KVsnap rendering and execution, process-local invariants, parser, builder, and canonicalization tests pass.",
+      "unblocks": "MCBoulanger.cfg at the pinned upstream revision: Before and IInv read other configured processes' local state. This supports AC-06, AC-17, and AC-19, but does not establish their complete acceptance coverage.",
+      "review": "Ponytail and cleanliness review retained the existing processLocalFamily lowering and formal Range call. No runtime path, compatibility overload, duplicate model schema, or fixed population was added. The approved static wrapper passed.",
+      "scope": "The starting SHA plus the configured local-family patch committed with this entry. Only the evidence ledger changed during the build. This is local diagnostic evidence, not a hosted upstream match or a complete DSL criterion."
+    },
+    {
+      "session": "71384",
+      "sourceSHA": "b0755df76872000d9e6d50bff1a13bc9bb2b8dab",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ConfiguredLocalFamilyTests|AlgorithmBuilderTests|AlgorithmBuilderParsingTests|ConfiguredProcessTests|GeneratedProcessLocalInvariantTests|KVsnapCorpusRenderingTests|KVsnapCorpusExecutionTests|CompilerPipelineCanonicalizationTests'",
+      "exitCode": 1,
+      "reason": "The test incorrectly expected generated Property.family for a declaration named Family. NativeSwiftEmitter passes the declaration name through GeneratedMachineAPI.generatedIdentifiers, which preserves case. The assertion now uses Property.Family; no production API, property meaning, or check selection changed.",
+      "scope": "The starting SHA plus the uncommitted configured local-family patch. No tests ran and no verification credit is assigned."
+    },
+    {
+      "session": "90607",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ConfiguredLocalFamilyTests|AlgorithmBuilderTests|AlgorithmBuilderParsingTests|ConfiguredProcessTests|GeneratedProcessLocalInvariantTests|KVsnapCorpusRenderingTests|KVsnapCorpusExecutionTests|CompilerPipelineCanonicalizationTests'",
+      "exitCode": 1,
+      "reason": "The parser correction compiled the new model. The test then failed compilation because it attempted to read a process-local family through shared State.value. Generated process locals are retained in the snapshot, not exposed as shared State fields. The corrected test asserts the generated Family property exists and checks its exact configured-domain and cross-member value predicate through violatedInvariants before and after transitions, plus complete graph exploration.",
+      "scope": "The configured local-family patch on b182e283, with only ledger changes during the build. No tests ran and no verification credit is assigned. The corrected test is running separately in session 71384 on b0755df76872000d9e6d50bff1a13bc9bb2b8dab plus the uncommitted patch."
+    },
     {
       "session": "67731",
       "sourceSHA": "2e84f79064da40b69afce5b8cf9c01ead7e30eb6",

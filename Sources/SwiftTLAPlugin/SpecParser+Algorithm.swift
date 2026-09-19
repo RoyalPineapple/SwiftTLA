@@ -386,6 +386,10 @@ extension ParserSession {
                 algorithmComponents.append(property)
                 continue
             }
+            if let failure = algorithmParseFailure {
+                components.diagnostics.append(.init(message: failure, source: call))
+                return nil
+            }
             guard let construct = AlgorithmSourceConstruct(call.calledExpression) else {
                 if let diagnostic = unsupportedAlgorithmSourceDiagnostic(
                     in: call.calledExpression, source: call
@@ -755,7 +759,7 @@ extension ParserSession {
         let parameter = closureParameters.first ?? "self"
         let declarationScope = closureParameters.count > 1 ? closureParameters.last : nil
         var processScope = scope.extending(binding: parameter,
-            to: .currentProcess)
+            to: .currentProcess, shape: elementType)
         var components: [AlgorithmComponentModel] = []
         for (index, statement) in closure.statements.enumerated() {
             if case .decl(let declaration) = statement.item,
@@ -787,6 +791,7 @@ extension ParserSession {
                 components.append(property)
                 continue
             }
+            if algorithmParseFailure != nil { return nil }
             guard let construct = AlgorithmSourceConstruct(componentCall.calledExpression) else {
                 guard let sourceName = AlgorithmSourceConstruct.referenceName(in: componentCall.calledExpression) else {
                     return nil

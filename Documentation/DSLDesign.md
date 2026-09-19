@@ -913,6 +913,13 @@ helpers. It cannot depend on machine state or action enabledness. For example,
 
 Each configuration creates local-state and control entries for exactly its
 population. An empty configured population creates no process instances.
+
+Inside a process property, `local.family(for: Member.self)` views the complete local-state family as an `Expr<[Member: Value]>`.
+The dictionary keys are the configured process members, including sparse integer populations.
+This view does not require a fixed enum or change the population.
+Properties can read another member with `local.family(for: Member.self)[other]`.
+For `Hashable` value types, `Range` returns an ordinary typed set from this dictionary view.
+
 Completion still follows the algorithm's control semantics. Different populations
 retain the same generated state fields and action cases.
 
