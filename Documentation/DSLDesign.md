@@ -785,6 +785,13 @@ DSL sequence indices start at one, as in TLA+.
 Generated application state uses ordinary Swift arrays, whose indices start at zero.
 The formal boundary rejects invalid element values instead of discarding them.
 
+`ZSequences.zeroBased(from:)` converts an ordinary array expression into a zero-based sequence expression.
+`ZSequences.oneBased(from:)` converts a zero-based sequence expression into an ordinary array expression.
+Both operations preserve element types, order, repeated values, and empty arrays.
+Models import `ZSequences.module` before they use these conversions.
+The `oneBased` name describes DSL sequence indices.
+The generated Swift array still uses zero-based indices.
+
 #### Configured sequence domains
 
 The bounded sequence builders accept typed set expressions for their elements and lengths.

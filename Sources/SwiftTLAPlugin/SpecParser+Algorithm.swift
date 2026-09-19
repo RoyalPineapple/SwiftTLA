@@ -731,14 +731,22 @@ extension ParserSession {
         }
         let domain: StateExpr
         let typeName: String
+        let elementType: CompiledValueType
         if let finite = finiteAlgorithmDomain(domainSyntax) {
             domain = .setLiteral(finite.values.map(StateExpr.value))
             typeName = finite.typeName
+            do {
+                elementType = try sourceTypeResolver.resolve(typeName)
+            } catch {
+                algorithmParseFailure = "Each has an invalid element type: \(error)"
+                return nil
+            }
         } else if case .set(let element)? = typedFacadeValueType(domainSyntax, scope: scope),
                   element.resolved,
                   let expression = decodeTypedFacadeValue(domainSyntax, scope: scope) {
             domain = expression
             typeName = element.swiftType
+            elementType = element
         } else {
             algorithmParseFailure = "Each requires a typed set with a resolved element type."
             return nil
@@ -762,7 +770,8 @@ extension ParserSession {
                 components.append(.local(.init(
                     root: state.root,
                     initialization: state.initialization,
-                    swiftTypeName: state.swiftTypeName
+                    swiftTypeName: state.swiftTypeName,
+                    resolvedValueType: state.resolvedValueType
                 )))
                 processScope = processScope.extending(binding: parsedVariable.sourceName,
                     to: .variable(state.root),
@@ -821,7 +830,8 @@ extension ParserSession {
         } else {
             fairness = .none
         }
-        return .process(.init(typeName: typeName, domain: domain, fairness: fairness, components: components))
+        return .process(.init(typeName: typeName, domain: domain, fairness: fairness,
+            components: components, resolvedElementType: elementType))
     }
 
     /// Parses one PlusCal-shaped state declaration into the source model.
@@ -891,7 +901,9 @@ extension ParserSession {
             algorithmParseFailure = "State '\(declaredName)' has an invalid value type: \(error)"
             return nil
         }
-        let component: AlgorithmComponentModel = kind == .shared ? .shared(state) : .local(state)
+        let resolvedState = AlgorithmStateModel(root: state.root, initialization: state.initialization,
+            swiftTypeName: state.swiftTypeName, resolvedValueType: inferredType)
+        let component: AlgorithmComponentModel = kind == .shared ? .shared(resolvedState) : .local(resolvedState)
         return (sourceName, component, valueType)
     }
 

@@ -1346,7 +1346,8 @@ private struct CanonicalSpecificationEncoder {
             variable.name,
             canonicalInitialization(variable.initialization),
             collection,
-            canonicalOptional(variable.generatedSwiftType)
+            canonicalOptional(variable.generatedSwiftType),
+            canonicalOptional(variable.resolvedValueType.map(nativeTypeKey))
         ])
     }
 

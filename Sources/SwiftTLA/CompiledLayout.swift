@@ -70,6 +70,7 @@ package struct CompiledVariableLayout: Hashable, Sendable {
     package let id: VariableID
     package let declaration: CompiledDeclaration
     package let generatedSwiftType: String?
+    package let resolvedValueType: CompiledValueType?
     package let collection: CompiledModelCollectionLayout?
 }
 
@@ -203,6 +204,7 @@ package struct CompiledLayout: Hashable, Sendable {
                     origin: variable.origin
                 ),
                 generatedSwiftType: variable.generatedSwiftType,
+                resolvedValueType: variable.resolvedValueType,
                 collection: collection.map {
                     .init(
                         members: $0.metadata.members.map(CompiledValue.init(formal:)),

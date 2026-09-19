@@ -161,6 +161,24 @@ public enum ZSequences {
     Expr(.recursiveCall("ZLen", [sequence.stateExpr]))
   }
 
+  public static func zeroBased<Element: TLAValueType>(
+    from sequence: some TypedExpression<[Element]>
+  ) -> Expr<ZeroBasedSequence<Element>> {
+    Expr(.recursiveCall("ZSeqFromSeq", [sequence.stateExpr]))
+  }
+
+  /// Produces an ordinary Swift array; DSL indexing remains one-based.
+  public static func oneBased<Element: TLAValueType>(
+    from sequence: some TypedExpression<ZeroBasedSequence<Element>>
+  ) -> Expr<[Element]> {
+    Expr(oneBasedExpression(from: sequence.stateExpr))
+  }
+
+  package static func oneBasedExpression(from sequence: StateExpr) -> StateExpr {
+    // Selection retains every element while giving the function a sequence view.
+    .sequenceSelect(.recursiveCall("SeqFromZSeq", [sequence]), "__zSequenceElement", .bool(true))
+  }
+
   public static func rotation<Element: TLAValueType>(
     of sequence: some TypedExpression<ZeroBasedSequence<Element>>,
     leftBy shift: some TypedExpression<Int>

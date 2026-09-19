@@ -1571,6 +1571,17 @@ final class ParserSession {
            let element = typedFacadeValueType(domain, scope: scope)?.selectedElement {
             return .set(.dictionary(.int, element))
         }
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           compilerGrammarName(in: member.base) == "ZSequences",
+           call.arguments.count == 1, let argument = call.arguments.first,
+           argument.label?.text == "from",
+           let input = typedFacadeValueType(argument.expression, scope: scope) {
+            switch (member.declName.baseName.sourceIdentifierName, input) {
+            case ("zeroBased", .array(let element)): return .dictionary(.int, element)
+            case ("oneBased", .dictionary(.int, let element)): return .array(element)
+            default: break
+            }
+        }
         if compilerGrammarName(in: call.calledExpression) == "Functions",
            let domain = call.arguments.first(where: { $0.label?.text == "from" })?.expression,
            let range = call.arguments.first(where: { $0.label?.text == "to" })?.expression {
@@ -1864,6 +1875,8 @@ final class ParserSession {
         case "sequences": signature = ("ZSeq", ["over"])
         case "indices": signature = ("ZIndices", ["of"])
         case "length": signature = ("ZLen", ["of"])
+        case "zeroBased": signature = ("ZSeqFromSeq", ["from"])
+        case "oneBased": signature = ("SeqFromZSeq", ["from"])
         case "rotation": signature = ("Rotation", ["of", "leftBy"])
         case "rotations": signature = ("Rotations", ["of"])
         case "lexicographicallyPrecedesOrEquals": signature = ("LexicographicallyPrecedesOrEquals", [nil, nil])
@@ -1872,6 +1885,9 @@ final class ParserSession {
         guard call.arguments.map({ $0.label?.text }) == signature.labels else { return nil }
         let arguments = call.arguments.compactMap { decode($0.expression) }
         guard arguments.count == signature.labels.count else { return nil }
+        if signature.name == "SeqFromZSeq" {
+            return ZSequences.oneBasedExpression(from: arguments[0])
+        }
         return .recursiveCall(signature.name, arguments)
     }
 

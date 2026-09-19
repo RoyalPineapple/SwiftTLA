@@ -2,7 +2,7 @@ private func typeKeyNode(_ tag: String, _ fields: [String] = []) -> String {
     tag + "[" + fields.map { "\($0.utf8.count):\($0)" }.joined() + "]"
 }
 
-private func nativeTypeKey(_ type: CompiledValueType) -> String {
+func nativeTypeKey(_ type: CompiledValueType) -> String {
     func fields(_ values: [CompiledFieldType]) -> [String] {
         values.map { typeKeyNode("field", [$0.name, nativeTypeKey($0.type)]) }
     }

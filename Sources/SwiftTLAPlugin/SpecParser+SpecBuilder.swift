@@ -359,6 +359,12 @@ extension ParserSession {
                     ))
                     valueType = nil
                 }
+                components.variables[components.variables.count - 1] = .init(
+                    name: variable.name, initialization: variable.initialization,
+                    collectionType: variable.collectionType,
+                    generatedSwiftType: variable.generatedSwiftType,
+                    resolvedValueType: variable.generatedSwiftType == nil ? valueType : nil,
+                    origin: variable.origin)
                 sourceScope = sourceScope.extending(binding: patternName,
                     to: .variable(variable.name),
                     shape: valueType)
@@ -1317,6 +1323,7 @@ extension ParserSession {
             initialization: replacement.initialization,
             collectionType: replacement.collectionType,
             generatedSwiftType: replacement.generatedSwiftType ?? existing.generatedSwiftType,
+            resolvedValueType: replacement.resolvedValueType ?? existing.resolvedValueType,
             origin: replacement.origin
         )
     }

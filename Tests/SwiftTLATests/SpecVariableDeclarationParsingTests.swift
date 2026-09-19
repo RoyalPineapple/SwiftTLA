@@ -6,6 +6,24 @@ import SwiftParser
 import SwiftTLAMacros
 
 @Suite(.serialized) struct SpecVariableDeclarationParsingTests {
+    @Test("inferred sequence types survive specification declarations and formal initializer merging")
+    func retainsInferredSequenceTypes() throws {
+        for registration in ["", "Variable(values)"] {
+            let parsed = SpecParser.parseSpecClosure(named: "InferredSequence", try parseSpecTestClosure("""
+            { scope in
+                Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 0))
+                let values = scope.sharedVar(initial: ZSequences.oneBased(from:
+                    ZSequences.zeroBased(from: Array<Int>([]))))
+                \(registration)
+            }
+            """))
+            #expect(parsed.diagnostics.isEmpty)
+            #expect(parsed.variables.count == 1)
+            #expect(parsed.variables.first?.resolvedValueType == .array(.int))
+            #expect(try parsed.compile().layout.variables.first?.resolvedValueType == .array(.int))
+        }
+    }
+
     @Test("Malformed variable declarations cannot replace an existing initializer", arguments: [
         "Variable(computed: value) { 1; unsupported() }",
         "Variable(computed: value) { 1 }",

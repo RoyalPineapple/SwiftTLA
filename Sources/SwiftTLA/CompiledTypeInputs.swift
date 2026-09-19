@@ -55,7 +55,8 @@ package final class CompiledTypeInputs: Sendable {
                 variableTypes[variable.id] = .dictionary(
                     .collectionMember(variable.id, swiftType: "\(element).ID"), try resolveSourceType(value))
             } else {
-                variableTypes[variable.id] = try variable.generatedSwiftType.map(resolveSourceType) ?? .unknown
+                variableTypes[variable.id] = try variable.resolvedValueType
+                    ?? variable.generatedSwiftType.map(resolveSourceType) ?? .unknown
             }
         }
         self.variableTypes = variableTypes

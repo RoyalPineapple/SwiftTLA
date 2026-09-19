@@ -22,6 +22,16 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
+    "candidateOrdinarySuiteResult": {
+      "sourceSHA": "d0392111ee75ce2937c0661a21788f07d3ce9ac4",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35446757795/job/105906969816",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35446757795/artifacts/10586221263",
+      "artifactDigest": "sha256:be12d7e5724d6dfd4388394a1a32f503022cbc6f9e3d3ea20324473f25d332d3",
+      "buildSeconds": 590.34,
+      "testSeconds": 589.741,
+      "testsPassed": 1454,
+      "scope": "The terminal ordinary-suite log reports all tests passing. This result covers the pushed baseline, not the later uncommitted type-preservation patch. Other jobs in this run were still active when this result was recorded. No independent upstream match or overall CI completion follows from this suite alone."
+    },
     "latestScenarioTimeout": {
       "sourceSHA": "d30c0c0832c7ecb7dcdee61a1327c9fcb370b1f5",
       "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35375110820/job/105698244593",
@@ -175,6 +185,52 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "96220",
+      "sourceSHA": "d0392111ee75ce2937c0661a21788f07d3ce9ac4",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SequenceIndexConversionTests|FormalValueEqualityTests|ImportedModuleConfigurationTests|LeastCircularSubstringCorpusModuleContractTests|CompilerPipelineCanonicalizationTests|GeneratedProcessLocalInvariantTests|ProcedureLoweringTests|StateDeclarationNamesTests|ConfiguredProcessTests|SpecVariableDeclarationParsingTests|AlgorithmBuilderParsingTests|CompilerBoundaryDiagnosticTests'",
+      "exitCode": 0,
+      "buildSeconds": 577.22,
+      "testSeconds": 1.198,
+      "testsRun": 208,
+      "result": "Typed sequence conversions pass in specification and algorithm scopes. Inferred empty-array and nominal element types survive lowering, declaration merging, generated state, transitions, and checking. Existing parser/builder identity assertions pass unchanged after removing redundant metadata for explicit source type declarations. Process, procedure, formal equality, and imported-module contracts also pass.",
+      "scope": "The starting SHA plus the type-preservation patch committed with this entry. Static validation and diff checks also pass. These are focused local diagnostics, not hosted upstream equivalence or complete DSL acceptance."
+    },
+    {
+      "session": "33713",
+      "sourceSHA": "d0392111ee75ce2937c0661a21788f07d3ce9ac4",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SequenceIndexConversionTests|FormalValueEqualityTests|ImportedModuleConfigurationTests|LeastCircularSubstringCorpusModuleContractTests|CompilerPipelineCanonicalizationTests|GeneratedProcessLocalInvariantTests|ProcedureLoweringTests|StateDeclarationNamesTests|ConfiguredProcessTests|SpecVariableDeclarationParsingTests'",
+      "exitCode": 1,
+      "buildSeconds": 578.32,
+      "testSeconds": 1.165,
+      "testsRun": 140,
+      "issues": 1,
+      "reason": "Typed conversions pass in both specification and algorithm scopes. The unchanged parser/builder identity assertion in algorithmTypedFormalDefinitionParsesWithClosureBinders fails because parsed explicit type declarations gained redundant resolved metadata. The correction retains inferred metadata where no source type declaration exists, without weakening the identity assertion.",
+      "scope": "The starting SHA plus the uncommitted type-preservation patch. No hosted or completion credit."
+    },
+    {
+      "session": "52646",
+      "sourceSHA": "d0392111ee75ce2937c0661a21788f07d3ce9ac4",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SequenceIndexConversionTests|FormalValueEqualityTests|ImportedModuleConfigurationTests|LeastCircularSubstringCorpusModuleContractTests|CompilerPipelineCanonicalizationTests|GeneratedProcessLocalInvariantTests|ProcedureLoweringTests|StateDeclarationNamesTests|ConfiguredProcessTests'",
+      "exitCode": 0,
+      "buildSeconds": 571.08,
+      "testSeconds": 1.141,
+      "testsRun": 115,
+      "result": "Typed sequence conversions preserve empty inputs, nominal element types, order, and repetitions through generated state and transitions. Native checking and generated transitions agree for all three diagnostic scenarios. Imported helper text and explicit scenario bindings are retained. The related process, procedure, and compilation identity contracts pass.",
+      "scope": "The starting SHA plus the uncommitted type-preservation patch, before the additional specification-scoped variable fix. Local diagnostics only; no hosted configuration or DSL acceptance credit."
+    },
+    {
+      "session": "26382",
+      "sourceSHA": "8169db18824a84f4242637900da648e5a489663d",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SequenceIndexConversionTests|FormalValueEqualityTests|ImportedModuleConfigurationTests|LeastCircularSubstringCorpusModuleContractTests|CompilerPipelineCanonicalizationTests|GeneratedProcessLocalInvariantTests|ProcedureLoweringTests|StateDeclarationNamesTests|ConfiguredProcessTests'",
+      "exitCode": 1,
+      "buildSeconds": 571.89,
+      "testSeconds": 1.197,
+      "testsRun": 115,
+      "issues": 7,
+      "reason": "The conversion test expected original helper names in specialized root output. It also expected identical root text across three different parameter bindings. Those export assertions produced seven issues. The generated state, transition, and checking assertions reported no failures. Other tests passed.",
+      "scope": "The starting SHA plus the uncommitted type-preservation patch. Commit d0392111 changed only workflow and ledger files during compilation. The next assertions inspect imported helpers and explicit scenario bindings. The failed run grants no hosted credit."
+    },
     {
       "session": "88969",
       "sourceSHA": "d30c0c0832c7ecb7dcdee61a1327c9fcb370b1f5",
@@ -3594,7 +3650,7 @@
       "path": "specifications/LeastCircularSubstring",
       "name": "Minimal Circular Substring",
       "audit": "reference inputs audited",
-      "gap": "Both configurations have complete hosted graph and property matches on the audited SHA, with their published character and length bounds, TypeInvariant, and Correctness unchanged. Neither upstream configuration selects the declared Termination property. Direct ZSequences conversion regressions pass locally after fixing formal equality. Typed conversion calls, native/formal agreement, the helper disposition, and legacy cleanup remain open, so the family is incomplete.",
+      "gap": "Both configurations have complete hosted graph and property matches on the audited SHA, with their published character and length bounds, TypeInvariant, and Correctness unchanged. Neither upstream configuration selects the declared Termination property. Typed ZSequences conversion calls now have focused local coverage for generated state, transitions, checking, and formal evaluation. Independent hosted helper equivalence, the helper disposition, and legacy cleanup remain open, so the family is incomplete.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -3618,7 +3674,7 @@
         {
           "path": "specifications/LeastCircularSubstring/ZSequences.tla",
           "role": "operator helper",
-          "reason": "This stateless helper has no standalone configuration. ImportedModuleConfigurationTests covers generated bounded sequence initialization and length preservation after rotation. TLAModuleBundleTests covers one concrete formal rotation and separate module export. SequenceIndexConversionTests covers both conversion directions, round trips, index domains, empty inputs, order, and integer, Boolean, string, and model-value identity. Its ten initial equality failures in session 29872 are resolved by formal-engine equality in session 31820. The operators still lack typed DSL calls and native/formal agreement evidence under AC-12 and AC-17; the helper is not complete.",
+          "reason": "This stateless helper has no standalone configuration. ImportedModuleConfigurationTests covers generated bounded sequence initialization and length preservation after rotation. TLAModuleBundleTests covers one concrete formal rotation and separate module export. SequenceIndexConversionTests covers both conversion directions, round trips, index domains, empty inputs, order, and integer, Boolean, string, and model-value identity. Session 52646 adds passing typed conversion, generated transition/checking agreement, nominal element preservation, and formal evaluation diagnostics. These checks support AC-12 and AC-17 but do not establish independent hosted helper equivalence or complete operator acceptance. The helper is not complete.",
           "implementations": [
             "Sources/SwiftTLA/ZSequences.swift",
             "Sources/SwiftTLAMacros/ZSequences+Rotations.swift"

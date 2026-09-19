@@ -136,7 +136,7 @@ extension TLASpec {
         }
         var specialized = self
         specialized.formalParameters.removeAll { parameters[$0.name] != nil }
-        specialized.variables = variables.map { .init(name: $0.name, initialization: initialization($0.initialization), collectionType: $0.collectionType, generatedSwiftType: $0.generatedSwiftType, origin: $0.origin) }
+        specialized.variables = variables.map { .init(name: $0.name, initialization: initialization($0.initialization), collectionType: $0.collectionType, generatedSwiftType: $0.generatedSwiftType, resolvedValueType: $0.resolvedValueType, origin: $0.origin) }
         specialized.actions = actions.map { $0.substitutingVariables(parameters) }
         specialized.invariants = invariants.map { .init(name: $0.name, body: state($0.body), reference: $0.reference) }
         specialized.reachabilityProperties = reachabilityProperties.map { .init(name: $0.name, body: state($0.body), reference: $0.reference) }

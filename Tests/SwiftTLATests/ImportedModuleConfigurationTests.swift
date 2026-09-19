@@ -81,12 +81,38 @@ struct ImportedModuleConfigurationTests {
         #expect(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral:
             "SwiftTLA.ZSequences.rotation(of: input, leftBy: 1)"), scope: scope) ==
             .recursiveCall("Rotation", [.variable("resolvedInput"), .int(1)]))
+        #expect(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral:
+            "ZSequences.zeroBased(from: input)"), scope: scope) ==
+            .recursiveCall("ZSeqFromSeq", [.variable("resolvedInput")]))
+        #expect(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral:
+            "ZSequences.oneBased(from: input)"), scope: scope) ==
+            ZSequences.oneBasedExpression(from: .variable("resolvedInput")))
         for source in ["ZSequences.rotation(of: input)",
                        "ZSequences.rotation(of: input, leftBy: 1, extra: 2)",
                        "ZSequences.sequences(of: input)",
+                       "ZSequences.zeroBased(of: input)",
+                       "ZSequences.oneBased(from: input, extra: 1)",
                        "ZSequences.length(of: missing)"] {
             #expect(parser.decodeTypedFacadeValue(ExprSyntax(stringLiteral: source), scope: scope) == nil)
         }
+    }
+
+    @Test("sequence conversions retain explicitly declared element types even for empty inputs")
+    func conversionResultTypes() {
+        let parser = ParserSession()
+        let scope = ParserSession.TypedFacadeScope.empty
+            .extending(binding: "array", to: .variable("array"), shape: .array(.named("Member")))
+            .extending(binding: "zero", to: .variable("zero"), shape: .dictionary(.int, .named("Member")))
+        #expect(parser.typedFacadeValueType("ZSequences.zeroBased(from: array)", scope: scope)
+            == .dictionary(.int, .named("Member")))
+        #expect(parser.typedFacadeValueType("ZSequences.oneBased(from: zero)", scope: scope)
+            == .array(.named("Member")))
+        #expect(parser.typedFacadeValueType("ZSequences.zeroBased(from: Array<Int>([]))", scope: scope)
+            == .dictionary(.int, .int))
+        #expect(parser.typedFacadeValueType(
+            "ZSequences.oneBased(from: ZSequences.zeroBased(from: Array<Int>([])))", scope: scope) == .array(.int))
+        #expect(parser.typedFacadeValueType("ZSequences.zeroBased(from: missing)", scope: scope) == nil)
+        #expect(parser.typedFacadeValueType("ZSequences.oneBased(from: array)", scope: scope) == nil)
     }
 
     @Test("only an empty formal tuple admits a contextual function representation")

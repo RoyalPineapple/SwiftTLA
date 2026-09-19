@@ -102,7 +102,8 @@ package struct AlgorithmModel: Sendable {
                     loopCondition: step.loopCondition))
             case .process(let process):
                 return .process(.init(typeName: process.typeName, domain: process.domain,
-                    fairness: process.fairness, components: process.components.map(component)))
+                    fairness: process.fairness, components: process.components.map(component),
+                    resolvedElementType: process.resolvedElementType))
             case .procedure(let procedure):
                 return .procedure(.init(name: procedure.name, parameters: procedure.parameters,
                     components: procedure.components.map(component)))
@@ -148,7 +149,8 @@ package struct AlgorithmModel: Sendable {
             .init(
                 root: value.root,
                 initialization: initialization(value.initialization),
-                swiftTypeName: value.swiftTypeName
+                swiftTypeName: value.swiftTypeName,
+                resolvedValueType: value.resolvedValueType
             )
         }
 
@@ -182,7 +184,8 @@ package struct AlgorithmModel: Sendable {
                         typeName: process.typeName,
                         domain: expression(process.domain),
                         fairness: process.fairness,
-                        components: process.components.map(component)
+                        components: process.components.map(component),
+                        resolvedElementType: process.resolvedElementType
                     )
                 )
             case .procedure(let procedure):
@@ -480,6 +483,7 @@ package struct AlgorithmProcedureParameterModel: Sendable {
 
 package struct AlgorithmProcessModel: Sendable {
     package let typeName: String
+    package let resolvedElementType: CompiledValueType?
     package let domain: StateExpr
     package let fairness: AlgorithmFairness
     package let components: [AlgorithmComponentModel]
@@ -491,8 +495,10 @@ package struct AlgorithmProcessModel: Sendable {
         }
     }
 
-    package init(typeName: String, domain: StateExpr, fairness: AlgorithmFairness, components: [AlgorithmComponentModel]) {
+    package init(typeName: String, domain: StateExpr, fairness: AlgorithmFairness,
+        components: [AlgorithmComponentModel], resolvedElementType: CompiledValueType? = nil) {
         self.typeName = typeName
+        self.resolvedElementType = resolvedElementType
         self.domain = domain
         self.fairness = fairness
         self.components = components
@@ -509,15 +515,18 @@ package struct AlgorithmStateModel: Sendable {
     package let root: String
     package let initialization: VariableInitialization
     package let swiftTypeName: String?
+    package let resolvedValueType: CompiledValueType?
 
     package init(
         root: String,
         initialization: VariableInitialization,
-        swiftTypeName: String? = nil
+        swiftTypeName: String? = nil,
+        resolvedValueType: CompiledValueType? = nil
     ) {
         self.root = root
         self.initialization = initialization.normalized
         self.swiftTypeName = swiftTypeName
+        self.resolvedValueType = resolvedValueType
     }
 }
 

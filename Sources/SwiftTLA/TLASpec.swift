@@ -28,6 +28,7 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   public let initialization: VariableInitialization
   public let collectionType: CollectionVarType
   package let generatedSwiftType: String?
+  package let resolvedValueType: CompiledValueType?
   package let origin: VariableOrigin
 
   public init(
@@ -46,12 +47,14 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
     name: String, initialization: VariableInitialization,
     collectionType: CollectionVarType = .scalar,
     generatedSwiftType: String? = nil,
+    resolvedValueType: CompiledValueType? = nil,
     origin: VariableOrigin
   ) {
     self.name = name
     self.initialization = initialization.normalized
     self.collectionType = collectionType
     self.generatedSwiftType = generatedSwiftType
+    self.resolvedValueType = resolvedValueType
     self.origin = origin
   }
   public var description: String {

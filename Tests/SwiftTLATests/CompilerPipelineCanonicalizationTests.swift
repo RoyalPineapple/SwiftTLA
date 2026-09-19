@@ -169,6 +169,22 @@ struct CompilerPipelineCanonicalizationTests {
         }
     }
 
+    @Test("resolved state types survive lowering and contribute to compilation identity")
+    func resolvedStateTypeIdentity() throws {
+        func compilation(_ type: CompiledValueType) throws -> CompiledSpecification {
+            try TLASpec(name: "ResolvedStateType", variables: [
+                NamedVar(name: "items", initialization: .expression(.tupleLiteral([])),
+                    resolvedValueType: type, origin: .source)
+            ], actions: [], invariants: []).compile()
+        }
+        let integers = try compilation(.array(.int))
+        let strings = try compilation(.array(.string))
+        #expect(integers.layout.variables.first?.resolvedValueType == .array(.int))
+        #expect(strings.layout.variables.first?.resolvedValueType == .array(.string))
+        #expect(integers.identity != strings.identity)
+        #expect(integers.identity == (try compilation(.array(.int))).identity)
+    }
+
     @Test("generated Swift value types contribute to compilation identity")
     func generatedSwiftValueTypesContributeToCompilationIdentity() throws {
         let first = try TLASpec("GeneratedSurfaceIdentity") {
