@@ -106,9 +106,23 @@
         "capacityFinding": "The unchanged upstream search exceeds the native five-million-state limit: its completed run reports 7,866,982 distinct states. Native capacity must exceed that floor before this configuration can complete. The exact native/bridge graph size and memory requirement still need measurement; storage changes alone cannot overcome the existing cap.",
         "scope": "The retained TLC log reports no error, an empty queue, and a completed search. This diagnostic did not retain the lossless graph bridge output or compare Swift and TLC graphs. It establishes a resource baseline, not a hosted configuration match or family completion."
       },
-      "completedJobs": [
-        {
-          "name": "upstream",
+    "completedJobs": [
+      {
+        "name": "finite-graphs",
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/job/105977911703",
+        "conclusion": "failure",
+        "testsRun": 25,
+        "issues": 1,
+        "buildSeconds": 1434.64,
+        "testSeconds": 2458.950,
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/artifacts/10595205003",
+        "artifactSHA256": "2bebe5a89aacd944cfaf5f4ff58cad46eba1847e9b649583adb7d21335dcf06b",
+        "failure": "Boulanger raised stateLimitExceeded(5000000). All other test functions passed. This is a configured capacity failure, not a timeout or an observed graph mismatch.",
+        "diagnosticAudit": "Downloaded diagnostic source marker equals 0b86465f. The retained test-process samples report a peak physical footprint of 6.7G. Samples after the peak include Boulanger deallocation and KVsnap execution; the suite peak is not a per-model peak measurement.",
+        "scope": "Terminal job log and retained resource samples audited. The unchanged upstream Boulanger baseline has 7,866,982 distinct states, so five million is insufficient. Raising capacity still requires a completed hosted run; these diagnostics establish no new configuration match."
+      },
+      {
+        "name": "upstream",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/job/105977911688",
           "conclusion": "success",
           "testsRun": 23,
@@ -632,6 +646,16 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "77221",
+      "sourceSHA": "a816824166011554f88e8c963958f2983fc1ce49",
+      "sourcePatchSHA256": "3bfe8a05c9f7069ead822a05e56061e4dc407dc7ee3d9f950a60173487f25ddf",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SwiftRecordTypeTests|KVsnapCorpusExecutionTests|KVsnapCorpusRenderingTests|FormalUnionTests|NativeTypeDiagnosticTests|GeneratedSwiftRecordTests|FormalValueEqualityTests|SpecificationSourceAuthorityTests'",
+      "exitCode": 1,
+      "testsRun": 0,
+      "result": "KVsnap macro compilation passed the record and union checks. Swift compilation then rejected concatenating the migrated [Operation] with InjectiveSequence's legacy TupleExpr return. The helper has only the two KVsnap call sites; its next revision returns an ordinary Swift array expression without changing the formal choice operation.",
+      "scope": "Failed local diagnostic, not acceptance. Only evidence-ledger edits and their commit occurred during the build; source stayed fixed."
+    },
     {
       "session": "20676",
       "sourceSHA": "a816824166011554f88e8c963958f2983fc1ce49",
