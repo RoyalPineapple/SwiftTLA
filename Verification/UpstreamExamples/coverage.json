@@ -22,10 +22,23 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
-    "currentCandidate": {
+    "verifiedCandidate": {
       "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451791172",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508",
+      "conclusion": "success",
+      "ordinaryTestsPassed": 1465,
+      "scenarioTestsPassed": 7,
+      "upstreamTestsPassed": 23,
+      "finiteGraphSuiteResult": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451791172/job/105920114064",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451791172/artifacts/10588550785",
+        "artifactDigest": "sha256:8ceab460f3d55a3d0926d8b7cecaf22427de50a2fdf615b6d54dd03885fd3a03",
+        "buildSeconds": 1328.27,
+        "testSeconds": 2392.603,
+        "testsPassed": 25,
+        "jobConclusion": "success"
+      },
       "upstreamSuiteResult": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451791172/job/105920114077",
         "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451791172/artifacts/10586899667",
@@ -46,7 +59,7 @@
         "jobConclusion": "success",
         "scope": "The terminal job log reports all seven scenario tests passing. Cleanup and diagnostic upload also completed successfully. Retained diagnostics identify this source SHA, release configuration, Swift 6.1.2, and Xcode 16.4. This confirms a successful hosted scenario run after the timeout-headroom change; it does not establish that headroom caused this faster run, independent TLC equivalence, or aggregate CI completion."
       },
-      "scope": "Hosted CI and independent candidate comparisons target this exact pushed SHA. Ordinary, scenario, upstream, Apple-platform, and corpus-export jobs passed. The finite-graph suite and aggregate result are not yet terminal. Inspected configuration evidence is recorded separately below."
+      "scope": "All four Swift test suites, Apple-platform examples, canonical corpus export, and the aggregate gate passed at this exact pushed SHA. Terminal test logs and job conclusions were inspected. Independent candidate comparisons remain separate; only inspected configuration evidence below earns upstream equivalence credit. This run does not qualify later fairness or local-family changes."
     },
     "candidateScenarioSuiteResult": {
       "sourceSHA": "d0392111ee75ce2937c0661a21788f07d3ce9ac4",
@@ -132,7 +145,7 @@
       "scenarioCases": 62,
       "scope": "The hosted release validator built with Xcode 16.4. Discovery and selection checks passed for every identifier, all cases, and unknown identifiers. The workflow created 92 separate comparison jobs. These checks do not establish model equivalence or completion of those jobs."
     },
-    "lastSuccessfulRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364040583",
+    "lastSuccessfulRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451791172",
     "lastSuccessfulState": "success",
     "appleAdoptionResult": {
       "sourceSHA": "983b819132b07c8bb4634dad2f7c81ff9b9997b5",
@@ -243,6 +256,14 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "67731",
+      "sourceSHA": "2e84f79064da40b69afce5b8cf9c01ead7e30eb6",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ConfiguredLocalFamilyTests|AlgorithmBuilderTests|AlgorithmBuilderParsingTests|ConfiguredProcessTests|GeneratedProcessLocalInvariantTests|KVsnapCorpusRenderingTests|KVsnapCorpusExecutionTests|CompilerPipelineCanonicalizationTests'",
+      "exitCode": 1,
+      "reason": "The new fixture failed macro expansion before tests ran. The parser recognized the bound invariant handle but lacked dictionary type information for family(...), so it could not decode keys and cross-member indexing. Its fallback then reported the handle as an unknown Algorithm declaration. The correction adds family key/value inference, retains the process binder type, and preserves the property-body diagnostic.",
+      "scope": "The starting SHA plus the uncommitted configured local-family patch. Only documentation and ledger files changed during the build. No verification credit."
+    },
     {
       "session": "28897",
       "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
