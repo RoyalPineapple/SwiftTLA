@@ -186,6 +186,17 @@
   },
   "localDiagnostics": [
     {
+      "session": "59023",
+      "sourceSHA": "271fa3439a94274e398b4c16ed32440374706a77",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'FormalValueProjectionTests|SequenceIndexConversionTests|FormalValueEqualityTests|ArrayValueTests|SetConfigurationTests|DictionaryConfigurationTests|ImportedModuleConfigurationTests|SwiftRecordTypeTests|EnumEncodingTests|TLAValueCodingTests|CompilerPipelineCanonicalizationTests|TypedFormalCollectionTests'",
+      "exitCode": 0,
+      "buildSeconds": 553.99,
+      "testSeconds": 0.115,
+      "testsRun": 131,
+      "result": "Zero-based sequences accept the upstream empty tuple and equivalent empty function and record representations. Nested arrays, sets, dictionary keys and values, and generated record fields preserve those values. Invalid index domains, lossy element decoders, colliding projections, changed string bytes, and model-value/string conflation are rejected. Related collection, enum, module, formal-equality, and compilation-identity contracts pass.",
+      "scope": "The starting SHA plus the projection patch committed with this entry. The boundary reuses formal equality without changing structural hashing, model bounds, selected properties, or transitions. Local diagnostics only; current-source hosted comparison and complete helper acceptance remain required."
+    },
+    {
       "session": "18388",
       "sourceSHA": "3f62e103fc6758e554da01f4526499edf8f44ab8",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLAModuleBundleTests|ImportedModuleConfigurationTests|SequenceIndexConversionTests|SequenceMembershipTests|LeastCircularSubstringCorpusModuleContractTests|UpstreamCorpusInventoryTests'",
@@ -3711,7 +3722,7 @@
               { "upstream": "Rotation", "swift": "ZSequences.rotation(of:leftBy:)", "checks": "TLAModuleBundleTests.zeroBasedSequenceModuleIsExecutable; generated rotation transitions" },
               { "upstream": "Rotations", "swift": "ZSequences.rotations(of:)", "checks": "ImportedModuleConfigurationTests.projectsRotationRecords; generated rotation-record predicates; configured Correctness checks" }
             ],
-            "openBoundaryCheck": "Source inspection shows that ZeroBasedSequence.init(formalValue:) accepts function values but rejects the empty tuple used by upstream EmptyZSeq. The formal engine treats these as equal. Add a focused regression and audit nested typed collection projections before calling this boundary complete."
+            "boundaryCheck": "Session 59023 passes FormalValueProjectionTests and related contracts: upstream EmptyZSeq projects as an empty zero-based sequence, including nested collections and generated records. Lossy element decoders, invalid domains, projection collisions, changed string bytes, and model-value/string conflation are rejected. This closes the identified local projection gap, not current-source hosted equivalence or full helper acceptance."
           },
           "reason": "This stateless helper has no standalone configuration. ImportedModuleConfigurationTests covers generated bounded sequence initialization and length preservation after rotation. TLAModuleBundleTests covers one concrete formal rotation and separate module export. SequenceIndexConversionTests covers both conversion directions, round trips, index domains, empty inputs, order, and integer, Boolean, string, and model-value identity. Session 52646 adds passing typed conversion, generated transition/checking agreement, nominal element preservation, and formal evaluation diagnostics. These checks support AC-12 and AC-17 but do not establish independent hosted helper equivalence or complete operator acceptance. The helper is not complete.",
           "implementations": [

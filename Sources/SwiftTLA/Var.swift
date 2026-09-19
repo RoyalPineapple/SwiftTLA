@@ -17,13 +17,18 @@ extension _GeneratedRecordValue {
     Field.formalValueShape
   }
   public static func _formalRecordValue<Field: TLAValueType>(_ value: TLAValue, for keyPath: KeyPath<Self, Field>) -> Field? {
-    Field(formalValue: value)
+    guard let field = Field(formalValue: value), field.preservesFormalValue(value) else { return nil }
+    return field
   }
 }
 extension TLAValueType {
   public var expr: Expr<Self> { Expr(self) }
   public var stateExpr: StateExpr { expr.stateExpr }
   public static var formalValueShape: FormalValueShape { .unsupported(String(reflecting: Self.self)) }
+
+  func preservesFormalValue(_ original: TLAValue) -> Bool {
+    sourceIssue == nil && CompiledValue(formal: tlaValue).formallyEquals(CompiledValue(formal: original))
+  }
 }
 
 extension Int: TLAValueType {
@@ -56,7 +61,7 @@ extension TLAValueType where Self: RawRepresentable, Self.RawValue == Int {
   public init?(formalValue: TLAValue) {
     guard case .int(let rawValue) = formalValue,
           let value = Self(rawValue: rawValue),
-          value.sourceIssue == nil, value.tlaValue == formalValue else { return nil }
+          value.preservesFormalValue(formalValue) else { return nil }
     self = value
   }
 }
@@ -70,7 +75,7 @@ extension TLAValueType where Self: RawRepresentable, Self.RawValue == String {
     default: return nil
     }
     guard let value = Self(rawValue: rawValue),
-          value.sourceIssue == nil, value.tlaValue == formalValue else { return nil }
+          value.preservesFormalValue(formalValue) else { return nil }
     self = value
   }
 }

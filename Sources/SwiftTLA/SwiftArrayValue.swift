@@ -8,8 +8,7 @@ extension Array: TLAValueType, TLAValueConvertible, TypedExpression, StateExprCo
         guard case .tuple(let members) = formalValue else { return nil }
         self.init()
         for member in members {
-            guard let value = Element(formalValue: member), value.sourceIssue == nil,
-                  value.tlaValue == member else { return nil }
+            guard let value = Element(formalValue: member), value.preservesFormalValue(member) else { return nil }
             append(value)
         }
     }

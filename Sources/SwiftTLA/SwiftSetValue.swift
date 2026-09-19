@@ -17,8 +17,8 @@ extension Set: TLAValueType, TLAValueConvertible, TypedExpression, StateExprConv
         guard case .set(let members) = formalValue else { return nil }
         self.init()
         for member in members {
-            guard let value = Element(formalValue: member), value.sourceIssue == nil,
-                  value.tlaValue == member, insert(value).inserted else { return nil }
+            guard let value = Element(formalValue: member), value.preservesFormalValue(member),
+                  insert(value).inserted else { return nil }
         }
     }
 }

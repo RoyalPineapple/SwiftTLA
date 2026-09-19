@@ -609,11 +609,15 @@ public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, 
   }
 
   public init?(formalValue: TLAValue) {
+    if CompiledValue(formal: formalValue).formallyEquals(.tuple([])) {
+      self.elements = []
+      return
+    }
     guard case .function(let values) = formalValue else { return nil }
     var elements: [Element] = []
     for index in 0..<values.count {
       guard let value = values[.int(index)],
-            let element = Element(formalValue: value), element.sourceIssue == nil
+            let element = Element(formalValue: value), element.preservesFormalValue(value)
       else { return nil }
       elements.append(element)
     }

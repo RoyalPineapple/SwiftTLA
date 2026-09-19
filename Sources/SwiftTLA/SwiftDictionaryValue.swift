@@ -35,10 +35,8 @@ where Key: TLAValueType, Value: TLAValueType {
         guard case .function(let entries) = formalValue else { return nil }
         self.init()
         for (rawKey, rawValue) in entries {
-            guard let key = Key(formalValue: rawKey), key.sourceIssue == nil,
-                  key.tlaValue == rawKey,
-                  let value = Value(formalValue: rawValue), value.sourceIssue == nil,
-                  value.tlaValue == rawValue,
+            guard let key = Key(formalValue: rawKey), key.preservesFormalValue(rawKey),
+                  let value = Value(formalValue: rawValue), value.preservesFormalValue(rawValue),
                   updateValue(value, forKey: key) == nil else { return nil }
         }
     }
