@@ -22,6 +22,18 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
+    "latestIndependentScenarioFailure": {
+      "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
+      "caseID": "coffee-can-2",
+      "scenario": "CoffeeCan3000Beans",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/job/105922523702",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10587894011",
+      "artifactDigest": "sha256:d37ac2736043d157ca95715458744c268d9ee2839cc23d840ae3f6c87c4d065b",
+      "conclusion": "failure",
+      "reason": "The terminal validator log classifies the run as timedOut at the configured 600-second TLC limit. TLC reports 4,504,500 distinct initial states, five temporal branches, and 564,410 states still queued when termination occurs. It also warns of low heap memory during liveness checking. Shutdown-related graph-stream exceptions appear in the retained partial output. This is incomplete resource-limited evidence, not a property counterexample or equivalence result.",
+      "candidateChange": "Raise the hosted model-owned scenario TLC timeout to 1800 seconds, matching the largest declared graph-case timeout. Keep the 120-minute step and 150-minute job budgets, model populations, native state limits, selected properties, deadlock checks, and complete comparison requirements unchanged. A completed hosted rerun remains required.",
+      "scope": "Diagnosis uses the terminal job log and artifact metadata. The 1.48 GB artifact is retained remotely but has not been downloaded or audited as complete evidence. The separate graphs-coffee-can-3000 job remains live."
+    },
     "currentCandidate": {
       "sourceSHA": "b0755df76872000d9e6d50bff1a13bc9bb2b8dab",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754",
