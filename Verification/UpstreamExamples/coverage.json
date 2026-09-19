@@ -423,6 +423,18 @@
   },
   "localDiagnostics": [
     {
+      "session": "93658",
+      "sourceSHA": "a8394a670f18085749373deca270a89b6c258dac",
+      "sourcePatchSHA256": "2fc4f854a266d07197d81ccb54b383d631277b4f1d88f09bfba5210b2cd15b7b",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'BreadthFirstExplorationTests|NativeReachabilityTests|NativeMachineExecutionTests|ConstraintBoundaryCheckingTests'",
+      "exitCode": 0,
+      "buildSeconds": 602.63,
+      "testSeconds": 0.011,
+      "testsRun": 14,
+      "result": "All 14 focused tests pass. The frontier regression checks every state and labeled edge, all deadlocks, shortest traces from one or two roots, and state-limit rejection. Existing native execution, reachability, and constraint checks also pass.",
+      "scope": "Two arrays replace the ArraySlice queue without changes to model bounds, checks, or graph completeness. Swift 6.1.2 matches the hosted compiler version. Source stayed unchanged during the build; only ledger records changed. Ponytail and cleanliness reviews retained one queue path without dependencies or compatibility code. Static diagnostics pass. Hosted timeout recovery and large-graph performance remain unproven."
+    },
+    {
       "session": "61104",
       "sourceSHA": "a8394a670f18085749373deca270a89b6c258dac",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'BreadthFirstExplorationTests|NativeReachabilityTests|NativeMachineExecutionTests|ConstraintBoundaryCheckingTests'",

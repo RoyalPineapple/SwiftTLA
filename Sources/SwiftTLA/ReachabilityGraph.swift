@@ -73,7 +73,8 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         let properties = try initialMachine.temporalProperties(checking: checking.properties)
         machine = initialMachine
         var transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]] = [:]
-        var pending: ArraySlice<Machine> = []
+        var pending: [Machine] = []
+        var currentLayer: [Machine] = []
         var predecessors: [Machine.Snapshot: (source: Machine.Snapshot, action: Machine.Action)] = [:]
         var violations: [Machine.Snapshot: [SafetyViolation<Machine.Property>]] = [:]
         var deadlockedStates: Set<Machine.Snapshot> = []
@@ -123,7 +124,12 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         let initialStates = Set(transitions.keys)
         guard !initialStates.isEmpty else { throw ExplorationError.noInitialStates }
         self.initialStates = initialStates
-        while let machine = pending.popFirst() {
+        while !currentLayer.isEmpty || !pending.isEmpty {
+            if currentLayer.isEmpty {
+                swap(&currentLayer, &pending)
+                currentLayer.reverse()
+            }
+            let machine = currentLayer.removeLast()
             try Task.checkCancellation()
             let successors = try machine.successors()
             var failures = try machine.violatedInvariants(checking: checking.properties).map(SafetyViolation.invariant)
