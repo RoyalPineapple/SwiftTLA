@@ -55,6 +55,10 @@ final class ParserSession {
 
         var isEmpty: Bool { bindings.isEmpty }
 
+        func containsBinding(named name: String) -> Bool {
+            bindings.contains { $0.sourceName == name }
+        }
+
         private init(bindings: [Binding]) {
             self.bindings = bindings
         }
@@ -586,8 +590,7 @@ final class ParserSession {
               name == "ForAll" || name == "Exists",
               call.additionalTrailingClosures.isEmpty,
               let closure = call.trailingClosure,
-              closure.statements.count == 1,
-              case .expr(let bodySyntax) = closure.statements.first?.item
+              let finalStatement = closure.statements.last
         else { return nil }
 
         let arguments = call.arguments.filter { !["file", "line", "column"].contains($0.label?.text ?? "") }
@@ -604,14 +607,30 @@ final class ParserSession {
                 StateExpr.setLiteral($0.values.map(StateExpr.value))
             }) ?? decodeTypedFacadeValue(domainSyntax, scope: scope) else { return nil }
             let sourceName = parameters.isEmpty ? "$\(index)" : parameters[index]
-            let binder = sourceName.hasPrefix("$") || sourceName == "_"
+            let binder = sourceName.hasPrefix("$") || sourceName == "_" || scope.containsBinding(named: sourceName)
                 ? generatedBinderName(line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset), column: UInt(index))
                 : sourceName
             bodyScope = bodyScope.extending(binding: sourceName, to: .variable(binder),
                 shape: typedFacadeValueType(domainSyntax, scope: scope)?.selectedElement)
             bindings.append((domain, binder))
         }
-        guard var predicate = decodeTypedFacadeValue(bodySyntax, scope: bodyScope) else { return nil }
+        for statement in closure.statements.dropLast() {
+            guard let declaration = statement.item.as(VariableDeclSyntax.self),
+                  let binding = parseFormalLet(declaration, scope: bodyScope),
+                  let initializer = declaration.bindings.first?.initializer?.value
+            else { return nil }
+            bodyScope = bodyScope.extending(binding: binding.name, to: binding.value,
+                shape: typedFacadeValueType(initializer, scope: bodyScope))
+        }
+        let bodySyntax: ExprSyntax?
+        if let returned = finalStatement.item.as(ReturnStmtSyntax.self) {
+            bodySyntax = returned.expression
+        } else if closure.statements.count == 1, case .expr(let expression) = finalStatement.item {
+            bodySyntax = expression
+        } else {
+            return nil
+        }
+        guard let bodySyntax, var predicate = decodeTypedFacadeValue(bodySyntax, scope: bodyScope) else { return nil }
         for binding in bindings.reversed() {
             predicate = name == "ForAll"
                 ? .forAll(binding.domain, binding.name, predicate)

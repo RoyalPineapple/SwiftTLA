@@ -22,6 +22,17 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
+    "latestIndependentGraphFailure": {
+      "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
+      "caseID": "coffee-can-3000",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/job/105922519949",
+      "comparisonStepConclusion": "failure",
+      "comparisonStartedAt": "2026-09-19T16:02:30Z",
+      "comparisonCompletedAt": "2026-09-19T18:02:43Z",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10589308743",
+      "artifactDigest": "sha256:4ec780587ee876f6a79940c49bdb690728d4d2dcf939c7822df3b214c8c76fe9",
+      "scope": "The terminal log and check annotation confirm the 120-minute comparison-step timeout. Native export finished after 1799.335 seconds, then the validator entered tlc-execution and reported no later phase before cancellation. That phase includes reference graph capture and decoding, so the log alone does not identify the remaining bottleneck. The 1.74 GB evidence artifact uploaded successfully and the job failed. Its contents still require inspection. No complete graph or property match is established, and no coverage credit is assigned."
+    },
     "latestIndependentScenarioFailure": {
       "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
       "caseID": "coffee-can-2",
@@ -38,6 +49,17 @@
       "sourceSHA": "b0755df76872000d9e6d50bff1a13bc9bb2b8dab",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754",
       "completedJobs": [
+        {
+          "name": "scenarios",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/job/105929392232",
+          "conclusion": "success",
+          "testsPassed": 7,
+          "buildSeconds": 1574.47,
+          "testSeconds": 1801.072,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/artifacts/10589157066",
+          "artifactDigest": "sha256:29224ee36172368832bc4c1e81ea1dc774fef89b0a0c7c2e4137fdd77b27d34d",
+          "scope": "The terminal log reports all seven scenario tests passing, followed by successful diagnostic upload and job completion. This covers b0755df7 only, not the unpushed configured-family, lexical-predicate, range, or Boulanger changes. Independent TLC comparisons and aggregate CI remain separate."
+        },
         {
           "name": "upstream",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754/job/105929392214",
@@ -920,8 +942,25 @@
     {
       "path": "specifications/Bakery-Boulangerie",
       "name": "The Boulangerie Algorithm",
+      "pendingMigration": {
+        "configuration": "MCBoulanger.cfg",
+        "scope": "The working patch replaces the fixed two-member port with the model-owned N=3, MaxNat=3 scenario, ordinary typed dictionaries and sets, the ncs fairness exemption, TypeOK, and all nine IInv clauses with Before. Reused named process predicates supply TypeOK within Inv. Typed At and Finished accept configured process expressions. Original MCBoulanger module/configuration and Boulanger dependency replace the reduced fixture; the TLAPS helper is staged with its license and source digest.",
+        "diagnosticSession": "57124",
+        "previousDiagnostic": "Sessions 88060, 71645, and 41454 failed before tests. The generated throwing-domain error was removed, but splitting predicates did not resolve Swift's type-checking diagnostic. Source inspection then identified IntRange returning legacy SetExpr<Int> while configured dictionary keys and locals use Set<Int>. Session 89609 was intentionally stopped before source edits after finding dependent mapping and parser type spellings. The working patch migrates IntRange and set mapping to Swift Set results, updates affected callers, and permits InjectiveSequence to consume any typed set. It also retains quantified lexical expressions and gives shadowing quantifiers distinct binders. Session 4945 is the focused retry; no successful result is claimed yet.",
+        "latestDiagnostic": "Session 57124 passed all 330 focused tests after a 591.09-second build and 14.794 seconds of tests. Coverage includes Boulanger native dispatch and rendering, all 63 scenario identities, KVsnap regressions, configured process families, fairness exemptions, collection types, quantifier lexical scope and shadowing, recursion, and parser/compiler fidelity. The approved wrapper exited successfully. Only documentation and ledger files changed during this build.",
+        "localEvidence": {
+          "sourceBaseSHA": "61d75eafc1cae0e71b0e85f4824f6b52001796ba",
+          "sourcePatchSHA256": "5a0f4424ec926b07e6fd4f22e8ff02222dffe1c95d31a5b8036e1878028441d7",
+          "patchCommand": "git diff --binary HEAD -- Sources Tests Tools",
+          "session": "57124",
+          "testsPassed": 330,
+          "authority": "Local diagnostic only; independent hosted equivalence remains required."
+        },
+        "remaining": "Independent complete hosted comparisons remain required. The all-model scenario enumerator includes Boulanger, with its inventory assertion updated to 63. N in 0...MaxNat preserves the upstream N-in-Nat assumption after substitution. Source review maps all nine transitions and all nine IInv clauses to the pinned reference. The configured control domain is compiler-owned and still requires complete graph-boundary comparison. No hosted completion credit is assigned.",
+        "invariantMapping": "The process-scoped typeOK predicate is reused by TypeOK and Inv. Inv retains IInv clauses 1-5 directly and clause 7 through nxt family lookup. Clauses 6, 8, and 9 share one universal other-member predicate: the disjunction of their applicable antecedents implies the complete Before(self, other) body. This factoring avoids duplicate Before expressions while preserving each antecedent; it remains subject to generated execution and independent hosted validation."
+      },
       "audit": "reference inputs audited",
-      "gap": "Both published configurations lack exact cases. MCBakery selects ISpec, whose initial predicate is Inv rather than Init. The Bakery fixture starts from Init. Boulanger uses two processes instead of upstream N=3. Its modified reference replaces TypeOK and Inv with weaker LocalTypeOK. Upstream Boulanger also exempts ncs from process fairness (ncs:-); the port's Each(..., fairness: .weak) applies fairness to every generated label, including ncs. Both ports need model-owned configurations and complete invariant coverage; Boulanger additionally requires the upstream fairness exemption to be preserved.",
+      "gap": "MCBoulanger now has the published N=3, MaxNat=3 configuration, original references, all selected invariants, ncs fairness exemption, and successful focused diagnostics. Complete independent hosted graph and property comparisons remain missing. MCBakery still lacks its published ISpec configuration: its initial predicate is Inv rather than the Init used by the legacy Bakery fixture. The family remains incomplete.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -941,10 +980,10 @@
             "candidateSource": "https://github.com/tlaplus/tlapm/blob/f14d23363a6409ee616cb6ee12edd53b07660011/library/TLAPS.tla",
             "gitBlobSHA": "d99c4bb1be3d09f9cd17504e0af2fa53dea16d07",
             "sha256": "9afe54984062748a0568966434cc0945d682f8cd89fdbc38f73b5579751b0c55",
-            "status": "Located and hashed read-only. Helper staging, dependency registration, and hosted SANY/TLC acceptance remain required; no TLAPS proof-verification claim is made."
+            "status": "Staged byte-identically as a declared MCBoulanger dependency with the upstream license. Hosted SANY/TLC acceptance remains required; no TLAPS proof-verification claim is made."
           },
           "role": "behavior dependency",
-          "reason": "This module contains the Boulanger algorithm, safety invariants, and proofs. MCBoulanger imports its executable definitions. BoulangerModel uses two processes and does not retain all selected upstream invariants. Source audit at the pinned revision confirms Spec requires WF_vars((pc[self] # ncs) /\\ p(self)), not fairness for ncs. At the audited pushed SHA, AlgorithmLowering assigns the Each fairness policy to every generated atomic action. The pending step exemption needs native and export evidence for AC-15. TypeOK checks seven complete function domains and ranges; Inv also includes all nine IInv clauses and Before. These read other members' unchecked, max, nxt, and previous values. The existing LocalVariable.family(for:) accessor can expose family state, but its Function return type requires a fixed FiniteTLAValueDomain and does not accept the configured integer population. Preserve this existing lowering path while supplying a typed configured-domain view; do not substitute weaker local predicates or a hard-coded two-member domain.",
+          "reason": "The configured Swift port retains all nine transitions, TypeOK, MutualExclusion, all nine IInv clauses with Before, and the ncs fairness exemption. Process-local family views retain configured integer keys through ordinary typed dictionaries. The original upstream module and its TLAPS helper are retained. Focused diagnostics passed; complete independent hosted comparisons remain required. No TLAPS proof-verification claim is made.",
           "implementations": [
             "Sources/UpstreamParity/CanonicalCorpus/Boulanger.swift"
           ],
@@ -961,7 +1000,7 @@
           "path": "specifications/Bakery-Boulangerie/MCBoulanger.tla",
           "role": "configured root",
           "reason": "The configuration binds N=3 and MaxNat=3, replaces Nat with 0..MaxNat, and selects Spec. StateConstraint requires every ticket to be less than MaxNat. MutualExclusion, TypeOK, Inv, and default deadlock checking remain required.",
-          "implementations": [],
+          "implementations": ["Sources/UpstreamParity/CanonicalCorpus/Boulanger.swift"],
           "dispositionComplete": false
         }
       ],
@@ -980,10 +1019,10 @@
           "module": "specifications/Bakery-Boulangerie/MCBoulanger.tla",
           "configuration": "specifications/Bakery-Boulangerie/MCBoulanger.cfg",
           "required": true,
-          "status": "missing",
+          "status": "locally checked",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": ["Sources/UpstreamParity/CanonicalCorpus/Boulanger.swift"],
           "evidence": []
         }
       ],
@@ -991,7 +1030,7 @@
         {
           "caseID": "boulanger",
           "implementation": "Sources/UpstreamParity/CanonicalCorpus/Boulanger.swift",
-          "reason": "The registered root or configuration does not match a published module/configuration pair byte-for-byte. No completion credit."
+          "reason": "The registered MCBoulanger reference module and configuration are byte-identical to upstream. Focused diagnostics passed, but complete independent hosted comparisons remain missing. No hosted completion credit."
         }
       ]
     },

@@ -18,6 +18,7 @@ package func modelValidationScenarios() throws -> [(id: String, scenario: any Mo
         ("labelled-property-claims", try LabelledPropertyClaims.validationScenarios()),
         ("refinement-counter", try RefinementScenarioCounter.validationScenarios()),
         ("dining-philosophers", try DiningPhilosophersModel.validationScenarios()),
+        ("boulanger", try BoulangerModel.validationScenarios()),
         ("die-hard", try DieHardModel.validationScenarios()),
         ("die-harder", try DieHarderModel.validationScenarios()),
         ("channel", try ChannelModel.validationScenarios()),

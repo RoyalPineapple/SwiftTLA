@@ -4,13 +4,16 @@ import SwiftTLA
 package struct CanonicalCorpusEntry: Sendable {
     package let id: String
     package let specification: @Sendable () -> TLASpec
+    package let rendered: @Sendable () throws -> RenderedSpecification
 
     package init(
         id: String,
-        specification: @escaping @Sendable () -> TLASpec
+        specification: @escaping @Sendable () -> TLASpec,
+        rendered: @escaping @Sendable () throws -> RenderedSpecification
     ) {
         self.id = id
         self.specification = specification
+        self.rendered = rendered
     }
 }
 

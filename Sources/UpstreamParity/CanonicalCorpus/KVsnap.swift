@@ -11,7 +11,8 @@ import SwiftTLAMacros
 package struct KVsnapModel: Sendable {
     package static let corpusEntry = CanonicalCorpusEntry(
         id: "kvsnap-upstream-port",
-        specification: { KVsnapModel.spec }
+        specification: { KVsnapModel.spec },
+        rendered: { try KVsnapModel.spec.compile().render() }
     )
 
     package enum Key: String, CaseIterable, FiniteTLAValueDomain {
@@ -138,7 +139,7 @@ package struct KVsnapModel: Sendable {
                     }
 
                     Do(Step.read) {
-                        let reads: Expr<SetExpr<Record<OperationSchema>>> = read_keys.expr.mapping { key in
+                        let reads: Expr<Set<Record<OperationSchema>>> = read_keys.expr.mapping { key in
                             ModuleCall("CC", "r", key.expr, snapshotStore[key.expr])
                         }
                         Assign(
@@ -177,7 +178,7 @@ package struct KVsnapModel: Sendable {
                                         else: store[key.expr]
                                     )
                                 })
-                                let writes: Expr<SetExpr<Record<OperationSchema>>> = write_keys.expr.mapping { key in
+                                let writes: Expr<Set<Record<OperationSchema>>> = write_keys.expr.mapping { key in
                                     ModuleCall("CC", "w", key.expr, Value.first(selfID.expr))
                                 }
                                 Assign(

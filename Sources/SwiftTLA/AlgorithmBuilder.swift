@@ -1186,15 +1186,7 @@ public func Finished() -> Expr<Bool> {
 /// True when one member of a process family has reached `Done`.
 /// The program counter remains lowerer-owned; this avoids raw string-keyed
 /// inspection of generated control state.
-public func Finished<Value: FiniteTLAValueDomain>(_ process: WithValue<Value>) -> Expr<Bool> {
-    Expr(.equal(
-        .functionApply(.programCounter, process.stateExpr),
-        .controlLocation(.done)
-    ))
-}
-
-/// True when the current `Each` process has reached `Done`.
-public func Finished<Value: FiniteTLAValueDomain>(_ process: ProcessIdentifier<Value>) -> Expr<Bool> {
+public func Finished<Value: TLAValueType>(_ process: some TypedExpression<Value>) -> Expr<Bool> {
     Expr(.equal(
         .functionApply(.programCounter, process.stateExpr),
         .controlLocation(.done)
@@ -1205,20 +1197,9 @@ public func Finished<Value: FiniteTLAValueDomain>(_ process: ProcessIdentifier<V
 ///
 /// This is the typed way to state properties about algorithm control flow.
 /// The generated program counter remains an implementation detail.
-public func At<Label: CaseIterable & RawRepresentable & Sendable, Value: FiniteTLAValueDomain>(
+public func At<Label: CaseIterable & RawRepresentable & Sendable, Value: TLAValueType>(
     _ label: Label,
-    _ process: WithValue<Value>
-) -> Expr<Bool> where Label.RawValue == String {
-    Expr(.equal(
-        .functionApply(.programCounter, process.stateExpr),
-        .controlLocation(.init(label.rawValue))
-    ))
-}
-
-/// True when the current `Each` process is at a named PlusCal label.
-public func At<Label: CaseIterable & RawRepresentable & Sendable, Value: FiniteTLAValueDomain>(
-    _ label: Label,
-    _ process: ProcessIdentifier<Value>
+    _ process: some TypedExpression<Value>
 ) -> Expr<Bool> where Label.RawValue == String {
     Expr(.equal(
         .functionApply(.programCounter, process.stateExpr),

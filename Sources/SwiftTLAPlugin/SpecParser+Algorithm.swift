@@ -1139,7 +1139,7 @@ extension ParserSession {
 
     /// Decodes a lexical value. Algorithm declarations use it as an alias;
     /// step statements bind its value at that position in the transition.
-    private func parseFormalLet(
+    func parseFormalLet(
         _ declaration: VariableDeclSyntax,
         scope: TypedFacadeScope
     ) -> (name: String, value: StateExpr)? {

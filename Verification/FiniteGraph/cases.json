@@ -535,21 +535,25 @@
     {
       "id": "boulanger",
       "sourceModel": "boulanger",
-      "module": "boulanger/Boulanger.tla",
-      "configuration": "boulanger/Boulanger.cfg",
-      "imports": [],
-      "dependencies": [],
+      "scenario": "MCBoulanger",
+      "module": "boulanger/MCBoulanger.tla",
+      "configuration": "boulanger/MCBoulanger.cfg",
+      "imports": ["boulanger/Boulanger.tla", "boulanger/TLAPS.tla"],
+      "dependencies": [
+        {"importingModule": "MCBoulanger", "importedModule": "Boulanger"},
+        {"importingModule": "Boulanger", "importedModule": "TLAPS"}
+      ],
       "sourceInput": {
-        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Bakery-Boulangerie/Boulanger.tla",
-        "sha256": "e0f76da20c999aa23ed494d319119575f678ccd77f3c1e105eead18d3fe66fa0"
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Bakery-Boulangerie/MCBoulanger.tla",
+        "sha256": "e1a52928940ae952cd25a3888cecb962f615237d5e81e4c164c9bfd64f82f3fa"
       },
       "exploration": {
-        "maximumStateLimit": 100000,
+        "maximumStateLimit": 5000000,
         "symmetryReduction": "disabled"
       },
-      "moduleSHA256": "71052de3121d0cd65be41b87ab369c59621cd9cc020620443fe5edecc1fa209e",
-      "cfgSHA256": "009c66f37d8ea5b247424ae2795358e6d0787e2c272fb71ba04db06e4b963f2b",
-      "timeoutSeconds": 60
+      "moduleSHA256": "e1a52928940ae952cd25a3888cecb962f615237d5e81e4c164c9bfd64f82f3fa",
+      "cfgSHA256": "7e0e8f28fc849e16ca20b909e3816d8b80fbfd96bf7d94f45dadb7a62735a8c9",
+      "timeoutSeconds": 1800
     },
     {
       "id": "voteproof",

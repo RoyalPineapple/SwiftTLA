@@ -82,9 +82,7 @@ do {
     try FileManager.default.createDirectory(at: options.output, withIntermediateDirectories: true)
 
     let cases = try CanonicalCorpus.entries.map { item -> Manifest.Case in
-        let specification = item.specification()
-        let compilation = try specification.compile()
-        let rendered = try compilation.render()
+        let rendered = try item.rendered()
         let bundle = rendered.tlaBundle
         let plusCalBundle = try rendered.plusCalBundle()
 

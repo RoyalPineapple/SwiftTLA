@@ -11,20 +11,21 @@ public struct LocalRecursion<Input: TLAValueType, Output: TLAValueType>: Sendabl
 
 /// Defines a bounded recursive function and returns the typed result of `body`.
 public func LetRec<
+    Domain: FormalSetValue,
     Input: TLAValueType,
     Output: TLAValueType,
     Definition: TypedExpression,
     Result: TypedExpression
 >(
     _ name: String,
-    over domain: some TypedExpression<SetExpr<Input>>,
+    over domain: some TypedExpression<Domain>,
     taking _: Input.Type,
     _ definition: (LocalRecursion<Input, Output>, WithValue<Input>) -> Definition,
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column,
     in body: (LocalRecursion<Input, Output>) -> Result
-) -> Expr<Result.ExpressionValue> where Definition.ExpressionValue == Output {
+) -> Expr<Result.ExpressionValue> where Domain.Element == Input, Definition.ExpressionValue == Output {
     let inputName = generatedBinderName(file: file, line: line, column: column)
     let recursion = LocalRecursion<Input, Output>(name: name)
     return Expr(.letIn(

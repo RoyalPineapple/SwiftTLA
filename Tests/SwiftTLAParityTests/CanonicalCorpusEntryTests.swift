@@ -5,7 +5,7 @@ struct CanonicalCorpusEntryTests {
     @Test("each canonical corpus model owns its compiled module closure")
     func corpusEntriesOwnCompiledModuleClosure() throws {
         let voteProof = try #require(CanonicalCorpus.entries.first { $0.id == "voteproof-upstream-port" })
-        let rendered = try voteProof.specification().compile().render()
+        let rendered = try voteProof.rendered()
         #expect(rendered.tlaBundle.imports.map(\.name) == ["Consensus"])
         #expect(rendered.tlaBundle.cfg.contains("PROPERTY Refines\n"))
         #expect(CanonicalCorpus.entries.map(\.id) == [
@@ -17,7 +17,7 @@ struct CanonicalCorpusEntryTests {
     func configurationIncludesAllDeclaredChecks() throws {
         for entry in CanonicalCorpus.entries {
             let compiled = try entry.specification().compile()
-            let rendered = try compiled.render()
+            let rendered = try entry.rendered()
             let configuration = rendered.tlaBundle.cfg
             let directives = Set(configuration.split(separator: "\n").map(String.init))
             for name in compiled.description.invariants {

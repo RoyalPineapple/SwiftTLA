@@ -348,9 +348,9 @@ public func Range<Mapping: FormalDictionaryValue>(
 /// This is the standard TLA+ `CHOOSE f \in [1..Cardinality(S) -> S] :
 /// IsInjective(f)` expression. The choice remains symbolic in the formal
 /// specification and is evaluated by the compiled runtime.
-public func InjectiveSequence<Element: TLAValueType>(
-  from values: some TypedExpression<SetExpr<Element>>
-) -> Expr<TupleExpr<Element>> {
+public func InjectiveSequence<Domain: FormalSetValue>(
+  from values: some TypedExpression<Domain>
+) -> Expr<TupleExpr<Domain.Element>> {
   Expr(.choose(
     .functionSet(.integerRange(.int(1), .cardinality(values.stateExpr)), values.stateExpr),
     "f",
@@ -986,19 +986,19 @@ extension TypedExpression {
 public func IntRange(
   _ lower: some TypedExpression<Int>,
   through upper: some TypedExpression<Int>
-) -> Expr<SetExpr<Int>> {
-  Expr<SetExpr<Int>>(.integerRange(lower.stateExpr, upper.stateExpr))
+) -> Expr<Set<Int>> {
+  Expr<Set<Int>>(.integerRange(lower.stateExpr, upper.stateExpr))
 }
 
-public func IntRange(_ lower: Int, through upper: some TypedExpression<Int>) -> Expr<SetExpr<Int>> {
+public func IntRange(_ lower: Int, through upper: some TypedExpression<Int>) -> Expr<Set<Int>> {
   IntRange(Expr(lower), through: upper)
 }
 
-public func IntRange(_ lower: some TypedExpression<Int>, through upper: Int) -> Expr<SetExpr<Int>> {
+public func IntRange(_ lower: some TypedExpression<Int>, through upper: Int) -> Expr<Set<Int>> {
   IntRange(lower, through: Expr(upper))
 }
 
-public func IntRange(_ lower: Int, through upper: Int) -> Expr<SetExpr<Int>> {
+public func IntRange(_ lower: Int, through upper: Int) -> Expr<Set<Int>> {
   IntRange(Expr(lower), through: Expr(upper))
 }
 
@@ -1017,10 +1017,10 @@ extension TypedExpression where ExpressionValue: FormalSetValue {
   public func mapping<Result: TypedExpression>(
     file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
     _ transform: (WithValue<ExpressionValue.Element>) -> Result
-  ) -> Expr<SetExpr<Result.ExpressionValue>> {
+  ) -> Expr<Set<Result.ExpressionValue>> where Result.ExpressionValue: Hashable {
     let binding = generatedBinderName(file: file, line: line, column: column)
     let element = WithValue<ExpressionValue.Element>(expression: .variable(binding))
-    return Expr<SetExpr<Result.ExpressionValue>>(.setMap(transform(element).stateExpr, binding, stateExpr))
+    return Expr<Set<Result.ExpressionValue>>(.setMap(transform(element).stateExpr, binding, stateExpr))
   }
 
   /// Unions the formal sets produced by a typed expression for each member.

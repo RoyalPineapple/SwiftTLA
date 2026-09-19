@@ -491,18 +491,18 @@ extension NativeSwiftEmitter {
                 return Self(execution: execution\(collectionArguments))
             }
         }
-        private var _actions: [Action] {
+        private func _actions() throws -> [Action] {
             var result: [Action] = []
             \(enumeration.joined(separator: "\n"))
             return result
         }
         public func successors() throws -> [(action: Action, machine: Self)] {
-            try _actions.flatMap { action in
+            try _actions().flatMap { action in
                 try successors(for: action).map { (action, $0) }
             }
         }
         public func enabledActions() throws -> [Action] {
-            try _actions.filter { try isEnabled($0) }
+            try _actions().filter { try isEnabled($0) }
         }
         public mutating func send(_ action: Action) throws -> Transition {
             var candidates = try _successors(for: action)[...]

@@ -655,7 +655,7 @@ extension ParserSession {
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "IntRange" {
-            return "SetExpr<Int>"
+            return "Set<Int>"
         }
         if let member = expression.as(MemberAccessExprSyntax.self),
            member.declName.baseName.sourceIdentifierName == "empty",

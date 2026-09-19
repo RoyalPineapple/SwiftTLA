@@ -277,6 +277,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package func resolveScenario() throws -> (any ModelValidationScenario)? {
             let scenarios: [any ModelValidationScenario]
             switch sourceModel {
+            case .boulanger:
+                scenarios = try BoulangerModel.validationScenarios()
             case .diningPhilosophers:
                 scenarios = try DiningPhilosophersModel.validationScenarios()
             case .hourClock:
@@ -401,12 +403,11 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
                 rendered: rendered, checkingDeadlock: checkingDeadlock, for: finiteGraphCase)
         }
         switch self {
-        case .boulanger: return try explore(BoulangerModel.initialMachines())
         case .voteProof: return try explore(VoteProofModel.initialMachines())
         case .kvsnap: return try explore(KVsnapModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
-        case .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
+        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())

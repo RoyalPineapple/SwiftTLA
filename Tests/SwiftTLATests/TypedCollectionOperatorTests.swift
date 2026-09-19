@@ -559,7 +559,7 @@ private struct FoldGeneratedModel {
 
     @Test("Integer ranges accept typed and literal endpoints and preserve empty ranges")
     func integerRangeEndpoints() throws {
-        func range(_ lower: some TypedExpression<Int>, _ upper: some TypedExpression<Int>) -> Expr<SetExpr<Int>> {
+        func range(_ lower: some TypedExpression<Int>, _ upper: some TypedExpression<Int>) -> Expr<Set<Int>> {
             IntRange(lower, through: upper)
         }
         let ranges = [
@@ -570,6 +570,7 @@ private struct FoldGeneratedModel {
         ]
         for expression in ranges {
             #expect(try compiledValue(expression.raw) == .set([.int(1), .int(2), .int(3)]))
+            #expect(try compiledValue((expression == Set<Int>([1, 2, 3])).stateExpr) == .bool(true))
         }
         #expect(try compiledValue(range(Expr<Int>(3), Expr<Int>(1)).raw) == .set([]))
     }
@@ -578,7 +579,7 @@ private struct FoldGeneratedModel {
     func typedOperatorsEvaluate() throws {
         let values = IntRange(1, through: 4)
         let evenValues = values.filtering { value in value.expr % 2 == 0 }
-        let squares = evenValues.mapping { value in value.expr * value.expr }
+        let squares: Expr<Set<Int>> = evenValues.mapping { value in value.expr * value.expr }
         let expanded = squares.union(SetExpr<Int>.literal(25))
         let sequence = TupleExpr<Int>.literal(3, 5, 7)
 

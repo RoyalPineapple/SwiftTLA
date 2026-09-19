@@ -853,7 +853,21 @@ Dictionary projections reject invalid keys, invalid values, and collisions betwe
 
 Dictionary expressions expose `.keys` as a typed set. An empty dictionary has an empty key set.
 Native generation and TLA+ export preserve the key type and domain expression.
+`IntRange` produces `Expr<Set<Int>>`. A set's `.mapping` expression produces a Swift `Set` of its result type, which must be `Hashable`.
+Both operations retain formal expressions until evaluation. They do not enumerate their members during source construction.
 `ForAll(in:)` and `Exists(in:)` accept typed Swift sets and retain their element types.
+Their predicate closures can use immutable `let` bindings before one final `return` expression.
+Each binding retains references to the quantified members, earlier bindings, and enclosing model values.
+Nested quantifiers retain their own scope. Mutable bindings and statements after `return` are invalid.
+
+```swift
+ForAll(in: members) { member in
+    let expected = member + 10
+    let matches = family[member] == expected
+    return matches
+}
+```
+
 `Assume` and `Constraint` resolve parameter and state handles in their declaration scope.
 
 `Functions(from: 1, to: Set<Int>([0, 1]))` is invalid because its domain is not a set.
