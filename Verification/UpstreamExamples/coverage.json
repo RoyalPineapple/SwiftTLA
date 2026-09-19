@@ -22,6 +22,38 @@
     "unconfiguredModules": "No published configuration is not an exclusion. Unclassified modules require review before family completion."
   },
   "ci": {
+    "candidateScenarioSuiteResult": {
+      "sourceSHA": "d0392111ee75ce2937c0661a21788f07d3ce9ac4",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35446757795/job/105906969830",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35446757795/artifacts/10586578785",
+      "artifactDigest": "sha256:a291971398eaa3c4f76464095b57a5e75b93ebd2abc3ed071318f74e99b0aa8b",
+      "buildSeconds": 2142.65,
+      "testSeconds": 2954.125,
+      "testsPassed": 7,
+      "jobConclusion": "failure",
+      "reason": "All seven tests passed at 15:12:36 UTC, but the step exceeded its 85-minute limit at 15:12:41 UTC during post-test cleanup. The build and tests consumed 5096.775 seconds before cleanup. Diagnostics uploaded successfully; the aggregate CI gate failed. Every other suite passed.",
+      "candidateChange": "The scenario step now has 90 minutes within a 95-minute job, preserving five minutes for diagnostic upload. This adds cleanup headroom to the observed complete test run without changing scenarios, model bounds, selected checks, assertions, or toolchains. Hosted confirmation remains required."
+    },
+    "candidateUpstreamSuiteResult": {
+      "sourceSHA": "d0392111ee75ce2937c0661a21788f07d3ce9ac4",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35446757795/job/105906969837",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35446757795/artifacts/10586542713",
+      "artifactDigest": "sha256:ad4b0373528ec42c2000eae9c3f84e3216824b86fe97c2451cdf6076a61f4d1f",
+      "buildSeconds": 1674.86,
+      "testSeconds": 1089.808,
+      "testsPassed": 23,
+      "scope": "The terminal log reports all tests passing and the job completed successfully. This validates the pushed baseline only, not subsequent DSL changes or independent upstream equivalence. The scenario suite was still running when recorded."
+    },
+    "candidateFiniteGraphSuiteResult": {
+      "sourceSHA": "d0392111ee75ce2937c0661a21788f07d3ce9ac4",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35446757795/job/105906969859",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35446757795/artifacts/10585677925",
+      "artifactDigest": "sha256:bcd4417bbcf9504f48c42eee4a7d556f9e9e784fdd98f9cd3f973f74eb417c06",
+      "buildSeconds": 1445.86,
+      "testSeconds": 2042.035,
+      "testsPassed": 25,
+      "scope": "All tests passed and the job completed successfully, including diagnostics retention. This suite does not establish independent TLC comparisons. The scenario suite and overall CI result remained pending when recorded."
+    },
     "candidateOrdinarySuiteResult": {
       "sourceSHA": "d0392111ee75ce2937c0661a21788f07d3ce9ac4",
       "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35446757795/job/105906969816",
@@ -185,6 +217,22 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "75248",
+      "sourceSHA": "32558474a8ab783795b0733fc47d7398178b4547",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLAModuleBundleTests|ImportedModuleConfigurationTests|SequenceIndexConversionTests|SequenceMembershipTests|FormalValueProjectionTests|LeastCircularSubstringCorpusModuleContractTests|UpstreamCorpusInventoryTests|SpecVariableDeclarationParsingTests|CompilerPipelineCanonicalizationTests'",
+      "exitCode": 1,
+      "reason": "The ordinary Swift set initialization regression exposed ambiguity between the unrestricted Sequence overload and the typed FormalSetValue overload for Variable(_:in:). Tests did not run. The correction removes the unrestricted typed-variable overload and migrates finite-domain callers to explicit sets or IntRange, leaving one typed set-domain path.",
+      "scope": "The starting SHA plus the uncommitted ordinary-set result patch. No verification credit."
+    },
+    {
+      "session": "3775",
+      "sourceSHA": "32558474a8ab783795b0733fc47d7398178b4547",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLAModuleBundleTests|ImportedModuleConfigurationTests|SequenceIndexConversionTests|SequenceMembershipTests|FormalValueProjectionTests|LeastCircularSubstringCorpusModuleContractTests|UpstreamCorpusInventoryTests'",
+      "exitCode": 1,
+      "reason": "The library and upstream examples compiled, but the test build rejected Variable(corpus, in: ZSequences.sequences(...)). Its existing typed-domain overload required SetExpr instead of the shared FormalSetValue contract. Tests did not run. The correction generalizes that overload and checks ordinary set initialization without adding a compatibility overload.",
+      "scope": "The starting SHA plus the uncommitted ordinary-set result patch. No verification credit."
+    },
     {
       "session": "59023",
       "sourceSHA": "271fa3439a94274e398b4c16ed32440374706a77",
