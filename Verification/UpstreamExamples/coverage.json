@@ -394,6 +394,17 @@
   },
   "localDiagnostics": [
     {
+      "session": "87981",
+      "sourceSHA": "fd2812f13c9966d318275cd8dbbcc577b88e23a4",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'UpstreamCorpusInventoryTests'",
+      "exitCode": 0,
+      "buildSeconds": 595.23,
+      "testSeconds": 0.018,
+      "testsRun": 4,
+      "result": "All four inventory tests pass. The corrected MCBoulanger implementation object binds the existing source file, MCBoulanger scenario, and boulanger graph case to the pinned module/configuration blobs. Its implemented status does not claim absent configuration-bound evidence. The inventory retains all 78 families, published configurations, declared environment variants, and strict complete-evidence requirements.",
+      "scope": "Local regression for the hosted ordinary-suite failure at ff01cbc7. Compiled source stayed unchanged; the read-only MCBakery capability audit was added to the ledger during the build. This does not establish hosted CI recovery, upstream equivalence, or additional coverage credit."
+    },
+    {
       "session": "14100",
       "sourceSHA": "c40fae77a200d4cab11cede1a592dd88839e1382",
       "sourcePatchSHA256": "95bfcfb1ac73b1afb4db5494ece3d6a4f56bad5d4fa5d301d36ffa8e2f0afb76",
@@ -1095,6 +1106,16 @@
           "configuration": "specifications/Bakery-Boulangerie/MCBakery.cfg",
           "required": true,
           "status": "missing",
+          "capabilityAudit": {
+            "moduleBlobSHA": "d9f40ecf2cb3cfb04e412dbe92265c803117766d",
+            "configurationBlobSHA": "b0af6112a142d531d26c36dd06ff3b5dea258d74",
+            "behaviorBlobSHA": "7f9329e1e3e9360b3939abb2713f638e7a2cbc72",
+            "initialization": "Bakery.tla line 502 defines ISpec as Inv /\\ [][Next]_vars. Inv is TypeOK /\\ IInv, not the fixed initial assignments of Init. Initial states must range over the finite typed shared/local functions and all nine declared control labels, then satisfy IInv. A native port starting only at ncs with zero tickets is not equivalent.",
+            "behavior": "The published configuration binds N=2 and MaxNat=2, substitutes NatOverride=0..MaxNat for Nat, and checks MutualExclusion, TypeOK, and Inv. ISpec has no fairness conjuncts. CHECK_DEADLOCK is explicitly FALSE, and the two commented temporal properties are not selected.",
+            "requiredCapability": "Typed invariant-defined initial-state selection, including compiler-owned process control locations, must feed generated initial machines and TLA+ export from one model. Current ModelBehavior only selects specification versus initialAndNext over the same initial states; it cannot select ISpec. Resolve the authoring contract before implementation. Do not expose raw pc maps or add a second execution backend.",
+            "criteria": ["AC-04", "AC-06", "AC-08", "AC-09", "AC-15", "AC-19"],
+            "scope": "Read-only audit of the pinned upstream blobs and current DSL/compiler surface. No model implementation, initial-state count, graph match, or completion credit is claimed."
+          },
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [],
