@@ -432,6 +432,27 @@
   },
   "localDiagnostics": [
     {
+      "session": "61394",
+      "sourceSHA": "ca5774c928126066cb3c3007a2acb4170cab8176",
+      "sourcePatchSHA256": "c901d71e0e001dd9e70bb882dea5fc8acb81600d52f4e0c026a5cce719598010",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'GuardedStepExecutionTests|OrderedStepTests|IndependentAtomicStepTests'",
+      "exitCode": 0,
+      "buildSeconds": 602.48,
+      "testSeconds": 0.019,
+      "testsRun": 13,
+      "result": "All 13 focused tests pass, including all four process and procedure guard combinations. False guards suppress failing bodies and preserve complete snapshots. True procedure guards retain both choices and return only the selected process. Native graph edges agree with generated procedure successors. Existing ordered-call and top-level guard tests pass.",
+      "scope": "Source stayed unchanged during the build; only the failed-build ledger entry changed. One fixture covers both remaining guard contexts without duplicate model schemas or production changes. Ponytail and cleanliness reviews retain source-derived names and typed actions. Static diagnostics pass. AC-01 has local implementation checks across all four authoring contexts, but hosted acceptance remains pending."
+    },
+    {
+      "session": "97015",
+      "sourceSHA": "ca5774c928126066cb3c3007a2acb4170cab8176",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'GuardedStepExecutionTests|OrderedStepTests|IndependentAtomicStepTests'",
+      "exitCode": 1,
+      "testsRun": 0,
+      "result": "The new GuardedProcesses fixture failed compilation because Node.all requires FiniteTLAValueDomain conformance. No tests ran. The corrected fixture adds that conformance and uses existing macro synthesis instead of handwritten encoding members.",
+      "scope": "This build includes uncommitted process and procedure guard tests. It establishes no semantic failure or acceptance evidence. The corrected rerun is recorded separately when complete."
+    },
+    {
       "session": "34192",
       "sourceSHA": "11eaee734839a7f2f9d2b7bc1d96955f89db48d9",
       "sourcePatchSHA256": "b9339c60ea5b147fa702589ebbef50d46717a8e667c8daacbfbad549a70d79c8",
@@ -7802,9 +7823,9 @@
   "dslCriteria": [
     {
       "id": "AC-01",
-      "status": "missing",
+      "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "IndependentAtomicStepTests covers top-level guards and choices. GuardedStepExecutionTests covers sequential Algorithm guards, body-evaluation failure suppression, control transfer, ambiguity, and complete native exploration. Local diagnostic 34192 passed both guard values and the existing suites. Process and procedure contexts still require complete acceptance audits. Hosted acceptance evidence remains incomplete.",
+      "reason": "IndependentAtomicStepTests and GuardedStepExecutionTests cover top-level, sequential Algorithm, process, and procedure guards. Local diagnostics 34192 and 61394 pass disabled-body failure suppression, unchanged snapshots, control transfer, all enabled choices, and native exploration. Hosted acceptance evidence for this complete test scope remains pending. This status does not count as a verified DSL criterion.",
       "evidence": []
     },
     {

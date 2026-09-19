@@ -2,6 +2,46 @@ import Testing
 import SwiftTLA
 
 struct GuardedStepExecutionTests {
+    @Test("Process and procedure guards suppress failing bodies without changing other process control",
+        arguments: [0, 1], [0, 1])
+    func guardsProcessAndProcedure(entryReady: Int, bodyReady: Int) throws {
+        let initial = try #require(try GuardedProcesses.initialMachines().first {
+            $0.state.entryReady == entryReady && $0.state.bodyReady == bodyReady
+        })
+        let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 100)
+        #expect(graph.deadlockedStates.isEmpty == (entryReady == 1 && bodyReady == 1))
+        for node in GuardedProcesses.Node.allCases {
+            var machine = initial
+            let enter = GuardedProcesses.Action.enter(process: node)
+            #expect(try machine.isEnabled(enter) == (entryReady == 1))
+            if entryReady == 0 {
+                #expect(try machine.successors(for: enter).isEmpty)
+                #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try machine.send(enter) }
+                #expect(machine.snapshot == initial.snapshot)
+                continue
+            }
+            _ = try machine.send(enter)
+            let before = machine.snapshot
+            let body = GuardedProcesses.Action.procedure_choose_body(process: node)
+            let successors = try machine.successors(for: body)
+            #expect(try machine.isEnabled(body) == (bodyReady == 1))
+            #expect(Set(successors.map { $0.state.value }) == (bodyReady == 1 ? [1, 2] : []))
+            #expect(throws: bodyReady == 1 ? GeneratedMachineError.ambiguousAction : .noMatchingSuccessor) {
+                try machine.send(body)
+            }
+            #expect(machine.snapshot == before)
+            #expect(Set(graph.transitions[before, default: []].filter { $0.action == body }.map(\.target))
+                == Set(successors.map(\.snapshot)))
+            for successor in successors {
+                #expect(try successor.isEnabled(.finish(process: node)))
+                for other in GuardedProcesses.Node.allCases where other != node {
+                    #expect(try successor.isEnabled(.enter(process: other)))
+                    #expect(try !successor.isEnabled(.finish(process: other)))
+                }
+            }
+        }
+    }
+
     @Test("Whole-step guards precede body evaluation and preserve every enabled branch", arguments: [0, 1])
     func guardsAlgorithmExecution(ready: Int) throws {
         var machine = try GuardedAlgorithm.makeMachine(.init(ready: ready, value: 0))
