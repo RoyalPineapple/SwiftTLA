@@ -77,6 +77,15 @@
       "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798",
+      "boulangerScenarioFailure": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948648268",
+        "conclusion": "failure",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/artifacts/10593003544",
+        "artifactSHA256": "8641567a9b521c5b7d8227e90678951058687143c87be4b53009dd09f9e083d0",
+        "artifactBytes": 190,
+        "reason": "The scenario step reached its 120-minute timeout at 21:54:07 UTC. The downloaded artifact contains only validation.log with the scenario-selection line. No native graph, TLC output, comparison, or scenario error was retained.",
+        "scope": "The CLI constructs NativeScenarioRun before TLCScenarioCheck writes native evidence. The retained output does not identify the exact stalled phase or establish a state-limit failure for this scenario run. Do not infer the graph job's failure cause from this timeout. The unchanged upstream diagnostic remains the next capacity check; no coverage credit is assigned."
+      },
       "coffeeCan3000GraphFailure": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948644772",
         "conclusion": "failure",
@@ -93,7 +102,7 @@
         "scenarioJobs": 63,
         "boulangerGraphJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948645289",
         "boulangerScenarioJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948648268",
-        "scope": "The release validator build and configuration-selection checks passed. The log selects all 63 scenarios, and the job inventory contains 30 graph plus 63 scenario comparisons. The Boulanger graph job failed at the native state limit. Its scenario job remains pending. Neither has verified coverage."
+        "scope": "The release validator build and configuration-selection checks passed. The log selects all 63 scenarios, and the job inventory contains 30 graph plus 63 scenario comparisons. The Boulanger graph job failed at the native state limit. Its scenario job timed out after 120 minutes without retained graph or TLC evidence. Neither has verified coverage."
       },
       "boulangerGraphFailure": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948645289",
