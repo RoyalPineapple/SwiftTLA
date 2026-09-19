@@ -52,6 +52,19 @@
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647",
       "boulangerDiagnosticJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/job/105977930719",
+      "boulangerReferenceDiagnostic": {
+        "conclusion": "success",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/artifacts/10593119201",
+        "artifactSHA256": "48e333e4eb3033dec7a5237a34a6ac968b2b6b848b888e5a0b081c64cc3d39e6",
+        "distinctStates": 7866982,
+        "generatedStates": 63482135,
+        "remainingQueue": 0,
+        "searchDepth": 84,
+        "elapsedSeconds": 231.33,
+        "inputAudit": "Downloaded source marker equals 0b86465f. All four TLA/CFG input hashes verify and equal repository fixture hashes. The original CFG retains N=3, MaxNat=3, NatOverride, MutualExclusion, TypeOK, Inv, Spec, and StateConstraint. The command runs pinned TLC with one worker and fp=1, without disabling deadlock checks or changing the model.",
+        "capacityFinding": "The unchanged upstream search exceeds the native five-million-state limit: its completed run reports 7,866,982 distinct states. Native capacity must exceed that floor before this configuration can complete. The exact native/bridge graph size and memory requirement still need measurement; storage changes alone cannot overcome the existing cap.",
+        "scope": "The retained TLC log reports no error, an empty queue, and a completed search. This diagnostic did not retain the lossless graph bridge output or compare Swift and TLC graphs. It establishes a resource baseline, not a hosted configuration match or family completion."
+      },
       "completedJobs": [
         {
           "name": "upstream",
