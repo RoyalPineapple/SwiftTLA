@@ -1,52 +1,5 @@
 import Testing
 import SwiftTLA
-import SwiftTLAMacros
-
-@TLAModel
-private struct BranchingControl {
-    enum Step: String, CaseIterable { case enter, choose }
-    static var spec: TLASpec {
-        #spec("BranchingControl") {
-            Algorithm("BranchingControl", scoped: { scope in
-                let value = scope.sharedVar(_name: "value", initial: 0)
-                Invariant("AtMostOne") { value <= 1 }
-                Do(Step.enter) { Goto(Step.choose) }
-                Do(Step.choose) {
-                    Choose(1...2) { choice in Assign(value, to: choice) }
-                }
-            })
-        }
-    }
-}
-
-@TLAModel
-private struct BlockedControl {
-    enum Step: String, CaseIterable { case wait }
-    static var spec: TLASpec {
-        #spec("BlockedControl") {
-            Algorithm("BlockedControl", scoped: { scope in
-                let value = scope.sharedVar(_name: "value", initial: 0)
-                Do(Step.wait, when: value == 1) {
-                    Assign(value, to: 2)
-                }
-            })
-        }
-    }
-}
-
-@TLAModel
-private struct InvalidAssumption {
-    enum Step: String, CaseIterable { case advance }
-    static var spec: TLASpec {
-        #spec("InvalidAssumption") {
-            Assume(false)
-            Algorithm("InvalidAssumption", scoped: { scope in
-                let value = scope.sharedVar(_name: "value", initial: 0)
-                Do(Step.advance) { Assign(value, to: 1) }
-            })
-        }
-    }
-}
 
 @Suite struct NativeReachabilityTests {
     @Test("Exploration distinguishes control locations and retains every choice")
@@ -69,6 +22,37 @@ private struct InvalidAssumption {
         #expect(application.snapshot == entered.snapshot)
         #expect(throws: GeneratedMachineError.ambiguousAction) { try application.send(.choose) }
         #expect(application.snapshot == entered.snapshot)
+
+        var pending = [initial]
+        var visited: Set<BranchingControl.Snapshot> = []
+        while let machine = pending.popLast() {
+            guard visited.insert(machine.snapshot).inserted else { continue }
+            let edges = try #require(graph.transitions[machine.snapshot])
+            #expect(Set(try machine.enabledActions()) == Set(edges.map(\.action)))
+            for action: BranchingControl.Action in [.enter, .choose, .Terminating] {
+                let successors = try machine.successors(for: action)
+                let targets = edges.filter { $0.action == action }.map(\.target)
+                #expect(Set(successors.map(\.snapshot)) == Set(targets))
+                #expect(successors.count == targets.count)
+                #expect(try machine.isEnabled(action) == !successors.isEmpty)
+                var dispatched = machine
+                switch successors.count {
+                case 0:
+                    #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try dispatched.send(action) }
+                    #expect(dispatched.snapshot == machine.snapshot)
+                case 1:
+                    let transition = try dispatched.send(action)
+                    #expect(transition.before == machine.state)
+                    #expect(transition.after == successors[0].state)
+                    #expect(dispatched.snapshot == successors[0].snapshot)
+                default:
+                    #expect(throws: GeneratedMachineError.ambiguousAction) { try dispatched.send(action) }
+                    #expect(dispatched.snapshot == machine.snapshot)
+                }
+                pending.append(contentsOf: successors)
+            }
+        }
+        #expect(visited == Set(graph.transitions.keys))
     }
 
     @Test("Safety checking retains the complete graph and a native counterexample")

@@ -507,6 +507,18 @@
   },
   "localDiagnostics": [
     {
+      "session": "63984",
+      "sourceSHA": "b77e82a2bbea9c77543ffa588bb8e4eb76ad6e68",
+      "sourcePatchSHA256": "345fded045d56aa34abb27b9aa28d117c550c1027d01d13ab887455bc6fb910e",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'NativeReachabilityTests|NativeMachineExecutionTests|NativeExecutionBoundaryTests'",
+      "exitCode": 0,
+      "buildSeconds": 593.89,
+      "testSeconds": 0.011,
+      "testsRun": 16,
+      "result": "All 16 focused tests pass. The branching fixture is replayed over every reachable complete snapshot and all three actions. Generated successors, enabledness, labeled edge counts, deterministic dispatch, disabled dispatch, ambiguity, and snapshot preservation agree with the complete native graph. Existing boundary tests retain transactional evaluation-failure coverage.",
+      "scope": "Source stayed unchanged during the build; only hosted-suite evidence changed in the ledger. Ponytail and cleanliness reviews reuse existing models, separate fixture declarations from the suite, and use source-derived state names. No production execution path or configuration changed. AC-04 has local implementation evidence; complete hosted acceptance remains pending."
+    },
+    {
       "session": "8864",
       "sourceSHA": "410308a40282759a7972a8aedcf09bb46581ee91",
       "sourcePatchSHA256": "4180a91616d0f85cb175d7c98ed99aed8e102432d1aa3dcab68c7970667a4275",
@@ -7997,9 +8009,9 @@
     },
     {
       "id": "AC-04",
-      "status": "missing",
+      "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLATests/NativeMachineExecutionTests.swift and Tests/SwiftTLATests/NativeReachabilityTests.swift cover successors, disabled actions, ambiguity, and complete control-state identity. Tests/SwiftTLATests/NativeExecutionBoundaryTests.swift checks the same overflow through successor enumeration, enabledness, dispatch, and exploration. Failed dispatch preserves the complete snapshot. Full criterion coverage and hosted acceptance evidence remain unaudited.",
+      "reason": "Local diagnostic 63984 passes 16 tests for complete generated successor and application-dispatch agreement. NativeReachabilityTests replays every reachable snapshot and action of the branching fixture, including distinct control locations, termination, disabled dispatch, and ambiguity. NativeExecutionBoundaryTests retains the same evaluation failure through enumeration, enabledness, dispatch, and exploration, with transactional snapshot preservation. NativeMachineExecutionTests supplies complete branching and constraint-boundary coverage. Hosted acceptance for the strengthened scope remains pending; this is not a verified DSL criterion.",
       "evidence": []
     },
     {
