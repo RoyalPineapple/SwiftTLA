@@ -60,13 +60,13 @@ package struct TLCPropertyCheck: Sendable {
       let batch = try request.selecting(bundle: checked, work: request.workingDirectory,
         runID: UUID(), invocation: .finiteGraph)
       let output = directory.appendingPathComponent("checked-graph")
-      let capture = try processAdapter.capture(batch, retainingIn: output)
-      if capture.outcome == .completed { return capture }
-      if capture.outcome == .temporalTautology {
+      let execution = try processAdapter.run(batch, retainingIn: output)
+      if execution == .completed { return try TLCProcessCapture(reading: batch, outcome: execution) }
+      if execution == .temporalTautology {
         return try processAdapter.capture(request, retainingIn: directory)
       }
-      let outcome: TLCExecutionOutcome = capture.outcome == .failed(exitStatus: 13)
-        ? .livenessViolation : capture.outcome
+      let outcome: TLCExecutionOutcome = execution == .failed(exitStatus: 13)
+        ? .livenessViolation : execution
       if case .failed = outcome {
         return try processAdapter.capture(request, retainingIn: directory)
       }

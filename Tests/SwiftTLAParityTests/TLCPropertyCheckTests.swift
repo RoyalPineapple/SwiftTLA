@@ -28,8 +28,9 @@ struct TLCPropertyCheckTests {
     }
   }
 
-  @Test("an unsupported batch isolates every check without accepting unavailable results", arguments: [false, true])
-  func isolatesUnsupportedBatch(unsupportedProperty: Bool) throws {
+  @Test("an unsupported batch retains partial output and isolates every check without accepting unavailable results",
+    arguments: [false, true], [false, true])
+  func isolatesUnsupportedBatch(unsupportedProperty: Bool, partialBatchGraph: Bool) throws {
     let x = Var<Int>("x", 1)
     let rendered = try TLASpec("TemporalFixture") {
       Variable(x)
@@ -41,7 +42,7 @@ struct TLCPropertyCheckTests {
     let native = try NativeModelRun(rendered: rendered, graph: fixture.swiftRun,
       checks: .init(properties: ["Positive": .satisfied, "Progress": .satisfied], deadlock: .violated(deadlock)))
     let checker = TLCPropertyCheck(processAdapter: .init(executor:
-      TLCUnsupportedPropertyExecutor(unsupportedProperty: unsupportedProperty)))
+      TLCUnsupportedPropertyExecutor(unsupportedProperty: unsupportedProperty, partialBatchGraph: partialBatchGraph)))
     let graphDirectory = fixture.root.appendingPathComponent("graph")
     let graph = try checker.captureGraph(native, request: fixture.completeGraphRequest, source: .generated,
       in: graphDirectory)
@@ -49,6 +50,10 @@ struct TLCPropertyCheckTests {
     #expect(graph.graph.isComparable)
     #expect(graph.request.bundle == fixture.completeGraphRequest.bundle)
     #expect(FileManager.default.fileExists(atPath: graphDirectory.appendingPathComponent("checked-graph/logs/tlc.stdout.log").path))
+    if partialBatchGraph {
+      #expect(try Data(contentsOf: graphDirectory.appendingPathComponent("checked-graph/graph-events.jsonl"))
+        == Data("{\"incomplete\":".utf8))
+    }
     let result = try checker.captureAll(native, completeGraph: .success(graph), source: .generated, in: fixture.directory)
     #expect(result.graphComparison?.matches == true)
     #expect(result.checks.map(\.check) == [.property("Positive"), .property("Progress"), .deadlock])

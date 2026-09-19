@@ -49,6 +49,15 @@
       "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798",
+      "comparisonDiscovery": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105945024178",
+        "conclusion": "success",
+        "graphJobs": 30,
+        "scenarioJobs": 63,
+        "boulangerGraphJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948645289",
+        "boulangerScenarioJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948648268",
+        "scope": "The release validator build and configuration-selection checks passed. The log selects all 63 scenarios, and the job inventory contains 30 graph plus 63 scenario comparisons. Boulanger jobs are queued, not verified."
+      },
       "completedJobs": [
         {
           "name": "ordinary",
@@ -384,6 +393,21 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "14100",
+      "sourceSHA": "c40fae77a200d4cab11cede1a592dd88839e1382",
+      "sourcePatchSHA256": "95bfcfb1ac73b1afb4db5494ece3d6a4f56bad5d4fa5d301d36ffa8e2f0afb76",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLCPropertyCheckTests|TLCGraphReaderTests|FiniteGraphCheckTests.(retainsFailedExecution|comparesEveryCheck|rejectsTimedOutBatch|rejectsDifferentPropertyVerdicts|rejectsOriginalPropertyDisagreement|rejectsWrongTLCStreamRunBinding)'",
+      "exitCode": 0,
+      "buildSeconds": 599.49,
+      "testSeconds": 1.375,
+      "testsRun": 81,
+      "result": "Batch graph capture retains process evidence before considering the outcome. Completed captures use the single strict graph decoder. Failed batches retain their raw partial stream without decoding a discarded graph, then use the existing complete-graph and per-property retries. Tests prove partial failed output is retained, unavailable individual checks remain unavailable, timeouts still fail, counterexamples are validated, and complete graph/property mismatches cannot pass.",
+      "unblocks": "CoffeeCan3000Beans checked-graph capture exited with status 1 after liveness heap exhaustion and retained 10,351,781,272 bytes of partial graph events. The previous path decoded that failed graph before discarding it and starting graph-only capture. This change removes that unnecessary work; it does not claim to resolve TLC memory exhaustion or certify the configuration.",
+      "review": "Ponytail and cleanliness review kept one strict TLCProcessCapture constructor and reused existing run, evidence retention, and retry paths. No compatibility initializer, weakened graph check, model bound, or heap-setting change was added. The approved static wrapper and git diff --check passed.",
+      "previousAttempt": "Session 46772 was deliberately stopped during compilation with exit 130 after detecting that the broad FiniteGraphCheckTests selector included full corpus exploration. No test pass is claimed for that attempt. Session 14100 selects only six finite-graph failure-handling methods plus the reader and property-check suites.",
+      "scope": "The recorded source SHA plus this source/test patch. Ledger-only changes during the build did not alter compiled source. All TLC executions in these focused cases use synthetic fixtures. Hosted complete CoffeeCan comparison remains required."
+    },
     {
       "session": "9954",
       "sourceSHA": "c194d75dbc86219f222dc2e93570d80eaf4d59f9",

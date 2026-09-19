@@ -3,6 +3,7 @@ import UpstreamParity
 
 struct TLCUnsupportedPropertyExecutor: TLCProcessExecuting {
   let unsupportedProperty: Bool
+  var partialBatchGraph = false
 
   func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
     if request.invocation == .finiteGraph {
@@ -11,6 +12,9 @@ struct TLCUnsupportedPropertyExecutor: TLCProcessExecuting {
     let configuration = request.bundle.cfg
     if configuration.contains("PROPERTY Progress"),
        unsupportedProperty || configuration.contains("INVARIANT Positive") {
+      if partialBatchGraph, request.invocation == .finiteGraph {
+        try Data("{\"incomplete\":".utf8).write(to: request.graphEvents)
+      }
       return .init(status: 255,
         stdout: "Error: Temporal formulas containing actions must be of forms <>[]A or []<>A.", stderr: "")
     }

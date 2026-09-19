@@ -335,10 +335,15 @@ package struct TLCProcessCapture: Sendable {
   package let outcome: TLCExecutionOutcome
   package let graph: GraphRun
 
-  fileprivate init(request: TLCProcessRequest, outcome: TLCExecutionOutcome, graph: GraphRun) {
+  package init(reading request: TLCProcessRequest, outcome: TLCExecutionOutcome) throws {
+    let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase)
+    let stream = try reader.parse(contentsOf: request.graphEvents)
+    guard stream.runID == request.runID else {
+      throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
+    }
     self.request = request
     self.outcome = outcome
-    self.graph = graph
+    self.graph = try reader.makeGraphRun(stream, outcome: outcome)
   }
 }
 
@@ -354,12 +359,7 @@ package struct TLCProcessAdapter: Sendable {
     retainingIn directory: URL
   ) throws -> TLCProcessCapture {
     let outcome = try run(request, retainingIn: directory)
-    let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase)
-    let stream = try reader.parse(contentsOf: request.graphEvents)
-    guard stream.runID == request.runID else {
-      throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
-    }
-    return TLCProcessCapture(request: request, outcome: outcome, graph: try reader.makeGraphRun(stream, outcome: outcome))
+    return try TLCProcessCapture(reading: request, outcome: outcome)
   }
 
   package func run(
