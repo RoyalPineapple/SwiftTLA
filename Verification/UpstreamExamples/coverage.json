@@ -65,7 +65,15 @@
         "scenarioJobs": 63,
         "boulangerGraphJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948645289",
         "boulangerScenarioJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948648268",
-        "scope": "The release validator build and configuration-selection checks passed. The log selects all 63 scenarios, and the job inventory contains 30 graph plus 63 scenario comparisons. Boulanger jobs are queued, not verified."
+        "scope": "The release validator build and configuration-selection checks passed. The log selects all 63 scenarios, and the job inventory contains 30 graph plus 63 scenario comparisons. The Boulanger graph job failed at the native state limit. Its scenario job remains pending. Neither has verified coverage."
+      },
+      "boulangerGraphFailure": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948645289",
+        "conclusion": "failure",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/artifacts/10592540200",
+        "artifactSHA256": "7dccb67da4f719b4087d16c1ebb77add03b671be915ae6a776f70541f20818e1",
+        "reason": "The downloaded diagnostic reports stateLimitExceeded(5000000) during native graph export. The terminal log reports this failure after approximately 94 minutes. TLC comparison did not start.",
+        "scope": "The artifact contains a diagnostic and validation log, not a complete graph. Storage improvements cannot remove this state-limit failure. Audit configuration fidelity and completion requirements before changing resource limits. Preserve N=3, MaxNat=3, StateConstraint, all selected properties, deadlock checks, and complete comparison requirements."
       },
       "completedJobs": [
         {
@@ -431,6 +439,18 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "8903",
+      "sourceSHA": "376bb6cb0f14e826f045ace42b4374348d6cff6d",
+      "sourcePatchSHA256": "b5bf655f3cad77ceeee284ad7f90af407d5cebc48ce35669eda58efa85662347",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'BreadthFirstExplorationTests|NativeReachabilityTests|NativeMachineExecutionTests|ConstraintBoundaryCheckingTests|GuardedStepExecutionTests|BoulangerCorpusExecutionTests'",
+      "exitCode": 0,
+      "buildSeconds": 595.96,
+      "testSeconds": 0.011,
+      "testsRun": 17,
+      "result": "All 17 focused tests pass. Graph discovery now reuses the complete stored snapshot for equal successor targets. Full graph edges, shortest traces, state limits, control-state distinctions, guard rollback, deadlocks, and constraint-boundary witnesses remain checked.",
+      "scope": "Source stayed unchanged during the build; only the hosted-failure ledger changed. Ponytail review kept the existing graph dictionary without another cache or lossy state identity. Static diagnostics and cleanliness checks pass. Hosted memory improvement remains unmeasured. This change cannot resolve the separate Boulanger state-limit failure."
+    },
     {
       "session": "30688",
       "sourceSHA": "cc47b7776503492bda8a9afcf6a69f26bcef596c",

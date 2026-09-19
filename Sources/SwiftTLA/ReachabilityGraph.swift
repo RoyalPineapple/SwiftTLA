@@ -103,14 +103,18 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             violations[machine.snapshot] = failures
             if !initialRoots.contains(machine.snapshot), predecessors[machine.snapshot] == nil { predecessors[machine.snapshot] = predecessor }
         }
-        func discover(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
+        func discover(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws -> Machine.Snapshot {
             guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
-            guard transitions[machine.snapshot] == nil else { return }
+            let snapshot = machine.snapshot
+            if let index = transitions.index(forKey: snapshot) {
+                return transitions.keys[index]
+            }
             guard transitions.count < maximumStates else { throw ExplorationError.stateLimitExceeded(maximumStates) }
-            transitions[machine.snapshot] = []
-            predecessors[machine.snapshot] = predecessor
+            transitions[snapshot] = []
+            predecessors[snapshot] = predecessor
             try recordReachability(machine)
             pending.append(machine)
+            return snapshot
         }
         for machine in initialMachines {
             guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
@@ -119,7 +123,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
                 try recordBoundaryViolations(machine)
                 continue
             }
-            try discover(machine)
+            _ = try discover(machine)
         }
         let initialStates = Set(transitions.keys)
         guard !initialStates.isEmpty else { throw ExplorationError.noInitialStates }
@@ -145,10 +149,11 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
                 }
                 return true
             }
-            for successor in retained {
-                try discover(successor.machine, from: (machine.snapshot, successor.action))
+            let edges = try retained.map { successor in
+                (action: successor.action,
+                 target: try discover(successor.machine, from: (machine.snapshot, successor.action)))
             }
-            transitions[machine.snapshot] = retained.map { ($0.action, $0.machine.snapshot) }
+            transitions[machine.snapshot] = edges
         }
         self.transitions = transitions
         self.predecessors = predecessors
