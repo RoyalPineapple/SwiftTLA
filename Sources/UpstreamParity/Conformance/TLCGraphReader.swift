@@ -62,16 +62,14 @@ package struct TLCGraphReader: Sendable {
             })
     }
 
+    package func parse(contentsOf url: URL) throws -> TLCGraphEventStream {
+        try parse(Data(contentsOf: url, options: .alwaysMapped))
+    }
+
     package func parse(_ data: Data) throws -> TLCGraphEventStream {
-        guard String(data: data, encoding: .utf8) != nil else { throw TLCGraphEventError.invalidUTF8 }
         guard !data.starts(with: [0xEF, 0xBB, 0xBF]), data.last == 10 else {
             throw TLCGraphEventError.invalidFooter("stream must be UTF-8 without BOM and LF-terminated")
         }
-        let lines = data.split(separator: 10, omittingEmptySubsequences: false)
-        guard lines.last?.isEmpty == true else { throw TLCGraphEventError.invalidFooter("missing final LF") }
-        let records = lines.dropLast()
-        guard !records.isEmpty else { throw TLCGraphEventError.missingFooter }
-
         var runID: UUID?
         var initialStates: Set<String> = []
         var transitions: Set<TLCGraphTransition> = []
@@ -80,11 +78,17 @@ package struct TLCGraphReader: Sendable {
         var footer: [String: Any]?
         var bodyHash = CryptoKit.SHA256()
         let newline = Data([10])
+        var offset = data.startIndex
+        var recordCount = 0
 
-        for (index, bytes) in records.enumerated() {
+        while let separator = data.range(of: newline, in: offset..<data.endIndex) {
             try autoreleasepool {
+                let index = recordCount
                 let line = index + 1
-                let lineData = Data(bytes)
+                let lineData = data.subdata(in: offset..<separator.lowerBound)
+                guard String(data: lineData, encoding: .utf8) != nil else {
+                    throw TLCGraphEventError.invalidUTF8
+                }
                 let object = try decodeJSONObject(lineData, line: line)
                 try validateCommon(object, line: line, expectedSequence: index, runID: &runID)
                 guard footer == nil else { throw TLCGraphEventError.invalidRecord(line: line, reason: "record after footer") }
@@ -193,18 +197,20 @@ package struct TLCGraphReader: Sendable {
                     bodyHash.update(data: newline)
                 }
             }
+            recordCount += 1
+            offset = separator.upperBound
         }
 
         guard let footer else { throw TLCGraphEventError.missingFooter }
-        guard try string(footer, "status", records.count) == "closed" else { throw TLCGraphEventError.invalidFooter("not closed") }
-        guard try int(footer, "lastBodySeq", records.count) == records.count - 2 else {
+        guard try string(footer, "status", recordCount) == "closed" else { throw TLCGraphEventError.invalidFooter("not closed") }
+        guard try int(footer, "lastBodySeq", recordCount) == recordCount - 2 else {
             throw TLCGraphEventError.invalidFooter("last body sequence")
         }
         let digest = bodyHash.finalize().map { String(format: "%02x", $0) }.joined()
-        guard try string(footer, "bodySha256", records.count) == digest else { throw TLCGraphEventError.invalidFooter("body digest") }
-        let footerCounts = try dictionary(footer, "counts", records.count)
+        guard try string(footer, "bodySha256", recordCount) == digest else { throw TLCGraphEventError.invalidFooter("body digest") }
+        let footerCounts = try dictionary(footer, "counts", recordCount)
         for (type, count) in counts {
-            guard try int(footerCounts, type, records.count) == count else {
+            guard try int(footerCounts, type, recordCount) == count else {
                 throw TLCGraphEventError.invalidFooter("count for \(type)")
             }
         }

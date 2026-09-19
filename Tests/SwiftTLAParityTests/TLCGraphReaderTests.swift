@@ -5,6 +5,31 @@ import SwiftTLA
 @testable import UpstreamParity
 @Suite(.serialized)
 struct TLCGraphReaderTests {
+  @Test("file-backed graph decoding preserves complete records and rejects corrupt transport")
+  func validatesFileBackedStream() throws {
+    let finiteGraphCase = try fixtureCase(try testReferencePin())
+    let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
+    let complete = try completeGraphStream(finiteGraphCase)
+    let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: file) }
+    try complete.write(to: file)
+    #expect(try reader.parse(contentsOf: file) == reader.parse(complete))
+
+    var changedBody = complete
+    changedBody.insert(0x20, at: 1)
+    let corruptions: [Data] = [
+      Data(), Data(complete.dropLast()), Data([0xEF, 0xBB, 0xBF]) + complete,
+      complete + Data([10]), complete + Data([0xFF, 10]), changedBody,
+      complete + complete,
+    ]
+    for data in corruptions {
+      try data.write(to: file)
+      #expect(throws: TLCGraphEventError.self) {
+        try reader.parse(contentsOf: file)
+      }
+    }
+  }
+
   @Test("scalar string decoding consumes exactly one value")
   func rejectsExtraScalarStrings() throws {
     #expect(try TLCValueParser.parse(#""first, second""#) == .string("first, second"))

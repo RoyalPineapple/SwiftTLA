@@ -43,9 +43,15 @@
       "conclusion": "failure",
       "reason": "The terminal validator log classifies the run as timedOut at the configured 600-second TLC limit. TLC reports 4,504,500 distinct initial states, five temporal branches, and 564,410 states still queued when termination occurs. It also warns of low heap memory during liveness checking. Shutdown-related graph-stream exceptions appear in the retained partial output. This is incomplete resource-limited evidence, not a property counterexample or equivalence result.",
       "candidateChange": "Raise the hosted model-owned scenario TLC timeout to 1800 seconds, matching the largest declared graph-case timeout. Keep the 120-minute step and 150-minute job budgets, model populations, native state limits, selected properties, deadlock checks, and complete comparison requirements unchanged. A completed hosted rerun remains required.",
-      "scope": "Diagnosis uses the terminal job log and artifact metadata. The 1.48 GB artifact is retained remotely but has not been downloaded or audited as complete evidence. The separate graphs-coffee-can-3000 job remains live."
+      "scope": "Diagnosis uses the terminal job log and artifact metadata. The 1.48 GB artifact is retained remotely but has not been downloaded or audited as complete evidence. Run 35451794508 has completed with failure: this scenario and graphs-coffee-can-3000 are its only failed comparison jobs; the aggregate gate also failed. Successful jobs still require retained evidence audits before any new coverage credit."
     },
     "currentCandidate": {
+      "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035",
+      "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798",
+      "scope": "Submitted configured local families, lexical predicates, typed range and mapping results, and the MCBoulanger port for CI and independent candidate comparisons. This submission excludes the subsequent file-backed TLC graph reader change. No hosted match is assigned before retained complete evidence is audited."
+    },
+    "completedCandidate": {
       "sourceSHA": "b0755df76872000d9e6d50bff1a13bc9bb2b8dab",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35455298754",
       "conclusion": "success",
@@ -348,6 +354,19 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "9954",
+      "sourceSHA": "c194d75dbc86219f222dc2e93570d80eaf4d59f9",
+      "sourcePatchSHA256": "0faf1f48deabd9aec400989dbd45636392f2a0ef573374b97956f62fedaa2ec0",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLCGraphReaderTests|TLCProcessAdapterTests'",
+      "exitCode": 0,
+      "testSeconds": 1.158,
+      "testsRun": 37,
+      "result": "All 37 TLCGraphReaderTests passed, including process-adapter capture tests. File-backed input uses Foundation memory mapping and one-record decoding instead of loading the entire event file, constructing a whole-file UTF-8 string, and allocating an array of every line. New checks compare file-backed and in-memory results and reject empty, truncated, BOM-prefixed, invalid UTF-8, altered-digest, blank-record, and repeated streams. Existing sequence, footer, Unicode, duplicate-key, fingerprint, action, and capture contracts pass.",
+      "unblocks": "CoffeeCan3000Beans requires complete comparison of 4,504,500 states. Its retained graph-only event file is 13,360,429,891 bytes and declares 18,000,004 records including its footer. Hosted decoding did not finish before the comparison deadline. This change removes redundant transport-sized allocations without reducing the graph or selected checks.",
+      "review": "Ponytail and cleanliness review kept one parser and Foundation file mapping. No custom buffering layer, compatibility API, model cutoff, or weakened integrity check was added. The approved static wrapper and git diff --check passed.",
+      "scope": "The recorded source SHA plus this source/test patch; the ledger-only ff01cbc7 commit made during the build did not change compiled source. This is local semantic evidence, not a large-file benchmark or hosted match. TLC liveness heap exhaustion remains unresolved. The file-backed reader was not included in the ff01cbc7 hosted submission."
+    },
     {
       "session": "31852",
       "sourceSHA": "efc2cc2b6cecdcd20954bb409dfc13a0c976a73f",

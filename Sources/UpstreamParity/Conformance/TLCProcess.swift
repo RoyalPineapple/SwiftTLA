@@ -355,7 +355,7 @@ package struct TLCProcessAdapter: Sendable {
   ) throws -> TLCProcessCapture {
     let outcome = try run(request, retainingIn: directory)
     let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase)
-    let stream = try reader.parse(Data(contentsOf: request.graphEvents))
+    let stream = try reader.parse(contentsOf: request.graphEvents)
     guard stream.runID == request.runID else {
       throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
     }
