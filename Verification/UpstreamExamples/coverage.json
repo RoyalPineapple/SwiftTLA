@@ -60,6 +60,17 @@
       },
       "completedJobs": [
         {
+          "name": "upstream",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/job/105944975813",
+          "conclusion": "success",
+          "testsPassed": 23,
+          "buildSeconds": 1838.31,
+          "testSeconds": 1114.284,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/artifacts/10590373118",
+          "artifactDigest": "sha256:ab498de9b92359d96d27e1d6835f7bb77ac41b1d2e3f1b8d4fe70795c8a13311",
+          "scope": "The completed hosted job log reports all 23 upstream suite tests passing. Artifact identity is recorded from GitHub metadata; artifact contents have not been audited. This establishes suite evidence for ff01cbc7 only, not independent complete upstream equivalence, a new verified configuration, or coverage of the later local reader and failed-batch fixes."
+        },
+        {
           "name": "ordinary",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/job/105944975893",
           "conclusion": "failure",
