@@ -2037,6 +2037,16 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/artifacts/10590583033",
+              "artifactDigest": "sha256:cd1c97d0213e0ea1ffe65a73d52952e59b8f0b870a4ef68c3bd657fc20d341ad",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Downloaded and compared the entire native, upstream TLC, and generated TLC graph files: all three are byte-identical. Parsed every canonical record and checked the complete footer: 20 initial states, 20 states, 32 labeled edges, no violation or trace. All four property comparisons establish TypeInvariant and deadlock satisfaction for both TLC sources. Native checks, original configuration, module and dependency digests, successful process outcomes, and TLC/Java/bridge source pins match. This refreshes an existing match at ff01cbc7, not an additional configuration or evidence for the subsequent reader and failed-batch fixes."
+            },
             {"sourceSHA":"3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217","developerToolsVersion":"16.4","runURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508","artifactURL":"https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10587244123","artifactDigest":"sha256:62c2da1ec7630335d829169ed2122e457541e86ed1da1a24408d78876d521e82","completeGraph":true,"allPropertiesMatch":true,"scope":"Complete native, upstream TLC, and generated TLC graph files are byte-identical: 20 initial states, 20 states, 32 labeled edges. Completion footers and every record count agree. TypeInvariant and deadlock are satisfied in both comparisons. Module, dependency, original configuration, TLC, Java, and bridge pins match. This refreshes an existing configuration match, not an additional configuration."},{
             "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
             "developerToolsVersion": "16.4",
