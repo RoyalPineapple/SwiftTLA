@@ -54,6 +54,17 @@
       "boulangerDiagnosticJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/job/105977930719",
       "completedJobs": [
         {
+          "name": "ordinary",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/job/105977911662",
+          "conclusion": "success",
+          "testsRun": 1477,
+          "buildSeconds": 815.85,
+          "testSeconds": 602.781,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/artifacts/10593144384",
+          "artifactSHA256": "baf91533783e436798283f59d0124dec2ee1fb938bb649e2a86d2d3b1d462931",
+          "scope": "Terminal hosted job logs report 1477 passing tests on 0b86465f. Artifact metadata is retained; contents have not been downloaded or audited. This excludes the separate upstream, finite-graph, and scenario jobs and does not validate later local changes or add upstream configuration matches."
+        },
+        {
           "name": "apple-platform-examples",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/job/105977911648",
           "conclusion": "success",
