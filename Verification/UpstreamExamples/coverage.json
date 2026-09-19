@@ -51,8 +51,27 @@
       "sourceSHA": "f667b67983a51f800ee03dd90d0903cc705db7a8",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479",
-      "completedJobs": [],
-      "scope": "This candidate includes the file-backed reader, failed-batch capture fix, ledger correction, and breadth-first queue change. Both hosted runs are pending. Local focused checks passed, but they do not establish hosted recovery or configuration matches. The previous independent comparison run remains active."
+      "completedJobs": [
+        {
+          "name": "finite-graphs",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/job/105959910510",
+          "conclusion": "cancelled",
+          "buildSeconds": 1615.76,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/artifacts/10592407826",
+          "artifactSHA256": "0491e1c11bc6a43c75e51637912cb1edb5452a780144fe1703cc0fc24977355a",
+          "scope": "The suite step ended at its 75-minute limit after compilation succeeded. Downloaded diagnostics bind to f667b679 and Xcode 16.4 with SDK 24F74. The final sample at 21:21:29 UTC shows Boulanger dictionary lookup and snapshot copies during discovery, with a 6.8 GB footprint. Queue copying is no longer the sampled hotspot. The graph remained incomplete. This source predates complete-snapshot reuse and establishes no hosted recovery or configuration match."
+        },
+        {
+          "name": "apple-platform-examples",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/job/105959910665",
+          "conclusion": "success",
+          "testsRun": 12,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/artifacts/10591988186",
+          "artifactSHA256": "af555f052a7afc6a8be93d5bef6d33bc5cef918a7de2343f55243e0a2e658879",
+          "scope": "The downloaded source marker binds to f667b679. Retained adoption logs report 12 tests with zero failures. The hosted job also built the camera executable and demo app successfully. This evidence covers the pushed candidate only, not later snapshot, guard, or reader changes. It establishes no upstream configuration match."
+        }
+      ],
+      "scope": "This candidate includes the file-backed reader, failed-batch capture fix, ledger correction, and breadth-first queue change. Apple examples passed, but the finite-graph suite reached its time limit. Remaining CI jobs and independent comparisons are pending. Local checks do not substitute for hosted recovery. The previous independent comparison run remains active."
     },
     "previousCandidate": {
       "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
