@@ -31,6 +31,8 @@
       "comparisonCompletedAt": "2026-09-19T18:02:43Z",
       "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/artifacts/10589308743",
       "artifactDigest": "sha256:4ec780587ee876f6a79940c49bdb690728d4d2dcf939c7822df3b214c8c76fe9",
+      "javaHeapMB": 1792,
+      "resourceDiagnosis": "The retained TLC banner reports one worker, three cores, a 1792 MB Java heap, and 64 MB of offheap memory. TLC reports heap exhaustion during five-branch temporal checking. The launch command sets no explicit Java heap limit. Reader allocation changes do not by themselves resolve this separate Java failure. A larger heap or separate property runs require hosted evidence with all checks retained.",
       "scope": "The terminal log and check annotation confirm the 120-minute comparison-step timeout. Native export finished after 1799.335 seconds. Retained checked-graph logs report Java heap exhaustion during five-branch liveness checking. The subsequent graph-only capture completed at 17:14:09 UTC in 170 seconds, with 18,000,002 generated states, 4,504,500 distinct states, and an empty queue. The validator never reached its post-decoding phase before cancellation at 18:02:43 UTC. Thus the artifact identifies both a TLC liveness memory failure and an unfinished graph decoding stage. The 1.74 GB artifact was downloaded and these logs inspected; no complete graph or property match is established, and no coverage credit is assigned."
     },
     "latestIndependentScenarioFailure": {
@@ -46,6 +48,13 @@
       "scope": "Diagnosis uses the terminal job log and artifact metadata. The 1.48 GB artifact is retained remotely but has not been downloaded or audited as complete evidence. Run 35451794508 has completed with failure: this scenario and graphs-coffee-can-3000 are its only failed comparison jobs; the aggregate gate also failed. Successful jobs still require retained evidence audits before any new coverage credit."
     },
     "currentCandidate": {
+      "sourceSHA": "f667b67983a51f800ee03dd90d0903cc705db7a8",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601",
+      "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479",
+      "completedJobs": [],
+      "scope": "This candidate includes the file-backed reader, failed-batch capture fix, ledger correction, and breadth-first queue change. Both hosted runs are pending. Local focused checks passed, but they do not establish hosted recovery or configuration matches. The previous independent comparison run remains active."
+    },
+    "previousCandidate": {
       "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798",
