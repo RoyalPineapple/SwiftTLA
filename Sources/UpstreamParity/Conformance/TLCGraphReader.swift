@@ -106,8 +106,7 @@ package struct TLCGraphReader: Sendable {
                         throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid initial callback")
                     }
                     let state = try parseState(try dictionary(object, "state", line), line: line)
-                    try registerRepresentative(state, in: &representatives, line: line)
-                    initialStates.insert(state.fingerprint)
+                    initialStates.insert(try registerRepresentative(state, in: &representatives, line: line))
                 case "transition":
                     try exactKeys(object, [
                         "schema", "version", "type", "callback", "seq", "runId", "caseId", "source",
@@ -163,15 +162,16 @@ package struct TLCGraphReader: Sendable {
                               object["predicateLocation"] is NSNull,
                               !notInModel
                         else { throw TLCGraphEventError.invalidRecord(line: line, reason: "invalid reachable transition") }
-                        try validateReference(source, in: representatives, line: line)
+                        let sourceFingerprint = try validateReference(source, in: representatives, line: line)
+                        let targetFingerprint: String
                         if seen {
-                            try validateReference(target, in: representatives, line: line)
+                            targetFingerprint = try validateReference(target, in: representatives, line: line)
                         } else {
-                            try registerRepresentative(target, in: &representatives, line: line)
+                            targetFingerprint = try registerRepresentative(target, in: &representatives, line: line)
                         }
                         for resolvedAction in resolvedActions {
                             transitions.insert(TLCGraphTransition(
-                                source: source.fingerprint, target: target.fingerprint, action: resolvedAction
+                                source: sourceFingerprint, target: targetFingerprint, action: resolvedAction
                             ))
                         }
                     }
@@ -310,28 +310,29 @@ package struct TLCGraphReader: Sendable {
 
     private func registerRepresentative(
         _ state: TLCGraphState, in representatives: inout [String: TLCGraphState], line: Int
-    ) throws {
+    ) throws -> String {
         if let existing = representatives[state.fingerprint] {
-            if existing.bindings == state.bindings { return }
+            if existing.bindings == state.bindings { return existing.fingerprint }
             guard try canonicalState(existing) == canonicalState(state) else {
                 throw TLCGraphEventError.invalidRecord(line: line, reason: "fingerprint binding mismatch")
             }
-            return
+            return existing.fingerprint
         }
         representatives[state.fingerprint] = state
+        return state.fingerprint
     }
 
     private func validateReference(
         _ state: TLCGraphState, in representatives: [String: TLCGraphState], line: Int
-    ) throws {
+    ) throws -> String {
         guard let representative = representatives[state.fingerprint] else {
             throw TLCGraphEventError.invalidRecord(line: line, reason: "seen fingerprint without representative")
         }
-        if representative.bindings == state.bindings { return }
+        if representative.bindings == state.bindings { return representative.fingerprint }
         let representativeState = try canonicalState(representative)
         let alias = try canonicalState(state)
         if representativeState == alias {
-            return
+            return representative.fingerprint
         }
         guard finiteGraphCase.symmetryGroup.isEmpty == false else {
             throw TLCGraphEventError.invalidRecord(line: line, reason: "fingerprint binding mismatch")
@@ -342,6 +343,7 @@ package struct TLCGraphReader: Sendable {
             throw TLCGraphEventError.invalidRecord(
                 line: line, reason: "fingerprint binding outside declared symmetry orbit")
         }
+        return representative.fingerprint
     }
 
     private func canonicalState(_ state: TLCGraphState) throws -> CanonicalState {

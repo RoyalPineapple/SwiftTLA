@@ -468,6 +468,18 @@
   },
   "localDiagnostics": [
     {
+      "session": "33042",
+      "sourceSHA": "a5ba5e66590819fe0876de6de7aebef4bfde288c",
+      "sourcePatchSHA256": "fb55b56d48fab821295e72a03db4da62e77218af26d28b08f00c5437c6f68a0d",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLCGraphReaderTests|CanonicalGraphTests|GraphComparisonTests'",
+      "exitCode": 0,
+      "buildSeconds": 598.69,
+      "testSeconds": 2.898,
+      "testsRun": 63,
+      "result": "All 63 focused tests pass. TLC graph edges reuse stored fingerprint strings only after the existing binding and symmetry checks succeed. Long fingerprint IDs preserve the exact canonical graph. Collision rejection, Unicode distinctions, malformed transport, graph identity, and incomplete-result failures remain checked.",
+      "scope": "Source stayed unchanged during the build; only the CI evidence ledger was edited and committed. Ponytail review reused the existing representative table without adding a cache. No binding check, graph record, or property was removed. Static diagnostics and cleanliness checks pass. Hosted memory improvement and complete CoffeeCan3000 comparison remain unverified."
+    },
+    {
       "session": "5499",
       "sourceSHA": "372c871a86ca49fe9ec62b2ff9049fe5f41d88ac",
       "sourcePatchSHA256": "496fe91609c7661ef149c38aa739341df52fd4a754cf927207bddd962f57efa7",

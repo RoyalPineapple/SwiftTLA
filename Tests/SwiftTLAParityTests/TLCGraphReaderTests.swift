@@ -5,6 +5,24 @@ import SwiftTLA
 @testable import UpstreamParity
 @Suite(.serialized)
 struct TLCGraphReaderTests {
+  @Test("long fingerprint references preserve complete canonical graph identity")
+  func preservesLongFingerprintReferences() throws {
+    let finiteGraphCase = try fixtureCase(try testReferencePin())
+    let reader = TLCGraphReader(finiteGraphCase: finiteGraphCase)
+    let original = try completeGraphStream(finiteGraphCase)
+    let source = "18446744073709551614"
+    let target = "18446744073709551615"
+    let renamed = String(decoding: original, as: UTF8.self)
+      .replacingOccurrences(of: "\"fingerprint\":\"1\"", with: "\"fingerprint\":\"\(source)\"")
+      .replacingOccurrences(of: "\"fingerprint\":\"2\"", with: "\"fingerprint\":\"\(target)\"")
+    let stream = try reader.parse(refreshedFooterDigest(Data(renamed.utf8)))
+    #expect(Set(stream.states.keys) == [source, target])
+    #expect(stream.initialStates == [source])
+    #expect(stream.transitions == [TLCGraphTransition(source: source, target: target, action: "Next")])
+    #expect(try reader.makeGraphRun(stream, outcome: .completed)
+      == reader.makeGraphRun(reader.parse(original), outcome: .completed))
+  }
+
   @Test("file-backed graph decoding preserves complete records and rejects corrupt transport")
   func validatesFileBackedStream() throws {
     let finiteGraphCase = try fixtureCase(try testReferencePin())
