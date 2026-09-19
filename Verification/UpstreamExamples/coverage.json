@@ -60,6 +60,15 @@
       },
       "completedJobs": [
         {
+          "name": "scenarios",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/job/105944975784",
+          "conclusion": "failure",
+          "buildSeconds": 1437.83,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/artifacts/10590673801",
+          "artifactDigest": "sha256:00bf6566b4a9eb1df1261dbedae7d61d0e9821991ed4bd7d27ec705bec27e8d7",
+          "scope": "The suite step reached its 90-minute timeout after compilation succeeded. Downloaded diagnostics bind to ff01cbc7. The final sample at 19:50:16 UTC shows Boulanger graph storage destruction inside ReachabilityGraph initialization, with an 11.8 GB footprint. The sample does not establish why cleanup started or prove that queue changes resolve this failure. No complete suite result or upstream equivalence follows."
+        },
+        {
           "name": "finite-graphs",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035/job/105944975936",
           "conclusion": "cancelled",
@@ -413,6 +422,17 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "61104",
+      "sourceSHA": "a8394a670f18085749373deca270a89b6c258dac",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'BreadthFirstExplorationTests|NativeReachabilityTests|NativeMachineExecutionTests|ConstraintBoundaryCheckingTests'",
+      "exitCode": 1,
+      "buildSeconds": 598.16,
+      "testSeconds": 0.011,
+      "testsRun": 14,
+      "result": "The new multiple-root regression failed with invalidInitialState. Its fixture declared only node 1 as initial but requested node 3. The single-root case and existing focused suites passed. The corrected fixture declares both roots and needs a complete rerun.",
+      "scope": "This diagnostic includes the uncommitted queue change and its first regression fixture. It establishes no hosted recovery or configuration coverage."
+    },
     {
       "session": "13804",
       "sourceSHA": "dfb4207dcbc37489a38903b3c176c3b3341c65c9",
