@@ -594,7 +594,7 @@ struct LivenessConformanceTests {
         #expect(try #require(analysis.witness).cycle.isEmpty == false)
 
         let bounded = try TLASpec("incomplete") {
-            Variable(x, in: 0...2)
+            Variable(x, in: IntRange(0, through: 2))
             Action("step") { x.becomes(x + 1).when(x < 2) }
             Eventually("reachesTwo", x == 2)
         }.compile()

@@ -141,7 +141,7 @@ public enum ZSequences {
 
   public static func indices<Element: TLAValueType>(
     of sequence: some TypedExpression<ZeroBasedSequence<Element>>
-  ) -> Expr<SetExpr<Int>> {
+  ) -> Expr<Set<Int>> {
     Expr(.recursiveCall("ZIndices", [sequence.stateExpr]))
   }
 
@@ -151,7 +151,7 @@ public enum ZSequences {
   /// domain used by the upstream `ZSeq` definition.
   public static func sequences<Domain: FormalSetValue>(
     over elements: some TypedExpression<Domain>
-  ) -> Expr<SetExpr<ZeroBasedSequence<Domain.Element>>> {
+  ) -> Expr<Set<ZeroBasedSequence<Domain.Element>>> {
     Expr(.recursiveCall("ZSeq", [elements.stateExpr]))
   }
 

@@ -90,7 +90,7 @@ import SwiftTLAMacros
         let source = """
         {
             let counter = Var("counter", 0)
-            Variable(counter, in: 0...1)
+            Variable(counter, in: IntRange(0, through: 1))
         }
         """
         let closure = try parseSpecTestClosure(source)

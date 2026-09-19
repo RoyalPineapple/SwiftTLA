@@ -333,7 +333,7 @@ struct CanonicalGraphTests {
         let cases: [(TLASpec, GraphRunOutcome)] = [
             (
                 TLASpec("EmptyInitialStateRelation") {
-                    Variable(value, in: [Int]())
+                    Variable(value, in: Set<Int>())
                 },
                 .executionError("the compiled initial-state relation is empty")
             ),

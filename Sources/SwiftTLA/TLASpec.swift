@@ -814,18 +814,9 @@ public func Variable<T>(_ ref: Var<T>, _ initial: some TypedExpression<T>) -> Va
   )
 }
 @discardableResult
-public func Variable<T>(_ ref: Var<T>, in values: some Sequence<some TLAValueConvertible>)
-  -> VarDecl {
-  let set = Set(values.map(\.tlaValue))
-  let stateSet: StateExpr = .setLiteral(set.map { .value($0) })
-  return VarDecl(
-    ref.name,
-    initialization: .memberOf(stateSet),
-    generatedSwiftType: swiftSurfaceTypeName(for: T.self)
-  )
-}
-@discardableResult
-public func Variable<T>(_ ref: Var<T>, in values: some TypedExpression<SetExpr<T>>) -> VarDecl {
+public func Variable<T, Domain: FormalSetValue>(
+  _ ref: Var<T>, in values: some TypedExpression<Domain>
+) -> VarDecl where Domain.Element == T {
   return VarDecl(
     ref.name,
     initialization: .memberOf(values.stateExpr),

@@ -218,6 +218,17 @@
   },
   "localDiagnostics": [
     {
+      "session": "10635",
+      "sourceSHA": "32558474a8ab783795b0733fc47d7398178b4547",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLAModuleBundleTests|ImportedModuleConfigurationTests|SequenceIndexConversionTests|SequenceMembershipTests|FormalValueProjectionTests|LeastCircularSubstringCorpusModuleContractTests|UpstreamCorpusInventoryTests|SpecVariableDeclarationParsingTests|CompilerPipelineCanonicalizationTests|CanonicalGraphTests|LivenessCheckerTests|ModelCheckOutcomeTests|SymmetryReductionTests|CounterexampleTraceTests|LivenessConformanceTests|CompleteExplorationSafetyTests'",
+      "exitCode": 0,
+      "buildSeconds": 592.43,
+      "testSeconds": 3.155,
+      "testsRun": 216,
+      "result": "ZSequences indices, sequence domains, and rotation records return ordinary typed Swift sets. Formal projection and initialization preserve the complete bounded domain. Variable(_:in:) has one typed set-domain overload with matching element types; the unrestricted typed-variable Sequence overload is removed. Migrated empty-domain, symmetry, liveness, trace, and initialization fixtures pass their existing assertions. Parser and compilation identity checks also pass.",
+      "scope": "The starting SHA plus the set-domain migration committed with this entry. Commit 0f1cc774 changed only workflow and ledger files during the build. No model bounds, selected properties, graph requirements, or pinned inputs changed. These local diagnostics do not establish current-source hosted equivalence or complete DSL acceptance."
+    },
+    {
       "session": "75248",
       "sourceSHA": "32558474a8ab783795b0733fc47d7398178b4547",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLAModuleBundleTests|ImportedModuleConfigurationTests|SequenceIndexConversionTests|SequenceMembershipTests|FormalValueProjectionTests|LeastCircularSubstringCorpusModuleContractTests|UpstreamCorpusInventoryTests|SpecVariableDeclarationParsingTests|CompilerPipelineCanonicalizationTests'",

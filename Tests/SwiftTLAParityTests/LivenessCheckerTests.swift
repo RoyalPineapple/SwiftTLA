@@ -137,7 +137,7 @@ struct LivenessCheckerTests {
   func eventuallySatisfied() throws {
     let position = Var<Int>("position")
     let spec = TLASpec("FairCycle") {
-      Variable(position, in: 1...12)
+      Variable(position, in: IntRange(1, through: 12))
       let advance = Action("advance") {
         (position < 12 && position.becomes(position + 1)) ||
           (position == 12 && position.becomes(1))
@@ -156,7 +156,7 @@ struct LivenessCheckerTests {
   func eventuallyViolated() throws {
     let position = Var<Int>("position")
     let spec = TLASpec("CycleWithUnreachableProperty") {
-      Variable(position, in: 1...12)
+      Variable(position, in: IntRange(1, through: 12))
       Action("advance") {
         (position < 12 && position.becomes(position + 1)) ||
           (position == 12 && position.becomes(1))

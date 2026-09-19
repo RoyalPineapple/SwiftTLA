@@ -6,7 +6,7 @@ struct CompleteExplorationSafetyTests {
     func preservesGraphAndAllSafetyChecks() throws {
         let value = Var<Int>("value")
         let specification = TLASpec("CompleteSafety") {
-            Variable(value, in: [0, 10])
+            Variable(value, in: Set([0, 10]))
             Action("advance") { value.becomes(value + 1).when(value >= 10 && value < 13) }
             Invariant("BelowEleven") { value < 11 }
             Invariant("BelowThirteen") { value < 13 }

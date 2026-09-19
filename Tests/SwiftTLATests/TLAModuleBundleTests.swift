@@ -230,7 +230,7 @@ struct TLAModuleBundleTests {
     #expect(bundle.imports.map(\.name) == ["ZSequences"])
     #expect(!bundle.root.tla.contains("ZSeq(elements) =="))
 
-    let domain = ZSequences.sequences(over: Set<Int>([0, 1]))
+    let domain: Expr<Set<ZeroBasedSequence<Int>>> = ZSequences.sequences(over: Set<Int>([0, 1]))
     let sequences = try compiledValue(
       domain.stateExpr,
       recursiveFunctions: try FormalModuleClosure.resolve(root: consumer)
@@ -241,6 +241,22 @@ struct TLAModuleBundleTests {
       return
     }
     #expect(values.count == 7)
+    #expect(try #require(Set<ZeroBasedSequence<Int>>(formalValue: sequences)).count == 7)
+
+    let sequence = ZeroBasedSequence<Int>.literal(0, 1)
+    let indices: Expr<Set<Int>> = ZSequences.indices(of: sequence)
+    let rotations: Expr<Set<ZSequences.Rotation<Int>>> = ZSequences.rotations(of: sequence)
+    let functions = try FormalModuleClosure.resolve(root: consumer).linkedOperators.recursiveFunctions
+    let indexValues = try compiledValue(indices.stateExpr, recursiveFunctions: functions)
+    #expect(Set<Int>(formalValue: indexValues) == [0, 1])
+    let rotationValues = try compiledValue(rotations.stateExpr, recursiveFunctions: functions)
+    let projectedRotations = try #require(Set<ZSequences.Rotation<Int>>(formalValue: rotationValues))
+    #expect(projectedRotations.count == 2)
+    #expect(Set(projectedRotations.map(\.shift)) == [0, 1])
+    for rotation in projectedRotations {
+      #expect(rotation.seq.element(at: 0) == rotation.shift)
+      #expect(rotation.seq.element(at: 1) == 1 - rotation.shift)
+    }
 
     let corpus = Var<ZeroBasedSequence<Int>>("corpus", .init())
     let initialized = TLASpec("InitializedZSequences") {
@@ -249,6 +265,12 @@ struct TLAModuleBundleTests {
     }
     let compilation = try initialized.compile()
     #expect(try CompiledRuntime(compilation: compilation).initialStates().count == 7)
+
+    let member = Var<Int>("member", 0)
+    let ordinarySet = TLASpec("OrdinarySetDomain") {
+      Variable(member, in: Set([0, 1]))
+    }
+    #expect(try CompiledRuntime(compilation: ordinarySet.compile()).initialStates().count == 2)
   }
 
   @Test("an import remains a source dependency and links its operators during compilation")

@@ -18,7 +18,7 @@ struct ModelCheckOutcomeTests {
   func emptyInitialStateRelation() throws {
     let value = Var<Int>("value")
     let outcome = try checker(TLASpec("EmptyInitialStateRelation") {
-      Variable(value, in: [Int]())
+      Variable(value, in: Set<Int>())
     }).check()
 
     guard case .noInitialStates = outcome else {

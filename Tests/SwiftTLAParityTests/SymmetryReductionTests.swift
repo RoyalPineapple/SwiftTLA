@@ -8,7 +8,7 @@ struct SymmetryReductionTests {
   func directValueSymmetry() throws {
     let spec = TLASpec("SymTest") {
       let owner = Var<LeftNode>("owner")
-      Variable(owner, in: LeftNode.allCases)
+      Variable(owner, in: Set(LeftNode.allCases))
       Action("stay") { owner.stays }
       Symmetry("owner", Set(LeftNode.allCases))
     }
@@ -37,8 +37,8 @@ struct SymmetryReductionTests {
     let spec = TLASpec("MultiSym") {
       let left = Var<LeftNode>("left")
       let right = Var<RightNode>("right")
-      Variable(left, in: LeftNode.allCases)
-      Variable(right, in: RightNode.allCases)
+      Variable(left, in: Set(LeftNode.allCases))
+      Variable(right, in: Set(RightNode.allCases))
       Action("stay") { left.stays && right.stays }
       Symmetry("left", Set(LeftNode.allCases))
       Symmetry("right", Set(RightNode.allCases))
@@ -67,7 +67,7 @@ struct SymmetryReductionTests {
   func emptySymmetryNoOp() throws {
     let spec = TLASpec("NoSym") {
       let x = Var<Int>("x")
-      Variable(x, in: 1...3)
+      Variable(x, in: IntRange(1, through: 3))
       Action("inc") { x < 3 && x.becomes(x + 1) }
       Invariant("TypeOK") { x >= 1 && x <= 3 }
     }
@@ -98,7 +98,7 @@ struct SymmetryReductionTests {
   func symmetryTLAOutput() throws {
     let spec = TLASpec("SymOut") {
       let x = Var<Int>("x")
-      Variable(x, in: [1, 2, 3])
+      Variable(x, in: Set([1, 2, 3]))
       Invariant("TypeOK") { x >= 1 }
       Symmetry("x", [1, 2, 3] as Set<Int>)
     }
