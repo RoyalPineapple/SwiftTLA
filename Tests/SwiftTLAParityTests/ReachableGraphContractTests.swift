@@ -1,6 +1,3 @@
-import Foundation
-import SwiftParser
-import SwiftSyntax
 @testable import SwiftTLA
 import Testing
 import UpstreamParity
@@ -73,31 +70,6 @@ import UpstreamParity
     } else {
       #expect(Bool(false))
     }
-  }
-
-  @Test("Majority Boyer-Moore shape explores")
-  func majority() throws {
-    let cand = Var<Int>("cand")
-    let cnt = Var<Int>("cnt")
-    let i = Var<Int>("i")
-    let spec = TLASpec("Majority") {
-      Variable(cand, 0)
-      Variable(cnt, 0)
-      Variable(i, 1)
-      Invariant("TypeOK") {
-        i >= 1 && i <= 4 && cand >= 0 && cand <= 3 && cnt >= 0 && cnt <= 3
-      }
-      Action("Next") {
-        (i <= 3) && i.becomes(i + 1)
-          && (cnt == 0 && cand.becomes(i) && cnt.becomes(1)
-            || cnt != 0 && cand == i && cnt.becomes(cnt + 1)
-            || cnt != 0 && cand != i && cnt.becomes(cnt - 1))
-      }
-    }
-    let exploration = try ModelChecker(compilation: spec.compile(), configuration: .init(maximumStateLimit: 100, symmetryReduction: .disabled)).explore()
-    #expect(exploration.isComplete)
-    #expect(exploration.graph.states.count >= 1)
-    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
   }
 
   @Test("Multi-choose is Cartesian product")

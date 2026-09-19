@@ -468,6 +468,18 @@
   },
   "localDiagnostics": [
     {
+      "session": "20764",
+      "sourceSHA": "a2316d6e7b528d64703fda3cadd7e03db6e35940",
+      "sourcePatchSHA256": "fd6707aa344f5c7fd324b045ba90c345e57b76311118ef3c102b67a37efc3db7",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'MajorityCorpusStateGraphTests|ReachableGraphContractTests|UpstreamCorpusInventoryTests'",
+      "exitCode": 0,
+      "buildSeconds": 601.18,
+      "testSeconds": 0.391,
+      "testsRun": 13,
+      "result": "All 13 focused tests pass after removing the duplicate Majority toy model and unused imports. The canonical suite retains all 1092 initial states, 2733 reachable states, selected invariants, pinned references, and complete application-dispatch replay. Inventory and remaining graph fixtures pass.",
+      "scope": "Production source stayed unchanged; only the Boulanger capacity ledger changed during the build. Ponytail and cleanliness reviews remove the duplicate instead of preserving another authoring path. Static diagnostics pass. Majority remains incomplete because APMajority lacks a justified validation scope. No new hosted configuration or family credit is assigned."
+    },
+    {
       "session": "33042",
       "sourceSHA": "a5ba5e66590819fe0876de6de7aebef4bfde288c",
       "sourcePatchSHA256": "fb55b56d48fab821295e72a03db4da62e77218af26d28b08f00c5437c6f68a0d",
@@ -1227,6 +1239,11 @@
     {
       "path": "specifications/Bakery-Boulangerie",
       "name": "The Boulangerie Algorithm",
+      "capacityInvestigation": {
+        "upstreamManifest": "https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Bakery-Boulangerie/manifest.json",
+        "observation": "The pinned MCBoulanger entry records successful exhaustive search with runtime 00:01:00, but supplies no state count. MCBakery's separate 655200-state figure must not be attributed to MCBoulanger.",
+        "remaining": "Run the unchanged upstream MCBoulanger configuration in hosted TLC before choosing a larger native runner limit. Retain source, tool, configuration, timing, and state-count evidence. The historical runtime is not a comparable benchmark. Native overhead and semantic mismatch remain distinct possibilities. An upstream-only diagnostic cannot establish graph or property equivalence."
+      },
       "pendingMigration": {
         "configuration": "MCBoulanger.cfg",
         "scope": "The working patch replaces the fixed two-member port with the model-owned N=3, MaxNat=3 scenario, ordinary typed dictionaries and sets, the ncs fairness exemption, TypeOK, and all nine IInv clauses with Before. Reused named process predicates supply TypeOK within Inv. Typed At and Finished accept configured process expressions. Original MCBoulanger module/configuration and Boulanger dependency replace the reduced fixture; the TLAPS helper is staged with its license and source digest.",
@@ -4603,8 +4620,8 @@
       "path": "specifications/Majority",
       "name": "Boyer-Moore Majority Vote",
       "audit": "reference inputs audited",
-      "gap": "MCMajority has a complete hosted graph and property match on the audited SHA, with the original configuration unchanged. APMajority has no published configuration or sequence bound at the pin. Its two VAL elements differ from the three model values in MCMajority. The legacy toy model in ReachableGraphContractTests.majority still needs removal. MajorityProof contains proof lemmas, not another configured model.",
-      "legacyCleanupComplete": false,
+      "gap": "MCMajority has a complete hosted graph and property match on the audited SHA, with the original configuration unchanged. APMajority has no published configuration or sequence bound at the pin. Its two VAL elements differ from the three model values in MCMajority. The duplicate toy model is removed; local diagnostic 20764 passes the canonical graph and dispatch checks. MajorityProof contains proof lemmas, not another configured model. The family remains incomplete.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/Majority/APMajority.tla",
@@ -4632,11 +4649,11 @@
         {
           "path": "specifications/Majority/MCMajority.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The model-owned MCMajority scenario preserves the published bound, Value set, sequence substitution, selected invariants, and disabled deadlock check. The configuration binding retains complete hosted graph and property evidence. The duplicate toy model is removed; APMajority remains a separate incomplete variant.",
           "implementations": [
             "Sources/UpstreamParity/Examples/Majority.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
