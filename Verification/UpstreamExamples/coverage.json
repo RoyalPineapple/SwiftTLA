@@ -53,6 +53,15 @@
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479",
       "completedJobs": [
         {
+          "name": "scenarios",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/job/105959910664",
+          "conclusion": "failure",
+          "buildSeconds": 1401.52,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/artifacts/10593680885",
+          "artifactSHA256": "a104238360e1e7a11da02bdbf97f9791eeee7197e336065e04f9f1811b781675",
+          "scope": "The step reached its 90-minute timeout at 22:22:37 UTC. Downloaded diagnostics bind to f667b679, Xcode 16.4, Swift 6.1.2, and SDK 24F74. The final sample at 22:17:57 shows Boulanger discovery and snapshot copies with a 10.9 GB footprint, not a completed scenario graph. This source predates complete-snapshot reuse. The sample does not prove the pending change resolves memory or completion. No equivalence credit is assigned."
+        },
+        {
           "name": "ordinary",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601/job/105959910787",
           "conclusion": "success",
@@ -101,7 +110,7 @@
           "scope": "The downloaded source marker binds to f667b679. Retained adoption logs report 12 tests with zero failures. The hosted job also built the camera executable and demo app successfully. This evidence covers the pushed candidate only, not later snapshot, guard, or reader changes. It establishes no upstream configuration match."
         }
       ],
-      "scope": "This candidate includes the file-backed reader, failed-batch capture fix, ledger correction, and breadth-first queue change. Apple examples passed, but the finite-graph suite reached its time limit. Remaining CI jobs and independent comparisons are pending. Local checks do not substitute for hosted recovery. The previous independent comparison run remains active."
+      "scope": "Main CI is terminal. Ordinary, upstream, Apple, and canonical export jobs passed; finite-graph and scenario suites reached their time limits. This candidate includes the file-backed reader, failed-batch capture fix, ledger correction, and breadth-first queue change, but not the later snapshot reuse or fingerprint reuse. Independent comparisons remain pending. Local checks do not substitute for hosted recovery."
     },
     "previousCandidate": {
       "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
