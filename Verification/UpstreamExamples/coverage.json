@@ -28,7 +28,9 @@
       "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35375110820/artifacts/10562695229",
       "conclusion": "cancelled",
       "reason": "The check annotation reports that the scenario suite exceeded its one-hour job limit. The aggregate gate failed. Other suites passed.",
-      "sample": "The retained sample 1789756261-37774.txt shows CoffeeCan native graph canonicalization in CanonicalGraph.init, called from NativeModelRun.init. The process footprint was 6.1 GB. This sample identifies active work, not the complete cause of the timeout."
+      "buildSeconds": 1927.64,
+      "sample": "The retained sample 1789756261-37774.txt shows CoffeeCan native graph canonicalization in CanonicalGraph.init, called from NativeModelRun.init. The process footprint was 6.1 GB. This sample identifies active work, not the complete cause of the timeout.",
+      "candidateChange": "The scenario job now has a 90-minute limit. Its test step has an 85-minute limit to reserve time for diagnostic upload. Other suites retain their limits. The scenario set, state bounds, properties, assertions, and Xcode version remain unchanged. Hosted completion remains required."
     },
     "auditedRun": {
       "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
@@ -173,6 +175,14 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "88969",
+      "sourceSHA": "d30c0c0832c7ecb7dcdee61a1327c9fcb370b1f5",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SequenceIndexConversionTests|FormalValueEqualityTests|ImportedModuleConfigurationTests|LeastCircularSubstringCorpusModuleContractTests|CompilerPipelineCanonicalizationTests|GeneratedProcessLocalInvariantTests|ProcedureLoweringTests|StateDeclarationNamesTests|ConfiguredProcessTests'",
+      "exitCode": 1,
+      "reason": "The empty-array fixture declared a state handle without using that handle in the model. Warnings-as-errors stopped compilation before tests ran. The next fixture includes the empty state in its invariant. Earlier nominal-array and primitive-process type errors did not recur.",
+      "scope": "The starting SHA plus the uncommitted type-preservation patch. Workflow and ledger commit 8169db18 occurred during compilation without changing compiler inputs. No runtime or hosted credit applies."
+    },
     {
       "session": "5439",
       "sourceSHA": "d30c0c0832c7ecb7dcdee61a1327c9fcb370b1f5",
