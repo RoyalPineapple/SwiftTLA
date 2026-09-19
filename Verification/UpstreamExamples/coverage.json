@@ -48,6 +48,13 @@
       "scope": "Diagnosis uses the terminal job log and artifact metadata. The 1.48 GB artifact is retained remotely but has not been downloaded or audited as complete evidence. Run 35451794508 has completed with failure: this scenario and graphs-coffee-can-3000 are its only failed comparison jobs; the aggregate gate also failed. Successful jobs still require retained evidence audits before any new coverage credit."
     },
     "currentCandidate": {
+      "sourceSHA": "0b86465f165584983dbcca910a9fb56d6865aca4",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025",
+      "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647",
+      "boulangerDiagnosticJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/job/105977930719",
+      "scope": "Pushed after the preceding main CI became terminal. Includes complete-snapshot reuse, validated fingerprint reuse, AC-01 through AC-04 local contract checks, Majority toy-model removal, and scenario phase markers. Independent candidate validation includes the opt-in unchanged upstream Boulanger diagnostic. Jobs are pending; no hosted recovery or additional configuration match is established. PR 394 remains draft."
+    },
+    "queueRepairCandidate": {
       "sourceSHA": "f667b67983a51f800ee03dd90d0903cc705db7a8",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479",
@@ -116,6 +123,15 @@
       "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461092035",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798",
+      "coffeeCan3000ScenarioFailure": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948649034",
+        "conclusion": "failure",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/artifacts/10593335964",
+        "artifactSHA256": "e021a1b6e856c7b72c620e22193463e1e2ad2cf5e873132e742e16433a1ea9b6",
+        "artifactBytes": 2028973919,
+        "reason": "The scenario step started at 20:05:48 UTC with a 1800-second TLC limit and reached its 120-minute step limit at 22:06:01 UTC. No exact comparison result was reported.",
+        "scope": "The terminal log and artifact metadata were audited. The large artifact remains retained remotely and has not been downloaded. The output does not identify the stalled phase; this source predates file-backed decoding and failed-batch capture changes. The new candidate must still complete the unchanged configuration and all checks. No completion credit is assigned."
+      },
       "boulangerScenarioFailure": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798/job/105948648268",
         "conclusion": "failure",
