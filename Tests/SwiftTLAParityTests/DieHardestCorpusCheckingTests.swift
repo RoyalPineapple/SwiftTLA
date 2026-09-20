@@ -47,10 +47,10 @@ struct DieHardestCorpusCheckingTests {
             renderedActions: rendered.actions, maximumStates: 100_000, checkingDeadlock: false)
         #expect(replay.trace.steps.count == 7)
         #expect(replay.final.state == states.last)
-        var delayed = states
         let fastCopy = [[0, 0], [1, 0], [1, 0], [0, 0], [0, 3], [1, 2], [1, 2]]
-        for index in delayed.indices {
-            delayed[index].c2 = ["j1": fastCopy[index][0], "j2": fastCopy[index][1]]
+        let delayed = states.enumerated().map { index, state in
+            DieHardestGlobalFreezeModel.State(c1: state.c1,
+                c2: ["j1": fastCopy[index][0], "j2": fastCopy[index][1]], s1: state.s1, s2: state.s2)
         }
         #expect(throws: TLCTraceError.self) {
             try TLCTraceParser().replayCounterexample(data(delayed), initialMachines: initial,
