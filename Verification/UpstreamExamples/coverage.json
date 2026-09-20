@@ -1098,6 +1098,18 @@
   },
   "localDiagnostics": [
     {
+      "session": "8565",
+      "sourceSHA": "30d2923c9573bc9a3ecc927d673c5b1d9b9db04c",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CandidateTraversalTests|CheckingContextTests|ChoiceScopeTests|SetChoiceTests|DieHardestCorpusCheckingTests'",
+      "exitCode": 0,
+      "buildSeconds": 632.13,
+      "testSeconds": 1.561,
+      "testsPassed": 17,
+      "result": "Generated conjunctions process each candidate through the remaining action before the next choice. Application and checking calls retain the same successors. Scope, disabled-guard, register-lifetime, and existing MCDieHardest counterexample tests pass. Checked enum views retain token boundaries after formatting.",
+      "scope": "The run used the committed source and test contents before the commit. The retained log is /tmp/swifttla-candidate-traversal.yCofE4/diagnostic.log. These are local diagnostics only. Register declarations, register expressions, effect-preserving lowering, and hosted global-freeze comparison remain unfinished. No additional coverage receives credit.",
+      "priorAttempts": "Session 88149 stopped after source review found an invalid raw-range test fixture. Session 66579 exposed malformed generated closure tokens. Session 41250 built successfully but crashed in the new synthetic 32-level parser test. The crash report identifies a test-worker stack overflow. The final test uses the actual two-level nesting pattern and an explicit token-boundary assertion. Upstream models and checks did not change."
+    },
+    {
       "session": "87290",
       "baseSHA": "2e6bc667",
       "sourceTestPatchSHA256": "6ee960dd15ee81c42710f687d63329147ee802f77e9119c5af9b022e6919e9c6",
