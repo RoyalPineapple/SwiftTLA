@@ -3,6 +3,7 @@ public protocol StateMachine: Sendable {
     associatedtype Snapshot: Hashable, Sendable
     associatedtype Action: Hashable, Sendable
     associatedtype Property: Hashable, CaseIterable, Sendable
+    associatedtype CheckingRegisters: Sendable
 
     /// Complete execution state, including compiler-owned control state.
     var snapshot: Snapshot { get }
@@ -23,11 +24,14 @@ public protocol StateMachine: Sendable {
     func matchedReachabilityProperties(checking: Set<Property>) throws -> [Property]
     func refinementFailures(in graph: inout ReachabilityGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>]
     func successors() throws -> [(action: Action, machine: Self)]
+    func initialCheckingRegisters() throws -> CheckingRegisters
+    func successors(checking context: inout CheckingContext<CheckingRegisters>) throws -> [(action: Action, machine: Self)]
 }
 
 public enum ExplorationError: Error, Equatable, Sendable {
     case invalidStateLimit(Int)
     case stateLimitExceeded(Int)
+    case levelOverflow
     case noInitialStates
     case assumptionViolated
     case configurationMismatch
@@ -126,6 +130,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         behavior: ModelBehavior, stopOnViolation: Bool, stopOnReachability: Machine.Property? = nil) throws {
         guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
         guard let initialMachine = initialMachines.first else { throw ExplorationError.noInitialStates }
+        var context = CheckingContext(registers: try initialMachine.initialCheckingRegisters())
         let checking = checking ?? ModelChecks(properties: Set(Machine.Property.allCases), checkDeadlock: Machine.checksDeadlock)
         self.checking = checking
         self.behavior = behavior
@@ -224,12 +229,13 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         self.initialStates = initialStates
         while !currentLayer.isEmpty || !pending.isEmpty {
             if currentLayer.isEmpty {
+                try context.advanceBreadthFirstLevel()
                 swap(&currentLayer, &pending)
                 currentLayer.reverse()
             }
             let machine = currentLayer.removeLast()
             try Task.checkCancellation()
-            let successors = try machine.successors()
+            let successors = try machine.successors(checking: &context)
             var failures = try machine.violatedInvariants(checking: checking.properties).map(SafetyViolation.invariant)
             if successors.isEmpty {
                 deadlockedStates.insert(machine.snapshot)

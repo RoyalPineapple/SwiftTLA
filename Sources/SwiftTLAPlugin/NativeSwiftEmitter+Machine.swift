@@ -19,6 +19,11 @@ extension NativeSwiftEmitter {
             "let \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: "\n")
         declarations += try nativeDeclarations("""
+        public struct CheckingRegisters: Sendable {}
+        public func initialCheckingRegisters() throws -> CheckingRegisters { CheckingRegisters() }
+        public func successors(checking context: inout CheckingContext<CheckingRegisters>) throws -> [(action: Action, machine: Self)] {
+            try successors()
+        }
         public struct Snapshot: Hashable, Sendable {
             public let state: State
             \(fields)
