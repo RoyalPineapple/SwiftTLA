@@ -29,10 +29,11 @@ struct DieHarderCorpusStateGraphTests {
         for scenario in scenarios {
             let run = try NativeScenarioRun(scenario, maximumStates: 100)
             try run.validateExpectations()
-            #expect(run.native.graph.graph.states.count == 16)
-            #expect(run.native.graph.graph.edges.count == 96)
-            #expect(run.native.checks.deadlock == .satisfied)
-            #expect(run.native.checks.properties["TypeOK"] == .satisfied)
+            let exhaustive = try NativeModelRun(scenario.explore(maximumStates: 100), rendered: scenario.render())
+            #expect(exhaustive.graph.graph.states.count == 16)
+            #expect(exhaustive.graph.graph.edges.count == 96)
+            #expect(exhaustive.checks.deadlock == .satisfied)
+            #expect(exhaustive.checks.properties["TypeOK"] == .satisfied)
             let rendered = try scenario.render()
             #expect(rendered.checksDeadlock)
             #expect(rendered.tlaBundle.tla.contains("DOMAIN contents"))
@@ -44,12 +45,18 @@ struct DieHarderCorpusStateGraphTests {
                     Issue.record("Expected the upstream solution counterexample")
                     continue
                 }
-                try trace.validate(in: run.native.graph.graph)
+                try trace.validate(in: exhaustive.graph.graph)
+                #expect(run.native.graph == nil)
+                #expect(run.native.checks.deadlock == .unavailable)
+                #expect(run.native.checks.properties["TypeOK"] == .unavailable)
             } else {
                 #expect(!run.coverage.coversCompleteScenario)
                 #expect(run.coverage.omittedProperties == ["NotSolved"])
                 #expect(rendered.checkNames == ["TypeOK"])
                 #expect(run.native.checks.properties["NotSolved"] == nil)
+                #expect(run.native.graph == exhaustive.graph)
+                #expect(run.native.checks.deadlock == .satisfied)
+                #expect(run.native.checks.properties["TypeOK"] == .satisfied)
             }
         }
     }

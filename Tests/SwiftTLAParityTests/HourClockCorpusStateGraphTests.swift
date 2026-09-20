@@ -24,9 +24,10 @@ struct HourClockCorpusStateGraphTests {
             let scenario = try #require(try declaration.resolveScenario())
             let run = try NativeScenarioRun(scenario, maximumStates: 12)
             try run.validateExpectations()
-            #expect(run.native.graph.graph.initialStateKeys.count == 12)
-            #expect(run.native.graph.graph.states.count == 12)
-            #expect(run.native.graph.graph.edges.count == 12)
+            let graph = try #require(run.native.graph).graph
+            #expect(graph.initialStateKeys.count == 12)
+            #expect(graph.states.count == 12)
+            #expect(graph.edges.count == 12)
             let rendered = try scenario.render()
             #expect(rendered.invariantNames == ["HCini"])
             #expect(rendered.checksDeadlock)

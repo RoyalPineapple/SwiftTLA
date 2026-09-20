@@ -69,6 +69,10 @@ private struct NativeCheckStopped<Machine: StateMachine>: Error {
     let counterexample: SafetyCounterexample<Machine>
 }
 
+private struct NativeReachabilityFound<Machine: StateMachine>: Error {
+    let trace: [(action: Machine.Action?, state: Machine.Snapshot)]
+}
+
 /// A complete reachable graph with native safety and temporal results for one finite configuration.
 public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     private let machine: Machine
@@ -103,8 +107,23 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         }
     }
 
+    package static func reachabilityWitness(initialMachines: [Machine], property: Machine.Property,
+        maximumStates: Int) throws -> [(action: Machine.Action?, state: Machine.Snapshot)]? {
+        guard Machine.reachabilityProperties.contains(property) else {
+            throw ExplorationError.undeclaredReachabilityProperty(String(reflecting: property))
+        }
+        do {
+            _ = try Self(initialMachines: initialMachines, maximumStates: maximumStates,
+                checking: .init(properties: [property], checkDeadlock: false), behavior: .initialAndNext,
+                stopOnViolation: false, stopOnReachability: property)
+            return nil
+        } catch let found as NativeReachabilityFound<Machine> {
+            return found.trace
+        }
+    }
+
     private init(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Machine.Property>?,
-        behavior: ModelBehavior, stopOnViolation: Bool) throws {
+        behavior: ModelBehavior, stopOnViolation: Bool, stopOnReachability: Machine.Property? = nil) throws {
         guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
         guard let initialMachine = initialMachines.first else { throw ExplorationError.noInitialStates }
         let checking = checking ?? ModelChecks(properties: Set(Machine.Property.allCases), checkDeadlock: Machine.checksDeadlock)
@@ -122,9 +141,9 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         let reachabilityProperties = Set(Machine.reachabilityProperties).intersection(checking.properties)
         var reachabilityTargets = Dictionary(uniqueKeysWithValues: reachabilityProperties.map { ($0, Set<Machine.Snapshot>()) })
         let initialRoots = Set(initialMachines.map(\.snapshot))
-        func stop(_ snapshot: Machine.Snapshot, failures: [SafetyViolation<Machine.Property>],
-                  from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
-            guard stopOnViolation, !failures.isEmpty else { return }
+        func path(to snapshot: Machine.Snapshot,
+                  from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil)
+            -> [(action: Machine.Action?, state: Machine.Snapshot)] {
             var path: [(action: Machine.Action?, state: Machine.Snapshot)] = []
             var current = snapshot
             if !initialRoots.contains(snapshot), predecessors[snapshot] == nil, let predecessor {
@@ -136,12 +155,21 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
                 current = previous.source
             }
             path.append((nil, current))
+            return path.reversed()
+        }
+        func stop(_ snapshot: Machine.Snapshot, failures: [SafetyViolation<Machine.Property>],
+                  from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
+            guard stopOnViolation, !failures.isEmpty else { return }
             throw NativeCheckStopped(counterexample: SafetyCounterexample<Machine>(
-                violations: failures, trace: path.reversed(), checking: checking))
+                violations: failures, trace: path(to: snapshot, from: predecessor), checking: checking))
         }
         func checkDiscoveredState(_ machine: Machine,
                                   from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
             guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
+            if let property = stopOnReachability,
+               try machine.matchedReachabilityProperties(checking: [property]).contains(property) {
+                throw NativeReachabilityFound<Machine>(trace: path(to: machine.snapshot, from: predecessor))
+            }
             guard stopOnViolation else { return }
             try stop(machine.snapshot,
                      failures: machine.violatedInvariants(checking: checking.properties).map(SafetyViolation.invariant),

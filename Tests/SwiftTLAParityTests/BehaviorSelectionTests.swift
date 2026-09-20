@@ -23,14 +23,14 @@ struct BehaviorSelectionTests {
         try fair.validateExpectations()
         try unconstrained.validateExpectations()
         #expect(fair.native.graph == unconstrained.native.graph)
-        #expect(fair.native.graph.graph.states.count == 2)
+        #expect(try #require(fair.native.graph).graph.states.count == 2)
         #expect(fair.native.checks.properties["AllVisited"] == .satisfied)
         guard case .violated(let witness) = unconstrained.native.checks.properties["AllVisited"] else {
             Issue.record("Expected an unfair stuttering witness")
             return
         }
         #expect(witness.cycleStartIndex != nil)
-        try witness.validate(in: unconstrained.native.graph.graph)
+        try witness.validate(in: #require(unconstrained.native.graph).graph)
         #expect(unconstrained.coverage.behavior == .initialAndNext)
         #expect(!unconstrained.coverage.coversCompleteScenario)
         let rendered = try initialAndNext.render()

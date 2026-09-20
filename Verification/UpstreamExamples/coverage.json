@@ -49,6 +49,14 @@
     "completionRule": "Scheduling labels and queue positions confer no evidence credit. Count only retained hosted configuration matches. Declare a family complete only after every applicable configuration and variant is verified, module dispositions are resolved, and legacy code is removed. The next deliverable is one fully verified family on a green hosted revision through the intended DSL and correct checking path."
   },
   "ci": {
+    "ordinaryLedgerFailure": {
+      "sourceSHA": "59fa4d5b156774c4993dc6f632e9aa16bd2f837a",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35502123379/job/106055632936",
+      "testsRun": 1521,
+      "issues": 1,
+      "diagnosis": "UpstreamCorpusInventoryTests cannot decode three refreshed bba219f evidence records because developerToolsVersion is missing. The APDieHarder, MCDieHarder, and Majority job logs each explicitly select /Applications/Xcode_16.4.app/Contents/Developer. Restore developerToolsVersion=16.4 from those logs; do not relax the required evidence schema.",
+      "scope": "The fields are restored locally. Hosted confirmation remains required. No model mismatch or new coverage credit is inferred from this metadata repair. Other jobs on the same revision remain independent evidence."
+    },
     "latestIndependentGraphFailure": {
       "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
       "caseID": "coffee-can-3000",
@@ -1024,6 +1032,40 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "91231",
+      "sourceSHA": "59fa4d5b156774c4993dc6f632e9aa16bd2f837a",
+      "sourcePatchSHA256": "c666dda1d273845e2aa94ed723970bc82496cf88570b09450422af937b14848a",
+      "sourcePatchScope": "git diff -- Sources Tests; untracked NativeCounterexampleRun.swift SHA256 aada5b058a86e1c7d9d7c1a8750ad53dfcb2db84029ee5096120f045212df262; DecisiveScenarioComparisonTests.swift SHA256 cddf6894003c4fe8f9cb2277b23e9e91b7e10a084cdfdeb4a3e4cc6b0e1f4055; DecisiveScenarioFixtures.swift SHA256 b457cbe800a02a01afbf05f722b1fd5bca374995c075831635937009c0d8c9ef",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'DecisiveScenarioComparisonTests|DecisiveCheckingTests|ScenarioExpectationTests|CheckSelectionTests|ScopedInvariantTests|DictionaryConfigurationTests|ParameterizedAtomicStepTests|DieHardCorpusStateGraphTests|DieHarderCorpusStateGraphTests|QueensCorpusStateGraphTests|NQueensCorpusStateGraphTests|BehaviorSelectionTests|AsynchInterfaceCorpusStateGraphTests|ChannelCorpusStateGraphTests|HourClockCorpusStateGraphTests|DiningPhilosophersCorpusConfigurationTests'",
+      "exitCode": 0,
+      "testsPassed": 55,
+      "testSeconds": 11.546,
+      "result": "All 55 focused tests pass. Mixed initial and later reachability witnesses, subsequent safety failure, unavailable queries, repeated-query rejection, and process failure are covered through the scenario runner. Full counterexample replay rejects invalid states, transitions, and labels. Exhaustive regression assertions remain intact. The subsequent approved static check passes.",
+      "scope": "Source and tests stayed unchanged during the diagnostic. Ponytail review confirms reuse of the native BFS, trace parser, and process adapter without a second checking engine. These are local diagnostics, including mocked TLC process results, not hosted equivalence evidence. Independent upstream decisive comparison and MCDieHardest remain unfinished. Three missing ledger toolchain fields were separately restored from hosted job logs; their inventory test was not selected in this run. No new configuration or DSL criterion credit."
+    },
+    {
+      "session": "28811",
+      "sourceSHA": "59fa4d5b156774c4993dc6f632e9aa16bd2f837a",
+      "sourcePatchSHA256": "c666dda1d273845e2aa94ed723970bc82496cf88570b09450422af937b14848a",
+      "sourcePatchScope": "git diff -- Sources Tests; untracked NativeCounterexampleRun.swift SHA256 aada5b058a86e1c7d9d7c1a8750ad53dfcb2db84029ee5096120f045212df262; DecisiveScenarioComparisonTests.swift SHA256 7571b58f91cb06dd20b5be0721f5d353fafadcab5393e035989883148d64c0f4; DecisiveScenarioFixtures.swift SHA256 b457cbe800a02a01afbf05f722b1fd5bca374995c075831635937009c0d8c9ef",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'DecisiveScenarioComparisonTests|DecisiveCheckingTests|ScenarioExpectationTests|CheckSelectionTests|ScopedInvariantTests|DictionaryConfigurationTests|ParameterizedAtomicStepTests|DieHardCorpusStateGraphTests|DieHarderCorpusStateGraphTests|QueensCorpusStateGraphTests|NQueensCorpusStateGraphTests|BehaviorSelectionTests|AsynchInterfaceCorpusStateGraphTests|ChannelCorpusStateGraphTests|HourClockCorpusStateGraphTests|DiningPhilosophersCorpusConfigurationTests'",
+      "exitCode": 1,
+      "result": "The new mixed-query runner and shared BFS helper compiled. Test compilation failed because two new #require function-call expressions omitted an inner try. No tests ran. After terminal exit, both test expressions were corrected and the same diagnostic was restarted as session 91231.",
+      "scope": "The runner now starts with every selected check. A negated reachability invariant produces a separately checked native BFS witness and a retained positive query comparison. Only an answered query leaves a subsequent TLC request; remaining checks retain selection. Repeated query reports and later process failure must fail admission. The new tests cover initial and later reached queries, an unanswered query, and both failure modes. These behaviors remain unverified until the corrected diagnostic and hosted evidence finish. No coverage credit."
+    },
+    {
+      "session": "56699",
+      "sourceSHA": "59fa4d5b156774c4993dc6f632e9aa16bd2f837a",
+      "sourcePatchSHA256": "c730d8e8222316d3f34283958106954ee4873bdf755a5140d0a147ac92dfb1af",
+      "sourcePatchScope": "git diff -- Sources Tests; untracked NativeCounterexampleRun.swift SHA256 3294cdeeeaf119ecbb1d264925ba99b1bcea6199d00bb4dc71464ec3a794b70a; DecisiveScenarioComparisonTests.swift SHA256 87aa433a2a21a71c28702085a379e1a5aefa5f605e0850c0d7209b902bc595be; DecisiveScenarioFixtures.swift SHA256 aec50369a1e5b815250ed12834d2361f89d8e5fe59a5ef3f75a9c6dbf634ace2",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'DecisiveScenarioComparisonTests|ScenarioExpectationTests|CheckSelectionTests|ScopedInvariantTests|DictionaryConfigurationTests|ParameterizedAtomicStepTests|DieHardCorpusStateGraphTests|DieHarderCorpusStateGraphTests|QueensCorpusStateGraphTests|NQueensCorpusStateGraphTests'",
+      "exitCode": 0,
+      "testsPassed": 36,
+      "testSeconds": 11.350,
+      "result": "Full package compilation and all 36 selected tests pass. The actual scenario runner retains a mocked TLC counterexample for an infinite native model without requiring a complete graph. Initial invariant failures, deadlock replay, malformed traces, wrong outcomes, and failed process evidence are covered. Explicit graph tests retain their complete state and edge assertions. The subsequent approved static check passes.",
+      "scope": "Source and tests stayed unchanged during this diagnostic. Ponytail review reused the existing trace parser, process adapter, and generated transitions. This does not establish real hosted TLC agreement. Source review identified an additional integration case outside this filter's process tests: TLCConfiguration exports reachability queries as negated invariants. ConfiguredCounter's AtLimit can therefore stop a combined TLC run before its native deadlock. The runner must preserve those query semantics before publication, without suppressing selected checks or claiming unavailable outcomes passed. This issue, independent upstream early-stop comparison, and MCDieHardest implementation remain unfinished. No coverage credit."
+    },
     {
       "session": "55441",
       "sourceSHA": "190ee4c560c2ad978426a82b9d12cf5c1c516f93",
@@ -3760,8 +3802,8 @@
       "modules": [
         {
           "path": "specifications/DieHard/APADieHardest.tla",
-          "role": "unconfigured variant",
-          "reason": "This Apalache wrapper selects ConstInit, NextInterleaved, and NotSolved through a documented command with length 13. It compares 5/3 and 5/3/3 jug capacities. It has no TLC configuration file. The bounded command is not complete-graph evidence.",
+          "role": "configured annotation wrapper",
+          "reason": "Direct inspection at the pinned revision establishes that ConstInit binds Goal=4 and the same 5/3 and 5/3/3 capacity functions as MCDieHardest. The module imports DieHardest unchanged and its documented command selects NextInterleaved and NotSolved. Unlike APMajority, it supplies explicit constant bindings, but they duplicate MCDieHardest's configured behavior. The documented length 13 is an Apalache search option, not a model bound or a requirement to exhaust the infinite graph. Disposition remains incomplete until the shared MCDieHardest behavior has implementation and hosted evidence. No Apalache execution is required or claimed.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -3843,6 +3885,7 @@
               "sourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037",
               "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/job/106044135412",
+              "developerToolsVersion": "16.4",
               "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/artifacts/10601182195",
               "artifactDigest": "sha256:65a5741def9e68d7558592e3e4fe5b93a8fdb5adf1aa477d580490f376ba4716",
               "completeGraph": true,
@@ -3907,6 +3950,7 @@
               "sourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037",
               "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/job/106044135361",
+              "developerToolsVersion": "16.4",
               "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/artifacts/10601247963",
               "artifactDigest": "sha256:fbd0ebcb82dc033891b2bbdc75be4d2536eaa1598849b92ae278fdfeb0995c18",
               "completeGraph": true,
@@ -6009,6 +6053,7 @@
             {
               "sourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/job/106044136691",
+              "developerToolsVersion": "16.4",
               "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/artifacts/10601827800",
               "artifactDigest": "sha256:4d965832e3359ecef430ffad6981c09be5bb13e39a74cfcc3936ba5e95317bec",
               "completeGraph": true,

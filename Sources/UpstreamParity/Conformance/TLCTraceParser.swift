@@ -18,6 +18,70 @@ package struct TLCTraceParser: Sendable {
 
     package func parseCounterexample(_ data: Data, states knownStates: some Collection<CanonicalState>,
         renderedActions: [RenderedAction] = []) throws -> GraphTrace {
+        try parseCounterexample(data, renderedActions: renderedActions) { bindings, index in
+            let matches = Array(knownStates.lazy.filter { matchesBindings(bindings, state: $0) }.prefix(2))
+            guard let match = matches.first else { throw TLCTraceError.invalidState(index) }
+            guard matches.count == 1 else { throw TLCTraceError.ambiguousState(index) }
+            return match
+        }
+    }
+
+    /// Resolves each state using generated transitions, without exploring unrelated paths.
+    package func replayCounterexample<Machine: StateMachine>(
+        _ data: Data, initialMachines: [Machine], renderedActions: [RenderedAction]
+    ) throws -> (trace: GraphTrace, final: Machine) {
+        var machines: [Machine] = []
+        var allowedActions: [Set<String>] = []
+        let actionNames = Dictionary(uniqueKeysWithValues: renderedActions.map {
+            ($0.sourceInvocationName, $0.renderedName)
+        })
+        let trace = try parseCounterexample(data, renderedActions: renderedActions) { bindings, index in
+            let candidates: [(action: Machine.Action?, machine: Machine)]
+            if let previous = machines.last {
+                guard try previous.satisfiesStateConstraint() else { throw TLCTraceError.invalidState(index - 1) }
+                candidates = try previous.successors().map { ($0.action, $0.machine) }
+            } else {
+                candidates = initialMachines.map { (nil, $0) }
+            }
+            var matches: [Machine.Snapshot: (Machine, CanonicalState)] = [:]
+            var actions: Set<String> = []
+            for candidate in candidates {
+                if let first = initialMachines.first {
+                    guard candidate.machine.hasSameConfiguration(as: first) else { throw ExplorationError.configurationMismatch }
+                }
+                let state = try CanonicalState(candidate.machine.formalProjection(of: candidate.machine.snapshot))
+                guard matchesBindings(bindings, state: state) else { continue }
+                matches[candidate.machine.snapshot] = (candidate.machine, state)
+                if let action = candidate.action {
+                    let name = try candidate.machine.formalCall(for: action).description
+                    actions.insert(actionNames[name] ?? name)
+                }
+            }
+            guard let match = matches.values.first else { throw TLCTraceError.invalidState(index) }
+            guard matches.count == 1 else { throw TLCTraceError.ambiguousState(index) }
+            guard try match.0.assumptionsHold() else { throw ExplorationError.assumptionViolated }
+            machines.append(match.0)
+            allowedActions.append(actions)
+            return match.1
+        }
+        guard trace.cycleStartIndex == nil, trace.steps.count == machines.count,
+              let final = machines.last else { throw GraphRunError.invalidLasso }
+        for index in trace.steps.indices.dropFirst() {
+            guard let action = trace.steps[index].action, allowedActions[index].contains(action) else {
+                throw TLCTraceError.invalidAction(index - 1)
+            }
+        }
+        return (trace, final)
+    }
+
+    private func matchesBindings(_ bindings: [String: Any], state: CanonicalState) -> Bool {
+        state.bindings.count == bindings.count && state.bindings.allSatisfy { name, value in
+            bindings[name].map { matchesJSON($0, value: value) } ?? false
+        }
+    }
+
+    private func parseCounterexample(_ data: Data, renderedActions: [RenderedAction],
+        resolve: ([String: Any], Int) throws -> CanonicalState) throws -> GraphTrace {
         guard let source = String(data: data, encoding: .utf8) else { throw TLCTraceError.invalidUTF8 }
         let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.hasPrefix("digraph"), !trimmed.hasPrefix("strict graph") else {
@@ -33,16 +97,7 @@ package struct TLCTraceParser: Sendable {
         else { throw TLCTraceError.missingStates }
         let states = try rawStates.enumerated().map { index, state in
             let bindings = try parseBindings(state, variables: variables, index: index)
-            // TLC JSON erases collection and model-value tags. Resolve an existing
-            // typed graph state rather than inventing types from its JSON syntax.
-            let matches = Array(knownStates.lazy.filter { state in
-                state.bindings.count == bindings.count && state.bindings.allSatisfy { name, value in
-                    bindings[name].map { matchesJSON($0, value: value) } ?? false
-                }
-            }.prefix(2))
-            guard let match = matches.first else { throw TLCTraceError.invalidState(index) }
-            guard matches.count == 1 else { throw TLCTraceError.ambiguousState(index) }
-            return match
+            return try resolve(bindings, index)
         }
         guard rawActions.count == states.count - 1 || rawActions.count == states.count else {
             throw TLCTraceError.invalidAction(rawActions.count)

@@ -85,24 +85,28 @@ struct NQueensCorpusStateGraphTests {
         #expect(terminal.state.sols == [[2, 4, 1, 3], [3, 1, 4, 2]])
     }
 
-    @Test("FourQueens reports the upstream NoSolutions counterexample separately from its successful properties")
+    @Test("FourQueens stops at NoSolutions without claiming its unevaluated properties passed")
     func noSolutionsProducesCounterexample() throws {
         let scenario = try #require(NQueensModel.validationScenarios().first)
         let run = try NativeScenarioRun(scenario, maximumStates: 5_000)
+        let exhaustive = try NativeModelRun(scenario.explore(maximumStates: 5_000), rendered: scenario.render())
         try run.validateExpectations()
         guard case .violated(let trace) = run.native.checks.properties["NoSolutions"] else {
             Issue.record("Expected the NoSolutions counterexample")
             return
         }
-        try trace.validate(in: run.native.graph.graph)
+        try trace.validate(in: exhaustive.graph.graph)
         let terminal = try #require(trace.steps.last)
-        let state = try #require(run.native.graph.graph.states[terminal.state])
+        let state = try #require(exhaustive.graph.graph.states[terminal.state])
         guard case .orderedSet(let solutions) = state.bindings["sols"] else {
             Issue.record("Expected a set of discovered solutions")
             return
         }
         #expect(!solutions.isEmpty)
-        #expect(run.native.checks.properties.filter { $0.key != "NoSolutions" }.values.allSatisfy { $0 == .satisfied })
-        #expect(run.native.checks.deadlock == .satisfied)
+        #expect(run.native.graph == nil)
+        #expect(run.native.checks.properties.filter { $0.key != "NoSolutions" }.values.allSatisfy { $0 == .unavailable })
+        #expect(run.native.checks.deadlock == .unavailable)
+        #expect(exhaustive.checks.properties.filter { $0.key != "NoSolutions" }.values.allSatisfy { $0 == .satisfied })
+        #expect(exhaustive.checks.deadlock == .satisfied)
     }
 }

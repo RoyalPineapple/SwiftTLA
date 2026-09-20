@@ -11,9 +11,10 @@ struct DiningPhilosophersCorpusConfigurationTests {
         let runs = try scenarios.map { try NativeScenarioRun($0, maximumStates: 67) }
         for run in runs { try run.validateExpectations() }
         #expect(runs[0].native.graph == runs[1].native.graph)
-        #expect(runs[0].native.graph.graph.initialStateKeys.count == 1)
-        #expect(runs[0].native.graph.graph.states.count == 67)
-        #expect(runs[0].native.graph.graph.edges.count == 335)
+        let graph = try #require(runs[0].native.graph).graph
+        #expect(graph.initialStateKeys.count == 1)
+        #expect(graph.states.count == 67)
+        #expect(graph.edges.count == 335)
         #expect(scenarios[0].behavior == .specification)
         #expect(scenarios[1].behavior == .initialAndNext)
         #expect(scenarios[1].checking.properties == [.TypeOK, .ExclusiveAccess])

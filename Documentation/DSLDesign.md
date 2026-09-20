@@ -993,21 +993,36 @@ General composition, unresolved abstract configurations, and additional refineme
 check. Duplicate overrides and expectations for disabled checks are errors.
 `Model.validationScenarios()` returns generated scenario values with immutable
 `Configuration` values, typed property expectations, and a deadlock expectation.
-Each scenario provides `initialMachines()`, `explore(maximumStates:)`, and `render()`.
+Each scenario provides `initialMachines()`, `check(maximumStates:)`, `explore(maximumStates:)`, and `render()`.
 These methods use the same generated machine and symbolic transition module.
 
 Generated scenarios conform to `ModelValidationScenario`.
-The current repository runner derives canonical graphs and native property results from that interface.
-It still requires complete exploration before it validates expected outcomes.
-This implementation must change to support upstream checks that stop on a decisive violation.
+The repository runner derives native results from that interface.
+`check(maximumStates:)` stops at a selected invariant violation or deadlock, or returns an exhausted graph.
+`explore(maximumStates:)` retains exhaustive behavior for explicit graph comparisons.
 An expected violation requires an established result and a complete witness, not an arbitrary exploration cutoff.
+After an early stop, other selected properties remain unavailable. Their selection and expected outcomes do not change.
 
 The runner uses rendered check metadata without compiling the specification again.
 Temporal and refinement declarations remain distinct until TLC configuration output.
 The `tlc-validate scenarios list` command discovers registered model-owned scenarios.
 The hosted `tlc-validate scenarios run --case <id-or-all> --output <directory>` command runs the selected scenarios.
-The current runner retains complete native and TLC graphs, property results, expectations, and comparison failures.
-Missing or disagreeing results fail the run.
+
+For exhaustive results, the runner retains complete native and TLC graphs and compares every selected property.
+For early counterexamples, the first TLC run uses the unchanged configuration and the runner retains both full witnesses.
+The runner replays each TLC transition through the generated machine and validates the failed invariant or deadlock.
+The runner records the completion kind, selected checks, expectations, and comparison failures in both cases.
+Counterexample agreement does not establish whole-graph equivalence or outcomes for unavailable properties.
+Missing required evidence or disagreeing results fail the run.
+
+TLC represents a reachability query as a negated invariant. Its violation supplies a positive witness, not a safety failure.
+
+If a query stops TLC first, the runner compares its witness with a separate native BFS witness.
+Both witnesses must establish the declared predicate through valid transitions.
+The runner retains the comparison before it removes that answered query from the next TLC configuration.
+Every unanswered query, invariant, temporal property, and deadlock check keeps its selection.
+The next run continues toward the decisive safety result. Other properties remain unavailable unless their evidence establishes an outcome.
+
 The finite-graph workflow derives one job per scenario from this list, with at most four validation jobs at once.
 Every discovered scenario must retain an exact result before the aggregate check can pass.
 Independent TLC agreement still requires successful hosted evidence. The toolchain

@@ -143,7 +143,7 @@ struct RecordUnionOrderingTests {
         #expect(rendered.tlaBundle.imports == formalBundle.imports)
         let scenarioRun = try NativeScenarioRun(scenario, maximumStates: 100)
         try scenarioRun.validateExpectations()
-        #expect(scenarioRun.native.graph.graph == graph)
+        #expect(try #require(scenarioRun.native.graph).graph == graph)
         #expect(scenarioRun.native.rendered.tlaBundle == rendered.tlaBundle)
         #expect(scenarioRun.coverage.coversCompleteScenario)
     }

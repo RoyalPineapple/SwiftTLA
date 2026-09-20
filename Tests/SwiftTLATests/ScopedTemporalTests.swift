@@ -29,7 +29,7 @@ struct ScopedTemporalTests {
             Issue.record("Expected the scoped temporal counterexample")
             return
         }
-        try trace.validate(in: run.native.graph.graph)
+        try trace.validate(in: #require(run.native.graph).graph)
         #expect(trace.cycleStartIndex != nil)
     }
 

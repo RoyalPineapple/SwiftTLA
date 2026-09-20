@@ -6,6 +6,30 @@ package enum ScenarioExpectationError: Error, Equatable, Sendable {
     case checkDifference(PropertyComparison)
 }
 
+package enum NativeScenarioResult: Sendable {
+    case exhausted(NativeModelRun)
+    case counterexample(NativeCounterexampleRun)
+
+    package var rendered: RenderedSpecification {
+        switch self {
+        case .exhausted(let run): run.rendered
+        case .counterexample(let run): run.rendered
+        }
+    }
+
+    package var checks: ModelCheckResults {
+        switch self {
+        case .exhausted(let run): run.checks
+        case .counterexample(let run): run.checks
+        }
+    }
+
+    package var graph: GraphRun? {
+        if case .exhausted(let run) = self { return run.graph }
+        return nil
+    }
+}
+
 package struct NativeScenarioRun: Sendable {
     package struct CheckCoverage: Encodable, Sendable {
         package let selectedProperties: [String]
@@ -16,7 +40,7 @@ package struct NativeScenarioRun: Sendable {
         package let propertyDisplayNames: [String: String]
     }
     package let name: String
-    package let native: NativeModelRun
+    package let native: NativeScenarioResult
     package let expectations: [String: ValidationExpectation]
     package let deadlockExpectation: ValidationExpectation?
     package let coverage: CheckCoverage
@@ -39,7 +63,14 @@ package struct NativeScenarioRun: Sendable {
         name = scenario.name
         expectations = Dictionary(uniqueKeysWithValues: bindings)
         deadlockExpectation = scenario.deadlockExpectation
-        native = try NativeModelRun(scenario.explore(maximumStates: maximumStates), rendered: rendered)
+        let initial = try scenario.initialMachines()
+        switch try ReachabilityGraph.check(initialMachines: initial, maximumStates: maximumStates,
+            checking: scenario.checking, behavior: scenario.behavior) {
+        case .exhausted(let graph): native = .exhausted(try NativeModelRun(graph, rendered: rendered))
+        case .counterexample(let result):
+            native = .counterexample(try NativeCounterexampleRun(result, initialMachines: initial,
+                rendered: rendered, maximumStates: maximumStates))
+        }
         let omitted = Set(names.keys).subtracting(scenario.checking.properties)
         coverage = .init(selectedProperties: rendered.checkNames.sorted(),
             omittedProperties: omitted.map { names[$0]! }.sorted(), checksDeadlock: rendered.checksDeadlock,
@@ -56,6 +87,7 @@ package struct NativeScenarioRun: Sendable {
             guard let actual = native.checks.properties[name] else {
                 throw EvidenceFormatError.invalidField(record: self.name, field: "missing scenario result: \(name)")
             }
+            if case .counterexample = native, actual == .unavailable { continue }
             guard expected.accepts(actual) else {
                 throw ScenarioExpectationError.unexpectedOutcome(check: .property(name), expected: expected, actual: actual)
             }
@@ -64,6 +96,7 @@ package struct NativeScenarioRun: Sendable {
             guard let actual = native.checks.deadlock else {
                 throw EvidenceFormatError.invalidField(record: name, field: "missing scenario deadlock result")
             }
+            if case .counterexample = native, actual == .unavailable { return }
             guard expected.accepts(actual) else {
                 throw ScenarioExpectationError.unexpectedOutcome(check: .deadlock, expected: expected, actual: actual)
             }
@@ -71,6 +104,9 @@ package struct NativeScenarioRun: Sendable {
     }
 
     package func validateComparison(_ graph: GraphComparison, checks: [PropertyComparison]) throws {
+        guard case .exhausted = native else {
+            throw EvidenceFormatError.invalidField(record: name, field: "counterexample is not a complete graph")
+        }
         let expectedPaths = Set(expectations.keys.map { ModelCheck.property($0).artifactPath })
             .union(deadlockExpectation == nil ? [] : [ModelCheck.deadlock.artifactPath])
         guard checks.count == expectedPaths.count, Set(checks.map { $0.check.artifactPath }) == expectedPaths else {
@@ -93,6 +129,39 @@ package struct NativeScenarioRun: Sendable {
                   expected?.accepts(comparison.tlcResult) == true else {
                 throw ScenarioExpectationError.checkDifference(comparison)
             }
+        }
+    }
+
+    package func validateCounterexample(_ comparison: PropertyComparison) throws {
+        guard case .counterexample = native else {
+            throw EvidenceFormatError.invalidField(record: name, field: "expected a decisive result")
+        }
+        try validateExpectations()
+        let expected: ValidationExpectation?
+        let actual: PropertyResult?
+        switch comparison.check {
+        case .property(let name):
+            expected = expectations[name]
+            actual = native.checks.properties[name]
+        case .deadlock:
+            expected = deadlockExpectation
+            actual = native.checks.deadlock
+        }
+        guard comparison.status == .exact, comparison.swiftResult == actual,
+              case .violated = comparison.tlcResult, expected == .violated else {
+            throw ScenarioExpectationError.checkDifference(comparison)
+        }
+    }
+
+    package func validateReachability(_ comparison: PropertyComparison) throws {
+        guard case .counterexample = native,
+              case .property(let name) = comparison.check,
+              native.rendered.reachabilityNames.contains(name),
+              comparison.status == .exact,
+              case .reached = comparison.swiftResult,
+              case .reached = comparison.tlcResult,
+              expectations[name]?.accepts(comparison.swiftResult) == true else {
+            throw ScenarioExpectationError.checkDifference(comparison)
         }
     }
 }

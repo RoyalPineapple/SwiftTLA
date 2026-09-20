@@ -7,6 +7,21 @@ struct ScenarioExpectationTests {
     func validatesIndependentResults() throws {
         for scenario in try ConfiguredCounter.validationScenarios() {
             let run = try NativeScenarioRun(scenario, maximumStates: 10)
+            if case .counterexample = run.native {
+                let deadlock = try #require(run.native.checks.deadlock)
+                let comparison = PropertyComparison(caseID: scenario.name, check: .deadlock, status: .exact,
+                    swiftResult: deadlock, tlcResult: deadlock)
+                try run.validateCounterexample(comparison)
+                #expect(run.native.graph == nil)
+                #expect(throws: EvidenceFormatError.self) {
+                    try run.validateComparison(.init(differences: []), checks: [comparison])
+                }
+                #expect(throws: ScenarioExpectationError.self) {
+                    try run.validateCounterexample(.init(caseID: scenario.name, check: .deadlock,
+                        status: .unavailable, swiftResult: deadlock, tlcResult: .unavailable))
+                }
+                continue
+            }
             var checks = run.native.checks.properties.map { name, result in
                 PropertyComparison(caseID: scenario.name, check: .property(name), status: .exact,
                     swiftResult: result, tlcResult: result)
@@ -87,18 +102,19 @@ struct ScenarioExpectationTests {
         }
     }
 
-    @Test("Counter scenarios derive canonical graphs and every property result without runtime compilation")
+    @Test("explicit exhaustive Counter exploration retains every result independently of decisive checking")
     func derivesCompleteCounterEvidence() throws {
         for scenario in try ConfiguredCounter.validationScenarios() {
             let run = try NativeScenarioRun(scenario, maximumStates: 10)
+            let exhaustive = try NativeModelRun(scenario.explore(maximumStates: 10), rendered: scenario.render())
             try run.validateExpectations()
             #expect(run.name == scenario.name)
-            #expect(run.native.graph.isComparable)
-            #expect(run.native.graph.graph.states.count == scenario.configuration.limit + 1)
-            #expect(Set(run.native.checks.properties.keys) == run.native.rendered.checkNames)
+            #expect(exhaustive.graph.isComparable)
+            #expect(exhaustive.graph.graph.states.count == scenario.configuration.limit + 1)
+            #expect(Set(exhaustive.checks.properties.keys) == exhaustive.rendered.checkNames)
             #expect(run.expectations["__pcal_assert_0"] == .satisfied)
-            #expect(run.native.checks.properties["__pcal_assert_0"] == .satisfied)
-            guard case .reached(let witness) = run.native.checks.properties["AtLimit"] else {
+            #expect(exhaustive.checks.properties["__pcal_assert_0"] == .satisfied)
+            guard case .reached(let witness) = exhaustive.checks.properties["AtLimit"] else {
                 Issue.record("Missing Counter reachability witness")
                 continue
             }
@@ -106,11 +122,13 @@ struct ScenarioExpectationTests {
             if scenario.configuration.stopAtLimit {
                 #expect(run.native.checks.deadlock == .satisfied)
             } else {
-                guard case .violated(let deadlock) = run.native.checks.deadlock else {
+                guard case .violated(let deadlock) = exhaustive.checks.deadlock else {
                     Issue.record("Missing expected deadlock witness")
                     continue
                 }
-                try deadlock.validate(in: run.native.graph.graph)
+                try deadlock.validate(in: exhaustive.graph.graph)
+                #expect(run.native.graph == nil)
+                #expect(run.native.checks.properties["AtLimit"] == .unavailable)
                 #expect(deadlock.steps.count == scenario.configuration.limit + 1)
             }
         }

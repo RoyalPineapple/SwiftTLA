@@ -72,7 +72,7 @@ struct ConditionalTemporalTests {
             Issue.record("Expected the conditional counterexample")
             return
         }
-        try trace.validate(in: run.native.graph.graph)
+        try trace.validate(in: #require(run.native.graph).graph)
         let rendered = try scenario.render()
         #expect(rendered.tlaBundle.tla.contains("IF (value = 0) THEN"))
         #expect(rendered.tlaBundle.tla.contains("ELSE (IF (value = 1) THEN"))

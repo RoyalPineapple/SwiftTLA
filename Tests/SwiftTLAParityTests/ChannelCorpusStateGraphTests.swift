@@ -33,9 +33,10 @@ struct ChannelCorpusStateGraphTests {
             let run = try NativeScenarioRun(scenario, maximumStates: 100)
             try run.validateExpectations()
             #expect(run.coverage.coversCompleteScenario)
-            #expect(run.native.graph.graph.initialStateKeys.count == 2 * count)
-            #expect(run.native.graph.graph.states.count == 4 * count)
-            #expect(run.native.graph.graph.edges.count == 2 * count * (count + 1))
+            let graph = try #require(run.native.graph).graph
+            #expect(graph.initialStateKeys.count == 2 * count)
+            #expect(graph.states.count == 4 * count)
+            #expect(graph.edges.count == 2 * count * (count + 1))
             #expect(run.native.checks.deadlock == .satisfied)
             #expect(run.native.checks.properties == ["TypeInvariant": .satisfied])
             let rendered = try scenario.render()

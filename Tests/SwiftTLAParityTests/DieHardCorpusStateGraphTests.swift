@@ -57,7 +57,7 @@ struct DieHardCorpusStateGraphTests {
         }
     }
 
-    @Test("DieHard retains the upstream expected violation and a valid solution trace without truncating the graph")
+    @Test("DieHard stops at the upstream expected violation and retains an independently checked complete graph")
     func preservesUpstreamChecks() throws {
         let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
             from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
@@ -73,15 +73,19 @@ struct DieHardCorpusStateGraphTests {
         let run = try NativeScenarioRun(scenario, maximumStates: 100)
         try run.validateExpectations()
         #expect(run.coverage.coversCompleteScenario)
-        #expect(run.native.graph.graph.states.count == 16)
-        #expect(run.native.graph.graph.edges.count == 96)
-        #expect(run.native.checks.properties["TypeOK"] == .satisfied)
-        #expect(run.native.checks.deadlock == .satisfied)
+        let exhaustive = try NativeModelRun(scenario.explore(maximumStates: 100), rendered: scenario.render())
+        #expect(exhaustive.graph.graph.states.count == 16)
+        #expect(exhaustive.graph.graph.edges.count == 96)
+        #expect(exhaustive.checks.properties["TypeOK"] == .satisfied)
+        #expect(exhaustive.checks.deadlock == .satisfied)
+        #expect(run.native.graph == nil)
+        #expect(run.native.checks.properties["TypeOK"] == .unavailable)
+        #expect(run.native.checks.deadlock == .unavailable)
         guard case .violated(let trace) = run.native.checks.properties["NotSolved"] else {
             Issue.record("Expected the upstream NotSolved counterexample")
             return
         }
-        try trace.validate(in: run.native.graph.graph)
+        try trace.validate(in: exhaustive.graph.graph)
         #expect(trace.cycleStartIndex == nil)
         let bundle = try scenario.render().tlaBundle
         #expect(bundle.cfg.contains("INVARIANT TypeOK"))

@@ -42,7 +42,16 @@ func runScenarios(arguments: [String]) -> Never {
                 fputs("scenario \(id): native-scenario at \(started.duration(to: .now))\n", stderr)
                 let run = try NativeScenarioRun(scenario, maximumStates: maximumStates)
                 fputs("scenario \(id): request-preparation at \(started.duration(to: .now))\n", stderr)
-                let bundle = try run.native.rendered.tlaBundle(checking: [], checkDeadlock: false)
+                let bundle: TLAModuleBundle
+                let invocation: TLCInvocationKind
+                switch run.native {
+                case .exhausted:
+                    bundle = try run.native.rendered.tlaBundle(checking: [], checkDeadlock: false)
+                    invocation = .finiteGraph
+                case .counterexample:
+                    bundle = run.native.rendered.tlaBundle
+                    invocation = .propertyCheck
+                }
                 let work = try RetainedFiles.createDirectory(output.appendingPathComponent("work-\(id)"), beneath: output)
                 let launch = try FiniteGraphCase(id: scenario.name,
                     exploration: .init(maximumStateLimit: maximumStates, symmetryReduction: .disabled),
@@ -52,7 +61,7 @@ func runScenarios(arguments: [String]) -> Never {
                 let request = TLCProcessRequest(javaExecutable: tools.java, jar: tools.jar, bridgeJar: tools.bridgeJar,
                     bundle: bundle, graphEvents: work.appendingPathComponent("events.jsonl"),
                     traceOutput: work.appendingPathComponent("counterexample.json"), workingDirectory: work,
-                    finiteGraphCase: launch, runID: UUID(), timeout: timeout, invocation: .finiteGraph,
+                    finiteGraphCase: launch, runID: UUID(), timeout: timeout, invocation: invocation,
                     referenceArtifacts: tools.artifacts)
                 fputs("scenario \(id): comparison-and-retention at \(started.duration(to: .now))\n", stderr)
                 try TLCScenarioCheck().run(run, request: request, in: directory)

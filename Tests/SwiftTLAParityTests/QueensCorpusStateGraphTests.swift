@@ -63,14 +63,18 @@ struct QueensCorpusStateGraphTests {
         let run = try NativeScenarioRun(scenario, maximumStates: 5_000)
         try run.validateExpectations()
         #expect(run.native.checks.deadlock == nil)
-        #expect(run.native.checks.properties["TypeInvariant"] == .satisfied)
-        #expect(run.native.checks.properties["Invariant"] == .satisfied)
+        #expect(run.native.graph == nil)
+        #expect(run.native.checks.properties["TypeInvariant"] == .unavailable)
+        #expect(run.native.checks.properties["Invariant"] == .unavailable)
         guard case .violated(let trace) = run.native.checks.properties["NoSolutions"] else {
             Issue.record("Expected the upstream NoSolutions counterexample")
             return
         }
-        try trace.validate(in: run.native.graph.graph)
         let rendered = try scenario.render()
+        let exhaustive = try NativeModelRun(graph, rendered: rendered)
+        try trace.validate(in: exhaustive.graph.graph)
+        #expect(exhaustive.checks.properties["TypeInvariant"] == .satisfied)
+        #expect(exhaustive.checks.properties["Invariant"] == .satisfied)
         #expect(rendered.checkNames == ["TypeInvariant", "Invariant", "NoSolutions"])
         #expect(!rendered.checksDeadlock)
         #expect(rendered.tlaBundle.tla.contains("WF_<<todo, sols>>(Next)"))

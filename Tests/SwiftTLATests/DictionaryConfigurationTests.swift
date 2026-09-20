@@ -12,11 +12,14 @@ struct DictionaryConfigurationTests {
             let run = try NativeScenarioRun(scenario, maximumStates: 10)
             try run.validateExpectations()
             #expect(run.coverage.coversCompleteScenario)
-            #expect(run.native.graph.graph.states.count == 1)
-            #expect(run.native.graph.graph.edges.count == [0, 0, 1, 2][index])
-            #expect(run.native.checks.properties["total"] == .satisfied)
-            #expect(run.native.checks.properties["sameKey"] == .satisfied)
-            #expect(run.native.checks.properties["hasCapacity"] == .satisfied)
+            let exhaustive = try NativeModelRun(scenario.explore(maximumStates: 10), rendered: scenario.render())
+            #expect(exhaustive.graph.graph.states.count == 1)
+            #expect(exhaustive.graph.graph.edges.count == [0, 0, 1, 2][index])
+            #expect(exhaustive.checks.properties.values.allSatisfy { $0 == .satisfied })
+            for name in ["total", "sameKey", "hasCapacity"] {
+                #expect(run.native.checks.properties[name] == (index < 2 ? .unavailable : .satisfied))
+            }
+            #expect(run.native.graph == (index < 2 ? nil : exhaustive.graph))
             let bundle = try scenario.render().tlaBundle
             #expect(bundle.cfg.contains("CONSTANT capacity <- __SwiftTLAParameter1"))
             #expect(bundle.tla.contains("__SwiftTLAParameter1 == ["))

@@ -8,8 +8,16 @@ struct CheckSelectionTests {
         let scenarios = try SelectedChecksModel.validationScenarios()
         let runs = try scenarios.map { try NativeScenarioRun($0, maximumStates: 2) }
         for run in runs { try run.validateExpectations() }
-        #expect(runs.allSatisfy { $0.native.graph == runs[0].native.graph })
-        #expect(runs[0].native.graph.graph.states.count == 2)
+        let graphs = try scenarios.map {
+            try NativeModelRun($0.explore(maximumStates: 2), rendered: $0.render()).graph
+        }
+        #expect(graphs.allSatisfy { $0 == graphs[0] })
+        #expect(graphs[0].graph.states.count == 2)
+        #expect(runs[0].native.graph == nil)
+        #expect(runs[0].native.checks.properties["StaysZero"] == .unavailable)
+        #expect(runs[0].native.checks.deadlock == .unavailable)
+        #expect(runs[1].native.graph == graphs[1])
+        #expect(runs[2].native.graph == graphs[2])
         #expect(runs[0].coverage.coversCompleteScenario)
         #expect(!runs[1].coverage.coversCompleteScenario)
         #expect(runs[1].coverage.selectedProperties == ["Reached", "Safe"])

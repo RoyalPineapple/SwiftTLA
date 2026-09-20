@@ -24,7 +24,7 @@ struct TransitionPropertyTests {
                 Issue.record("Expected a transition counterexample")
                 continue
             }
-            try trace.validate(in: run.native.graph.graph)
+            try trace.validate(in: #require(run.native.graph).graph)
             let bundle = try scenario.render().tlaBundle
             #expect(bundle.tla.contains("(value)'"))
             #expect(bundle.tla.contains("increases == []["))
