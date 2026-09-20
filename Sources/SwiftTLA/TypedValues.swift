@@ -412,16 +412,16 @@ public func Where<Value: TLAValueType, Predicate: TypedExpression<Bool>>(
 /// Selects one value from a finite formal domain.
 ///
 /// The choice remains symbolic and is evaluated against the current model state.
-public func Select<Value: TLAValueType, Predicate: TypedExpression<Bool>>(
-  from candidates: some TypedExpression<SetExpr<Value>>,
+public func Select<Domain: FormalSetValue, Predicate: TypedExpression<Bool>>(
+  from candidates: some TypedExpression<Domain>,
   file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
-  matching predicate: (WithValue<Value>) -> Predicate
-) -> Expr<Value> {
+  matching predicate: (WithValue<Domain.Element>) -> Predicate
+) -> Expr<Domain.Element> {
   let binding = generatedBinderName(file: file, line: line, column: column)
   return Expr(.choose(
     candidates.stateExpr,
     binding,
-    predicate(WithValue<Value>(expression: .variable(binding))).stateExpr
+    predicate(WithValue<Domain.Element>(expression: .variable(binding))).stateExpr
   ))
 }
 

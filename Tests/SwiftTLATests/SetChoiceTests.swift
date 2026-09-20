@@ -2,6 +2,17 @@ import Testing
 @testable import SwiftTLA
 
 struct SetChoiceTests {
+    @Test("Formal selection accepts ordinary Swift sets without erasing element types")
+    func selectsFromOrdinarySet() throws {
+        let values = Set<Int>([3, 1, 2])
+        let minimum: Expr<Int> = Select(from: values) { candidate in
+            ForAll(in: values) { other in candidate.expr <= other.expr }
+        }
+        #expect(try evaluateClosed(minimum.stateExpr) == .int(1))
+        let empty: Expr<Int> = Select(from: Set<Int>([])) { _ in true }
+        #expect(throws: EvalError.noSatisfyingChoice) { try evaluateClosed(empty.stateExpr) }
+    }
+
     @Test("configured Swift sets retain nondeterministic choices under one action label")
     func completeGraphs() throws {
         for scenario in try SetChoiceMachine.validationScenarios() {

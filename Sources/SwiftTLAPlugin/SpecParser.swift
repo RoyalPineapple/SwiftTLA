@@ -567,7 +567,8 @@ final class ParserSession {
               case .expr(let predicateSyntax) = closure.statements.first?.item,
               let predicate = decodeTypedFacadeValue(
                 predicateSyntax,
-                scope: scope.extending(binding: parameter, to: .variable(canonicalBinding))
+                scope: scope.extending(binding: parameter, to: .variable(canonicalBinding),
+                    shape: typedFacadeValueType(candidatesSyntax, scope: scope)?.selectedElement)
               )
         else { return nil }
         return .choose(
@@ -1638,6 +1639,10 @@ final class ParserSession {
         }
         guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
         if compilerGrammarName(in: call.calledExpression) == "IntRange" { return .set(.int) }
+        if compilerGrammarName(in: call.calledExpression) == "Select",
+           let candidates = call.arguments.first(where: { $0.label?.text == "from" })?.expression {
+            return typedFacadeValueType(candidates, scope: scope)?.selectedElement
+        }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            member.declName.baseName.sourceIdentifierName == "integerDivided",
            decodeTypedFacadeValue(expression, scope: scope) != nil {
