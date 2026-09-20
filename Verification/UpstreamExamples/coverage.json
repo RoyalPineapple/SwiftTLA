@@ -52,6 +52,38 @@
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797",
       "temporalRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485733646",
+      "completedJobs": [
+        {
+          "name": "ordinary",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/job/106011625583",
+          "conclusion": "success",
+          "testsPassed": 1491,
+          "buildSeconds": 769.34,
+          "testSeconds": 649.040,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/artifacts/10598034043",
+          "artifactSHA256": "a119863fd0b66c710e2b7697c06d40d440a904e3ad61922c33cc2b29cf416cf6",
+          "scope": "The terminal log reports 1491 passing tests. Downloaded archive checksum and retained markers verify 6d0617ab, Swift 6.1.2, Xcode 16.4 build 16F6, and SDK 24F74. The selection excludes FiniteGraphCheckTests, UpstreamParityTests, and ScenarioValidationTests. This evidence does not cover subsequent local changes or establish additional upstream matches. Artifact contents: /tmp/swifttla-successes-6d.gzek4G/ordinary."
+        },
+        {
+          "name": "upstream",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/job/106011625518",
+          "conclusion": "success",
+          "testsPassed": 23,
+          "buildSeconds": 1503.13,
+          "testSeconds": 880.630,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/artifacts/10597978384",
+          "artifactSHA256": "005b84412535c099a38946d027285056bb8aacc08aaab0b48b479443b4e7725f",
+          "scope": "The terminal log reports 23 passing UpstreamParityTests. Downloaded archive checksum and retained markers verify 6d0617ab, Swift 6.1.2, Xcode 16.4 build 16F6, and SDK 24F74. This suite does not replace independent complete graph/property comparisons or validate subsequent local changes. Artifact contents: /tmp/swifttla-successes-6d.gzek4G/upstream."
+        },
+        {
+          "name": "canonical-corpus-export",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/job/106011625501",
+          "conclusion": "success",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/artifacts/10598901031",
+          "artifactSHA256": "394896b41fa094570a1c2f78f4e213fa42ad4394a2e235a2ee733e1905bf106d",
+          "scope": "The downloaded archive checksum verifies. Its manifest binds to 6d0617ab and all 20 declared file digests across four cases verify (21 archive files including the manifest). All eight direct/PlusCal TLA files differ from the edec23de export; all configurations and imports retain their hashes. This candidate uses generated rendering, so earlier generated-output comparisons cannot qualify these changed files. Export integrity is not TLC or external PlusCal admission. Artifact contents: /tmp/swifttla-successes-6d.gzek4G/export."
+        }
+      ],
       "scenarioTimeout": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/job/106011625511",
         "conclusion": "failure",
