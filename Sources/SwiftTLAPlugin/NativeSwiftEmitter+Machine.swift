@@ -249,8 +249,30 @@ extension NativeSwiftEmitter {
             switch initialization.initialization {
             case .value(let expression):
                 code += "let \(name): \(try swiftType(type)) = \(try self.expression(expression, state: ""))\n"
+                if let field = stateMemberNames[initialization.variable] {
+                    code += "if _selectedInitial == nil || _selectedInitial!.\(field) == \(name) {\n"
+                    closing += "}\n"
+                }
             case .memberOf(let expression):
-                code += "for \(name) in \(try self.expression(expression, state: "")).sorted(by: \(try ordering(type))) {\n"
+                if let field = stateMemberNames[initialization.variable] {
+                    let membership = CompiledExpression(operation: .in, resultType: .bool, children: [
+                        CompiledExpression(operation: .stateVariable(initialization.variable), resultType: type, children: []),
+                        expression
+                    ])
+                    code += """
+                    let \(name)Candidates: [\(try swiftType(type))]
+                    if let selected = _selectedInitial {
+                        let \(name) = selected.\(field)
+                        \(name)Candidates = \(try self.expression(membership, state: "")) ? [\(name)] : []
+                    } else {
+                        \(name)Candidates = \(try self.expression(expression, state: "")).sorted(by: \(try ordering(type)))
+                    }
+                    for \(name) in \(name)Candidates {
+
+                    """
+                } else {
+                    code += "for \(name) in \(try self.expression(expression, state: "")).sorted(by: \(try ordering(type))) {\n"
+                }
                 closing += "}\n"
             }
         }
@@ -271,7 +293,7 @@ extension NativeSwiftEmitter {
             """
         }.joined(separator: "\n")
         return try nativeDeclarations("""
-        private static func _initialStates(\(parameters)) throws -> [Snapshot] {
+        private static func _initialStates(_selectedInitial: State? = nil\(appendedParameters)) throws -> [Snapshot] {
             \(validation)
             \(code)
         }
@@ -285,7 +307,7 @@ extension NativeSwiftEmitter {
             return Self(execution: execution\(appendedArguments))
         }
         public static func makeMachine(_ initial: State\(appendedParameters)) throws -> Self {
-            var candidates = try _initialStates(\(arguments)).filter { $0.state == initial }[...]
+            var candidates = try _initialStates(_selectedInitial: initial\(appendedArguments))[...]
             guard let execution = candidates.popFirst() else { throw GeneratedMachineError.invalidInitialState }
             guard candidates.isEmpty else { throw GeneratedMachineError.ambiguousInitialState }
             return Self(execution: execution\(appendedArguments))
