@@ -52,6 +52,14 @@
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037",
       "temporalRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493942145",
+      "temporalSymmetryResult": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493942145/job/106033512742",
+        "conclusion": "success",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493942145/artifacts/10599934070",
+        "artifactSHA256": "c734eadc310eb42b95fb661f516927eb05d303309d4bc2eb0e86d617e33bf271",
+        "exactCases": 25,
+        "scope": "Downloaded archive checksum verifies, and the terminal checkout log binds the run to bba219f340df1f4354de6d1f2ec7a6fe011cfed9 under the declared Xcode 16.4 environment. All 25 case-outcome records are exact. All 21 property-comparison records (18 temporal properties and three deadlock checks) are exact with matching native/TLC statuses; every violation retains both traces. LeavesZero is violated with no fairness and satisfied with weak/strong fairness. For each symmetry scope 2 through 5, complete raw header/initial/state/edge streams compare equal, all four raw/reduced graph footers report completion, and the reported orbit/quotient-edge counts are 3/2, 4/3, 5/4, and 6/5. Symmetry still uses FormalGraphExporter and ModelChecker, so this is not native symmetry or AC-12 completion. It does not validate later uncommitted record-union changes or add complete-criterion/family credit. Retained archive and contents: /tmp/swifttla-temporal-bba.GITZ9C."
+      },
       "scope": "Pushed after the previous main CI run completed with failure, without cancelling older independent comparisons. Includes existing-index projection membership, buffered graph serialization, retained graph-file moves, ordinary-record MultiCarElevator and Echo migrations, dictionary-preserving updates, three-domain Do, documentation export coverage, and the demo SwiftPM CI runner fix. The combined focused wrapper run passed 100 tests on source 9ae139e6; the only subsequent change in this candidate records that diagnostic. All three new hosted workflows target this exact immutable SHA. Results and artifact audits remain pending; no performance recovery, family/configuration match, or completed DSL criterion is claimed. PR 394 remains draft."
     },
     "projectionCandidate": {
