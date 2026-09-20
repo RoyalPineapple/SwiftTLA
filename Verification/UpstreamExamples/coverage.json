@@ -48,6 +48,13 @@
       "scope": "Diagnosis uses the terminal job log and artifact metadata. The 1.48 GB artifact is retained remotely but has not been downloaded or audited as complete evidence. Run 35451794508 has completed with failure: this scenario and graphs-coffee-can-3000 are its only failed comparison jobs; the aggregate gate also failed. Successful jobs still require retained evidence audits before any new coverage credit."
     },
     "currentCandidate": {
+      "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660",
+      "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
+      "completedJobs": [],
+      "scope": "Submitted after prior main CI became terminal. Includes AC-05 through AC-08 local contract evidence, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and the Boulanger capacity increase from five to ten million states. Focused wrapper session 3696 passes 114 tests; model bounds and selected checks are unchanged. CI and independent candidate comparisons are queued for this exact SHA. No new hosted acceptance or coverage credit is assigned; PR 394 remains draft."
+    },
+    "snapshotReuseCandidate": {
       "sourceSHA": "0b86465f165584983dbcca910a9fb56d6865aca4",
       "conclusion": "failure",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025",
