@@ -1067,6 +1067,20 @@
   },
   "localDiagnostics": [
     {
+      "session": "64187",
+      "sourceSHA": "d6e7d31d",
+      "sourcePatchSHA256": "868eb366dfe058ea6e4893e28537a3880c0c73020a5bbf4215dc48fc600c9bcd",
+      "sourcePatchScope": "git diff -- Examples; TwoBuckets.swift and TwoBucketsDemoTests.swift",
+      "workingDirectory": "Examples/SwiftTLADemos",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools ../../scripts/local-validation.sh swiftpm-test 'TwoBucketsDemoTests|GeneratedDemoTestSuiteTests'",
+      "exitCode": 0,
+      "testsPassed": 3,
+      "buildSeconds": 162.03,
+      "testSeconds": 0.003,
+      "result": "All three focused consumer tests pass. Every generated transition across the 16 reachable jug states matches direct fill, empty, and minimum-volume pour arithmetic; capacity checks remain valid. Existing action calls and the generated demo check suite pass. The export has no synthetic pc variable.",
+      "scope": "The consumer now uses scoped shared variables and atomic Do steps instead of six singleton process domains. Both overflow branches retain the transferred volume before updating the destination. Ponytail review removes the obsolete process types and loops without a compatibility path. This diagnostic does not claim upstream graph equivalence or hosted Apple UI validation. No coverage credit."
+    },
+    {
       "session": "57257",
       "sourceSHA": "f1c5a6fa",
       "sourcePatchSHA256": "aa02c807da4eb92bc8178e8ef6c2a0ae7ce5fcc7e56e984e7729170aa2dccf0a",
@@ -3868,8 +3882,17 @@
       "path": "specifications/DieHard",
       "name": "The Die Hard Problem",
       "audit": "reference inputs audited",
-      "gap": "MCDieHardest still needs its native implementation and hosted comparison under upstream single-worker BFS semantics. Its selected NotSolved check stops with a shortest finite counterexample despite the infinite reachable graph. Requiring graph exhaustion or a separate proof adds requirements absent from upstream. The runner still needs decisive-check results distinct from graph completion. No bound or exclusion is invented. APDieHarder, MCDieHarder, and DieHard have hosted matches. Module dispositions and legacy cleanup remain incomplete.",
+      "gap": "All four published configurations now have intended-DSL implementations. MCDieHardest and the decisive comparison path pass focused local tests; its hosted candidate remains in progress. The original single-worker BFS configuration stops at a shortest finite NotSolved counterexample despite the infinite reachable graph. No counter bound, graph-exhaustion requirement, or separate proof gate is added. APDieHarder, MCDieHarder, and DieHard retain earlier hosted matches. Source-defined alternative operators and module dispositions remain under audit. The TwoBuckets consumer's singleton-process wrappers have been replaced by atomic Do steps, and all three focused consumer tests pass. Hosted consumer confirmation and final family cleanup admission remain pending.",
       "legacyCleanupComplete": false,
+      "legacyCleanupAudit": {
+        "corpusFiles": ["Sources/UpstreamParity/Examples/DieHard.swift", "Sources/UpstreamParity/Examples/DieHarder.swift", "Sources/UpstreamParity/Examples/DieHardest.swift"],
+        "consumerFile": "Examples/SwiftTLADemos/Sources/TwoBuckets.swift",
+        "consumerTest": "Examples/SwiftTLADemos/Tests/TwoBucketsDemoTests.swift",
+        "baseSHA": "d6e7d31d",
+        "examplePatchSHA256": "868eb366dfe058ea6e4893e28537a3880c0c73020a5bbf4215dc48fc600c9bcd",
+        "diagnosticSession": "64187",
+        "scope": "Repository-wide source search finds the three corpus models and the separate TwoBuckets consumer. The corpus uses scoped variables and atomic Do actions. The consumer migration removes six hand-written finite-domain process types and synthetic control state while retaining its UI action names and move guards. All three focused tests pass, including comparison of every reachable transition against direct jug arithmetic. Hosted Apple UI confirmation and final cleanup admission remain pending; this consumer test does not confer upstream-equivalence credit."
+      },
       "modules": [
         {
           "path": "specifications/DieHard/APADieHardest.tla",
@@ -3915,8 +3938,8 @@
         {
           "path": "specifications/DieHard/DieHardest.tla",
           "role": "behavior dependency",
-          "reason": "This module composes two DieHarder instances. Spec selects interleaved steps with unbounded counters and requires single-worker BFS. Other sections define parallel, per-behavior freeze, and TLC-register freeze variants. None has a Swift port.",
-          "implementations": [],
+          "reason": "Spec composes two DieHarder instances through NextInterleaved with unbounded counters and single-worker BFS. DieHardestModel implements that selected behavior. NextParallel, NextParallelFreeze, and NextParallelGlobalFreeze are alternative operators not selected by any of the four published configurations; their source-defined variant disposition remains open. The last uses TLC's global exploration registers, unlike ordinary model state. The current candidate does not implement or claim those alternatives.",
+          "implementations": ["Sources/UpstreamParity/Examples/DieHardest.swift"],
           "dispositionComplete": false
         },
         {
@@ -3932,7 +3955,7 @@
           "path": "specifications/DieHard/MCDieHardest.tla",
           "role": "configured root",
           "reason": "The configuration selects Spec and NotSolved, with Goal=4 and capacities 5/3 versus 5/3/3. The expected counterexample records step counts 6 and 5. That finite witness does not complete its infinite graph.",
-          "implementations": [],
+          "implementations": ["Sources/UpstreamParity/Examples/DieHardest.swift"],
           "dispositionComplete": false
         }
       ],
