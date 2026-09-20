@@ -165,6 +165,18 @@
     },
     "queueRepairCandidate": {
       "sourceSHA": "f667b67983a51f800ee03dd90d0903cc705db7a8",
+      "kvsnapComparison": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479/job/105972420246",
+        "conclusion": "success",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479/artifacts/10594831805",
+        "artifactSHA256": "78a732005129bd0f4a81673ac690e2895efc5cbcdcc2e8301197f162edbb92f9",
+        "initialStates": 1,
+        "states": 189664,
+        "edges": 365595,
+        "result": "exact",
+        "checks": "SnapshotIsolation, Termination, TypeOK, and deadlock are satisfied and exact for generated and original-reference comparisons.",
+        "scope": "Downloaded artifact comparison and property records audited; both retained complete-graph footers agree with these counts. No reference or generated graph differences are reported. This validates the older f667b679 implementation, not the later typed-record migration or every KeyValueStore configuration. No family completion or additional configuration credit is inferred."
+      },
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466583601",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479",
       "completedJobs": [
@@ -646,6 +658,26 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "68324",
+      "sourceSHA": "0bf75b0212fcd74d5d706dd8691f302415e2fd21",
+      "sourcePatchSHA256": "1c8462e8813018c16c1d0ebc2ec18f9a3c7d64dd1988204705fb7082ca789f0d",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SwiftRecordTypeTests|KVsnapCorpusExecutionTests|KVsnapCorpusRenderingTests|FormalUnionTests|NativeTypeDiagnosticTests|GeneratedSwiftRecordTests|FormalValueEqualityTests|SpecificationSourceAuthorityTests|ArrayValueTests'",
+      "exitCode": 1,
+      "testsRun": 0,
+      "result": "Explicit union result types removed ambiguous native enum construction. The remaining compiler error identifies DijkstraMutexModel.TemporaryInitial: its private access is incompatible with a generated module-internal snapshot field that now preserves the declared union. The caller migration changes only that enum's access to module-internal; its values and model behavior are unchanged.",
+      "scope": "Full compiler log retained at /tmp/swifttla-union-diagnostics.EkZPLz/validation.log. Failed local diagnostic, not acceptance. Source remained fixed until terminal exit."
+    },
+    {
+      "session": "19512",
+      "sourceSHA": "061647655c26d109bce57b51b916f52f914e3313",
+      "sourcePatchSHA256": "bf80f7d0cc1a8bd90759e53d50737b879f021ed8c81d506288c913f36006e3b1",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SwiftRecordTypeTests|KVsnapCorpusExecutionTests|KVsnapCorpusRenderingTests|FormalUnionTests|NativeTypeDiagnosticTests|GeneratedSwiftRecordTests|FormalValueEqualityTests|SpecificationSourceAuthorityTests|ArrayValueTests'",
+      "exitCode": 1,
+      "testsRun": 0,
+      "result": "Generated test-module compilation rejected a private type in a snapshot field and ambiguous uses of OneOf.second. The first diagnostic filter omitted the containing declaration; the next run retains a full log. Generated union construction now carries an explicit result type to distinguish a native enum case from the symbolic-expression overload.",
+      "scope": "Failed local diagnostic. Source stayed fixed throughout the build; only ledger changes were committed."
+    },
     {
       "session": "77221",
       "sourceSHA": "a816824166011554f88e8c963958f2983fc1ce49",
