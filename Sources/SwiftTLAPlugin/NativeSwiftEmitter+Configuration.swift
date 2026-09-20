@@ -35,13 +35,16 @@ extension NativeSwiftEmitter {
                 throw unsupported("missing parameter domain: \(parameter.reference.name)")
             }
             let value = inputs[parameter.binder]!
-            let domainName = "_domain\(parameter.binder.ordinal)"
-            body.append("let \(domainName) = \(try expression(domain, state: "", substitutions: inputs))")
+            let membership = CompiledExpression(operation: .in, resultType: .bool, children: [
+                CompiledExpression(operation: .boundValue(parameter.binder),
+                    resultType: program.bindingTypes[parameter.binder]!, children: []),
+                domain
+            ])
             body.append("""
-            guard \(domainName).contains(\(value)) else {
+            guard \(try expression(membership, state: "", substitutions: inputs)) else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
                     path: \(String(reflecting: "configuration." + parameter.reference.name)),
-                    expected: String(describing: \(domainName)), actual: String(describing: \(value)))
+                    expected: "a member of the declared parameter domain", actual: String(describing: \(value)))
             }
             self.`\(parameter.reference.name)` = \(value)
             """)
