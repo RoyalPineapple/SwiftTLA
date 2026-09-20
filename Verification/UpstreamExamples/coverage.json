@@ -781,6 +781,19 @@
   },
   "localDiagnostics": [
     {
+      "session": "16790",
+      "sourceSHA": "b4cc786ab42a34748fc97310a66633ac36b129ad",
+      "sourcePatchSHA256": "c859b4b2ddaa83fc4ce9aced3cbcd7ca6920b5a7e13ec588d7705b42bf2b14db",
+      "sourcePatchScope": "git diff -- Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ScenarioExpectationTests|UpstreamCorpusInventoryTests'",
+      "exitCode": 0,
+      "testsPassed": 10,
+      "buildSeconds": 603.02,
+      "testSeconds": 0.017,
+      "result": "All six expectation contracts and four inventory checks pass. Existing test bodies are unchanged: expected outcomes affect only verdicts, missing or disagreeing checks fail, incomplete exploration fails, and Counter evidence covers every declared result. ScenarioValidationTests retains both registry and full-corpus tests. The ordinary CI exclusion does not match ScenarioExpectationTests.",
+      "scope": "Compiled source remained fixed during the wrapper build; intervening commits changed only documentation and the ledger. Static checks and exact test-body comparison pass. Ponytail review uses existing fixtures and the existing CI split without another filter or duplicate test. Hosted admission for this new suite placement remains pending. No configuration or DSL criterion gains credit."
+    },
+    {
       "session": "27421",
       "sourceSHA": "dd8841b61f7ad076ec4eed2d22144ddccba53689",
       "sourcePatchSHA256": "e7271c5bf6dc711ae86b54610e9731d3bd8a97674777c86797b54c6d05b07bf9",
@@ -8766,7 +8779,7 @@
       "id": "AC-07",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Local diagnostic 11919 passes paired temporal and deadlock expectation tests. The weakly fair process retains identical complete initial snapshots, graphs, actual property results, deadlock results, and TLA/CFG after only its expectation changes; only the validation verdict differs. Missing checks, incomplete exploration, and disagreeing comparisons remain failures. Hosted evidence remains missing: ordinary CI excludes ScenarioValidationTests, and the separate scenario suite times out during Boulanger without terminal results for these short contract tests. Separate expectation contracts from long-running corpus enumeration so ordinary CI can exercise them independently. This is not a verified DSL criterion.",
+      "reason": "ScenarioExpectationTests checks paired temporal and deadlock expectations. The weakly fair process retains identical initial snapshots, complete graphs, actual property and deadlock results, and TLA/CFG after only its expectation changes. Missing checks, incomplete exploration, and disagreeing comparisons remain failures. Local diagnostic 16790 passes all six contracts after moving their unchanged bodies out of ScenarioValidationTests. Ordinary CI now selects them independently of the long-running corpus suite. Hosted evidence for this placement remains pending; this is not a verified DSL criterion.",
       "evidence": []
     },
     {
