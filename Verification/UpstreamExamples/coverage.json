@@ -66,7 +66,16 @@
     "contractsCandidate": {
       "sourceSHA": "265c7a197eeb9ed3cf22465180daa317138b907b",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518383391",
-      "observedStatus": "in_progress",
+      "observedStatus": "completed",
+      "conclusion": "failure",
+      "upstreamContracts": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518383391/job/106098090673",
+        "testsPassed": 21,
+        "elapsedSeconds": 1136.152,
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518383391/artifacts/10608970488",
+        "artifactSHA256": "93a88e46c359843f88cd833a8c6ff5838bb36d1a1d9240cdae94054bc98d4bd2",
+        "audit": "The 190920-byte archive checksum and retained source SHA verify. The terminal log reports 21 passing UpstreamParityTests. Retained markers identify Swift 6.1.2, Xcode 16.4 build 16F6, SDK 24F74, release compilation, and Debug assertions. These include bounded and partial implementation checks, not independent upstream TLC comparisons. No configuration, family, or DSL-criterion credit is added. This does not verify later frame-completion and scope-scan changes. Retained archive: /tmp/swifttla-upstream-contracts.8LORSL/evidence.zip."
+      },
       "ordinaryFailure": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518383391/job/106098090688",
         "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518383391/artifacts/10607064120",
