@@ -54,8 +54,12 @@
       "sourceSHA": "5d3025ddb1e628c2bb639dfde7bbc464b55754c9",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35515925978",
       "caseLabels": ["decisive-die-hardest-global-freeze", "scenarios-die-hardest-global-freeze-0", "decisive-mc-die-hardest"],
-      "observedStatus": "queued",
-      "scope": "Independent comparison of the unchanged NextParallelGlobalFreeze operator using the source's Goal=2, 9/10 versus 1/3 running example; generated-TLC comparison and the published MCDieHardest regression. MCGlobalFreeze is a local configuration harness, not a published upstream CFG. No hosted match or family completion is claimed before retained evidence is audited."
+      "observedStatus": "completed",
+      "conclusion": "success",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35515925978/artifacts/10607340951",
+      "artifactSHA256": "97aa973c5fd7e499faac218685cb4a01677aa1adfa7c63468dec0ef2e3b0fc30",
+      "audit": "The 194240-byte archive and retained source SHA match. Six complete global-freeze traces across native, unchanged upstream, and generated TLC are identical: seven states and six transitions. Copy 2 freezes at [j1=1,j2=2] after step two; copy 1 reaches [j1=9,j2=2] after step six. Counters remain zero; registers are absent from formal state. All module/configuration and TLC/Java/bridge source pins match. TLC uses one worker without -continue and stops at NotSolved. Deadlock remains unavailable; graphCompared is false. Four complete twelve-state MCDieHardest regression traces also match. Retained archive and files: /tmp/swifttla-global-freeze-evidence.Cbofh9.",
+      "scope": "This verifies the Section 3 running example at 5d3025dd. MCGlobalFreeze is a local harness, not a published upstream CFG. It adds no published configuration or complete-family credit. That revision's negative-test fixture compile error was fixed in e8d2e498; the local rerun is pending. This focused match is not final-revision admission."
     },
     "familyRegressionCandidate": {
       "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
@@ -4000,14 +4004,28 @@
       "path": "specifications/DieHard",
       "name": "The Die Hard Problem",
       "scheduling": {
-        "label": "Checker gap",
+        "label": "Ready",
         "variant": "DieHardest.NextParallelGlobalFreeze",
+        "status": "hosted match",
+        "verifiedSourceSHA": "5d3025ddb1e628c2bb639dfde7bbc464b55754c9",
+        "bindings": {"Goal": 2, "Capacities": [{"j1": 9, "j2": 10}, {"j1": 1, "j2": 3}]},
         "reproducer": "The pinned operator uses TLCGet(level), TLCGet(2), TLCGet(3), and TLCSet to freeze copies after global BFS discovery. Its running example binds Goal=2 and capacities 9/10 versus 1/3.",
-        "nativeBoundary": "5d3025dd implements the source-defined global-freeze running example with typed run-owned registers, generated transitions, effect-sensitive action identity, and BFS-prefix witness replay. Registers remain outside model state. The reference selects the unchanged upstream operator through a clearly local configuration harness. Focused local rerun and hosted comparison are pending; no variant completion is claimed.",
+        "nativeBoundary": "5d3025dd independently matches the global-freeze running example using typed run-owned registers, generated transitions, effect-sensitive action identity, and BFS-prefix witness replay. Registers remain outside model state. The reference selects the unchanged operator through a local configuration harness. This closes the demonstrated register blocker for this case, not every possible register use site or final admission.",
         "implementation": {"file": "Sources/UpstreamParity/Examples/DieHardestGlobalFreeze.swift", "caseID": "die-hardest-global-freeze", "scenario": "NextParallelGlobalFreeze"},
         "completionCondition": "Preserve exploration-wide register initialization, BFS levels, and freeze effects through a supported checking boundary. Obtain hosted comparison for the unchanged source-defined variant.",
-        "remainingVariants": ["NextParallel", "NextParallelFreeze", "NextParallelGlobalFreeze"],
-        "scope": "The four published configurations have retained matches. This variant keeps the family incomplete. The user explicitly prioritized implementation of checker-register support before further family expansion.",
+        "remainingVariants": ["NextParallel", "NextParallelFreeze"],
+        "evidence": [{
+          "sourceSHA": "5d3025ddb1e628c2bb639dfde7bbc464b55754c9",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35515925978/job/106093618383",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35515925978/artifacts/10607340951",
+          "artifactSHA256": "97aa973c5fd7e499faac218685cb4a01677aa1adfa7c63468dec0ef2e3b0fc30",
+          "completion": "decisive-counterexample",
+          "completeCounterexampleMatch": true,
+          "completeGraph": false,
+          "scope": "The complete six-transition NotSolved witness matches unchanged upstream and generated TLC. Single-worker execution, input pins, and every state/action were audited. Other variants and final family admission remain open."
+        }],
+        "scope": "The four published configurations and Section 3 global-freeze running example have retained matches. NextParallel and NextParallelFreeze remain source-defined variant work. Published configuration totals do not include the local global-freeze harness.",
         "pinnedSemantics": {
           "revision": "867aefb69ffc2452031292587b389d1fc3eb43ff",
           "implementation": "tlatools/org.lamport.tlatools/src/tlc2/module/TLCGetSet.java",
@@ -4073,8 +4091,8 @@
         {
           "path": "specifications/DieHard/DieHardest.tla",
           "role": "behavior dependency",
-          "reason": "Spec composes two DieHarder instances through NextInterleaved with unbounded counters and single-worker BFS. DieHardestModel implements that selected behavior. NextParallel, NextParallelFreeze, and NextParallelGlobalFreeze are source-defined alternatives not selected by the four published configurations. DieHardestGlobalFreezeModel implements the Section 3 running example on 5d3025dd; hosted comparison is pending. The other alternatives and complete module disposition remain open.",
-          "implementations": ["Sources/UpstreamParity/Examples/DieHardest.swift"],
+          "reason": "Spec composes two DieHarder instances through NextInterleaved with unbounded counters and single-worker BFS. DieHardestModel implements that selected behavior. DieHardestGlobalFreezeModel matches the unchanged Section 3 operator and running example in hosted run 35515925978 at 5d3025dd. NextParallel and NextParallelFreeze remain unverified alternatives. Complete module disposition remains open.",
+          "implementations": ["Sources/UpstreamParity/Examples/DieHardest.swift", "Sources/UpstreamParity/Examples/DieHardestGlobalFreeze.swift"],
           "dispositionComplete": false
         },
         {
