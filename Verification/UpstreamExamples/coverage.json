@@ -50,6 +50,13 @@
     "completionRule": "Scheduling labels and queue positions confer no evidence credit. Count only retained hosted configuration matches. Declare a family complete only after every applicable configuration and variant is verified, module dispositions are resolved, and legacy code is removed. The next deliverable is one fully verified family on a green hosted revision through the intended DSL and correct checking path."
   },
   "ci": {
+    "parallelVariantsCandidate": {
+      "sourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35517612379",
+      "caseLabels": ["graphs-die-hard", "graphs-mc-die-harder", "graphs-ap-die-harder", "decisive-mc-die-hardest", "decisive-die-hardest-global-freeze", "graphs-die-hardest-parallel", "graphs-die-hardest-parallel-freeze", "scenarios-die-hardest-parallel-0", "scenarios-die-hardest-parallel-1"],
+      "observedStatus": "in_progress",
+      "scope": "Refresh all seven DieHard reference cases at one source revision, including complete graphs/properties for the two parallel variants and generated-TLC checks of their model-owned scenarios. MCParallel is a local harness for the source running example, not a published upstream CFG. No new coverage credit is claimed before retained evidence is audited."
+    },
     "globalFreezeCandidate": {
       "sourceSHA": "5d3025ddb1e628c2bb639dfde7bbc464b55754c9",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35515925978",
@@ -1108,6 +1115,13 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "73438",
+      "sourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'DieHardestCorpusCheckingTests|DieHardestParallelCorpusCheckingTests|IndependentAtomicStepTests|AlgorithmBuilderParsingTests|AlgorithmBuilderTests|FiniteGraphManifestTests'",
+      "observedStatus": "running",
+      "scope": "Log: /tmp/swifttla-parallel-variants.log. Tests compare every native parallel-variant transition with jug arithmetic, preserve the global-freeze and interleaved witnesses, and exercise specification-scoped statement macros through existing lowering. Source and tests stay fixed during the diagnostic. No passing result is claimed."
+    },
     {
       "session": "75147",
       "sourceSHA": "e8d2e4984438bf5da3bb6ff5e196fccd6729090b",
@@ -4019,6 +4033,10 @@
         "implementation": {"file": "Sources/UpstreamParity/Examples/DieHardestGlobalFreeze.swift", "caseID": "die-hardest-global-freeze", "scenario": "NextParallelGlobalFreeze"},
         "completionCondition": "Preserve exploration-wide register initialization, BFS levels, and freeze effects through a supported checking boundary. Obtain hosted comparison for the unchanged source-defined variant.",
         "remainingVariants": ["NextParallel", "NextParallelFreeze"],
+        "parallelVariants": [
+          {"operator": "NextParallel", "status": "implemented", "implementation": {"file": "Sources/UpstreamParity/Examples/DieHardestParallel.swift", "caseID": "die-hardest-parallel", "scenario": "NextParallel"}, "evidence": []},
+          {"operator": "NextParallelFreeze", "status": "implemented", "implementation": {"file": "Sources/UpstreamParity/Examples/DieHardestParallel.swift", "caseID": "die-hardest-parallel-freeze", "scenario": "NextParallelFreeze"}, "evidence": []}
+        ],
         "evidence": [{
           "sourceSHA": "5d3025ddb1e628c2bb639dfde7bbc464b55754c9",
           "developerToolsVersion": "16.4",
