@@ -52,6 +52,15 @@
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797",
       "temporalRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485733646",
+      "scenarioTimeout": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/job/106011625511",
+        "conclusion": "failure",
+        "buildSeconds": 2106.80,
+        "stepLimitMinutes": 120,
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/artifacts/10598589264",
+        "artifactSHA256": "326752fcaeaaa2c93d43128b440586b2aa6ae0234e2876e5e94b6dec9afa5e36",
+        "scope": "The terminal log reports a 120-minute test-step timeout at 2026-09-20T05:10:50Z. The downloaded archive checksum verifies; retained markers identify 6d0617ab, Swift 6.1.2, Xcode 16.4 build 16F6, and SDK 24F74. The final sample at 05:06:19 shows Boulanger canonical state conversion in NativeModelRun with an 18.9 GB physical footprint. Of 4661 samples on the active test thread, 1084 enter ReachabilityGraph.formalProjection's dictionary membership lookup, including 904 in swift_retain beneath value copying. Commit dd8841b6 already replaces that membership lookup with index(forKey:) and passed 23 focused local tests, but is not included in this hosted source. The sample supports testing that pending fix, not a claim that it resolves the timeout. Archive and samples: /tmp/swifttla-scenarios-6d.RbKded. No complete graph/property result or additional coverage credit."
+      },
       "appleDemoFailure": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/job/106011625622",
         "conclusion": "failure",
