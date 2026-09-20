@@ -19,6 +19,10 @@ on:
         description: Retain an upstream-only Boulanger capacity diagnostic (candidate only; not parity evidence)
         type: boolean
         default: false
+      case_labels:
+        description: Comma-separated validation labels for a focused candidate run (empty runs every case)
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -115,8 +119,10 @@ jobs:
       - name: Build the validator once for this revision
         run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
 
-      - name: Derive one job per complete graph case and model-owned scenario
+      - name: Derive one job per reference configuration and model-owned scenario
         id: cases
+        env:
+          CASE_LABELS: ${{ inputs.case_labels }}
         run: |
           scenarios=$(.build/release/tlc-validate scenarios list)
           matrix=$(jq -ce --argjson scenarios "$scenarios" '
@@ -127,10 +133,21 @@ jobs:
               and ($scenarios | length > 0)
               and (all($scenarios[]; test("^[a-z0-9][a-z0-9-]*$")))
               and ($scenarios | length == (unique | length))
-            then {include: ([.cases[] | {phase: "graphs", label: ("graphs-" + .id), caseID: .id}]
+              and (all(.cases[]; (.comparisonMode // "exhaustive") | . == "exhaustive" or . == "decisive-counterexample"))
+            then {include: ([.cases[] | {phase: (if .comparisonMode == "decisive-counterexample" then "decisive" else "graphs" end), label: ((if .comparisonMode == "decisive-counterexample" then "decisive-" else "graphs-" end) + .id), caseID: .id}]
               + [$scenarios[] | {phase: "scenarios", label: ("scenarios-" + .), caseID: .}])}
             else error("Invalid or duplicate case identifiers") end
           ' Verification/FiniteGraph/cases.json)
+          if [ -n "$CASE_LABELS" ]; then
+            test "$ADMISSION_MODE" = candidate
+            matrix=$(jq -ce --arg labels "$CASE_LABELS" '
+              ($labels | split(",")) as $requested
+              | if ($requested | length == (unique | length))
+                and ($requested - [.include[].label] | length == 0)
+              then {include: [.include[] | select(.label as $label | $requested | index($label))]}
+              else error("Unknown or duplicate candidate case labels") end
+            ' <<< "$matrix")
+          fi
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
       - name: Verify release CLI case selection without launching TLC
@@ -254,8 +271,8 @@ jobs:
           mkdir -p .build/retained
           .build/validation-bin/tlc-validate scenarios run --case "$CASE_ID" --output .build/scenario-evidence 2>&1 | tee .build/retained/validation.log
 
-      - name: Run exact finite graph comparison
-        if: matrix.phase == 'graphs'
+      - name: Compare the declared upstream configuration
+        if: matrix.phase == 'graphs' || matrix.phase == 'decisive'
         timeout-minutes: 120
         env:
           CASE_ID: ${{ matrix.caseID }}
@@ -335,6 +352,18 @@ jobs:
               and (.checks | all(. == "exact"))
             ' "evidence/finite-graph-evidence/$case_id/comparison.json"
           done < <(jq -r '.include[] | select(.phase == "graphs") | .caseID' <<< "$CASE_MATRIX")
+          while IFS= read -r case_id; do
+            jq -e --arg id "$case_id" '
+              .schema == "DecisiveConfigurationComparison"
+              and .caseID == $id and .result == "exact"
+              and .completion == "decisive-counterexample" and .graphCompared == false
+              and .reference.status == "exact"
+              and .reference.swiftResult.status == "violated"
+              and .reference.tlcResult.status == "violated"
+            ' "evidence/finite-graph-evidence/$case_id/comparison.json"
+            test "$(cat "evidence/finite-graph-evidence/$case_id/generated/result.txt")" = exact
+            test "$(cat "evidence/finite-graph-evidence/$case_id/generated/completion.txt")" = decisive-counterexample
+          done < <(jq -r '.include[] | select(.phase == "decisive") | .caseID' <<< "$CASE_MATRIX")
           while IFS= read -r case_id; do
             test "$(cat "evidence/scenario-evidence/$case_id/result.txt")" = exact
           done < <(jq -r '.include[] | select(.phase == "scenarios") | .caseID' <<< "$CASE_MATRIX")

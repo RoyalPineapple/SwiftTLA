@@ -3,6 +3,19 @@ import Testing
 @testable import UpstreamParity
 
 struct ReferenceConfigurationDecodingTests {
+  @Test("decisive reference coverage rejects missing, extra, duplicate, and disabled checks", arguments: [
+    #"{"declarations":"","invariants":[],"properties":[],"checksDeadlock":true}"#,
+    #"{"declarations":"","invariants":["BelowThree","Other"],"properties":[],"checksDeadlock":true}"#,
+    #"{"declarations":"","invariants":["BelowThree","BelowThree"],"properties":[],"checksDeadlock":true}"#,
+    #"{"declarations":"","invariants":["BelowThree"],"properties":[],"checksDeadlock":false}"#
+  ])
+  func rejectsChangedDecisiveSelection(input: String) throws {
+    let scenario = try #require(TraceReplayCounter.validationScenarios().first)
+    let configuration = try JSONDecoder().decode(TLCReferenceConfiguration.self, from: Data(input.utf8))
+    #expect(throws: TLCPropertyCheckError.self) {
+      try configuration.validateDecisiveCoverage(scenario.render())
+    }
+  }
   @Test("reference configuration decoding preserves every declared check")
   func preservesCheckDeclarations() throws {
     let input = Data(#"{"declarations":"SPECIFICATION Spec\n","invariants":["Safe"],"properties":["Live"],"checksDeadlock":true}"#.utf8)

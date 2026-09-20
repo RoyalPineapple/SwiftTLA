@@ -10,6 +10,54 @@ package struct TLCScenarioCheck: Sendable {
         self.processAdapter = processAdapter
     }
 
+    package func runReference(_ scenario: NativeScenarioRun, request: TLCProcessRequest,
+        configuration: TLCReferenceConfiguration, in directory: URL) throws {
+        try RetainedFiles.outputDirectory(directory, beneath: directory.deletingLastPathComponent())
+        do {
+            guard case .counterexample(let native) = scenario.native,
+                  request.invocation == .propertyCheck,
+                  request.finiteGraphCase.arguments == ["-workers", "1", "-fp", "1"] else {
+                throw TLCPropertyCheckError.requestMismatch
+            }
+            try configuration.validateDecisiveCoverage(native.rendered)
+            try request.validateDeclaredBundle()
+            guard SHA256.hex(Data(request.bundle.tla.utf8)) == request.finiteGraphCase.moduleSHA256,
+                  SHA256.hex(Data(request.bundle.cfg.utf8)) == request.finiteGraphCase.cfgSHA256 else {
+                throw TLCPropertyCheckError.requestMismatch
+            }
+            try RetainedFiles.writeText(request.bundle.cfg, to: directory.appendingPathComponent("reference-original.cfg"))
+            let reference = directory.appendingPathComponent("reference")
+            let outcome = try processAdapter.run(request, retainingIn: reference)
+            let comparison = try native.compare(
+                data: Data(contentsOf: reference.appendingPathComponent("counterexample.json")), outcome: outcome,
+                stdout: String(contentsOf: reference.appendingPathComponent("logs/tlc.stdout.log"), encoding: .utf8))
+            try RetainedFiles.writeCanonical(comparison, to: reference.appendingPathComponent("property-comparison.json"))
+            try scenario.validateCounterexample(comparison)
+            let work = request.workingDirectory.appendingPathComponent(UUID().uuidString)
+            try RetainedFiles.createDirectory(work, beneath: request.workingDirectory)
+            defer { try? FileManager.default.removeItem(at: work) }
+            let generated = try request.selecting(bundle: native.rendered.tlaBundle,
+                work: work, runID: UUID(), invocation: .propertyCheck)
+            try run(scenario, request: generated, in: directory.appendingPathComponent("generated"))
+            struct Comparison: Encodable {
+                let schema = "DecisiveConfigurationComparison"
+                let completion = "decisive-counterexample"
+                let graphCompared = false
+                let result = "exact"
+                let caseID: String
+                let configurationSHA256: String
+                let reference: PropertyComparison
+            }
+            try RetainedFiles.writeCanonical(Comparison(caseID: request.caseID,
+                configurationSHA256: request.finiteGraphCase.cfgSHA256, reference: comparison),
+                to: directory.appendingPathComponent("comparison.json"))
+        } catch {
+            try RetainedFiles.writeText(redactingSecrets(in: String(describing: error)),
+                to: directory.appendingPathComponent("error.txt"))
+            throw error
+        }
+    }
+
     package func run(_ scenario: NativeScenarioRun, request: TLCProcessRequest, in directory: URL) throws {
         try RetainedFiles.outputDirectory(directory, beneath: directory.deletingLastPathComponent())
         do {

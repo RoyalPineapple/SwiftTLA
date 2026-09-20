@@ -3,6 +3,18 @@ import Testing
 import UpstreamParity
 
 struct FiniteGraphManifestTests {
+  @Test("reference cases reject unknown comparison modes")
+  func rejectsUnknownComparisonMode() throws {
+    let source = try Data(contentsOf: URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent("Verification/FiniteGraph/cases.json"))
+    let text = String(decoding: source, as: UTF8.self)
+      .replacingOccurrences(of: "\"decisive-counterexample\"", with: "\"partial-graph\"")
+    #expect(throws: DecodingError.self) {
+      try JSONDecoder().decode(FiniteGraphManifest.self, from: Data(text.utf8))
+    }
+  }
+
   @Test("one native model can declare separate reference configurations")
   func acceptsMultipleConfigurations() throws {
     let manifest = try decodeCases(ids: ["hour-clock-default", "hour-clock-no-deadlock"])

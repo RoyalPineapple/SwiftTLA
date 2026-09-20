@@ -222,6 +222,11 @@ package struct FiniteGraphManifest: Decodable, Sendable {
     package let cases: [Case]
 
     package struct Case: Decodable, Sendable {
+        package enum ComparisonMode: String, Decodable, Sendable {
+            case exhaustive
+            case decisiveCounterexample = "decisive-counterexample"
+        }
+        package let comparisonMode: ComparisonMode
         package let sourceModel: FiniteGraphSourceModel
         package let scenario: String?
         package let id: String
@@ -236,7 +241,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package let timeoutSeconds: TimeInterval
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case id, sourceModel, scenario, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration, timeoutSeconds
+            case id, sourceModel, scenario, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration, timeoutSeconds, comparisonMode
         }
 
         package struct Dependency: Decodable, Sendable {
@@ -258,6 +263,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             let container = try decoder.container(validatingKeys: CodingKeys.self)
             id = try container.decode(String.self, forKey: .id)
             sourceModel = try container.decode(FiniteGraphSourceModel.self, forKey: .sourceModel)
+            comparisonMode = try container.decodeIfPresent(ComparisonMode.self, forKey: .comparisonMode) ?? .exhaustive
             scenario = try container.decodeIfPresent(String.self, forKey: .scenario)
             module = try container.decode(String.self, forKey: .module)
             configuration = try container.decode(String.self, forKey: .configuration)
@@ -291,6 +297,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
                 scenarios = try DieHardModel.validationScenarios()
             case .dieHarder:
                 scenarios = try DieHarderModel.validationScenarios()
+            case .dieHardest:
+                scenarios = try DieHardestModel.validationScenarios()
             case .channel:
                 scenarios = try ChannelModel.validationScenarios()
             case .asynchInterface:
@@ -317,6 +325,9 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         private func validate() throws {
+            guard comparisonMode == .exhaustive || scenario != nil else {
+                throw EvidenceFormatError.invalidField(record: id, field: "decisive comparison requires a model-owned scenario")
+            }
             let allowedIDCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-_")
             guard !id.isEmpty, id != "all", id.unicodeScalars.allSatisfy(allowedIDCharacters.contains) else {
                 throw FiniteGraphCaseError.invalidIdentifier("case ID")
@@ -381,6 +392,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case leastCircularSubstring = "least-circular-substring"
     case dieHard = "die-hard"
     case dieHarder = "die-harder"
+    case dieHardest = "die-hardest"
     case multiCarElevator = "multicar-elevator"
     case tlcmcGraph1 = "tlcmc-graph-1"
     case nQueensFour = "n-queens-four"
@@ -407,7 +419,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .kvsnap: return try explore(KVsnapModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
-        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
+        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .dieHardest, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
@@ -422,7 +434,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .tlcmcGraph1: return try TLCMCModel.render()
         case .stringLiterals: return try StringLiteralModel.render()
         case .actionReferences: return try ActionReferencesModel.render()
-        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
+        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .dieHardest, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
             throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned scenario")
         }
     }

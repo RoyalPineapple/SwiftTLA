@@ -22,7 +22,7 @@ struct FiniteGraphCheckTests {
   }
 
   @Test("finite model exports retain complete native graphs and every declared check",
-    arguments: try declaredCases().map(\.id))
+    arguments: try declaredCases().filter { $0.comparisonMode == .exhaustive }.map(\.id))
   func nativeExportsRetainCompleteGraphsAndChecks(id: String) throws {
     func validate<Scenario: ModelValidationScenario>(_ scenario: Scenario, native: NativeModelRun) throws {
       for (property, expectation) in scenario.expectations {

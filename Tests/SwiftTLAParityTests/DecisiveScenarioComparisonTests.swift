@@ -4,6 +4,53 @@ import SwiftTLA
 import UpstreamParity
 
 struct DecisiveScenarioComparisonTests {
+    @Test("independent decisive comparison retains the original reference and requires generated agreement",
+        arguments: ReferenceTraceExecutor.Fault.allCases)
+    func comparesIndependentReference(fault: ReferenceTraceExecutor.Fault) throws {
+        let scenario = try #require(TraceReplayCounter.validationScenarios().first)
+        let run = try NativeScenarioRun(scenario, maximumStates: 3)
+        let generated = run.native.rendered.tlaBundle
+        let reference = TLAModuleBundle.external(root: .init(name: "Reference",
+            tla: generated.tla.replacingOccurrences(of: "MODULE \(generated.root.name)", with: "MODULE Reference"),
+            cfg: generated.cfg + "\\* Original reference configuration\n"))
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let work = root.appendingPathComponent("work")
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        let launch = try FiniteGraphCase(id: "independent-counterexample",
+            exploration: .init(maximumStateLimit: 3, symmetryReduction: .disabled),
+            moduleSHA256: SHA256.hex(Data(reference.tla.utf8)), cfgSHA256: SHA256.hex(Data(reference.cfg.utf8)),
+            arguments: ["-workers", "1", "-fp", "1"], environment: [:], pin: testReferencePin(),
+            renderedActions: run.native.rendered.actions)
+        let request = TLCProcessRequest(javaExecutable: root.appendingPathComponent("java"),
+            jar: root.appendingPathComponent("tlc.jar"), bridgeJar: root.appendingPathComponent("bridge.jar"),
+            bundle: reference, graphEvents: work.appendingPathComponent("events.jsonl"),
+            traceOutput: work.appendingPathComponent("counterexample.json"), workingDirectory: work,
+            finiteGraphCase: launch, runID: UUID(), timeout: 1, invocation: .propertyCheck)
+        let configuration = try JSONDecoder().decode(TLCReferenceConfiguration.self, from: Data(
+            #"{"declarations":"SPECIFICATION Spec\n","invariants":["BelowThree"],"properties":[],"checksDeadlock":true}"#.utf8))
+        let checker = TLCScenarioCheck(processAdapter: .init(executor:
+            ReferenceTraceExecutor(reference: reference, generated: generated, fault: fault)))
+        let output = root.appendingPathComponent("evidence")
+        if fault == .none {
+            try checker.runReference(run, request: request, configuration: configuration, in: output)
+            let comparison = try #require(JSONSerialization.jsonObject(with:
+                Data(contentsOf: output.appendingPathComponent("comparison.json"))) as? [String: Any])
+            #expect(comparison["result"] as? String == "exact")
+            #expect(comparison["graphCompared"] as? Bool == false)
+            #expect(comparison["swiftComplete"] == nil)
+            #expect(try String(contentsOf: output.appendingPathComponent("generated/result.txt"), encoding: .utf8) == "exact\n")
+        } else {
+            #expect(throws: (any Error).self) {
+                try checker.runReference(run, request: request, configuration: configuration, in: output)
+            }
+            #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("comparison.json").path))
+        }
+        #expect(try String(contentsOf: output.appendingPathComponent("reference-original.cfg"), encoding: .utf8) == reference.cfg)
+        #expect(try Data(contentsOf: output.appendingPathComponent("reference/counterexample.json")) == decisiveTraceData())
+    }
+
     @Test("targeted reachability shares BFS transitions and retains witnesses before the state limit")
     func boundsReachabilitySearch() throws {
         let initial = try TraceReplayQueries.initialMachines()

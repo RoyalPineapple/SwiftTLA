@@ -51,6 +51,21 @@ package struct TLCReferenceConfiguration: Decodable, Sendable {
     }
   }
 
+  package func validateDecisiveCoverage(_ rendered: RenderedSpecification) throws {
+    let selected = invariants + properties
+    let temporal = rendered.checkNames.subtracting(rendered.invariantNames)
+      .subtracting(rendered.reachabilityNames)
+    guard Set(selected).count == selected.count,
+      Set(invariants) == rendered.invariantNames,
+      Set(properties) == temporal,
+      Set(selected) == rendered.checkNames,
+      checksDeadlock == rendered.checksDeadlock else {
+      throw TLCPropertyCheckError.uncoveredReferenceChecks([
+        "The decisive reference must preserve the scenario's exact invariant, temporal, and deadlock selection."
+      ])
+    }
+  }
+
   func bundle(from original: TLAModuleBundle, native: NativeModelRun,
     checking names: Set<String>, checkDeadlock: Bool) throws -> TLAModuleBundle {
     // Preserve the model definition. Remove symmetry for complete graph comparison.

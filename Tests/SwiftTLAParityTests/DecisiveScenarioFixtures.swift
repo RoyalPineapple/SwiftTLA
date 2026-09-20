@@ -77,6 +77,22 @@ struct DecisiveTraceExecutor: TLCProcessExecuting {
     }
 }
 
+struct ReferenceTraceExecutor: TLCProcessExecuting {
+    enum Fault: CaseIterable, Sendable { case none, referenceFailure, generatedFailure }
+    let reference: TLAModuleBundle
+    let generated: TLAModuleBundle
+    let fault: Fault
+
+    func execute(_ request: TLCProcessRequest) throws -> TLCProcessResult {
+        guard request.invocation == .propertyCheck,
+              request.bundle == reference || request.bundle == generated else {
+            throw TLCPropertyCheckError.requestMismatch
+        }
+        let fails = request.bundle == reference ? fault == .referenceFailure : fault == .generatedFailure
+        return try DecisiveTraceExecutor(exitStatus: fails ? 255 : 12).execute(request)
+    }
+}
+
 struct ReachabilityTraceExecutor: TLCProcessExecuting {
     enum Fault: CaseIterable, Sendable { case none, repeatedQuery, failedProcess }
     let fault: Fault

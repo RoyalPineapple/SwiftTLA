@@ -49,6 +49,11 @@
     "completionRule": "Scheduling labels and queue positions confer no evidence credit. Count only retained hosted configuration matches. Declare a family complete only after every applicable configuration and variant is verified, module dispositions are resolved, and legacy code is removed. The next deliverable is one fully verified family on a green hosted revision through the intended DSL and correct checking path."
   },
   "ci": {
+    "candidateCaseSelection": {
+      "workflow": ".github/workflows/finite-graph.yml",
+      "input": "case_labels",
+      "scope": "The optional comma-separated selector applies only to candidate runs. Empty selection preserves the full matrix. Admission rejects nonempty selection. The workflow's actual jq expressions were exercised locally: a reference/generated scenario selection succeeds, while unknown, duplicate, and empty labels fail. This supports bounded hosted work for the current family without retrying unchanged capacity failures. It does not qualify omitted cases or confer hosted coverage credit."
+    },
     "ordinaryLedgerFailure": {
       "sourceSHA": "59fa4d5b156774c4993dc6f632e9aa16bd2f837a",
       "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35502123379/job/106055632936",
@@ -58,6 +63,19 @@
       "scope": "The fields are restored locally. Hosted confirmation remains required. No model mismatch or new coverage credit is inferred from this metadata repair. Other jobs on the same revision remain independent evidence."
     },
     "latestIndependentGraphFailure": {
+      "sourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
+      "caseID": "coffee-can-3000",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/job/106044136024",
+      "comparisonStepConclusion": "failure",
+      "comparisonStartedAt": "2026-09-20T08:32:16Z",
+      "comparisonCompletedAt": "2026-09-20T10:21:11Z",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/artifacts/10603233443",
+      "artifactDigest": "sha256:b30be60e19dbb9209ffd75ea6a9f7966402da44e166ad24fac35beed000b8bef",
+      "artifactBytes": 1712069623,
+      "resourceDiagnosis": "The terminal job log reports native export completion at 1505.221 seconds, TLC parsing at 5130.888 seconds, and comparison at 5280.269 seconds. The run then fails while moving the generated TLC events.jsonl into generated/checked-graph/graph-events.jsonl: NSCocoaErrorDomain 640 and NSPOSIXErrorDomain 28, No space left on device. This is a disk-capacity failure during generated graph retention, not a timeout or confirmed semantic mismatch.",
+      "scope": "Job and artifact metadata are terminal. The 1.71 GB archive remains hosted and has not been downloaded or audited. Inspect retained file sizes and duplication before a capacity change. Do not retry unchanged, shrink the configuration, truncate evidence, or grant a hosted match. CoffeeCan stays incomplete while DieHard implementation continues."
+    },
+    "previousIndependentGraphFailure": {
       "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
       "caseID": "coffee-can-3000",
       "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35451794508/job/105922519949",
@@ -1032,6 +1050,30 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "26274",
+      "sourceSHA": "e402e63d",
+      "sourcePatchSHA256": "92c1468ea4f53f04691a199568c1b6ee7b299825e018ab67b094e8fcaa7671e2",
+      "sourcePatchScope": "git diff -- Sources Tests; untracked DieHardest.swift SHA256 a7dfe438bcfb6814c71c2cc12d0c9c4dcc0b8aeb568416b5dfe1cdbb6ef34c5c; DieHardestCorpusCheckingTests.swift SHA256 d65428d5768d0b77fa19ad237738410fdbfa1e893c6328fac59ef7403bae63d8",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'DieHardestCorpusCheckingTests|DecisiveScenarioComparisonTests|ReferenceConfigurationDecodingTests|FiniteGraphManifestTests|UpstreamCorpusInventoryTests|ScenarioValidationTests/identifiesRegisteredScenarios'",
+      "exitCode": 0,
+      "testsPassed": 24,
+      "buildSeconds": 638.16,
+      "testSeconds": 3.043,
+      "result": "All 24 focused tests pass. MCDieHardest retains increasing counters without a model bound and stops at a complete 12-state NotSolved witness with s1=6 and s2=5. Independent-reference tests retain unchanged inputs and reject reference or generated process failure. Configuration coverage rejects missing, extra, duplicate, and disabled checks. The subsequent approved static check passes.",
+      "scope": "Source and tests stayed unchanged during the diagnostic. Ponytail review confirms reuse of the scenario checker, strict trace replay, and process adapter. Mocked TLC results prove runner contracts, not hosted equivalence. The hosted candidate selector cannot narrow admission runs. No new hosted configuration, family, or DSL criterion credit."
+    },
+    {
+      "session": "59137",
+      "sourceSHA": "e402e63d",
+      "sourcePatchScope": "Untracked DieHardest.swift SHA256 bcc86ec4b58ef40747640b1e1c53a6399629c725f4f040cd58987b605f42dd49; DieHardestCorpusCheckingTests.swift SHA256 a3c0e7d49aca24e38bcf92716fa8a4fc7d496f5f0707714928bad102e8368f45",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'DieHardestCorpusCheckingTests|DecisiveScenarioComparisonTests|UpstreamCorpusInventoryTests'",
+      "exitCode": 1,
+      "testsRun": 12,
+      "buildSeconds": 629.95,
+      "result": "Full compilation succeeded. The new model failed during initialization: Index 0 out of bounds (1..2). All inventory and decisive runner tests passed, including the repaired developerToolsVersion fields. Documentation/DSLDesign.md explicitly requires one-based DSL sequence indices. The model, not the compiler, used the wrong indices. Its Capacities accesses were corrected to 1 and 2 after this diagnostic ended.",
+      "scope": "No language-semantics change, invented bound, or coverage credit. The subsequent candidate also wires the independent reference comparison, explicit decisive manifest mode, and hosted admission gate. Session 26274 checks that combined candidate."
+    },
     {
       "session": "91231",
       "sourceSHA": "59fa4d5b156774c4993dc6f632e9aa16bd2f837a",
@@ -3983,16 +4025,31 @@
           "module": "specifications/DieHard/MCDieHardest.tla",
           "configuration": "specifications/DieHard/MCDieHardest.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
+          "implementationCandidate": {
+            "file": "Sources/UpstreamParity/Examples/DieHardest.swift",
+            "test": "Tests/SwiftTLAParityTests/DieHardestCorpusCheckingTests.swift",
+            "baseSHA": "e402e63d",
+            "sourceSHA256": "a7dfe438bcfb6814c71c2cc12d0c9c4dcc0b8aeb568416b5dfe1cdbb6ef34c5c",
+            "testSHA256": "d65428d5768d0b77fa19ad237738410fdbfa1e893c6328fac59ef7403bae63d8",
+            "trackedSourcePatchSHA256": "92c1468ea4f53f04691a199568c1b6ee7b299825e018ab67b094e8fcaa7671e2",
+            "diagnosticSession": "26274",
+            "diagnosticCommand": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'DieHardestCorpusCheckingTests|DecisiveScenarioComparisonTests|ReferenceConfigurationDecodingTests|FiniteGraphManifestTests|UpstreamCorpusInventoryTests|ScenarioValidationTests/identifiesRegisteredScenarios'",
+            "scope": "The model uses the required one-based DSL indices. The candidate registers MCDieHardest, preserves its original reference configuration, compares complete native/reference/generated counterexamples, and adds an explicit decisive CI gate without complete-graph flags. All 24 focused tests and subsequent static checks pass. Reference inputs retain their pinned blobs and CommunityModules revision. General composition and other source-defined DieHardest variants remain outside this candidate. Hosted equivalence is not established; no coverage credit."
+          },
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "completionConstraint": {
             "sourceRevision": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
             "sourceFiles": ["specifications/DieHard/MCDieHardest.tla", "specifications/DieHard/MCDieHardest.cfg", "specifications/DieHard/DieHardest.tla", "specifications/DieHard/DieHarder.tla"],
             "infiniteStateWitness": "The selected Spec uses NextInterleaved. Starting with both jug maps empty and s1=s2=0, repeatedly taking D1!EmptyJug(j1) leaves c1 and c2 empty and s2=0, but increments s1 on every step. Every natural s1 is reachable and NotSolved remains true on this path. The published configuration supplies no state constraint, counter bound, or VIEW. A finite shortest NotSolved counterexample does not make the complete reachable graph finite.",
-            "decision": "The user challenged the additional requirements. The proposed separate proof gate is withdrawn. Match the unchanged upstream configuration and its single-worker BFS invariant check, including a complete valid counterexample and the shortest-path result. Do not require graph exhaustion for that decisive check or label its explored prefix a complete graph. The native implementation, matching result mode, and hosted evidence remain missing. No coverage credit, invented bound, quotient, or exclusion."
+            "decision": "The user challenged the additional requirements. The proposed separate proof gate is withdrawn. Match the unchanged upstream configuration and its single-worker BFS invariant check, including a complete valid counterexample and the shortest-path result. Do not require graph exhaustion for that decisive check or label its explored prefix a complete graph. The native implementation and matching result mode pass focused local diagnostics; hosted evidence remains missing. No coverage credit, invented bound, quotient, or exclusion."
           },
-          "implementations": [],
+          "implementations": [{
+            "file": "Sources/UpstreamParity/Examples/DieHardest.swift",
+            "scenario": "MCDieHardest",
+            "caseID": "mc-die-hardest"
+          }],
           "evidence": []
         }
       ],

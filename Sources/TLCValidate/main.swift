@@ -219,10 +219,26 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
                 finiteGraphCase: finiteGraphCase,
                 runID: options.runID ?? UUID(),
                 timeout: declaration.timeoutSeconds,
-                invocation: .finiteGraph,
+                invocation: declaration.comparisonMode == .exhaustive ? .finiteGraph : .propertyCheck,
                 referenceArtifacts: referenceArtifacts
             )
             let referenceConfiguration = try TLCReferenceConfiguration.parse(request, checking: rendered.checkNames)
+            if declaration.comparisonMode == .decisiveCounterexample {
+                do {
+                    guard let scenario else {
+                        throw FiniteGraphCLIError.invalidManifest("decisive comparison requires a model-owned scenario")
+                    }
+                    let native = try NativeScenarioRun(scenario,
+                        maximumStates: declaration.exploration.maximumStateLimit)
+                    try TLCScenarioCheck().runReference(native, request: request,
+                        configuration: referenceConfiguration, in: caseOutput)
+                    print("decisive-check \(declaration.id): exact")
+                } catch {
+                    exitCode = FiniteGraphExitCode.failure.rawValue
+                    fputs("decisive-check \(declaration.id): \(error)\n", stderr)
+                }
+                continue
+            }
             let check = FiniteGraphCheck().run(
                 nativeRun: { try declaration.sourceModel.nativeRun(rendered: rendered,
                     checkingDeadlock: referenceConfiguration.checksDeadlock, scenario: scenario, for: finiteGraphCase) },
