@@ -55,6 +55,11 @@
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518951439",
       "caseLabels": ["graphs-boulanger", "graphs-die-hardest-parallel-freeze"],
       "observedStatus": "in_progress",
+      "parallelFreezeRegression": {
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518951439/artifacts/10607942903",
+        "artifactSHA256": "81fc8480a2b3c2c48e8a45c81dc02d253d7631a125ede5f2579a9e1b9454ca01",
+        "audit": "The downloaded archive and retained e23c7a4e source marker verify. Native, unchanged-upstream, and generated graphs are byte-identical: one initial state, 288 states, and 4316 labeled edges, with complete footers and matching record counts. All four selected property/deadlock comparisons have matching verdicts. All four violation witnesses follow graph edges and reach both goals. TLC/Java pins, bridge source hashes, and single-worker arguments verify for all four retained processes. This is a small graph-export regression, not evidence that Boulanger's capacity failure is resolved. Retained archive: /tmp/swifttla-projection-regression.SnYStZ/evidence.zip."
+      },
       "diagnosis": "The terminal 59fa4d5b finite-graph sample /tmp/swifttla-finite-59fa.bUWvte/extracted/1789905683-43912.txt spends the sampled export work in CanonicalGraph's preliminary allSatisfy scan, copying and hashing Boulanger snapshots. The same initializer checks every source again when it exports edges, including sources with no successors. e23c7a4e removes the redundant scan, retains exact state-count and per-source/per-target validation, and adds equal-size invalid-table and deadlocked-source regressions.",
       "scope": "This reruns the unchanged Boulanger reference after a measured-path change, with a small complete DieHard graph regression. No bound, property, state, edge, or evidence requirement changes. Removing the duplicate pass is not proof that the remaining capacity failure is resolved. Wait for hosted evidence and inspect any new expensive phase before another change."
     },
