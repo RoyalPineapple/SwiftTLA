@@ -2287,6 +2287,18 @@ package struct CompiledTypeChecker: Sendable {
         }
         let result: CompiledValueType
         switch expression.operation {
+        case .checkingRegister(let id):
+            guard let type = inputs.checkingRegisterTypes[id] else {
+                throw CompiledValueType.diagnostic("checkingRegister", "register has no declared type")
+            }
+            return try checkedType(type, expected: expected)
+        case .setCheckingRegister(let id):
+            guard let type = inputs.checkingRegisterTypes[id] else {
+                throw CompiledValueType.diagnostic("setCheckingRegister", "register has no declared type")
+            }
+            let value = try checkOperand(expression.children[0], expected: type)
+            return try checkedType(.bool, expected: expected, children: [value])
+        case .checkingLevel: return try checkedType(.int, expected: expected)
         case .assertView(let shape):
             let value = expression.children[0]
 

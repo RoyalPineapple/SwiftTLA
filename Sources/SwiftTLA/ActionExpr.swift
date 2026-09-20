@@ -73,7 +73,7 @@ extension ActionExpr {
         }
     }
 
-    private var scopeNames: Set<String> {
+    var scopeNames: Set<String> {
         switch self {
         case .assign(let target, let value):
             if case .named(let name) = target { return value.freeVariableNames.union([name]) }

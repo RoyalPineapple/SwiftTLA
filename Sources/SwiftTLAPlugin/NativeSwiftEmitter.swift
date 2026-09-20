@@ -19,6 +19,7 @@ struct NativeSwiftEmitter {
     private var expressionOrdinals: [CompiledExpression: Int] = [:]
     private var hasDepthScope = false
     private var nextMembershipPredicate = 0
+    var checkingContextName: String?
 
     init(model: MacroCompilation, sharedTypes: NativeTypeDeclarations? = nil) {
         self.model = model
@@ -568,6 +569,25 @@ struct NativeSwiftEmitter {
         activeFunctions: Set<ResolvedFunctionID>
     ) throws -> String {
         switch id.operation {
+        case .checkingRegister(let register), .setCheckingRegister(let register):
+            guard let context = checkingContextName else {
+                return "(try { () throws -> \(try swiftType(id.resultType)) in throw NativeMachineEvaluationError.checkingContextRequired }())"
+            }
+            let names = GeneratedMachineAPI.generatedIdentifiers(program.layout.checkingRegisters.map { $0.reference.name }, fallback: "register")
+            let storage = "\(context)!.registers.\(names[register.ordinal])"
+            let body: String
+            if case .setCheckingRegister = id.operation {
+                let value = try expression(id.children[0], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+                body = "let value = \(value)\n\(storage) = value\nreturn true"
+            } else {
+                body = "return \(storage)"
+            }
+            return "(try { () throws -> \(try swiftType(id.resultType)) in\nguard \(context) != nil else { throw NativeMachineEvaluationError.checkingContextRequired }\n\(body)\n}())"
+        case .checkingLevel:
+            guard let context = checkingContextName else {
+                return "(try { () throws -> Int in throw NativeMachineEvaluationError.checkingContextRequired }())"
+            }
+            return "(try { () throws -> Int in guard let level = \(context)?.level else { throw NativeMachineEvaluationError.checkingContextRequired }; return level }())"
         case .stutteringStep:
             guard state != "nextState." else { throw unsupported("nested successor-state read") }
             let before = try expression(id.children[0], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
@@ -687,7 +707,8 @@ struct NativeSwiftEmitter {
             guard !state.isEmpty else { throw unsupported("enabledness without a state") }
             let snapshot = state.hasSuffix(".") ? String(state.dropLast()) : state
             let arguments = machineArguments.isEmpty ? "" : ", " + machineArguments
-            return "(try Self._isEnabled\(id.ordinal)(in: \(snapshot)\(arguments)))"
+            let checking = checkingContextName.map { ", checking: &\($0)" } ?? ""
+            return "(try Self._isEnabled\(id.ordinal)(in: \(snapshot)\(arguments)\(checking)))"
         case .convert:
             return try projected(emit(0), from: childType(0), to: node.resultType)
         case .assertView:

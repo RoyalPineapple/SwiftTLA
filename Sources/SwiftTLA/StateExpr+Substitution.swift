@@ -88,7 +88,8 @@ extension StateExpr {
         }
 
         switch expr {
-        case .sourceIssue, .parameter: return expr
+        case .sourceIssue, .parameter, .checkingRegister, .checkingLevel: return expr
+        case .setCheckingRegister(let reference, let value): return .setCheckingRegister(reference, sub(value))
         case .variable(let name): return replacements.values[.variable(name)] ?? expr
         case .processLocalFamily(let name): return replacements.values[.processLocalFamily(name)] ?? expr
         case .currentProcess: return replacements.values[.currentProcess] ?? expr
@@ -244,7 +245,8 @@ extension StateExpr {
         }
         func visit(_ expression: StateExpr) -> StateExpr {
             switch expression {
-            case .sourceIssue, .value, .variable, .parameter, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction: return expression
+            case .sourceIssue, .value, .variable, .parameter, .checkingRegister, .checkingLevel, .processLocalFamily, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction: return expression
+            case .setCheckingRegister(let reference, let value): return .setCheckingRegister(reference, visit(value))
             case .add(let a, let b): return .add(visit(a), visit(b))
             case .subtract(let a, let b): return .subtract(visit(a), visit(b))
             case .multiply(let a, let b): return .multiply(visit(a), visit(b))

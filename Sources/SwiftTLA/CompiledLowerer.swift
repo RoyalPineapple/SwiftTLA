@@ -1126,6 +1126,23 @@ struct CompiledLowerer {
                     }
                     lowered.append(.init(expression: .boundValue(parameter.binder), operatorReferences: [],
                         bindingReferences: [parameter.binder]))
+                case .checkingRegister(let reference), .setCheckingRegister(let reference, _):
+                    guard let register = layout.checkingRegisters.first(where: { $0.reference == reference }) else {
+                        throw CompilationDiagnostic(code: .unknownReference, stage: .binding, path: path,
+                            expected: "a checking register owned by this model",
+                            actual: "foreign or undeclared register '\(reference.name)'",
+                            nextSafeAction: "Use a register declared in this model's specification scope.")
+                    }
+                    requiredStandardModules.insert(.tlc)
+                    if case .setCheckingRegister(_, let value) = expression {
+                        scheduleUnary(value, at: path, scope: scope,
+                            operation: .setCheckingRegister(register.id), on: &tasks)
+                    } else {
+                        lowered.append(.init(expression: .init(operation: .checkingRegister(register.id), children: []), operatorReferences: []))
+                    }
+                case .checkingLevel:
+                    requiredStandardModules.insert(.tlc)
+                    lowered.append(.init(expression: .init(operation: .checkingLevel, children: []), operatorReferences: []))
                 case .controlLocation(let reference):
                     let matches = layout.controlLocations.filter { location in
                         location.sourceName == reference.sourceName

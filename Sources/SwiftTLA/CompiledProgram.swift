@@ -49,7 +49,7 @@ package struct CompiledProgram: Sendable {
         while let expression = pending.popLast() {
             guard visited.insert(expression).inserted else { continue }
             switch expression.operation {
-            case .stateVariable, .enabledAction, .controlLocation:
+            case .stateVariable, .enabledAction, .controlLocation, .checkingRegister, .setCheckingRegister, .checkingLevel:
                 throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
                     path: path, expected: "an immutable domain independent of machine state",
                     actual: expression.operation.diagnosticName,

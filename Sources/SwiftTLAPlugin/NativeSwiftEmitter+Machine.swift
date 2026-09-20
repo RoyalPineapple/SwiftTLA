@@ -34,7 +34,9 @@ extension NativeSwiftEmitter {
             return CheckingRegisters(\(registerInitializers))
         }
         public func successors(checking context: inout CheckingContext<CheckingRegisters>) throws -> [(action: Action, machine: Self)] {
-            try successors()
+            var run: CheckingContext<CheckingRegisters>? = context
+            defer { context = run! }
+            return try _successors(checking: &run)
         }
         public struct Snapshot: Hashable, Sendable {
             public let state: State
@@ -353,11 +355,14 @@ extension NativeSwiftEmitter {
     }
 
     mutating func updateFunction(_ action: CompiledAction, collectionParameters: String) throws -> DeclSyntax {
+        let previous = checkingContextName
+        checkingContextName = "context"
+        defer { checkingContextName = previous }
         let parameters = try action.bindings.map {
             "\(binder($0.binder)): \(try swiftType(program.bindingTypes[$0.binder]!))"
         }.joined(separator: ", ")
         return DeclSyntax(stringLiteral: """
-        private static func _updates\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters)) throws -> [_Updates] {
+        private static func _updates\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters), checking context: inout CheckingContext<CheckingRegisters>?) throws -> [_Updates] {
             \(try actionFunctions(action.body))
         }
         """)
@@ -388,8 +393,12 @@ extension NativeSwiftEmitter {
             }
             declarations += try nativeDeclarations("""
             private static func _isEnabled\(action.id.ordinal)(in state: Snapshot\(collectionParameters)) throws -> Bool {
+                var context: CheckingContext<CheckingRegisters>?
+                return try _isEnabled\(action.id.ordinal)(in: state\(collectionArguments), checking: &context)
+            }
+            private static func _isEnabled\(action.id.ordinal)(in state: Snapshot\(collectionParameters), checking context: inout CheckingContext<CheckingRegisters>?) throws -> Bool {
                 \(loops)
-                if try !_updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(collectionArguments)).isEmpty { return true }
+                if try !_updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(collectionArguments), checking: &context).isEmpty { return true }
                 \(closing)
                 return false
             }
@@ -404,8 +413,8 @@ extension NativeSwiftEmitter {
         }.joined(separator: ", ")
         let arguments = action.bindings.map { "\(binder($0.binder)): \(binder($0.binder))" }.joined(separator: ", ")
         return DeclSyntax(stringLiteral: """
-        private static func _successors\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters)) throws -> [Snapshot] {
-            let updates = try _updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(collectionArguments))
+        private static func _successors\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters), checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
+            let updates = try _updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(collectionArguments), checking: &context)
             let candidates = updates.map { $0.applying(to: state) }
             return candidates.reduce(into: [Snapshot]()) { states, state in
                 if !states.contains(state) { states.append(state) }
@@ -419,6 +428,7 @@ extension NativeSwiftEmitter {
             return try nativeDeclarations("""
             public func enabledActions() throws -> [Action] { [] }
             public func successors() throws -> [(action: Action, machine: Self)] { [] }
+            private func _successors(checking context: inout CheckingContext<CheckingRegisters>?) throws -> [(action: Action, machine: Self)] { [] }
             public func formalCall(for action: Action) throws -> FormalActionCall {}
             """)
         }
@@ -486,7 +496,7 @@ extension NativeSwiftEmitter {
             cases.append("""
             case \(label):
                 \(validations.joined(separator: "\n"))
-                return try Self._successors\(action.id.ordinal)(from: _execution\(invocation.isEmpty ? "" : ", " + invocation.joined(separator: ", "))\(collectionArguments))
+                return try Self._successors\(action.id.ordinal)(from: _execution\(invocation.isEmpty ? "" : ", " + invocation.joined(separator: ", "))\(collectionArguments), checking: &context)
             """)
             let actionValue = ".\(api.swiftIdentifier)" + (actionArguments.isEmpty ? "" : "(\(actionArguments.joined(separator: ", ")))")
             enumeration.append("do {\n" + loops + "result.append(\(actionValue))\n" + closing + "}\n")
@@ -498,6 +508,10 @@ extension NativeSwiftEmitter {
             }
         }
         private func _successors(for action: Action) throws -> [Snapshot] {
+            var context: CheckingContext<CheckingRegisters>?
+            return try _successors(for: action, checking: &context)
+        }
+        private func _successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
             switch action {
                 \(cases.joined(separator: "\n"))
             }
@@ -517,8 +531,15 @@ extension NativeSwiftEmitter {
             return result
         }
         public func successors() throws -> [(action: Action, machine: Self)] {
+            var context: CheckingContext<CheckingRegisters>?
+            return try _successors(checking: &context)
+        }
+        private func _successors(checking context: inout CheckingContext<CheckingRegisters>?) throws -> [(action: Action, machine: Self)] {
             try _actions().flatMap { action in
-                try successors(for: action).map { (action, $0) }
+                try _successors(for: action, checking: &context).map { execution in
+                    try Self._validateCollections(execution\(collectionArguments))
+                    return (action, Self(execution: execution\(collectionArguments)))
+                }
             }
         }
         public func enabledActions() throws -> [Action] {

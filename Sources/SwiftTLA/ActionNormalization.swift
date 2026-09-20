@@ -1,16 +1,37 @@
 enum ActionNormalization {
     static func complete(_ action: ActionExpr, variables: [NamedVar]) -> ActionExpr {
         let targets = variables.map(actionTarget(for:))
-        let completed = branches(of: action).map { branch in
-            let assigned = assignedVars(branch)
-            let explicit = frameTargets(inNormalizedBranch: branch)
-            var terms = conjunctionTerms(in: branch)
-            for target in targets where !assigned.contains(target) && !explicit.contains(target) {
-                terms.append(.unchanged(target))
-            }
-            return combine(terms, with: ActionExpr.and) ?? branch
+        var unavailable = action.scopeNames
+        func append(_ first: ActionExpr, _ rest: ActionExpr?) -> ActionExpr {
+            rest.map { .and(first, $0) } ?? first
         }
-        return combine(completed, with: ActionExpr.or) ?? .guard_(.value(.bool(false)))
+        func visit(_ node: ActionExpr, defined: Set<ActionTarget>,
+                   then continuation: (Set<ActionTarget>) -> ActionExpr?) -> ActionExpr {
+            switch node {
+            case .and(let left, let right):
+                return visit(left, defined: defined) { visit(right, defined: $0, then: continuation) }
+            case .or(let left, let right):
+                return .or(visit(left, defined: defined, then: continuation),
+                    visit(right, defined: defined, then: continuation))
+            case .ifElse(let condition, let yes, let no):
+                return .ifElse(condition, visit(yes, defined: defined, then: continuation),
+                    visit(no, defined: defined, then: continuation))
+            case .existsAction(let binder, let domain, let body), .define(let binder, let domain, let body):
+                let fresh = StateExpr.freshBoundName(binder, avoiding: unavailable)
+                unavailable.insert(fresh)
+                let renamed = body.substitutingVariable(binder, with: .variable(fresh))
+                let result = visit(renamed, defined: defined, then: continuation)
+                if case .define = node { return .define(fresh, domain, result) }
+                return .existsAction(fresh, domain, result)
+            case .assign(let target, _), .unchanged(let target):
+                return append(node, continuation(defined.union([target])))
+            case .guard_:
+                return append(node, continuation(defined))
+            }
+        }
+        return visit(action, defined: []) { defined in
+            combine(targets.filter { !defined.contains($0) }.map(ActionExpr.unchanged), with: ActionExpr.and)
+        }
     }
 
     private static func actionTarget(for variable: NamedVar) -> ActionTarget {

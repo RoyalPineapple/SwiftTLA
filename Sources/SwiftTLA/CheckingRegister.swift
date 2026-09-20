@@ -14,8 +14,15 @@ public struct CheckingRegisterReference: Hashable, Sendable {
     }
 }
 
-public struct CheckingRegister<Value: TLAValueType>: Sendable {
+public struct CheckingRegister<Value: TLAValueType>: TypedExpression, Sendable {
     package let reference: CheckingRegisterReference
+
+    public var expr: Expr<Value> { Expr(.checkingRegister(reference)) }
+    public var stateExpr: StateExpr { expr.stateExpr }
+
+    public func set(_ value: some TypedExpression<Value>) -> Expr<Bool> {
+        Expr(.setCheckingRegister(reference, value.stateExpr))
+    }
 }
 
 package struct CheckingRegisterDeclaration: Sendable {

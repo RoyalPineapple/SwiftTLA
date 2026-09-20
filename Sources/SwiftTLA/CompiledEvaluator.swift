@@ -44,6 +44,7 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case indexOutOfBounds(Int, Int)
     case recursionDepthExceeded(Int)
     case transitionPredicateRequiresGeneratedChecking
+    case registersRequireGeneratedChecking
 
     package var description: String {
         switch self {
@@ -78,6 +79,8 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case .recursionDepthExceeded(let limit): return "Evaluation exceeded recursive depth \(limit)"
         case .transitionPredicateRequiresGeneratedChecking:
             return "Transition predicates require generated native checking with both states"
+        case .registersRequireGeneratedChecking:
+            return "Checking registers require the generated native run context"
         }
     }
 }
@@ -549,6 +552,8 @@ struct CompiledEvaluator: Sendable {
                     ))
                 }
                 switch expression.operation {
+                case .checkingRegister, .setCheckingRegister, .checkingLevel:
+                    throw EvalError.registersRequireGeneratedChecking
                 case .value(let value):
                     values.append(value)
                 case .stateVariable(let variable):

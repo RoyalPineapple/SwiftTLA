@@ -429,6 +429,8 @@ public final class SpecificationScope {
 
     init() {}
 
+    public var checkingLevel: Expr<Int> { Expr(.checkingLevel) }
+
     public func checkingRegister<Value: TLAValueType>(
         as: Value.Type, initial: some TypedExpression<Value>, _name: String = "",
         _sourceOffset: Int? = nil, _sourceLength: Int = 0

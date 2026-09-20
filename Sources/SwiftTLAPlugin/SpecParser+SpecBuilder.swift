@@ -21,6 +21,7 @@ extension ParserSession {
                 shape: typedFacadeValueType(declaration.value).map { .dictionary(.unknown, $0) })
         }
         let declarationScope = closureParameterNames(in: closure).first
+        if let declarationScope { sourceScope = sourceScope.extendingCheckingScope(declarationScope) }
         for statement in closure.statements {
             if case .expr(let expression) = statement.item,
                let fc = expression.as(FunctionCallExprSyntax.self) {
@@ -112,12 +113,13 @@ extension ParserSession {
                     continue
                 }
                 do {
-                    _ = try sourceTypeResolver.resolve(base.trimmedDescription)
+                    let type = try sourceTypeResolver.resolve(base.trimmedDescription)
                     let reference = CheckingRegisterReference(name: sourceName,
                         sourceOffset: binding.positionAfterSkippingLeadingTrivia.utf8Offset,
                         sourceLength: binding.trimmedDescription.utf8.count)
                     components.checkingRegisters.append(.init(reference: reference,
                         swiftType: base.trimmedDescription, initial: initial))
+                    sourceScope = sourceScope.extending(binding: sourceName, to: .checkingRegister(reference), shape: type)
                 } catch {
                     components.diagnostics.append(.init(message: "Invalid checking register type: \(error)", source: binding))
                 }

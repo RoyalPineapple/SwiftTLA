@@ -16,6 +16,7 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
 
     case recursionDepthExceeded(Int)
     case noMatchingCase
+    case checkingContextRequired
     case noSatisfyingChoice
     case conflictingAssignment(variable: String)
     case collectionCardinalityOverflow(CollectionOperation, operands: [Int])
@@ -36,6 +37,7 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
             return "Integer \(operation.rawValue) overflowed for \(operands.map(String.init).joined(separator: ", "))"
         case .recursionDepthExceeded(let limit): return "Recursive operator depth exceeds \(limit)"
         case .noMatchingCase: return "No CASE branch matched"
+        case .checkingContextRequired: return "This expression requires a checking run context"
         case .noSatisfyingChoice: return "No value satisfies CHOOSE"
         case .conflictingAssignment(let variable): return "Conflicting assignments to \(variable)"
         case .collectionCardinalityOverflow(let operation, let operands):

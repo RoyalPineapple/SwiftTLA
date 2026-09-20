@@ -41,6 +41,7 @@ final class ParserSession {
         private enum Meaning: Sendable {
             case value(StateExpr)
             case recursiveOperator(String)
+            case checkingScope
         }
 
         private struct Binding: Sendable {
@@ -61,6 +62,16 @@ final class ParserSession {
 
         private init(bindings: [Binding]) {
             self.bindings = bindings
+        }
+
+        func extendingCheckingScope(_ name: String) -> Self {
+            Self(bindings: bindings + [.init(sourceName: name, meaning: .checkingScope, shape: nil)])
+        }
+
+        func isCheckingScope(_ reference: DeclReferenceExprSyntax) -> Bool {
+            guard let binding = bindings.last(where: { $0.sourceName == reference.baseName.sourceIdentifierName }),
+                  case .checkingScope = binding.meaning else { return false }
+            return true
         }
 
         func value(for reference: DeclReferenceExprSyntax) -> StateExpr? {
@@ -661,6 +672,7 @@ final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil
     ) -> StateExpr? {
+        if let checking = decodeCheckingExpression(expression, scope: scope) { return checking }
         if let member = expression.as(MemberAccessExprSyntax.self),
            let type = terminalTypeName(in: member.base), enumDefinition(named: type) != nil {
             if let domain = finiteAlgorithmDomain(expression) {
@@ -1308,6 +1320,7 @@ final class ParserSession {
         scope: TypedFacadeScope,
         expectedEnumType: String? = nil
     ) -> StateExpr? {
+        if let checking = decodeCheckingExpression(expression, scope: scope) { return checking }
         if let enabled = decodeStepEnabledness(expression, scope: scope) { return enabled }
         if let array = expression.as(ArrayExprSyntax.self) {
             let elements = array.elements.compactMap {
@@ -1572,6 +1585,10 @@ final class ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope
     ) -> CompiledValueType? {
+        if let checking = decodeCheckingExpression(expression, scope: scope) {
+            if case .checkingLevel = checking { return .int }
+            return .bool
+        }
         if decodeStepEnabledness(expression, scope: scope) != nil { return .bool }
         var expression = expression
         while let parentheses = expression.as(TupleExprSyntax.self),

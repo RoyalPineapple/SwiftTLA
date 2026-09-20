@@ -5,6 +5,9 @@ package enum CompiledOperation: Hashable, Sendable {
     case value(CompiledValue)
     case stateVariable(VariableID)
     case boundValue(BinderID)
+    case checkingRegister(CheckingRegisterID)
+    case setCheckingRegister(CheckingRegisterID)
+    case checkingLevel
     case controlLocation(ControlLocationID)
     case operatorReference(OperatorID)
     case add
