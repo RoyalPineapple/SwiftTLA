@@ -1098,6 +1098,18 @@
   },
   "localDiagnostics": [
     {
+      "session": "51465",
+      "sourceSHA": "162caa2219b4dabd0a3218aa1912e3cb47ef0f77",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CheckingRegisterDeclarationTests|CheckingContextTests|CandidateTraversalTests|ParameterResolutionTests'",
+      "exitCode": 0,
+      "buildSeconds": 634.35,
+      "testSeconds": 0.077,
+      "testsPassed": 20,
+      "result": "Register declarations retain typed identities and symbolic initializers through parsing, lowering, type checking, TLA initialization export, and native storage emission. Invalid initializer types and state-dependent initializers are rejected. Existing context lifetime, BFS level, candidate traversal, and parameter tests pass.",
+      "scope": "The run used the committed source and test contents before the commit. Retained log: /tmp/swifttla-register-declarations.gmPnig/diagnostic.log. The new tests inspect generated register storage; they do not execute register read/write expressions. Those expressions, effect-preserving lowering, runner integration, and hosted global-freeze comparison remain unfinished. No coverage or DSL criterion receives credit.",
+      "priorAttempts": "Session 23012 failed on overlapping access in the new fingerprint encoder; it now uses the existing parameter-encoding pattern. Session 63557 was stopped after unused register bindings failed warnings-as-errors; the declaration tests now use a parser fixture. Session 96220 built in 632.89 seconds and passed 18 of 20 tests; two failed because that fixture used an invalid string action label. The declaration-only fixture no longer contains an action. These were implementation and fixture errors, not upstream restrictions. Logs remain under /tmp/swifttla-register-declarations.HpQQKd, /tmp/swifttla-register-declarations.0uaHLs, and /tmp/swifttla-register-declarations.6HCUFP."
+    },
+    {
       "session": "8565",
       "sourceSHA": "30d2923c9573bc9a3ecc927d673c5b1d9b9db04c",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CandidateTraversalTests|CheckingContextTests|ChoiceScopeTests|SetChoiceTests|DieHardestCorpusCheckingTests'",
@@ -3956,7 +3968,7 @@
         "label": "Checker gap",
         "variant": "DieHardest.NextParallelGlobalFreeze",
         "reproducer": "The pinned operator uses TLCGet(level), TLCGet(2), TLCGet(3), and TLCSet to freeze copies after global BFS discovery. Its running example binds Goal=2 and capacities 9/10 versus 1/3.",
-        "nativeBoundary": "Generated transitions receive model state and immutable configuration, not mutable exploration-wide TLC registers. Encoding these registers as state variables changes the upstream semantics.",
+        "nativeBoundary": "The checker has a typed run context and BFS levels. Typed register declarations and initialization now pass focused compiler diagnostics on 162caa22. Generated register read/write expressions and effect-preserving action lowering are not integrated yet. Registers remain outside model state; the variant remains incomplete.",
         "completionCondition": "Preserve exploration-wide register initialization, BFS levels, and freeze effects through a supported checking boundary. Obtain hosted comparison for the unchanged source-defined variant.",
         "remainingVariants": ["NextParallel", "NextParallelFreeze", "NextParallelGlobalFreeze"],
         "scope": "The four published configurations have retained matches. This variant keeps the family incomplete. The user explicitly prioritized implementation of checker-register support before further family expansion.",
