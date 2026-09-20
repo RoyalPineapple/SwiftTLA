@@ -72,7 +72,20 @@ struct PropertyDeclarationNamesTests {
         let selected = try NativeScenarioRun(scenarios[1], maximumStates: 4)
         try all.validateExpectations()
         try selected.validateExpectations()
-        #expect(all.native.graph == selected.native.graph)
+        #expect(all.native.graph == nil)
+        let selectedGraph = try #require(selected.native.graph)
+        #expect(selectedGraph.isComparable)
+        guard case .violated(let violation)? = all.native.checks.properties["safe"],
+              case .reached(let reachability)? = selected.native.checks.properties["reachable"] else {
+            Issue.record("Equal labels must preserve the distinct invariant and reachability outcomes")
+            return
+        }
+        #expect(violation.steps.count == 1)
+        #expect(violation.steps == reachability.steps)
+        #expect(Set(violation.steps.map(\.state)) == selectedGraph.graph.initialStateKeys)
+        #expect(all.native.checks.properties["always"] == .unavailable)
+        #expect(selected.native.checks.properties["always"] == .satisfied)
+        #expect(Set(selected.native.checks.properties.keys) == ["reachable", "always"])
         #expect(LabelledPropertyClaims.formalPropertyNames.count == 7)
         #expect(Set(LabelledPropertyClaims.formalPropertyNames.values).count == 7)
         #expect(Set(LabelledPropertyClaims.propertyDisplayNames.values) == ["Safety / progress"])
