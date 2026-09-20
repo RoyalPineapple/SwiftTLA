@@ -781,6 +781,43 @@
   },
   "localDiagnostics": [
     {
+      "session": "71983",
+      "sourceSHA": "7b23b6a16a88a874c8fe3e896a8d479f063c7f40",
+      "sourcePatchSHA256": "4a48e7350a3a09b8bcdda40050672f676d487ed6fc3d98cb1b10862e5989d113",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ParameterizedAtomicStepTests|FiniteGraphCompilationTests|MultiCarElevatorCorpusStateGraphTests'",
+      "exitCode": 0,
+      "testsPassed": 9,
+      "buildSeconds": 603.90,
+      "testSeconds": 23.962,
+      "result": "MultiCarElevator uses ordinary Car and Call records, native dictionaries and sets, and three-domain typed Do steps. The complete bounded native/formal graph comparison passes. Both exports retain every expected source-name/ordered-argument tuple exactly once across all 80 action instances. Typed dispatch preserves unrelated records and guards. Invalid third-domain bindings fail parsing, while existing configured empty-domain and deadlock contracts still pass.",
+      "scope": "Source stayed fixed during the safety-wrapper build. Ponytail review reuses the existing atomic-step pipeline and removes duplicate schemas and raw action declarations without compatibility shims. The pinned TLA and configuration hashes remain unchanged. Hosted comparison is pending. This repository-owned fixture establishes no new upstream configuration or complete DSL criterion."
+    },
+    {
+      "session": "58712",
+      "sourceSHA": "7b23b6a16a88a874c8fe3e896a8d479f063c7f40",
+      "sourcePatchSHA256": "9944c7b1c8a338f2186af0b399ac5cdecd4dd869e8b51002e6c45d62d3507b03",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ParameterizedAtomicStepTests|FiniteGraphCompilationTests|MultiCarElevatorCorpusStateGraphTests'",
+      "exitCode": 1,
+      "testsPassed": 8,
+      "testsFailed": 1,
+      "buildSeconds": 604.88,
+      "testSeconds": 23.847,
+      "result": "The complete bounded native/formal graph comparison passed, as did typed record dispatch, generated export closure, configured domains, and parser rejection tests. One export test incorrectly required legacy numbered wrapper names and array ordering. Generated export uses argument-bearing names; domain sets have no semantic order. The retry enumerates every one of the 80 expected source-name/ordered-argument combinations in both exports and requires exactly one occurrence, instead of comparing presentation names or set enumeration order.",
+      "scope": "Source stayed fixed during the safety-wrapper build. Full bounded local graph equality does not establish independent TLC equivalence or coverage of an upstream configuration."
+    },
+    {
+      "session": "4206",
+      "sourceSHA": "7b23b6a16a88a874c8fe3e896a8d479f063c7f40",
+      "sourcePatchSHA256": "b5977a8829b89c5fbc44a55e0c295b607399ba43f8d8c78d3b6617e3f4c9fe0d",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ParameterizedAtomicStepTests|FiniteGraphCompilationTests|MultiCarElevatorCorpusStateGraphTests'",
+      "exitCode": 1,
+      "result": "The library, macro compiler, and migrated MultiCarElevator model compiled. The new parity assertions could not call internal synthesized memberwise record initializers through a normal import. No tests ran. The retry uses the existing test-target @testable import pattern without changing library access.",
+      "scope": "Source stayed fixed during the safety-wrapper build. This is a test access-control failure, not evidence of graph equivalence or upstream completion."
+    },
+    {
       "session": "80834",
       "sourceSHA": "cd1721aa00b401ab8b35bcc2f71fd0f256946507",
       "sourcePatchSHA256": "ae80e9685894a288db8864c3f16f1ebb53464a6fa7d473480058cb1ffe7b19b6",
@@ -5732,7 +5769,7 @@
       "path": "specifications/MultiCarElevator",
       "name": "Multi-Car Elevator System",
       "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "gap": "The existing multicar-elevator case compares Sources/UpstreamParity/Examples/MultiCarElevator.swift with a repository-owned MultiCarElevator.tla fixture. Its finite-graph declaration has no pinned upstream sourceInput and establishes no mapping to the required Elevator.tla configurations. Audit the upstream module roles and every published configuration before assigning coverage. The ordinary-record and typed-Do migration of this existing fixture concerns DSL cleanup only.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -8852,7 +8889,7 @@
       "id": "AC-13",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Sources/SwiftTLA/TypedValues.swift still exposes manual record schemas and field tables. The ElevatorBank and ChangRoberts demo schemas are now removed; ordinary-record migrations have focused local evidence and await current-candidate hosted validation. KVsnap's OperationSchema is removed and its ordinary-record native graph has a historical hosted partial-case match, without original-symmetry configuration credit. Remaining corpus schema declarations are Echo.MessageSchema, MultiCarElevator.CarSchema and CallSchema, and NanoBlockchain.SignatureSchema and SignedBlockSchema. Compiler/parity fixtures also retain manual schema declarations and need explicit migration or formal-boundary disposition before API removal. The complete replacement/deletion map and documentation consistency remain unfinished.",
+      "reason": "Sources/SwiftTLA/TypedValues.swift still exposes manual record schemas and field tables. The ElevatorBank and ChangRoberts demo schemas are now removed; ordinary-record migrations have focused local evidence and await current-candidate hosted validation. KVsnap's OperationSchema is removed and its ordinary-record native graph has a historical hosted partial-case match, without original-symmetry configuration credit. MultiCarElevator now uses ordinary Car and Call records, native dictionaries and sets, and typed Do steps. Its full bounded native/formal graph passes locally in diagnostic 58712; independent hosted comparison remains pending. Remaining corpus schema declarations are Echo.MessageSchema and NanoBlockchain.SignatureSchema and SignedBlockSchema. Compiler/parity fixtures also retain manual schema declarations and need explicit migration or formal-boundary disposition before API removal. The complete replacement/deletion map and documentation consistency remain unfinished.",
       "evidence": []
     },
     {

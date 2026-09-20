@@ -222,14 +222,14 @@ extension ParserSession {
 
     private func parseParameterizedIndependentStep(_ call: FunctionCallExprSyntax, into components: inout TLASpec) -> AtomicStep? {
         let arguments = Array(call.arguments)
-        guard (2...3).contains(arguments.count), arguments[0].label == nil,
+        guard (2...4).contains(arguments.count), arguments[0].label == nil,
               arguments[1].label?.text == "over",
               arguments.dropFirst(2).allSatisfy({ $0.label == nil }),
               call.additionalTrailingClosures.isEmpty,
               let label = algorithmLabel(arguments[0].expression),
               let closure = call.trailingClosure else {
             components.diagnostics.append(.init(
-                message: "Parameterized Do requires a typed label and one or two domains after over:.", source: call))
+                message: "Parameterized Do requires a typed label and one through three domains after over:.", source: call))
             return nil
         }
         let names = closureParameterNames(in: closure)

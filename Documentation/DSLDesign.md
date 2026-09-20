@@ -208,6 +208,7 @@ Missing registration and duplicate registration fail compilation.
 
 `Do(label, over: domain) { member in ... }` declares one action argument.
 `Do(label, over: firstDomain, secondDomain) { first, second in ... }` declares two action arguments.
+`Do(label, over: firstDomain, secondDomain, thirdDomain) { first, second, third in ... }` declares three action arguments.
 Each domain is a typed finite set of immutable values or model parameters.
 The closure must name each argument. These names supply the generated action argument labels.
 The compiler retains each argument type and binding identity through native generation and formal export.

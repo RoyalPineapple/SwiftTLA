@@ -842,6 +842,30 @@ public func Do<Name: CaseIterable & RawRepresentable & Sendable, First: FormalSe
         ])
 }
 
+/// Defines an independent action over the Cartesian product of three finite domains.
+public func Do<Name: CaseIterable & RawRepresentable & Sendable, First: FormalSetValue, Second: FormalSetValue, Third: FormalSetValue>(
+    _ label: Name,
+    over first: some TypedExpression<First>,
+    _ second: some TypedExpression<Second>,
+    _ third: some TypedExpression<Third>,
+    _firstName: String = "first",
+    _secondName: String = "second",
+    _thirdName: String = "third",
+    @DoBuilder _ body: (Expr<First.Element>, Expr<Second.Element>, Expr<Third.Element>) -> [StepStatement]
+) -> AtomicStep where Name.RawValue == String {
+    AtomicStep(model: .init(label: .init(name: label.rawValue),
+        statements: body(Expr(.variable(_firstName)), Expr(.variable(_secondName)),
+            Expr(.variable(_thirdName))).map(\.model)),
+        bindings: [
+            .init(name: _firstName, domain: first.stateExpr,
+                generatedSwiftType: swiftSurfaceTypeName(for: First.Element.self)),
+            .init(name: _secondName, domain: second.stateExpr,
+                generatedSwiftType: swiftSurfaceTypeName(for: Second.Element.self)),
+            .init(name: _thirdName, domain: third.stateExpr,
+                generatedSwiftType: swiftSurfaceTypeName(for: Third.Element.self))
+        ])
+}
+
 /// Defines a labeled bounded `while` loop.
 ///
 /// Each execution of the body is one atomic transition. When `condition` is

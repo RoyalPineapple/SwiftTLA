@@ -179,8 +179,8 @@ private final class DSLRewriter: SyntaxRewriter {
             }
             case nil: names = []
             }
-            let labels = names.count == 1 ? ["_name"] : ["_firstName", "_secondName"]
-            if (1...2).contains(names.count) {
+            let labels = names.count == 1 ? ["_name"] : ["_firstName", "_secondName", "_thirdName"]
+            if (1...3).contains(names.count) {
                 var arguments = Array(visited.arguments)
                 for (label, name) in zip(labels, names) {
                     if !arguments.isEmpty { arguments[arguments.count - 1].trailingComma = .commaToken() }
