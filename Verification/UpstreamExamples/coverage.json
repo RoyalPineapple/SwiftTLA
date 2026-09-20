@@ -4056,7 +4056,7 @@
         "label": "Ready",
         "variant": "DieHardest.NextParallelGlobalFreeze",
         "status": "hosted match",
-        "verifiedSourceSHA": "5d3025ddb1e628c2bb639dfde7bbc464b55754c9",
+        "verifiedSourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
         "bindings": {"Goal": 2, "Capacities": [{"j1": 9, "j2": 10}, {"j1": 1, "j2": 3}]},
         "reproducer": "The pinned operator uses TLCGet(level), TLCGet(2), TLCGet(3), and TLCSet to freeze copies after global BFS discovery. Its running example binds Goal=2 and capacities 9/10 versus 1/3.",
         "nativeBoundary": "5d3025dd independently matches the global-freeze running example using typed run-owned registers, generated transitions, effect-sensitive action identity, and BFS-prefix witness replay. Registers remain outside model state. The reference selects the unchanged operator through a local configuration harness. This closes the demonstrated register blocker for this case, not every possible register use site or final admission.",
@@ -4098,6 +4098,16 @@
           }
         ],
         "evidence": [{
+          "sourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35517612379/job/106098042955",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35517612379/artifacts/10607587031",
+          "artifactSHA256": "156ecf76f0ee7b09e2351d507961d6a8947c2c700e37d2c720934edc22c73c89",
+          "completion": "decisive-counterexample",
+          "completeCounterexampleMatch": true,
+          "completeGraph": false,
+          "scope": "Audited aggregate: four complete native/upstream/generated traces match exactly, with seven states and six actions. Single-worker checking stops at NotSolved. Deadlock remains unavailable. Source, input, toolchain, and archive pins verify. No graph-exhaustion claim. See ci.parallelVariantsCandidate for the retained audit."
+        }, {
           "sourceSHA": "5d3025ddb1e628c2bb639dfde7bbc464b55754c9",
           "developerToolsVersion": "16.4",
           "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35515925978/job/106093618383",
@@ -4201,7 +4211,7 @@
           "configuration": "specifications/DieHard/APDieHarder.cfg",
           "required": true,
           "status": "hosted match",
-          "verifiedSourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
+          "verifiedSourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -4212,6 +4222,16 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35517612379/job/106098043066",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35517612379/artifacts/10607587031",
+              "artifactSHA256": "156ecf76f0ee7b09e2351d507961d6a8947c2c700e37d2c720934edc22c73c89",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Audited aggregate: one initial state, 16 states, 96 labeled edges. Native, upstream, and generated graphs are byte-identical. All four property records match. Source, input, toolchain, and archive pins verify. See ci.parallelVariantsCandidate for the retained audit."
+            },
             {
               "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
               "developerToolsVersion": "16.4",
@@ -4251,7 +4271,7 @@
           "configuration": "specifications/DieHard/DieHard.cfg",
           "required": true,
           "status": "hosted match",
-          "verifiedSourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
+          "verifiedSourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [
@@ -4262,6 +4282,16 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35517612379/job/106098042958",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35517612379/artifacts/10607587031",
+              "artifactSHA256": "156ecf76f0ee7b09e2351d507961d6a8947c2c700e37d2c720934edc22c73c89",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Audited aggregate: one initial state, 16 states, 96 labeled edges. Native, upstream, and generated graphs are byte-identical. All six property records match. Source, input, toolchain, and archive pins verify. No identical-counterexample claim. See ci.parallelVariantsCandidate for the retained audit."
+            },
             {
               "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
               "developerToolsVersion": "16.4",
@@ -4290,7 +4320,7 @@
           "configuration": "specifications/DieHard/MCDieHarder.cfg",
           "required": true,
           "status": "hosted match",
-          "verifiedSourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
+          "verifiedSourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [
@@ -4301,6 +4331,16 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35517612379/job/106098042954",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35517612379/artifacts/10607587031",
+              "artifactSHA256": "156ecf76f0ee7b09e2351d507961d6a8947c2c700e37d2c720934edc22c73c89",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Audited aggregate: one initial state, 16 states, 96 labeled edges. Native, upstream, and generated graphs are byte-identical. All six property records match. Source, input, toolchain, and archive pins verify. No identical-counterexample claim. See ci.parallelVariantsCandidate for the retained audit."
+            },
             {
               "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
               "developerToolsVersion": "16.4",
@@ -4350,7 +4390,7 @@
           "configuration": "specifications/DieHard/MCDieHardest.cfg",
           "required": true,
           "status": "hosted match",
-          "verifiedSourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
+          "verifiedSourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
           "implementationCandidate": {
             "file": "Sources/UpstreamParity/Examples/DieHardest.swift",
             "test": "Tests/SwiftTLAParityTests/DieHardestCorpusCheckingTests.swift",
@@ -4376,6 +4416,16 @@
             "caseID": "mc-die-hardest"
           }],
           "evidence": [{
+            "sourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35517612379/job/106098042990",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35517612379/artifacts/10607587031",
+            "artifactSHA256": "156ecf76f0ee7b09e2351d507961d6a8947c2c700e37d2c720934edc22c73c89",
+            "completion": "decisive-counterexample",
+            "completeCounterexampleMatch": true,
+            "completeGraph": false,
+            "scope": "Audited aggregate: four complete native/upstream/generated traces match exactly, with 12 states and 11 actions. Single-worker checking stops at NotSolved. Deadlock remains unavailable. Source, input, toolchain, and archive pins verify. No graph-exhaustion claim. See ci.parallelVariantsCandidate for the retained audit."
+          }, {
             "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
             "developerToolsVersion": "16.4",
             "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35506180618",
