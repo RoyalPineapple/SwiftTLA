@@ -6,20 +6,28 @@ import SwiftTLAMacros
 /// The input is an assumption: `seq` is selected from the finite set of
 /// nondecreasing sequences. The `While` body is the source's one labeled
 /// atomic step, including its two scoped `with` bindings.
+@TLAModel
 package struct BinarySearchModel: Sendable {
     private enum Step: String, CaseIterable {
         case a
     }
 
     package static var spec: TLASpec {
-        #spec("BinarySearch") {
+        #spec("BinarySearch") { model in
             Extends(.integers)
+            let Values = model.parameter(as: Set<Int>.self,
+                in: Set<Set<Int>>([Set<Int>([1, 2, 3, 4, 5])]))
+            let MaxSeqLen = model.parameter(as: Int.self, in: 8...8)
+            let resultCorrect = Invariant()
+            let TypeOK = Invariant()
+            let Inv = Invariant()
+            let Termination = Temporal()
             Algorithm("BinarySearch", fairness: .weak, scoped: { scope in
                 let seq = scope.sharedVar(in: SortedSequences(
-                    of: SetExpr<Int>.literal(1, 2, 3, 4, 5),
-                    lengths: 0...8
+                    of: Values,
+                    lengths: IntRange(1, through: MaxSeqLen)
                 ))
-                let val = scope.sharedVar(in: SetExpr<Int>.literal(1, 2, 3, 4, 5))
+                let val = scope.sharedVar(in: Values)
                 let low = scope.sharedVar(initial: 1)
                 let high: SharedVariable<Int> = scope.sharedVar(initial: seq.count)
                 let result = scope.sharedVar(initial: 0)
@@ -40,13 +48,30 @@ package struct BinarySearchModel: Sendable {
                     }
                 }
 
-                Invariant("TypeOK") {
-                    val >= 1 && val <= 5
-                    low >= 1 && low <= seq.count + 1
-                    high >= 0 && high <= seq.count
-                    result >= 0 && result <= seq.count
+                let typeOK = seq.count >= 1 && seq.count <= MaxSeqLen
+                    && ForAll(in: IntRange(1, through: seq.count)) { index in
+                        Values.contains(seq[index])
+                            && ForAll(in: IntRange(index + 1, through: seq.count)) { other in
+                                seq[index] <= seq[other]
+                            }
+                    }
+                    && Values.contains(val)
+                    && low >= 1 && low <= seq.count + 1
+                    && high >= 0 && high <= seq.count
+                    && result >= 0 && result <= seq.count
+                TypeOK { typeOK }
+                Inv {
+                    typeOK
+                    result == 0 || (seq.count > 0 && seq[result] == val)
+                    Finished() || If(
+                        Exists(in: IntRange(1, through: seq.count)) { index in seq[index] == val },
+                        then: Exists(in: IntRange(low, through: high)) { index in seq[index] == val },
+                        else: result == 0
+                    )
+                    !Finished() || result != 0
+                        || ForAll(in: IntRange(1, through: seq.count)) { index in seq[index] != val }
                 }
-                Invariant("resultCorrect") {
+                resultCorrect {
                     (!Finished()) || If(
                         Exists(in: IntRange(1, through: seq.count)) { index in
                             seq[index.expr] == val
@@ -55,15 +80,12 @@ package struct BinarySearchModel: Sendable {
                         else: result == 0
                     )
                 }
+                Termination(.eventually(Finished()))
             })
+            Validation("MCBinarySearch") {
+                Bind(Values, to: Set<Int>([1, 2, 3, 4, 5]))
+                Bind(MaxSeqLen, to: 8)
+            }
         }
     }
-}
-
-extension Example {
-    package static let binarySearch = FiniteModelFixture(
-        expectedDistinct: 27_963,
-        maximumStateLimit: 100_000,
-        spec: BinarySearchModel.spec,
-    )
 }

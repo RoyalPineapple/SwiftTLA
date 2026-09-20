@@ -295,14 +295,6 @@ struct UpstreamParityTests {
         #expect(exploration.graph.states.count == Example.dijkstraMutex.expectedDistinct)
     }
 
-    @Test("BinarySearch PlusCal port matches its bounded TLC configuration")
-    func binarySearchParity() throws {
-        let exploration = try explore(BinarySearchModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.binarySearch.expectedDistinct)
-        let tla = try BinarySearchModel.spec.compile().render().tlaBundle.tla
-        #expect(tla.contains("WF_<<pc, seq, val, low, high, result>>(Next)"))
-    }
-
     @Test("Consensus PlusCal port matches its bounded TLC configuration")
     func consensusParity() throws {
         let exploration = try explore(ConsensusModel.spec, maximumStateLimit: 100_000)

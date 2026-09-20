@@ -1209,6 +1209,13 @@ final class ParserSession {
         let baseType = typedFacadeValueType(baseSyntax, scope: scope)
         let elementEnumType = baseType?.selectedElement?.enumerationType
         switch access.declName.baseName.sourceIdentifierName {
+        case "integerDivided":
+            guard call.arguments.map({ $0.label?.text }) == ["by"],
+                  call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+                  let divisorSyntax = call.arguments.first?.expression,
+                  let divisor = decodeTypedFacadeValue(divisorSyntax, scope: scope)
+            else { return nil }
+            return .integerDivide(base, divisor)
         case "contains":
             guard let memberSyntax = call.arguments.first?.expression,
                   let member = decodeTypedFacadeValue(memberSyntax, scope: scope, expectedEnumType: elementEnumType)
@@ -1631,6 +1638,11 @@ final class ParserSession {
         }
         guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
         if compilerGrammarName(in: call.calledExpression) == "IntRange" { return .set(.int) }
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.sourceIdentifierName == "integerDivided",
+           decodeTypedFacadeValue(expression, scope: scope) != nil {
+            return .int
+        }
         if decodeProcessLocalFamily(call) != nil,
            let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            let local = member.base,

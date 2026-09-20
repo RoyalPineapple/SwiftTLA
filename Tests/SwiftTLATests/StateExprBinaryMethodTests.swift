@@ -6,6 +6,23 @@ import SwiftParser
 import SwiftTLAMacros
 
 @Suite(.serialized) struct StateExprBinaryMethodTests {
+    @Test("Scoped integer division retains midpoint bindings and its integer result type")
+    func scopedIntegerDivision() throws {
+        let parser = ParserSession()
+        let low = StateExpr.variable("resolvedLow")
+        let high = StateExpr.variable("resolvedHigh")
+        let scope = ParserSession.TypedFacadeScope.empty
+            .extending(binding: "low", to: low, shape: .int)
+            .extending(binding: "high", to: high, shape: .int)
+        let expression = try parseSpecTestExpression("(low + high).integerDivided(by: 2)")
+        #expect(parser.decodeTypedFacadeValue(expression, scope: scope)
+            == .integerDivide(.add(low, high), .value(.int(2))))
+        #expect(parser.typedFacadeValueType(expression, scope: scope) == .int)
+        for invalid in ["low.integerDivided(2)", "low.integerDivided(by: 2, extra: 3)"] {
+            #expect(parser.decodeTypedFacadeValue(try parseSpecTestExpression(invalid), scope: scope) == nil)
+        }
+    }
+
     @Test func parseBinaryMethods() throws {
         let x: StateExpr = .variable("x")
         let s: StateExpr = .variable("s")
