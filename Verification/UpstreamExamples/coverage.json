@@ -5,6 +5,7 @@
   "auditedSwiftSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
   "rules": {
     "unit": "One upstream module/configuration pair with resolved parameter and environment bindings. Every pinned configuration and required variant remains required until an explicit reviewed exclusion.",
+    "sourceBinding": "Each hosted configuration or environment variant names its verifiedSourceSHA and retains matching evidence for that exact revision and toolchain. Historical matches may come from different revisions; they are progress evidence, not final-revision admission. The top-level auditedSwiftSHA remains the original audit baseline and DSL-criterion evidence anchor. Completion still requires all required checks to pass on the final pushed revision.",
     "configurationBindings": "The pinned upstream tree, inventory, and ledger contain the same 234 published configuration files across 78 families, with no missing, extra, or duplicate ledger paths. A previous report of 292 was incorrect. Published configuration-file pairs form the baseline. Source-defined environment variants need separate bindings and evidence before family completion. The pair count is not the final variant count.",
     "states": [
       "missing",
@@ -49,13 +50,23 @@
     "completionRule": "Scheduling labels and queue positions confer no evidence credit. Count only retained hosted configuration matches. Declare a family complete only after every applicable configuration and variant is verified, module dispositions are resolved, and legacy code is removed. The next deliverable is one fully verified family on a green hosted revision through the intended DSL and correct checking path."
   },
   "ci": {
+    "familyRegressionCandidate": {
+      "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35507347106",
+      "caseLabels": ["graphs-die-hard", "graphs-mc-die-harder", "graphs-ap-die-harder", "scenarios-die-hard-0", "scenarios-die-harder-0", "scenarios-die-harder-1", "graphs-dining-philosophers", "graphs-ap-dining-philosophers", "graphs-least-circular-substring-small", "graphs-least-circular-substring-medium", "graphs-n-queens-four"],
+      "observedStatus": "in_progress",
+      "scope": "Refresh the remaining published DieHard configurations, their generated scenarios, and the agreed small regression anchors on the same revision as the audited MCDieHardest match. The successful decisive case is not repeated. CoffeeCan and Boulanger capacity failures are not retried. This focused candidate is not full admission or evidence for later commits."
+    },
     "decisiveCandidate": {
       "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
       "branch": "codex/pr394-decisive-candidate",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35506180618",
       "caseLabels": ["decisive-mc-die-hardest", "scenarios-die-hardest-0"],
-      "observedStatus": "in_progress",
-      "scope": "The exact locally checked commit was published on a candidate branch so existing PR CI remains running. This focused candidate checks the unchanged upstream MCDieHardest configuration and generated model. No new PR was created. Full admission and the PR branch update remain pending; no hosted match is claimed."
+      "observedStatus": "completed",
+      "conclusion": "success",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35506180618/artifacts/10604336527",
+      "artifactSHA256": "2a5006693fb4b03a4954841f12a0dc7fee2c69da3377778e021a6a697970538b",
+      "scope": "The candidate and both selected jobs passed. The 286336-byte archive checksum and retained source SHA verify. All six complete canonical traces across native/reference/generated comparisons match: 12 states, 11 NextInterleaved actions, ending at s1=6 and s2=5. Original module, configuration, dependencies, TLC, Java, and bridge source pins match. Single-worker execution stops at NotSolved without -continue; deadlock remains unavailable, not satisfied. Retained archive and files: /tmp/swifttla-diehardest.hfP5LK. This is a decisive configuration match on 3f5e3ac2, not graph equivalence or full/final-revision admission. No new PR was created."
     },
     "candidateCaseSelection": {
       "workflow": ".github/workflows/finite-graph.yml",
@@ -1066,6 +1077,19 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "21415",
+      "sourceSHA": "3f2232b1",
+      "sourcePatchSHA256": "82b97dcbe96d262ecba6093d0ee6189ca28bdd0f380ac2019910d8ad165b2242",
+      "sourcePatchScope": "git diff -- Sources Tests; only UpstreamCorpusInventoryTests.swift changed",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'UpstreamCorpusInventoryTests'",
+      "exitCode": 0,
+      "testsPassed": 5,
+      "buildSeconds": 641.48,
+      "testSeconds": 0.017,
+      "result": "All five inventory tests pass with 23 hosted configuration matches. Each configuration names its own exact verified revision; existing source/toolchain/environment matching remains mandatory. The 22 earlier matches retain their original audit revision. MCDieHardest names 3f5e3ac2 and requires complete decisive counterexample evidence rather than a false complete-graph claim.",
+      "scope": "Test source and ledger stayed unchanged throughout the diagnostic. Ponytail review reuses the existing evidence matcher and manifest modes, without introducing a second admission path. Static checks pass. These historical matches do not satisfy the separate requirement for all checks to pass on one final pushed revision."
+    },
     {
       "session": "64187",
       "sourceSHA": "d6e7d31d",
@@ -3588,6 +3612,7 @@
           "configuration": "specifications/CoffeeCan/APCoffeeCan.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -3634,6 +3659,7 @@
           "configuration": "specifications/CoffeeCan/CoffeeCan1000Beans.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -3682,6 +3708,7 @@
           "configuration": "specifications/CoffeeCan/CoffeeCan100Beans.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -3882,7 +3909,7 @@
       "path": "specifications/DieHard",
       "name": "The Die Hard Problem",
       "audit": "reference inputs audited",
-      "gap": "All four published configurations now have intended-DSL implementations. MCDieHardest and the decisive comparison path pass focused local tests; its hosted candidate remains in progress. The original single-worker BFS configuration stops at a shortest finite NotSolved counterexample despite the infinite reachable graph. No counter bound, graph-exhaustion requirement, or separate proof gate is added. APDieHarder, MCDieHarder, and DieHard retain earlier hosted matches. Source-defined alternative operators and module dispositions remain under audit. The TwoBuckets consumer's singleton-process wrappers have been replaced by atomic Do steps, and all three focused consumer tests pass. Hosted consumer confirmation and final family cleanup admission remain pending.",
+      "gap": "All four published configurations now have intended-DSL implementations and retained hosted matches, across their recorded revisions. MCDieHardest matches the unchanged single-worker BFS configuration with a complete shortest 12-state NotSolved witness ending at s1=6 and s2=5. No counter bound, graph-exhaustion requirement, or separate proof gate is added. Source-defined alternative operators and module dispositions remain under audit. The TwoBuckets consumer's singleton-process wrappers have been replaced by atomic Do steps, and all three focused consumer tests pass. Hosted consumer confirmation, final family cleanup admission, and one green final revision remain pending.",
       "legacyCleanupComplete": false,
       "legacyCleanupAudit": {
         "corpusFiles": ["Sources/UpstreamParity/Examples/DieHard.swift", "Sources/UpstreamParity/Examples/DieHarder.swift", "Sources/UpstreamParity/Examples/DieHardest.swift"],
@@ -3965,6 +3992,7 @@
           "configuration": "specifications/DieHard/APDieHarder.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -4003,6 +4031,7 @@
           "configuration": "specifications/DieHard/DieHard.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [
@@ -4030,6 +4059,7 @@
           "configuration": "specifications/DieHard/MCDieHarder.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [
@@ -4077,7 +4107,8 @@
           "module": "specifications/DieHard/MCDieHardest.tla",
           "configuration": "specifications/DieHard/MCDieHardest.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
           "implementationCandidate": {
             "file": "Sources/UpstreamParity/Examples/DieHardest.swift",
             "test": "Tests/SwiftTLAParityTests/DieHardestCorpusCheckingTests.swift",
@@ -4095,14 +4126,25 @@
             "sourceRevision": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
             "sourceFiles": ["specifications/DieHard/MCDieHardest.tla", "specifications/DieHard/MCDieHardest.cfg", "specifications/DieHard/DieHardest.tla", "specifications/DieHard/DieHarder.tla"],
             "infiniteStateWitness": "The selected Spec uses NextInterleaved. Starting with both jug maps empty and s1=s2=0, repeatedly taking D1!EmptyJug(j1) leaves c1 and c2 empty and s2=0, but increments s1 on every step. Every natural s1 is reachable and NotSolved remains true on this path. The published configuration supplies no state constraint, counter bound, or VIEW. A finite shortest NotSolved counterexample does not make the complete reachable graph finite.",
-            "decision": "The user challenged the additional requirements. The proposed separate proof gate is withdrawn. Match the unchanged upstream configuration and its single-worker BFS invariant check, including a complete valid counterexample and the shortest-path result. Do not require graph exhaustion for that decisive check or label its explored prefix a complete graph. The native implementation and matching result mode pass focused local diagnostics; hosted evidence remains missing. No coverage credit, invented bound, quotient, or exclusion."
+            "decision": "The user challenged the additional requirements. The separate proof gate is withdrawn. The unchanged upstream configuration and its single-worker BFS invariant check now have audited hosted agreement, including a complete counterexample and the shortest-path result. This evidence does not require graph exhaustion or label an explored prefix a complete graph. No invented bound, quotient, or exclusion is used."
           },
           "implementations": [{
             "file": "Sources/UpstreamParity/Examples/DieHardest.swift",
             "scenario": "MCDieHardest",
             "caseID": "mc-die-hardest"
           }],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35506180618",
+            "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35506180618/job/106068274224",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35506180618/artifacts/10604336527",
+            "artifactDigest": "sha256:2a5006693fb4b03a4954841f12a0dc7fee2c69da3377778e021a6a697970538b",
+            "completion": "decisive-counterexample",
+            "completeCounterexampleMatch": true,
+            "completeGraph": false,
+            "scope": "Audited unchanged upstream and generated-model checks at the exact retained revision. All native and TLC traces are complete 12-state, 11-action NotSolved witnesses, ending at s1=6 and s2=5. Every canonical step matches in this run; all original input and tool pins match. Single-worker BFS and default deadlock selection are retained. Deadlock is unevaluated after decisive stopping, not proved. The archive checksum verifies. No finite graph, invented counter bound, truncated witness, or all-properties proof is claimed."
+          }]
         }
       ],
       "partialCases": []
@@ -4211,6 +4253,7 @@
           "configuration": "specifications/DiningPhilosophers/APDiningPhilosophers.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -4248,6 +4291,7 @@
           "configuration": "specifications/DiningPhilosophers/DiningPhilosophers.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5895,6 +5939,7 @@
           "configuration": "specifications/LeastCircularSubstring/MCLeastCircularSubstringMedium.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5921,6 +5966,7 @@
           "configuration": "specifications/LeastCircularSubstring/MCLeastCircularSubstringSmall.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -6139,6 +6185,7 @@
           "configuration": "specifications/Majority/MCMajority.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -6619,6 +6666,7 @@
           "configuration": "specifications/N-Queens/Queens.toolbox/FourQueens/MC.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [
@@ -6644,6 +6692,7 @@
           "configuration": "specifications/N-Queens/QueensPluscal.toolbox/FourQueens/MC.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [
@@ -8319,6 +8368,7 @@
           "configuration": "specifications/SpecifyingSystems/AsynchronousInterface/APAsynchInterface.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -8346,6 +8396,7 @@
           "configuration": "specifications/SpecifyingSystems/AsynchronousInterface/APChannel.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -8362,6 +8413,7 @@
           "configuration": "specifications/SpecifyingSystems/AsynchronousInterface/AsynchInterface.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -8389,6 +8441,7 @@
           "configuration": "specifications/SpecifyingSystems/AsynchronousInterface/Channel.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -8446,6 +8499,7 @@
           "configuration": "specifications/SpecifyingSystems/Composing/APChannel.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -8472,6 +8526,7 @@
           "configuration": "specifications/SpecifyingSystems/FIFO/APChannel.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -8531,6 +8586,7 @@
           "configuration": "specifications/SpecifyingSystems/HourClock/APHourClock.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -8559,6 +8615,7 @@
           "configuration": "specifications/SpecifyingSystems/HourClock/APHourClock2.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -8587,6 +8644,7 @@
           "configuration": "specifications/SpecifyingSystems/HourClock/HourClock.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [

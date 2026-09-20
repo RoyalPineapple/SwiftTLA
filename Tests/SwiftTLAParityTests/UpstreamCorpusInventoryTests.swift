@@ -45,6 +45,7 @@ struct UpstreamCorpusInventoryTests {
             struct Variant: Decodable {
                 let environment: [String: String]
                 let status: String
+                let verifiedSourceSHA: String?
                 let implementations: [Implementation]
                 let evidence: [Evidence]
             }
@@ -52,6 +53,7 @@ struct UpstreamCorpusInventoryTests {
             let configuration: String
             let required: Bool
             let status: String
+            let verifiedSourceSHA: String?
             let implementations: [Implementation]
             let evidence: [Evidence]
             let environmentVariants: [Variant]?
@@ -179,19 +181,20 @@ struct UpstreamCorpusInventoryTests {
         #expect(Set(coverage.families.map(\.path)) == Set(inventory.families.map(\.path)))
         #expect(coverage.dslCriteria.map(\.id) == (1...19).map { String(format: "AC-%02d", $0) })
         let states = ["missing", "implemented", "locally checked", "hosted match"]
-        func verifyEvidence(_ evidence: [Coverage.Evidence], status: String,
+        func verifyEvidence(_ evidence: [Coverage.Evidence], status: String, sourceSHA: String,
             configurationMode: FiniteGraphManifest.Case.ComparisonMode? = .exhaustive,
             environment: [String: String]? = nil) {
             #expect(states.contains(status))
             if status == "locally checked" || status == "hosted match" {
+                #expect(sourceSHA.count == 40 && sourceSHA.allSatisfy { "0123456789abcdef".contains($0) })
                 #expect(evidence.contains {
-                    $0.matches(sourceSHA: coverage.auditedSwiftSHA,
+                    $0.matches(sourceSHA: sourceSHA,
                         developerToolsVersion: coverage.ci.hostedXcode, environment: environment)
                 })
             }
             if status == "hosted match" {
                 #expect(evidence.contains { record in
-                    record.matches(sourceSHA: coverage.auditedSwiftSHA,
+                    record.matches(sourceSHA: sourceSHA,
                         developerToolsVersion: coverage.ci.hostedXcode, environment: environment)
                         && (configurationMode.map { record.provesConfiguration($0) } ?? (record.acceptanceComplete == true))
                         && record.runURL.hasPrefix("https://github.com/")
@@ -218,6 +221,7 @@ struct UpstreamCorpusInventoryTests {
                 #expect(configuration.required)
                 #expect(family.modules.contains { $0.path == configuration.module })
                 verifyEvidence(configuration.evidence, status: configuration.status,
+                    sourceSHA: configuration.verifiedSourceSHA ?? "",
                     configurationMode: try comparisonMode(configuration.implementations))
                 if let variants = configuration.environmentVariants {
                     #expect(!variants.isEmpty)
@@ -227,6 +231,7 @@ struct UpstreamCorpusInventoryTests {
                         #expect(!variant.environment.isEmpty)
                         #expect(variant.environment.allSatisfy { !$0.key.isEmpty && !$0.value.isEmpty })
                         verifyEvidence(variant.evidence, status: variant.status,
+                            sourceSHA: variant.verifiedSourceSHA ?? "",
                             configurationMode: try comparisonMode(variant.implementations), environment: variant.environment)
                         if variant.status != "missing" { #expect(!variant.implementations.isEmpty) }
                         let aggregateRank = try #require(states.firstIndex(of: configuration.status))
@@ -255,7 +260,8 @@ struct UpstreamCorpusInventoryTests {
             }
         }
         for criterion in coverage.dslCriteria {
-            verifyEvidence(criterion.evidence, status: criterion.status, configurationMode: nil)
+            verifyEvidence(criterion.evidence, status: criterion.status,
+                sourceSHA: coverage.auditedSwiftSHA, configurationMode: nil)
         }
         let graphHarness = try #require(coverage.families.flatMap(\.configurations).first {
             $0.configuration == "specifications/TLC/TestGraphs.cfg"
