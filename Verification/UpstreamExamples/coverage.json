@@ -1119,8 +1119,13 @@
       "session": "73438",
       "sourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'DieHardestCorpusCheckingTests|DieHardestParallelCorpusCheckingTests|IndependentAtomicStepTests|AlgorithmBuilderParsingTests|AlgorithmBuilderTests|FiniteGraphManifestTests'",
-      "observedStatus": "running",
-      "scope": "Log: /tmp/swifttla-parallel-variants.log. Tests compare every native parallel-variant transition with jug arithmetic, preserve the global-freeze and interleaved witnesses, and exercise specification-scoped statement macros through existing lowering. Source and tests stay fixed during the diagnostic. No passing result is claimed."
+      "observedStatus": "completed",
+      "exitCode": 0,
+      "buildSeconds": 727.59,
+      "testSeconds": 14.888,
+      "testsPassed": 158,
+      "result": "Both parallel variants preserve every native graph transition against independent jug arithmetic and find a six-transition solution. Specification-scoped macros expand in ordinary and parameterized steps, inherit into algorithms, allow local shadowing, and reject invalid declarations. Existing algorithm, global-freeze, interleaved, and manifest checks pass.",
+      "scope": "Log: /tmp/swifttla-parallel-variants.log. Source and tests remained fixed at 26574bc0 throughout the diagnostic; later commits changed the ledger only. Local diagnostics do not establish upstream equivalence or confer corpus/DSL credit. Hosted run 35517612379 remains the independent comparison."
     },
     {
       "session": "75147",
