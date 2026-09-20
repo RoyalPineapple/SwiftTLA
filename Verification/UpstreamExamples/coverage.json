@@ -892,6 +892,15 @@
       "testsPassed": 1454,
       "scope": "The terminal ordinary-suite log reports all tests passing. This result covers the pushed baseline, not the later uncommitted type-preservation patch. Other jobs in this run were still active when this result was recorded. No independent upstream match or overall CI completion follows from this suite alone."
     },
+    "boulangerScenarioTimeout": {
+      "sourceSHA": "59fa4d5b156774c4993dc6f632e9aa16bd2f837a",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35502123379/job/106055632966",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35502123379/artifacts/10604960897",
+      "artifactDigest": "sha256:6a6bc9d4552f52a754b3008b4cd4210bfd502f215aafa6fce0e69b4f3729873d",
+      "conclusion": "failure",
+      "reason": "The scenario test step exceeded 120 minutes. The final retained sample shows Boulanger native canonical graph construction at 30.7 GB. Dictionary value copies, snapshot lookups, and edge-set insertion dominate the sampled work. This is before TLC execution.",
+      "scope": "The archive checksum and retained source SHA verify. This revision includes endpoint-copy change 212cbdb3, so that change did not resolve the bottleneck. No unchanged retry is justified."
+    },
     "latestScenarioTimeout": {
       "sourceSHA": "d30c0c0832c7ecb7dcdee61a1327c9fcb370b1f5",
       "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35375110820/job/105698244593",
@@ -1077,6 +1086,18 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "87290",
+      "baseSHA": "2e6bc667",
+      "sourceTestPatchSHA256": "6ee960dd15ee81c42710f687d63329147ee802f77e9119c5af9b022e6919e9c6",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CheckingContextTests|BreadthFirstExplorationTests|LearnProofsCorpusCheckingTests|DieHardestCorpusCheckingTests'",
+      "exitCode": 0,
+      "buildSeconds": 645.45,
+      "testSeconds": 3.019,
+      "testsPassed": 8,
+      "result": "Typed run context preserves register values across BFS states, starts exploration at level one, and resets between runs. Generated transitions and snapshots remain unchanged. LearnProofs retains 781 initial candidates, a separate length constraint, 742 explored states, and all four invariants. AddTwo has no invented bound or control state. The MCDieHardest shortest-counterexample regression passes.",
+      "scope": "Local diagnostics only. Register declaration syntax, generated register effects, and independent LearnProofs comparison remain unfinished. No new hosted configuration or DSL criterion credit."
+    },
     {
       "session": "21415",
       "sourceSHA": "3f2232b1",
@@ -3908,6 +3929,22 @@
     {
       "path": "specifications/DieHard",
       "name": "The Die Hard Problem",
+      "scheduling": {
+        "label": "Checker gap",
+        "variant": "DieHardest.NextParallelGlobalFreeze",
+        "reproducer": "The pinned operator uses TLCGet(level), TLCGet(2), TLCGet(3), and TLCSet to freeze copies after global BFS discovery. Its running example binds Goal=2 and capacities 9/10 versus 1/3.",
+        "nativeBoundary": "Generated transitions receive model state and immutable configuration, not mutable exploration-wide TLC registers. Encoding these registers as state variables changes the upstream semantics.",
+        "completionCondition": "Preserve exploration-wide register initialization, BFS levels, and freeze effects through a supported checking boundary. Obtain hosted comparison for the unchanged source-defined variant.",
+        "remainingVariants": ["NextParallel", "NextParallelFreeze", "NextParallelGlobalFreeze"],
+        "scope": "The four published configurations have retained matches. This variant keeps the family incomplete. The user explicitly prioritized implementation of checker-register support before further family expansion.",
+        "pinnedSemantics": {
+          "revision": "867aefb69ffc2452031292587b389d1fc3eb43ff",
+          "implementation": "tlatools/org.lamport.tlatools/src/tlc2/module/TLCGetSet.java",
+          "registerLifetime": "Registers are worker-local. This source-defined variant requires one worker, so writes persist across the entire BFS run. Writes return TRUE and occur immediately, outside model-state rollback.",
+          "level": "TLCGet(level) is zero during constant and initial-predicate evaluation. During exploration it reads the current source-state level. Initial states have level one.",
+          "nativeRequirement": "Pass typed checking context through generated transitions and the native checker. Preserve register effects and their order across candidate branches. Keep registers outside model snapshots and formal state projections."
+        }
+      },
       "audit": "reference inputs audited",
       "gap": "All four published configurations now have intended-DSL implementations and retained hosted matches, across their recorded revisions. MCDieHardest matches the unchanged single-worker BFS configuration with a complete shortest 12-state NotSolved witness ending at s1=6 and s2=5. No counter bound, graph-exhaustion requirement, or separate proof gate is added. Source-defined alternative operators and module dispositions remain under audit. The TwoBuckets consumer's singleton-process wrappers have been replaced by atomic Do steps, and all three focused consumer tests pass. Hosted consumer confirmation, final family cleanup admission, and one green final revision remain pending.",
       "legacyCleanupComplete": false,
@@ -4042,7 +4079,7 @@
           "configuration": "specifications/DieHard/DieHard.cfg",
           "required": true,
           "status": "hosted match",
-          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
+          "verifiedSourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [
@@ -4053,6 +4090,17 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35507347106",
+              "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35507347106/job/106071259071",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35507347106/artifacts/10603998911",
+              "artifactDigest": "sha256:6156fa21a73692a3ced19f54c12ba249754a6f867da0ee863d2544b61f01ff07",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "The archive checksum and retained source SHA verify. Complete native, upstream, and generated graphs are byte-identical: 1 initial state, 16 states, and 96 labeled edges. All six TypeOK, NotSolved, and deadlock records match. Original configuration, module, and tool pins verify. Native and TLC retain valid NotSolved traces of different lengths. No identical-trace or shortest-native-trace claim is made. This refreshes an existing match, not the family or final revision."
+            },
             {
               "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
               "developerToolsVersion": "16.4",
@@ -5864,13 +5912,13 @@
         }
       },
       "audit": "reference inputs audited",
-      "gap": "MCFindHighest requires separate Nat and Seq substitutions, MCConstraint, and all four published invariants. The Swift port folds the constraint into initialization and omits parts of TypeOK. It has no model-owned scenario or independent reference case. AddTwo adds an upstream-absent x < 10 constraint. Module dispositions, complete hosted evidence, and legacy cleanup remain incomplete.",
+      "gap": "Local diagnostics pass for the corrected sequence domain, separate constraint, all four invariants, and model-owned MCFindHighest scenario. AddTwo no longer has an invented bound or control state. Independent reference-case registration, module dispositions, and hosted evidence remain incomplete. Further LearnProofs implementation waits for the user-prioritized DieHard register support.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/LearnProofs/AddTwo.tla",
           "role": "unconfigured proof example",
-          "reason": "Defines unbounded x'=x+2 and proofs of TypeOK and Even. It has no TLC configuration. AddTwoModel adds x < 10, which changes the graph. Its source-faithful claim lacks equivalent evidence. No exclusion or finite bound qualifies this module as complete.",
+          "reason": "Defines unbounded x'=x+2 and proofs of TypeOK and Even. It has no TLC configuration. The intended-DSL port now uses one atomic Next action with no bound or control state. Focused tests cover generated execution and export. No universal proof verification is claimed.",
           "implementations": ["Sources/UpstreamParity/Examples/AddTwo.swift"],
           "dispositionComplete": false
         },
@@ -5904,11 +5952,11 @@
       "partialCases": [
         {
           "implementation": "Sources/UpstreamParity/Examples/FindHighest.swift",
-          "reason": "FindHighestModel limits initial sequence lengths to 0...3 instead of retaining the upstream domain and separate constraint. TypeOK omits f membership, i membership in the substituted Nat, and the upper bound for h. UpstreamParityTests.findHighestParity checks only 742 native states. No completion credit."
+          "reason": "FindHighestModel now preserves lengths 0...4 before the separate length-3 constraint and retains all four complete invariants. LearnProofsCorpusCheckingTests passes with 781 initial candidates, 156 retained roots, and 742 explored states. The old state-count-only fixture and test are removed. Independent upstream comparison is still missing."
         },
         {
           "implementation": "Sources/UpstreamParity/Examples/AddTwo.swift",
-          "reason": "The added x < 10 constraint makes the unbounded upstream algorithm finite. A builder or parser check cannot establish the upstream proofs or graph equivalence. No completion credit."
+          "reason": "The invented x < 10 constraint and synthetic program counter are removed. A focused test checks 100 generated Next transitions and unchanged export check selection. This is a local execution diagnostic, not a proof of the upstream theorems or a complete infinite graph."
         }
       ]
     },
