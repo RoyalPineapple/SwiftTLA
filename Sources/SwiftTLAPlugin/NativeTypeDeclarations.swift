@@ -25,6 +25,9 @@ struct NativeTypeDeclarations: Sendable {
                 }
             }
             pending.append(contentsOf: program.layout.parameters.compactMap { program.behavior.parameterDomains[$0.binder] })
+            pending.append(contentsOf: program.layout.checkingRegisters.compactMap {
+                program.behavior.checkingRegisterInitializations[$0.id]
+            })
             pending.append(contentsOf: program.behavior.validationScenarios.flatMap { $0.bindings.values })
             pending.append(contentsOf: program.behavior.actions.flatMap { $0.bindings.map(\.domain) })
             pending.append(contentsOf: program.behavior.temporalProperties.flatMap { $0.expression.predicates.map(\.expression) })
@@ -51,6 +54,7 @@ struct NativeTypeDeclarations: Sendable {
             var expressions: Set<CompiledExpression> = []
             var functions: Set<ResolvedFunctionID> = []
             types += variableTypes + bindingTypes
+            types += program.checkingRegisterTypes.sorted { $0.key.ordinal < $1.key.ordinal }.map(\.value)
             while let expression = pending.popLast() {
                 guard expressions.insert(expression).inserted else { continue }
                 types.append(expression.resultType)

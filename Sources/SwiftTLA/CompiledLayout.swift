@@ -6,6 +6,16 @@ package struct BinderID: Hashable, Sendable {
     package let ordinal: Int
 }
 
+package struct CheckingRegisterID: Hashable, Sendable {
+    package let ordinal: Int
+}
+
+package struct CompiledCheckingRegisterLayout: Hashable, Sendable {
+    package let id: CheckingRegisterID
+    package let reference: CheckingRegisterReference
+    package let swiftType: String
+}
+
 package struct CompiledParameterLayout: Hashable, Sendable {
     package let binder: BinderID
     package let reference: ParameterReference
@@ -178,6 +188,7 @@ package struct CompiledLayout: Hashable, Sendable {
     }
 
     package let parameters: [CompiledParameterLayout]
+    package let checkingRegisters: [CompiledCheckingRegisterLayout]
     package let variables: [CompiledVariableLayout]
     package let actions: [CompiledActionLayout]
     let stateProperties: [CompiledPropertyLayout]
@@ -189,6 +200,10 @@ package struct CompiledLayout: Hashable, Sendable {
     let declarations: [CompiledDeclaration]
 
     init(source spec: TLASpec) {
+        checkingRegisters = spec.checkingRegisters.enumerated().map {
+            .init(id: CheckingRegisterID(ordinal: $0.offset), reference: $0.element.reference,
+                swiftType: $0.element.swiftType)
+        }
         parameters = spec.parameters.enumerated().map {
             .init(binder: BinderID(ordinal: $0.offset), reference: $0.element.reference,
                 swiftType: $0.element.swiftType)

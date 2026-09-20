@@ -425,8 +425,20 @@ private extension SharedVariable {
 public final class SpecificationScope {
     var declarations: [VarDecl] = []
     var parameters: [ModelParameterDeclaration] = []
+    var checkingRegisters: [CheckingRegisterDeclaration] = []
 
     init() {}
+
+    public func checkingRegister<Value: TLAValueType>(
+        as: Value.Type, initial: some TypedExpression<Value>, _name: String = "",
+        _sourceOffset: Int? = nil, _sourceLength: Int = 0
+    ) -> CheckingRegister<Value> {
+        let reference = CheckingRegisterReference(name: _name,
+            sourceOffset: _sourceOffset, sourceLength: _sourceLength)
+        checkingRegisters.append(.init(reference: reference,
+            swiftType: swiftSurfaceTypeName(for: Value.self), initial: initial.stateExpr))
+        return CheckingRegister(reference: reference)
+    }
 
     public func parameter<Value: TLAValueType, Domain: FormalSetValue>(
         as: Value.Type, in domain: some TypedExpression<Domain>, _name: String = "",

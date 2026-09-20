@@ -147,10 +147,14 @@ private final class DSLRewriter: SyntaxRewriter {
                 return binding
             }
             guard let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-                  member.declName.baseName.sourceIdentifierName == "parameter",
+                  ["parameter", "checkingRegister"].contains(member.declName.baseName.sourceIdentifierName),
                   member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == parameterScope else { return binding }
             guard node.bindingSpecifier.text == "let" else {
-                context.diagnose(Diagnostic(node: Syntax(source), message: ParameterBindingDiagnostic()))
+                if member.declName.baseName.sourceIdentifierName == "checkingRegister" {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: CheckingRegisterBindingDiagnostic()))
+                } else {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: ParameterBindingDiagnostic()))
+                }
                 return binding
             }
             var arguments = Array(call.arguments)
@@ -308,6 +312,12 @@ private struct ParameterBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-parameter-binding")
     let severity: DiagnosticSeverity = .error
     let message = "A model parameter must be an immutable named let binding in the specification scope."
+}
+
+private struct CheckingRegisterBindingDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-checking-register-binding")
+    let severity: DiagnosticSeverity = .error
+    let message = "A checking register must be an immutable named let binding in the specification scope."
 }
 
 private struct StateBindingDiagnostic: DiagnosticMessage {

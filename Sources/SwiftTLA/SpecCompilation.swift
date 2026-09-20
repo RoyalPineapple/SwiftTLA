@@ -1217,6 +1217,12 @@ private struct CanonicalSpecificationEncoder {
             node("constant", [$0.name, canonicalValue($0.value)])
         }
         list("constants", constants) { $0 }
+        if !spec.checkingRegisters.isEmpty {
+            let registers = spec.checkingRegisters.map {
+                node("checkingRegister", [$0.reference.name, $0.swiftType, canonicalExpression($0.initial)])
+            }
+            list("checkingRegisters", registers) { $0 }
+        }
         if !spec.parameters.isEmpty {
             let parameters = spec.parameters.map {
                 node("parameter", [$0.reference.name, $0.swiftType, canonicalExpression($0.domain)])

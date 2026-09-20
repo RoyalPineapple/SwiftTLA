@@ -21,6 +21,7 @@ package final class CompiledTypeInputs: Sendable {
     let bindings: CompiledBindingTable
     let authoredAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan?
     package let variableTypes: [VariableID: CompiledValueType]
+    package let checkingRegisterTypes: [CheckingRegisterID: CompiledValueType]
     package let bindingTypes: [BinderID: CompiledValueType]
     package let collectionDomains: [VariableID: Set<CompiledValue>]
     package let types: CompiledTypeContext
@@ -46,6 +47,9 @@ package final class CompiledTypeInputs: Sendable {
         bindings = compilation.bindings
         authoredAlgorithm = compilation.authoredAlgorithm
         self.types = types
+        checkingRegisterTypes = try Dictionary(uniqueKeysWithValues: layout.checkingRegisters.map {
+            ($0.id, try resolveSourceType($0.swiftType))
+        })
 
         var variableTypes: [VariableID: CompiledValueType] = [:]
         var collectionDomains: [VariableID: Set<CompiledValue>] = [:]

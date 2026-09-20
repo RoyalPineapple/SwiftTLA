@@ -2,6 +2,7 @@
 package struct CompiledBehavior: Sendable {
     package let checkDeadlock: Bool
     package let parameterDomains: [BinderID: CompiledExpression]
+    package let checkingRegisterInitializations: [CheckingRegisterID: CompiledExpression]
     package let validationScenarios: [CompiledValidationScenario]
     package let initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)]
     package let actions: [CompiledAction]
@@ -22,6 +23,7 @@ package struct CompiledBehavior: Sendable {
         try .init(
             checkDeadlock: checkDeadlock,
             parameterDomains: parameterDomains.mapValues(transform),
+            checkingRegisterInitializations: checkingRegisterInitializations.mapValues(transform),
             validationScenarios: validationScenarios.map {
                 try .init(name: $0.name, bindings: $0.bindings.mapValues(transform),
                     expectations: $0.expectations, deadlockExpectation: $0.deadlockExpectation,

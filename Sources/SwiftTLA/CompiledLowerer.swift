@@ -128,6 +128,20 @@ struct CompiledLowerer {
     }
 
     mutating func lower(spec: TLASpec) throws -> CompiledSemantics {
+        guard spec.checkingRegisters.allSatisfy({ !$0.reference.name.isEmpty }),
+              Set(spec.checkingRegisters.map(\.reference)).count == spec.checkingRegisters.count,
+              Set(spec.checkingRegisters.map { $0.reference.name }).count == spec.checkingRegisters.count else {
+            throw CompilationDiagnostic(code: .unknownReference, stage: .binding, path: "checkingRegisters",
+                expected: "distinct register declarations and nonempty source names",
+                actual: "duplicate or unnamed register declaration",
+                nextSafeAction: "Declare each checking register once with a unique let binding inside #spec.")
+        }
+        var checkingRegisterInitializations: [CheckingRegisterID: CompiledExpression] = [:]
+        if !spec.checkingRegisters.isEmpty { requiredStandardModules.insert(.tlc) }
+        for (declaration, register) in zip(spec.checkingRegisters, layout.checkingRegisters) {
+            checkingRegisterInitializations[register.id] = try lower(declaration.initial,
+                at: "checkingRegisters.\(declaration.reference.name).initial", scope: rootScope)
+        }
         guard spec.parameters.allSatisfy({ !$0.reference.name.isEmpty }),
               Set(spec.parameters.map(\.reference)).count == spec.parameters.count,
               Set(spec.parameters.map { $0.reference.name }).count == spec.parameters.count else {
@@ -352,6 +366,7 @@ struct CompiledLowerer {
             behavior: .init(
                 checkDeadlock: spec.checkDeadlock,
                 parameterDomains: parameterDomains,
+                checkingRegisterInitializations: checkingRegisterInitializations,
                 validationScenarios: scenarios,
                 initializations: orderedInitializations,
                 actions: actions,

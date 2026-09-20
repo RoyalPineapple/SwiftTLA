@@ -15,6 +15,7 @@ extension TLASpec {
     let components = scope.declarations + body
     self.init(name, components: components)
     parameters = scope.parameters
+    checkingRegisters = scope.checkingRegisters
   }
 
   private init(_ name: String, components: [SpecComponent]) {
@@ -191,6 +192,7 @@ extension TLASpec {
     )
     lowered.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
     lowered.parameters = parameters
+    lowered.checkingRegisters = checkingRegisters
     lowered.validationScenarios = validationScenarios
     lowered.algorithmPhase = .lowered
     return lowered

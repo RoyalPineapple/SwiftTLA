@@ -34,6 +34,7 @@ package struct CompiledProgram: Sendable {
     }
 
     package let variableTypes: [VariableID: CompiledValueType]
+    package let checkingRegisterTypes: [CheckingRegisterID: CompiledValueType]
     package let bindingTypes: [BinderID: CompiledValueType]
     package let binderNames: [BinderID: String]
     package let functions: [ResolvedFunction]

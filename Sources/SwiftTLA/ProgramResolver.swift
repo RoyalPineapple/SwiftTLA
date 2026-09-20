@@ -69,8 +69,13 @@ private final class ProgramResolver {
             moduleImports: checked.moduleImports, formalModuleReplacements: replacements,
             requiredStandardModules: checked.requiredStandardModules, layout: checked.layout,
             behavior: behavior, refinements: refinements, enums: checked.enums,
-            projections: projections, variableTypes: checked.variableTypes, bindingTypes: checked.bindingTypes, binderNames: binderNames,
+            projections: projections, variableTypes: checked.variableTypes,
+            checkingRegisterTypes: checked.checkingRegisterTypes, bindingTypes: checked.bindingTypes, binderNames: binderNames,
             functions: resolvedFunctions, authoredAlgorithm: authoredAlgorithm)
+        for register in checked.layout.checkingRegisters {
+            try program.requireImmutableDomain(try require(behavior.checkingRegisterInitializations[register.id]),
+                path: "checkingRegisters.\(register.reference.name).initial at \(register.reference.sourceSpan)")
+        }
         for parameter in checked.layout.parameters {
             try program.requireImmutableDomain(try require(behavior.parameterDomains[parameter.binder]),
                 path: "parameters.\(parameter.reference.name).domain at \(parameter.reference.sourceSpan)")

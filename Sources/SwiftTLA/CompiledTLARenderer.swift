@@ -34,6 +34,15 @@ struct CompiledTLARenderer {
             }
             return "ASSUME \(try binderName(parameter.binder)) \\in \(try state(domain))"
         }
+        for register in layout.checkingRegisters {
+            guard let initial = behavior.checkingRegisterInitializations[register.id] else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
+                    path: "checkingRegisters.\(register.reference.name).initial",
+                    expected: "a resolved initialization", actual: "missing initialization",
+                    nextSafeAction: "Resolve the checking register initialization before export.")
+            }
+            result.append("ASSUME TLCSet(\(register.id.ordinal), \(try state(initial)))")
+        }
         if let assume = behavior.assume {
             result.append("ASSUME \(try state(assume.expression))")
         }

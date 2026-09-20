@@ -18,9 +18,21 @@ extension NativeSwiftEmitter {
         let fields = try program.layout.variables.filter { stateMemberNames[$0.id] == nil }.map { variable in
             "let \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: "\n")
+        let registers = program.layout.checkingRegisters
+        let registerNames = GeneratedMachineAPI.generatedIdentifiers(registers.map { $0.reference.name }, fallback: "register")
+        let registerFields = try zip(registers, registerNames).map { register, name in
+            "public var \(name): \(try swiftType(program.checkingRegisterTypes[register.id]!))"
+        }.joined(separator: "\n")
+        let registerInitializers = try zip(registers, registerNames).map { register, name in
+            "\(name): \(try expression(program.behavior.checkingRegisterInitializations[register.id]!))"
+        }.joined(separator: ", ")
         declarations += try nativeDeclarations("""
-        public struct CheckingRegisters: Sendable {}
-        public func initialCheckingRegisters() throws -> CheckingRegisters { CheckingRegisters() }
+        public struct CheckingRegisters: Sendable {
+            \(registerFields)
+        }
+        public func initialCheckingRegisters() throws -> CheckingRegisters {
+            return CheckingRegisters(\(registerInitializers))
+        }
         public func successors(checking context: inout CheckingContext<CheckingRegisters>) throws -> [(action: Action, machine: Self)] {
             try successors()
         }

@@ -280,6 +280,15 @@ package struct CompiledTypeChecker: Sendable {
     }
 
     package mutating func checkProgram() throws -> CompiledProgram {
+        var checkingRegisterInitializations: [CheckingRegisterID: CompiledExpression] = [:]
+        for register in inputs.layout.checkingRegisters {
+            guard let type = inputs.checkingRegisterTypes[register.id], type.resolved,
+                  let initial = inputs.semantics.behavior.checkingRegisterInitializations[register.id] else {
+                throw CompiledValueType.unresolvedDiagnostic(inputs.checkingRegisterTypes[register.id] ?? .unknown,
+                    at: "checkingRegisters.\(register.reference.name)")
+            }
+            checkingRegisterInitializations[register.id] = try checkOperand(initial, expected: type)
+        }
         var parameterDomains: [BinderID: CompiledExpression] = [:]
         for parameter in inputs.layout.parameters {
             guard let type = bindings[parameter.binder], type.resolved,
@@ -447,6 +456,7 @@ package struct CompiledTypeChecker: Sendable {
         let behavior = CompiledBehavior(
             checkDeadlock: inputs.semantics.behavior.checkDeadlock,
             parameterDomains: parameterDomains,
+            checkingRegisterInitializations: checkingRegisterInitializations,
             validationScenarios: scenarios,
             initializations: initializations,
             actions: actions,
@@ -467,7 +477,8 @@ package struct CompiledTypeChecker: Sendable {
         return CompiledProgram(identity: inputs.identity, moduleMetadata: inputs.moduleMetadata,
             moduleImports: inputs.moduleImports, formalModuleReplacements: replacements,
             requiredStandardModules: inputs.requiredStandardModules, layout: inputs.layout, behavior: behavior, refinements: refinements,
-            enums: inputs.types.enums, projections: [], variableTypes: variables, bindingTypes: bindingTypes, binderNames: inputs.bindings.binders,
+            enums: inputs.types.enums, projections: [], variableTypes: variables,
+            checkingRegisterTypes: inputs.checkingRegisterTypes, bindingTypes: bindingTypes, binderNames: inputs.bindings.binders,
             functions: [], authoredAlgorithm: authoredAlgorithm)
     }
 

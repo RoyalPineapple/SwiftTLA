@@ -99,6 +99,29 @@ extension ParserSession {
                 continue
             }
             if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+               member.declName.baseName.sourceIdentifierName == "checkingRegister",
+               member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == declarationScope {
+                guard declaration.bindingSpecifier.text == "let",
+                      let type = call.arguments.first(where: { $0.label?.text == "as" })?.expression.as(MemberAccessExprSyntax.self),
+                      type.declName.baseName.sourceIdentifierName == "self", let base = type.base,
+                      let initialSyntax = call.arguments.first(where: { $0.label?.text == "initial" })?.expression,
+                      let initial = decodeTypedFacadeValue(initialSyntax, scope: sourceScope,
+                        expectedEnumType: base.trimmedDescription) else {
+                    components.diagnostics.append(.init(
+                        message: "A checking register requires a named let binding, an explicit value type, and a typed initial value.", source: binding))
+                    continue
+                }
+                do {
+                    _ = try sourceTypeResolver.resolve(base.trimmedDescription)
+                    let reference = CheckingRegisterReference(name: sourceName,
+                        sourceOffset: binding.positionAfterSkippingLeadingTrivia.utf8Offset,
+                        sourceLength: binding.trimmedDescription.utf8.count)
+                    components.checkingRegisters.append(.init(reference: reference,
+                        swiftType: base.trimmedDescription, initial: initial))
+                } catch {
+                    components.diagnostics.append(.init(message: "Invalid checking register type: \(error)", source: binding))
+                }
+            } else if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
                member.declName.baseName.sourceIdentifierName == "parameter",
                member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == declarationScope {
                 guard declaration.bindingSpecifier.text == "let",
