@@ -781,6 +781,29 @@
   },
   "localDiagnostics": [
     {
+      "session": "80834",
+      "sourceSHA": "cd1721aa00b401ab8b35bcc2f71fd0f256946507",
+      "sourcePatchSHA256": "ae80e9685894a288db8864c3f16f1ebb53464a6fa7d473480058cb1ffe7b19b6",
+      "sourcePatchScope": "git diff -- Tests",
+      "command": "cd Tests/Fixtures/GeneratedMachineDocumentation && DEVELOPER_DIR=/Library/Developer/CommandLineTools ../../../scripts/local-validation.sh swiftpm-test 'generatedExportMatchesGuide'",
+      "exitCode": 0,
+      "testsPassed": 1,
+      "buildSeconds": 169.39,
+      "testSeconds": 0.001,
+      "result": "The external documentation consumer compiles the exact BoundedCounter.render().tlaBundle call from the guide and checks its public root module, module source, and specification directive. It uses no runtime source compilation or package-only helper.",
+      "scope": "Source stayed fixed during the wrapper build. Static checks and Ponytail review pass. The fixture reuses the documented model without another schema or export implementation. Hosted consumer evidence remains pending; this focused check does not establish upstream equivalence or full DSL completion."
+    },
+    {
+      "session": "25217",
+      "sourceSHA": "cd1721aa00b401ab8b35bcc2f71fd0f256946507",
+      "sourcePatchSHA256": "099d3bdf26d9717f0b482e7ba1bbe93680b95e143431f4a99712af80a8307f81",
+      "sourcePatchScope": "git diff -- Tests",
+      "command": "cd Tests/Fixtures/GeneratedMachineDocumentation && DEVELOPER_DIR=/Library/Developer/CommandLineTools ../../../scripts/local-validation.sh swiftpm-test 'generatedExportMatchesGuide'",
+      "exitCode": 1,
+      "result": "The external consumer fixture compiles BoundedCounter.render(), but its new test attempts the package-only validateDeclaredClosure helper and fails access control. No tests ran. The retry keeps the public export call and checks the public module and configuration instead of widening library access.",
+      "scope": "Source stayed fixed during the wrapper build. This is a fixture-test error, not a generated-export failure or hosted evidence. No coverage credit."
+    },
+    {
       "session": "16790",
       "sourceSHA": "b4cc786ab42a34748fc97310a66633ac36b129ad",
       "sourcePatchSHA256": "c859b4b2ddaa83fc4ce9aced3cbcd7ca6920b5a7e13ec588d7705b42bf2b14db",
