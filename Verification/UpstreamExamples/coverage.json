@@ -186,6 +186,14 @@
     },
     "queueRepairCandidate": {
       "sourceSHA": "f667b67983a51f800ee03dd90d0903cc705db7a8",
+      "coffeeCan3000GraphFailure": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479/job/105972419860",
+        "conclusion": "failure",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479/artifacts/10595366486",
+        "artifactSHA256": "6d4d793bdb02366f5ffe2349207ba9f99d879566a2161040ccbf61c1d4d3bebb",
+        "failure": "The checked graph invocation exited 1 after Java ran out of its 1792 MB heap during final liveness checking of five branches. Its log reached 4,504,500 distinct states and an empty queue, but no successful property verdict. The graph-only fallback exited 0 after 196 seconds at 23:15:57 UTC with 18,000,002 generated states and 4,504,500 distinct states. The hosted step timed out at 00:19:13. Retained validation.log subsequently reached tlc-parsing at 7239.03 seconds, then failed publication with a missing staging diagnostic.json path; no comparison was published.",
+        "scope": "Downloaded archive SHA-256 matches GitHub metadata. Audited both retained process records, both stdout logs, empty stderr entries, validation log, and archive inventory. The graph-only event stream is 13,360,429,891 bytes; no full graph parse or equivalence audit was performed locally. The phase boundary includes retention and graph reading: over an hour passed after TLC completion before this boundary returned, but the records do not identify the exact CPU or memory hotspot. The subsequent publication error occurred after the hosted timeout and is not treated as its cause. This source predates fingerprint reuse; newer comparisons remain pending. Existing individual-property fallback may avoid the failed multi-branch batch, but no successful property evidence was reached. No coverage credit or weakened-check substitution. Archive: /tmp/swifttla-coffee3000-f667.WNkGdZ/artifact.zip."
+      },
       "boulangerGraphFailure": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479/job/105972420171",
         "conclusion": "failure",
@@ -8403,7 +8411,7 @@
       "id": "AC-13",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Sources/SwiftTLA/TypedValues.swift still exposes manual record schemas and field tables. Application callers remain in Examples/SwiftTLADemos/Sources/ElevatorBank.swift and Examples/SwiftTLADemos/Sources/ChangRoberts.swift. Sources/UpstreamParity/CanonicalCorpus/KVsnap.swift also retains OperationSchema. These callers require migration before the manual schema API can be removed. The remaining replacement and deletion map still requires a complete audit.",
+      "reason": "Sources/SwiftTLA/TypedValues.swift still exposes manual record schemas and field tables. Application callers remain in Examples/SwiftTLADemos/Sources/ElevatorBank.swift and Examples/SwiftTLADemos/Sources/ChangRoberts.swift. KVsnap's OperationSchema and field table were removed in 1d0e5799; its ordinary Swift Operation record and explicit checked imported-record projection passed local diagnostic 3696. The remaining callers require migration before the manual schema API can be removed. The remaining replacement and deletion map still requires a complete audit; hosted acceptance of the KVsnap migration is pending.",
       "evidence": []
     },
     {
@@ -8431,7 +8439,7 @@
       "id": "AC-17",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLATests/GeneratedSwiftRecordTests.swift executes transitions with original Swift records and typed field access. Tests/SwiftTLATests/SwiftRecordTypeTests.swift preserves nominal identity, nested arrays and sets, and field order without parallel record declarations. It rejects unsupported record shapes instead of guessing. Source-located diagnostics for every supported value category and complete hosted acceptance evidence remain unaudited. KVsnap still uses a manual record schema.",
+      "reason": "Tests/SwiftTLATests/GeneratedSwiftRecordTests.swift executes transitions with original Swift records and typed field access. Tests/SwiftTLATests/SwiftRecordTypeTests.swift preserves nominal identity, nested arrays and sets, field order, and declared OneOf alternatives without parallel record declarations. It rejects unsupported or overlapping shapes instead of guessing. KVsnap now uses its ordinary Swift Operation record; local diagnostic 3696 covers checked import projection, strict field validation, union roundtrips, and native transaction execution. Source-located diagnostics for every supported value category and complete hosted acceptance evidence remain unaudited. Nominal-record union alternatives are not yet supported.",
       "evidence": []
     },
     {
