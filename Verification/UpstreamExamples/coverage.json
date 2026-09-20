@@ -51,8 +51,18 @@
       "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
-      "completedJobs": [],
-      "scope": "Submitted after prior main CI became terminal. Includes AC-05 through AC-08 local contract evidence, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and the Boulanger capacity increase from five to ten million states. Focused wrapper session 3696 passes 114 tests; model bounds and selected checks are unchanged. CI and independent candidate comparisons are queued for this exact SHA. No new hosted acceptance or coverage credit is assigned; PR 394 remains draft."
+      "completedJobs": [
+        {
+          "name": "apple-platform-examples",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632013",
+          "conclusion": "success",
+          "testsRun": 12,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10595580107",
+          "artifactSHA256": "f15cb739921e313c77bbfb6b33d68b7619e0754917b3c57f8aaf93f69bd4b5e7",
+          "scope": "Downloaded source-sha.txt binds to edec23de. Retained camera adoption logs report 12 tests with zero failures and the camera executable build succeeded. GitHub reports the full Apple job successful. This does not cover later temporal or Chang-Roberts edits or establish additional upstream matches. Artifact contents: /tmp/swifttla-apple-edec.CjrMk5."
+        }
+      ],
+      "scope": "Submitted after prior main CI became terminal. Includes AC-05 through AC-08 local contract evidence, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and the Boulanger capacity increase from five to ten million states. Focused wrapper session 3696 passes 114 tests; model bounds and selected checks are unchanged. Apple CI passed; the scenario suite is running and other suites and independent comparisons remain queued or active for this exact SHA. No new upstream coverage credit is assigned; PR 394 remains draft."
     },
     "snapshotReuseCandidate": {
       "sourceSHA": "0b86465f165584983dbcca910a9fb56d6865aca4",
