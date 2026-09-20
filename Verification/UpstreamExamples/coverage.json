@@ -714,6 +714,19 @@
   },
   "localDiagnostics": [
     {
+      "session": "81173",
+      "sourceSHA": "e052e14c49b767c1d82c010f048127ca8bdfb9b0",
+      "sourcePatchSHA256": "65ebe42d2674182579f854de35b33bbc184ebb81b7e4658aa3bdfdb23399e592",
+      "sourcePatchScope": "git diff -- Sources Tests Examples",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SpecificationSourceAuthorityTests|NativeCodeGenerationTests|NativeTypeDiagnosticTests|GeneratedSavedValueSwapTests'",
+      "exitCode": 1,
+      "testsRun": 93,
+      "buildSeconds": 587.39,
+      "testSeconds": 1.370,
+      "result": "The string-backed enum dictionary binding regression passes after LET-body rechecking. The integer-backed case fails in source parsing because dictionary shorthand keys did not receive the declared key type. The other 92 tests pass, including native code generation, union preservation, KVsnap nested collection checking, and generated saved-value behavior. The next parser change propagates the declared dictionary key and value types instead of inferring shorthand enum cases without context.",
+      "scope": "Source stayed fixed throughout the wrapper build. Full log: /tmp/swifttla-binder-identity.uxzhLS/validation.log. No complete local acceptance or new hosted coverage is claimed."
+    },
+    {
       "session": "27363",
       "sourceSHA": "8aab5417baaa8dff7531da16ba67f1e54233da44",
       "sourcePatchSHA256": "9d80487ec8d83c6964263af106fad544da132c8f11a025b36a7aa27b9df73cc8",
