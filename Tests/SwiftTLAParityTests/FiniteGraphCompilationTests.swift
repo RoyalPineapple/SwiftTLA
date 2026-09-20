@@ -1,8 +1,25 @@
+import Foundation
 import SwiftTLA
 import Testing
 import UpstreamParity
 
 struct FiniteGraphCompilationTests {
+  @Test("every declared finite graph case renders its generated model and preserves scenario selection")
+  func rendersRegisteredGeneratedModels() throws {
+    let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
+      from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
+    for declaration in manifest.cases {
+      let scenario = try declaration.resolveScenario()
+      let rendered = try scenario?.render() ?? declaration.sourceModel.render()
+      try rendered.tlaBundle.validateDeclaredClosure()
+      #expect(!rendered.tlaBundle.tla.isEmpty)
+      if scenario != nil {
+        #expect(throws: EvidenceFormatError.invalidField(record: declaration.sourceModel.rawValue,
+          field: "model-owned scenario")) { try declaration.sourceModel.render() }
+      }
+    }
+  }
+
   @Test("The elevator initializes native typed records and action parameters")
   func initializesNativeElevator() throws {
     let machine = try MultiCarElevator.makeMachine()

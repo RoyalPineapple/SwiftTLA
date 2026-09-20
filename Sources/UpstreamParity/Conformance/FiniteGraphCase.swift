@@ -414,27 +414,16 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         }
     }
 
-    package var spec: TLASpec {
+    package func render() throws -> RenderedSpecification {
         switch self {
-        case .boulanger: BoulangerModel.spec
-        case .voteProof: VoteProofModel.spec
-        case .kvsnap: KVsnapModel.spec
-        case .majority: MajorityModel.spec
-        case .channel: ChannelModel.spec
-        case .asynchInterface: AsynchInterfaceModel.spec
-        case .hourClock: Example.hourClock.spec
-        case .hourClock2: HourClock2Model.spec
-        case .leastCircularSubstring: LeastCircularSubstringModel.spec
-        case .dieHard: DieHardModel.spec
-        case .dieHarder: DieHarderModel.spec
-        case .multiCarElevator: MultiCarElevator.spec
-        case .tlcmcGraph1: TLCMCModel.spec
-        case .nQueensFour: NQueensModel.spec
-        case .queensFour: QueensModel.spec
-        case .coffeeCan: CoffeeCanModel.spec
-        case .diningPhilosophers: DiningPhilosophersModel.spec
-        case .stringLiterals: StringLiteralModel.spec
-        case .actionReferences: ActionReferencesModel.spec
+        case .voteProof: return try VoteProofModel.render()
+        case .kvsnap: return try KVsnapModel.render()
+        case .multiCarElevator: return try MultiCarElevator.render()
+        case .tlcmcGraph1: return try TLCMCModel.render()
+        case .stringLiterals: return try StringLiteralModel.render()
+        case .actionReferences: return try ActionReferencesModel.render()
+        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
+            throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned scenario")
         }
     }
 }

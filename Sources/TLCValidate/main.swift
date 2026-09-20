@@ -123,7 +123,7 @@ private func runFiniteGraphCheck(arguments: [String]) -> Never {
         fputs("finite-graph: selected \(selected.count) case(s) for \(options.caseID)\n", stderr)
         let preparedCases = try selected.map { declaration in
             let scenario = try declaration.resolveScenario()
-            let rendered = try scenario?.render() ?? declaration.sourceModel.spec.compile().render()
+            let rendered = try scenario?.render() ?? declaration.sourceModel.render()
             return (declaration, scenario, rendered)
         }
         fputs("finite-graph: prepared \(preparedCases.count) rendered case(s)\n", stderr)

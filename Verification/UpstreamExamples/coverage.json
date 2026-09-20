@@ -51,6 +51,16 @@
       "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
+      "conclusion": "failure",
+      "finiteGraphTimeout": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632138",
+        "conclusion": "failure",
+        "buildSeconds": 1465.82,
+        "stepLimitMinutes": 120,
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10596309030",
+        "artifactSHA256": "ad01dd299b325b55ca10e85390ca39d4d08a68ff0e4645bba8ebcb2eb09d7d9a",
+        "scope": "Terminal log confirms the step timed out at 2026-09-20T02:54:07Z. Artifact checksum, edec23de source SHA, Swift 6.1.2, Xcode 16.4 build 16F6, and SDK 24F74 verify. Late samples show NativeModelRun retained-state Set construction at 02:39 and 02:44, then Boulanger canonical state conversion at 02:49. The final sample reports an 11.5 GB physical footprint. Like the scenario suite, this remains incomplete native export rather than a reported semantic mismatch. Logs and samples: /tmp/swifttla-finite-edec.JQGl9x. Main CI is terminal; independent comparisons remain active and must not be cancelled."
+      },
       "scenarioTimeout": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632093",
         "conclusion": "failure",
@@ -101,7 +111,7 @@
           "scope": "Downloaded source-sha.txt binds to edec23de. Retained camera adoption logs report 12 tests with zero failures and the camera executable build succeeded. GitHub reports the full Apple job successful. This does not cover later temporal or Chang-Roberts edits or establish additional upstream matches. Artifact contents: /tmp/swifttla-apple-edec.CjrMk5."
         }
       ],
-      "scope": "Submitted after prior main CI became terminal. Includes AC-05 through AC-08 local contract evidence, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and the Boulanger capacity increase from five to ten million states. Focused wrapper session 3696 passes 114 tests; model bounds and selected checks are unchanged. Apple, ordinary, upstream, and export CI passed; scenarios timed out and finite-graphs remains running. Independent comparisons remain queued or active for this exact SHA. No new upstream coverage credit is assigned; PR 394 remains draft."
+      "scope": "Main CI is terminal with failure: Apple, ordinary, upstream, and export jobs passed, but both scenario and finite-graph suites timed out while exporting Boulanger native graphs. The candidate includes AC-05 through AC-08 local contracts, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and Boulanger capacity above five million states; model bounds and selected checks remain unchanged. Independent comparisons are still queued or active. CoffeeCan 100, 1000, and AP matches were re-audited without adding coverage; CoffeeCan 3000 remains incomplete. PR 394 stays draft."
     },
     "snapshotReuseCandidate": {
       "sourceSHA": "0b86465f165584983dbcca910a9fb56d6865aca4",
@@ -764,6 +774,19 @@
   },
   "localDiagnostics": [
     {
+      "session": "22680",
+      "sourceSHA": "b3885abf89e1323205b3cde350dc6df89b911fd4",
+      "sourcePatchSHA256": "affbb5405217159a0ddfb9305ceaa3c3ef3b5d4ea24a6d5016ee0c03f55a1a37",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'FiniteGraphCompilationTests|FiniteGraphManifestTests|NativeGraphExportTests|ConstraintBoundaryCheckingTests|GraphComparisonTests'",
+      "exitCode": 0,
+      "testsPassed": 25,
+      "buildSeconds": 602.97,
+      "testSeconds": 0.027,
+      "result": "Every declared finite graph configuration renders through its generated model or required model-owned scenario. Removed the runtime source-spec registry and compilation fallback from CLI and graph harness. Native export checks boundary membership using the existing transition index, without copying all snapshots into another Set. Excluded successor safety witnesses and excluded reachability witnesses still fail explicitly; existing initial-boundary, trace, complete graph, and property coverage checks pass.",
+      "scope": "Source stayed fixed during the wrapper build. Static validation passed. Full log: /tmp/swifttla-native-export.SQYC0s/validation.log. Tests use small fixtures and render metadata; no local TLC or large corpus exploration. Performance improvement and independent equivalence require new hosted evidence; no coverage credit."
+    },
+    {
       "session": "96234",
       "sourceSHA": "4853954ad5ac8dc3f3baf1c4c26c930457225c05",
       "sourcePatchSHA256": "ae17d4051426b9006a207166a3a8fed9653e12817a187eb04aa163e9e7a9b5d8",
@@ -771,6 +794,7 @@
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CanonicalCorpusEntryTests|KVsnapCorpusRenderingTests|VoteProofCorpusRenderingTests|TLCMCCorpusConformanceTests'",
       "exitCode": 0,
       "testsPassed": 10,
+      "buildSeconds": 611.96,
       "testSeconds": 0.145,
       "result": "Canonical export now uses generated render methods for KVsnap, TLCMC, and VoteProof; Boulanger retains its model-owned generated scenario. Deleted the unused runtime source closure and initializer from the registry. Original formal compiler structural assertions remain, while new checks cover resolved generated module closure, all selected properties, and the specialized abstract refinement behavior. TLCMC complete native/formal graph parity passes. No source recompilation remains in the corpus registry or exporter.",
       "scope": "Source stayed fixed during the wrapper build. Static validation passed. Full log: /tmp/swifttla-generated-export.9pSbU6/validation-2.log. Hosted TLC has not yet exercised these generated exports; no configuration or complete DSL criterion gains credit."

@@ -34,7 +34,7 @@ struct FiniteGraphCheckTests {
     }
     let declaration = try #require(Self.declaredCases().first { $0.id == id })
     let scenario = try declaration.resolveScenario()
-    let rendered = try scenario?.render() ?? declaration.sourceModel.spec.compile().render()
+    let rendered = try scenario?.render() ?? declaration.sourceModel.render()
     let finiteGraphCase = try FiniteGraphCase(id: declaration.id, exploration: declaration.exploration,
       moduleSHA256: declaration.moduleSHA256, cfgSHA256: declaration.cfgSHA256,
       arguments: [], environment: [:], pin: testReferencePin(), renderedActions: rendered.actions)
@@ -131,9 +131,6 @@ struct FiniteGraphCheckTests {
     let manifest = try JSONDecoder().decode(FiniteGraphManifest.self, from: data)
     let sources = manifest.cases.map(\.sourceModel)
     #expect(Set(sources) == Set(FiniteGraphSourceModel.allCases))
-    for source in sources {
-      _ = source.spec
-    }
   }
 
   @Test("finite graph manifests reject unknown dependency fields")
