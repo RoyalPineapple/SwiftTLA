@@ -40,6 +40,11 @@ extension NativeSwiftEmitter {
             }.joined(separator: "\n")
             return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in switch value { \(cases)\ndefault: throw NativeMachineEvaluationError.noMatchingCase } }(\(value)))"
         }
+        if let inputs = source.recordFields, let outputs = target.recordFields,
+           inputs.map(\.name) == outputs.map(\.name) {
+            return try checkedFields(value, from: source, to: target,
+                                     inputs: inputs.map(\.type), outputs: outputs.map(\.type))
+        }
         switch (source, target) {
         case (.set(let input), .set(let output)):
             return "Set<\(try swiftType(output))>(try (\(value)).map { element in \(try checkedView("element", from: input, to: output)) })"
@@ -51,8 +56,6 @@ extension NativeSwiftEmitter {
             return "Dictionary<\(try swiftType(targetKey)), \(try swiftType(targetValue))>(uniqueKeysWithValues: try (\(value)).map { entry in (\(key), \(item)) })"
         case (.tuple(let inputs), .tuple(let outputs)) where inputs.count == outputs.count:
             return try checkedFields(value, from: source, to: target, inputs: inputs, outputs: outputs)
-        case (.record(let inputs), .record(let outputs)) where inputs.map(\.name) == outputs.map(\.name):
-            return try checkedFields(value, from: source, to: target, inputs: inputs.map(\.type), outputs: outputs.map(\.type))
         default:
             return "(try { (_: \(try swiftType(source))) throws -> \(try swiftType(target)) in throw NativeMachineEvaluationError.noMatchingCase }(\(value)))"
         }

@@ -79,6 +79,14 @@
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037",
       "temporalRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493942145",
+      "mainConclusion": "failure",
+      "scenarioTestsResult": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495/job/106033496114",
+        "conclusion": "failure",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495/artifacts/10602975767",
+        "artifactSHA256": "c4f6230f516cb1ffa501becb8443c2a13a37e4abc8d4ab66215acdbfb05f82d9",
+        "scope": "The job completed at 09:14:42 UTC on 2026-09-20 after the test step reached its 120-minute limit. Archive checksum, retained bba219f340df1f4354de6d1f2ec7a6fe011cfed9 source SHA, and release mode verify. The 09:10:05 profile shows 30.5 GB physical footprint in NativeModelRun -> CanonicalGraph edge construction for BoulangerModel. Of 627 samples on that stack, 365 are in the endpoint state lookup and copying path at CanonicalGraph.swift:305/322. This is export-stage resource evidence, not a semantic mismatch. Commit 212cbdb3 already replaces that full-value endpoint lookup with dictionary indices and has focused local diagnostics, but has not been hosted on this candidate. Verify that change before considering another optimization. Retained evidence: /tmp/swifttla-scenarios-bba.ljj4gf. The main run is terminal; its previous push hold no longer applies."
+      },
       "finiteGraphTestsResult": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495/job/106033496094",
         "conclusion": "failure",
@@ -1016,6 +1024,19 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "55441",
+      "sourceSHA": "190ee4c560c2ad978426a82b9d12cf5c1c516f93",
+      "sourcePatchSHA256": "3532bdd0c983dbba19f7d2cf06169590420aa477870d2e34eee246978f7ab002",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'DecisiveCheckingTests|RecordUnionOrderingTests|NativeGraphExportTests|ConstraintBoundaryCheckingTests|ScenarioValidationTests/identifiesRegisteredScenarios'",
+      "exitCode": 0,
+      "testsPassed": 24,
+      "buildSeconds": 629.65,
+      "testSeconds": 0.013,
+      "result": "Both previously failing sentinel-union tests now pass unchanged: generated guarded views execute create/advance/clear, preserve all six states and nine edges, and match the complete formal graph and emitted bundle. All five decisive-checking, six native-export, four constraint-boundary, and registry tests pass. The subsequent safety-wrapper static check passes.",
+      "scope": "Source and tests remained unchanged throughout the Swift 6.1.2 diagnostic; ledger-only commit 37cc62ca was made during the run. Ponytail review reuses recordFields and checkedFields instead of introducing a conversion schema or backend. This fixes session 60639's observed named-record conversion failure. Native checking and explicit exhaustive exploration remain separate result contracts over the same transitions. The hosted comparison runner still requires early-stop integration. No new upstream configuration or complete DSL criterion credit."
+    },
     {
       "session": "60639",
       "sourceSHA": "01f111d3a8f0cfa9df7696a80b5339e2bdf1bc9e",

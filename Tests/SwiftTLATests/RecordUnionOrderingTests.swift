@@ -3,6 +3,25 @@ import Testing
 @testable import UpstreamParity
 
 struct RecordUnionOrderingTests {
+    @Test("guarded record union views support symbolic updates and sentinel transitions")
+    func updatesSentinelUnion() throws {
+        typealias Model = RecordUnionSentinelModel
+        var machine = try #require(Model.initialMachines().first { $0.state.value == .second(.noBlock) })
+        #expect(try machine.enabledActions() == [.create])
+        _ = try machine.send(.create)
+        for balance in 1...3 {
+            let transition = try machine.send(.advance)
+            #expect(transition.after.value == .first(.init(
+                block: .init(account: "NoBlock", balance: balance), signature: "NoBlock")))
+        }
+        #expect(try machine.enabledActions() == [.clear])
+        _ = try machine.send(.clear)
+        #expect(machine.state.value == .second(.noBlock))
+        let graph = try ReachabilityGraph(initialMachines: Model.initialMachines(), maximumStates: 100)
+        #expect(graph.transitions.count == 6)
+        #expect(graph.transitions.values.reduce(0) { $0 + $1.count } == 9)
+    }
+
     @Test("nested records and model-value sentinels preserve complete graphs and export")
     func preservesSentinelGraph() throws {
         let scenario = try #require(RecordUnionSentinelModel.validationScenarios().first)

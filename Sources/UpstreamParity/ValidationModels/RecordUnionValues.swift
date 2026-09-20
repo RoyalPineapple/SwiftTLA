@@ -12,7 +12,7 @@ package struct RecordUnionSentinelModel {
     package struct Block: Hashable, Sendable { package let account: String; package let balance: Int }
     package struct SignedBlock: Hashable, Sendable { package let block: Block; package let signature: String }
     package typealias Value = OneOf<SignedBlock, Sentinel>
-    enum Step: String, CaseIterable { case finish }
+    enum Step: String, CaseIterable { case create, advance, clear }
 
     package static var spec: TLASpec {
         #spec("RecordUnionSentinel") { scope in
@@ -21,8 +21,20 @@ package struct RecordUnionSentinelModel {
                 Value.first(SignedBlock(block: Block(account: "NoBlock", balance: 0), signature: "NoBlock")),
                 Value.first(SignedBlock(block: Block(account: "account", balance: 3), signature: "signature"))
             ]))
-            Algorithm("SelectValue") {
-                Do(Step.finish) { Assign(value, to: value); Stop() }
+            Do(Step.create, when: value == Value.second(Sentinel.noBlock)) {
+                Assign(value, to: Value.first(SignedBlock(
+                    block: Block(account: "NoBlock", balance: 0), signature: "NoBlock")))
+            }
+            Do(Step.advance) {
+                When(value != Value.second(Sentinel.noBlock))
+                let signed = value.assuming(SignedBlock.self)
+                When(signed.block.balance < 3)
+                Assign(value, to: Value.first(SignedBlock.expression(
+                    block: Block.expression(account: signed.block.account, balance: signed.block.balance + 1),
+                    signature: signed.signature)))
+            }
+            Do(Step.clear, when: value != Value.second(Sentinel.noBlock)) {
+                Assign(value, to: Value.second(Sentinel.noBlock))
             }
             Validation("Records and model-value sentinel") {}
         }
