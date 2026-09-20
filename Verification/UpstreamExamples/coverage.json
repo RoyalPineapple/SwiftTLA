@@ -5,7 +5,7 @@
   "auditedSwiftSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
   "rules": {
     "unit": "One upstream module/configuration pair with resolved parameter and environment bindings. Every pinned configuration and required variant remains required until an explicit reviewed exclusion.",
-    "configurationBindings": "Published configuration-file pairs form the baseline. Source-defined environment variants need separate bindings and evidence before family completion. The pair count is not the final variant count.",
+    "configurationBindings": "The pinned upstream tree, inventory, and ledger contain the same 234 published configuration files across 78 families, with no missing, extra, or duplicate ledger paths. A previous report of 292 was incorrect. Published configuration-file pairs form the baseline. Source-defined environment variants need separate bindings and evidence before family completion. The pair count is not the final variant count.",
     "states": [
       "missing",
       "implemented",
@@ -52,6 +52,21 @@
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037",
       "temporalRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493942145",
+      "ordinaryTestsResult": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495/job/106033496129",
+        "conclusion": "success",
+        "testsPassed": 1503,
+        "testSeconds": 714.802,
+        "scope": "The terminal job log reports 1503 passing tests for the ordinary suite on bba219f340df1f4354de6d1f2ec7a6fe011cfed9. Finite-graph, upstream, scenario, and Apple jobs remain separate checks. This does not validate later local record-union changes or add complete-criterion/configuration credit."
+      },
+      "corpusExportResult": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495/job/106033496009",
+        "conclusion": "success",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495/artifacts/10600078295",
+        "artifactSHA256": "87781e4de98805be739a09368f8c4b0b13d8bda1737663d9c6d77135e1ef9f90",
+        "verifiedFiles": 20,
+        "scope": "The archive checksum and all 20 manifest file checksums verify. The checkout log and manifest identify bba219f340df1f4354de6d1f2ec7a6fe011cfed9. The four exported cases are Boulanger, KVsnap, TLCMC, and VoteProof. This establishes retained export integrity, not native/upstream equivalence or complete configuration coverage. Retained archive and files: /tmp/swifttla-corpus-bba.TFOJv6."
+      },
       "temporalSymmetryResult": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493942145/job/106033512742",
         "conclusion": "success",
@@ -63,6 +78,13 @@
       "scope": "Pushed after the previous main CI run completed with failure, without cancelling older independent comparisons. Includes existing-index projection membership, buffered graph serialization, retained graph-file moves, ordinary-record MultiCarElevator and Echo migrations, dictionary-preserving updates, three-domain Do, documentation export coverage, and the demo SwiftPM CI runner fix. The combined focused wrapper run passed 100 tests on source 9ae139e6; the only subsequent change in this candidate records that diagnostic. All three new hosted workflows target this exact immutable SHA. Results and artifact audits remain pending; no performance recovery, family/configuration match, or completed DSL criterion is claimed. PR 394 remains draft."
     },
     "projectionCandidate": {
+      "coffeeCan3000Failure": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797/job/106019928941",
+        "conclusion": "failure",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797/artifacts/10601060119",
+        "reportedArtifactSHA256": "0f545015e53714b6785dd723fb7899cc19020b41d7615a3acaff764752e812bd",
+        "scope": "The terminal job log reports NSCocoaErrorDomain 640 / POSIX 28 while saving generated/checked-graph/tlc-process.json at 07:07:21 UTC on 2026-09-20. The comparison exits 2; the job completes with failure at 07:13:07 after retaining a 2,135,515,151-byte archive. This is disk exhaustion, not an established semantic mismatch. The archive has not been downloaded or audited, so its reported digest and partial output give no equivalence credit. This 6d0617ab run predates the retained-file move in bba219f3; recovery still requires completed current-source evidence."
+      },
       "sourceSHA": "6d0617ab720ad6fb54f6dce11f642dbe63863c9d",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797",
@@ -933,6 +955,20 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "40102",
+      "sourceSHA": "37a321f8e39b4ad3e299bd628c3a6998db6d873d",
+      "sourcePatchSHA256": "94ab0f5804a85363d04f67343282a25582400a1f56683e6034d3aa2a5d0157f5",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'RecordUnionOrderingTests'",
+      "exitCode": 1,
+      "testsPassed": 3,
+      "testsFailed": 2,
+      "buildSeconds": 615.47,
+      "testSeconds": 0.011,
+      "result": "Both new complete native/formal graph comparisons pass their graph assertions, including all initial states, states, and labeled edges. Both tests then fail whole-bundle equality between generated render() and spec.compile().render(). The three existing ordering and projection tests pass. Export equivalence is not established; the next diagnostic splits bundle equality into root, imports, and provenance without removing any field.",
+      "scope": "Focused safety-wrapper diagnostic only. The source/test patch stayed fixed throughout the run. An earlier build, session 5693, was deliberately terminated before tests to correct missing try annotations; it supplies no test evidence. No family/configuration/DSL criterion credit."
+    },
     {
       "session": "53930",
       "sourceSHA": "bcfc74ac8f6ebecd5ec15efb28025e10fe8a9894",
