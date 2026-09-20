@@ -47,13 +47,14 @@ func alphaKey(_ action: ActionExpr) -> String {
     alphaKey(action, bindingNames: [])
 }
 
-func alphaKey(_ action: ActionExpr, bindingNames: [String]) -> String {
+func alphaKey(_ action: ActionExpr, bindingNames: [String], preservingEvaluation: Bool = false) -> String {
     var next = 0
     var environment: [String: String] = [:]
     for name in bindingNames {
         let (_, extended) = fresh(name, environment: environment, next: &next)
         environment = extended
     }
+    if preservingEvaluation { return actionKey(action, environment: environment, next: &next) }
     let branches = ActionNormalization.branches(of: action) { semanticStateBranches($0).map(ActionExpr.guard_) }
     return "or[\(branches.map { actionKey($0, environment: environment, next: &next) }.joined(separator: ","))]"
 }

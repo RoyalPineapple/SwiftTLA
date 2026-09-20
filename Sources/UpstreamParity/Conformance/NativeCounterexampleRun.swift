@@ -49,13 +49,19 @@ package struct NativeCounterexampleRun: Sendable {
         self.rendered = rendered
         self.checks = checks
         compareTrace = { data, outcome, stdout in
+            if outcome == .deadlock {
+                guard rendered.checksDeadlock, case .violated = checks.deadlock else {
+                    throw EvidenceFormatError.invalidField(record: "counterexample", field: "different decisive check")
+                }
+            }
             let replay = try TLCTraceParser().replayCounterexample(data,
-                initialMachines: initialMachines, renderedActions: rendered.actions)
+                initialMachines: initialMachines, renderedActions: rendered.actions,
+                maximumStates: maximumStates, checkingDeadlock: outcome == .deadlock)
             let check: ModelCheck
             let nativeResult: PropertyResult?
             switch outcome {
             case .deadlock where rendered.checksDeadlock:
-                guard try replay.final.successors().isEmpty else {
+                guard replay.finalIsDeadlocked == true else {
                     throw EvidenceFormatError.invalidField(record: "counterexample", field: "false deadlock")
                 }
                 check = .deadlock

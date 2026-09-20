@@ -4,6 +4,19 @@ import SwiftParser
 @testable import SwiftTLAPlugin
 
 struct CheckingRegisterDeclarationTests {
+    @Test("Effectful action identity preserves whether a write runs once or for each branch")
+    func preservesEffectEvaluationIdentity() {
+        let register = CheckingRegisterReference(name: "visits")
+        let write = ActionExpr.guard_(.setCheckingRegister(register,
+            .add(.checkingRegister(register), .value(.int(1)))))
+        let first = ActionExpr.guard_(.value(.bool(true)))
+        let second = ActionExpr.guard_(.value(.bool(false)))
+        let shared = ActionExpr.and(write, .or(first, second))
+        let repeated = ActionExpr.or(.and(write, first), .and(write, second))
+        #expect(alphaKey(shared, bindingNames: [], preservingEvaluation: true)
+            != alphaKey(repeated, bindingNames: [], preservingEvaluation: true))
+    }
+
     @Test("Register declarations retain typed identities and symbolic initializers")
     func retainsDeclarations() throws {
         let spec = try checkingRegisterDeclarationSpec()

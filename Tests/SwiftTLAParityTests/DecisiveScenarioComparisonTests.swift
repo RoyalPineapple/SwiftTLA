@@ -188,7 +188,7 @@ struct DecisiveScenarioComparisonTests {
                      String(original.dropLast(2))] {
             #expect(throws: TLCTraceError.self) {
                 try TLCTraceParser().replayCounterexample(Data(text.utf8), initialMachines: initial,
-                    renderedActions: actions)
+                    renderedActions: actions, maximumStates: 100, checkingDeadlock: false)
             }
         }
     }

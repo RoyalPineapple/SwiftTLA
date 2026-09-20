@@ -26,10 +26,48 @@ package struct TLCTraceParser: Sendable {
         }
     }
 
-    /// Resolves each state using generated transitions, without exploring unrelated paths.
+    /// Replays the BFS prefix so exploration-wide effects include off-witness branches.
     package func replayCounterexample<Machine: StateMachine>(
-        _ data: Data, initialMachines: [Machine], renderedActions: [RenderedAction]
-    ) throws -> (trace: GraphTrace, final: Machine) {
+        _ data: Data, initialMachines: [Machine], renderedActions: [RenderedAction],
+        maximumStates: Int, checkingDeadlock: Bool
+    ) throws -> (trace: GraphTrace, final: Machine, finalIsDeadlocked: Bool?) {
+        guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
+        guard let initial = initialMachines.first else { throw ExplorationError.noInitialStates }
+        var context = CheckingContext(registers: try initial.initialCheckingRegisters())
+        var pending: [Machine] = []
+        var layer: [Machine] = []
+        var discovered: Set<Machine.Snapshot> = []
+        var expanded: [Machine.Snapshot: [(action: Machine.Action, machine: Machine)]] = [:]
+        var successorsToDiscover: [Machine] = []
+        func discover(_ machine: Machine) throws {
+            guard machine.hasSameConfiguration(as: initial) else { throw ExplorationError.configurationMismatch }
+            guard try machine.satisfiesStateConstraint(), !discovered.contains(machine.snapshot) else { return }
+            guard discovered.count < maximumStates else { throw ExplorationError.stateLimitExceeded(maximumStates) }
+            discovered.insert(machine.snapshot)
+            pending.append(machine)
+        }
+        for machine in initialMachines {
+            guard try machine.assumptionsHold() else { throw ExplorationError.assumptionViolated }
+            try discover(machine)
+        }
+        func successors(of machine: Machine) throws -> [(action: Machine.Action, machine: Machine)] {
+            while expanded[machine.snapshot] == nil {
+                try Task.checkCancellation()
+                for successor in successorsToDiscover { try discover(successor) }
+                successorsToDiscover.removeAll(keepingCapacity: true)
+                if layer.isEmpty {
+                    guard !pending.isEmpty else { throw ExplorationError.traceTargetNotReachable }
+                    try context.advanceBreadthFirstLevel()
+                    swap(&layer, &pending)
+                    layer.reverse()
+                }
+                let source = layer.removeLast()
+                let successors = try source.successors(checking: &context)
+                expanded[source.snapshot] = successors
+                successorsToDiscover = successors.map(\.machine)
+            }
+            return expanded[machine.snapshot]!
+        }
         var machines: [Machine] = []
         var allowedActions: [Set<String>] = []
         let actionNames = Dictionary(uniqueKeysWithValues: renderedActions.map {
@@ -39,7 +77,7 @@ package struct TLCTraceParser: Sendable {
             let candidates: [(action: Machine.Action?, machine: Machine)]
             if let previous = machines.last {
                 guard try previous.satisfiesStateConstraint() else { throw TLCTraceError.invalidState(index - 1) }
-                candidates = try previous.successors().map { ($0.action, $0.machine) }
+                candidates = try successors(of: previous).map { ($0.action, $0.machine) }
             } else {
                 candidates = initialMachines.map { (nil, $0) }
             }
@@ -71,7 +109,8 @@ package struct TLCTraceParser: Sendable {
                 throw TLCTraceError.invalidAction(index - 1)
             }
         }
-        return (trace, final)
+        let finalIsDeadlocked = checkingDeadlock ? try successors(of: final).isEmpty : nil
+        return (trace, final, finalIsDeadlocked)
     }
 
     private func matchesBindings(_ bindings: [String: Any], state: CanonicalState) -> Bool {

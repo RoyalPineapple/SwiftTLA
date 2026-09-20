@@ -1191,6 +1191,7 @@ private func directActionCalls(
 /// Encodes the lowered declaration plan with unambiguous field boundaries.
 private struct CanonicalSpecificationEncoder {
     private var output = ""
+    private var preservesActionEvaluation = false
 
     mutating func encode(_ spec: TLASpec) -> String {
         specification(spec)
@@ -1209,6 +1210,7 @@ private struct CanonicalSpecificationEncoder {
     }
 
     private mutating func specification(_ spec: TLASpec) {
+        preservesActionEvaluation = !spec.checkingRegisters.isEmpty
         field("spec.name", spec.name)
         let layout = CompiledLayout(source: spec)
         field("declarationLayout", layout.canonicalEncoding)
@@ -1407,7 +1409,8 @@ private struct CanonicalSpecificationEncoder {
         _ expression: ActionExpr,
         bindingNames: [String] = []
     ) -> String {
-        node("action", [alphaKey(expression, bindingNames: bindingNames)])
+        node("action", [alphaKey(expression, bindingNames: bindingNames,
+            preservingEvaluation: preservesActionEvaluation)])
     }
 
     private func canonicalTemporal(_ expression: TemporalCondition<StateExpr>) -> String {
