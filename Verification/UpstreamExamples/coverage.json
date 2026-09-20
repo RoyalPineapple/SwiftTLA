@@ -9054,8 +9054,18 @@
       "id": "AC-09",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLATests/NativeReachabilityTests.swift retains complete graphs after invariant violations, permits normal termination, and reports unfinished blocked machines as deadlocks. Tests/SwiftTLATests/NativeTemporalCheckingTests.swift retains replayable typed temporal cycles. Tests/SwiftTLATests/ProjectedFairnessTests.swift covers stuttering under projected fairness. These tests do not establish agreement with separately executed TLC. Independent hosted evidence for all required cases remains unverified.",
-      "evidence": []
+      "reason": "NativeReachabilityTests covers complete graphs after invariant violations, normal termination, and unfinished blocked machines. NativeTemporalCheckingTests retains replayable typed cycles. The 6d0617ab independent temporal matrix now has audited TLC agreement for stuttering, temporal violations, and deadlock satisfaction; CoffeeCan AP/100/1000 also has audited invariant/temporal/deadlock comparisons. These do not complete the required normal-completion versus unfinished-stuck versus expected-deadlock scenario matrix. Counter and configured-process scenario jobs in run 35485732797 remain queued, and projected fairness needs independent evidence. No complete-criterion credit.",
+      "evidence": [
+        {
+          "sourceSHA": "6d0617ab720ad6fb54f6dce11f642dbe63863c9d",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485733646/job/106011635841",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485733646/artifacts/10597495826",
+          "artifactSHA256": "af3883b8c8772868a567160e676cb1cb301e36625fec46cb093eb95267146294",
+          "acceptanceComplete": false,
+          "scope": "Eighteen temporal property comparisons and three deadlock comparisons are exact. Retained traces distinguish stuttering and cyclic counterexamples, and no-fairness LeavesZero is violated while weak/strong variants satisfy it. This fixed matrix does not exercise every AC-09 termination or expected-deadlock scenario."
+        }
+      ]
     },
     {
       "id": "AC-10",
@@ -9094,10 +9104,29 @@
     },
     {
       "id": "AC-15",
-      "status": "missing",
+      "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLATests/ConfiguredProcessTests.swift separates reachable completion from eventual completion without fairness. Explicit weak and strong fairness apply to each configured process and survive TLA+ export. Tests/SwiftTLAParityTests/TemporalSymmetryCheckTests.swift compares the same complete graph across no, weak, and strong fairness cases. Complete generated-model coverage and independent hosted acceptance evidence remain unaudited.",
-      "evidence": []
+      "reason": "Audited generated tests preserve the complete three-state/four-edge temporal graph under no, weak, and strong fairness and assert the corresponding absence/presence of WF_/SF_ in generated export. ConfiguredProcessTests covers per-instance obligations, empty populations, and reachable completion without assuming eventual completion. ProjectedFairnessTests covers state projections and stuttering; ProcessFairnessExemptionTests checks unchanged transitions/initialization, selected obligation removal, export, and invalid declarations. Hosted ordinary and independent base-matrix evidence now exist at 6d0617ab. Configured-process scenario jobs are still queued, and independent projected/exempt fairness evidence plus remaining B-04 scope decisions are incomplete. This criterion remains uncredited.",
+      "evidence": [
+        {
+          "sourceSHA": "6d0617ab720ad6fb54f6dce11f642dbe63863c9d",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/job/106011625583",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/artifacts/10598034043",
+          "artifactSHA256": "a119863fd0b66c710e2b7697c06d40d440a904e3ad61922c33cc2b29cf416cf6",
+          "acceptanceComplete": false,
+          "scope": "Terminal log confirms ConfiguredProcessTests' three cases, TemporalSymmetryCheckTests.temporalCasesPreserveFairnessOutcomes, and ProjectedFairnessTests pass. Their exact assertions and generated NativeTemporalMatrix source were audited, not inferred from suite names. These files are unchanged between 6d0617ab and this audit. ProcessFairnessExemptionTests was source-audited but not separately attributed to this job here."
+        },
+        {
+          "sourceSHA": "6d0617ab720ad6fb54f6dce11f642dbe63863c9d",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485733646/job/106011635841",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485733646/artifacts/10597495826",
+          "artifactSHA256": "af3883b8c8772868a567160e676cb1cb301e36625fec46cb093eb95267146294",
+          "acceptanceComplete": false,
+          "scope": "The separately executed TLC matrix agrees on all six temporal properties in each fairness mode. Native and reference violation traces are retained. The base matrix proves no inferred fairness and explicit fairness outcome agreement, not every process, projection, exemption, or unresolved scope form."
+        }
+      ]
     },
     {
       "id": "AC-16",
