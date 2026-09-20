@@ -1,7 +1,7 @@
 import SwiftTLA
 import SwiftSyntax
 
-private struct AlgorithmMacroDefinition: Sendable {
+struct AlgorithmMacroDefinition: Sendable {
     let parameters: [String]
     let body: CodeBlockItemListSyntax
     let assignmentParameters: Set<String>
@@ -204,7 +204,7 @@ extension ParserSession {
         }
         guard call.arguments.first?.label == nil, call.additionalTrailingClosures.isEmpty,
               case .step(let model)? = parseEachComponent(call, construct: .doStep,
-                processParameter: "__independent_step", macros: [:], scope: sourceScope) else {
+                processParameter: "__independent_step", macros: specBindings.statementMacros, scope: sourceScope) else {
             components.diagnostics.append(algorithmSourceDiagnostic ?? .init(
                 message: algorithmParseFailure ?? "Do requires a typed label, an optional when guard, and an atomic body.",
                 source: call))
@@ -253,7 +253,7 @@ extension ParserSession {
             bodyScope = bodyScope.extending(binding: name, to: .variable(name), shape: element)
         }
         guard let statements = parseAlgorithmStatements(closure.statements,
-            processParameter: "__independent_step", macros: [:], scope: bodyScope) else {
+            processParameter: "__independent_step", macros: specBindings.statementMacros, scope: bodyScope) else {
             components.diagnostics.append(algorithmSourceDiagnostic ?? .init(
                 message: algorithmParseFailure ?? "Do requires a supported atomic body.", source: closure))
             return nil
@@ -308,7 +308,8 @@ extension ParserSession {
         }
 
         var algorithmComponents: [AlgorithmComponentModel] = []
-        var macros: [String: AlgorithmMacroDefinition] = [:]
+        var macros = specBindings.statementMacros
+        var localMacroNames: Set<String> = []
         let outerConstants = constants
         let outerSourceScope = sourceScope
         let outerAllowsUnboundNames = allowsUnboundValueNames
@@ -324,7 +325,7 @@ extension ParserSession {
                let variable = declaration.as(VariableDeclSyntax.self),
                let macro = parseAlgorithmMacroDeclaration(variable, scope: sourceScope) {
                 let name = variable.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName ?? ""
-                guard macros[name] == nil else {
+                guard localMacroNames.insert(name).inserted else {
                     components.diagnostics.append(.init(message: "Algorithm macro '\(name)' is declared more than once.", source: statement))
                     return nil
                 }
@@ -940,7 +941,7 @@ extension ParserSession {
         return (sourceName, component, valueType)
     }
 
-    private func parseAlgorithmMacroDeclaration(
+    func parseAlgorithmMacroDeclaration(
         _ declaration: VariableDeclSyntax,
         scope: TypedFacadeScope
     ) -> AlgorithmMacroDefinition? {

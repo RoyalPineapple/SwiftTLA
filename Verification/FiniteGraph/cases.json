@@ -152,6 +152,56 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "die-hardest-parallel",
+      "sourceModel": "die-hardest-parallel",
+      "scenario": "NextParallel",
+      "module": "die-hardest/MCParallel.tla",
+      "configuration": "die-hardest/MCParallel.cfg",
+      "imports": ["die-hardest/DieHardest.tla", "die-harder/DieHarder.tla", "die-hardest/FiniteSetsExt.tla", "kvsnap/Functions.tla", "kvsnap/Folds.tla"],
+      "dependencies": [
+        {"importingModule": "MCParallel", "importedModule": "DieHardest"},
+        {"importingModule": "DieHardest", "importedModule": "DieHarder"},
+        {"importingModule": "DieHardest", "importedModule": "Functions"},
+        {"importingModule": "DieHardest", "importedModule": "FiniteSetsExt"},
+        {"importingModule": "FiniteSetsExt", "importedModule": "Functions"},
+        {"importingModule": "FiniteSetsExt", "importedModule": "Folds"},
+        {"importingModule": "Functions", "importedModule": "Folds"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/DieHard/DieHardest.tla",
+        "sha256": "e0afd451c0e26c5e1b1b7a5c9d4a5a61b7947a4d65dc484583344397c64d1de3"
+      },
+      "exploration": {"maximumStateLimit": 100000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "3495cea5e4264a47a13e2d5cc646bf157abf0b64b06029f55ad438e7a003687f",
+      "cfgSHA256": "0310f76deeec637660454b617500ff6b47f46cd129805f2842354b81c30db650",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "die-hardest-parallel-freeze",
+      "sourceModel": "die-hardest-parallel",
+      "scenario": "NextParallelFreeze",
+      "module": "die-hardest/MCParallel.tla",
+      "configuration": "die-hardest/MCParallelFreeze.cfg",
+      "imports": ["die-hardest/DieHardest.tla", "die-harder/DieHarder.tla", "die-hardest/FiniteSetsExt.tla", "kvsnap/Functions.tla", "kvsnap/Folds.tla"],
+      "dependencies": [
+        {"importingModule": "MCParallel", "importedModule": "DieHardest"},
+        {"importingModule": "DieHardest", "importedModule": "DieHarder"},
+        {"importingModule": "DieHardest", "importedModule": "Functions"},
+        {"importingModule": "DieHardest", "importedModule": "FiniteSetsExt"},
+        {"importingModule": "FiniteSetsExt", "importedModule": "Functions"},
+        {"importingModule": "FiniteSetsExt", "importedModule": "Folds"},
+        {"importingModule": "Functions", "importedModule": "Folds"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/DieHard/DieHardest.tla",
+        "sha256": "e0afd451c0e26c5e1b1b7a5c9d4a5a61b7947a4d65dc484583344397c64d1de3"
+      },
+      "exploration": {"maximumStateLimit": 100000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "3495cea5e4264a47a13e2d5cc646bf157abf0b64b06029f55ad438e7a003687f",
+      "cfgSHA256": "3a2babba9efbe628fe1f062d8a62146c5f7596c2f7c0ee4b8607ba839fdfa0cb",
+      "timeoutSeconds": 120
+    },
+    {
       "id": "ap-die-harder",
       "sourceModel": "die-harder",
       "scenario": "APDieHarder",

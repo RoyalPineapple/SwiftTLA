@@ -8,6 +8,67 @@ struct IndependentAtomicStepTests {
         .init(enums: [parserTestEnum("Step", cases: ["next": .string("next"), "other": .string("other")])])
     }
 
+    @Test("specification statement macros expand in ordinary and parameterized independent steps")
+    func expandsSpecificationMacros() throws {
+        let spec = SpecParser.parseSpecClosure(named: "SharedMacro", try parseSpecTestClosure("""
+        { scope in
+            let value = scope.sharedVar(initial: 0)
+            let advance = Macro { Assign(value, to: value + 1) }
+            Do(Step.next) { advance(); advance() }
+            Do(Step.other, over: Set<Int>([1, 2])) { amount in
+                advance()
+                Assign(value, to: value + amount)
+            }
+        }
+        """), sourceTypes: sourceTypes)
+        #expect(spec.diagnostics.isEmpty)
+        #expect(spec.sourceAlgorithms.isEmpty)
+        #expect(spec.sourceAtomicSteps.count == 2)
+        let compilation = try spec.compile()
+        #expect(compilation.layout.variables.map(\.declaration.name) == ["value"])
+        let initial = try firstCompiledState(in: compilation)
+        let next = try #require(try compiledSuccessors(named: "next", arguments: [], in: compilation, from: initial).first)
+        #expect(try renderedValue(named: "value", in: next, compilation: compilation) == .int(2))
+        let other = try #require(try compiledSuccessors(named: "other", arguments: [.int(2)], in: compilation, from: initial).first)
+        #expect(try renderedValue(named: "value", in: other, compilation: compilation) == .int(3))
+    }
+
+    @Test("specification statement macros reject mutable declarations, duplicates, and independent control transfers", arguments: [
+        "var advance = Macro { Assign(value, to: 1) }\nDo(Step.next) { advance() }",
+        "let advance = Macro { Skip() }\nlet advance = Macro { Skip() }",
+        "let advance = Macro { Stop() }\nDo(Step.next) { advance() }"
+    ])
+    func rejectsInvalidSpecificationMacros(_ declarations: String) throws {
+        let spec = SpecParser.parseSpecClosure(named: "InvalidMacro", try parseSpecTestClosure("""
+        { scope in
+            let value = scope.sharedVar(initial: 0)
+            \(declarations)
+        }
+        """), sourceTypes: sourceTypes)
+        #expect(!spec.diagnostics.isEmpty)
+        #expect(throws: (any Error).self) { try spec.compile() }
+    }
+
+    @Test("algorithms inherit specification macros and can shadow them locally", arguments: [false, true])
+    func inheritsAndShadowsSpecificationMacros(shadow: Bool) throws {
+        let local = shadow ? "let advance = Macro { Assign(value, to: value + 2) }" : ""
+        let spec = SpecParser.parseSpecClosure(named: "MacroScope", try parseSpecTestClosure("""
+        { scope in
+            let value = scope.sharedVar(initial: 0)
+            let advance = Macro { Assign(value, to: value + 1) }
+            Algorithm("Nested") {
+                \(local)
+                Do(Step.next) { advance() }
+            }
+        }
+        """), sourceTypes: sourceTypes)
+        #expect(spec.diagnostics.isEmpty)
+        let compilation = try spec.compile()
+        let initial = try firstCompiledState(in: compilation)
+        let next = try #require(try compiledSuccessors(named: "next", arguments: [], in: compilation, from: initial).first)
+        #expect(try renderedValue(named: "value", in: next, compilation: compilation) == .int(shadow ? 2 : 1))
+    }
+
     @Test("bound steps reject mutable bindings, duplicate registration, and unregistered enabledness", arguments: [
         "var next = Do(Step.next) { Skip() }\nnext",
         "let next = Do(Step.next) { Skip() }\nnext\nnext",

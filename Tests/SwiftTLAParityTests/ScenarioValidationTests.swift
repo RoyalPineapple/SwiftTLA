@@ -6,7 +6,7 @@ struct ScenarioValidationTests {
     @Test("registered model scenarios have unique identities")
     func identifiesRegisteredScenarios() throws {
         let scenarios = try modelValidationScenarios()
-        #expect(scenarios.count == 68)
+        #expect(scenarios.count == 70)
         #expect(Set(scenarios.map(\.id)).count == scenarios.count)
     }
 

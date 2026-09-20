@@ -301,6 +301,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
                 scenarios = try DieHardestModel.validationScenarios()
             case .dieHardestGlobalFreeze:
                 scenarios = try DieHardestGlobalFreezeModel.validationScenarios()
+            case .dieHardestParallel:
+                scenarios = try DieHardestParallelModel.validationScenarios()
             case .channel:
                 scenarios = try ChannelModel.validationScenarios()
             case .asynchInterface:
@@ -396,6 +398,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case dieHarder = "die-harder"
     case dieHardest = "die-hardest"
     case dieHardestGlobalFreeze = "die-hardest-global-freeze"
+    case dieHardestParallel = "die-hardest-parallel"
     case multiCarElevator = "multicar-elevator"
     case tlcmcGraph1 = "tlcmc-graph-1"
     case nQueensFour = "n-queens-four"
@@ -422,7 +425,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .kvsnap: return try explore(KVsnapModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
-        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
+        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
@@ -437,7 +440,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .tlcmcGraph1: return try TLCMCModel.render()
         case .stringLiterals: return try StringLiteralModel.render()
         case .actionReferences: return try ActionReferencesModel.render()
-        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
+        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
             throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned scenario")
         }
     }

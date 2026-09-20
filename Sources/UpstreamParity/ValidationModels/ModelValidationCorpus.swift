@@ -26,6 +26,7 @@ package func modelValidationScenarios() throws -> [(id: String, scenario: any Mo
         ("die-harder", try DieHarderModel.validationScenarios()),
         ("die-hardest", try DieHardestModel.validationScenarios()),
         ("die-hardest-global-freeze", try DieHardestGlobalFreezeModel.validationScenarios()),
+        ("die-hardest-parallel", try DieHardestParallelModel.validationScenarios()),
         ("channel", try ChannelModel.validationScenarios()),
         ("asynch-interface", try AsynchInterfaceModel.validationScenarios()),
         ("majority", try MajorityModel.validationScenarios()),

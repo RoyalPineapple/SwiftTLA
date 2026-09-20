@@ -99,7 +99,17 @@ extension ParserSession {
                 }
                 continue
             }
-            if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+            if compilerGrammarName(in: call.calledExpression) == "Macro" {
+                guard declaration.bindingSpecifier.text == "let",
+                      specBindings.statementMacros[sourceName] == nil,
+                      let macro = parseAlgorithmMacroDeclaration(declaration, scope: sourceScope) else {
+                    components.diagnostics.append(algorithmSourceDiagnostic ?? .init(
+                        message: algorithmParseFailure ?? "A statement macro requires a unique let binding and a supported body.",
+                        source: binding))
+                    continue
+                }
+                specBindings.statementMacros[sourceName] = macro
+            } else if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
                member.declName.baseName.sourceIdentifierName == "checkingRegister",
                member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == declarationScope {
                 guard declaration.bindingSpecifier.text == "let",
