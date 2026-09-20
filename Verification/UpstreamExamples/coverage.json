@@ -8738,14 +8738,22 @@
       "id": "AC-06",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Local diagnostic 18575 passes 32 configuration tests. ValidationScenarioTests rejects missing, duplicate, foreign, and incompatible scalar bindings. ParameterResolutionTests and DictionaryConfigurationTests retain typed identities and reject incompatible domains, keys, and values. ConfiguredCounterExecutionTests, ConfiguredProcessTests, and SetConfigurationTests vary settings and populations with unchanged generated API types and reject invalid dependent domains or mixed configurations. Hosted acceptance for the strengthened scope remains pending; this is not a verified DSL criterion.",
-      "evidence": []
+      "reason": "ValidationScenarioTests rejects missing, duplicate, foreign, and incompatible scalar bindings. ParameterResolutionTests and DictionaryConfigurationTests retain typed identities and reject incompatible domains, keys, and values. ConfiguredCounterExecutionTests, ConfiguredProcessTests, and SetConfigurationTests vary settings and populations with unchanged generated API types and reject invalid dependent domains or mixed configurations. All six suites passed hosted ordinary validation at edec23de. Historical evidence is retained, but the criterion remains uncredited pending source-aligned admission.",
+      "evidence": [{
+        "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632109",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10596135960",
+        "artifactSHA256": "d76ed2004fba91758ff38e6d0caef660a6943a73bccc090a51ecb195ca2901bf",
+        "acceptanceComplete": true,
+        "scope": "Audited all six suites against terminal passing results: typed scalar/set/dictionary configurations, same-named foreign identity rejection, missing and duplicate bindings, incompatible types and domains, invalid dictionary keys/values, parameter-dependent populations, shared generated state/action types, and mixed-configuration rejection. Test files are unchanged since this hosted SHA. Swift 6.1.2, Xcode 16.4 build 16F6, SDK 24F74. This does not establish every upstream configuration or complete AC-19 inference support."
+      }]
     },
     {
       "id": "AC-07",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Local diagnostic 11919 passes paired temporal and deadlock expectation tests. The weakly fair process retains identical complete initial snapshots, graphs, actual property results, deadlock results, and TLA/CFG after only its expectation changes; only the validation verdict differs. Missing checks, incomplete exploration, and disagreeing comparisons remain failures. Hosted acceptance for this strengthened scope remains pending; this is not a verified DSL criterion.",
+      "reason": "Local diagnostic 11919 passes paired temporal and deadlock expectation tests. The weakly fair process retains identical complete initial snapshots, graphs, actual property results, deadlock results, and TLA/CFG after only its expectation changes; only the validation verdict differs. Missing checks, incomplete exploration, and disagreeing comparisons remain failures. Hosted evidence remains missing: ordinary CI excludes ScenarioValidationTests, and the separate scenario suite times out during Boulanger without terminal results for these short contract tests. Separate expectation contracts from long-running corpus enumeration so ordinary CI can exercise them independently. This is not a verified DSL criterion.",
       "evidence": []
     },
     {
