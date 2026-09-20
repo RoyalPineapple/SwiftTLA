@@ -219,6 +219,29 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "find-highest",
+      "sourceModel": "find-highest",
+      "scenario": "MCFindHighest",
+      "module": "learn-proofs/MCFindHighest.tla",
+      "configuration": "learn-proofs/MCFindHighest.cfg",
+      "imports": ["learn-proofs/FindHighest.tla", "boulanger/TLAPS.tla"],
+      "dependencies": [
+        {"importingModule": "MCFindHighest", "importedModule": "FindHighest"},
+        {"importingModule": "FindHighest", "importedModule": "TLAPS"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/LearnProofs/MCFindHighest.tla",
+        "sha256": "f6a52f3ac863a235f0356551ce0fe1d41c34a606dae52546284b00da6a61bafc"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "f6a52f3ac863a235f0356551ce0fe1d41c34a606dae52546284b00da6a61bafc",
+      "cfgSHA256": "cf763095863919e42f8fc8fc3f7c65c9499d1e3a459e23de06bc7510d2de6f6a",
+      "timeoutSeconds": 600
+    },
+    {
       "id": "least-circular-substring-small",
       "sourceModel": "least-circular-substring",
       "scenario": "Small",

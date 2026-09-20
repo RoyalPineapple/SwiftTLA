@@ -3,3 +3,4 @@ Verification/FiniteGraph/fixtures/n-queens-four/QueensPluscal.tla whitespace=-bl
 Verification/FiniteGraph/fixtures/dining-philosophers/DiningPhilosophers.tla whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/boulanger/Boulanger.tla whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/boulanger/TLAPS.tla whitespace=-blank-at-eol
+Verification/FiniteGraph/fixtures/learn-proofs/* whitespace=-blank-at-eol,-blank-at-eof
