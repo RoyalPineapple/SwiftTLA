@@ -781,7 +781,9 @@ extension TLCGraphReaderTests {
     let directory = try helperProcessDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
     let request = try retainedCaptureRequest(in: directory)
-    try completeGraphStream(request.finiteGraphCase).write(to: request.graphEvents, options: .atomic)
+    let events = try completeGraphStream(request.finiteGraphCase)
+    try events.write(to: request.graphEvents, options: .atomic)
+    let originalFile = try FileManager.default.attributesOfItem(atPath: request.graphEvents.path)[.systemFileNumber] as? NSNumber
     try Data("stale trace".utf8).write(to: request.traceOutput)
     let executor = RecordingTLCExecutor(results: [.init(status: status, stdout: "TLC output", stderr: "")])
     let output = directory.appendingPathComponent("retained")
@@ -792,6 +794,30 @@ extension TLCGraphReaderTests {
     #expect(capture.graph.isComplete == (status == 0))
     #expect(!FileManager.default.fileExists(atPath: request.traceOutput.path))
     #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("counterexample.json").path))
+    let retained = output.appendingPathComponent("graph-events.jsonl")
+    #expect(!FileManager.default.fileExists(atPath: request.graphEvents.path))
+    #expect(try Data(contentsOf: retained) == events)
+    #expect(originalFile != nil)
+    #expect(try FileManager.default.attributesOfItem(atPath: retained.path)[.systemFileNumber] as? NSNumber == originalFile)
+    try Data("later invocation".utf8).write(to: request.graphEvents)
+    #expect(try Data(contentsOf: retained) == events)
+  }
+
+  @Test("graph retention rejects symbolic links without moving their targets")
+  func rejectsSymbolicGraphOutput() throws {
+    let directory = try helperProcessDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let request = try retainedCaptureRequest(in: directory)
+    let original = directory.appendingPathComponent("original.jsonl")
+    let events = try completeGraphStream(request.finiteGraphCase)
+    try events.write(to: original)
+    try FileManager.default.createSymbolicLink(at: request.graphEvents, withDestinationURL: original)
+    let executor = RecordingTLCExecutor(results: [.init(status: 0, stdout: "TLC output", stderr: "")])
+    #expect(throws: EvidenceFormatError.self) {
+      try TLCProcessAdapter(executor: executor).capture(request, retainingIn: directory.appendingPathComponent("retained"))
+    }
+    #expect(try Data(contentsOf: original) == events)
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: request.graphEvents.path) == original.path)
   }
 
   @Test("TLC exit status defines the process outcome")

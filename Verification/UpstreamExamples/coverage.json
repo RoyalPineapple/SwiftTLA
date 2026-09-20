@@ -52,7 +52,14 @@
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797",
       "temporalRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485733646",
-      "scope": "Pushed after edec23de main CI became terminal; older independent comparisons were left running. Includes native temporal DSL migration, dictionary enum identity preservation, ordinary-record demo migrations and hosted demo tests, generated canonical and finite-graph rendering, unavailable checked-batch reuse, existing-index boundary validation, and finite-graph stack sampling. Focused wrapper sessions 4457, 96234, and 22680 pass 89, 10, and 25 tests respectively; earlier local evidence covers temporal and demo changes. Main CI, finite-graph comparisons, and temporal/symmetry validation are newly queued for this exact SHA. PR 394 remains draft. No new hosted coverage credit; full graph/property equivalence and measured performance are pending."
+      "appleDemoFailure": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/job/106011625622",
+        "conclusion": "failure",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/artifacts/10598995642",
+        "artifactSHA256": "21e86eac20731f6d7952075b5d0dfc0185272888e22db9c3f82dbc1d5308478e",
+        "scope": "The verified artifact binds to 6d0617ab, Swift 6.1.2, and Xcode 16.4 build 16F6. The generated demo-model step failed before tests because SwiftTLADemos-Package is not an available Xcode scheme. The job log reports the preceding 12 Apple adoption tests passed. Local artifact: /tmp/swifttla-demo-ci-6d.b9vF8D/artifact.zip. Use the existing SwiftPM runner for this pure-Swift macOS library package, aligned with focused local diagnostics. Keep Xcode app builds and Apple adoption tests unchanged. Main CI remains active; do not cancel it or assign recovery credit before a new hosted pass."
+      },
+      "scope": "Pushed after edec23de main CI became terminal; older independent comparisons were left running. Includes native temporal DSL migration, dictionary enum identity preservation, ordinary-record demo migrations and hosted demo tests, generated canonical and finite-graph rendering, unavailable checked-batch reuse, existing-index boundary validation, and finite-graph stack sampling. Focused wrapper sessions 4457, 96234, and 22680 pass 89, 10, and 25 tests respectively; earlier local evidence covers temporal and demo changes. Main CI is active; the Apple demo-model step failed before test execution, as recorded in appleDemoFailure. Independent finite-graph and temporal/symmetry comparisons remain pending for this exact SHA. PR 394 remains draft. No new hosted coverage credit; full graph/property equivalence and measured performance are pending."
     },
     "capacityCandidate": {
       "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
@@ -739,6 +746,16 @@
     "toolchainGap": "Command Line Tools 16.4 supports focused SwiftPM diagnostics with the same SDK build shown in hosted Apple logs. Full Xcode 16.4 is absent locally. Earlier beta-toolchain passes remain uncredited."
   },
   "hostedComparisonFailures": {
+    "boulangerNativeExportTimeout": {
+      "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954/job/105995753064",
+      "conclusion": "failure",
+      "completedAt": "2026-09-20T04:45:10Z",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954/artifacts/10599180768",
+      "artifactSHA256": "ec7ab431da5c7c0ec5deca09556e8190293c0ae4fd6c8efe175f5fa1ee7461b2",
+      "artifactBytes": 274,
+      "scope": "The terminal job log confirms a 120-minute comparison-step timeout at 04:44:54 UTC. The locally verified artifact contains only validation.log: native swift-export started, but no subsequent phase, graph, or profile was retained. Local archive: /tmp/swifttla-boulanger-edec.p1mN8t/artifact.zip. This predates the queued/current candidate's retained-state membership changes and independent-run profiling. Do not infer a semantic mismatch, successful optimization, or completed configuration."
+    },
     "coffeeCan3000DiskExhaustion": {
       "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
@@ -748,7 +765,18 @@
       "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954/artifacts/10597498801",
       "reportedArtifactSHA256": "7ffa3a007cd13962daca8dce9c3728d253a411439a338b4b545b8df470480c4b",
       "artifactBytes": 2134901470,
-      "scope": "The terminal job log identifies edec23de and reports native export at 1663.848 seconds, TLC parsing at 4552.710 seconds, and comparison at 4798.527 seconds. At 04:26:51 UTC the validator exited with code 2: NSCocoaErrorDomain 640 / NSPOSIXErrorDomain 28, No space left on device, while writing generated/checked-graph/tlc-process.json. This is a hosted storage failure, not a reported graph mismatch or timeout. Evidence upload completed successfully. The artifact API and upload log agree on size and digest; local artifact checksum and content audit remain pending. Inspect retained storage and duplicate evidence before changing runner policy. Keep original model bounds, complete graphs, and every property/deadlock check. No configuration credit."
+      "artifactAudit": {
+        "localArchive": "/tmp/swifttla-coffee3000-edec.aN5mEd/artifact.zip",
+        "verifiedSHA256": "7ffa3a007cd13962daca8dce9c3728d253a411439a338b4b545b8df470480c4b",
+        "uncompressedBytes": 50169419974,
+        "canonicalGraphBytesEach": 3716818532,
+        "completeInitialStates": 4504500,
+        "completeStates": 4504500,
+        "completeLabeledEdges": 13495502,
+        "referenceChecksExact": 6,
+        "scope": "Streaming comparison proves the complete native and reference canonical graph files are byte-identical. The completion footer reports no violation and zero traces. All six reference property/deadlock records are exact. The retained module and original configuration hashes match the pinned CoffeeCan.tla and CoffeeCan3000Beans.cfg. The checked reference batch retained a 14,504,572,913-byte stream after Java exhausted memory during liveness checking; unchecked graph capture then completed. Exhaustive streaming byte comparison also proves the working and retained reference event files are identical, each 13,360,429,891 bytes. The retention patch moves this stream into evidence and reads it there, eliminating the duplicate without discarding records. Hosted recovery remains unproven. Generated-side graph and property evidence is missing. No full-configuration credit."
+      },
+      "scope": "The terminal job log identifies edec23de and reports native export at 1663.848 seconds, TLC parsing at 4552.710 seconds, and comparison at 4798.527 seconds. At 04:26:51 UTC the validator exited with code 2: NSCocoaErrorDomain 640 / NSPOSIXErrorDomain 28, No space left on device, while writing generated/checked-graph/tlc-process.json. This is a hosted storage failure, not a reported graph mismatch or timeout. Evidence upload completed successfully. The downloaded archive checksum matches the artifact API and upload log; the retained-content audit is recorded separately. Inspect retained storage and duplicate evidence before changing runner policy. Keep original model bounds, complete graphs, and every property/deadlock check. No configuration credit."
     },
     "latestCoffeeCan3000Attempt": {
       "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
@@ -791,6 +819,43 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "19285",
+      "sourceSHA": "9bdfb912a84666ed7b6a146b116413c94308b6f2",
+      "sourcePatchSHA256": "27a5ea7b6dd7c43bd703c19960b348041c2c85e4ac347ab16f89d8409d2b17d0",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLCGraphReaderTests|TLCPropertyCheckTests|TemporalSymmetryCheckTests'",
+      "exitCode": 0,
+      "testsPassed": 82,
+      "buildSeconds": 604.79,
+      "testSeconds": 1.388,
+      "result": "Retained evidence owns each complete or partial graph-event stream. Capture reads the retained path instead of keeping a working duplicate. Tests prove same-file identity on the same volume, exact bytes, removal of the old working file, preservation after working-path reuse, repeated property-check reuse, symlink rejection, and retention of failed batch output. Existing graph completeness, trace binding, property outcome, and temporal/symmetry contracts pass.",
+      "scope": "Source stayed fixed during the safety-wrapper build. Tests use fixture executors, not local TLC. Ponytail review reuses the existing retention and reader paths, with no compatibility API or new storage subsystem. Static checks pass. The change removes a proven 13.36 GB duplicate logical file in the audited CoffeeCan run; actual hosted disk headroom and successful completion still require new evidence. No configuration credit."
+    },
+    {
+      "session": "13526",
+      "sourceSHA": "9bdfb912a84666ed7b6a146b116413c94308b6f2",
+      "sourcePatchSHA256": "a5f35529b706f98044c3c75ee4e7a7536a0efcf266e82555c1690059643a030e",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLCGraphReaderTests|TLCPropertyCheckTests|TemporalSymmetryCheckTests'",
+      "exitCode": 1,
+      "testsPassed": 81,
+      "testsFailed": 1,
+      "buildSeconds": 612.61,
+      "testSeconds": 1.371,
+      "result": "Graph-reader and temporal/symmetry suites passed, including same-inode retention, full-byte preservation, working-path reuse, and symlink rejection. One property-reuse test still reads the old working event path after retention moves that file. The retry reads the retained path and preserves its exact-byte assertion across both property comparisons.",
+      "scope": "Source stayed fixed during the safety-wrapper build. Partial failed-batch evidence remains retained, and no original or generated check is removed. Hosted disk recovery remains unproven."
+    },
+    {
+      "session": "27942",
+      "sourceSHA": "9bdfb912a84666ed7b6a146b116413c94308b6f2",
+      "sourcePatchSHA256": "810501d6f50730eee1870bbd00fb0e7f63dcc4101910fece0392a6e74eb1dbd9",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLCGraphReaderTests|TLCPropertyCheckTests|TemporalSymmetryCheckTests'",
+      "exitCode": 1,
+      "result": "The new graph-retention guard cannot access TLCProcessRequest.inputDirectory because that property is private to its type. No tests ran. The retry makes it fileprivate for the adapter in the same source file; it adds no public or package API.",
+      "scope": "Source stayed fixed until the safety-wrapper build stopped. No hosted storage-recovery or configuration credit."
+    },
     {
       "session": "71983",
       "sourceSHA": "7b23b6a16a88a874c8fe3e896a8d479f063c7f40",

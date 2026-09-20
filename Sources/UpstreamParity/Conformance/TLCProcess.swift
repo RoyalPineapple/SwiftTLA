@@ -145,7 +145,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
       configuration: inputDirectory.appendingPathComponent(configurationFileName))
   }
 
-  private var inputDirectory: URL {
+  fileprivate var inputDirectory: URL {
     workingDirectory.appendingPathComponent(
       "input-\(runID.uuidString.lowercased())", isDirectory: true)
   }
@@ -336,9 +336,9 @@ package struct TLCProcessCapture: Sendable {
   package let graph: GraphRun
   package var unavailableCheckBundle: TLAModuleBundle?
 
-  package init(reading request: TLCProcessRequest, outcome: TLCExecutionOutcome) throws {
+  package init(reading request: TLCProcessRequest, outcome: TLCExecutionOutcome, retainedIn directory: URL) throws {
     let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase)
-    let stream = try reader.parse(contentsOf: request.graphEvents)
+    let stream = try reader.parse(contentsOf: directory.appendingPathComponent("graph-events.jsonl"))
     guard stream.runID == request.runID else {
       throw TLCGraphEventError.invalidRecord(line: 1, reason: "run ID")
     }
@@ -360,7 +360,7 @@ package struct TLCProcessAdapter: Sendable {
     retainingIn directory: URL
   ) throws -> TLCProcessCapture {
     let outcome = try run(request, retainingIn: directory)
-    return try TLCProcessCapture(reading: request, outcome: outcome)
+    return try TLCProcessCapture(reading: request, outcome: outcome, retainedIn: directory)
   }
 
   package func run(
@@ -431,10 +431,28 @@ package struct TLCProcessAdapter: Sendable {
     for (source, name) in graphFiles + [(request.traceOutput, "counterexample.json")] {
       guard FileManager.default.fileExists(atPath: source.path) else { continue }
       let destination = directory.appendingPathComponent(name)
+      if name == "graph-events.jsonl" {
+        let root = request.workingDirectory.resolvingSymlinksInPath().standardizedFileURL
+        let resolved = try RetainedFiles.resolve(source, beneath: root)
+        let values = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        let protected = [request.javaExecutable, request.jar, request.bridgeJar, request.traceOutput, destination]
+          .map { $0.resolvingSymlinksInPath().standardizedFileURL }
+        let inputs = request.inputDirectory.resolvingSymlinksInPath().standardizedFileURL
+        guard values.isRegularFile == true, values.isSymbolicLink != true,
+              resolved != root, !protected.contains(resolved),
+              resolved != inputs, !resolved.path.hasPrefix(inputs.path + "/") else {
+          throw EvidenceFormatError.invalidField(record: source.path, field: "graph output must be a distinct regular working file")
+        }
+      }
       if FileManager.default.fileExists(atPath: destination.path) {
         try FileManager.default.removeItem(at: destination)
       }
-      try FileManager.default.copyItem(at: source, to: destination)
+      if name == "graph-events.jsonl" {
+        // The retained file owns the complete stream; later runs can reuse the working path.
+        try FileManager.default.moveItem(at: source, to: destination)
+      } else {
+        try FileManager.default.copyItem(at: source, to: destination)
+      }
     }
   }
 }

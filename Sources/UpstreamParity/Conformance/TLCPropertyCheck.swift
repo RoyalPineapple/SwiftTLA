@@ -61,7 +61,9 @@ package struct TLCPropertyCheck: Sendable {
         runID: UUID(), invocation: .finiteGraph)
       let output = directory.appendingPathComponent("checked-graph")
       let execution = try processAdapter.run(batch, retainingIn: output)
-      if execution == .completed { return try TLCProcessCapture(reading: batch, outcome: execution) }
+      if execution == .completed {
+        return try TLCProcessCapture(reading: batch, outcome: execution, retainedIn: output)
+      }
       let outcome: TLCExecutionOutcome = execution == .failed(exitStatus: 13)
         ? .livenessViolation : execution
       switch outcome {

@@ -387,8 +387,12 @@ struct TLCPropertyCheckTests {
   @Test("property comparisons reuse one captured graph")
   func reusesCapturedGraph() throws {
     let fixture = try Fixture()
-    let shared = try fixture.captureGraph()
-    let rawGraph = try Data(contentsOf: shared.request.graphEvents)
+    let request = fixture.completeGraphRequest
+    let rawGraph = try graphStream(case: request.finiteGraphCase, runID: request.runID)
+    let retained = fixture.root.appendingPathComponent("shared-graph")
+    let shared = try TLCProcessAdapter(executor: FixtureExecutor(stream: rawGraph))
+      .capture(request, retainingIn: retained)
+    #expect(!FileManager.default.fileExists(atPath: request.graphEvents.path))
     let executor = PropertyExecutor(
       propertyResult: Fixture.success)
     for index in 0..<2 {
@@ -397,7 +401,7 @@ struct TLCPropertyCheckTests {
         outputDirectory: fixture.root.appendingPathComponent("property-\(index)"))
       #expect(result.status == .exact)
     }
-    #expect(try Data(contentsOf: shared.request.graphEvents) == rawGraph)
+    #expect(try Data(contentsOf: retained.appendingPathComponent("graph-events.jsonl")) == rawGraph)
   }
 
   @Test("TLC property checker rejects equal property outcomes over different graphs")
