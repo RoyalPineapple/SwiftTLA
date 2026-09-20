@@ -865,6 +865,13 @@ extension TypedExpression where ExpressionValue: FormalSequenceValue {
 extension TypedExpression {
   @_disfavoredOverload
   public subscript<Key: TLAValueType & Hashable, Value: TLAValueType>(
+    _ index: Key
+  ) -> Expr<Value> where ExpressionValue == Dictionary<Key, Value> {
+    self[index.expr]
+  }
+
+  @_disfavoredOverload
+  public subscript<Key: TLAValueType & Hashable, Value: TLAValueType>(
     _ index: some TypedExpression<Key>
   ) -> Expr<Value> where ExpressionValue == Dictionary<Key, Value> {
     Expr(.functionApply(stateExpr, index.stateExpr))

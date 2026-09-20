@@ -1225,6 +1225,12 @@ extension MacroParameter: AssignmentTarget {}
 
 extension AssignmentTarget {
     public subscript<Key: TLAValueType & Hashable, Element: TLAValueType>(
+        _ index: Key
+    ) -> AlgorithmLValue<Element> where Value == Dictionary<Key, Element> {
+        self[index.expr]
+    }
+
+    public subscript<Key: TLAValueType & Hashable, Element: TLAValueType>(
         _ index: some TypedExpression<Key>
     ) -> AlgorithmLValue<Element> where Value == Dictionary<Key, Element> {
         let base = algorithmLValue

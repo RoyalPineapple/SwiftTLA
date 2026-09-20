@@ -53,6 +53,14 @@
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
       "completedJobs": [
         {
+          "name": "canonical-corpus-export",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632182",
+          "conclusion": "success",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10596290866",
+          "artifactSHA256": "21e20de65ed06ef3e44596e49f199b266a01d78dbabe65fb538f0a325085709e",
+          "scope": "Downloaded manifest binds to edec23de and all 21 declared file hashes verify across four exported cases. Boulanger, TLCMC, and VoteProof files remain byte-identical to the prior 0b86465f export. KVsnap direct and PlusCal TLA files changed with ordinary records and checked imported-value projection; their configurations and imports are unchanged. Export integrity is not independent TLC equivalence evidence. Artifact contents: /tmp/swifttla-export-edec.DaaFdz."
+        },
+        {
           "name": "upstream",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632165",
           "conclusion": "success",
@@ -84,7 +92,7 @@
           "scope": "Downloaded source-sha.txt binds to edec23de. Retained camera adoption logs report 12 tests with zero failures and the camera executable build succeeded. GitHub reports the full Apple job successful. This does not cover later temporal or Chang-Roberts edits or establish additional upstream matches. Artifact contents: /tmp/swifttla-apple-edec.CjrMk5."
         }
       ],
-      "scope": "Submitted after prior main CI became terminal. Includes AC-05 through AC-08 local contract evidence, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and the Boulanger capacity increase from five to ten million states. Focused wrapper session 3696 passes 114 tests; model bounds and selected checks are unchanged. Apple, ordinary, and upstream CI passed; scenario and finite-graph suites are running. Export and independent comparisons remain queued or active for this exact SHA. No new upstream coverage credit is assigned; PR 394 remains draft."
+      "scope": "Submitted after prior main CI became terminal. Includes AC-05 through AC-08 local contract evidence, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and the Boulanger capacity increase from five to ten million states. Focused wrapper session 3696 passes 114 tests; model bounds and selected checks are unchanged. Apple, ordinary, upstream, and export CI passed; scenario and finite-graph suites are running. Independent comparisons remain queued or active for this exact SHA. No new upstream coverage credit is assigned; PR 394 remains draft."
     },
     "snapshotReuseCandidate": {
       "sourceSHA": "0b86465f165584983dbcca910a9fb56d6865aca4",
@@ -735,6 +743,41 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "26427",
+      "sourceSHA": "71f342998be7ad606f22ac0b220c2fe49f683daa",
+      "sourcePatchSHA256": "d7175dc799489f12809cc4478bb88960c280708188e283ba2c867cf13195e0f1",
+      "sourcePatchScope": "git diff -- Sources Tests Examples",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'DictionaryKeyIdentityTests|RecordFieldAssignmentTests|SpecificationSourceAuthorityTests|NativeTypeDiagnosticTests'",
+      "exitCode": 0,
+      "testsPassed": 74,
+      "testSeconds": 0.155,
+      "result": "Concrete enum dictionary keys infer in both read-only expressions and assignment locations. The generated fixture uses shorthand keys through nested lookups and preserves enum-valued links. Record-field assignments, formal projections, source authority, and type diagnostics also pass. Combined with local consumer session 30319, the ordinary-record ElevatorBank migration has focused compiler and generated-machine evidence.",
+      "scope": "Source stayed fixed during the wrapper build. Full log: /tmp/swifttla-enum-dictionary.9ATAHU/dictionary-shorthand.log. Local evidence only; no complete upstream configuration or DSL criterion gains hosted credit."
+    },
+    {
+      "session": "30319",
+      "sourceSHA": "71f342998be7ad606f22ac0b220c2fe49f683daa",
+      "sourcePatchSHA256": "d7175dc799489f12809cc4478bb88960c280708188e283ba2c867cf13195e0f1",
+      "sourcePatchScope": "git diff -- Sources Tests Examples",
+      "command": "cd Examples/SwiftTLADemos && DEVELOPER_DIR=/Library/Developer/CommandLineTools ../../scripts/local-validation.sh swiftpm-test 'ElevatorBankDemoTests|ChangRobertsDemoTests|GeneratedDemoTestSuiteTests|TwoBucketsDemoTests'",
+      "exitCode": 0,
+      "testsPassed": 9,
+      "buildSeconds": 161.73,
+      "testSeconds": 0.002,
+      "result": "Concrete dictionary-key overloads resolve the previous Swift type-checking failure. ElevatorBank now compiles with ordinary Car and Passenger records, native enum dictionaries, and nested field assignments. Typed projections reject invalid floors and missing fields. Ascending and descending trips pass; other cars, waiting passengers, and the empty-rider sentinel remain unchanged. All other demo contracts pass. No duplicate record schemas or runtime spec.compile calls remain under Examples.",
+      "scope": "Source stayed fixed during the wrapper build. Full log: /tmp/swifttla-enum-dictionary.9ATAHU/elevator-records-2.log. Local consumer evidence only; the root dictionary fixture change still needs its focused run. No hosted configuration credit."
+    },
+    {
+      "session": "14370",
+      "sourceSHA": "71f342998be7ad606f22ac0b220c2fe49f683daa",
+      "sourcePatchSHA256": "9e07ce1f8f4ddd62762c62c6c973511d352fe0add1ae25dd6f1857e013265cfe",
+      "sourcePatchScope": "git diff -- Examples",
+      "command": "cd Examples/SwiftTLADemos && DEVELOPER_DIR=/Library/Developer/CommandLineTools ../../scripts/local-validation.sh swiftpm-test 'ElevatorBankDemoTests|ChangRobertsDemoTests|GeneratedDemoTestSuiteTests|TwoBucketsDemoTests'",
+      "exitCode": 1,
+      "result": "Ordinary-record ElevatorBank migration passed macro parsing but Swift could not type-check its source builder in reasonable time. Inspection found dictionary subscripts offered only a generic typed-expression index, unlike finite Function subscripts which also accept the concrete key type. The next patch adds concrete dictionary-key overloads for readable and writable expressions and exercises shorthand keys in the generated dictionary fixture. This remains a hypothesis until the retry passes; no tests ran.",
+      "scope": "Source stayed fixed during the wrapper build. Full log: /tmp/swifttla-enum-dictionary.9ATAHU/elevator-records.log. No hosted credit."
+    },
     {
       "session": "13999",
       "sourceSHA": "2de485e0805f7cbbce44891bed89e8784866662f",

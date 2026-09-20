@@ -15,8 +15,8 @@ struct DictionaryKeyIdentityModel {
             let labels: SharedVariable<[Label: Key]> = scope.sharedVar(initial: [.first: .first, .second: .second])
             Algorithm("DictionaryKeyIdentity") {
                 Do(Step.update) {
-                    Assign(values[Key.first], to: values[links[Key.first]])
-                    Assign(labels[Label.first], to: links[Key.first])
+                    Assign(values[.first], to: values[links.expr[.first]])
+                    Assign(labels[.first], to: links[.first])
                     Stop()
                 }
             }
