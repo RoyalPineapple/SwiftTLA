@@ -297,8 +297,7 @@ package struct CanonicalGraph: Equatable, Sendable {
         _ native: ReachabilityGraph<Machine>, states: [Machine.Snapshot: CanonicalState],
         renderedActionNames: [String: String] = [:]
     ) throws {
-        guard states.count == native.transitions.count,
-              native.transitions.keys.allSatisfy({ states.index(forKey: $0) != nil }) else {
+        guard states.count == native.transitions.count else {
             throw CanonicalGraphError.missingNativeSnapshot
         }
         func stateIndex(_ snapshot: Machine.Snapshot) throws -> Dictionary<Machine.Snapshot, CanonicalState>.Index {

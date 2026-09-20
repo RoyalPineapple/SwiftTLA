@@ -21,6 +21,24 @@ struct NativeGraphExportTests {
             #expect(throws: CanonicalGraphError.missingNativeSnapshot) {
                 try CanonicalGraph(native, states: missing)
             }
+            missing[CyclicExportModel.Snapshot(state: .init(value: 99))] = states[snapshot]
+            #expect(missing.count == states.count)
+            #expect(throws: CanonicalGraphError.missingNativeSnapshot) {
+                try CanonicalGraph(native, states: missing)
+            }
+        }
+    }
+
+    @Test("native export checks projections of sources with no outgoing edges")
+    func rejectsMissingDeadlockedSourceProjection() throws {
+        let initial = try #require(FailingExportModel.initialMachines().first { $0.state.value == 0 })
+        let native = try ReachabilityGraph(initialMachines: [initial], maximumStates: 1)
+        #expect(native.transitions.count == 1)
+        #expect(native.transitions.values.allSatisfy(\.isEmpty))
+        let projection = try CanonicalState(native.formalProjection(of: initial.snapshot))
+        let states = [FailingExportModel.Snapshot(state: .init(value: 99)): projection]
+        #expect(throws: CanonicalGraphError.missingNativeSnapshot) {
+            try CanonicalGraph(native, states: states)
         }
     }
 
