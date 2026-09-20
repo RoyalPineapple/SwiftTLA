@@ -96,6 +96,17 @@
     },
     "snapshotReuseCandidate": {
       "sourceSHA": "0b86465f165584983dbcca910a9fb56d6865aca4",
+      "coffeeCan3000GraphFailure": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/job/105985968034",
+        "conclusion": "failure",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/artifacts/10597345297",
+        "artifactSHA256": "e97d38365095da855e7c38fb91a9858117d8f9578a8085e7de7afd5250e2caff",
+        "sourceAudit": "Terminal checkout log binds to 0b86465f. Downloaded archive digest verifies. Retained upstream TLA and original CFG hashes match the pinned coffee-can-3000 manifest; MaxBeanCount remains 3000 and all five reference properties/invariants plus default deadlock checking remain required.",
+        "timings": "Native export reached TLC execution at 1618.524 seconds. The graph-only reference TLC run completed at 00:39:42 UTC in 178 seconds with 4,504,500 distinct states and an empty queue. captureGraph returned at 01:30:11 (5260.479 seconds), about 50 minutes after TLC finished. Serializing the reference graph took another 309.627 seconds before comparison began at 5570.106 seconds. These phase timings identify capture/processing overhead, not a sampled CPU hotspot.",
+        "referenceChecks": "The initial checked graph run and the later reference batch both report Java out-of-memory during liveness checking with a 1792 MB heap. Individual fallback checks then succeeded. Retained PropertyComparison records report exact/satisfied for EventuallyTerminates, MonotonicDecrease, LoopInvariant, TerminationHypothesis, TypeInvariant, and deadlock. In this code path exact also requires the completed Swift/reference graph comparison to match. The large graph records were not independently re-parsed locally.",
+        "failure": "GitHub confirms the comparison step timed out after 120 minutes at 02:02:42 UTC. Generated TLA capture had started after reference checks finished around 01:57:43, but its retained event stream is incomplete and no final comparison.json was published. The retained validation log also reports a publication failure for missing staging diagnostic.json after the workflow moved evidence. No complete generated/reference validation exists.",
+        "scope": "Archive /tmp/swifttla-coffee3000-0b.914lVH/artifact.zip is 2.33 GB compressed and lists 52.35 GB uncompressed. Only small logs, process metadata, property records, and input TLA/CFG files were extracted under records/. No local TLC or large graph revalidation ran. This improves the diagnosis but adds no configuration or family credit. Next performance work should profile the capture/read path and avoid repeating a failed batch without disabling its individual checks."
+      },
       "boulangerGraphFailure": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/job/105985968320",
         "conclusion": "failure",
@@ -751,6 +762,7 @@
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'DictionaryKeyIdentityTests|RecordFieldAssignmentTests|SpecificationSourceAuthorityTests|NativeTypeDiagnosticTests'",
       "exitCode": 0,
       "testsPassed": 74,
+      "buildSeconds": 599.34,
       "testSeconds": 0.155,
       "result": "Concrete enum dictionary keys infer in both read-only expressions and assignment locations. The generated fixture uses shorthand keys through nested lookups and preserves enum-valued links. Record-field assignments, formal projections, source authority, and type diagnostics also pass. Combined with local consumer session 30319, the ordinary-record ElevatorBank migration has focused compiler and generated-machine evidence.",
       "scope": "Source stayed fixed during the wrapper build. Full log: /tmp/swifttla-enum-dictionary.9ATAHU/dictionary-shorthand.log. Local evidence only; no complete upstream configuration or DSL criterion gains hosted credit."
