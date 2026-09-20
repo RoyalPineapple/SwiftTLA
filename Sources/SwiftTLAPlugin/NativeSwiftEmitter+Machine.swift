@@ -284,57 +284,60 @@ extension NativeSwiftEmitter {
         var nextID = 1
         var declarations: [String] = []
         while let (node, id, bindings) = pending.popLast() {
-            func childCall(_ child: CompiledActionExpr, binding: BinderID? = nil) -> String {
+            func childCall(_ child: CompiledActionExpr, binding: BinderID? = nil,
+                           updates: String = "updates", emit: String = "emit") -> String {
                 let childBindings = bindings + (binding.map { [$0] } ?? [])
                 let childID = nextID
                 nextID += 1
                 pending.append((child, childID, childBindings))
-                return "try _actionPart\(childID)(\(childBindings.map(binder).joined(separator: ", ")))"
+                let arguments = childBindings.map(binder) + [updates, emit]
+                return "try _actionPart\(childID)(\(arguments.joined(separator: ", ")))"
             }
             let body: String
             switch node {
             case .assign(let variableID, let value):
-                body = "return [_Updates(\(variable(variableID)): \(try expression(value)))]"
+                body = "try emit(updates.merging(_Updates(\(variable(variableID)): \(try expression(value)))))"
             case .unchanged(let variableID):
-                body = "return [_Updates(\(variable(variableID)): \(stateValue(variableID)))]"
+                body = "try emit(updates.merging(_Updates(\(variable(variableID)): \(stateValue(variableID)))))"
             case .guard_(let predicate):
                 if let constant = predicate.booleanConstant {
-                    body = constant ? "return [_Updates()]" : "return []"
+                    body = constant ? "try emit(updates)" : "return"
                 } else {
-                    body = "guard \(try expression(predicate)) else { return [] }\nreturn [_Updates()]"
+                    body = "guard \(try expression(predicate)) else { return }\ntry emit(updates)"
                 }
             case .existsAction(let binding, let domainExpression, let child):
                 let element = program.bindingTypes[binding]!
                 let domain = try expression(domainExpression)
                 body = """
-                return try \(domain).sorted(by: \(try ordering(element))).flatMap { (\(binder(binding)): \(try swiftType(element))) throws -> [_Updates] in
-                    return \(childCall(child, binding: binding))
+                for \(binder(binding)) in \(domain).sorted(by: \(try ordering(element))) {
+                    \(childCall(child, binding: binding))
                 }
                 """
             case .define(let binding, let value, let child):
-                body = "let \(binder(binding)) = \(try expression(value))\nreturn \(childCall(child, binding: binding))"
+                body = "let \(binder(binding)) = \(try expression(value))\n\(childCall(child, binding: binding))"
             case .ifElse(let condition, let yes, let no):
-                body = "if \(try expression(condition)) { return \(childCall(yes)) } else { return \(childCall(no)) }"
+                body = "if \(try expression(condition)) { \(childCall(yes)) } else { \(childCall(no)) }"
             case .and(let lhs, let rhs):
-                body = """
-                let left = \(childCall(lhs))
-                guard !left.isEmpty else { return [] }
-                let right = \(childCall(rhs))
-                return try left.flatMap { first -> [_Updates] in try right.map { try first.merging($0) } }
-                """
+                let right = childCall(rhs, updates: "candidate")
+                body = childCall(lhs, emit: "{ candidate in \(right) }")
             case .or(let lhs, let rhs):
-                body = "let left = \(childCall(lhs))\nlet right = \(childCall(rhs))\nreturn left + right"
+                body = "\(childCall(lhs))\n\(childCall(rhs))"
             }
-            let parameters = try bindings.map {
+            let parameters = (try bindings.map {
                 "_ \(binder($0)): \(try swiftType(program.bindingTypes[$0]!))"
-            }.joined(separator: ", ")
+            } + ["_ updates: _Updates", "_ emit: (_Updates) throws -> Void"]).joined(separator: ", ")
             declarations.append("""
-            func _actionPart\(id)(\(parameters)) throws -> [_Updates] {
+            func _actionPart\(id)(\(parameters)) throws {
                 \(body)
             }
             """)
         }
-        return declarations.joined(separator: "\n") + "\nreturn try _actionPart0()"
+        return declarations.joined(separator: "\n") + """
+
+        var candidates: [_Updates] = []
+        try _actionPart0(_Updates()) { candidates.append($0) }
+        return candidates
+        """
     }
 
     mutating func updateFunction(_ action: CompiledAction, collectionParameters: String) throws -> DeclSyntax {

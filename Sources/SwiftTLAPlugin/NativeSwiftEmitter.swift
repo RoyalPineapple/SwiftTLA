@@ -270,7 +270,7 @@ struct NativeSwiftEmitter {
             }.joined(separator: "\n")
         default: throw unsupported("native projection from \(source) to \(destination)")
         }
-        return "({ (value: \(try swiftType(source))) -> \(try swiftType(destination)) in switch value { \(cases) } })(\(value))"
+        return "({ (value: \(try swiftType(source))) -> \(try swiftType(destination)) in\nswitch value { \(cases) } })(\(value))"
     }
 
     /// Emits a native comparator matching CompiledValue's structural order.

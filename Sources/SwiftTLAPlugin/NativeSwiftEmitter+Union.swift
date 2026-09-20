@@ -23,7 +23,7 @@ extension NativeSwiftEmitter {
                 else { result = "throw NativeMachineEvaluationError.noMatchingCase" }
                 return "case .\(finiteCaseName(members, index: index)): \(result)"
             }.joined(separator: "\n")
-            return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in switch value { \(cases) } }(\(value)))"
+            return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in\nswitch value { \(cases) } }(\(value)))"
         }
         if case .named(let name) = source,
            let members = program.enums.cases[name] {
@@ -31,14 +31,14 @@ extension NativeSwiftEmitter {
                 let payload = try? literal(item.value, as: target)
                 return "case .`\(item.name)`: " + (payload.map { "return " + $0 } ?? "throw NativeMachineEvaluationError.noMatchingCase")
             }.joined(separator: "\n")
-            return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in switch value { \(cases) } }(\(value)))"
+            return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in\nswitch value { \(cases) } }(\(value)))"
         }
         if [.int, .bool, .string, .modelValue].contains(source) {
             let cases = finiteViewMembers(target).compactMap { member -> String? in
                 guard let pattern = try? literal(member, as: source), let payload = try? literal(member, as: target) else { return nil }
                 return "case \(pattern): return \(payload)"
             }.joined(separator: "\n")
-            return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in switch value { \(cases)\ndefault: throw NativeMachineEvaluationError.noMatchingCase } }(\(value)))"
+            return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in\nswitch value { \(cases)\ndefault: throw NativeMachineEvaluationError.noMatchingCase } }(\(value)))"
         }
         if let inputs = source.recordFields, let outputs = target.recordFields,
            inputs.map(\.name) == outputs.map(\.name) {
@@ -88,7 +88,7 @@ extension NativeSwiftEmitter {
         }.joined(separator: "\n")
         let throwing = checked ? " throws" : ""
         let prefix = checked ? "try " : ""
-        return "(\(prefix){ (value: \(try swiftType(source)))\(throwing) -> \(try swiftType(target)) in switch value { \(cases) } }(\(value)))"
+        return "(\(prefix){ (value: \(try swiftType(source)))\(throwing) -> \(try swiftType(target)) in\nswitch value { \(cases) } }(\(value)))"
     }
 
     func unionOrdering(_ type: CompiledValueType) throws -> String {
@@ -212,14 +212,14 @@ extension NativeSwiftEmitter {
             let cases = try alternatives.enumerated().map { index, alternative in
                 "case .\(unionCase(type, index: index))(let payload): return \(try formalKindRank("payload", type: alternative))"
             }.joined(separator: "\n")
-            return "({ (value: \(try swiftType(type))) -> Int in switch value { \(cases) } })(\(value))"
+            return "({ (value: \(try swiftType(type))) -> Int in\nswitch value { \(cases) } })(\(value))"
         case .finite(let members):
             let cases = members.indices.map { "case .\(finiteCaseName(members, index: $0)): return \(members[$0].orderingKind)" }.joined(separator: "\n")
-            return "({ (value: \(try swiftType(type))) -> Int in switch value { \(cases) } })(\(value))"
+            return "({ (value: \(try swiftType(type))) -> Int in\nswitch value { \(cases) } })(\(value))"
         case .named(let name):
             guard let members = program.enums.cases[name] else { throw unsupported("union enum rank") }
             let cases = members.map { "case .`\($0.name)`: return \($0.value.orderingKind)" }.joined(separator: "\n")
-            return "({ (value: \(name)) -> Int in switch value { \(cases) } })(\(value))"
+            return "({ (value: \(name)) -> Int in\nswitch value { \(cases) } })(\(value))"
         default: throw unsupported("union alternative order")
         }
         return String(representative.orderingKind)
