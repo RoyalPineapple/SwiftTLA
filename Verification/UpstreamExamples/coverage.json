@@ -696,6 +696,19 @@
   },
   "localDiagnostics": [
     {
+      "session": "72996",
+      "sourceSHA": "60e1ed62ea8395bca6f5d9c62c2f40564d00e81a",
+      "sourcePatchSHA256": "4b787f4fecfb8e5daa335a7efe969e12d41aacff54b8ea1aed662c37f5c60f36",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TemporalSymmetryCheckTests|NativeReachabilityTests|NativeTemporalCheckingTests|ProjectedFairnessTests|distinguishesExpectedDeadlock|expectationsPreserveFairBehavior'",
+      "exitCode": 0,
+      "testsRun": 17,
+      "buildSeconds": 586.45,
+      "testSeconds": 0.080,
+      "result": "The three temporal matrix models use typed independent Do steps and source-derived temporal handles instead of raw Action declarations and repeated property strings. Exact initial states and all four labeled graph edges remain unchanged for no, weak, and strong fairness. Rendered action names, explicit fairness, enabled deadlock checks, expected property outcomes, replayable violations, and incomplete-exploration rejection pass. Existing generated reachability, deadlock, expected-result, and projected-fairness checks also pass.",
+      "scope": "Source stayed fixed throughout the wrapper build; only historical evidence changed in the ledger. Ponytail and cleanliness review reused existing models, generated execution, and comparison paths without adding compatibility APIs or new corpus cases. Independent hosted temporal acceptance remains pending; no DSL criterion or upstream coverage credit is inferred. Full log: /tmp/swifttla-temporal-diagnostics.uG222v/validation.log."
+    },
+    {
       "session": "3696",
       "sourceSHA": "2f5e3d25bb9d85bc59006b764d4bc4a90fe88958",
       "sourcePatchSHA256": "ba4a21b939a5dbd4d8980d9dd26f144385a7faf928b609e40534e56840d6cbcf",

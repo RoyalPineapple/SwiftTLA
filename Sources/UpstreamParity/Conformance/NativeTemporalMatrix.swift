@@ -3,63 +3,87 @@ import SwiftTLAMacros
 
 @TLAModel
 private struct UnfairTemporalMatrix {
+  enum Step: String, CaseIterable { case A, B, C, Stay }
+
   static var spec: TLASpec {
     #spec("TemporalMatrix") { scope in
       let x = scope.sharedVar(initial: 0)
-      let a = SwiftTLA.Action("A") { x.becomes(2).when(x == 0) }
+      let a = Do(Step.A, when: x == 0) { Assign(x, to: 2) }
       a
-      SwiftTLA.Action("B") { x.becomes(1).when(x == 0) }
-      SwiftTLA.Action("C") { x.becomes(0).when(x == 1) }
-      SwiftTLA.Action("Stay") { x.becomes(2).when(x == 2) }
+      Do(Step.B, when: x == 0) { Assign(x, to: 1) }
+      Do(Step.C, when: x == 1) { Assign(x, to: 0) }
+      Do(Step.Stay, when: x == 2) { Assign(x, to: 2) }
 
-      Always("AlwaysP", x == 2)
-      Eventually("EventuallyP", x == 2)
-      AlwaysEventually("AlwaysEventuallyP", x == 2)
-      EventuallyAlways("EventuallyAlwaysP", x == 2)
-      LeadsTo("LeadsToPQ", x == 2, x == 1)
-      LeadsTo("LeavesZero", x == 0, x != 0)
+      let AlwaysP = Always()
+      let EventuallyP = Eventually()
+      let AlwaysEventuallyP = AlwaysEventually()
+      let EventuallyAlwaysP = EventuallyAlways()
+      let LeadsToPQ = LeadsTo()
+      let LeavesZero = LeadsTo()
+      AlwaysP(x == 2)
+      EventuallyP(x == 2)
+      AlwaysEventuallyP(x == 2)
+      EventuallyAlwaysP(x == 2)
+      LeadsToPQ(x == 2, x == 1)
+      LeavesZero(x == 0, x != 0)
     }
   }
 }
 
 @TLAModel
 private struct WeaklyFairTemporalMatrix {
+  enum Step: String, CaseIterable { case A, B, C, Stay }
+
   static var spec: TLASpec {
     #spec("TemporalMatrix") { scope in
       let x = scope.sharedVar(initial: 0)
-      let a = SwiftTLA.Action("A") { x.becomes(2).when(x == 0) }
+      let a = Do(Step.A, when: x == 0) { Assign(x, to: 2) }
       a
-      SwiftTLA.Action("B") { x.becomes(1).when(x == 0) }
-      SwiftTLA.Action("C") { x.becomes(0).when(x == 1) }
-      SwiftTLA.Action("Stay") { x.becomes(2).when(x == 2) }
+      Do(Step.B, when: x == 0) { Assign(x, to: 1) }
+      Do(Step.C, when: x == 1) { Assign(x, to: 0) }
+      Do(Step.Stay, when: x == 2) { Assign(x, to: 2) }
       WeakFairness(a)
-      Always("AlwaysP", x == 2)
-      Eventually("EventuallyP", x == 2)
-      AlwaysEventually("AlwaysEventuallyP", x == 2)
-      EventuallyAlways("EventuallyAlwaysP", x == 2)
-      LeadsTo("LeadsToPQ", x == 2, x == 1)
-      LeadsTo("LeavesZero", x == 0, x != 0)
+      let AlwaysP = Always()
+      let EventuallyP = Eventually()
+      let AlwaysEventuallyP = AlwaysEventually()
+      let EventuallyAlwaysP = EventuallyAlways()
+      let LeadsToPQ = LeadsTo()
+      let LeavesZero = LeadsTo()
+      AlwaysP(x == 2)
+      EventuallyP(x == 2)
+      AlwaysEventuallyP(x == 2)
+      EventuallyAlwaysP(x == 2)
+      LeadsToPQ(x == 2, x == 1)
+      LeavesZero(x == 0, x != 0)
     }
   }
 }
 
 @TLAModel
 private struct StronglyFairTemporalMatrix {
+  enum Step: String, CaseIterable { case A, B, C, Stay }
+
   static var spec: TLASpec {
     #spec("TemporalMatrix") { scope in
       let x = scope.sharedVar(initial: 0)
-      let a = SwiftTLA.Action("A") { x.becomes(2).when(x == 0) }
+      let a = Do(Step.A, when: x == 0) { Assign(x, to: 2) }
       a
-      SwiftTLA.Action("B") { x.becomes(1).when(x == 0) }
-      SwiftTLA.Action("C") { x.becomes(0).when(x == 1) }
-      SwiftTLA.Action("Stay") { x.becomes(2).when(x == 2) }
+      Do(Step.B, when: x == 0) { Assign(x, to: 1) }
+      Do(Step.C, when: x == 1) { Assign(x, to: 0) }
+      Do(Step.Stay, when: x == 2) { Assign(x, to: 2) }
       StrongFairness(a)
-      Always("AlwaysP", x == 2)
-      Eventually("EventuallyP", x == 2)
-      AlwaysEventually("AlwaysEventuallyP", x == 2)
-      EventuallyAlways("EventuallyAlwaysP", x == 2)
-      LeadsTo("LeadsToPQ", x == 2, x == 1)
-      LeadsTo("LeavesZero", x == 0, x != 0)
+      let AlwaysP = Always()
+      let EventuallyP = Eventually()
+      let AlwaysEventuallyP = AlwaysEventually()
+      let EventuallyAlwaysP = EventuallyAlways()
+      let LeadsToPQ = LeadsTo()
+      let LeavesZero = LeadsTo()
+      AlwaysP(x == 2)
+      EventuallyP(x == 2)
+      AlwaysEventuallyP(x == 2)
+      EventuallyAlwaysP(x == 2)
+      LeadsToPQ(x == 2, x == 1)
+      LeavesZero(x == 0, x != 0)
     }
   }
 }

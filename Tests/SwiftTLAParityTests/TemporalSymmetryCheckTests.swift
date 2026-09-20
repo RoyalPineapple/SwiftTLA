@@ -37,6 +37,11 @@ struct TemporalSymmetryCheckTests {
       #expect(model.checks.deadlock == .satisfied)
       #expect(model.graph.graph == expected)
       #expect(model.graph.trace == nil)
+      #expect(Set(model.rendered.actions.map(\.sourceInvocationName)) == ["A", "B", "C", "Stay"])
+      #expect(model.rendered.tlaBundle.cfg.contains("CHECK_DEADLOCK TRUE"))
+      let tla = model.rendered.tlaBundle.root.tla
+      #expect(tla.contains("WF_") == (temporalCase.fairness == .weak))
+      #expect(tla.contains("SF_") == (temporalCase.fairness == .strong))
       #expect(model.checks.properties.values.allSatisfy { $0 != .unavailable })
       for (property, native) in model.checks.properties {
         let expectation = try #require(temporalCase.expectedProperties[property])
