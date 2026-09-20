@@ -31,13 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "pending",
+      "status": "reviewed; LoopInvariance selected",
       "candidates": [
         "specifications/LoopInvariance",
         "specifications/FiniteMonotonic",
         "specifications/CarTalkPuzzle"
       ],
-      "scope": "LearnProofs is complete. These three candidates require pinned-source review before the next family is selected. Queue order provides no evidence credit."
+      "scope": "Pinned-source review selects LoopInvariance. FiniteMonotonic needs action composition and configuration applicability review. CarTalkPuzzle needs assumption-only result handling. No candidate receives hosted credit from this review."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -2773,7 +2773,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": null,
+  "nextFamily": "specifications/LoopInvariance",
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -6688,43 +6688,53 @@
     {
       "path": "specifications/LoopInvariance",
       "name": "Loop Invariance",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned sources reviewed; implementation in progress",
+      "gap": "Both published configurations have generated native models and pinned comparison entries. Hosted comparisons remain pending. SumSequence still uses a bounded legacy fixture.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/LoopInvariance/BinarySearch.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
-          "implementations": [],
+          "role": "behavior dependency",
+          "reason": "Preserves the configured algorithm, three invariants, Termination, weak fairness, and default deadlock checks. The Seq substitution uses lengths 1..MaxSeqLen. Hosted comparison remains pending.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/BinarySearch.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/LoopInvariance/MCBinarySearch.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
+          "reason": "Preserves the configured algorithm, three invariants, Termination, weak fairness, and default deadlock checks. The Seq substitution uses lengths 1..MaxSeqLen. Hosted comparison remains pending.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/BinarySearch.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/LoopInvariance/MCQuicksort.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
+          "reason": "Preserves the configured algorithm, three invariants, Termination, weak fairness, and default deadlock checks. The Seq substitution uses lengths 1..MaxSeqLen. Hosted comparison remains pending.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Quicksort.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/LoopInvariance/Quicksort.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
-          "implementations": [],
+          "role": "behavior dependency",
+          "reason": "Preserves the configured algorithm, three invariants, Termination, weak fairness, and default deadlock checks. The Seq substitution uses lengths 1..MaxSeqLen. Hosted comparison remains pending.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Quicksort.swift"
+          ],
           "dispositionComplete": false
         },
         {
           "path": "specifications/LoopInvariance/SumSequence.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
-          "implementations": [],
+          "role": "unconfigured proof example",
+          "reason": "No published configuration exists. Upstream describes a bounded Seq substitution as an illustration. The current Swift fixture adds fixed domains and omits upstream claims. Migration remains required.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/SumSequence.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -6733,24 +6743,70 @@
           "module": "specifications/LoopInvariance/MCBinarySearch.tla",
           "configuration": "specifications/LoopInvariance/MCBinarySearch.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/BinarySearch.swift",
+              "scenario": "MCBinarySearch",
+              "caseID": "binary-search"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/LoopInvariance/MCQuicksort.tla",
           "configuration": "specifications/LoopInvariance/MCQuicksort.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Quicksort.swift",
+              "scenario": "MCQuicksort",
+              "caseID": "quicksort"
+            }
+          ],
           "evidence": []
         }
       ],
-      "partialCases": []
+      "partialCases": [],
+      "localDiagnostics": [
+        {
+          "sourceSHA": "10bb3ecd924153ba255b11e542464c50f8c1c415",
+          "log": "/tmp/swifttla-loop-invariance-related.log",
+          "testsPassed": 33,
+          "scope": "Native graphs exhaust with 27953 BinarySearch states and 4548 Quicksort states. All selected native properties hold. These results do not prove upstream equivalence."
+        },
+        {
+          "sourceSHA": "3e0ecc4fdb612f5e13f4d58e8fa9b7ca62444e6f",
+          "log": "/tmp/swifttla-loop-invariance-reference-isolated.log",
+          "testsPassed": 1,
+          "scope": "Both model-owned scenarios resolve. All ten fixture hashes match their pinned inputs."
+        },
+        {
+          "sourceSHA": "3e0ecc4fdb612f5e13f4d58e8fa9b7ca62444e6f",
+          "log": "/tmp/swifttla-loop-invariance-registration-related.log",
+          "testsPassed": 16,
+          "scope": "Manifest, configuration decoding, inventory, scenario identity, and generated export regressions pass. Static checks also pass."
+        }
+      ],
+      "referenceProvenance": {
+        "examplesRevision": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
+        "libraryRepository": "tlaplus/tlapm",
+        "libraryRevision": "f14d23363a6409ee616cb6ee12edd53b07660011",
+        "libraryPaths": [
+          "library/SequenceTheorems.tla",
+          "library/FiniteSetTheorems.tla",
+          "library/NaturalsInduction.tla",
+          "library/WellFoundedInduction.tla",
+          "library/TLAPS.tla",
+          "test/fast/regression/consensus/Functions.tla"
+        ],
+        "scope": "The new fixtures retain exact pinned bytes. Existing TLAPS, Functions, and Folds fixtures supply shared dependencies. The isolated registration test retains all ten new fixture hashes."
+      }
     },
     {
       "path": "specifications/Majority",
