@@ -31,14 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "upstreamRevision": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
-      "selected": "specifications/LearnProofs",
+      "status": "pending",
       "candidates": [
-        {"family": "specifications/LearnProofs", "decision": "Ready", "reason": "MCFindHighest preserves the configured domain, separate constraint, four invariants, and default deadlock check. Existing diagnostics cover 742 states. Reference registration, TLAPS dependency pins, module dispositions, and hosted comparison remain."},
-        {"family": "specifications/sums_even", "decision": "Checker gap", "reason": "MC_sums_even.cfg selects assumptions over NatOverride=0..1000000 without an initial or next-state relation. The native comparison path requires initial machines. An assumption-only result needs explicit support."},
-        {"family": "specifications/Stones", "decision": "Checker gap", "reason": "Stones.cfg binds W=40 and N=4. The module evaluates recursive partition assumptions and PrintT without a transition system. Assumption-only outcomes and output effects need explicit support."}
+        "specifications/LoopInvariance",
+        "specifications/FiniteMonotonic",
+        "specifications/CarTalkPuzzle"
       ],
-      "scope": "Pinned source inspection and existing implementation diagnostics determine this selection. No candidate gains hosted coverage from this audit. CoffeeCan and Boulanger capacity failures remain open."
+      "scope": "LearnProofs is complete. These three candidates require pinned-source review before the next family is selected. Queue order provides no evidence credit."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -61,6 +60,59 @@
     "completionRule": "Scheduling labels and queue positions confer no evidence credit. Count only retained hosted configuration matches. Declare a family complete only after every applicable configuration and variant is verified, module dispositions are resolved, and legacy code is removed. The next deliverable is one fully verified family on a green hosted revision through the intended DSL and correct checking path."
   },
   "ci": {
+    "learnProofsFamilyCandidate": {
+      "sourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a",
+      "observedStatus": "completed",
+      "conclusion": "success",
+      "contracts": {
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35529047354",
+        "selection": "contracts_only=true",
+        "ordinary": {
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35529047354/job/106126261901",
+          "testsPassed": 1566,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35529047354/artifacts/10610334946",
+          "artifactSHA256": "1ad3330c571f9dc65bd6aeca4f353850d88d5e8d2b3a67ef5d7bcc4ffe089818"
+        },
+        "upstream": {
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35529047354/job/106126261949",
+          "testsPassed": 21,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35529047354/artifacts/10611580583",
+          "artifactSHA256": "1cb78162e360bb073a7506b9171ce3a4ff41cbb6389c18c469c82b7257156fef"
+        },
+        "canonicalExport": {
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35529047354/artifacts/10610667021",
+          "artifactSHA256": "cffea65e1250925eb4995597439fa219a82d1a6a06dbcc33c3c023b79066126e"
+        },
+        "appleAdoption": {
+          "testsPassed": 12,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35529047354/artifacts/10610871644",
+          "artifactSHA256": "53f77df6dc876faff2f8604c12cb338b46b5b61b0440092ba088b96183847d83"
+        },
+        "demoModels": {
+          "testsPassed": 10,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35529047354/artifacts/10610114350",
+          "artifactSHA256": "ed7b7b6593b1dfc6dbea08cd0912ee922e2ba584b42a15b91db0f455d588eb88"
+        },
+        "audit": "All retained source markers and archive digests verify. Swift 6.1.2, Xcode 16.4/16F6, and SDK 24F74 match. Ordinary tests use debug compilation. Upstream tests use release compilation with Debug assertions. Apple builds and all twenty canonical export file hashes verify.",
+        "scope": "These selected contracts do not replace full-corpus admission. Job logs retain the complete test outcomes."
+      },
+      "comparisons": {
+        "sourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35529048870",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35529048870/artifacts/10611042242",
+        "artifactSHA256": "848e8d0a5f194e17e1725c28a7533fd4b972cb703100f14d46b7cceaed29f7e9",
+        "completeGraph": true,
+        "allPropertiesMatch": true,
+        "scope": "The original configuration retains Nat and Seq substitutions, MaxLength=3, MaxNat=4, and MCConstraint. All four invariants and default deadlock checking remain selected. The generated scenario omits no declared property. TLAPS proofs and the unselected Termination property receive no verification claim.",
+        "caseLabels": [
+          "graphs-find-highest",
+          "scenarios-find-highest-0"
+        ],
+        "audit": "Five canonical graph files match byte-for-byte, with complete footers and exact counts. Every initial state and edge endpoint belongs to the complete state set. All fifteen property/deadlock records are exact and satisfied. Three TLC processes retain verified input hashes and TLC/Java/bridge source pins. All three event streams have valid body checksums, sequence numbers, identifiers, counts, and closed footers."
+      },
+      "scope": "One complete LearnProofs family has hosted evidence on 8a9543c7. This later ledger commit records that immutable candidate. Other families and all nineteen DSL acceptance criteria remain subject to their own evidence."
+    },
     "dieHardFamilyCandidate": {
       "sourceSHA": "6563d8d058a9fe083d9e0daefcca028641843e94",
       "observedStatus": "completed",
@@ -1240,6 +1292,35 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "24709",
+      "observedStatus": "completed",
+      "exitCode": 1,
+      "localLog": "/tmp/swifttla-learnproofs-reference-isolated.log",
+      "scope": "The new assertion omitted try inside #require around resolveScenario(). Compilation failed before tests ran. The correction changed only that assertion."
+    },
+    {
+      "session": "95204",
+      "sourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a",
+      "observedStatus": "completed",
+      "exitCode": 0,
+      "testsPassed": 1,
+      "buildSeconds": 717.24,
+      "testSeconds": 0.072,
+      "localLog": "/tmp/swifttla-learnproofs-reference-corrected.log",
+      "scope": "The exact integration test passed before related regressions. Tested source and fixtures match 8a9543c7. The later whitespace attribute preserves unchanged upstream bytes."
+    },
+    {
+      "session": "40234",
+      "sourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a",
+      "observedStatus": "completed",
+      "exitCode": 0,
+      "testsPassed": 31,
+      "buildSeconds": 716.38,
+      "testSeconds": 0.105,
+      "localLog": "/tmp/swifttla-learnproofs-related.log",
+      "scope": "LearnProofs, manifest, inventory, scenario identity, graph export, reference configuration, and scenario expectation diagnostics pass. Source remained fixed. No local TLC ran."
+    },
     {
       "session": "39109",
       "sourceSHA": "4eb8ea9423827e92dc020bf33bceb88e02581db2",
@@ -2692,7 +2773,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": "specifications/LearnProofs",
+  "nextFamily": null,
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -6328,38 +6409,46 @@
       "name": "Learn TLA⁺ Proofs",
       "scheduling": {
         "label": "Ready",
-        "reason": "Existing sequence domains, parameter bindings, state constraints, and invariants cover the published configuration. Implementation and hosted comparison remain necessary.",
-        "completionCondition": "Preserve lengths 0...4 before MCConstraint, all four invariants, and default deadlock checks. Remove the invented AddTwo bound. Resolve module dispositions without claiming TLAPS proof verification.",
+        "reason": "Existing DSL and checker features express the published configuration. Hosted evidence closes the family without an engine or model-semantics change.",
+        "completionCondition": "Complete at 8a9543c7. The source-defined initial domain, separate constraint, four invariants, and default deadlock check match upstream.",
         "reusableDependency": {
           "path": "Verification/FiniteGraph/fixtures/boulanger/TLAPS.tla",
           "sourceCommit": "f14d23363a6409ee616cb6ee12edd53b07660011",
           "sha256": "9afe54984062748a0568966434cc0945d682f8cd89fdbc38f73b5579751b0c55"
-        }
+        },
+        "status": "hosted match",
+        "verifiedSourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a"
       },
-      "audit": "reference inputs audited",
-      "gap": "Next selected family after DieHard completion. Existing diagnostics cover the configured sequence domain, separate constraint, four invariants, and MCFindHighest scenario. AddTwo has no invented bound or control state. Independent reference registration, TLAPS dependency pins, module dispositions, and hosted evidence remain incomplete.",
-      "legacyCleanupComplete": false,
+      "audit": "complete at verified revision",
+      "gap": "None for this family at 8a9543c7. The published configuration and model-owned scenario have audited hosted matches. All module dispositions and legacy cleanup are complete. Selected ordinary/upstream contracts, Apple consumers, and canonical export pass on that revision. Full-corpus admission and DSL acceptance remain incomplete.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/LearnProofs/AddTwo.tla",
           "role": "unconfigured proof example",
-          "reason": "Defines unbounded x'=x+2 and proofs of TypeOK and Even. It has no TLC configuration. The intended-DSL port now uses one atomic Next action with no bound or control state. Focused tests cover generated execution and export. No universal proof verification is claimed.",
-          "implementations": ["Sources/UpstreamParity/Examples/AddTwo.swift"],
-          "dispositionComplete": false
+          "reason": "AddTwo has no published TLC configuration. Its generated Next action preserves x'=x+2 without an invented bound or control state. Hosted execution and export contracts pass. TypeOK and Even remain declared. TLAPS proofs are outside this model-checking claim.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/AddTwo.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/LearnProofs/FindHighest.tla",
           "role": "behavior dependency",
-          "reason": "Defines the Highest algorithm, terminating stutter, four invariants, Termination, and TLAPS proofs. Spec has no fairness. MCFindHighest selects the four invariants but not Termination. A pinned TLAPS dependency remains necessary for the original reference bundle.",
-          "implementations": ["Sources/UpstreamParity/Examples/FindHighest.swift"],
-          "dispositionComplete": false
+          "reason": "FindHighest defines the Highest algorithm, terminating stutter, four invariants, Termination, and TLAPS proofs. The complete configured graph and selected properties match upstream. Spec has no fairness, and MCFindHighest does not select Termination. No termination or TLAPS-proof claim is made. The reused TLAPS dependency retains its pinned source bytes.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/FindHighest.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/LearnProofs/MCFindHighest.tla",
           "role": "configured root",
           "reason": "Selects MaxLength=3, MaxNat=4, Nat<-MCNat, Seq<-MCSeq, and MCConstraint. MCSeq uses the substituted Nat, so its domain includes sequences of length four. MCConstraint separately restricts Len(f) to three. TypeOK retains finite-domain membership for f, i, and h. The configuration does not disable TLC deadlock checks.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": [
+            "Sources/UpstreamParity/Examples/FindHighest.swift"
+          ],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -6367,11 +6456,29 @@
           "module": "specifications/LearnProofs/MCFindHighest.tla",
           "configuration": "specifications/LearnProofs/MCFindHighest.cfg",
           "required": true,
-          "status": "missing",
+          "status": "hosted match",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
-          "evidence": []
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/FindHighest.swift",
+              "scenario": "MCFindHighest",
+              "caseID": "find-highest"
+            }
+          ],
+          "evidence": [
+            {
+              "sourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35529048870",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35529048870/artifacts/10611042242",
+              "artifactSHA256": "848e8d0a5f194e17e1725c28a7533fd4b972cb703100f14d46b7cceaed29f7e9",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Native, unchanged upstream, and generated TLC graphs match completely: 156 initial states, 742 states, and 742 labeled edges. All four invariants and deadlock results match. Original inputs, toolchain pins, complete footers, every edge endpoint, and event checksums verify. The model-owned scenario also matches. See ci.learnProofsFamilyCandidate."
+            }
+          ],
+          "verifiedSourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a"
         }
       ],
       "partialCases": [
@@ -6383,7 +6490,17 @@
           "implementation": "Sources/UpstreamParity/Examples/AddTwo.swift",
           "reason": "The invented x < 10 constraint and synthetic program counter are removed. A focused test checks 100 generated Next transitions and unchanged export check selection. This is a local execution diagnostic, not a proof of the upstream theorems or a complete infinite graph."
         }
-      ]
+      ],
+      "verifiedSourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a",
+      "legacyCleanupAudit": {
+        "sourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a",
+        "files": [
+          "Sources/UpstreamParity/Examples/AddTwo.swift",
+          "Sources/UpstreamParity/Examples/FindHighest.swift"
+        ],
+        "test": "Tests/SwiftTLAParityTests/LearnProofsCorpusCheckingTests.swift",
+        "scope": "Repository-wide source inspection finds these two models and no separate application consumer. Both use #spec and scoped variables. No legacy Var, Variable, Action, checkingSafety, or public raw-state map remains in these models. Hosted ordinary contracts pass all three LearnProofs cases."
+      }
     },
     {
       "path": "specifications/LeastCircularSubstring",
