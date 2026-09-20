@@ -74,20 +74,27 @@ extension ActionExpr {
     }
 
     var scopeNames: Set<String> {
-        switch self {
-        case .assign(let target, let value):
-            if case .named(let name) = target { return value.freeVariableNames.union([name]) }
-            return value.freeVariableNames
-        case .unchanged(let target):
-            if case .named(let name) = target { return [name] }
-            return []
-        case .guard_(let condition): return condition.freeVariableNames
-        case .existsAction(let binder, let value, let body), .define(let binder, let value, let body):
-            return value.freeVariableNames.union(body.scopeNames).union([binder])
-        case .ifElse(let condition, let then, let otherwise):
-            return condition.freeVariableNames.union(then.scopeNames).union(otherwise.scopeNames)
-        case .and(let lhs, let rhs), .or(let lhs, let rhs): return lhs.scopeNames.union(rhs.scopeNames)
+        var pending = [self]
+        var names: Set<String> = []
+        while let action = pending.popLast() {
+            switch action {
+            case .assign(let target, let value):
+                if case .named(let name) = target { names.insert(name) }
+                names.formUnion(value.freeVariableNames)
+            case .unchanged(let target):
+                if case .named(let name) = target { names.insert(name) }
+            case .guard_(let condition): names.formUnion(condition.freeVariableNames)
+            case .existsAction(let binder, let value, let body), .define(let binder, let value, let body):
+                names.formUnion(value.freeVariableNames)
+                names.insert(binder)
+                pending.append(body)
+            case .ifElse(let condition, let then, let otherwise):
+                names.formUnion(condition.freeVariableNames)
+                pending.append(contentsOf: [then, otherwise])
+            case .and(let lhs, let rhs), .or(let lhs, let rhs): pending.append(contentsOf: [lhs, rhs])
+            }
         }
+        return names
     }
 }
 
