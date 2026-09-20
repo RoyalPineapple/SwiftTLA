@@ -820,6 +820,19 @@
   },
   "localDiagnostics": [
     {
+      "session": "69479",
+      "sourceSHA": "d093fdfb9235a924e0384c3ecbac7785fa78333d",
+      "sourcePatchSHA256": "c3b102b462eddb64601e768caef10deab83572d7549c4356d5896b6e2e4385d1",
+      "sourcePatchScope": "git diff -- .github/workflows/ci.yml",
+      "command": "cd Examples/SwiftTLADemos && DEVELOPER_DIR=/Library/Developer/CommandLineTools ../../scripts/local-validation.sh swiftpm-test 'ElevatorBankDemoTests|ChangRobertsDemoTests|GeneratedDemoTestSuiteTests|TwoBucketsDemoTests'",
+      "exitCode": 0,
+      "testsPassed": 9,
+      "buildSeconds": 162.96,
+      "testSeconds": 0.003,
+      "result": "All four pure-Swift demo suites pass with Swift 6.1.2: typed elevator records and projection, ChangRoberts deliveries and election, generated suite execution, and TwoBuckets. The CI correction replaces the unavailable SwiftTLADemos-Package scheme with SwiftPM under the existing pinned DEVELOPER_DIR. It preserves warnings-as-errors, one build job, complete test logging, exact source markers, and artifact retention, and adds the SDK build marker. Apple UI builds and adoption tests still use Xcode.",
+      "scope": "Source stayed fixed during the wrapper build. Static checks pass. Repository searches found no consumer of the old demo result-bundle path in SwiftTLA or the admission repository. This proves the local demo contracts, not the corrected hosted workflow. Main CI on 6d0617ab remains active, so the next push is held. No upstream or full-criterion credit."
+    },
+    {
       "session": "19285",
       "sourceSHA": "9bdfb912a84666ed7b6a146b116413c94308b6f2",
       "sourcePatchSHA256": "27a5ea7b6dd7c43bd703c19960b348041c2c85e4ac347ab16f89d8409d2b17d0",

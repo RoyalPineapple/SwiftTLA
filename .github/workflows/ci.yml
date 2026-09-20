@@ -156,7 +156,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
           swift --version > .build/demo-evidence/swift-version.txt
           xcodebuild -version > .build/demo-evidence/xcode-version.txt
-          xcodebuild test SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO -scheme SwiftTLADemos-Package -destination 'platform=macOS,arch=arm64' -only-testing:SwiftTLADemosTests -parallel-testing-enabled NO -parallel-testing-worker-count 1 -jobs 1 -resultBundlePath .build/demo-evidence/demo-contracts.xcresult 2>&1 | tee .build/demo-evidence/demo-contracts.log
+          xcrun --sdk macosx --show-sdk-build-version > .build/demo-evidence/sdk-build-version.txt
+          swift test -Xswiftc -warnings-as-errors -j 1 --no-parallel 2>&1 | tee .build/demo-evidence/demo-contracts.log
 
       - name: Retain generated demo-model evidence
         if: always()
