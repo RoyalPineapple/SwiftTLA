@@ -66,6 +66,14 @@
     },
     "snapshotReuseCandidate": {
       "sourceSHA": "0b86465f165584983dbcca910a9fb56d6865aca4",
+      "boulangerGraphFailure": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/job/105985968320",
+        "conclusion": "failure",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/artifacts/10594844916",
+        "artifactSHA256": "ecb0f5d78901b343ee4fddf951d09da785e0b4b922960d586e0c907f7027fdd3",
+        "failure": "The terminal job log reports stateLimitExceeded(5000000) during swift-export, from 00:13:32 to 00:43:18 UTC. TLC execution and comparison were not reached.",
+        "scope": "Terminal job log and artifact metadata audited; artifact contents not downloaded. This source includes snapshot reuse but predates the ten-million-state capacity change already submitted in edec23de. The result confirms the known capacity failure, not a new semantic mismatch, complete graph, or proof that the newer capacity fits hosted resources."
+      },
       "conclusion": "failure",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647",
