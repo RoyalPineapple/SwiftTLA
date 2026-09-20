@@ -62,6 +62,12 @@
       "sourceSHA": "265c7a197eeb9ed3cf22465180daa317138b907b",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518383391",
       "observedStatus": "in_progress",
+      "ordinaryFailure": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518383391/job/106098090688",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518383391/artifacts/10607064120",
+        "artifactSHA256": "e72b24340c905a41e9c1a570ad588bade86f50d6a07c1fd2f26a1b7bb7f48385",
+        "diagnosis": "The ordinary suite exits with signal 10. The last started test is Compiled action execution accepts wide lowered simultaneous updates; no assertion failure or crash backtrace is retained. The archive checksum verifies, but it contains toolchain markers and process inventories, not the crashing stack. The recursive action-frame completion path is a hypothesis, not a confirmed cause. UpstreamCorpusInventoryTests passed all five cases before the crash, confirming the earlier ledger repair on this revision."
+      },
       "scope": "Manual contracts-only diagnostics run the unchanged ordinary and upstream suites, Apple consumers, and canonical export. PR/main CI still selects all four Swift suites. The diagnostic aggregate has a distinct check name and cannot replace full admission. This checks the repaired ledger schema and migrated TwoBuckets consumer without repeating unchanged large-graph capacity failures."
     },
     "parallelVariantsCandidate": {
@@ -117,7 +123,7 @@
       "testsRun": 1521,
       "issues": 1,
       "diagnosis": "UpstreamCorpusInventoryTests cannot decode three refreshed bba219f evidence records because developerToolsVersion is missing. The APDieHarder, MCDieHarder, and Majority job logs each explicitly select /Applications/Xcode_16.4.app/Contents/Developer. Restore developerToolsVersion=16.4 from those logs; do not relax the required evidence schema.",
-      "scope": "The fields are restored locally. Hosted confirmation remains required. No model mismatch or new coverage credit is inferred from this metadata repair. Other jobs on the same revision remain independent evidence."
+      "scope": "All five UpstreamCorpusInventoryTests pass in hosted job 106098090688 at 265c7a19, confirming the restored fields. The same job later crashes in a different test. No model mismatch or new coverage credit is inferred from this metadata repair."
     },
     "boulangerIndependentTimeout": {
       "sourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",

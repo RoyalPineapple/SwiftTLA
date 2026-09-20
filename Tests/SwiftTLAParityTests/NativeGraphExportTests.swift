@@ -34,7 +34,7 @@ struct NativeGraphExportTests {
         let initial = try #require(FailingExportModel.initialMachines().first { $0.state.value == 0 })
         let native = try ReachabilityGraph(initialMachines: [initial], maximumStates: 1)
         #expect(native.transitions.count == 1)
-        #expect(native.transitions.values.allSatisfy(\.isEmpty))
+        #expect(native.transitions.values.allSatisfy { $0.isEmpty })
         let projection = try CanonicalState(native.formalProjection(of: initial.snapshot))
         let states = [FailingExportModel.Snapshot(state: .init(value: 99)): projection]
         #expect(throws: CanonicalGraphError.missingNativeSnapshot) {
