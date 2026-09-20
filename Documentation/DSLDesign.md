@@ -617,10 +617,13 @@ constraints, property selection, and deadlock selection. An unsupported choice
 must produce an explicit diagnostic. A backend must not ignore a choice or
 substitute its default.
 
-By default, exploration captures the complete reachable graph and evaluates
-every declared property, with deadlock checking enabled. Property violations
-must not stop graph capture. Normal completion retains the semantics in
-section 4. Resource limits remain runner controls, not model constraints.
+Checking must preserve the effective upstream check selection and stopping behavior.
+Deadlock checking is enabled unless the configuration disables it.
+A decisive invariant violation can complete a check before exploration exhausts the graph.
+The result must distinguish a completed check from a complete graph.
+An explicit exhaustive graph comparison must retain every reachable state and labeled edge.
+Resource limits remain runner controls, not model constraints.
+Normal completion retains the semantics in section 4.
 
 State constraints select the initial states and successors that exploration
 retains. They do not change the executable transition relation. Deadlock checks
@@ -993,16 +996,17 @@ check. Duplicate overrides and expectations for disabled checks are errors.
 Each scenario provides `initialMachines()`, `explore(maximumStates:)`, and `render()`.
 These methods use the same generated machine and symbolic transition module.
 
-Generated scenarios conform to `ModelValidationScenario`. The repository runner
-derives canonical graphs and all native property results from that interface.
-It validates expected outcomes after complete exploration. An expected violation
-cannot excuse an unavailable result or incomplete graph.
+Generated scenarios conform to `ModelValidationScenario`.
+The current repository runner derives canonical graphs and native property results from that interface.
+It still requires complete exploration before it validates expected outcomes.
+This implementation must change to support upstream checks that stop on a decisive violation.
+An expected violation requires an established result and a complete witness, not an arbitrary exploration cutoff.
 
 The runner uses rendered check metadata without compiling the specification again.
 Temporal and refinement declarations remain distinct until TLC configuration output.
 The `tlc-validate scenarios list` command discovers registered model-owned scenarios.
 The hosted `tlc-validate scenarios run --case <id-or-all> --output <directory>` command runs the selected scenarios.
-It retains complete native and TLC graphs, property results, expectations, and comparison failures.
+The current runner retains complete native and TLC graphs, property results, expectations, and comparison failures.
 Missing or disagreeing results fail the run.
 The finite-graph workflow derives one job per scenario from this list, with at most four validation jobs at once.
 Every discovered scenario must retain an exact result before the aggregate check can pass.
@@ -1058,8 +1062,8 @@ Keep three facts separate:
    or an explicit incomplete/failed outcome. The result shape depends on the
    claim; a violated reachability claim does not have a counterexample trace.
 2. **Scenario expectation:** whether the established outcome was intended.
-3. **Backend agreement:** whether Swift and TLC represent the same graph and
-   agree on the relevant property outcomes.
+3. **Backend agreement:** whether Swift and TLC agree under the same configuration,
+   checking mode, and stopping behavior, with complete supporting results.
 
 For a failed reachability claim, exhaustive absence of a target is the result;
 there need not be a single counterexample trace. For a failed invariant there is
@@ -1070,8 +1074,14 @@ Application-facing traces must carry generated states, actions, and complete
 execution snapshots where control state matters. Canonical formal conversion
 belongs at the validation boundary and must validate every key and value.
 
-A discovered witness can settle an existential claim early, but it does not
-complete whole-graph equivalence validation. That validation still requires:
+A decisive violation or reachability witness can complete its check before graph exhaustion.
+This result does not establish whole-graph equivalence.
+An upstream comparison must retain the full verdict and witness, including all states, actions, and cycle information that the witness requires.
+Each witness must satisfy the corresponding model semantics.
+Checks that did not run must remain unevaluated, not satisfied.
+When upstream requires shortest counterexamples, the comparison must also establish the required shortest-path result.
+
+When exhaustive exploration completes, whole-graph comparison requires:
 
 - Equal initial-state sets and complete labeled transition graphs.
 - Corresponding invariant violations, deadlocks, and temporal outcomes.
@@ -1079,9 +1089,9 @@ complete whole-graph equivalence validation. That validation still requires:
 - Automatically produced mismatch traces or a precise explanation of missing
   states, edges, outcomes, or undecodable data.
 
-Different valid counterexamples need not be byte-for-byte identical. Validate
-each witness against the corresponding semantics and compare the underlying
-graphs and outcomes.
+Different valid counterexamples need not be byte-for-byte identical.
+Compare their established outcomes and required witness properties.
+Compare complete graphs when exhaustive exploration completes.
 
 For topology differences, `graph-mismatch-traces.json` retains up to one rooted,
 labeled witness per side. Each witness reaches a differing initial state,
@@ -1089,15 +1099,16 @@ transition, or reachable state and is valid in its own complete graph.
 The full graphs and difference reports remain available. Metadata-only
 differences remain in the structured difference report.
 
-Capture complete graphs independently of early-stopping property checks. Then
-run selected property checks separately using the same model and scenario.
-Symmetry reduction must not invalidate temporal analysis or conceal differences
-in the graph being compared.
+Complete graph capture must not become an extra prerequisite for an upstream check that stops on a decisive violation.
+The pinned `MCDieHardest` configuration uses single-worker breadth-first search to find a shortest `NotSolved` counterexample.
+Its counters permit infinitely many reachable states, but its selected invariant check can finish with a finite counterexample.
+Matching that check requires neither an invented counter bound nor a separate equivalence proof.
+Symmetry reduction must preserve the selected checks and the result that the comparison establishes.
 
-Timeouts, truncated exploration, unsupported constructs, crashes, and decoding
-failures never count as successful equivalence validation or an expected
-counterexample. Finite comparisons establish agreement for tested configurations,
-not a universal proof of compiler correctness.
+Timeouts, resource cutoffs, unsupported constructs, crashes, and decoding failures are incomplete or failed results.
+They cannot substitute for a decisive verdict or a complete counterexample.
+Stopping at a decisive violation under upstream semantics is not resource truncation.
+Configuration comparisons do not establish a universal proof of compiler correctness.
 
 ## 8. Types and compiler boundaries
 

@@ -46,6 +46,29 @@ public enum SafetyViolation<Property: Hashable & Sendable>: Hashable, Sendable {
     case deadlock
 }
 
+/// A decisive safety result. Other selected properties have no established verdict.
+public struct SafetyCounterexample<Machine: StateMachine>: Sendable {
+    public let violations: [SafetyViolation<Machine.Property>]
+    public let trace: [(action: Machine.Action?, state: Machine.Snapshot)]
+    public let checking: ModelChecks<Machine.Property>
+
+    public var unevaluatedProperties: Set<Machine.Property> {
+        checking.properties.subtracting(violations.compactMap {
+            if case .invariant(let property) = $0 { return property }
+            return nil
+        })
+    }
+}
+
+public enum NativeCheckResult<Machine: StateMachine>: Sendable {
+    case counterexample(SafetyCounterexample<Machine>)
+    case exhausted(ReachabilityGraph<Machine>)
+}
+
+private struct NativeCheckStopped<Machine: StateMachine>: Error {
+    let counterexample: SafetyCounterexample<Machine>
+}
+
 /// A complete reachable graph with native safety and temporal results for one finite configuration.
 public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     private let machine: Machine
@@ -65,6 +88,23 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
 
     public init(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Machine.Property>? = nil,
         behavior: ModelBehavior = .specification) throws {
+        try self.init(initialMachines: initialMachines, maximumStates: maximumStates, checking: checking,
+                      behavior: behavior, stopOnViolation: false)
+    }
+
+    /// Checks generated transitions in breadth-first order and stops at a safety violation.
+    public static func check(initialMachines: [Machine], maximumStates: Int,
+        checking: ModelChecks<Machine.Property>? = nil, behavior: ModelBehavior = .specification) throws -> NativeCheckResult<Machine> {
+        do {
+            return .exhausted(try Self(initialMachines: initialMachines, maximumStates: maximumStates,
+                                      checking: checking, behavior: behavior, stopOnViolation: true))
+        } catch let stopped as NativeCheckStopped<Machine> {
+            return .counterexample(stopped.counterexample)
+        }
+    }
+
+    private init(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Machine.Property>?,
+        behavior: ModelBehavior, stopOnViolation: Bool) throws {
         guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
         guard let initialMachine = initialMachines.first else { throw ExplorationError.noInitialStates }
         let checking = checking ?? ModelChecks(properties: Set(Machine.Property.allCases), checkDeadlock: Machine.checksDeadlock)
@@ -82,6 +122,31 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         let reachabilityProperties = Set(Machine.reachabilityProperties).intersection(checking.properties)
         var reachabilityTargets = Dictionary(uniqueKeysWithValues: reachabilityProperties.map { ($0, Set<Machine.Snapshot>()) })
         let initialRoots = Set(initialMachines.map(\.snapshot))
+        func stop(_ snapshot: Machine.Snapshot, failures: [SafetyViolation<Machine.Property>],
+                  from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
+            guard stopOnViolation, !failures.isEmpty else { return }
+            var path: [(action: Machine.Action?, state: Machine.Snapshot)] = []
+            var current = snapshot
+            if !initialRoots.contains(snapshot), predecessors[snapshot] == nil, let predecessor {
+                path.append((predecessor.action, current))
+                current = predecessor.source
+            }
+            while let previous = predecessors[current] {
+                path.append((previous.action, current))
+                current = previous.source
+            }
+            path.append((nil, current))
+            throw NativeCheckStopped(counterexample: SafetyCounterexample<Machine>(
+                violations: failures, trace: path.reversed(), checking: checking))
+        }
+        func checkDiscoveredState(_ machine: Machine,
+                                  from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
+            guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
+            guard stopOnViolation else { return }
+            try stop(machine.snapshot,
+                     failures: machine.violatedInvariants(checking: checking.properties).map(SafetyViolation.invariant),
+                     from: predecessor)
+        }
         func recordReachability(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
             for property in try machine.matchedReachabilityProperties(checking: checking.properties) {
                 guard reachabilityProperties.contains(property) else {
@@ -119,6 +184,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         for machine in initialMachines {
             guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
             guard try machine.assumptionsHold() else { throw ExplorationError.assumptionViolated }
+            try checkDiscoveredState(machine)
             guard try machine.satisfiesStateConstraint() else {
                 try recordBoundaryViolations(machine)
                 continue
@@ -142,7 +208,9 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
                 if checking.checkDeadlock { failures.append(.deadlock) }
             }
             if !failures.isEmpty { violations[machine.snapshot] = failures }
+            try stop(machine.snapshot, failures: failures)
             let retained = try successors.filter { successor in
+                try checkDiscoveredState(successor.machine, from: (machine.snapshot, successor.action))
                 guard try successor.machine.satisfiesStateConstraint() else {
                     try recordBoundaryViolations(successor.machine, from: (machine.snapshot, successor.action))
                     return false

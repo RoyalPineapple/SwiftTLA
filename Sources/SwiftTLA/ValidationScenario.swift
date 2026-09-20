@@ -72,6 +72,11 @@ public protocol ModelValidationScenario: Sendable {
 }
 
 extension ModelValidationScenario {
+    public func check(maximumStates: Int) throws -> NativeCheckResult<Machine> {
+        try ReachabilityGraph.check(initialMachines: initialMachines(), maximumStates: maximumStates,
+                                    checking: checking, behavior: behavior)
+    }
+
     public func explore(maximumStates: Int) throws -> ReachabilityGraph<Machine> {
         try ReachabilityGraph(initialMachines: initialMachines(), maximumStates: maximumStates, checking: checking, behavior: behavior)
     }
