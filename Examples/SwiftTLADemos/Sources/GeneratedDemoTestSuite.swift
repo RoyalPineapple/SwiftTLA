@@ -51,15 +51,13 @@ public enum GeneratedDemoTestSuite {
         ]
     }
 
-    /// The twelve-node ring has a deliberately large asynchronous state space.
-    /// The release pipeline exhaustively checks it; the app runs these immediate,
-    /// generated-surface checks so its button remains responsive.
+    /// Immediate generated-surface checks, not exhaustive state-space validation.
     private static func ringChecks() -> [GeneratedDemoCheck] {
         [
-            check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Formal surface", action: { () throws -> Void in
-                let description = try ChangRoberts.spec.compile().description
-                guard description.variables.isEmpty == false, description.actions.isEmpty == false else {
-                    throw GeneratedDemoSuiteError.unexpectedFormalSurface
+            check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Generated export", action: { () throws -> Void in
+                let bundle = try ChangRoberts.render().tlaBundle
+                guard bundle.root.name == "ChangRoberts", !bundle.root.tla.isEmpty, !bundle.cfg.isEmpty else {
+                    throw GeneratedDemoSuiteError.unexpectedGeneratedExport
                 }
             }),
             check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Generated state", action: { () throws -> Void in
@@ -101,21 +99,10 @@ public enum GeneratedDemoTestSuite {
         }
     }
 
-    private static func check(
-        target: String,
-        name: String,
-        action: () throws -> String
-    ) -> GeneratedDemoCheck {
-        do {
-            return .init(target: target, check: name, detail: try action(), passed: true)
-        } catch {
-            return .init(target: target, check: name, detail: String(describing: error), passed: false)
-        }
-    }
 }
 
 private enum GeneratedDemoSuiteError: Error {
-    case unexpectedFormalSurface
+    case unexpectedGeneratedExport
     case unexpectedInitialState
     case deliveryWasNotForwarded
     case expectedActionUnavailable

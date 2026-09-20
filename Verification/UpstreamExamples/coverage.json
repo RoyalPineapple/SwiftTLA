@@ -725,6 +725,19 @@
   },
   "localDiagnostics": [
     {
+      "session": "85501",
+      "sourceSHA": "4bdc6930b951a88b3bb6977752878a88fe4c7b4f",
+      "sourcePatchSHA256": "ab5c999ec217a1f9629c57cd8b4972d4feb4e8ce50e6acc798bc9c0957dfa52d",
+      "sourcePatchScope": "git diff -- Examples .github/workflows/ci.yml",
+      "command": "cd Examples/SwiftTLADemos && DEVELOPER_DIR=/Library/Developer/CommandLineTools ../../scripts/local-validation.sh swiftpm-test 'ChangRobertsDemoTests|GeneratedDemoTestSuiteTests|ElevatorBankDemoTests|TwoBucketsDemoTests'",
+      "exitCode": 1,
+      "testsRun": 7,
+      "buildSeconds": 162.27,
+      "testSeconds": 0.003,
+      "result": "Six tests passed, including ChangRoberts ordinary record/enum state, strict formal projection, generated delivery and actor execution, full-ring election, and the app-facing generated export check. The existing ElevatorBank test fails: Alice remains onboard after exiting because the model clears the car's rider before indexing the riders dictionary. The next patch saves that rider before the ordered assignments; it does not change assignment semantics or weaken the test.",
+      "scope": "Source stayed fixed during the wrapper build. Full log: /tmp/swifttla-enum-dictionary.9ATAHU/demo-validation.log. Local consumer diagnostics only. No upstream configuration gains hosted credit."
+    },
+    {
       "session": "53473",
       "sourceSHA": "7d1a0d557d698f73131e179de2497c783a8e01ae",
       "sourcePatchSHA256": "336b45deeb9fb1e9966d7ef074f9ecba69ca2a94a8d9cae65626e8c6644fb00b",
