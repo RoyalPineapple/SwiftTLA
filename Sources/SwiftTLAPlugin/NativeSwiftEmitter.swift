@@ -202,6 +202,9 @@ struct NativeSwiftEmitter {
             if values.isEmpty { return "[\(try swiftType(key)): \(try swiftType(element))]()" }
             return "[\(try values.keys.sorted().map { "\(try literal($0, as: key)): \(try literal(values[$0]!, as: element))" }.joined(separator: ", "))]"
         case (.record(let value), .record(let fields)), (.record(let value), .nominalRecord(_, let fields)):
+            guard value.fields.map(\.key) == fields.map({ CompiledValue.string($0.name) }).sorted() else {
+                throw unsupported("record literal must contain exactly the declared fields")
+            }
             let name = try swiftType(type)
             let arguments = try fields.enumerated().map { index, field in
                 guard let value = value.fields.first(where: { $0.key == .string(field.name) })?.value else {

@@ -926,6 +926,18 @@
   },
   "localDiagnostics": [
     {
+      "session": "79809",
+      "sourceSHA": "c00a92c80a75b08a84b3a358f946588160bad192",
+      "sourcePatchSHA256": "74d60a6efcdf662396d413cc98a6c1dfd60a58b79a610e8db342e2f34c751460",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SwiftRecordTypeTests|GeneratedSwiftRecordTests|FormalUnionTests'",
+      "exitCode": 0,
+      "testsPassed": 16,
+      "testSeconds": 0.012,
+      "result": "Native record-literal emission now requires exactly the declared field keys before constructing either an ordinary nominal record or a structural record. Regressions reject extra, missing, duplicate, and wrongly typed fields, including records nested in arrays. Literal union selection cannot discard extra fields to fit an earlier, smaller alternative. Existing generated record execution, checked conversion, nominal identity, and formal-union behavior pass.",
+      "scope": "Swift 6.1.2 diagnostic through the safety wrapper; source stayed fixed for the complete build and all three selected suites passed. The record-union literal test directly exercises emitter input, not public resolver admission: nominal-record unions remain unsupported until native structural ordering and disjointness are implemented. Ponytail review keeps the guard in the shared emitter, adds no representation or fallback, and changes no model semantics. Hosted validation of this patch and complete AC-17/corpus evidence remain pending; no coverage credit."
+    },
+    {
       "session": "28031",
       "sourceSHA": "9ae139e6583a6294210d90705f257c56d88047b2",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'EchoCorpusStateGraphTests|DictionaryKeyIdentityTests|NativeGraphExportTests|ConstraintBoundaryCheckingTests|TLCGraphReaderTests|TLCPropertyCheckTests|GraphRunRecordsTests|MultiCarElevatorCorpusStateGraphTests'",
@@ -9186,6 +9198,7 @@
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
       "recordUnionGap": {
+        "literalBoundary": "Native record-literal emission previously ignored unexpected fields, allowing a larger record to be narrowed into an earlier union alternative. The shared emitter now validates the exact field keys before construction. Diagnostic 79809 passes strict and nested literal regressions. This fixes a prerequisite boundary loss but does not enable nominal-record union admission or cross-record ordering.",
         "requiredBy": "Pinned Nano.tla defines genesis, send, open, receive, and change record alternatives; genesis.account is PublicKey. SignedBlock embeds the block union and a signature record. Ledger and hashFunction also admit the NoBlock model-value sentinel configured through the Nano instance. The current fixture has only genesis/send plus a fabricated NoBlock record and uses PrivateKey for genesis.account; those differences must be removed, not preserved as the target union contract. The NanoBlockchain family sourceAudit records all three required configurations and coupled gaps.",
         "resolver": "SourceTypeResolver routes declared OneOf alternatives through CompiledValueType.preservingUnion and normalizedUnion. normalizedUnion has no nominalRecord kind and rejects multiple composite alternatives with the same kind. Adding nominalRecord alone does not support multiple record shapes.",
         "ordering": "NativeSwiftEmitter.unionOrdering handles matching alternatives with their typed comparator but orders differing composite alternatives only by formal-kind rank and an ordinal of zero. Two record alternatives would therefore compare neither less nor greater. CompiledValue record order instead compares sorted field-name/value pairs lexicographically; shared leading fields must compare their values before a later field-name difference. Sorting only by record type name, case number, or field-name list would change that order.",

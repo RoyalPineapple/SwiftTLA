@@ -65,6 +65,50 @@ struct SwiftRecordTypeTests {
         #expect(projection.contains(".init(\"a\", TLAValue.int(packet.`a`))"))
     }
 
+    @Test("native record literals reject lossy and malformed field projections")
+    func rejectsLossyRecordLiterals() throws {
+        let compilation = try TLASpec("RecordBoundary") { Var("value", 0) }.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "RecordBoundary", program: program))
+        let record = CompiledValueType.nominalRecord("Model.Packet", [.init(name: "value", type: .int)])
+        let invalid: [TLAValue] = [
+            .record([:]),
+            .record(["value": .int(1), "extra": .int(2)]),
+            .record(["wrong": .int(1)]),
+            .record(["value": .bool(true)]),
+            .record(TLARecord([.init("value", .int(1)), .init("value", .int(2))]))
+        ]
+        for value in invalid {
+            let compiled = CompiledValue(formal: value)
+            #expect(throws: (any Error).self) { try emitter.literal(compiled, as: record) }
+            #expect(throws: (any Error).self) {
+                try emitter.literal(.tuple([compiled]), as: .array(record))
+            }
+        }
+        let valid = CompiledValue(formal: .record(["value": .int(1)]))
+        #expect(try emitter.literal(valid, as: record) == "Model.Packet(value: 1)")
+        #expect(try emitter.literal(.tuple([valid]), as: .array(record)) == "[Model.Packet(value: 1)]")
+    }
+
+    @Test("record literal selection cannot erase fields to fit an earlier union alternative")
+    func selectsExactRecordLiteralShape() throws {
+        let compilation = try TLASpec("RecordBoundary") { Var("value", 0) }.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "RecordBoundary", program: program))
+        let small = CompiledValueType.nominalRecord("Model.Small", [.init(name: "value", type: .int)])
+        let large = CompiledValueType.nominalRecord("Model.Large", [
+            .init(name: "value", type: .int), .init(name: "extra", type: .bool)
+        ])
+        let value = CompiledValue(formal: .record(["value": .int(1), "extra": .bool(true)]))
+        #expect(try emitter.literal(value, as: .oneOf(small, large)) ==
+            "(OneOf<Model.Small, Model.Large>.second(Model.Large(value: 1, extra: true)) as OneOf<Model.Small, Model.Large>)")
+        #expect(throws: (any Error).self) {
+            try emitter.literal(
+                CompiledValue(formal: .record(["value": .int(1), "extra": .bool(true), "unknown": .int(3)])),
+                as: .oneOf(small, large))
+        }
+    }
+
     @Test("Swift records retain declaration identity, field order, and nested collection types")
     func resolvesNominalRecords() throws {
         let resolver = SourceTypeResolver(metadata: try swiftRecordMetadata("""
