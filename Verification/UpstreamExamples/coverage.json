@@ -48,10 +48,26 @@
       "scope": "Diagnosis uses the terminal job log and artifact metadata. The 1.48 GB artifact is retained remotely but has not been downloaded or audited as complete evidence. Run 35451794508 has completed with failure: this scenario and graphs-coffee-can-3000 are its only failed comparison jobs; the aggregate gate also failed. Successful jobs still require retained evidence audits before any new coverage credit."
     },
     "currentCandidate": {
+      "sourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495",
+      "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037",
+      "temporalRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493942145",
+      "scope": "Pushed after the previous main CI run completed with failure, without cancelling older independent comparisons. Includes existing-index projection membership, buffered graph serialization, retained graph-file moves, ordinary-record MultiCarElevator and Echo migrations, dictionary-preserving updates, three-domain Do, documentation export coverage, and the demo SwiftPM CI runner fix. The combined focused wrapper run passed 100 tests on source 9ae139e6; the only subsequent change in this candidate records that diagnostic. All three new hosted workflows target this exact immutable SHA. Results and artifact audits remain pending; no performance recovery, family/configuration match, or completed DSL criterion is claimed. PR 394 remains draft."
+    },
+    "projectionCandidate": {
       "sourceSHA": "6d0617ab720ad6fb54f6dce11f642dbe63863c9d",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797",
       "temporalRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485733646",
+      "mainConclusion": "failure",
+      "finiteGraphTimeout": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/job/106011625548",
+        "conclusion": "failure",
+        "stepLimitMinutes": 120,
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758/artifacts/10600530806",
+        "artifactSHA256": "bbdfd274ce0ecdd6e314987f3bcf63e861e5356876cb34b35357cc443c527adc",
+        "scope": "Terminal job log confirms timeout at 2026-09-20T06:18:53Z. Downloaded archive checksum verifies. The final 06:14:20 sample reports 18.8 GB physical footprint and Boulanger canonical state conversion through NativeModelRun and ReachabilityGraph.formalProjection, including swift_retain beneath dictionary value access. The existing-index membership fix is absent from this source and is now included in bba219f3 for hosted validation. No completed graph or recovery evidence is established. Retained diagnostic: /tmp/swifttla-finite-6d.AjmU3d. Main run became terminal before the next push; older independent comparisons were left running."
+      },
       "auditedComparisons": {
         "scope": "All four archive checksums verify. Retained performance/source-sha.txt files identify 6d0617ab. Complete native, reference TLC, and generated-TLA TLC JSONL streams compare byte-for-byte equal in all four cases, including CoffeeCan1000's complete stream; no prefixes or state-count-only comparisons were used. All comparison records report complete graphs, exact checks, and empty reference/generated difference lists. Original CFG hashes match the case manifest; retained reference TLA hashes and TLC/Java pins match the declared fixtures/toolchain. CoffeeCan references are pinned upstream files. VoteProof is the existing string-valued partial fixture, not byte-identical upstream input. These results do not cover later local changes or add family/configuration credit at the ledger's admission anchor. Archives and selected metadata: /tmp/swifttla-comparisons-6d.lj7bV5. CoffeeCan3000 and Boulanger remain active in this independent run.",
         "cases": [
