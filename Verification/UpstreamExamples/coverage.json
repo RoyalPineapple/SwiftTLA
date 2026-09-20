@@ -714,6 +714,17 @@
   },
   "localDiagnostics": [
     {
+      "session": "27363",
+      "sourceSHA": "8aab5417baaa8dff7531da16ba67f1e54233da44",
+      "sourcePatchSHA256": "9d80487ec8d83c6964263af106fad544da132c8f11a025b36a7aa27b9df73cc8",
+      "sourcePatchScope": "git diff -- Examples",
+      "command": "cd Examples/SwiftTLADemos && DEVELOPER_DIR=/Library/Developer/CommandLineTools ../../scripts/local-validation.sh swiftpm-test 'ChangRobertsDemoTests'",
+      "exitCode": 1,
+      "testsRun": 0,
+      "result": "The model parsed after correcting the invariant handle. Generated Swift then failed because the dictionary initializer's earlier duplicate-key cardinality guard used Set<String> while later contextual checking refined its local key bindings to Node. The emitter therefore received inconsistent checked binder occurrences. The next compiler patch rechecks LET bodies when a later use refines their binder, following existing action/body checking behavior; it does not lower enum keys to strings or restore legacy Function authoring.",
+      "scope": "Source stayed fixed during the wrapper build. Full diagnostics: /tmp/swifttla-message-record.zIRV50/validation-2.log. This is a compiler defect found by the ordinary dictionary migration, not successful record migration evidence."
+    },
+    {
       "session": "52167",
       "sourceSHA": "3e1958b16c9ed2897e920542751b62b96b4332d1",
       "sourcePatchSHA256": "d9b5c6510668ab8c2e2b1c8fdf0aad868d864cde4cc98111c5d113a2dc633fb3",
