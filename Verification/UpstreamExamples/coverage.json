@@ -49,6 +49,7 @@
     },
     "currentCandidate": {
       "sourceSHA": "0b86465f165584983dbcca910a9fb56d6865aca4",
+      "conclusion": "failure",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647",
     "boulangerDiagnosticJobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473241647/job/105977930719",
@@ -107,6 +108,19 @@
         "scope": "The retained TLC log reports no error, an empty queue, and a completed search. This diagnostic did not retain the lossless graph bridge output or compare Swift and TLC graphs. It establishes a resource baseline, not a hosted configuration match or family completion."
       },
     "completedJobs": [
+      {
+        "name": "scenarios",
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/job/105977911740",
+        "conclusion": "failure",
+        "testsRun": 7,
+        "issues": 1,
+        "buildSeconds": 1837.85,
+        "testSeconds": 2388.758,
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/artifacts/10594303242",
+        "artifactSHA256": "9bf3c82f3f80aed8cf9922ca4aa5414c284a8e2911d1fbff775998dc1bca1d18",
+        "failure": "Only boulanger-0 reports stateLimitExceeded(5000000). The suite completed normally with one issue; no timeout or property mismatch is reported.",
+        "scope": "Terminal log and artifact metadata audited; artifact contents have not been downloaded. Both failing main-CI suites now isolate the same inadequate Boulanger capacity. This does not establish complete hosted upstream comparisons."
+      },
       {
         "name": "finite-graphs",
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35473235025/job/105977911703",
