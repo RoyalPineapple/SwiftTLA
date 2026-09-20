@@ -1,28 +1,25 @@
 # Production readiness
 
-SwiftTLA qualifies one exact released commit. That commit owns the meaning of
-every source model that its `compile()` accepts.
+SwiftTLA qualifies one exact released commit. Evidence for an earlier commit does
+not qualify later source changes.
 
 Accepted source has one path:
 
 ```text
-source model
-  → compile
-  → CompiledSpecification
-       ├→ generated machine
-       ├→ compiled runtime
-       └→ rendered bundles
+typed source model → resolved program
+                       ├→ generated machine → execution and exploration
+                       └→ generated export → formal bundles
 ```
 
-Compilation accepts a declaration only when every supported output preserves
-its compiled meaning. Executable declarations are typed. One compiled runtime
-executes them. Applications use generated typed state and actions. Formal text
-exists at rendering and external-tool boundaries.
+Native generation and formal export must preserve the same resolved meaning.
+Applications use generated typed state and actions. Swift exploration uses the
+same generated transitions. Formal text exists at export and external-tool boundaries.
 
 The supported application execution API contains one generated-machine route.
-A successful compilation supplies every executable model fact to that route.
-The `@TLAModel` expansion uses an underscored compiler-support ABI whose state
-is private inside each generated machine.
+The `@TLAModel` expansion emits native initialization, transitions, and property checks.
+Generated machines do not compile or interpret source declarations at runtime.
+Remaining formal-core interpreter callers require migration or an explicit boundary justification.
+Their presence does not establish a second application backend or completion of the DSL migration.
 
 ## Qualify a release commit
 
@@ -91,6 +88,8 @@ names contain the resolved SHA, run ID, and run attempt.
 
 ## Scope
 
-Production readiness covers fidelity for the language accepted by `compile()`.
-Bounded TLC comparison supplies independent evidence for each declared finite
-case.
+Production readiness requires evidence for the accepted DSL contract and every
+required upstream configuration. The coverage ledger retains missing implementations,
+incomplete configurations, and incomplete comparisons.
+Finite TLC comparisons supply evidence for their exact configurations, not for
+untested configurations or the entire language.

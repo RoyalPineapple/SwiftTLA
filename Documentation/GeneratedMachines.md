@@ -1,7 +1,6 @@
 # Generated machines
 
-`@TLAModel` generates a typed Swift state machine from one compiled
-specification.
+`@TLAModel` generates a typed Swift state machine from one resolved program.
 The machine holds its execution state and exposes declared variables through
 an immutable `State`. It accepts typed `Action` values; each successful action
 returns a `Transition` with the visible state before and after it.
@@ -12,8 +11,8 @@ let transition = try machine.send(.advance)
 let state = transition.after
 ```
 
-Application code uses the generated machine. TLC and PlusCal tools use the
-rendered bundles published by the compiled specification.
+Application code uses the generated machine. Independent validation uses the
+formal bundles from the generated export API.
 
 ## Generate a machine
 
@@ -297,32 +296,37 @@ unknown members and malformed formal values throw. Use one finite configuration
 for the entire graph. This explicit serialization boundary does not execute the
 formal interpreter or invoke TLC.
 
-## Compile and render
+## Export formal artifacts
 
-Compile the source model when exporting formal artifacts:
+Use the generated export API:
 
 ```swift
-let compilation = try BoundedCounter.spec.compile()
-let bundle = try compilation.render().tlaBundle
+let bundle = try BoundedCounter.render().tlaBundle
 ```
 
-Compilation validates declarations, binds names, links modules, lowers
-behavior, and allocates private identities. `render()` consumes the resulting
-program to produce TLA+/PlusCal text and formal bundles. Reuse that rendered
-result when exporting multiple artifacts. At build time, the macro
-uses the resolved compiler program to emit typed Swift initialization, guards,
-updates, and property checks. Generated machines execute that Swift directly;
-construction and transitions do not compile the specification or interpret
-formal values. Formal artifacts are exported separately for independent validation.
+At build time, the macro resolves declarations, types, bindings, and control flow.
+Native generation and formal export consume that same resolved program.
+The generated `render()` method assembles the formal bundle without runtime compilation.
+Parameterized models require a typed configuration. A model-owned scenario supplies
+its bindings and selected checks through `scenario.render()`.
+
+Generated machines execute native Swift initialization, guards, updates, and property checks.
+Construction and transitions do not compile the specification or interpret formal values.
+Unsupported export operations produce a diagnostic rather than an interpreter fallback.
+The formal-core compilation API remains for explicit compiler and imported-module boundaries,
+not as the application export route.
 
 The inline specification is authoritative. Its getter must contain one direct
 `#spec` declaration (or return that declaration), with statically admitted model
 structure. Unsupported native operations produce build-time diagnostics.
 
-`violatedInvariants()` returns the names of false invariants in the current
-state. `assumptionsHold()` evaluates the declared assumptions. These checks do
-not remove invariant violations from the transition relation. State constraints
-filter successor candidates before the machine selects a unique transition.
+`violatedInvariants()` returns typed `Property` values for false invariants in the current state.
+`assumptionsHold()` evaluates the declared assumptions. These checks do not remove
+invariant violations from the transition relation.
+
+State constraints select states for exploration. They do not disable application
+transitions or resolve an ambiguous action. Exploration retains invariant witnesses
+outside the constraint, even though those states are absent from its transition graph.
 
 ## API reference
 
