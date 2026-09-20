@@ -50,6 +50,14 @@
     "completionRule": "Scheduling labels and queue positions confer no evidence credit. Count only retained hosted configuration matches. Declare a family complete only after every applicable configuration and variant is verified, module dispositions are resolved, and legacy code is removed. The next deliverable is one fully verified family on a green hosted revision through the intended DSL and correct checking path."
   },
   "ci": {
+    "nativeProjectionTraversalCandidate": {
+      "sourceSHA": "e23c7a4ea3498124eaf36766e107f55fd0825140",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518951439",
+      "caseLabels": ["graphs-boulanger", "graphs-die-hardest-parallel-freeze"],
+      "observedStatus": "in_progress",
+      "diagnosis": "The terminal 59fa4d5b finite-graph sample /tmp/swifttla-finite-59fa.bUWvte/extracted/1789905683-43912.txt spends the sampled export work in CanonicalGraph's preliminary allSatisfy scan, copying and hashing Boulanger snapshots. The same initializer checks every source again when it exports edges, including sources with no successors. e23c7a4e removes the redundant scan, retains exact state-count and per-source/per-target validation, and adds equal-size invalid-table and deadlocked-source regressions.",
+      "scope": "This reruns the unchanged Boulanger reference after a measured-path change, with a small complete DieHard graph regression. No bound, property, state, edge, or evidence requirement changes. Removing the duplicate pass is not proof that the remaining capacity failure is resolved. Wait for hosted evidence and inspect any new expensive phase before another change."
+    },
     "contractsCandidate": {
       "sourceSHA": "265c7a197eeb9ed3cf22465180daa317138b907b",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518383391",
@@ -1125,6 +1133,13 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "96614",
+      "sourceSHA": "e23c7a4ea3498124eaf36766e107f55fd0825140",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'NativeGraphExportTests|CanonicalGraphTests'",
+      "observedStatus": "running",
+      "scope": "Log: /tmp/swifttla-native-graph-validation.log. Focused export and canonical graph diagnostics include missing projections, equal-size invalid projection tables, and sources with no outgoing edges. Source and tests remain fixed during the diagnostic. No passing result or performance recovery is claimed."
+    },
     {
       "session": "73438",
       "sourceSHA": "26574bc076f0d16269d067508bb47885d2292ba6",
