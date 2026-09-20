@@ -17,8 +17,23 @@ struct UpstreamCorpusInventoryTests {
             let artifactURL: String
             let completeGraph: Bool?
             let allPropertiesMatch: Bool?
+            let completion: FiniteGraphManifest.Case.ComparisonMode?
+            let completeCounterexampleMatch: Bool?
             let acceptanceComplete: Bool?
             let environment: [String: String]?
+
+            func provesConfiguration(_ mode: FiniteGraphManifest.Case.ComparisonMode) -> Bool {
+                switch mode {
+                case .exhaustive:
+                    return (completion == nil || completion == .exhaustive)
+                        && completeGraph == true && allPropertiesMatch == true
+                        && completeCounterexampleMatch != true
+                case .decisiveCounterexample:
+                    return completion == .decisiveCounterexample
+                        && completeCounterexampleMatch == true && completeGraph == false
+                        && allPropertiesMatch != true
+                }
+            }
 
             func matches(sourceSHA: String, developerToolsVersion: String, environment: [String: String]?) -> Bool {
                 self.sourceSHA == sourceSHA
@@ -164,7 +179,8 @@ struct UpstreamCorpusInventoryTests {
         #expect(Set(coverage.families.map(\.path)) == Set(inventory.families.map(\.path)))
         #expect(coverage.dslCriteria.map(\.id) == (1...19).map { String(format: "AC-%02d", $0) })
         let states = ["missing", "implemented", "locally checked", "hosted match"]
-        func verifyEvidence(_ evidence: [Coverage.Evidence], status: String, requiresGraph: Bool = true,
+        func verifyEvidence(_ evidence: [Coverage.Evidence], status: String,
+            configurationMode: FiniteGraphManifest.Case.ComparisonMode? = .exhaustive,
             environment: [String: String]? = nil) {
             #expect(states.contains(status))
             if status == "locally checked" || status == "hosted match" {
@@ -174,14 +190,22 @@ struct UpstreamCorpusInventoryTests {
                 })
             }
             if status == "hosted match" {
-                #expect(evidence.contains {
-                    $0.matches(sourceSHA: coverage.auditedSwiftSHA,
+                #expect(evidence.contains { record in
+                    record.matches(sourceSHA: coverage.auditedSwiftSHA,
                         developerToolsVersion: coverage.ci.hostedXcode, environment: environment)
-                        && (requiresGraph ? ($0.completeGraph == true && $0.allPropertiesMatch == true) : $0.acceptanceComplete == true)
-                        && $0.runURL.hasPrefix("https://github.com/")
-                        && $0.artifactURL.hasPrefix("https://github.com/")
+                        && (configurationMode.map { record.provesConfiguration($0) } ?? (record.acceptanceComplete == true))
+                        && record.runURL.hasPrefix("https://github.com/")
+                        && record.artifactURL.hasPrefix("https://github.com/")
                 })
             }
+        }
+        func comparisonMode(_ implementations: [Coverage.Implementation]) throws -> FiniteGraphManifest.Case.ComparisonMode {
+            let modes = try implementations.map { implementation in
+                try #require(manifest.cases.first { $0.id == implementation.caseID }).comparisonMode
+            }
+            let mode = modes.first ?? .exhaustive
+            #expect(modes.allSatisfy { $0 == mode })
+            return mode
         }
         for family in coverage.families {
             let source = try #require(inventory.families.first { $0.path == family.path })
@@ -193,7 +217,8 @@ struct UpstreamCorpusInventoryTests {
             for configuration in family.configurations {
                 #expect(configuration.required)
                 #expect(family.modules.contains { $0.path == configuration.module })
-                verifyEvidence(configuration.evidence, status: configuration.status)
+                verifyEvidence(configuration.evidence, status: configuration.status,
+                    configurationMode: try comparisonMode(configuration.implementations))
                 if let variants = configuration.environmentVariants {
                     #expect(!variants.isEmpty)
                     #expect(configuration.variantReason?.isEmpty == false)
@@ -201,7 +226,8 @@ struct UpstreamCorpusInventoryTests {
                     for variant in variants {
                         #expect(!variant.environment.isEmpty)
                         #expect(variant.environment.allSatisfy { !$0.key.isEmpty && !$0.value.isEmpty })
-                        verifyEvidence(variant.evidence, status: variant.status, environment: variant.environment)
+                        verifyEvidence(variant.evidence, status: variant.status,
+                            configurationMode: try comparisonMode(variant.implementations), environment: variant.environment)
                         if variant.status != "missing" { #expect(!variant.implementations.isEmpty) }
                         let aggregateRank = try #require(states.firstIndex(of: configuration.status))
                         let variantRank = try #require(states.firstIndex(of: variant.status))
@@ -229,7 +255,7 @@ struct UpstreamCorpusInventoryTests {
             }
         }
         for criterion in coverage.dslCriteria {
-            verifyEvidence(criterion.evidence, status: criterion.status, requiresGraph: false)
+            verifyEvidence(criterion.evidence, status: criterion.status, configurationMode: nil)
         }
         let graphHarness = try #require(coverage.families.flatMap(\.configurations).first {
             $0.configuration == "specifications/TLC/TestGraphs.cfg"
@@ -253,6 +279,7 @@ struct UpstreamCorpusInventoryTests {
         let environment = ["GRAPH": "1a", "K": "2"]
         let evidence = Coverage.Evidence(sourceSHA: "source", developerToolsVersion: "16.4",
             runURL: "", artifactURL: "", completeGraph: true, allPropertiesMatch: true,
+            completion: nil, completeCounterexampleMatch: nil,
             acceptanceComplete: nil, environment: environment)
         #expect(evidence.matches(sourceSHA: "source", developerToolsVersion: "16.4", environment: environment))
         #expect(!evidence.matches(sourceSHA: "other", developerToolsVersion: "16.4", environment: environment))
@@ -264,5 +291,32 @@ struct UpstreamCorpusInventoryTests {
         for binding in otherBindings {
             #expect(!evidence.matches(sourceSHA: "source", developerToolsVersion: "16.4", environment: binding))
         }
+    }
+
+    @Test("decisive evidence cannot substitute for graph completion or claim all properties")
+    func distinguishesCompletionEvidence() {
+        func evidence(completion: FiniteGraphManifest.Case.ComparisonMode? = .decisiveCounterexample,
+            completeGraph: Bool? = false, allPropertiesMatch: Bool? = nil,
+            completeCounterexampleMatch: Bool? = true) -> Coverage.Evidence {
+            Coverage.Evidence(sourceSHA: "source", developerToolsVersion: "16.4",
+                runURL: "", artifactURL: "", completeGraph: completeGraph,
+                allPropertiesMatch: allPropertiesMatch, completion: completion,
+                completeCounterexampleMatch: completeCounterexampleMatch,
+                acceptanceComplete: nil, environment: nil)
+        }
+        let decisive = evidence()
+        #expect(decisive.provesConfiguration(.decisiveCounterexample))
+        #expect(!decisive.provesConfiguration(.exhaustive))
+        let exhaustive = evidence(completion: .exhaustive, completeGraph: true,
+            allPropertiesMatch: true, completeCounterexampleMatch: nil)
+        #expect(exhaustive.provesConfiguration(.exhaustive))
+        #expect(!exhaustive.provesConfiguration(.decisiveCounterexample))
+        for invalid in [evidence(completion: nil), evidence(completion: .exhaustive),
+            evidence(completeGraph: true), evidence(completeGraph: nil),
+            evidence(allPropertiesMatch: true), evidence(completeCounterexampleMatch: false),
+            evidence(completeCounterexampleMatch: nil)] {
+            #expect(!invalid.provesConfiguration(.decisiveCounterexample))
+        }
+        #expect(!evidence(completeGraph: true, allPropertiesMatch: true).provesConfiguration(.exhaustive))
     }
 }

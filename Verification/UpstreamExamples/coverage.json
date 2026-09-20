@@ -54,7 +54,7 @@
       "branch": "codex/pr394-decisive-candidate",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35506180618",
       "caseLabels": ["decisive-mc-die-hardest", "scenarios-die-hardest-0"],
-      "observedStatus": "queued",
+      "observedStatus": "in_progress",
       "scope": "The exact locally checked commit was published on a candidate branch so existing PR CI remains running. This focused candidate checks the unchanged upstream MCDieHardest configuration and generated model. No new PR was created. Full admission and the PR branch update remain pending; no hosted match is claimed."
     },
     "candidateCaseSelection": {
@@ -69,6 +69,14 @@
       "issues": 1,
       "diagnosis": "UpstreamCorpusInventoryTests cannot decode three refreshed bba219f evidence records because developerToolsVersion is missing. The APDieHarder, MCDieHarder, and Majority job logs each explicitly select /Applications/Xcode_16.4.app/Contents/Developer. Restore developerToolsVersion=16.4 from those logs; do not relax the required evidence schema.",
       "scope": "The fields are restored locally. Hosted confirmation remains required. No model mismatch or new coverage credit is inferred from this metadata repair. Other jobs on the same revision remain independent evidence."
+    },
+    "boulangerIndependentTimeout": {
+      "sourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/job/106044136460",
+      "conclusion": "failure",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/artifacts/10603846399",
+      "artifactSHA256": "fbfb24bbf163b171884e81349e7ca9fa08d96a3dd33dd6e7a410d30e219b3b50",
+      "scope": "The comparison timed out after 120 minutes at 2026-09-20T10:53:09Z. The downloaded 785437-byte archive checksum and retained source SHA verify. Its log remains in swift-export. The final 10:48:48 UTC sample reports a 30.8 GB footprint in CanonicalGraph.init, copying canonical endpoint states through Dictionary lookup and inserting edges. This revision predates the endpoint-copy fix in 212cbdb3. Recovery remains unproved until the active newer-source runs finish; no unchanged retry or graph-equivalence credit. Retained archive: /tmp/swifttla-boulanger-bba.FqVQIf/evidence.zip."
     },
     "latestIndependentGraphFailure": {
       "sourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
@@ -1058,6 +1066,19 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "57257",
+      "sourceSHA": "f1c5a6fa",
+      "sourcePatchSHA256": "aa02c807da4eb92bc8178e8ef6c2a0ae7ce5fcc7e56e984e7729170aa2dccf0a",
+      "sourcePatchScope": "git diff -- Sources Tests; only UpstreamCorpusInventoryTests.swift changed",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'UpstreamCorpusInventoryTests'",
+      "exitCode": 0,
+      "testsPassed": 5,
+      "buildSeconds": 638.19,
+      "testSeconds": 0.018,
+      "result": "All five inventory tests pass. Hosted configuration evidence must satisfy the comparison mode selected by its declared reference case. Complete decisive counterexample matches are distinct from complete graphs and cannot claim all properties are proved. Existing graph evidence, source/toolchain/environment bindings, pinned fixture identities, and the full 78-family/234-configuration inventory remain enforced.",
+      "scope": "Source and tests stayed unchanged throughout the diagnostic. Ponytail review keeps the rule in the existing ledger verifier and reuses the manifest comparison mode. This is local validation of evidence bookkeeping, not a hosted model match. No coverage credit."
+    },
     {
       "session": "26274",
       "sourceSHA": "e402e63d",
