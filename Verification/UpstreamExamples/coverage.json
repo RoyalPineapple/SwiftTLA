@@ -8708,15 +8708,31 @@
       "id": "AC-04",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Local diagnostic 63984 passes 16 tests for complete generated successor and application-dispatch agreement. NativeReachabilityTests replays every reachable snapshot and action of the branching fixture, including distinct control locations, termination, disabled dispatch, and ambiguity. NativeExecutionBoundaryTests retains the same evaluation failure through enumeration, enabledness, dispatch, and exploration, with transactional snapshot preservation. NativeMachineExecutionTests supplies complete branching and constraint-boundary coverage. Hosted acceptance for the strengthened scope remains pending; this is not a verified DSL criterion.",
-      "evidence": []
+      "reason": "NativeReachabilityTests replays every reachable snapshot and action, including hidden control, termination, disabled dispatch, and ambiguity. NativeExecutionBoundaryTests checks identical arithmetic failure through enumeration, enabledness, dispatch, and exploration with snapshot preservation. NativeMachineExecutionTests supplies complete branching and constraint-boundary comparisons. This complete scope passed hosted ordinary validation at edec23de. Historical evidence is retained, but the criterion remains uncredited pending source-aligned admission.",
+      "evidence": [{
+        "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632109",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10596135960",
+        "artifactSHA256": "d76ed2004fba91758ff38e6d0caef660a6943a73bccc090a51ecb195ca2901bf",
+        "acceptanceComplete": true,
+        "scope": "Audited every-state/action traversal, exact target sets and multiplicity, transactional disabled and ambiguous dispatch, overflow propagation, and excluded constraint-boundary witnesses against terminal passing NativeReachabilityTests, NativeExecutionBoundaryTests, and the suite displayed as Generated execution agrees with the formal relation. These test and fixture files are unchanged since this hosted SHA. Swift 6.1.2, Xcode 16.4 build 16F6, SDK 24F74. Formal interpreter calls here are test oracles, not evidence that AC-12 deletion is complete. No upstream configuration credit."
+      }]
     },
     {
       "id": "AC-05",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Local diagnostic 80472 passes positive witness replay through generated dispatch, complete graph retention, unreachable outcomes only after complete exploration, and resource-limit rejection for found and absent goals. ConfiguredProcessTests retains both a replayable completion witness and a separate noncompleting liveness cycle for nonempty unfair populations. Hosted acceptance for this complete test scope remains pending; this is not a verified DSL criterion.",
-      "evidence": []
+      "reason": "PositiveReachabilityTests checks witness replay through generated dispatch, complete graph retention, unreachable outcomes only after complete exploration, and resource-limit rejection for found and absent goals. ConfiguredProcessTests retains both a replayable completion witness and a separate noncompleting liveness cycle for nonempty unfair populations. This complete scope passed hosted ordinary validation at edec23de. Historical evidence is retained, but the criterion remains uncredited pending source-aligned admission.",
+      "evidence": [{
+        "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632109",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10596135960",
+        "artifactSHA256": "d76ed2004fba91758ff38e6d0caef660a6943a73bccc090a51ecb195ca2901bf",
+        "acceptanceComplete": true,
+        "scope": "Audited exact witness snapshots, all three counter states and both edges after early goal discovery, absent-goal completion, capacity errors for both found and absent goals, and replayable process completion alongside a noncompleting lasso. PositiveReachabilityTests and ConfiguredProcessTests pass in the terminal hosted log; relevant source/fixtures are unchanged since this SHA. Swift 6.1.2, Xcode 16.4 build 16F6, SDK 24F74. No upstream configuration credit."
+      }]
     },
     {
       "id": "AC-06",
@@ -8771,7 +8787,7 @@
       "id": "AC-13",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Sources/SwiftTLA/TypedValues.swift still exposes manual record schemas and field tables. Application callers remain in Examples/SwiftTLADemos/Sources/ElevatorBank.swift and Examples/SwiftTLADemos/Sources/ChangRoberts.swift. KVsnap's OperationSchema and field table were removed in 1d0e5799; its ordinary Swift Operation record and explicit checked imported-record projection passed local diagnostic 3696. The remaining callers require migration before the manual schema API can be removed. The remaining replacement and deletion map still requires a complete audit; hosted acceptance of the KVsnap migration is pending.",
+      "reason": "Sources/SwiftTLA/TypedValues.swift still exposes manual record schemas and field tables. The ElevatorBank and ChangRoberts demo schemas are now removed; ordinary-record migrations have focused local evidence and await current-candidate hosted validation. KVsnap's OperationSchema is removed and its ordinary-record native graph has a historical hosted partial-case match, without original-symmetry configuration credit. Remaining corpus schema declarations are Echo.MessageSchema, MultiCarElevator.CarSchema and CallSchema, and NanoBlockchain.SignatureSchema and SignedBlockSchema. Compiler/parity fixtures also retain manual schema declarations and need explicit migration or formal-boundary disposition before API removal. The complete replacement/deletion map and documentation consistency remain unfinished.",
       "evidence": []
     },
     {
