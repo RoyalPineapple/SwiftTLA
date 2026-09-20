@@ -7,43 +7,20 @@ import SwiftTLAMacros
 /// A record is the message on the network. The `inbox` finite function gives
 /// every node its own set of messages, while each `Each(Node.all)` body is an
 /// independently scheduled PlusCal process.
+@TLAModel
 package struct EchoModel: Sendable {
-    package enum Node: String, TLAValueType, FiniteTLAValueDomain {
+    package enum Node: String, CaseIterable {
         case a, b, c
-
-        package static let finiteValues: [Self] = [.a, .b, .c]
-        package static var defaultValue: Self { .a }
     }
 
-    package enum MessageKind: String, TLAValueType {
+    package enum MessageKind: String, CaseIterable {
         case message = "m"
         case acknowledgement = "c"
-
-        package static var defaultValue: Self { .message }
     }
 
-    package struct MessageFields {
+    package struct Message: Hashable, Sendable {
         package let kind: MessageKind
         package let sender: Node
-    }
-
-    package enum MessageSchema: TLARecordSchema {
-        package typealias Fields = MessageFields
-
-        package static let fields: [TLARecordFieldDeclaration<Self>] = [
-            .init(kind, default: MessageKind.message),
-            .init(sender, default: Node.a),
-        ]
-
-        package static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \MessageFields.kind { return "kind" }
-            if key == \MessageFields.sender { return "sender" }
-            return nil
-        }
-
-        package static let kind = field(\MessageFields.kind)
-        package static let sender = field(\MessageFields.sender)
     }
 
     private enum Step: String, CaseIterable {
@@ -53,53 +30,44 @@ package struct EchoModel: Sendable {
     package static var spec: TLASpec {
         #spec("Echo") {
             Extends(.finiteSets)
-            Algorithm("Echo", scoped: { scope in
-                let inbox = scope.sharedVar(initial: Function<Node, SetExpr<Record<MessageSchema>>>.literal(
-                    (.a, SetExpr<Record<MessageSchema>>()),
-                    (.b, SetExpr<Record<MessageSchema>>()),
-                    (.c, SetExpr<Record<MessageSchema>>())
-                ))
+            Algorithm("Echo", scoped: { (scope: AlgorithmScope) in
+                let inbox: SharedVariable<[Node: Set<Message>]> = scope.sharedVar(initial: [
+                    .a: Set<Message>(), .b: Set<Message>(), .c: Set<Message>()
+                ])
 
-                Each(Node.all, scoped: { selfID, scope in
-                    // The root's concrete `parent` default keeps the Swift value
-                    // type finite while matching the algorithm.
+                Each(Node.all, scoped: { (selfID: ProcessIdentifier<Node>, scope: ProcessScope) in
+                    // This bounded port uses a concrete parent default; upstream uses NoNode.
                     let parent: LocalVariable<Node> = scope.localVar(initial: .a)
-                    let children: LocalVariable<SetExpr<Node>> = scope.localVar(initial: SetExpr<Node>())
+                    let children: LocalVariable<Set<Node>> = scope.localVar(initial: Set<Node>())
                     let received: LocalVariable<Int> = scope.localVar(initial: 0)
 
                     Do(Step.n0) {
                         If(selfID == .a) {
-                            Assign(inbox, to: Function<Node, SetExpr<Record<MessageSchema>>>.mapping { destination in
-                                If(SetExpr<Node>.literal(.a, .b, .c).removing(selfID).contains(destination),
-                                   then: inbox[destination].inserting(Record<MessageSchema>.literal(
-                                       .init(MessageSchema.kind, .message),
-                                       .init(MessageSchema.sender, selfID)
-                                   )),
+                            Assign(inbox, to: Dictionary<Node, Set<Message>>.mapping(over: Node.all) { (destination: WithValue<Node>) -> Expr<Set<Message>> in
+                                If(Node.all.removing(selfID).contains(destination),
+                                   then: inbox[destination].inserting(Message.expression(kind: MessageKind.message, sender: selfID)),
                                    else: inbox[destination])
                             })
                         }
                     }
 
-                    While(Step.n1, received.expr < SetExpr<Node>.literal(.a, .b, .c).removing(selfID).cardinality) {
-                        With(inbox[selfID]) { message in
-                            Let(inbox.updating(selfID, to: inbox[selfID].removing(message))) { networkAfterReceive in
+                    While(Step.n1, received.expr < Node.all.removing(selfID).cardinality) {
+                        With(inbox[selfID]) { (message: WithValue<Message>) in
+                            Let(inbox.updating(selfID, to: inbox[selfID].removing(message))) { (networkAfterReceive: WithValue<[Node: Set<Message>]>) in
                                 If(selfID != .a && received.expr == 0) {
-                                    Assert(message[MessageSchema.kind] == .message)
-                                    Assign(parent, to: message[MessageSchema.sender])
-                                    Assign(inbox, to: Function<Node, SetExpr<Record<MessageSchema>>>.mapping { destination in
-                                        If(SetExpr<Node>.literal(.a, .b, .c).removing(selfID).removing(message[MessageSchema.sender]).contains(destination),
-                                           then: networkAfterReceive[destination].inserting(Record<MessageSchema>.literal(
-                                               .init(MessageSchema.kind, .message),
-                                               .init(MessageSchema.sender, selfID)
-                                           )),
+                                    Assert(message.kind == .message)
+                                    Assign(parent, to: message.sender)
+                                    Assign(inbox, to: Dictionary<Node, Set<Message>>.mapping(over: Node.all) { (destination: WithValue<Node>) -> Expr<Set<Message>> in
+                                        If(Node.all.removing(selfID).removing(message.sender).contains(destination),
+                                           then: networkAfterReceive[destination].inserting(Message.expression(kind: MessageKind.message, sender: selfID)),
                                            else: networkAfterReceive[destination])
                                     })
                                 } else: {
                                     Assign(inbox, to: networkAfterReceive.expr)
                                 }
                                 Assign(received, to: received.expr + 1)
-                                If(message[MessageSchema.kind] == .acknowledgement) {
-                                    Assign(children, to: children.expr.inserting(message[MessageSchema.sender]))
+                                If(message.kind == .acknowledgement) {
+                                    Assign(children, to: children.expr.inserting(message.sender))
                                 }
                             }
                         }
@@ -107,12 +75,9 @@ package struct EchoModel: Sendable {
 
                     Do(Step.n2) {
                         If(selfID != .a) {
-                            Assert(SetExpr<Node>.literal(.a, .b, .c).removing(selfID).contains(parent.expr))
+                            Assert(Node.all.removing(selfID).contains(parent.expr))
                             Assign(inbox, to: inbox.updating(parent, to: inbox[parent].inserting(
-                                Record<MessageSchema>.literal(
-                                    .init(MessageSchema.kind, .acknowledgement),
-                                    .init(MessageSchema.sender, selfID)
-                                )
+                                Message.expression(kind: MessageKind.acknowledgement, sender: selfID)
                             )))
                         }
                     }

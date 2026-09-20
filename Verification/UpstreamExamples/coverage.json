@@ -861,6 +861,20 @@
   },
   "localDiagnostics": [
     {
+      "session": "65138",
+      "sourceSHA": "28ef75e561fcfffc72f628e56f3cdc1a7f3abbd0",
+      "sourcePatchSHA256": "130990a9a59e316ae573233592335cc184a9ea772a39e76e898413bd00a1a014",
+      "sourcePatchScope": "git diff -- Sources Tests; new untracked EchoCorpusStateGraphTests.swift recorded separately",
+      "newTestSHA256": "8ff392fdf56043617e187732417d2a7c436f5de136c7cc10971bb7e620681f40",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'EchoCorpusStateGraphTests|UpstreamParityTests/echoParity|DictionaryKeyIdentityTests'",
+      "exitCode": 0,
+      "testsPassed": 6,
+      "buildSeconds": 613.44,
+      "testSeconds": 0.198,
+      "result": "Echo now uses an ordinary Message record, native dictionaries and sets, and generated native execution. The complete 75-state native graph equals the formal graph. Projection tests preserve kind/sender fields and m/c wire values and reject unknown kinds and extra fields. The existing dictionary expression API gains a type-preserving updating operation using the existing EXCEPT representation; literal and expression key contracts pass.",
+      "scope": "Swift 6.1.2 safety-wrapper diagnostic only; source stayed fixed during this run. Earlier session 82276 failed with a DSL type-check timeout; explicit closure types in 56690 exposed the missing dictionary updating overload. Both exited before source changes. Initial session 23664 was stopped to correct a test typo; surviving compiler children were terminated and supplied no validation evidence. Ponytail review reuses existing operators and generated record support, removing MessageSchema and MessageFields without compatibility aliases. The upstream configuration remains missing because its NoNode, state naming, stored neighbors, invariants, reference pins, and complete hosted comparison are not implemented. No coverage or complete DSL-criterion credit."
+    },
+    {
       "session": "69479",
       "sourceSHA": "d093fdfb9235a924e0384c3ecbac7785fa78333d",
       "sourcePatchSHA256": "c3b102b462eddb64601e768caef10deab83572d7549c4356d5896b6e2e4385d1",
@@ -3930,14 +3944,14 @@
     {
       "path": "specifications/echo",
       "name": "The Echo Algorithm",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "partial source and configuration audit",
+      "gap": "The existing EchoModel is a bounded three-node source port, not a verified MCEcho configuration. The pinned MCEcho.cfg selects Node=N1, initiator=I1, R=R1, NoNode as a model value, TestSpec, TypeOK, and AncestorProperties. The Swift port substitutes parent=a for NoNode, sender for sndr, and received for rcvd; it computes neighbors instead of retaining nbrs and does not declare either configured invariant. Exact state/action projection, default deadlock behavior, the Relation dependency, model-owned validation, pinned reference inputs, and hosted complete graph/property evidence remain missing. A 75-state local count alone cannot establish upstream equivalence. The ordinary-message migration preserves this existing bounded port and adds no configuration credit.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/echo/Echo.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "algorithm dependency",
+          "reason": "MCEcho extends this module. It owns the PlusCal algorithm, translated state, and the configured TypeOK and AncestorProperties invariants. The Swift source is only a partial port.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -3950,8 +3964,8 @@
         },
         {
           "path": "specifications/echo/Relation.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "helper dependency",
+          "reason": "Echo extends Relation and uses its relation predicates and transitive closure in assumptions and AncestorProperties. It is not an excluded model; its required semantics and export closure remain to be implemented and verified.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -9019,7 +9033,7 @@
       "id": "AC-13",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Sources/SwiftTLA/TypedValues.swift still exposes manual record schemas and field tables. The ElevatorBank and ChangRoberts demo schemas are now removed; ordinary-record migrations have focused local evidence and await current-candidate hosted validation. KVsnap's OperationSchema is removed and its ordinary-record native graph has a historical hosted partial-case match, without original-symmetry configuration credit. MultiCarElevator now uses ordinary Car and Call records, native dictionaries and sets, and typed Do steps. Its full bounded native/formal graph passes locally in diagnostic 58712; independent hosted comparison remains pending. Remaining corpus schema declarations are Echo.MessageSchema and NanoBlockchain.SignatureSchema and SignedBlockSchema. Compiler/parity fixtures also retain manual schema declarations and need explicit migration or formal-boundary disposition before API removal. The complete replacement/deletion map and documentation consistency remain unfinished.",
+      "reason": "Sources/SwiftTLA/TypedValues.swift still exposes manual record schemas and field tables. The ElevatorBank and ChangRoberts demo schemas are now removed; ordinary-record migrations have focused local evidence and await current-candidate hosted validation. KVsnap's OperationSchema is removed and its ordinary-record native graph has a historical hosted partial-case match, without original-symmetry configuration credit. MultiCarElevator now uses ordinary Car and Call records, native dictionaries and sets, and typed Do steps. Its full bounded native/formal graph passes locally in diagnostic 58712; independent hosted comparison remains pending. Echo.MessageSchema and MessageFields are removed; its ordinary Message record and complete bounded native/formal graph pass diagnostic 65138, without upstream configuration credit. Remaining corpus schema declarations are NanoBlockchain.SignatureSchema and SignedBlockSchema. Compiler/parity fixtures also retain manual schema declarations and need explicit migration or formal-boundary disposition before API removal. The complete replacement/deletion map and documentation consistency remain unfinished.",
       "evidence": []
     },
     {

@@ -7,6 +7,13 @@ extension Dictionary: FormalDictionaryValue where Key: TLAValueType, Value: TLAV
 
 extension TypedExpression where ExpressionValue: FormalDictionaryValue {
     public var keys: Expr<Set<ExpressionValue.Key>> { Expr(.domain(stateExpr)) }
+
+    public func updating(
+        _ key: some TypedExpression<ExpressionValue.Key>,
+        to value: some TypedExpression<ExpressionValue.Value>
+    ) -> Expr<ExpressionValue> {
+        Expr(.except(stateExpr, key.stateExpr, value.stateExpr))
+    }
 }
 
 extension Dictionary: TLAValueType, TLAValueConvertible, TypedExpression, StateExprConvertible

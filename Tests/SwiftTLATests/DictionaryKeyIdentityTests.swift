@@ -2,6 +2,17 @@ import Testing
 import SwiftTLA
 
 struct DictionaryKeyIdentityTests {
+    @Test func functionalUpdatesPreserveDictionaryAndKeyTypes() {
+        typealias Key = DictionaryKeyIdentityModel.Key
+        let values: [Key: Int] = [.first: 1, .second: 2]
+        let updated: Expr<[Key: Int]> = values.updating(Key.first, to: 9)
+        #expect(updated.stateExpr == .except(values.stateExpr, Key.first.stateExpr, 9.stateExpr))
+        let key = Expr(Key.second)
+        let nested: Expr<[Key: Int]> = updated.updating(key, to: Expr(4))
+        #expect(nested.stateExpr == .except(updated.stateExpr, key.stateExpr, 4.stateExpr))
+        #expect(values == [.first: 1, .second: 2])
+    }
+
     @Test func generatedStateAndTransitionsPreserveEnumKeysAndValues() throws {
         var machine = try DictionaryKeyIdentityModel.makeMachine()
         #expect(machine.state.values == [.first: 1, .second: 2])
