@@ -233,6 +233,26 @@ Missing, duplicate, or anonymous closure arguments are invalid.
 An unresolved element type is a compile-time error, including for empty sets without a declared element type.
 Acceptance requires argument-sensitive graph comparison, configured empty domains, and diagnostics for each rejection rule.
 
+#### Shared statement macros
+
+An immutable `Macro` binding at specification scope defines reusable statements for `Do` blocks.
+Each call expands inside its enclosing atomic step. It does not add an action, process, or program counter.
+
+```swift
+let advance = Macro { Assign(count, to: count + 1) }
+Do(Step.once) { advance() }
+Do(Step.twice) { advance(); advance() }
+```
+
+Later calls observe assignments from earlier calls in the same step.
+Parameterized independent steps and nested algorithms can use these macros.
+An algorithm can declare a local macro with the same name.
+Specification macros require unique immutable bindings.
+Control transfers inside a macro still require an enclosing algorithm.
+
+`DieHardestParallelModel` uses these macros for the upstream `NextParallel` and `NextParallelFreeze` operators.
+Both variants retain one atomic transition for the two jug configurations.
+
 ### Atomicity and assignment semantics
 
 A `Do` block executes statements in order, like normal Swift. Later statements
