@@ -5,6 +5,7 @@ struct NativeTypeDeclarations: Sendable {
     let names: [CompiledValueType: String]
     let records: [CompiledValueType]
     let nominalRecords: [CompiledValueType]
+    let enumNames: Set<String>
     let unions: [[CompiledValueType]]
     let finiteValues: [[CompiledValue]]
     let modelValueCases: [String: String]
@@ -110,6 +111,10 @@ struct NativeTypeDeclarations: Sendable {
         self.names = names
         self.records = records
         self.nominalRecords = nominalRecords
+        self.enumNames = Set(visited.compactMap {
+            if case .named(let name) = $0 { return name }
+            return nil
+        })
         self.unions = unions
         self.finiteValues = finiteValues
     }

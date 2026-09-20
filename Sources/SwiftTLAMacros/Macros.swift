@@ -10,6 +10,7 @@ import SwiftTLA
 public macro TLAModel() = #externalMacro(module: "SwiftTLAPlugin", type: "ModelMacro")
 
 @attached(member, names: named(defaultValue), named(finiteValues))
+@attached(extension, conformances: FiniteTLAValueDomain)
 public macro _TLAFiniteEnum() = #externalMacro(module: "SwiftTLAPlugin", type: "FiniteEnumMacro")
 
 @attached(member, names: named(defaultValue))

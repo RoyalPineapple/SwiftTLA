@@ -725,6 +725,42 @@
   },
   "localDiagnostics": [
     {
+      "session": "53473",
+      "sourceSHA": "7d1a0d557d698f73131e179de2497c783a8e01ae",
+      "sourcePatchSHA256": "336b45deeb9fb1e9966d7ef074f9ecba69ca2a94a8d9cae65626e8c6644fb00b",
+      "sourcePatchScope": "git diff HEAD -- Sources Tests Examples .github/workflows/ci.yml",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SpecificationSourceAuthorityTests|NativeCodeGenerationTests|NativeTypeDiagnosticTests|GeneratedSavedValueSwapTests|DictionaryKeyIdentityTests'",
+      "exitCode": 0,
+      "testsPassed": 95,
+      "buildSeconds": 598.85,
+      "testSeconds": 1.362,
+      "result": "Ordinary Int- and String-backed CaseIterable enum dictionaries compile and execute typed generated transitions, including enum-valued links and nested lookups. Formal projections reject unknown values and other representations. LET-body rechecking retains binder identity; dictionary shorthand receives declared key/value context. Finite formal conformance is synthesized only for modeled enum values, leaving private control labels alone. Existing code-generation, type-diagnostic, and saved-value tests pass.",
+      "scope": "Source stayed fixed during the wrapper build. Full log: /tmp/swifttla-enum-dictionary.9ATAHU/validation-2.log. Local compiler evidence only: the pending demo and CI edits in the patch were not exercised by this root-package test filter. No upstream configuration or complete DSL criterion gains hosted credit."
+    },
+    {
+      "session": "4786",
+      "sourceSHA": "7d1a0d557d698f73131e179de2497c783a8e01ae",
+      "sourcePatchSHA256": "0a73acd52949f4ccc7a978e7c68672a46c6d75213dfceccf6cc005b8cc642331",
+      "sourcePatchScope": "git diff HEAD -- Sources Tests Examples",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SpecificationSourceAuthorityTests|NativeCodeGenerationTests|NativeTypeDiagnosticTests|GeneratedSavedValueSwapTests|DictionaryKeyIdentityTests'",
+      "exitCode": 1,
+      "result": "The plugin compiled, but canonical corpus compilation rejected generated finite-domain extensions for private step-label enums. The macro must synthesize formal conformance only for enum types used as modeled values, not control labels. The retry derives that set from resolved native type declarations and makes the regression's step label private. No tests ran.",
+      "scope": "Source stayed fixed during the wrapper build. Full log: /tmp/swifttla-enum-dictionary.9ATAHU/validation.log. No hosted coverage credit."
+    },
+    {
+      "session": "36609",
+      "sourceSHA": "981a6c7d8980987cd0fc464f8bb33622b9183044",
+      "sourcePatchSHA256": "2b4f9722b7b22ed69be8b60ac9cb7a1af7c89e980074010a072dde145f5c12c9",
+      "sourcePatchScope": "git diff -- Sources Tests Examples",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SpecificationSourceAuthorityTests|NativeCodeGenerationTests|NativeTypeDiagnosticTests|GeneratedSavedValueSwapTests'",
+      "exitCode": 1,
+      "testsRun": 93,
+      "buildSeconds": 586.30,
+      "testSeconds": 1.380,
+      "result": "92 tests passed. Propagating declared dictionary key/value context alone did not fix the integer enum regression: enum discovery omitted ordinary Int-backed CaseIterable enums without a formal-value protocol. The previous diagnostic's parser-context explanation was incomplete. String enum binder checking passes. The next patch admits ordinary raw CaseIterable enums and synthesizes their finite formal boundary through the existing enum macro, with generated-machine regression coverage.",
+      "scope": "Source stayed fixed throughout the wrapper build. Full log: /tmp/swifttla-binder-identity.uxzhLS/validation-2.log. Diagnostic only; no hosted coverage credit."
+    },
+    {
       "session": "81173",
       "sourceSHA": "e052e14c49b767c1d82c010f048127ca8bdfb9b0",
       "sourcePatchSHA256": "65ebe42d2674182579f854de35b33bbc184ebb81b7e4658aa3bdfdb23399e592",

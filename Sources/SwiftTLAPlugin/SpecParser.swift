@@ -1317,7 +1317,8 @@ final class ParserSession {
             return .tupleLiteral(elements)
         }
         if let dictionary = expression.as(DictionaryExprSyntax.self) {
-            return decodeDictionaryLiteral(dictionary, scope: scope)
+            return decodeDictionaryLiteral(dictionary, scope: scope,
+                expectedType: expectedEnumType.flatMap { try? sourceTypeResolver.resolve($0) })
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            typedFacadeType(call.calledExpression)?.name == "Dictionary" {
@@ -1325,7 +1326,8 @@ final class ParserSession {
             if call.arguments.isEmpty { return .value(.function([:])) }
             guard call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil,
                   let dictionary = argument.expression.as(DictionaryExprSyntax.self) else { return nil }
-            return decodeDictionaryLiteral(dictionary, scope: scope)
+            return decodeDictionaryLiteral(dictionary, scope: scope,
+                expectedType: typedFacadeValueType(expression, scope: scope))
         }
         if let call = expression.as(FunctionCallExprSyntax.self), nominalRecordType(call.calledExpression) != nil {
             return decodeNominalRecord(call, scope: scope)
@@ -1411,14 +1413,25 @@ final class ParserSession {
         return decodeStateExpr(expression)
     }
 
-    private func decodeDictionaryLiteral(_ dictionary: DictionaryExprSyntax, scope: TypedFacadeScope) -> StateExpr? {
+    private func decodeDictionaryLiteral(
+        _ dictionary: DictionaryExprSyntax, scope: TypedFacadeScope, expectedType: CompiledValueType?
+    ) -> StateExpr? {
         guard case .elements(let entries) = dictionary.content else { return .value(.function([:])) }
+        let keyType: CompiledValueType?
+        let valueType: CompiledValueType?
+        if case .dictionary(let key, let value) = expectedType {
+            keyType = key
+            valueType = value
+        } else {
+            keyType = nil
+            valueType = nil
+        }
         var keys: [StateExpr] = []
         var values: [StateExpr] = []
         var seen: Set<StateExpr> = []
         for entry in entries {
-            guard let key = decodeTypedFacadeValue(entry.key, scope: scope),
-                  let value = decodeTypedFacadeValue(entry.value, scope: scope),
+            guard let key = decodeTypedFacadeValue(entry.key, scope: scope, expectedEnumType: keyType?.swiftType),
+                  let value = decodeTypedFacadeValue(entry.value, scope: scope, expectedEnumType: valueType?.swiftType),
                   seen.insert(key).inserted else { return nil }
             keys.append(key)
             values.append(value)

@@ -152,6 +152,13 @@ enum TLASpecVerifier {
         } ?? [])
     }
 
+    static func infersFiniteEnumConformance(_ inheritedNames: Set<String>) -> Bool {
+        inheritedNames.contains("CaseIterable")
+            && (inheritedNames.contains("Int") || inheritedNames.contains("String"))
+            && !inheritedNames.contains("TLAValueType")
+            && !inheritedNames.contains("FiniteTLAValueDomain")
+    }
+
     static func collectEnumVariables(from members: MemberBlockItemListSyntax) throws -> [SourceEnum] {
         var enums: [SourceEnum] = []
         for member in members {
@@ -164,7 +171,8 @@ enum TLASpecVerifier {
             guard intBacked || stringBacked else { continue }
             let formalValue = inheritedNames.contains("TLAValueType")
                 || inheritedNames.contains("FiniteTLAValueDomain")
-            guard formalValue || (stringBacked && inheritedNames.contains("CaseIterable")) else {
+            let inferredFiniteDomain = infersFiniteEnumConformance(inheritedNames)
+            guard formalValue || inferredFiniteDomain else {
                 continue
             }
 
@@ -233,7 +241,7 @@ enum TLASpecVerifier {
                 typeName: enumDecl.name.text,
                 cases: cases,
                 finiteValues: try finiteValues(in: enumDecl, cases: cases),
-                isFiniteDomain: inheritedNames.contains("FiniteTLAValueDomain")
+                isFiniteDomain: inheritedNames.contains("FiniteTLAValueDomain") || inferredFiniteDomain
             ))
         }
         return enums
@@ -423,6 +431,12 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
               let inheritance = enumDeclaration.inheritanceClause
         else { return [] }
         let inheritedNames = TLASpecVerifier.inheritedTypeNames(in: inheritance)
+        if TLASpecVerifier.infersFiniteEnumConformance(inheritedNames) {
+            guard let model = try? TLASpecVerifier.parseAndVerify(declaration),
+                  NativeTypeDeclarations(program: model.program).enumNames.contains(enumDeclaration.name.sourceIdentifierName)
+            else { return [] }
+            return ["@_TLAFiniteEnum"]
+        }
         let memberNames = Set(enumDeclaration.memberBlock.members.compactMap {
             if let variable = $0.decl.as(VariableDeclSyntax.self) {
                 return variable.bindings.compactMap {
@@ -465,7 +479,7 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
     }
 }
 
-public struct FiniteEnumMacro: MemberMacro {
+public struct FiniteEnumMacro: MemberMacro, ExtensionMacro {
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
@@ -482,12 +496,33 @@ public struct FiniteEnumMacro: MemberMacro {
             throw ModelMacroError.emptyFiniteEnum
         }
         let finiteValues = cases.map { ".\($0)" }.joined(separator: ", ")
-        return [
-            "public static var defaultValue: Self { .\(raw: firstCase) }",
-            "public static var finiteValues: [Self] { [\(raw: finiteValues)] }"
-        ]
+        let memberNames = Set(enumDeclaration.memberBlock.members.flatMap {
+            $0.decl.as(VariableDeclSyntax.self)?.bindings.compactMap {
+                $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text
+            } ?? []
+        })
+        var members: [DeclSyntax] = []
+        if !memberNames.contains("defaultValue") {
+            members.append("public static var defaultValue: Self { .\(raw: firstCase) }")
+        }
+        if !memberNames.contains("finiteValues") {
+            members.append("public static var finiteValues: [Self] { [\(raw: finiteValues)] }")
+        }
+        return members
     }
 
+    public static func expansion(
+        of node: AttributeSyntax,
+        attachedTo declaration: some DeclGroupSyntax,
+        providingExtensionsOf type: some TypeSyntaxProtocol,
+        conformingTo protocols: [TypeSyntax],
+        in context: some MacroExpansionContext
+    ) throws -> [ExtensionDeclSyntax] {
+        guard TLASpecVerifier.infersFiniteEnumConformance(
+            TLASpecVerifier.inheritedTypeNames(in: declaration.inheritanceClause)
+        ) else { return [] }
+        return [try ExtensionDeclSyntax("extension \(type): SwiftTLA.FiniteTLAValueDomain {}")]
+    }
 }
 
 public struct ValueEnumMacro: MemberMacro {

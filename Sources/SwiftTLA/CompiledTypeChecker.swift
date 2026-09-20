@@ -190,6 +190,8 @@ private enum ExpressionCheckTask {
     case subset(expected: CompiledValueType)
     case setOperands(CompiledExpression, CompiledExpression, expected: CompiledValueType)
     case bind(BinderID)
+    case letBody(BinderID, CompiledExpression, expected: CompiledValueType)
+    case finishLetBody(BinderID, CompiledExpression, original: CompiledValueType?, expected: CompiledValueType)
     case finishArgument(BinderID, ArgumentRefinement)
     case finishBindingDomain(BinderID)
     case bindDomain(BinderID, retainElement: Bool)
@@ -1490,7 +1492,7 @@ package struct CompiledTypeChecker: Sendable {
                         bindingDomains[id] = literalValues(value)
                         pending.append(contentsOf: [
                             .finish(expected: expected),
-                            .retainOperand(1), .check(body, expected: expected),
+                            .retainOperand(1), .letBody(id, body, expected: expected),
                             .bind(id),
                             .retainOperand(0), .check(value, expected: bindings[id] ?? .unknown),
                         ])
@@ -1919,6 +1921,18 @@ package struct CompiledTypeChecker: Sendable {
                     let checked = try finishExpression(expression, result: result, expected: expected)
                     results.append(checked.type)
                     try finish(checked, in: &self)
+                case .letBody(let id, let body, let expected):
+                    pending.append(contentsOf: [
+                        .finishLetBody(id, body, original: bindings[id], expected: expected),
+                        .check(body, expected: expected)
+                    ])
+                case .finishLetBody(let id, let body, let original, let expected):
+                    // A later use can refine this binder; earlier uses must
+                    // then be checked against the same native representation.
+                    if bindings[id] != original {
+                        _ = results.popLast()
+                        pending.append(.letBody(id, body, expected: expected))
+                    }
                 case .boundValue(let id, let check, let expected):
                     ancestors.append(.boundValue(id))
                     operandFrames.append([:])

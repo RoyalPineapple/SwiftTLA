@@ -6,6 +6,51 @@ import SwiftTLA
 
 @Suite("Specification source authority")
 struct SpecificationSourceAuthorityTests {
+    @Test("dictionary key checks retain enum identity after later uses refine local bindings", arguments: [
+        "enum Key: String, CaseIterable { case first, second }",
+        "enum Key: Int, CaseIterable { case first = 1, second = 2 }"
+    ])
+    func dictionaryKeyBindingIdentity(_ keyDeclaration: String) throws {
+        let model = try declaration("""
+        \(keyDeclaration)
+        typealias Links = [Key: Key]
+        static var spec: TLASpec {
+            #spec("DictionaryKeyIdentity") { scope in
+                let values: SharedVariable<[Key: Int]> = scope.sharedVar(initial: [.first: 1, .second: 2])
+                let links: SharedVariable<Links> = scope.sharedVar(initial: [.first: .second, .second: .first])
+            }
+        }
+        """)
+        let verified = try TLASpecVerifier.parseAndVerify(model)
+        let variable = try #require(verified.program.layout.variables.first { $0.declaration.name == "values" })
+        #expect(verified.program.variableTypes[variable.id] == .dictionary(.named("Key"), .int))
+        let links = try #require(verified.program.layout.variables.first { $0.declaration.name == "links" })
+        #expect(verified.program.variableTypes[links.id] == .dictionary(.named("Key"), .named("Key")))
+        var pending: [CompiledExpression] = []
+        for (_, initialization) in verified.program.behavior.initializations {
+            guard case .value(let initial) = initialization else {
+                Issue.record("Expected an authored dictionary initializer")
+                continue
+            }
+            pending.append(initial)
+        }
+        var definitions: [BinderID: CompiledValueType] = [:]
+        var reads: [(BinderID, CompiledValueType)] = []
+        while let expression = pending.popLast() {
+            if case .letValue(let id) = expression.operation {
+                definitions[id] = expression.children[0].resultType
+            }
+            if case .boundValue(let id) = expression.operation {
+                reads.append((id, expression.resultType))
+            }
+            pending += expression.children
+        }
+        #expect(definitions.values.contains(.named("Key")))
+        for (id, type) in reads {
+            if let declared = definitions[id] { #expect(type == declared) }
+        }
+    }
+
     @Test("conditional branches retain the declared union instead of narrowing to one alternative", arguments: [false, true])
     func conditionalUnionContext(_ reverse: Bool) throws {
         let branches = reverse ? "then: value.expr, else: Value.first(1)" : "then: Value.first(1), else: value.expr"
