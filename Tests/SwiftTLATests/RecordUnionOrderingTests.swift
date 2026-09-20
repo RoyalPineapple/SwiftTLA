@@ -3,6 +3,39 @@ import Testing
 @testable import UpstreamParity
 
 struct RecordUnionOrderingTests {
+    @Test("nested records and model-value sentinels preserve complete graphs and export")
+    func preservesSentinelGraph() throws {
+        let scenario = try #require(RecordUnionSentinelModel.validationScenarios().first)
+        try compareCompleteGraph(
+            RecordUnionSentinelModel.initialMachines(),
+            specification: RecordUnionSentinelModel.spec,
+            rendered: RecordUnionSentinelModel.render(),
+            scenario: scenario,
+            initialStateCount: 3
+        )
+    }
+
+    @Test("model-value sentinel unions preserve native identity and reject string substitutes")
+    func preservesSentinelIdentity() throws {
+        typealias Model = RecordUnionSentinelModel
+        let values = try Model.initialMachines().map { $0.state.value }
+        let formal = values.map { CompiledValue(formal: $0.tlaValue) }
+        #expect(formal == formal.sorted())
+        #expect(values.last == .second(.noBlock))
+        #expect(Set(formal).count == 3)
+        for value in values {
+            #expect(Model.Value(formalValue: value.tlaValue) == value)
+        }
+        #expect(Model.Value(formalValue: .constant("NoBlock")) == .second(.noBlock))
+        #expect(Model.Value(formalValue: .string("NoBlock")) == nil)
+        #expect(Model.Value(formalValue: .constant("UnknownBlock")) == nil)
+        #expect(Model.Value(formalValue: .record(["type": .string("none")])) == nil)
+        #expect(Model.Value(formalValue: .record([
+            "block": .record(["account": .string("account"), "balance": .int(3), "extra": .bool(true)]),
+            "signature": .string("signature")
+        ])) == nil)
+    }
+
     @Test("nested record unions preserve the complete native and formal graphs and export")
     func preservesNestedUnionGraph() throws {
         let scenario = try #require(RecordUnionOrderingModel.validationScenarios().first)

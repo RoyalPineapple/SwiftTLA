@@ -2,6 +2,34 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
+package struct RecordUnionSentinelModel {
+    package enum Sentinel: String, CaseIterable, FiniteTLAValueDomain {
+        case noBlock = "NoBlock"
+        package static var defaultValue: Self { .noBlock }
+        package static let finiteValues = allCases
+        package var tlaValue: TLAValue { .constant(rawValue) }
+    }
+    package struct Block: Hashable, Sendable { package let account: String; package let balance: Int }
+    package struct SignedBlock: Hashable, Sendable { package let block: Block; package let signature: String }
+    package typealias Value = OneOf<SignedBlock, Sentinel>
+    enum Step: String, CaseIterable { case finish }
+
+    package static var spec: TLASpec {
+        #spec("RecordUnionSentinel") { scope in
+            let value = scope.sharedVar(in: Set<Value>([
+                Value.second(Sentinel.noBlock),
+                Value.first(SignedBlock(block: Block(account: "NoBlock", balance: 0), signature: "NoBlock")),
+                Value.first(SignedBlock(block: Block(account: "account", balance: 3), signature: "signature"))
+            ]))
+            Algorithm("SelectValue") {
+                Do(Step.finish) { Assign(value, to: value); Stop() }
+            }
+            Validation("Records and model-value sentinel") {}
+        }
+    }
+}
+
+@TLAModel
 package struct RecordUnionOrderingModel {
     package struct First: Hashable, Sendable { package let a: Int; package let z: Int }
     package struct Second: Hashable, Sendable { package let a: Int; package let b: Int }

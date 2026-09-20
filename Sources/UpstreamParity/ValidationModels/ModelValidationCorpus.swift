@@ -15,6 +15,7 @@ package func modelValidationScenarios() throws -> [(id: String, scenario: any Mo
         ("configured-dictionary-values", try ConfiguredDictionaryValues.validationScenarios()),
         ("record-union-ordering", try RecordUnionOrderingModel.validationScenarios()),
         ("record-union-field-domains", try RecordUnionFieldDomainModel.validationScenarios()),
+        ("record-union-sentinel", try RecordUnionSentinelModel.validationScenarios()),
         ("scoped-reachability-claims", try ScopedReachabilityClaims.validationScenarios()),
         ("constant-state-claims", try ConstantStateClaims.validationScenarios()),
         ("labelled-property-claims", try LabelledPropertyClaims.validationScenarios()),

@@ -983,6 +983,19 @@
   },
   "localDiagnostics": [
     {
+      "session": "3520",
+      "sourceSHA": "4a7f48ae852c4d6b4ffa752e5a8a14ce24c31354",
+      "sourcePatchSHA256": "e90bef6d991f5a087b5b304f9b0ce8e75cf5b38a969828e332ea5e665f840632",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'RecordUnionOrderingTests|ScenarioValidationTests/identifiesRegisteredScenarios'",
+      "exitCode": 0,
+      "testsPassed": 8,
+      "buildSeconds": 617.42,
+      "testSeconds": 0.013,
+      "result": "The nested signed-record/model-value sentinel union preserves the complete native/formal initial-state, state, and labeled-edge sets and every emitted root/import file. Native ordering and boundary roundtrips preserve model-value identity; a same-spelled string, unknown model value, fake none record, and extra nested field are rejected. All prior record-union tests pass. Registry validation confirms 66 unique model-owned scenarios, including record-union-sentinel-0. The subsequent safety-wrapper static check passes.",
+      "scope": "Source and tests stayed fixed throughout the Swift 6.1.2 diagnostic. This checks the existing typed union/projection path needed for NanoBlockchain's real NoBlock sentinel rather than its legacy fake record. Ponytail review reuses the existing full-graph helper and scenario registry without a new schema or backend. Hosted TLC validation, the full NanoBlockchain model, and complete AC-17 remain pending; no upstream configuration credit."
+    },
+    {
       "session": "63299",
       "sourceSHA": "15e52d6212cced0a9ad0bddbe98a99d478fa873b",
       "sourcePatchSHA256": "438a5d880915e2d5c341f241b91742b26f8cb0911551c00902b50b5202d6e667",
