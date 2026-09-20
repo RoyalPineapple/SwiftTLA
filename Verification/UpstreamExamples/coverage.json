@@ -781,6 +781,19 @@
   },
   "localDiagnostics": [
     {
+      "session": "27421",
+      "sourceSHA": "dd8841b61f7ad076ec4eed2d22144ddccba53689",
+      "sourcePatchSHA256": "e7271c5bf6dc711ae86b54610e9731d3bd8a97674777c86797b54c6d05b07bf9",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'GraphRunRecordsTests|GraphComparisonTests|NativeGraphExportTests'",
+      "exitCode": 0,
+      "testsPassed": 22,
+      "buildSeconds": 600.69,
+      "testSeconds": 0.163,
+      "result": "Canonical graph publication batches small records in a one-MiB buffer and writes oversized records directly. A full-byte comparison crosses multiple flushes and includes oversized escaped Unicode records. Existing exact serialization, replacement, failed-publication cleanup, complete graphs, traces, property outcomes, and mismatch rejection checks pass.",
+      "scope": "Source remained unchanged throughout the wrapper build; intervening commits changed only the ledger. Session output retains the terminal result. Ponytail review uses the existing writer and JSON encoding, without a new public API or alternate format. Static checks pass. This targets CoffeeCan3000's measured 309.627-second canonical-write phase, but hosted speedup and complete comparison remain unproven. No coverage credit."
+    },
+    {
       "session": "35056",
       "sourceSHA": "8103967d43d76a048c6b2abb670510fdfa20b912",
       "sourcePatchSHA256": "79f7b55d6679cacb452455cb4c178161445107bc1608fc9be633ad667f19f4fa",

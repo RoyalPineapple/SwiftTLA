@@ -8,11 +8,25 @@ package enum GraphRunRecords {
     defer { try? FileManager.default.removeItem(at: temporary) }
     let output = try FileHandle(forWritingTo: temporary)
     defer { try? output.close() }
+    let bufferLimit = 1_048_576
+    var buffer = Data()
+    buffer.reserveCapacity(bufferLimit)
+    func flush() throws {
+      if !buffer.isEmpty {
+        try output.write(contentsOf: buffer)
+        buffer.removeAll(keepingCapacity: true)
+      }
+    }
     func emit(_ record: [String: Any]) throws {
       try autoreleasepool {
         var data = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
         data.append(0x0a)
-        try output.write(contentsOf: data)
+        if data.count > bufferLimit - buffer.count { try flush() }
+        if data.count >= bufferLimit {
+          try output.write(contentsOf: data)
+        } else {
+          buffer.append(data)
+        }
       }
     }
     try emit([
@@ -54,6 +68,7 @@ package enum GraphRunRecords {
       "edgeCount": run.graph.edges.count,
       "traceCount": run.trace == nil ? 0 : 1
     ])
+    try flush()
     try output.close()
     guard rename(temporary.path, url.path) == 0 else {
       throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)

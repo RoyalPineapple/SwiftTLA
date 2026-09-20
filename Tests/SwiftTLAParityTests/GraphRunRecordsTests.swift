@@ -4,6 +4,34 @@ import Testing
 @testable import UpstreamParity
 
 struct GraphRunRecordsTests {
+  @Test("buffered publication preserves every byte across flushes and oversized records")
+  func preservesBufferedRecords() throws {
+    let state = CanonicalState(bindings: ["x": .integer(0)])
+    let actions = (0..<4096).map { "step-\($0)-" + String(repeating: "x", count: 300) }
+      + [String(repeating: "large-\"\\\nλ", count: 150_000)]
+    let edges = actions.map { CanonicalEdge(source: state.key, action: $0, target: state.key) }
+    let graph = try CanonicalGraph(initialStates: [state], states: [state], edges: edges)
+    let run = try GraphRun(isComplete: true, graph: graph,
+      observableActions: Set(actions), outcome: .noViolation)
+    var expected: [[String: Any]] = [
+      ["type": "header", "schema": "swifttla.finite-graph", "version": 4,
+       "observableActions": actions.sorted()],
+      ["type": "initial", "state": state.key.canonicalEncoding],
+      ["type": "state", "state": state.key.canonicalEncoding]
+    ]
+    expected.append(contentsOf: edges.sorted().map {
+      ["type": "edge", "source": $0.source.canonicalEncoding,
+       "action": $0.action, "target": $0.target.canonicalEncoding]
+    })
+    expected.append(["type": "complete", "isComplete": true,
+      "outcome": ["kind": "noViolation"], "initialStateCount": 1,
+      "stateCount": 1, "edgeCount": edges.count, "traceCount": 0])
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: url) }
+    try GraphRunRecords.write(run, to: url)
+    #expect(try Data(contentsOf: url) == data(for: expected))
+  }
+
   @Test("graph publication preserves exact bytes and cleans temporary files")
   func publishesCompleteRecords() throws {
     let state = CanonicalState(bindings: ["x": .integer(0)])
