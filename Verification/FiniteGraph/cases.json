@@ -548,7 +548,7 @@
         "sha256": "e1a52928940ae952cd25a3888cecb962f615237d5e81e4c164c9bfd64f82f3fa"
       },
       "exploration": {
-        "maximumStateLimit": 5000000,
+        "maximumStateLimit": 10000000,
         "symmetryReduction": "disabled"
       },
       "moduleSHA256": "e1a52928940ae952cd25a3888cecb962f615237d5e81e4c164c9bfd64f82f3fa",

@@ -246,7 +246,7 @@ jobs:
         if: matrix.phase == 'scenarios'
         timeout-minutes: 120
         env:
-          SWIFTTLA_SCENARIO_MAXIMUM_STATES: "5000000"
+          SWIFTTLA_SCENARIO_MAXIMUM_STATES: "10000000"
           SWIFTTLA_SCENARIO_TIMEOUT_SECONDS: "1800"
           CASE_ID: ${{ matrix.caseID }}
         run: |

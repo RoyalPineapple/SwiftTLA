@@ -33,7 +33,7 @@ jobs:
             configuration: release
             selection: --filter UpstreamParityTests
     runs-on: macos-15
-    timeout-minutes: ${{ matrix.suite == 'scenarios' && 95 || matrix.suite == 'finite-graphs' && 75 || 60 }}
+    timeout-minutes: ${{ (matrix.suite == 'scenarios' || matrix.suite == 'finite-graphs') && 125 || 60 }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -43,7 +43,7 @@ jobs:
         run: bash Tests/Fixtures/LocalValidation/assert_lock.sh
 
       - name: Run complete Swift test suite
-        timeout-minutes: ${{ matrix.suite == 'scenarios' && 90 || matrix.suite == 'finite-graphs' && 75 || 60 }}
+        timeout-minutes: ${{ (matrix.suite == 'scenarios' || matrix.suite == 'finite-graphs') && 120 || 60 }}
         run: |
           mkdir -p .build/test-diagnostics
           git rev-parse HEAD > .build/test-diagnostics/source-sha.txt
