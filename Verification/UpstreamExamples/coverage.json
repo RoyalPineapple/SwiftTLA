@@ -48,6 +48,13 @@
       "scope": "Diagnosis uses the terminal job log and artifact metadata. The 1.48 GB artifact is retained remotely but has not been downloaded or audited as complete evidence. Run 35451794508 has completed with failure: this scenario and graphs-coffee-can-3000 are its only failed comparison jobs; the aggregate gate also failed. Successful jobs still require retained evidence audits before any new coverage credit."
     },
     "currentCandidate": {
+      "sourceSHA": "6d0617ab720ad6fb54f6dce11f642dbe63863c9d",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758",
+      "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797",
+      "temporalRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485733646",
+      "scope": "Pushed after edec23de main CI became terminal; older independent comparisons were left running. Includes native temporal DSL migration, dictionary enum identity preservation, ordinary-record demo migrations and hosted demo tests, generated canonical and finite-graph rendering, unavailable checked-batch reuse, existing-index boundary validation, and finite-graph stack sampling. Focused wrapper sessions 4457, 96234, and 22680 pass 89, 10, and 25 tests respectively; earlier local evidence covers temporal and demo changes. Main CI, finite-graph comparisons, and temporal/symmetry validation are newly queued for this exact SHA. PR 394 remains draft. No new hosted coverage credit; full graph/property equivalence and measured performance are pending."
+    },
+    "capacityCandidate": {
       "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
