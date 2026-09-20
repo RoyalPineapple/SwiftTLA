@@ -911,6 +911,7 @@
   "localDiagnostics": [
     {
       "session": "65138",
+      "followUpCleanup": "After this passing run, removed the redundant UpstreamParityTests.echoParity count-only test and its sole-use Example.echo FiniteModelFixture. EchoCorpusStateGraphTests retains the 75-state assertion, complete native/formal graph equality, and strict projection checks unchanged. Source/test/documentation reference search found no remaining callers. Static checks pass; this deletion-only cleanup was not followed by another compiler run and still requires hosted validation.",
       "sourceSHA": "28ef75e561fcfffc72f628e56f3cdc1a7f3abbd0",
       "sourcePatchSHA256": "130990a9a59e316ae573233592335cc184a9ea772a39e76e898413bd00a1a014",
       "sourcePatchScope": "git diff -- Sources Tests; new untracked EchoCorpusStateGraphTests.swift recorded separately",

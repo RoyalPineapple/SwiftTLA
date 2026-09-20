@@ -86,14 +86,3 @@ package struct EchoModel: Sendable {
         }
     }
 }
-
-extension Example {
-    /// A bounded source port of MCEcho: three fully connected nodes and `a`
-    /// as TLC's deterministic choice of initiator. The typed record spells
-    /// the upstream `sndr` field as the clearer Swift name `sender`.
-    package static let echo = FiniteModelFixture(
-        expectedDistinct: 75,
-        maximumStateLimit: 50_000,
-        spec: EchoModel.spec,
-    )
-}

@@ -344,12 +344,6 @@ struct UpstreamParityTests {
         #expect(exploration.graph.states.count == Example.parallelReachable.expectedDistinct)
     }
 
-    @Test("Echo PlusCal port matches its three-node TLC configuration")
-    func echoParity() throws {
-        let exploration = try explore(EchoModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.echo.expectedDistinct)
-    }
-
     @Test("EWD998 uses typed finite functions and parameterized actions")
     func ewd998TypedFunctionParity() throws {
         let exploration = try explore(EWD998TerminationModel.spec, maximumStateLimit: 50_000)
