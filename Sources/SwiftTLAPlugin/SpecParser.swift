@@ -276,7 +276,7 @@ final class ParserSession {
         if let finished = decodeFinishedControlLocation(expression) {
             return finished
         }
-        if let sequences = decodeBoundedSequenceDomain(expression) {
+        if let sequences = decodeSequenceDomain(expression) {
             return sequences
         }
         if let filledSequence = decodeZeroBasedSequenceFill(expression) {
@@ -465,20 +465,23 @@ final class ParserSession {
         return label
     }
 
-    /// Preserves bounded sequence domains as scoped formal comprehensions.
-    private func decodeBoundedSequenceDomain(
+    private func decodeSequenceDomain(
         _ expression: ExprSyntax,
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
         guard let call = expression.as(FunctionCallExprSyntax.self),
               let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
               let kind = BoundedSequenceKind(rawValue: name),
-              call.arguments.count == 2,
               let memberSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
-              let lengthSyntax = call.arguments.first(where: { $0.label?.text == "lengths" })?.expression,
               let memberSet = finiteAlgorithmDomain(memberSyntax).map({
                   StateExpr.setLiteral($0.values.map(StateExpr.value))
               }) ?? decodeTypedFacadeValue(memberSyntax, scope: scope)
+        else { return nil }
+        if call.arguments.count == 1, kind == .sequences {
+            return .sequenceSet(memberSet)
+        }
+        guard call.arguments.count == 2,
+              let lengthSyntax = call.arguments.first(where: { $0.label?.text == "lengths" })?.expression
         else { return nil }
         if let lengths = parseIntegerClosedRange(lengthSyntax) {
             return formalSequenceDomain(elements: memberSet, lengths: lengths, kind: kind)
@@ -737,7 +740,7 @@ final class ParserSession {
            let value = decodeZSequencesCall(call, decode: { decodeTypedFacadeValue($0, scope: scope) }) {
             return value
         }
-        if let sequences = decodeBoundedSequenceDomain(expression, scope: scope) {
+        if let sequences = decodeSequenceDomain(expression, scope: scope) {
             return sequences
         }
         if let call = expression.as(FunctionCallExprSyntax.self),

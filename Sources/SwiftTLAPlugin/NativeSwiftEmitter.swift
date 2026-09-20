@@ -608,7 +608,7 @@ struct NativeSwiftEmitter {
         case .setLiteral, .tupleLiteral, .in, .subset, .union,
              .intersection, .setDifference, .cardinality, .integerRange, .setFilter,
              .setMap, .forAll, .exists, .choose, .sequenceFromSet,
-             .powerSet, .unionAll, .functionSet, .setSum:
+             .powerSet, .sequenceSet, .unionAll, .functionSet, .setSum:
             return try collectionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .foldFunction, .sequenceSelect, .tupleAccess, .tupleDynamicAccess, .tupleRemoving,
              .tupleLength, .tupleHead, .tupleTail, .tupleAppend, .tupleConcatenate:
@@ -807,6 +807,7 @@ struct NativeSwiftEmitter {
             guard case .set(let element) = childType(0) else { throw unsupported("sequence from set") }
             return "(\(try emit(0)).sorted(by: \(try ordering(element))))"
         case .powerSet: return "(try _NativeMachineOperations.powerSet(\(try emit(0))))"
+        case .sequenceSet: return "(try _NativeMachineOperations.sequenceSet(\(try emit(0))))"
         case .unionAll:
             guard case .set(let element) = node.resultType else { throw unsupported("UNION result") }
             return "(\(try emit(0)).reduce(into: Set<\(try swiftType(element))>()) { $0.formUnion($1) })"
@@ -825,7 +826,7 @@ struct NativeSwiftEmitter {
         var functions: Set<ResolvedFunctionID> = []
         while let node = pending.popLast() {
             switch node.operation {
-            case .functionSet, .integerRange: return true
+            case .functionSet, .integerRange, .sequenceSet: return true
             case .call(let id) where functions.insert(id).inserted:
                 pending.append(program[id].body)
             case .ifThenElse: pending += node.children.dropFirst()
@@ -860,6 +861,13 @@ struct NativeSwiftEmitter {
         }
         let body: String
         switch node.operation {
+        case .sequenceSet:
+            let members = try predicate(node.children[0])
+            body = """
+            \(members.declaration)
+            let contains = \(members.call)
+            return { candidate in candidate.allSatisfy(contains) }
+            """
         case .integerRange:
             body = """
             let bounds = try _NativeMachineOperations.integerRangeBounds(\(try emit(node.children[0])), \(try emit(node.children[1])))

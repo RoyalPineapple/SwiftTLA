@@ -318,6 +318,7 @@ public indirect enum StateExpr: Hashable, Sendable {
     case setFilter(StateExpr, String, StateExpr)
     case setMap(StateExpr, String, StateExpr)
     case powerSet(StateExpr)
+    case sequenceSet(StateExpr)
     case unionAll(StateExpr)
     case integerRange(StateExpr, StateExpr)
 

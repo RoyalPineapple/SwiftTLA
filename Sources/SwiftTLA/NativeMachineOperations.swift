@@ -21,6 +21,7 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
     case conflictingAssignment(variable: String)
     case collectionCardinalityOverflow(CollectionOperation, operands: [Int])
     case powerSetTooLarge(actualCount: Int, maximumCount: Int)
+    case nonEnumerableSequenceDomain
     case integerOverflow(IntegerOperation, operands: [Int])
     case divisionByZero
     case negativeModuloDivisor(Int)
@@ -44,6 +45,8 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
             return "Collection \(operation.rawValue) cardinality overflowed for \(operands.map(String.init).joined(separator: ", "))"
         case .powerSetTooLarge(let actual, let maximum):
             return "Power set input has \(actual) elements; maximum representable input is \(maximum)"
+        case .nonEnumerableSequenceDomain:
+            return "Seq over a nonempty set cannot be exhaustively enumerated"
         case .divisionByZero: return "Division by zero"
         case .negativeModuloDivisor(let divisor): return "Modulo requires a positive divisor; received \(divisor)"
         case .indexOutOfBounds(let index, let count): return "Index \(index) out of bounds (1..\(count))"
@@ -123,6 +126,11 @@ public enum _NativeMachineOperations: Sendable {
             throw NativeMachineEvaluationError.collectionCardinalityOverflow(.integerRange, operands: [lower, upper])
         }
         return lower...upper
+    }
+
+    public static func sequenceSet<Element: Hashable & Sendable>(_ values: Set<Element>) throws -> Set<[Element]> {
+        guard values.isEmpty else { throw NativeMachineEvaluationError.nonEnumerableSequenceDomain }
+        return [[]]
     }
 
     public static func powerSet<Element: Hashable & Sendable>(_ values: Set<Element>) throws -> Set<Set<Element>> {

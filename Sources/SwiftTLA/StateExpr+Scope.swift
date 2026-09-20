@@ -37,7 +37,7 @@ extension StateExpr {
                  .functionApply(let lhs, let rhs), .functionSet(let lhs, let rhs):
                 schedule([lhs, rhs], bound: bound)
             case .assertView(let value, _), .nextState(let value), .negate(let value), .not(let value), .cardinality(let value),
-                 .powerSet(let value), .unionAll(let value), .tupleLength(let value),
+                 .powerSet(let value), .sequenceSet(let value), .unionAll(let value), .tupleLength(let value),
                  .tupleHead(let value), .tupleTail(let value), .domain(let value),
                  .sequenceFromSet(let value):
                 pending.append((value, bound))

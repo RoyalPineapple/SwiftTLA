@@ -1081,7 +1081,7 @@ package struct CompiledTypeChecker: Sendable {
             catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
             if case .checked(let result) = check { return checkedOccurrence(expression, annotation: result) }
             return try checkWorklist(startingWith: .boundValue(id, check, expected: expected))
-        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .recordLiteral, .except, .recordAccess, .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving, .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral, .cardinality, .powerSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate, .operatorApplication, .functionApply:
+        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .recordLiteral, .except, .recordAccess, .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving, .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral, .cardinality, .powerSet, .sequenceSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate, .operatorApplication, .functionApply:
             return try checkWorklist(startingWith: .check(expression, expected: expected))
         default: break
         }
@@ -1538,7 +1538,7 @@ package struct CompiledTypeChecker: Sendable {
                             .bindDomain(id, retainElement: true),
                             .retainOperand(0), .check(domain, expected: .set(hints.key)),
                         ])
-                    case .cardinality, .powerSet, .unionAll, .sequenceFromSet:
+                    case .cardinality, .powerSet, .sequenceSet, .unionAll, .sequenceFromSet:
                         let domain = expression.children[0]
 
                         ancestors.append(expression)
@@ -1547,6 +1547,8 @@ package struct CompiledTypeChecker: Sendable {
                         switch expression.operation {
                         case .powerSet:
                             hint = if case .set(let item) = expected { item } else { .set(.unknown) }
+                        case .sequenceSet:
+                            hint = if case .set(.array(let item)) = expected { .set(item) } else { .set(.unknown) }
                         case .unionAll:
                             hint = .set(expected == .unknown ? .set(.unknown) : expected)
                         case .sequenceFromSet:
@@ -1803,6 +1805,7 @@ package struct CompiledTypeChecker: Sendable {
                     switch expression.operation {
                     case .cardinality: result = .int
                     case .powerSet: result = .set(source)
+                    case .sequenceSet: result = .set(.array(try element(source)))
                     case .unionAll: result = try element(source)
                     case .sequenceFromSet: result = .array(try element(source))
                     default: throw CompiledValueType.diagnostic("checking", "unexpected collection operation")

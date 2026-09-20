@@ -37,6 +37,7 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case invalidContinuation(availableValues: Int)
     case collectionState
     case powerSetTooLarge(actualCount: Int, maximumCount: Int)
+    case nonEnumerableSequenceDomain
     case collectionCardinalityOverflow(NativeMachineEvaluationError.CollectionOperation, operands: [Int])
     case divisionByZero
     case negativeModuloDivisor(Int)
@@ -67,6 +68,7 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
         case .invalidContinuation(let availableValues):
             return "Evaluator continuation has \(availableValues) values"
         case .collectionState: return "Collection evaluation reached an invalid state"
+        case .nonEnumerableSequenceDomain: return NativeMachineEvaluationError.nonEnumerableSequenceDomain.description
         case .powerSetTooLarge(let actualCount, let maximumCount):
             return "Power-set input has \(actualCount) members; the maximum is \(maximumCount)"
         case .collectionCardinalityOverflow(let operation, let operands):
@@ -251,6 +253,7 @@ private enum EvaluatorTask {
     case finish(CompiledOperation, operandCount: Int)
     case functionSpaceDomain(candidate: CompiledExpression, scope: EvaluatorScope)
     case functionSpaceMember(domain: Set<CompiledValue>, range: Set<CompiledValue>)
+    case sequenceMember
     case booleanResult
     case conditional(then: CompiledExpression, otherwise: CompiledExpression, scope: EvaluatorScope)
     case booleanRight(CompiledExpression, scope: EvaluatorScope, shortCircuit: Bool)
@@ -348,6 +351,18 @@ struct CompiledEvaluator: Sendable {
                 if case .function(let function) = candidate {
                     let matches = Set(function.keys) == domain && function.values.allSatisfy(range.contains)
                     values.append(.boolean(matches))
+                } else {
+                    values.append(.boolean(false))
+                }
+
+            case .sequenceMember:
+                let candidate = try popValue(from: &values)
+                let domain = try popValue(from: &values)
+                guard case .set(let members) = domain else {
+                    throw EvalError.expected(.set, actual: [domain])
+                }
+                if case .tuple(let sequence) = candidate {
+                    values.append(.boolean(sequence.allSatisfy(members.contains)))
                 } else {
                     values.append(.boolean(false))
                 }
@@ -533,6 +548,13 @@ struct CompiledEvaluator: Sendable {
                 values.append(value)
 
             case .expression(let expression, let scope):
+                if case .in = expression.operation,
+                   case .sequenceSet = expression.children[1].operation {
+                    tasks.append(.sequenceMember)
+                    tasks.append(.expression(expression.children[0], scope))
+                    tasks.append(.expression(expression.children[1].children[0], scope))
+                    continue
+                }
                 if let membership = expression.functionSpaceMembership {
                     tasks.append(.functionSpaceDomain(candidate: membership.candidate, scope: scope))
                     tasks.append(.expression(membership.range, scope))
@@ -719,7 +741,7 @@ struct CompiledEvaluator: Sendable {
                     let body = expression.children[0]
 
                     tasks.append(.expression(body, scope))
-                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .setSum, .functionSet:
+                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .sequenceSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .setSum, .functionSet:
                     schedule(expression.operation, expression.children)
 
                 }
@@ -845,6 +867,13 @@ extension CompiledOperation {
                 throw EvalError.expected(.set, actual: [value])
             }
             values.append(.integer(set.count))
+        case .sequenceSet:
+            let value = try popValue(from: &values)
+            guard case .set(let members) = value else {
+                throw EvalError.expected(.set, actual: [value])
+            }
+            let sequences = try nativeOperation { try _NativeMachineOperations.sequenceSet(members) }
+            values.append(.set(Set(sequences.map(CompiledValue.tuple))))
         case .powerSet:
             let value = try popValue(from: &values)
             guard case .set(let set) = value else {
@@ -1031,6 +1060,8 @@ private func nativeOperation<Value>(_ operation: () throws -> Value) throws -> V
         throw EvalError.collectionCardinalityOverflow(operation, operands: operands)
     } catch NativeMachineEvaluationError.powerSetTooLarge(let actualCount, let maximumCount) {
         throw EvalError.powerSetTooLarge(actualCount: actualCount, maximumCount: maximumCount)
+    } catch NativeMachineEvaluationError.nonEnumerableSequenceDomain {
+        throw EvalError.nonEnumerableSequenceDomain
     } catch NativeMachineEvaluationError.indexOutOfBounds(let index, let count) {
         throw EvalError.indexOutOfBounds(index, count)
     } catch NativeMachineEvaluationError.tupleIndexOutsideDomain(let index) {

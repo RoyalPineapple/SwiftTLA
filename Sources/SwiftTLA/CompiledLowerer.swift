@@ -1201,6 +1201,7 @@ struct CompiledLowerer {
                 case .not(let value): scheduleUnary(value, at: path, scope: scope, operation: .not, on: &tasks)
                 case .cardinality(let value): scheduleUnary(value, at: path, scope: scope, operation: .cardinality, on: &tasks)
                 case .powerSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .powerSet, on: &tasks)
+                case .sequenceSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .sequenceSet, on: &tasks)
                 case .unionAll(let value): scheduleUnary(value, at: path, scope: scope, operation: .unionAll, on: &tasks)
                 case .tupleLength(let value): scheduleUnary(value, at: path, scope: scope, operation: .tupleLength, on: &tasks)
                 case .tupleHead(let value): scheduleUnary(value, at: path, scope: scope, operation: .tupleHead, on: &tasks)

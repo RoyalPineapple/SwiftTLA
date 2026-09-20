@@ -382,6 +382,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .not(let value): schedule("not", [value], environment: environment)
             case .cardinality(let value): schedule("cardinality", [value], environment: environment)
             case .powerSet(let value): schedule("powerSet", [value], environment: environment)
+            case .sequenceSet(let value): schedule("sequenceSet", [value], environment: environment)
             case .unionAll(let value): schedule("unionAll", [value], environment: environment)
             case .tupleLength(let value): schedule("tupleLength", [value], environment: environment)
             case .tupleHead(let value): schedule("tupleHead", [value], environment: environment)

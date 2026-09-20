@@ -1086,6 +1086,7 @@ enum AlgorithmLowerer {
             case .setMap(let value, let variable, let set):
                 return .setMap(rewritten(value, localRoots: localRoots.subtracting([variable])), variable, rewritten(set, localRoots: localRoots))
             case .powerSet(let set): return .powerSet(rewritten(set, localRoots: localRoots))
+            case .sequenceSet(let set): return .sequenceSet(rewritten(set, localRoots: localRoots))
             case .unionAll(let set): return .unionAll(rewritten(set, localRoots: localRoots))
             case .integerRange(let lower, let upper): return .integerRange(rewritten(lower, localRoots: localRoots), rewritten(upper, localRoots: localRoots))
             case .tupleLiteral(let elements): return .tupleLiteral(elements.map { rewritten($0, localRoots: localRoots) })

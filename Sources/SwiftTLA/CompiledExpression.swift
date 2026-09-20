@@ -41,6 +41,7 @@ package enum CompiledOperation: Hashable, Sendable {
     case setFilter(BinderID)
     case setMap(BinderID)
     case powerSet
+    case sequenceSet
     case unionAll
     case integerRange
     case tupleLiteral

@@ -678,6 +678,13 @@ public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, 
 public protocol FormalZeroBasedSequenceValue: TLAValueType {}
 extension ZeroBasedSequence: FormalZeroBasedSequenceValue {}
 
+/// All finite sequences over the element domain, with no length bound.
+public func Sequences<Domain: FormalSetValue>(
+  of elements: some TypedExpression<Domain>
+) -> Expr<SetExpr<[Domain.Element]>> {
+  Expr(.sequenceSet(elements.stateExpr))
+}
+
 /// Creates a finite formal set of sequences for model checking.
 ///
 /// `Sequences(of:lengths:)` is the bounded authoring form of TLA+ `Seq(S)`.

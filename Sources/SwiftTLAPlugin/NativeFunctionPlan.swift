@@ -108,7 +108,7 @@ enum NativeFunctionPlan: Sendable {
         case .add, .subtract, .multiply, .negate,
              .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not,
              .recordLiteral, .tupleLiteral, .setLiteral,
-             .cardinality, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .powerSet, .unionAll:
+             .cardinality, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .powerSet, .sequenceSet, .unionAll:
             var bindings: [BinderID] = []
             for child in node.children {
                 let prefix = entryReads(child, parameters: parameters)
