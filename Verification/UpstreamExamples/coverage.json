@@ -3992,7 +3992,7 @@
           "configuration": "specifications/DieHard/APDieHarder.cfg",
           "required": true,
           "status": "hosted match",
-          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
+          "verifiedSourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -4003,6 +4003,17 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35507347106",
+              "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35507347106/job/106071259093",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35507347106/artifacts/10604527793",
+              "artifactDigest": "sha256:c205f9e0ece0833202350ea9a22efaee9e57aa968b56e80a6af88fc94d645a14",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Archive checksum and retained source revision verify. Complete native, upstream TLC, and generated TLC graphs are byte-identical: 1 initial state, 16 states, and 96 labeled edges. Completion footers and record counts match. All four selected property/deadlock records match. Original configuration, module, dependency, Java, TLC, and bridge source pins verify. Job logs select Xcode 16.4. This refreshes an existing configuration match, not the family or final revision."
+            },
             {
               "sourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037",
@@ -4059,7 +4070,7 @@
           "configuration": "specifications/DieHard/MCDieHarder.cfg",
           "required": true,
           "status": "hosted match",
-          "verifiedSourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
+          "verifiedSourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
           "implementations": [
@@ -4070,6 +4081,17 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35507347106",
+              "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35507347106/job/106071259054",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35507347106/artifacts/10604372873",
+              "artifactDigest": "sha256:b61bc0c962b4756744f7ed17a1ff910a2f1eb8bc8da108e9a24fc2a94df7620d",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Archive checksum and retained source revision verify. Complete native, upstream TLC, and generated TLC graphs are byte-identical: 1 initial state, 16 states, and 96 labeled edges. Completion footers and record counts match. All six selected property/deadlock records match. Original configuration, module, dependency, Java, TLC, and bridge source pins verify. Job logs select Xcode 16.4. This refreshes an existing configuration match, not the family or final revision. Native and TLC retain valid NotSolved traces with different lengths. No identical-trace or shortest-native-trace claim is made."
+            },
             {
               "sourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037",
