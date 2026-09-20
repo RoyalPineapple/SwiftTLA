@@ -54,7 +54,9 @@
       "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35507347106",
       "caseLabels": ["graphs-die-hard", "graphs-mc-die-harder", "graphs-ap-die-harder", "scenarios-die-hard-0", "scenarios-die-harder-0", "scenarios-die-harder-1", "graphs-dining-philosophers", "graphs-ap-dining-philosophers", "graphs-least-circular-substring-small", "graphs-least-circular-substring-medium", "graphs-n-queens-four"],
-      "observedStatus": "in_progress",
+      "observedStatus": "completed",
+      "conclusion": "success",
+      "audit": "All eleven selected jobs and the aggregate gate passed. The three finite DieHard configuration records retain audited artifacts. The other job results do not replace artifact audits. No additional family, configuration, or DSL criterion receives credit from this status update.",
       "scope": "Refresh the remaining published DieHard configurations, their generated scenarios, and the agreed small regression anchors on the same revision as the audited MCDieHardest match. The successful decisive case is not repeated. CoffeeCan and Boulanger capacity failures are not retried. This focused candidate is not full admission or evidence for later commits."
     },
     "decisiveCandidate": {
@@ -891,6 +893,15 @@
       "testSeconds": 589.741,
       "testsPassed": 1454,
       "scope": "The terminal ordinary-suite log reports all tests passing. This result covers the pushed baseline, not the later uncommitted type-preservation patch. Other jobs in this run were still active when this result was recorded. No independent upstream match or overall CI completion follows from this suite alone."
+    },
+    "boulangerFiniteGraphTimeout": {
+      "sourceSHA": "59fa4d5b156774c4993dc6f632e9aa16bd2f837a",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35502123379/job/106055632977",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35502123379/artifacts/10605020343",
+      "artifactDigest": "sha256:d47a587f3c6340fe258bc9b6d4e9e8256596abee816f4fc6f0cdc7f73b2f2e4a",
+      "conclusion": "failure",
+      "reason": "The finite-graph test step exceeded 120 minutes. The final sample places Boulanger native graph conversion at CanonicalGraph.swift:301, before TLC execution. The process footprint was 25.1 GB. Snapshot copies and hashes dominate the preliminary coverage check.",
+      "scope": "The archive checksum and retained source SHA match. The final sample is 1789905683-43912.txt. This revision includes endpoint-copy change 212cbdb3. The failure remains unresolved. No unchanged retry is justified."
     },
     "boulangerScenarioTimeout": {
       "sourceSHA": "59fa4d5b156774c4993dc6f632e9aa16bd2f837a",
