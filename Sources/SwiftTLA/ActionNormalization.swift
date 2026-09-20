@@ -1,37 +1,87 @@
 enum ActionNormalization {
+    private enum CompletionTask {
+        case visit([ActionExpr], Set<ActionTarget>)
+        case prepend([ActionExpr])
+        case disjoin
+        case conditional(StateExpr)
+        case existential(String, StateExpr)
+        case definition(String, StateExpr)
+    }
+
     static func complete(_ action: ActionExpr, variables: [NamedVar]) -> ActionExpr {
         let targets = variables.map(actionTarget(for:))
         var unavailable = action.scopeNames
-        func append(_ first: ActionExpr, _ rest: ActionExpr?) -> ActionExpr {
-            rest.map { .and(first, $0) } ?? first
-        }
-        func visit(_ node: ActionExpr, defined: Set<ActionTarget>,
-                   then continuation: (Set<ActionTarget>) -> ActionExpr?) -> ActionExpr {
-            switch node {
-            case .and(let left, let right):
-                return visit(left, defined: defined) { visit(right, defined: $0, then: continuation) }
-            case .or(let left, let right):
-                return .or(visit(left, defined: defined, then: continuation),
-                    visit(right, defined: defined, then: continuation))
-            case .ifElse(let condition, let yes, let no):
-                return .ifElse(condition, visit(yes, defined: defined, then: continuation),
-                    visit(no, defined: defined, then: continuation))
-            case .existsAction(let binder, let domain, let body), .define(let binder, let domain, let body):
-                let fresh = StateExpr.freshBoundName(binder, avoiding: unavailable)
-                unavailable.insert(fresh)
-                let renamed = body.substitutingVariable(binder, with: .variable(fresh))
-                let result = visit(renamed, defined: defined, then: continuation)
-                if case .define = node { return .define(fresh, domain, result) }
-                return .existsAction(fresh, domain, result)
-            case .assign(let target, _), .unchanged(let target):
-                return append(node, continuation(defined.union([target])))
-            case .guard_:
-                return append(node, continuation(defined))
+        var tasks = [CompletionTask.visit([action], [])]
+        var results: [ActionExpr] = []
+        while let task = tasks.popLast() {
+            switch task {
+            case .visit(var pending, var defined):
+                var prefix: [ActionExpr] = []
+                var suspended = false
+                traversal: while let node = pending.popLast() {
+                    switch node {
+                    case .and(let left, let right):
+                        pending.append(right)
+                        pending.append(left)
+                    case .assign(let target, _), .unchanged(let target):
+                        defined.insert(target)
+                        prefix.append(node)
+                    case .guard_:
+                        prefix.append(node)
+                        if case .guard_(.value(.bool(false))) = node {
+                            results.append(combine(prefix, with: ActionExpr.and)!)
+                            suspended = true
+                            break traversal
+                        }
+                    case .or(let left, let right), .ifElse(_, let left, let right):
+                        if !prefix.isEmpty { tasks.append(.prepend(prefix)) }
+                        if case .ifElse(let condition, _, _) = node {
+                            tasks.append(.conditional(condition))
+                        } else {
+                            tasks.append(.disjoin)
+                        }
+                        tasks.append(.visit(pending + [right], defined))
+                        tasks.append(.visit(pending + [left], defined))
+                        suspended = true
+                        break traversal
+                    case .existsAction(let binder, let domain, let body), .define(let binder, let domain, let body):
+                        let fresh = pending.contains { $0.scopeNames.contains(binder) }
+                            ? StateExpr.freshBoundName(binder, avoiding: unavailable) : binder
+                        unavailable.insert(fresh)
+                        let renamed = fresh == binder ? body
+                            : body.substitutingVariable(binder, with: .variable(fresh))
+                        if !prefix.isEmpty { tasks.append(.prepend(prefix)) }
+                        if case .define = node {
+                            tasks.append(.definition(fresh, domain))
+                        } else {
+                            tasks.append(.existential(fresh, domain))
+                        }
+                        tasks.append(.visit(pending + [renamed], defined))
+                        suspended = true
+                        break traversal
+                    }
+                }
+                if !suspended {
+                    let frames = targets.filter { !defined.contains($0) }.map(ActionExpr.unchanged)
+                    results.append(combine(prefix + frames, with: ActionExpr.and)!)
+                }
+            case .prepend(let prefix):
+                results.append(combine(prefix + [results.removeLast()], with: ActionExpr.and)!)
+            case .disjoin:
+                let right = results.removeLast()
+                let left = results.removeLast()
+                results.append(.or(left, right))
+            case .conditional(let condition):
+                let no = results.removeLast()
+                let yes = results.removeLast()
+                results.append(.ifElse(condition, yes, no))
+            case .existential(let binder, let domain):
+                results.append(.existsAction(binder, domain, results.removeLast()))
+            case .definition(let binder, let value):
+                results.append(.define(binder, value, results.removeLast()))
             }
         }
-        return visit(action, defined: []) { defined in
-            combine(targets.filter { !defined.contains($0) }.map(ActionExpr.unchanged), with: ActionExpr.and)
-        }
+        return results[0]
     }
 
     private static func actionTarget(for variable: NamedVar) -> ActionTarget {
