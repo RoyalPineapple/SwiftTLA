@@ -87,7 +87,7 @@ jobs:
 
   apple-platform-examples:
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
         with:
@@ -146,6 +146,27 @@ jobs:
       - name: Build SwiftUI demo app
         working-directory: Examples/SwiftTLADemoApp
         run: xcodebuild build SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO -scheme SwiftTLADemoApp -destination 'platform=macOS,arch=arm64' -jobs 1
+
+      - name: Run generated demo-model contracts
+        working-directory: Examples/SwiftTLADemos
+        run: |
+          set -euo pipefail
+          mkdir -p .build/demo-evidence
+          git rev-parse HEAD > .build/demo-evidence/source-sha.txt
+          test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          swift --version > .build/demo-evidence/swift-version.txt
+          xcodebuild -version > .build/demo-evidence/xcode-version.txt
+          xcodebuild test SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO -scheme SwiftTLADemos-Package -destination 'platform=macOS,arch=arm64' -only-testing:SwiftTLADemosTests -parallel-testing-enabled NO -parallel-testing-worker-count 1 -jobs 1 -resultBundlePath .build/demo-evidence/demo-contracts.xcresult 2>&1 | tee .build/demo-evidence/demo-contracts.log
+
+      - name: Retain generated demo-model evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: generated-demo-models-${{ env.SWIFT_TLA_SHA }}
+          path: Examples/SwiftTLADemos/.build/demo-evidence
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
   canonical-corpus-export:
     runs-on: macos-15

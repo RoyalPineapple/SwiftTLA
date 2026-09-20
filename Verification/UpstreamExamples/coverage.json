@@ -53,6 +53,17 @@
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
       "completedJobs": [
         {
+          "name": "upstream",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632165",
+          "conclusion": "success",
+          "testsPassed": 23,
+          "buildSeconds": 1309.03,
+          "testSeconds": 976.951,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10595514813",
+          "artifactSHA256": "071d5f0df2d1f40a95b587f3421ee049c99bcd0553eefc569bcd52f404b86655",
+          "scope": "Terminal job log reports 23 passing tests. Downloaded diagnostics bind to edec23de, Swift 6.1.2, Xcode 16.4 build 16F6, and SDK 24F74. This does not replace complete graph/property comparisons or cover subsequent local changes. Artifact contents and terminal log: /tmp/swifttla-upstream-edec.UgNlt9."
+        },
+        {
           "name": "ordinary",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632109",
           "conclusion": "success",
@@ -73,7 +84,7 @@
           "scope": "Downloaded source-sha.txt binds to edec23de. Retained camera adoption logs report 12 tests with zero failures and the camera executable build succeeded. GitHub reports the full Apple job successful. This does not cover later temporal or Chang-Roberts edits or establish additional upstream matches. Artifact contents: /tmp/swifttla-apple-edec.CjrMk5."
         }
       ],
-      "scope": "Submitted after prior main CI became terminal. Includes AC-05 through AC-08 local contract evidence, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and the Boulanger capacity increase from five to ten million states. Focused wrapper session 3696 passes 114 tests; model bounds and selected checks are unchanged. Apple and ordinary CI passed; scenario, finite-graph, and upstream suites are running. Export and independent comparisons remain queued or active for this exact SHA. No new upstream coverage credit is assigned; PR 394 remains draft."
+      "scope": "Submitted after prior main CI became terminal. Includes AC-05 through AC-08 local contract evidence, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and the Boulanger capacity increase from five to ten million states. Focused wrapper session 3696 passes 114 tests; model bounds and selected checks are unchanged. Apple, ordinary, and upstream CI passed; scenario and finite-graph suites are running. Export and independent comparisons remain queued or active for this exact SHA. No new upstream coverage credit is assigned; PR 394 remains draft."
     },
     "snapshotReuseCandidate": {
       "sourceSHA": "0b86465f165584983dbcca910a9fb56d6865aca4",
@@ -724,6 +735,19 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "13999",
+      "sourceSHA": "2de485e0805f7cbbce44891bed89e8784866662f",
+      "sourcePatchSHA256": "fa0b03a6838014f412fddbc04c80ea90e1b67d03e8ab557a1c376fd1babedda8",
+      "sourcePatchScope": "git diff -- Examples .github/workflows/ci.yml",
+      "command": "cd Examples/SwiftTLADemos && DEVELOPER_DIR=/Library/Developer/CommandLineTools ../../scripts/local-validation.sh swiftpm-test 'ChangRobertsDemoTests|GeneratedDemoTestSuiteTests|ElevatorBankDemoTests|TwoBucketsDemoTests'",
+      "exitCode": 0,
+      "testsPassed": 7,
+      "buildSeconds": 163.88,
+      "testSeconds": 0.002,
+      "result": "All four demo suites pass. Saving the exiting rider before clearing the car fixes ElevatorBank without weakening ordered assignment semantics. ChangRoberts retains typed records, enum dictionaries, strict formal projection, full-ring election, and actor behavior. The app-facing check consumes its generated export instead of compiling the source at runtime. CI now includes these demo-model tests with retained source-bound logs and a result bundle.",
+      "scope": "Source stayed fixed during the wrapper build. Full log: /tmp/swifttla-enum-dictionary.9ATAHU/demo-validation-2.log. Local SwiftPM consumer checks passed; the new hosted Xcode test step has not run. No upstream configuration or complete DSL criterion gains hosted credit."
+    },
     {
       "session": "85501",
       "sourceSHA": "4bdc6930b951a88b3bb6977752878a88fe4c7b4f",

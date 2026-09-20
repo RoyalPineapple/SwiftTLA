@@ -208,12 +208,13 @@ public struct ElevatorBank {
                             When(cars[car][CarSchema.rider] != .none)
                             When(riders[cars[car][CarSchema.rider]][RiderSchema.phase] == .onboard)
                             When(cars[car][CarSchema.floor] == riders[cars[car][CarSchema.rider]][RiderSchema.destination])
+                            let exitingRider = cars[car][CarSchema.rider]
                             Assign(cars, to: cars.updating(car) { vehicle in
                                 vehicle
                                     .updating(CarSchema.rider, to: .none)
                                     .updating(CarSchema.door, to: .closed)
                             })
-                            Assign(riders, to: riders.updating(cars[car][CarSchema.rider]) { passenger in
+                            Assign(riders, to: riders.updating(exitingRider) { passenger in
                                 passenger.updating(RiderSchema.phase, to: .arrived)
                             })
                                         }
