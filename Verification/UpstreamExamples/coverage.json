@@ -59,7 +59,7 @@
       "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35515925978/artifacts/10607340951",
       "artifactSHA256": "97aa973c5fd7e499faac218685cb4a01677aa1adfa7c63468dec0ef2e3b0fc30",
       "audit": "The 194240-byte archive and retained source SHA match. Six complete global-freeze traces across native, unchanged upstream, and generated TLC are identical: seven states and six transitions. Copy 2 freezes at [j1=1,j2=2] after step two; copy 1 reaches [j1=9,j2=2] after step six. Counters remain zero; registers are absent from formal state. All module/configuration and TLC/Java/bridge source pins match. TLC uses one worker without -continue and stops at NotSolved. Deadlock remains unavailable; graphCompared is false. Four complete twelve-state MCDieHardest regression traces also match. Retained archive and files: /tmp/swifttla-global-freeze-evidence.Cbofh9.",
-      "scope": "This verifies the Section 3 running example at 5d3025dd. MCGlobalFreeze is a local harness, not a published upstream CFG. It adds no published configuration or complete-family credit. That revision's negative-test fixture compile error was fixed in e8d2e498; the local rerun is pending. This focused match is not final-revision admission."
+      "scope": "This verifies the Section 3 running example at 5d3025dd. MCGlobalFreeze is a local harness, not a published upstream CFG. It adds no published configuration or complete-family credit. That revision's negative-test fixture compile error was fixed in e8d2e498; all 25 focused tests then passed. This focused match is not final-revision admission."
     },
     "familyRegressionCandidate": {
       "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
@@ -1112,8 +1112,13 @@
       "session": "75147",
       "sourceSHA": "e8d2e4984438bf5da3bb6ff5e196fccd6729090b",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CheckingRegisterDeclarationTests|DieHardestCorpusCheckingTests|DecisiveScenarioComparisonTests|FiniteGraphManifestTests'",
-      "observedStatus": "running",
-      "scope": "Log: /tmp/swifttla-global-freeze-immutable-state.log. The only source/test change from 5d3025dd constructs a replacement immutable State in the negative replay test. The hosted candidate's production implementation is unchanged. No passing result or coverage credit is claimed."
+      "observedStatus": "completed",
+      "exitCode": 0,
+      "buildSeconds": 682.69,
+      "testSeconds": 1.108,
+      "testsPassed": 25,
+      "result": "Global freeze finishes in six transitions and freezes the faster copy after two. BFS-prefix replay accepts the complete witness and rejects a delayed faster-copy solution. Effect-sensitive identity, register declarations, decisive/deadlock comparisons, unchanged MCDieHardest checking, and manifest validation pass.",
+      "scope": "Log: /tmp/swifttla-global-freeze-immutable-state.log. The only source/test change from 5d3025dd constructs a replacement immutable State in the negative replay test. Production code is identical to the audited hosted candidate. Source and tests remained fixed throughout the diagnostic. Local results do not confer additional corpus or DSL credit."
     },
     {
       "session": "22877",
