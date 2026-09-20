@@ -114,23 +114,6 @@ enum ActionNormalization {
         return branches[0]
     }
 
-    // Each normalized branch has one enabled path. Frame clauses inside its
-    // lexical scopes apply to that path.
-    static func frameTargets(inNormalizedBranch branch: ActionExpr) -> Set<ActionTarget> {
-        switch branch {
-        case .unchanged(let target):
-            return [target]
-        case .and(let left, let right), .or(let left, let right):
-            return frameTargets(inNormalizedBranch: left).union(frameTargets(inNormalizedBranch: right))
-        case .ifElse(_, let thenBranch, let elseBranch):
-            return frameTargets(inNormalizedBranch: thenBranch).union(frameTargets(inNormalizedBranch: elseBranch))
-        case .define(_, _, let body), .existsAction(_, _, let body):
-            return frameTargets(inNormalizedBranch: body)
-        case .assign, .guard_:
-            return []
-        }
-    }
-
     private static func normalized(_ action: ActionExpr) -> ActionExpr {
         switch action {
         case .and:

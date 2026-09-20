@@ -308,8 +308,7 @@ struct AlgorithmBuilderTests {
             variables: [programCounter]
         )
 
-        #expect(assignedVars(action).contains(.programCounter))
-        #expect(!ActionNormalization.frameTargets(inNormalizedBranch: action).contains(.programCounter))
+        #expect(action == .assign(.programCounter, .controlLocation(.done)))
     }
 
     @Test("rendered action headers use compiled process bindings")

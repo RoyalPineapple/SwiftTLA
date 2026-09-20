@@ -1098,6 +1098,17 @@
   },
   "localDiagnostics": [
     {
+      "session": "5906",
+      "sourceSHA": "b1736d222785ef05d5d5feaaf41d63e7e7a0137b",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CheckingEffectsTests|CheckingRegisterDeclarationTests|CheckingContextTests|CandidateTraversalTests|ActionFrameConditionTests|ScopedSubstitutionTests|DieHardestCorpusCheckingTests'",
+      "exitCode": 0,
+      "buildSeconds": 641.14,
+      "testSeconds": 1.111,
+      "testsPassed": 35,
+      "result": "Generated machines execute typed register reads, writes, and BFS-level access. Writes made by a rejected candidate persist into later candidates. Independent initialization resets registers, while context-free effectful calls fail rather than silently resetting them. Register identities render as TLCGet and TLCSet, outside model state. Frame and scope regressions and the unchanged MCDieHardest shortest-counterexample tests pass.",
+      "scope": "The run used the committed source and test contents before the commit. Retained log: /tmp/swifttla-checking-effects.eVaCXP/diagnostic.log. This proves focused generated execution, not the global-freeze variant or hosted admission. The subsequent cleanup removes a production helper used only by one test and replaces that test with exact action equality; that cleanup has static checks only. Effect-sensitive canonical identity, algorithm-control lowering, context-dependent properties, actual variant integration, and hosted comparison still need work. No configuration, family, or DSL criterion receives credit."
+    },
+    {
       "session": "51465",
       "sourceSHA": "162caa2219b4dabd0a3218aa1912e3cb47ef0f77",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CheckingRegisterDeclarationTests|CheckingContextTests|CandidateTraversalTests|ParameterResolutionTests'",
@@ -3968,7 +3979,7 @@
         "label": "Checker gap",
         "variant": "DieHardest.NextParallelGlobalFreeze",
         "reproducer": "The pinned operator uses TLCGet(level), TLCGet(2), TLCGet(3), and TLCSet to freeze copies after global BFS discovery. Its running example binds Goal=2 and capacities 9/10 versus 1/3.",
-        "nativeBoundary": "The checker has a typed run context and BFS levels. Typed register declarations and initialization now pass focused compiler diagnostics on 162caa22. Generated register read/write expressions and effect-preserving action lowering are not integrated yet. Registers remain outside model state; the variant remains incomplete.",
+        "nativeBoundary": "Typed register reads, writes, and BFS-level access execute through generated transitions on b1736d22. Frame completion preserves candidate continuations; writes survive rejected candidates. Registers remain outside model state. Effect-sensitive identity, algorithm-control paths, context-dependent properties, the actual global-freeze variant, and its hosted comparison remain incomplete.",
         "completionCondition": "Preserve exploration-wide register initialization, BFS levels, and freeze effects through a supported checking boundary. Obtain hosted comparison for the unchanged source-defined variant.",
         "remainingVariants": ["NextParallel", "NextParallelFreeze", "NextParallelGlobalFreeze"],
         "scope": "The four published configurations have retained matches. This variant keeps the family incomplete. The user explicitly prioritized implementation of checker-register support before further family expansion.",
