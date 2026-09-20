@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      contracts_only:
+        description: Run ordinary, upstream, consumer, and export diagnostics only (not admission)
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,19 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - suite: ordinary
-            configuration: debug
-            selection: --skip 'FiniteGraphCheckTests|UpstreamParityTests|ScenarioValidationTests'
-          - suite: finite-graphs
-            configuration: release
-            selection: --filter FiniteGraphCheckTests
-          - suite: scenarios
-            configuration: release
-            selection: --filter ScenarioValidationTests
-          - suite: upstream
-            configuration: release
-            selection: --filter UpstreamParityTests
+        suite: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.contracts_only && '["ordinary","upstream"]' || '["ordinary","finite-graphs","scenarios","upstream"]') }}
     runs-on: macos-15
     timeout-minutes: ${{ (matrix.suite == 'scenarios' || matrix.suite == 'finite-graphs') && 125 || 60 }}
     steps:
@@ -45,13 +39,21 @@ jobs:
       - name: Run complete Swift test suite
         timeout-minutes: ${{ (matrix.suite == 'scenarios' || matrix.suite == 'finite-graphs') && 120 || 60 }}
         run: |
+          configuration=release
+          case '${{ matrix.suite }}' in
+            ordinary) configuration=debug; selection=(--skip 'FiniteGraphCheckTests|UpstreamParityTests|ScenarioValidationTests') ;;
+            finite-graphs) selection=(--filter FiniteGraphCheckTests) ;;
+            scenarios) selection=(--filter ScenarioValidationTests) ;;
+            upstream) selection=(--filter UpstreamParityTests) ;;
+            *) exit 64 ;;
+          esac
           mkdir -p .build/test-diagnostics
           git rev-parse HEAD > .build/test-diagnostics/source-sha.txt
           test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
           swift --version | tee .build/test-diagnostics/swift-version.txt
           xcodebuild -version | tee .build/test-diagnostics/xcode-version.txt
           xcrun --sdk macosx --show-sdk-build-version | tee .build/test-diagnostics/sdk-build-version.txt
-          echo '${{ matrix.configuration }}' > .build/test-diagnostics/build-configuration.txt
+          echo "$configuration" > .build/test-diagnostics/build-configuration.txt
           echo Debug > .build/test-diagnostics/assertion-configuration.txt
           (
             while sleep 300; do
@@ -63,7 +65,7 @@ jobs:
           ) &
           sampler=$!
           trap 'kill "$sampler" 2>/dev/null || true' EXIT
-          swift test --configuration '${{ matrix.configuration }}' -Xswiftc -assert-config -Xswiftc Debug -Xswiftc -warnings-as-errors -j 1 --no-parallel ${{ matrix.selection }}
+          swift test --configuration "$configuration" -Xswiftc -assert-config -Xswiftc Debug -Xswiftc -warnings-as-errors -j 1 --no-parallel "${selection[@]}"
 
       - name: Retain Swift test stack samples
         if: always()
@@ -75,6 +77,7 @@ jobs:
           retention-days: 14
 
   swift-tests:
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_only && 'Selected Swift contracts (diagnostic)' || 'swift-tests' }}
     needs: swift-test-suites
     if: ${{ always() }}
     runs-on: ubuntu-24.04
