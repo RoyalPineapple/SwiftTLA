@@ -4080,11 +4080,11 @@
         {
           "path": "specifications/DieHard/APDieHarder.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The annotation wrapper instantiates DieHarder with string jug identities small_OF_JUG and big_OF_JUG, capacities 3 and 5, and Goal=4. Its published configuration checks TypeOK only. DieHarderModel.APDieHarder preserves these bindings and that check selection; retained hosted evidence compares all 16 states, 96 labeled edges, TypeOK, and deadlock. Annotations add no separate transition system.",
           "implementations": [
             "Sources/UpstreamParity/Examples/DieHarder.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/DieHard/DieHard_proof.tla",
@@ -4096,20 +4096,20 @@
         {
           "path": "specifications/DieHard/DieHard.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "DieHardModel preserves the six named fill, empty, and pour actions, including self-loops, initial big=small=0, TypeOK, and NotSolved. Its Upstream scenario selects both published invariants and retains default deadlock checking. Hosted evidence compares the complete 16-state, 96-edge labeled graph and every selected property; there are no additional operators requiring a separate model.",
           "implementations": [
             "Sources/UpstreamParity/Examples/DieHard.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/DieHard/DieHarder.tla",
           "role": "behavior dependency",
-          "reason": "This parameterized jug model supplies FillJug, EmptyJug, and JugToJug. Both finite wrappers and the two DieHardest instances use it. DieHarderModel supplies the finite configured port.",
+          "reason": "DieHarderModel preserves the parameterized FillJug, EmptyJug, and distinct-jug JugToJug relations, zero initialization, parameter assumption, TypeOK, and NotSolved for both published wrapper configurations. Both complete hosted graphs and property sets match. DieHardest instances reuse the same jug arithmetic; their composed operators are tracked under DieHardest rather than counted as additional standalone configurations of this dependency.",
           "implementations": [
             "Sources/UpstreamParity/Examples/DieHarder.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/DieHard/DieHardest.tla",
@@ -4121,11 +4121,11 @@
         {
           "path": "specifications/DieHard/MCDieHarder.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "This wrapper supplies MCJug={j1,j2} and MCCapacity=[j1|->3,j2|->5]. DieHarderModel.MCDieHarder binds those values and Goal=4, checks both TypeOK and NotSolved, and retains default deadlock checking. Retained hosted evidence compares the complete graph and all selected properties against the unchanged wrapper and configuration.",
           "implementations": [
             "Sources/UpstreamParity/Examples/DieHarder.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/DieHard/MCDieHardest.tla",
