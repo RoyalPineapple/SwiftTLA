@@ -8809,7 +8809,7 @@
       "id": "AC-12",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLATests/NativeCodeGenerationTests.swift rejects interpreter, runtime compilation, and formal-value references in generated counter execution. This contract covers one generated model, not every migrated application or checking path. Tests/SwiftTLAParityTests/TemporalSymmetryCheckTests.swift still uses ModelChecker for symmetry exploration. Each remaining formal-tool consumer requires an explicit boundary justification or migration. Complete caller coverage remains unaudited.",
+      "reason": "NativeCodeGenerationTests rejects interpreter, runtime compilation, and formal-value references in generated counter execution, but that does not cover all callers. Production validation in Sources/UpstreamParity/Conformance/TemporalSymmetryCheck.swift still calls symmetryConformanceSpec(scope:).compile() and constructs both raw and reduced Swift graphs through ModelChecker and FormalGraphExporter. Its legacy ModelCollection/CollectionAction fixture is not a generated native model. This production Swift-checking path requires migration, not merely a test-only formal-oracle justification. ReachabilityGraph exposes no symmetry-reduction policy yet. Complete caller coverage and remaining formal-tool boundary dispositions remain unaudited.",
       "evidence": []
     },
     {
