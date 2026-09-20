@@ -52,6 +52,55 @@
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485730758",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797",
       "temporalRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485733646",
+      "auditedComparisons": {
+        "scope": "All four archive checksums verify. Retained performance/source-sha.txt files identify 6d0617ab. Complete native, reference TLC, and generated-TLA TLC JSONL streams compare byte-for-byte equal in all four cases, including CoffeeCan1000's complete stream; no prefixes or state-count-only comparisons were used. All comparison records report complete graphs, exact checks, and empty reference/generated difference lists. Original CFG hashes match the case manifest; retained reference TLA hashes and TLC/Java pins match the declared fixtures/toolchain. CoffeeCan references are pinned upstream files. VoteProof is the existing string-valued partial fixture, not byte-identical upstream input. These results do not cover later local changes or add family/configuration credit at the ledger's admission anchor. Archives and selected metadata: /tmp/swifttla-comparisons-6d.lj7bV5. CoffeeCan3000 and Boulanger remain active in this independent run.",
+        "cases": [
+          {
+            "caseID": "coffee-can-ap",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797/artifacts/10599810069",
+            "artifactSHA256": "05d314dc3d813f20b4861f7b6f7ef7505f35efaed16073f2f016aa6832ab5889",
+            "initialStates": 20,
+            "states": 20,
+            "edges": 32,
+            "checks": "Four exact records: TypeInvariant and default deadlock satisfied in both reference and generated comparisons."
+          },
+          {
+            "caseID": "coffee-can-100",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797/artifacts/10599167758",
+            "artifactSHA256": "ead5a53028e22d69e5c6277c9f19179c133243b6bee289a98fa616c1fb4998eb",
+            "initialStates": 5150,
+            "states": 5150,
+            "edges": 14852,
+            "checks": "Twelve exact/satisfied records: EventuallyTerminates, LoopInvariant, MonotonicDecrease, TerminationHypothesis, TypeInvariant, and default deadlock in reference and generated comparisons."
+          },
+          {
+            "caseID": "coffee-can-1000",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797/artifacts/10599083745",
+            "artifactSHA256": "22a464a78511c07c1d4c1140549a8cd6a29b14fb5554f28149eefbfc621118d7",
+            "initialStates": 501500,
+            "states": 501500,
+            "edges": 1498502,
+            "checks": "Twelve exact/satisfied records for all five properties/invariants and default deadlock in reference and generated comparisons. Full-stream reference comparison session 71068 and generated comparison session 9101 both exited zero."
+          },
+          {
+            "caseID": "voteproof",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797/artifacts/10599143812",
+            "artifactSHA256": "0cbfba1c6c854188f5015514bd576450370902e1960464c5df538eefc3e37a1b",
+            "initialStates": 1,
+            "states": 6962,
+            "edges": 27726,
+            "checks": "Refines, TypeOK, and VInv1 through VInv4 are exact/satisfied in both comparisons. The additional deadlock diagnostic is exact/violated; the fixture CFG explicitly disables deadlock, as does upstream. This confirms the changed generated rendering for the partial fixture, not the missing original model-value configuration."
+          }
+        ]
+      },
+      "temporalSymmetryResult": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485733646/job/106011635841",
+        "conclusion": "success",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485733646/artifacts/10597495826",
+        "artifactSHA256": "af3883b8c8772868a567160e676cb1cb301e36625fec46cb093eb95267146294",
+        "exactCases": 25,
+        "scope": "Archive checksum verifies; terminal checkout log binds to 6d0617ab under Xcode 16.4. All 25 retained case-outcome records are exact: six temporal properties and deadlock for each of no, weak, and strong fairness, plus symmetry scopes 2 through 5. All 18 temporal property comparisons are exact. LeavesZero violates without fairness and is satisfied with weak/strong fairness; violation evidence retains native and TLC traces. The temporal side uses generated native execution, but symmetry still uses the legacy formal fixture and reduction path. This is not AC-12 completion or validation of subsequent local changes. Full archive contents: /tmp/swifttla-comparisons-6d.lj7bV5/temporal."
+      },
       "completedJobs": [
         {
           "name": "ordinary",
@@ -100,7 +149,7 @@
         "artifactSHA256": "21e86eac20731f6d7952075b5d0dfc0185272888e22db9c3f82dbc1d5308478e",
         "scope": "The verified artifact binds to 6d0617ab, Swift 6.1.2, and Xcode 16.4 build 16F6. The generated demo-model step failed before tests because SwiftTLADemos-Package is not an available Xcode scheme. The job log reports the preceding 12 Apple adoption tests passed. Local artifact: /tmp/swifttla-demo-ci-6d.b9vF8D/artifact.zip. Use the existing SwiftPM runner for this pure-Swift macOS library package, aligned with focused local diagnostics. Keep Xcode app builds and Apple adoption tests unchanged. Main CI remains active; do not cancel it or assign recovery credit before a new hosted pass."
       },
-      "scope": "Pushed after edec23de main CI became terminal; older independent comparisons were left running. Includes native temporal DSL migration, dictionary enum identity preservation, ordinary-record demo migrations and hosted demo tests, generated canonical and finite-graph rendering, unavailable checked-batch reuse, existing-index boundary validation, and finite-graph stack sampling. Focused wrapper sessions 4457, 96234, and 22680 pass 89, 10, and 25 tests respectively; earlier local evidence covers temporal and demo changes. Main CI is active; the Apple demo-model step failed before test execution, as recorded in appleDemoFailure. Independent finite-graph and temporal/symmetry comparisons remain pending for this exact SHA. PR 394 remains draft. No new hosted coverage credit; full graph/property equivalence and measured performance are pending."
+      "scope": "Pushed after edec23de main CI became terminal; older independent comparisons were left running. Includes native temporal DSL migration, dictionary enum identity preservation, ordinary-record demo migrations and hosted demo tests, generated canonical and finite-graph rendering, unavailable checked-batch reuse, existing-index boundary validation, and finite-graph stack sampling. Focused wrapper sessions 4457, 96234, and 22680 pass 89, 10, and 25 tests respectively; earlier local evidence covers temporal and demo changes. Main CI is active; scenario export timed out and the Apple demo-model step failed before test execution. The independent finite-graph run remains active with audited CoffeeCan AP/100/1000 and partial VoteProof results above. Temporal/symmetry validation passed all 25 declared cases, without completing native symmetry migration. PR 394 remains draft. No new coverage credit at the ledger's admission anchor; complete current-source family validation and measured performance recovery remain pending."
     },
     "capacityCandidate": {
       "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
