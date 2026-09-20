@@ -4,3 +4,4 @@ Verification/FiniteGraph/fixtures/dining-philosophers/DiningPhilosophers.tla whi
 Verification/FiniteGraph/fixtures/boulanger/Boulanger.tla whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/boulanger/TLAPS.tla whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/learn-proofs/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/loop-invariance/* whitespace=-blank-at-eol,-blank-at-eof

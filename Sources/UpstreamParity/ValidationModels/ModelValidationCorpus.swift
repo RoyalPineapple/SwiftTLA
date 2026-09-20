@@ -37,6 +37,8 @@ package func modelValidationScenarios() throws -> [(id: String, scenario: any Mo
         ("hour-clock-2", try HourClock2Model.validationScenarios()),
         ("least-circular-substring", try LeastCircularSubstringModel.validationScenarios()),
         ("find-highest", try FindHighestModel.validationScenarios()),
+        ("binary-search", try BinarySearchModel.validationScenarios()),
+        ("quicksort", try QuicksortModel.validationScenarios()),
         ("selected-checks", try SelectedChecksModel.validationScenarios()),
         ("unselected-predicates", try UnselectedPredicateModel.validationScenarios())
     ]

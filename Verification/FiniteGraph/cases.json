@@ -219,6 +219,112 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "binary-search",
+      "sourceModel": "binary-search",
+      "scenario": "MCBinarySearch",
+      "module": "loop-invariance/MCBinarySearch.tla",
+      "configuration": "loop-invariance/MCBinarySearch.cfg",
+      "imports": [
+        "loop-invariance/BinarySearch.tla",
+        "boulanger/TLAPS.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCBinarySearch",
+          "importedModule": "BinarySearch"
+        },
+        {
+          "importingModule": "BinarySearch",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/LoopInvariance/MCBinarySearch.tla",
+        "sha256": "807264a6cb748cd4e36100c170f805840efe33ed39c7a0297d869250acb32cdb"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "807264a6cb748cd4e36100c170f805840efe33ed39c7a0297d869250acb32cdb",
+      "cfgSHA256": "87ddb2c392f287e2d505890b54603147ecb899b826bbc124e5108a416b8ab6d6",
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "quicksort",
+      "sourceModel": "quicksort",
+      "scenario": "MCQuicksort",
+      "module": "loop-invariance/MCQuicksort.tla",
+      "configuration": "loop-invariance/MCQuicksort.cfg",
+      "imports": [
+        "loop-invariance/Quicksort.tla",
+        "boulanger/TLAPS.tla",
+        "loop-invariance/SequenceTheorems.tla",
+        "loop-invariance/FiniteSetTheorems.tla",
+        "loop-invariance/NaturalsInduction.tla",
+        "loop-invariance/WellFoundedInduction.tla",
+        "kvsnap/Functions.tla",
+        "kvsnap/Folds.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCQuicksort",
+          "importedModule": "Quicksort"
+        },
+        {
+          "importingModule": "Quicksort",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "Quicksort",
+          "importedModule": "SequenceTheorems"
+        },
+        {
+          "importingModule": "Quicksort",
+          "importedModule": "FiniteSetTheorems"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "SequenceTheorems",
+          "importedModule": "TLAPS"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "Functions"
+        },
+        {
+          "importingModule": "FiniteSetTheorems",
+          "importedModule": "WellFoundedInduction"
+        },
+        {
+          "importingModule": "WellFoundedInduction",
+          "importedModule": "NaturalsInduction"
+        },
+        {
+          "importingModule": "Functions",
+          "importedModule": "Folds"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/LoopInvariance/MCQuicksort.tla",
+        "sha256": "1c1cb71fcd1a1cef070cff835516a1db57ed572bee83ea680bf186c4f57b9286"
+      },
+      "exploration": {
+        "maximumStateLimit": 10000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "1c1cb71fcd1a1cef070cff835516a1db57ed572bee83ea680bf186c4f57b9286",
+      "cfgSHA256": "6d67c7f71645514928c26e204edfc3d56a7ccd529dd6f5e8b66254008c269dd7",
+      "timeoutSeconds": 600
+    },
+    {
       "id": "find-highest",
       "sourceModel": "find-highest",
       "scenario": "MCFindHighest",
