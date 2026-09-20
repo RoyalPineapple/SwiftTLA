@@ -1105,11 +1105,20 @@
   },
   "localDiagnostics": [
     {
+      "session": "75147",
+      "sourceSHA": "e8d2e4984438bf5da3bb6ff5e196fccd6729090b",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CheckingRegisterDeclarationTests|DieHardestCorpusCheckingTests|DecisiveScenarioComparisonTests|FiniteGraphManifestTests'",
+      "observedStatus": "running",
+      "scope": "Log: /tmp/swifttla-global-freeze-immutable-state.log. The only source/test change from 5d3025dd constructs a replacement immutable State in the negative replay test. The hosted candidate's production implementation is unchanged. No passing result or coverage credit is claimed."
+    },
+    {
       "session": "22877",
       "sourceSHA": "5d3025ddb1e628c2bb639dfde7bbc464b55754c9",
       "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CheckingRegisterDeclarationTests|DieHardestCorpusCheckingTests|DecisiveScenarioComparisonTests|FiniteGraphManifestTests'",
-      "observedStatus": "running",
-      "scope": "Source and tests remain fixed throughout this run. Log: /tmp/swifttla-global-freeze-rerun.log. No passing result or coverage credit is claimed.",
+      "observedStatus": "completed",
+      "exitCode": 1,
+      "result": "Production compilation passed. The new negative replay test attempted to mutate generated State.c2, which is immutable. Tests did not execute. e8d2e498 constructs a replacement State instead; the production implementation is unchanged.",
+      "scope": "Source and tests remained fixed throughout this run. Log: /tmp/swifttla-global-freeze-rerun.log. No passing result or coverage credit is claimed.",
       "priorAttempt": "Session 24799 built the preceding working-tree implementation in 663.10 seconds. Seventeen of eighteen tests passed, including the six-step global-freeze witness with the faster copy frozen after step two. A mismatched deadlock claim reached the replay state limit before rejection; 5d3025dd rejects that claim before replay. The earlier log remains at /tmp/swifttla-global-freeze-diagnostic.log. The current run also checks complete register-aware witness replay, rejection of a delayed solution, and reference registration."
     },
     {
