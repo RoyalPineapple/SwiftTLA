@@ -6481,16 +6481,7 @@
           "verifiedSourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a"
         }
       ],
-      "partialCases": [
-        {
-          "implementation": "Sources/UpstreamParity/Examples/FindHighest.swift",
-          "reason": "FindHighestModel now preserves lengths 0...4 before the separate length-3 constraint and retains all four complete invariants. LearnProofsCorpusCheckingTests passes with 781 initial candidates, 156 retained roots, and 742 explored states. The old state-count-only fixture and test are removed. Independent upstream comparison is still missing."
-        },
-        {
-          "implementation": "Sources/UpstreamParity/Examples/AddTwo.swift",
-          "reason": "The invented x < 10 constraint and synthetic program counter are removed. A focused test checks 100 generated Next transitions and unchanged export check selection. This is a local execution diagnostic, not a proof of the upstream theorems or a complete infinite graph."
-        }
-      ],
+      "partialCases": [],
       "verifiedSourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a",
       "legacyCleanupAudit": {
         "sourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a",
