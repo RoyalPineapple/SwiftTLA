@@ -739,6 +739,17 @@
     "toolchainGap": "Command Line Tools 16.4 supports focused SwiftPM diagnostics with the same SDK build shown in hosted Apple logs. Full Xcode 16.4 is absent locally. Earlier beta-toolchain passes remain uncredited."
   },
   "hostedComparisonFailures": {
+    "coffeeCan3000DiskExhaustion": {
+      "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954/job/105995752818",
+      "conclusion": "failure",
+      "completedAt": "2026-09-20T04:31:33Z",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954/artifacts/10597498801",
+      "reportedArtifactSHA256": "7ffa3a007cd13962daca8dce9c3728d253a411439a338b4b545b8df470480c4b",
+      "artifactBytes": 2134901470,
+      "scope": "The terminal job log identifies edec23de and reports native export at 1663.848 seconds, TLC parsing at 4552.710 seconds, and comparison at 4798.527 seconds. At 04:26:51 UTC the validator exited with code 2: NSCocoaErrorDomain 640 / NSPOSIXErrorDomain 28, No space left on device, while writing generated/checked-graph/tlc-process.json. This is a hosted storage failure, not a reported graph mismatch or timeout. Evidence upload completed successfully. The artifact API and upload log agree on size and digest; local artifact checksum and content audit remain pending. Inspect retained storage and duplicate evidence before changing runner policy. Keep original model bounds, complete graphs, and every property/deadlock check. No configuration credit."
+    },
     "latestCoffeeCan3000Attempt": {
       "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167",
