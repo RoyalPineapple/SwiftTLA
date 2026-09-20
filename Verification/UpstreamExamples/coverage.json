@@ -53,6 +53,17 @@
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
       "completedJobs": [
         {
+          "name": "ordinary",
+          "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632109",
+          "conclusion": "success",
+          "testsPassed": 1484,
+          "buildSeconds": 711.57,
+          "testSeconds": 544.753,
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10596135960",
+          "artifactSHA256": "d76ed2004fba91758ff38e6d0caef660a6943a73bccc090a51ecb195ca2901bf",
+          "scope": "Terminal hosted log reports 1,484 passing tests. Downloaded diagnostics bind to edec23de, Swift 6.1.2, Xcode 16.4, and SDK 24F74. This is ordinary-suite evidence for the earlier typed-record and union candidate; it excludes dedicated graph, scenario, and upstream suites and all later local temporal and dictionary changes. No complete upstream configuration credit is inferred. Artifact contents: /tmp/swifttla-ordinary-edec.uuOBiD."
+        },
+        {
           "name": "apple-platform-examples",
           "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632013",
           "conclusion": "success",
@@ -62,7 +73,7 @@
           "scope": "Downloaded source-sha.txt binds to edec23de. Retained camera adoption logs report 12 tests with zero failures and the camera executable build succeeded. GitHub reports the full Apple job successful. This does not cover later temporal or Chang-Roberts edits or establish additional upstream matches. Artifact contents: /tmp/swifttla-apple-edec.CjrMk5."
         }
       ],
-      "scope": "Submitted after prior main CI became terminal. Includes AC-05 through AC-08 local contract evidence, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and the Boulanger capacity increase from five to ten million states. Focused wrapper session 3696 passes 114 tests; model bounds and selected checks are unchanged. Apple CI passed; the scenario suite is running and other suites and independent comparisons remain queued or active for this exact SHA. No new upstream coverage credit is assigned; PR 394 remains draft."
+      "scope": "Submitted after prior main CI became terminal. Includes AC-05 through AC-08 local contract evidence, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and the Boulanger capacity increase from five to ten million states. Focused wrapper session 3696 passes 114 tests; model bounds and selected checks are unchanged. Apple and ordinary CI passed; scenario, finite-graph, and upstream suites are running. Export and independent comparisons remain queued or active for this exact SHA. No new upstream coverage credit is assigned; PR 394 remains draft."
     },
     "snapshotReuseCandidate": {
       "sourceSHA": "0b86465f165584983dbcca910a9fb56d6865aca4",
