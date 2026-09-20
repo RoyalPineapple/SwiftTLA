@@ -55,6 +55,7 @@ struct TLCPropertyCheckTests {
         == Data("{\"incomplete\":".utf8))
     }
     let result = try checker.captureAll(native, completeGraph: .success(graph), source: .generated, in: fixture.directory)
+    #expect(!FileManager.default.fileExists(atPath: fixture.directory.appendingPathComponent("batch").path))
     #expect(result.graphComparison?.matches == true)
     #expect(result.checks.map(\.check) == [.property("Positive"), .property("Progress"), .deadlock])
     for (check, comparison) in result.checks {
@@ -63,6 +64,13 @@ struct TLCPropertyCheckTests {
       #expect(FileManager.default.fileExists(atPath: fixture.directory.appendingPathComponent(check.artifactPath)
         .appendingPathComponent("tlc-process.json").path))
     }
+    let differentChecks = try NativeModelRun(rendered: rendered, graph: fixture.swiftRun,
+      checks: .init(properties: native.checks.properties, deadlock: .satisfied))
+    let differentDirectory = fixture.root.appendingPathComponent("different-checks")
+    let different = try checker.captureAll(differentChecks, completeGraph: .success(graph), source: .generated,
+      in: differentDirectory)
+    #expect(different.checks.map(\.check) == result.checks.map(\.check))
+    #expect(FileManager.default.fileExists(atPath: differentDirectory.appendingPathComponent("batch/tlc-process.json").path))
   }
 
   @Test("a temporal tautology never replaces graph capture or the other batch checks", arguments: [false, true])
@@ -84,6 +92,7 @@ struct TLCPropertyCheckTests {
     #expect(graph.graph.isComparable)
     #expect(graph.request.bundle == fixture.completeGraphRequest.bundle)
     let result = try checker.captureAll(native, completeGraph: .success(graph), source: .generated, in: fixture.directory)
+    #expect(!FileManager.default.fileExists(atPath: fixture.directory.appendingPathComponent("batch").path))
     #expect(result.graphComparison?.matches == true)
     #expect(result.checks.count == 3)
     for (check, comparison) in result.checks {

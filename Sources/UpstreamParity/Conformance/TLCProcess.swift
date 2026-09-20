@@ -334,6 +334,7 @@ package struct TLCProcessCapture: Sendable {
   package let request: TLCProcessRequest
   package let outcome: TLCExecutionOutcome
   package let graph: GraphRun
+  package var unavailableCheckBundle: TLAModuleBundle?
 
   package init(reading request: TLCProcessRequest, outcome: TLCExecutionOutcome) throws {
     let reader = TLCGraphReader(finiteGraphCase: request.finiteGraphCase)

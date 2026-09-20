@@ -755,6 +755,19 @@
   },
   "localDiagnostics": [
     {
+      "session": "4457",
+      "sourceSHA": "b07bc3f1214e7625b193641bb4e77949ec764dd0",
+      "sourcePatchSHA256": "387b9ebfa9ae4bf309428935c40e3812f29a23d4a05e42ac5361952c8cff81e2",
+      "sourcePatchScope": "git diff -- Sources Tests .github/workflows/finite-graph.yml",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'TLCPropertyCheckTests|ProcessCaptureTests|TLCGraphReaderTests|GraphComparisonTests'",
+      "exitCode": 0,
+      "testsPassed": 89,
+      "buildSeconds": 602.85,
+      "testSeconds": 1.388,
+      "result": "Graph capture remembers an unavailable checked bundle and avoids retrying only that identical bundle before isolating every selected property. Changed check selections still attempt their own batch. Existing contradiction, trace, full-graph, and process boundary checks pass. The finite-graph workflow now retains source-bound native process samples to investigate CoffeeCan 3000 capture latency; this instrumentation has not run hosted yet.",
+      "scope": "Source stayed fixed during the wrapper build. Static validation passed. Full log: /tmp/swifttla-batch-reuse.RPJAHW/validation.log. Mock-process diagnostics only; no local TLC and no new hosted configuration or DSL criterion credit."
+    },
+    {
       "session": "26427",
       "sourceSHA": "71f342998be7ad606f22ac0b220c2fe49f683daa",
       "sourcePatchSHA256": "d7175dc799489f12809cc4478bb88960c280708188e283ba2c867cf13195e0f1",

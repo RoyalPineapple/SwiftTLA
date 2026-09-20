@@ -261,7 +261,18 @@ jobs:
           CASE_ID: ${{ matrix.caseID }}
         run: |
           set -o pipefail
-          mkdir -p .build/retained
+          mkdir -p .build/retained/performance
+          git rev-parse HEAD > .build/retained/performance/source-sha.txt
+          (
+            while sleep 300; do
+              ps -axo pid,ppid,etime,%cpu,rss,command > ".build/retained/performance/$(date +%s)-processes.txt"
+              for pid in $(pgrep -f '[/]tlc-validate([[:space:]]|$)' || true); do
+                sample "$pid" 1 -file ".build/retained/performance/$(date +%s)-$pid.txt" || true
+              done
+            done
+          ) &
+          sampler=$!
+          trap 'kill "$sampler" 2>/dev/null || true' EXIT
           .build/validation-bin/tlc-validate finite-graph run --case "$CASE_ID" --output ".build/finite-graph-evidence/$CASE_ID" 2>&1 | tee .build/retained/validation.log
           test -f ".build/finite-graph-evidence/$CASE_ID/comparison.json"
 

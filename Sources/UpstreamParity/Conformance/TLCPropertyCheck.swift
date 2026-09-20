@@ -62,13 +62,14 @@ package struct TLCPropertyCheck: Sendable {
       let output = directory.appendingPathComponent("checked-graph")
       let execution = try processAdapter.run(batch, retainingIn: output)
       if execution == .completed { return try TLCProcessCapture(reading: batch, outcome: execution) }
-      if execution == .temporalTautology {
-        return try processAdapter.capture(request, retainingIn: directory)
-      }
       let outcome: TLCExecutionOutcome = execution == .failed(exitStatus: 13)
         ? .livenessViolation : execution
-      if case .failed = outcome {
-        return try processAdapter.capture(request, retainingIn: directory)
+      switch outcome {
+      case .temporalTautology, .failed:
+        var capture = try processAdapter.capture(request, retainingIn: directory)
+        capture.unavailableCheckBundle = checked
+        return capture
+      default: break
       }
       let check: ModelCheck
       if outcome == .deadlock {
@@ -130,10 +131,11 @@ package struct TLCPropertyCheck: Sendable {
       let (capture, _, alreadyChecked) = try prepared.get()
       if alreadyChecked { return .satisfied }
       guard passingChecks.count > 1 else { return .notRun }
+      let bundle = try source.bundle(for: native, checkingSatisfied: true)
+      if capture.unavailableCheckBundle == bundle { return .unavailable }
       let work = capture.request.workingDirectory.appendingPathComponent(UUID().uuidString)
       try RetainedFiles.createDirectory(work, beneath: capture.request.workingDirectory)
       defer { try? FileManager.default.removeItem(at: work) }
-      let bundle = try source.bundle(for: native, checkingSatisfied: true)
       let request = try capture.request.selecting(bundle: bundle,
         work: work, runID: UUID(), invocation: .propertyCheck)
       let output = directory.appendingPathComponent("batch")
