@@ -3739,6 +3739,16 @@
           ],
           "evidence": [
             {
+              "sourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037",
+              "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/job/106044135412",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/artifacts/10601182195",
+              "artifactDigest": "sha256:65a5741def9e68d7558592e3e4fe5b93a8fdb5adf1aa477d580490f376ba4716",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Downloaded archive checksum and retained source SHA verify. Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 16 states, 96 labeled edges, with complete footers and matching record counts. All four TypeOK/deadlock comparison records are exact. Module, dependency, original configuration, TLC, Java, and bridge source pins match. Refreshes an existing configuration match; does not cover MCDieHardest or later local changes. Retained archive and contents: /tmp/swifttla-diehard-bba.vazUlq/ap.zip and ap/."
+            },
+            {
               "sourceSHA": "1b8c58c83be97b8b0279a1da268406f6992afda3",
               "developerToolsVersion": "16.4",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35364068167",
@@ -3792,6 +3802,16 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037",
+              "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/job/106044135361",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037/artifacts/10601247963",
+              "artifactDigest": "sha256:fbd0ebcb82dc033891b2bbdc75be4d2536eaa1598849b92ae278fdfeb0995c18",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Downloaded archive checksum and retained source SHA verify. Complete native, upstream TLC, and generated TLC graph files are byte-identical: 1 initial state, 16 states, 96 labeled edges, with complete footers and matching record counts. All six TypeOK/NotSolved/deadlock comparison records are exact. The expected NotSolved violation retains native and both TLC traces. Module, dependency, original configuration, TLC, Java, and bridge source pins match. Refreshes an existing configuration match; does not cover MCDieHardest or later local changes. Retained archive and contents: /tmp/swifttla-diehard-bba.vazUlq/mc.zip and mc/."
+            },
             {
               "sourceSHA": "3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217",
               "developerToolsVersion": "16.4",
