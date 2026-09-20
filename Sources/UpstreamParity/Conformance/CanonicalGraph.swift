@@ -301,9 +301,9 @@ package struct CanonicalGraph: Equatable, Sendable {
               native.transitions.keys.allSatisfy({ states.index(forKey: $0) != nil }) else {
             throw CanonicalGraphError.missingNativeSnapshot
         }
-        func state(_ snapshot: Machine.Snapshot) throws -> CanonicalState {
-            guard let result = states[snapshot] else { throw CanonicalGraphError.missingNativeSnapshot }
-            return result
+        func stateIndex(_ snapshot: Machine.Snapshot) throws -> Dictionary<Machine.Snapshot, CanonicalState>.Index {
+            guard let index = states.index(forKey: snapshot) else { throw CanonicalGraphError.missingNativeSnapshot }
+            return index
         }
         var actionNames: [Machine.Action: String] = [:]
         func actionName(_ action: Machine.Action) throws -> String {
@@ -316,13 +316,14 @@ package struct CanonicalGraph: Equatable, Sendable {
         var edges = Set<CanonicalEdge>()
         edges.reserveCapacity(native.transitions.values.reduce(0) { $0 + $1.count })
         for (source, successors) in native.transitions {
-            let sourceKey = try state(source).key
+            let sourceKey = states.values[try stateIndex(source)].key
             for successor in successors {
                 edges.insert(CanonicalEdge(source: sourceKey, action: try actionName(successor.action),
-                                           target: try state(successor.target).key))
+                                           target: states.values[try stateIndex(successor.target)].key))
             }
         }
-        try self.init(initialStates: native.initialStates.map(state), states: states.values, edges: edges)
+        try self.init(initialStates: native.initialStates.map { states.values[try stateIndex($0)] },
+                      states: states.values, edges: edges)
     }
 
     package var variableNames: Set<String> {

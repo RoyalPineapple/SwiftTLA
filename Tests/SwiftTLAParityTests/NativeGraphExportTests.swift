@@ -3,6 +3,27 @@ import SwiftTLA
 import UpstreamParity
 
 struct NativeGraphExportTests {
+    @Test("provided native projections preserve the complete graph and require every snapshot")
+    func validatesProvidedProjections() throws {
+        let native = try ReachabilityGraph(initialMachines: CyclicExportModel.initialMachines(), maximumStates: 2)
+        let states = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
+            ($0, try CanonicalState(native.formalProjection(of: $0)))
+        })
+        let formal = try ModelChecker(
+            compilation: CyclicExportModel.spec.compile(),
+            configuration: .init(maximumStateLimit: 2, symmetryReduction: .disabled)
+        ).explore()
+        try #require(formal.isComplete)
+        #expect(try CanonicalGraph(native, states: states) == FormalGraphExporter().export(formal).graph)
+        for snapshot in native.transitions.keys {
+            var missing = states
+            missing.removeValue(forKey: snapshot)
+            #expect(throws: CanonicalGraphError.missingNativeSnapshot) {
+                try CanonicalGraph(native, states: missing)
+            }
+        }
+    }
+
     @Test("native export retains all reachability targets and a shortest witness without truncation")
     func exportsPositiveOutcomes() throws {
         let graph = try ReachabilityGraph(initialMachines: ReachabilityExportModel.initialMachines(), maximumStates: 3)

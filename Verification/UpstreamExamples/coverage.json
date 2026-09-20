@@ -52,6 +52,26 @@
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493941037",
       "temporalRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493942145",
+      "upstreamTestsResult": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495/job/106033496098",
+        "conclusion": "success",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495/artifacts/10601732624",
+        "artifactSHA256": "f89915fcacab0c18b365601a467e3aeadd5729558c9a330a07f4dfd417e0ae39",
+        "testsPassed": 22,
+        "testSeconds": 1076.045,
+        "scope": "The downloaded archive checksum verifies. The terminal hosted log reports 22 passing UpstreamParityTests on bba219f340df1f4354de6d1f2ec7a6fe011cfed9. These implementation diagnostics include bounded and partial models, notably NanoBlockchain's six genesis transitions; they do not replace independent hosted TLC configuration comparisons or complete-family audits. The earlier Echo count-only fixture was removed and replaced with full native/formal graph tests in the ordinary suite. No upstream coverage credit or evidence for later local changes. Retained archive and diagnostics: /tmp/swifttla-upstream-bba.EKKbpM."
+      },
+      "applePlatformResult": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495/job/106033496126",
+        "conclusion": "success",
+        "adoptionArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495/artifacts/10600687246",
+        "adoptionArtifactSHA256": "5b05a5a91a700fba7f7a4441f7f9276f6c0eca2a9c44cc80fd7c0251e0963739",
+        "demoArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495/artifacts/10601502473",
+        "demoArtifactSHA256": "ee30a4a163b619be2ebb949952700ee56775abdd1b4f2f5142e9889f4e943783",
+        "adoptionTestsPassed": 12,
+        "demoTestsPassed": 9,
+        "scope": "Both downloaded archive checksums verify, and both retained source-sha files identify bba219f340df1f4354de6d1f2ec7a6fe011cfed9. The demo artifact records Xcode 16.4 build 16F6, Swift 6.1.2, and SDK build 24F74. Camera adoption and SwiftUI demo executable builds pass. The retained logs show all 12 camera/Bluetooth adoption contracts and all 9 generated demo-model contracts passing, including ordinary message/car/passenger record projections and typed transitions. This resolves the earlier invalid demo Xcode-scheme runner failure on this candidate; it does not validate later local changes or establish upstream configuration/complete-criterion credit. Retained archives and contents: /tmp/swifttla-apple-bba.wgfq0p."
+      },
       "ordinaryTestsResult": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35493936495/job/106033496129",
         "conclusion": "success",
@@ -962,6 +982,32 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "63299",
+      "sourceSHA": "15e52d6212cced0a9ad0bddbe98a99d478fa873b",
+      "sourcePatchSHA256": "438a5d880915e2d5c341f241b91742b26f8cb0911551c00902b50b5202d6e667",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'NativeGraphExportTests|CanonicalGraphTests|GraphComparisonTests|RecordUnionOrderingTests'",
+      "exitCode": 0,
+      "testsPassed": 37,
+      "testSeconds": 2.851,
+      "result": "Index-based native endpoint lookup preserves the complete canonical graph against the existing cyclic formal oracle and rejects every omitted native snapshot. All selected graph identity, edge ordering, action-label, property-coverage, positive-reachability, and record-union tests pass. The subsequent safety-wrapper static check also passes.",
+      "scope": "Source and tests stayed fixed throughout the Swift 6.1.2 diagnostic. Ponytail review retains the existing state dictionary and canonical graph representation without a second cache or compatibility path. This supersedes the failed fixture selection in session 53385, not its historical result. Hosted performance recovery and final-SHA TLC validation remain pending; no configuration or complete-criterion credit."
+    },
+    {
+      "session": "53385",
+      "sourceSHA": "15e52d6212cced0a9ad0bddbe98a99d478fa873b",
+      "sourcePatchSHA256": "8982fb6bb60f4a563766fe931fcf9be3435156a86cac8525b9863fdf0926b3df",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'NativeGraphExportTests|CanonicalGraphTests|GraphComparisonTests|RecordUnionOrderingTests'",
+      "exitCode": 1,
+      "testsPassed": 36,
+      "testsFailed": 1,
+      "buildSeconds": 618.64,
+      "testSeconds": 2.831,
+      "result": "All existing selected tests pass with index-based native endpoint lookup. The new provided-projections test fails before comparison: its ReachabilityExportModel fixture declares positive reachability, which the formal diagnostic explorer explicitly rejects. The native positive-reachability tests pass unchanged. The regression will use the existing CyclicExportModel, retaining its full graph, temporal declaration, and checks, so it can use the formal graph oracle without changing production semantics or adding formal reachability support.",
+      "scope": "Local diagnostic only; no performance recovery or hosted coverage credit. The source/test patch stayed fixed throughout the wrapper run. Endpoint-copy reduction still needs a passing regression run and hosted measurement."
+    },
     {
       "session": "52471",
       "sourceSHA": "4cc50e505b8d3611785ec3ff66836f7ae5d3b138",
@@ -9293,6 +9339,7 @@
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
       "recordUnionGap": {
+        "graphAndExport": "Diagnostic 52471 passes complete native/formal initial-state, state, and labeled-edge comparisons for nested record unions and same-field disjoint records. All emitted root TLA/CFG and import files match. Commit 15e52d62 moves the same fixtures into Sources/UpstreamParity/ValidationModels/RecordUnionValues.swift and registers record-union-ordering-0 and record-union-field-domains-0 for the existing hosted native/generated-TLC scenario comparison. Local scenario graph/export identity, complete check coverage, and default deadlock expectations pass; independent hosted results for these cases remain pending.",
         "literalBoundary": "Native record-literal emission previously ignored unexpected fields, allowing a larger record to be narrowed into an earlier union alternative. The shared emitter now validates the exact field keys before construction. Diagnostics 79809 and 53930 pass strict and nested literal regressions. The subsequent record-union work retains the same strict boundary.",
         "requiredBy": "Pinned Nano.tla defines genesis, send, open, receive, and change record alternatives; genesis.account is PublicKey. SignedBlock embeds the block union and a signature record. Ledger and hashFunction also admit the NoBlock model-value sentinel configured through the Nano instance. The current fixture has only genesis/send plus a fabricated NoBlock record and uses PrivateKey for genesis.account; those differences must be removed, not preserved as the target union contract. The NanoBlockchain family sourceAudit records all three required configurations and coupled gaps.",
         "resolver": "SourceTypeResolver retains declared OneOf alternatives through preservingUnion. normalizedUnion now admits ordinary nominal records with distinct field sets or fields whose declared types prove disjoint. Ambiguous alternatives still fail. Nested union construction retains its record computation type and uses the existing explicit conversion node rather than relabeling the record computation as a union.",
