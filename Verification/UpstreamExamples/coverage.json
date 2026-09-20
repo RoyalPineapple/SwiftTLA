@@ -51,6 +51,15 @@
       "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660",
       "comparisonRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
+      "scenarioTimeout": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632093",
+        "conclusion": "failure",
+        "buildSeconds": 1634.18,
+        "stepLimitMinutes": 120,
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10596823233",
+        "artifactSHA256": "8be2a48e9c7d724f859c3adacb5e6d7b13e7a5e6728e7875541b59d49260a528",
+        "scope": "Terminal log confirms the test step timed out at 2026-09-20T02:37:53Z. Artifact checksum, edec23de source SHA, Swift 6.1.2, Xcode 16.4 build 16F6, and SDK 24F74 verify. Samples show Boulanger graph discovery through 01:42, NativeModelRun retained-state Set construction at 01:48 and 01:53, then canonical state conversion through 02:33. The final sample reports a 24.6 GB physical footprint. Increasing capacity removed the earlier five-million-state exception but has not established completion; this is a native graph export resource failure, not a proven semantic difference. Logs and samples: /tmp/swifttla-scenarios-edec.bfV2nJ. Investigate avoidable snapshot indexing and projection allocations without weakening graph or property checks."
+      },
       "completedJobs": [
         {
           "name": "canonical-corpus-export",
@@ -92,7 +101,7 @@
           "scope": "Downloaded source-sha.txt binds to edec23de. Retained camera adoption logs report 12 tests with zero failures and the camera executable build succeeded. GitHub reports the full Apple job successful. This does not cover later temporal or Chang-Roberts edits or establish additional upstream matches. Artifact contents: /tmp/swifttla-apple-edec.CjrMk5."
         }
       ],
-      "scope": "Submitted after prior main CI became terminal. Includes AC-05 through AC-08 local contract evidence, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and the Boulanger capacity increase from five to ten million states. Focused wrapper session 3696 passes 114 tests; model bounds and selected checks are unchanged. Apple, ordinary, upstream, and export CI passed; scenario and finite-graph suites are running. Independent comparisons remain queued or active for this exact SHA. No new upstream coverage credit is assigned; PR 394 remains draft."
+      "scope": "Submitted after prior main CI became terminal. Includes AC-05 through AC-08 local contract evidence, declared OneOf preservation, KVsnap ordinary operation records and arrays, checked imported record projection, and the Boulanger capacity increase from five to ten million states. Focused wrapper session 3696 passes 114 tests; model bounds and selected checks are unchanged. Apple, ordinary, upstream, and export CI passed; scenarios timed out and finite-graphs remains running. Independent comparisons remain queued or active for this exact SHA. No new upstream coverage credit is assigned; PR 394 remains draft."
     },
     "snapshotReuseCandidate": {
       "sourceSHA": "0b86465f165584983dbcca910a9fb56d6865aca4",
@@ -754,6 +763,30 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "96234",
+      "sourceSHA": "4853954ad5ac8dc3f3baf1c4c26c930457225c05",
+      "sourcePatchSHA256": "ae17d4051426b9006a207166a3a8fed9653e12817a187eb04aa163e9e7a9b5d8",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CanonicalCorpusEntryTests|KVsnapCorpusRenderingTests|VoteProofCorpusRenderingTests|TLCMCCorpusConformanceTests'",
+      "exitCode": 0,
+      "testsPassed": 10,
+      "testSeconds": 0.145,
+      "result": "Canonical export now uses generated render methods for KVsnap, TLCMC, and VoteProof; Boulanger retains its model-owned generated scenario. Deleted the unused runtime source closure and initializer from the registry. Original formal compiler structural assertions remain, while new checks cover resolved generated module closure, all selected properties, and the specialized abstract refinement behavior. TLCMC complete native/formal graph parity passes. No source recompilation remains in the corpus registry or exporter.",
+      "scope": "Source stayed fixed during the wrapper build. Static validation passed. Full log: /tmp/swifttla-generated-export.9pSbU6/validation-2.log. Hosted TLC has not yet exercised these generated exports; no configuration or complete DSL criterion gains credit."
+    },
+    {
+      "session": "18001",
+      "sourceSHA": "4853954ad5ac8dc3f3baf1c4c26c930457225c05",
+      "sourcePatchSHA256": "18ddd7cb3a22d592480f0660e30c61f218851ab64d8b542eac6362a25103cc63",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'CanonicalCorpusEntryTests|KVsnapCorpusRenderingTests|VoteProofCorpusRenderingTests|TLCMCCorpusConformanceTests'",
+      "exitCode": 1,
+      "buildSeconds": 602.57,
+      "testSeconds": 0.145,
+      "result": "All targets compile. Eight tests ran with ten issues: assertions expected unresolved ClientCentric and Consensus source-module structure from generated export. Inspection confirms resolved-program rendering deliberately emits resolved imported functions and a specialized VoteProof__Refinement0 module. TLCMC complete native/formal graph parity and all selected-check coverage passed. The follow-up preserves the original formal-compiler structural tests and separately tests generated export closure, checks, and specialized abstract behavior; hosted equivalence remains required.",
+      "scope": "Source stayed fixed during the wrapper build. Full log: /tmp/swifttla-generated-export.9pSbU6/validation.log. No runtime recompilation fallback was restored in the corpus registry; no hosted credit."
+    },
     {
       "session": "4457",
       "sourceSHA": "b07bc3f1214e7625b193641bb4e77949ec764dd0",
@@ -2834,6 +2867,16 @@
           ],
           "evidence": [
             {
+              "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954/artifacts/10596843313",
+              "artifactDigest": "sha256:da1e79bb94e111dd550a7b9cf21be7b045bf517c96de2d950e2033aa9336db86",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Artifact checksum verified. Complete native, reference TLC, and generated TLC graphs are byte-identical; every record and footer verifies: 20 initial states, 20 states, 32 labeled edges, no violation or trace. All four property records establish TypeInvariant and deadlock satisfaction. Original configuration, wrapper and CoffeeCan module digests, checked-process success, and TLC/Java/bridge pins match. Terminal job binds to edec23de and Xcode 16.4. Evidence: /tmp/swifttla-coffee-ap-edec.2re1VN. Refreshes existing coverage, not a new configuration or evidence for later local edits."
+            },
+            {
               "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
               "developerToolsVersion": "16.4",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35461108798",
@@ -2869,6 +2912,16 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954/artifacts/10596308339",
+              "artifactDigest": "sha256:3ba0dbf559c7b64531cfb0c441f81b593009e37cc6437bec18b964fbef2548fa",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Artifact checksum verified. Compared all 408,320,529 bytes of each native, reference TLC, and generated TLC graph; all three are identical. Parsed every canonical record and checked the completion footer: 501500 initial states, 501500 states, 1498502 labeled edges, no violation or trace. All 12 property records establish TypeInvariant, EventuallyTerminates, MonotonicDecrease, LoopInvariant, TerminationHypothesis, and deadlock satisfaction for both TLC sources. Original configuration, upstream module hash, successful checked-process outcomes, and TLC/Java/bridge pins match. Terminal job binds to edec23de and Xcode 16.4. Evidence: /tmp/swifttla-coffee1000-edec.Zn1b85. Refreshes existing coverage; CoffeeCan 3000 remains incomplete."
+            },
             {
               "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
               "developerToolsVersion": "16.4",
@@ -2907,6 +2960,16 @@
             }
           ],
           "evidence": [
+            {
+              "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954/artifacts/10596892411",
+              "artifactDigest": "sha256:180f84b0ef4596683577cac0fd8848cc36d61e36aeb2ea82c0093c61f0103e1a",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Downloaded artifact digest verified. All 4,004,517 bytes of each complete canonical native, upstream TLC, and generated TLC graph are identical. Parsed every record: 5150 initial states, 5150 states, 14852 labeled edges; completion footer reports no violation and no trace. All 12 property records establish satisfaction of the five selected properties and deadlock for both TLC sources. Original configuration, upstream module digest, successful checked-process outcomes, and pinned TLC/Java/bridge inputs match. Terminal hosted job binds to edec23de and Xcode 16.4. Evidence and job log: /tmp/swifttla-coffee100-edec.Yl3wuf. Refreshes an existing match only; CoffeeCan 3000 and later local changes remain unverified."
+            },
             {
               "sourceSHA": "ff01cbc70364e95684d2b189a51fd2e39bf53c8e",
               "developerToolsVersion": "16.4",

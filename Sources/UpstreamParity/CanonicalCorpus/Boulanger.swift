@@ -5,7 +5,6 @@ import SwiftTLAMacros
 package struct BoulangerModel: Sendable {
     package static let corpusEntry = CanonicalCorpusEntry(
         id: "boulanger-upstream-port",
-        specification: { BoulangerModel.spec },
         rendered: { try BoulangerModel.validationScenarios()[0].render() }
     )
 

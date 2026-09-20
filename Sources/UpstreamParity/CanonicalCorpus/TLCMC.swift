@@ -31,8 +31,7 @@ package struct TLCMCModel: Sendable {
 
     package static let corpusEntry = CanonicalCorpusEntry(
         id: "tlcmc-graph-1",
-        specification: { TLCMCModel.spec },
-        rendered: { try TLCMCModel.spec.compile().render() }
+        rendered: { try TLCMCModel.render() }
     )
 
     package static var spec: TLASpec {

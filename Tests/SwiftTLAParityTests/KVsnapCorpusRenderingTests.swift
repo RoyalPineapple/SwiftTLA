@@ -31,4 +31,20 @@ struct KVsnapCorpusRenderingTests {
         #expect(initialState.lowerBound < algorithm.lowerBound)
         #expect(instance.lowerBound < algorithm.lowerBound)
     }
+
+    @Test("KVsnap generated exports retain resolved operations and all selected checks")
+    func generatedExportsRetainResolvedOperations() throws {
+        let rendered = try KVsnapModel.render()
+        for bundle in [rendered.tlaBundle, try rendered.plusCalBundle()] {
+            try bundle.validateDeclaredClosure()
+            #expect(Set(bundle.imports.map(\.name)) == ["Folds", "Functions", "Util"])
+            #expect(bundle.root.tla.contains("SnapshotIsolation == (\\A "))
+            #expect(bundle.root.tla.contains("__KVsnap_resolvedFunction"))
+            #expect(bundle.cfg.contains("INVARIANT SnapshotIsolation\n"))
+            #expect(bundle.cfg.contains("INVARIANT TypeOK\n"))
+            #expect(bundle.cfg.contains("PROPERTY Termination\n"))
+            #expect(bundle.cfg.contains("CHECK_DEADLOCK TRUE\n"))
+            #expect(!bundle.cfg.contains("SYMMETRY"))
+        }
+    }
 }

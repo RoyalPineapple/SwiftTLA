@@ -6,8 +6,7 @@ import SwiftTLAMacros
 package struct VoteProofModel: Sendable {
     package static let corpusEntry = CanonicalCorpusEntry(
         id: "voteproof-upstream-port",
-        specification: { VoteProofModel.spec },
-        rendered: { try VoteProofModel.spec.compile().render() }
+        rendered: { try VoteProofModel.render() }
     )
 
     package enum Value: String, CaseIterable, FiniteTLAValueDomain {

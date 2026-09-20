@@ -82,4 +82,19 @@ struct VoteProofCorpusRenderingTests {
         #expect(chosenRange.lowerBound < instanceRange.lowerBound)
         #expect(instanceRange.lowerBound < refinesRange.lowerBound)
     }
+
+    @Test("VoteProof generated export retains the specialized abstract behavior and refinement")
+    func generatedExportRetainsAbstractBehavior() throws {
+        let rendered = try VoteProofModel.render()
+        for bundle in [rendered.tlaBundle, try rendered.plusCalBundle()] {
+            try bundle.validateDeclaredClosure()
+            let abstract = try #require(bundle.imports.first { $0.name == "VoteProof__Refinement0" })
+            #expect(abstract.tla.contains("Init == chosen = {}"))
+            #expect(abstract.tla.contains("chosen' = {candidate}"))
+            #expect(abstract.tla.contains("[][Next]_chosen"))
+            #expect(bundle.root.tla.contains("C == INSTANCE VoteProof__Refinement0 WITH chosen <-"))
+            #expect(bundle.root.tla.contains("Refines == C!Spec"))
+            #expect(bundle.cfg.contains("PROPERTY Refines\n"))
+        }
+    }
 }

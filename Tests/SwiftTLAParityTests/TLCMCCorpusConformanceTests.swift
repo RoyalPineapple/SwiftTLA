@@ -7,11 +7,9 @@ struct TLCMCCorpusConformanceTests {
     @Test("TLCMC Graph 1 has one canonical compiled specification")
     func hasOneCanonicalCompiledSpecification() throws {
         let entry = try #require(CanonicalCorpus.entries.first { $0.id == "tlcmc-graph-1" })
-        let compilation = try entry.specification().compile()
-        let resolved = try TLCMCModel.spec.compile()
-        let bundle = try compilation.render().tlaBundle
+        let compilation = try TLCMCModel.spec.compile()
+        let bundle = try entry.rendered().tlaBundle
 
-        #expect(compilation.identity == resolved.identity)
         #expect(compilation.description.actions.map(\.name).contains("returnToDequeue") == false)
         #expect(compilation.description.controlLocations.map(\.sourceName).contains("returnToDequeue") == false)
         #expect(bundle.root.tla.contains("SelectSeq"))

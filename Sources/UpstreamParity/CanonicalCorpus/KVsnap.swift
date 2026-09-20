@@ -11,8 +11,7 @@ import SwiftTLAMacros
 package struct KVsnapModel: Sendable {
     package static let corpusEntry = CanonicalCorpusEntry(
         id: "kvsnap-upstream-port",
-        specification: { KVsnapModel.spec },
-        rendered: { try KVsnapModel.spec.compile().render() }
+        rendered: { try KVsnapModel.render() }
     )
 
     package enum Key: String, CaseIterable, FiniteTLAValueDomain {
