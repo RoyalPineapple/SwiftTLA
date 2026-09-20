@@ -78,6 +78,13 @@
       "scope": "Pushed after the previous main CI run completed with failure, without cancelling older independent comparisons. Includes existing-index projection membership, buffered graph serialization, retained graph-file moves, ordinary-record MultiCarElevator and Echo migrations, dictionary-preserving updates, three-domain Do, documentation export coverage, and the demo SwiftPM CI runner fix. The combined focused wrapper run passed 100 tests on source 9ae139e6; the only subsequent change in this candidate records that diagnostic. All three new hosted workflows target this exact immutable SHA. Results and artifact audits remain pending; no performance recovery, family/configuration match, or completed DSL criterion is claimed. PR 394 remains draft."
     },
     "projectionCandidate": {
+      "boulangerGraphTimeout": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797/job/106019929397",
+        "conclusion": "failure",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797/artifacts/10600837174",
+        "artifactSHA256": "120fbc9d7941d130d91c71f4c3c259292fbf8976415a52f7f5bc2a27592c01a2",
+        "scope": "The exact comparison step timed out after 120 minutes at 07:33:36 UTC on 2026-09-20. The downloaded 724,759-byte archive checksum verifies. The final 07:29:11 sample reports a 31.0 GB physical footprint and execution inside NativeModelRun -> CanonicalGraph.init(native:states:renderedActionNames:), copying CanonicalState values in the endpoint state helper and inserting canonical edges. The retained validator log never advances beyond swift-export. This identifies a later edge-conversion bottleneck than earlier formalProjection samples; it is not a complete graph or semantic mismatch. The current bba219f3 candidate still needs measured recovery. Retained archive and samples: /tmp/swifttla-boulanger-6d.jXujGJ."
+      },
       "coffeeCan3000Failure": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35485732797/job/106019928941",
         "conclusion": "failure",
@@ -955,6 +962,34 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "52471",
+      "sourceSHA": "4cc50e505b8d3611785ec3ff66836f7ae5d3b138",
+      "sourcePatchSHA256": "1a4ac4d46058c69f822eced966bc19d86280d904af64aeaffe4976b9279578d9",
+      "sourcePatchScope": "git diff -- Sources Tests; new moved corpus fixture recorded separately",
+      "fixtureSHA256": "51a7a13c1d58354932eadb6fa21373f03bf02165661a76fb528de0685a3bca43",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'RecordUnionOrderingTests|ScenarioValidationTests/identifiesRegisteredScenarios'",
+      "exitCode": 0,
+      "testsPassed": 6,
+      "buildSeconds": 619.17,
+      "testSeconds": 0.012,
+      "result": "Both record-union models preserve every initial state, state, and labeled edge against complete formal exploration. All root TLA/CFG files and imported files match. Their model-owned scenarios preserve the full native graph and generated export, cover all selected checks, and satisfy default deadlock expectations. Registry validation confirms 65 unique scenarios, including the two new record-union cases. Existing ordering and malformed-projection tests pass.",
+      "scope": "Source and tests stayed fixed throughout the Swift 6.1.2 safety-wrapper run. Session 62477 was stopped before tests to align package access after moving the fixture and supplies no test evidence. Ponytail review reuses the existing scenario registry and full-graph exporter; the old test-only fixture is removed, not duplicated. The two DSL conformance scenarios do not represent additional upstream configurations. Hosted TLC evidence, complete AC-17, and the full NanoBlockchain implementation remain pending."
+    },
+    {
+      "session": "10745",
+      "sourceSHA": "37a321f8e39b4ad3e299bd628c3a6998db6d873d",
+      "sourcePatchSHA256": "499a3aa38f24b45dd7d92f93341e3026df77ac20aeb533667b8b363adf56aaca",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'RecordUnionOrderingTests'",
+      "exitCode": 1,
+      "testsPassed": 3,
+      "testsFailed": 2,
+      "buildSeconds": 612.22,
+      "testSeconds": 0.013,
+      "result": "The split diagnostic confirms that both complete graphs, both root TLA/CFG files, and every imported file match. Only internal provenance equality fails: generated bundles record an empty root structural path, while separately compiled diagnostic specifications record the root module name; their compilation identities also differ. No emitted-file mismatch remains. The test will compare all emitted files and complete graphs, and validate generated scenario wiring separately, instead of requiring identical provenance from separately constructed specifications.",
+      "scope": "Local diagnostic evidence, not TLC equivalence. Both existing fixtures are being moved into the model-owned validation corpus for independent hosted native/generated-TLC comparisons. No new compiler backend, projection normalization, truncated comparison, or upstream coverage credit."
+    },
     {
       "session": "40102",
       "sourceSHA": "37a321f8e39b4ad3e299bd628c3a6998db6d873d",

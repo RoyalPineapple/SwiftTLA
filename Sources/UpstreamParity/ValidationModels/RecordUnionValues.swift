@@ -2,15 +2,15 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-struct RecordUnionOrderingModel {
-    struct First: Hashable, Sendable { let a: Int; let z: Int }
-    struct Second: Hashable, Sendable { let a: Int; let b: Int }
-    struct Third: Hashable, Sendable { let a: [Int]; let c: Bool }
-    typealias Tail = OneOf<Second, Third>
-    typealias Value = OneOf<First, Tail>
+package struct RecordUnionOrderingModel {
+    package struct First: Hashable, Sendable { package let a: Int; package let z: Int }
+    package struct Second: Hashable, Sendable { package let a: Int; package let b: Int }
+    package struct Third: Hashable, Sendable { package let a: [Int]; package let c: Bool }
+    package typealias Tail = OneOf<Second, Third>
+    package typealias Value = OneOf<First, Tail>
     enum Step: String, CaseIterable { case finish }
 
-    static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("RecordUnionOrdering") { scope in
             let value = scope.sharedVar(in: Set<Value>([
                 Value.first(First(a: 2, z: 0)),
@@ -23,18 +23,19 @@ struct RecordUnionOrderingModel {
             Algorithm("SelectRecord") {
                 Do(Step.finish) { Assign(value, to: value); Stop() }
             }
+            Validation("All record alternatives") {}
         }
     }
 }
 
 @TLAModel
-struct RecordUnionFieldDomainModel {
-    struct Count: Hashable, Sendable { let value: Int }
-    struct Flag: Hashable, Sendable { let value: Bool }
-    typealias Value = OneOf<Count, Flag>
+package struct RecordUnionFieldDomainModel {
+    package struct Count: Hashable, Sendable { package let value: Int }
+    package struct Flag: Hashable, Sendable { package let value: Bool }
+    package typealias Value = OneOf<Count, Flag>
     enum Step: String, CaseIterable { case finish }
 
-    static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("RecordUnionFieldDomain") { scope in
             let value = scope.sharedVar(in: Set<Value>([
                 Value.second(Flag(value: true)), Value.first(Count(value: 0)),
@@ -43,6 +44,7 @@ struct RecordUnionFieldDomainModel {
             Algorithm("SelectRecord") {
                 Do(Step.finish) { Assign(value, to: value); Stop() }
             }
+            Validation("All field domains") {}
         }
     }
 }
