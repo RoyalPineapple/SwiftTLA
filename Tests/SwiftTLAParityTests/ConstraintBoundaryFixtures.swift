@@ -2,6 +2,26 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
+struct ConstraintReachabilityCounter {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("ConstraintReachabilityCounter") { scope in
+            let excluded = Reachable()
+            Algorithm("Counter", scoped: { scope in
+                let count = scope.sharedVar(initial: 0)
+                Do(Step.advance) {
+                    Assign(count, to: count + 1)
+                    Goto(Step.advance)
+                }
+                StateConstraint(count < 2)
+                excluded { count == 2 }
+            })
+        }
+    }
+}
+
+@TLAModel
 struct ConstraintBoundaryCounter {
     enum Step: String, CaseIterable { case advance }
 

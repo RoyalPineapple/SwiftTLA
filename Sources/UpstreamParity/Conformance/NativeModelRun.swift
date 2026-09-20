@@ -83,9 +83,10 @@ package struct NativeModelRun: Sendable {
     _ native: ReachabilityGraph<Machine>,
     rendered: RenderedSpecification, checkingDeadlock: Bool = false, for finiteGraphCase: FiniteGraphCase? = nil
   ) throws {
-    let retainedStates = Set(native.transitions.keys)
-    guard Set(native.safetyViolations.keys).isSubset(of: retainedStates),
-          native.reachabilityTargets.values.allSatisfy({ $0.isSubset(of: retainedStates) }) else {
+    guard native.safetyViolations.keys.allSatisfy({ native.transitions.index(forKey: $0) != nil }),
+          native.reachabilityTargets.values.allSatisfy({ targets in
+            targets.allSatisfy { native.transitions.index(forKey: $0) != nil }
+          }) else {
       throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name,
         field: "constraint-boundary counterexamples require evidence beyond the constrained graph")
     }

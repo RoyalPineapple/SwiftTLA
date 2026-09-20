@@ -3,6 +3,21 @@ import Testing
 @testable import UpstreamParity
 
 struct ConstraintBoundaryCheckingTests {
+    @Test("canonical export rejects reachability witnesses outside its constrained graph")
+    func rejectsExcludedReachabilityTarget() throws {
+        let graph = try ReachabilityGraph(initialMachines: ConstraintReachabilityCounter.initialMachines(), maximumStates: 10)
+        let targets = try #require(graph.reachabilityTargets[.excluded])
+        #expect(targets.count == 1)
+        let target = try #require(targets.first)
+        #expect(target.state.count == 2)
+        #expect(graph.transitions[target] == nil)
+        #expect(try graph.trace(to: target).map { $0.state.state.count } == [0, 1, 2])
+        #expect(throws: EvidenceFormatError.invalidField(record: "ConstraintReachabilityCounter",
+            field: "constraint-boundary counterexamples require evidence beyond the constrained graph")) {
+            try NativeModelRun(graph, rendered: ConstraintReachabilityCounter.render())
+        }
+    }
+
     @Test("constraints restrict exploration, not application transitions or deadlock enabledness")
     func boundaryIsNotADeadlock() throws {
         let configuration = try ConstraintBoundaryCounter.Configuration(safetyLimit: 3)
@@ -30,6 +45,10 @@ struct ConstraintBoundaryCheckingTests {
         #expect(graph.transitions[boundary] == nil)
         #expect(try graph.trace(to: boundary).map { $0.state.state.count } == [0, 1, 2])
         #expect(graph.safetyViolations.count == 1)
+        #expect(throws: EvidenceFormatError.invalidField(record: "ConstraintBoundaryCounter",
+            field: "constraint-boundary counterexamples require evidence beyond the constrained graph")) {
+            try NativeModelRun(graph, rendered: ConstraintBoundaryCounter.render(configuration: configuration))
+        }
     }
 
     @Test("excluded initial states retain initial invariant witnesses without entering the graph")
