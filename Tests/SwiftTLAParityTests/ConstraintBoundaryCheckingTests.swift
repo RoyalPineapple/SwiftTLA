@@ -12,6 +12,10 @@ struct ConstraintBoundaryCheckingTests {
         #expect(target.state.count == 2)
         #expect(graph.transitions[target] == nil)
         #expect(try graph.trace(to: target).map { $0.state.state.count } == [0, 1, 2])
+        var machine = try ConstraintReachabilityCounter.makeMachine()
+        _ = try machine.send(.advance)
+        _ = try machine.send(.advance)
+        #expect(try graph.formalProjection(of: target) == machine.formalProjection(of: machine.snapshot))
         #expect(throws: EvidenceFormatError.invalidField(record: "ConstraintReachabilityCounter",
             field: "constraint-boundary counterexamples require evidence beyond the constrained graph")) {
             try NativeModelRun(graph, rendered: ConstraintReachabilityCounter.render())
@@ -45,6 +49,15 @@ struct ConstraintBoundaryCheckingTests {
         #expect(graph.transitions[boundary] == nil)
         #expect(try graph.trace(to: boundary).map { $0.state.state.count } == [0, 1, 2])
         #expect(graph.safetyViolations.count == 1)
+        var machine = try ConstraintBoundaryCounter.makeMachine(configuration: configuration)
+        #expect(try graph.formalProjection(of: machine.snapshot) == machine.formalProjection(of: machine.snapshot))
+        _ = try machine.send(.advance)
+        _ = try machine.send(.advance)
+        #expect(try graph.formalProjection(of: boundary) == machine.formalProjection(of: machine.snapshot))
+        _ = try machine.send(.advance)
+        #expect(machine.state.count == 3)
+        #expect(throws: ExplorationError.traceTargetNotReachable) { try graph.formalProjection(of: machine.snapshot) }
+        #expect(throws: ExplorationError.traceTargetNotReachable) { try graph.trace(to: machine.snapshot) }
         #expect(throws: EvidenceFormatError.invalidField(record: "ConstraintBoundaryCounter",
             field: "constraint-boundary counterexamples require evidence beyond the constrained graph")) {
             try NativeModelRun(graph, rendered: ConstraintBoundaryCounter.render(configuration: configuration))

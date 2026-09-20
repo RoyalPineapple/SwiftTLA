@@ -176,7 +176,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
 
     /// A shortest native execution trace, including its initial state.
     public func trace(to target: Machine.Snapshot) throws -> [(action: Machine.Action?, state: Machine.Snapshot)] {
-        guard transitions[target] != nil || safetyViolations[target] != nil || reachabilityResults.values.contains(.reached(target)) else { throw ExplorationError.traceTargetNotReachable }
+        guard transitions.index(forKey: target) != nil || safetyViolations.index(forKey: target) != nil || reachabilityResults.values.contains(.reached(target)) else { throw ExplorationError.traceTargetNotReachable }
         var path: [(action: Machine.Action?, state: Machine.Snapshot)] = []
         var current = target
         while let previous = predecessors[current] {
@@ -190,7 +190,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
 
 extension ReachabilityGraph {
     package func formalProjection(of snapshot: Machine.Snapshot) throws -> TLAStateProjection {
-        guard transitions[snapshot] != nil || safetyViolations[snapshot] != nil || reachabilityResults.values.contains(.reached(snapshot)) else { throw ExplorationError.traceTargetNotReachable }
+        guard transitions.index(forKey: snapshot) != nil || safetyViolations.index(forKey: snapshot) != nil || reachabilityResults.values.contains(.reached(snapshot)) else { throw ExplorationError.traceTargetNotReachable }
         return try machine.formalProjection(of: snapshot)
     }
 

@@ -781,6 +781,19 @@
   },
   "localDiagnostics": [
     {
+      "session": "35056",
+      "sourceSHA": "8103967d43d76a048c6b2abb670510fdfa20b912",
+      "sourcePatchSHA256": "79f7b55d6679cacb452455cb4c178161445107bc1608fc9be633ad667f19f4fa",
+      "sourcePatchScope": "git diff -- Sources Tests",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'ConstraintBoundaryCheckingTests|NativeGraphExportTests|GraphComparisonTests|ExplorationGraphIntegrityTests'",
+      "exitCode": 0,
+      "testsPassed": 23,
+      "buildSeconds": 601.21,
+      "testSeconds": 0.011,
+      "result": "Graph projection and trace membership use existing dictionary indices without retrieving successor or violation arrays. Focused tests retain ordinary-state projections, excluded safety and reachability witnesses, complete traces, rejection of unvisited states, and rejection of incomplete canonical exports. Exact graph comparison regressions pass.",
+      "scope": "Source stayed fixed throughout the wrapper build. Full log: /tmp/swifttla-projection-membership.CCRj98/validation.log. Ponytail and cleanliness review retain the existing membership rule and two standard-library lookups, with no cache, new API, or alternate execution path. Static diagnostics pass. The optimization targets retained Boulanger projection samples; hosted performance and full-configuration completion remain unproven. No new coverage credit."
+    },
+    {
       "session": "22680",
       "sourceSHA": "b3885abf89e1323205b3cde350dc6df89b911fd4",
       "sourcePatchSHA256": "affbb5405217159a0ddfb9305ceaa3c3ef3b5d4ea24a6d5016ee0c03f55a1a37",
@@ -4783,7 +4796,7 @@
       "path": "specifications/KeyValueStore",
       "name": "Snapshot Key-Value Store",
       "audit": "reference inputs audited",
-      "gap": "The MCKVsnap fixture removes upstream TxIdSymmetric symmetry. Three MCKVS safety configurations lack exact cases. Small declares no symmetry, unlike Medium and Large. APKeyValueStore has no configuration at the pin. The operation-log schema is removed with local evidence; hosted validation of that change, helper coverage, and duplicate configuration remain unresolved.",
+      "gap": "The MCKVsnap fixture removes upstream TxIdSymmetric symmetry. Three MCKVS safety configurations lack exact cases. Small declares no symmetry, unlike Medium and Large. APKeyValueStore has no configuration at the pin. Ordinary operation records have complete hosted evidence for the no-symmetry fixture, but the exact upstream configuration, helper coverage, and duplicate configuration remain unresolved. The newer resolved generated export still needs its own hosted comparison.",
       "recordMigrationPrerequisite": {
         "configuration": "specifications/KeyValueStore/MCKVsnap.cfg",
         "criteria": ["AC-13", "AC-17", "AC-19"],
@@ -4800,7 +4813,7 @@
           "Tests/SwiftTLATests/SwiftRecordTypeTests.swift",
           "Tests/SwiftTLATests/NativeCodeGenerationTests.swift"
         ],
-        "scope": "Focused wrapper session 3696 passes 114 tests, including complete formal-state comparisons for the first transaction's READ/UPDATE/COMMIT stages and strict operation-record conversion. This proves the identified local migration contracts, not all DSL criteria, the full KVsnap graph on this patch, symmetry equivalence, or family completion. The older f667b679 hosted graph is baseline evidence only."
+        "scope": "Focused wrapper session 3696 passes 114 tests, including complete formal-state comparisons for the first transaction's READ/UPDATE/COMMIT stages and strict operation-record conversion. The edec23de partial-case evidence below now verifies the entire native/reference/generated graph and all selected checks for the ordinary-record migration. It does not prove upstream symmetry equivalence, all DSL criteria, family completion, or the later generated-rendering-path migration."
       },
       "legacyCleanupComplete": false,
       "modules": [
@@ -4913,7 +4926,18 @@
         {
           "caseID": "kvsnap",
           "implementation": "Sources/UpstreamParity/CanonicalCorpus/KVsnap.swift",
-          "reason": "The registered root or configuration does not match a published module/configuration pair byte-for-byte. No completion credit."
+          "reason": "The registered root or configuration does not match a published module/configuration pair byte-for-byte. No completion credit.",
+          "evidence": [
+            {
+              "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+              "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954/job/105995753275",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954/artifacts/10596464387",
+              "artifactSHA256": "8bb7c5bba8ec6339cfe30e3588bd181cabd24a179ed527cb07a905e3af5170e0",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Verified downloaded archive checksum and compared all 1,324,310,006 bytes of each native, reference TLC, and generated TLC canonical graph: all three are identical. Parsed every record and completion footer: one initial state, 189664 states, 365595 labeled edges, no violation or trace. All eight comparisons establish SnapshotIsolation, TypeOK, Termination, and deadlock satisfaction for both TLC sources. The registered no-symmetry configuration hash, MCKVsnap root and five imported module hashes, successful checked-process outcomes, and TLC/Java/bridge pins verify. Terminal job binds to edec23de and Xcode 16.4. This source includes ordinary operation records and typed OneOf preservation, but predates generated-rendering-path migration. Evidence: /tmp/swifttla-kvsnap-edec.3SnIaJ. No complete upstream configuration or family credit."
+            }
+          ]
         }
       ]
     },
@@ -8639,22 +8663,46 @@
       "id": "AC-01",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "IndependentAtomicStepTests and GuardedStepExecutionTests cover top-level, sequential Algorithm, process, and procedure guards. Local diagnostics 34192 and 61394 pass disabled-body failure suppression, unchanged snapshots, control transfer, all enabled choices, and native exploration. Hosted acceptance evidence for this complete test scope remains pending. This status does not count as a verified DSL criterion.",
-      "evidence": []
+      "reason": "IndependentAtomicStepTests and GuardedStepExecutionTests cover top-level, sequential Algorithm, process, and procedure guards: disabled-body failure suppression, unchanged snapshots, control transfer, all enabled choices, and native exploration. The complete test scope passed hosted ordinary validation at edec23de. That historical SHA differs from auditedSwiftSHA and the current candidate, so this entry remains uncredited pending source-aligned admission.",
+      "evidence": [{
+        "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632109",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10596135960",
+        "artifactSHA256": "d76ed2004fba91758ff38e6d0caef660a6943a73bccc090a51ecb195ca2901bf",
+        "acceptanceComplete": true,
+        "scope": "Audited criterion assertions and source fixtures against terminal suite results: GuardedStepExecutionTests and IndependentAtomicStepTests pass within 1484 ordinary tests. Swift 6.1.2, Xcode 16.4 build 16F6, SDK 24F74. Historical acceptance evidence only; the overall workflow failed elsewhere. No graph/configuration credit."
+      }]
     },
     {
       "id": "AC-02",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Local diagnostics 30688 and 5499 cover sequential, process, procedure, and top-level assignment reads and rejected-branch rollback. OrderedStepTests and GuardedStepExecutionTests retain enabled choices without committing rejected updates. IndependentAtomicStepTests checks a dynamic top-level guard after assignment. Complete hosted acceptance remains pending. This status does not count as a verified DSL criterion.",
-      "evidence": []
+      "reason": "OrderedStepTests and GuardedStepExecutionTests cover sequential, process, and procedure assignment reads, enabled choices, and rejected-branch rollback. IndependentAtomicStepTests checks a dynamic top-level guard after assignment. This complete scope passed hosted ordinary validation at edec23de. Historical evidence is retained, but the criterion remains uncredited pending source-aligned admission.",
+      "evidence": [{
+        "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632109",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10596135960",
+        "artifactSHA256": "d76ed2004fba91758ff38e6d0caef660a6943a73bccc090a51ecb195ca2901bf",
+        "acceptanceComplete": true,
+        "scope": "Audited positional guard and branch rollback assertions against terminal passing results in OrderedStepTests, GuardedStepExecutionTests, and IndependentAtomicStepTests. Fixture source is unchanged since this hosted SHA. Swift 6.1.2, Xcode 16.4 build 16F6, SDK 24F74. No graph/configuration credit."
+      }]
     },
     {
       "id": "AC-03",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Local diagnostic 5499 passes the exact x=1 to x=2,y=2 copy contract and ordered repeated writes. The complete fixture graph contains only (1,0), (2,2), and (4,2), excluding intermediate updates. GeneratedSavedValueSwapTests proves saved-value swaps; OrderedStepTests also checks saved-value capture and shadowing. Complete hosted acceptance remains pending. This status does not count as a verified DSL criterion.",
-      "evidence": []
+      "reason": "OrderedStepTests passes the exact x=1 to x=2,y=2 copy contract, ordered repeated writes, and the complete fixture graph containing only (1,0), (2,2), and (4,2). GeneratedSavedValueSwapTests proves saved-value swaps; OrderedStepTests checks capture and shadowing. This complete scope passed hosted ordinary validation at edec23de. Historical evidence is retained, but the criterion remains uncredited pending source-aligned admission.",
+      "evidence": [{
+        "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632109",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10596135960",
+        "artifactSHA256": "d76ed2004fba91758ff38e6d0caef660a6943a73bccc090a51ecb195ca2901bf",
+        "acceptanceComplete": true,
+        "scope": "Audited exact post-state, complete fixture graph, repeated-write, saved swap, and shadowing assertions against terminal passing OrderedStepTests and GeneratedSavedValueSwapTests results. Fixture source is unchanged since this hosted SHA. Swift 6.1.2, Xcode 16.4 build 16F6, SDK 24F74. This small acceptance graph is not upstream configuration evidence."
+      }]
     },
     {
       "id": "AC-04",
