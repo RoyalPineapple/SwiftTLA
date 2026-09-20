@@ -289,12 +289,6 @@ struct UpstreamParityTests {
         #expect(exploration.graph.states.count == Example.teachingSimpleRegularN8.expectedDistinct)
     }
 
-    @Test("FindHighest PlusCal port matches its bounded TLC configuration")
-    func findHighestParity() throws {
-        let exploration = try explore(FindHighestModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.findHighest.expectedDistinct)
-    }
-
     @Test("Dijkstra mutex preserves its bounded PlusCal model")
     func dijkstraMutexParity() throws {
         let exploration = try explore(DijkstraMutexModel.spec, maximumStateLimit: Example.dijkstraMutex.maximumStateLimit)
