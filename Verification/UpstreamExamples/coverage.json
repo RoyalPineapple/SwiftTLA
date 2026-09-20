@@ -49,6 +49,14 @@
     "completionRule": "Scheduling labels and queue positions confer no evidence credit. Count only retained hosted configuration matches. Declare a family complete only after every applicable configuration and variant is verified, module dispositions are resolved, and legacy code is removed. The next deliverable is one fully verified family on a green hosted revision through the intended DSL and correct checking path."
   },
   "ci": {
+    "decisiveCandidate": {
+      "sourceSHA": "3f5e3ac20cc003efa78d6e530ec3632afd182e80",
+      "branch": "codex/pr394-decisive-candidate",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35506180618",
+      "caseLabels": ["decisive-mc-die-hardest", "scenarios-die-hardest-0"],
+      "observedStatus": "queued",
+      "scope": "The exact locally checked commit was published on a candidate branch so existing PR CI remains running. This focused candidate checks the unchanged upstream MCDieHardest configuration and generated model. No new PR was created. Full admission and the PR branch update remain pending; no hosted match is claimed."
+    },
     "candidateCaseSelection": {
       "workflow": ".github/workflows/finite-graph.yml",
       "input": "case_labels",
