@@ -910,6 +910,17 @@
   },
   "localDiagnostics": [
     {
+      "session": "28031",
+      "sourceSHA": "9ae139e6583a6294210d90705f257c56d88047b2",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'EchoCorpusStateGraphTests|DictionaryKeyIdentityTests|NativeGraphExportTests|ConstraintBoundaryCheckingTests|TLCGraphReaderTests|TLCPropertyCheckTests|GraphRunRecordsTests|MultiCarElevatorCorpusStateGraphTests'",
+      "exitCode": 0,
+      "testsPassed": 100,
+      "buildSeconds": 613.01,
+      "testSeconds": 23.939,
+      "result": "Focused integration validation passes for the combined pending changes: projection membership guards, exact buffered graph serialization, retained graph ownership and reuse, malformed/incomplete result rejection, dictionary key/update identity, ordinary Echo messages, and complete Echo/MultiCarElevator native-versus-formal graphs. The redundant Echo count-only fixture is absent in this checked source.",
+      "scope": "Clean committed source stayed fixed throughout the Swift 6.1.2 safety-wrapper build. Transport tests use fixture executors, not local TLC. All eight selected suites pass; unrelated suites, Apple packages, and hosted performance are outside this run. PR 394 remains draft at published 6d0617ab. Main CI job 106011625548 is still live, so the next push is held to avoid cancelling evidence. No configuration or complete-criterion credit."
+    },
+    {
       "session": "65138",
       "followUpCleanup": "After this passing run, removed the redundant UpstreamParityTests.echoParity count-only test and its sole-use Example.echo FiniteModelFixture. EchoCorpusStateGraphTests retains the 75-state assertion, complete native/formal graph equality, and strict projection checks unchanged. Source/test/documentation reference search found no remaining callers. Static checks pass; this deletion-only cleanup was not followed by another compiler run and still requires hosted validation.",
       "sourceSHA": "28ef75e561fcfffc72f628e56f3cdc1a7f3abbd0",
