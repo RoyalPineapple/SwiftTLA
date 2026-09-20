@@ -4,6 +4,17 @@ import SwiftSyntax
 @testable import SwiftTLAPlugin
 
 struct ArrayValueTests {
+    @Test("injective choices compose directly with ordinary Swift array expressions")
+    func injectiveSequenceUsesArray() {
+        let values = Set<Int>([1, 2]).expr
+        let sequence: Expr<[Int]> = InjectiveSequence(from: values)
+        let appended: Expr<[Int]> = [0].expr.concatenating(sequence)
+        #expect(sequence.stateExpr == .choose(
+            .functionSet(.integerRange(.int(1), .cardinality(values.stateExpr)), values.stateExpr),
+            "f", .operatorApplication(.reference("IsInjective", arity: 1), [.value(.variable("f"))])))
+        #expect(appended.stateExpr == .tupleConcatenate([0].expr.stateExpr, sequence.stateExpr))
+    }
+
     @Test("sequence domains and set expressions compose without collection adapters")
     func collectionComposition() throws {
         let domain: Expr<SetExpr<[Int]>> = Sequences(of: Set<Int>([1, 2]), lengths: 1...1)

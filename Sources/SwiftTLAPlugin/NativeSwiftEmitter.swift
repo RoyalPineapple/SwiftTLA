@@ -91,6 +91,7 @@ struct NativeSwiftEmitter {
         case .modelValue: return "_ModelValue"
         case .controlLocation: return "_ControlLocation"
         case .named(let name): return name
+        case .oneOf(let first, let second): return "OneOf<\(try swiftType(first)), \(try swiftType(second))>"
         case .nominalRecord(let name, _): return name
         case .collectionMember(_, let name): return name
         case .finite, .union, .record, .tuple:
@@ -152,10 +153,10 @@ struct NativeSwiftEmitter {
     }
 
     func literal(_ value: CompiledValue, as type: CompiledValueType) throws -> String {
-        if case .union(let alternatives) = type {
+        if let alternatives = type.unionAlternatives {
             for (index, alternative) in alternatives.enumerated() {
                 if let payload = try? literal(value, as: alternative) {
-                    return "\(try swiftType(type)).alternative\(index + 1)(\(payload))"
+                    return try unionValue(payload, type: type, index: index)
                 }
             }
             throw unsupported("literal outside union")
@@ -215,12 +216,16 @@ struct NativeSwiftEmitter {
 
     func projected(_ value: String, from source: CompiledValueType, to destination: CompiledValueType?) throws -> String {
         guard let destination, source != destination else { return value }
-        if case .union = source { return try unionProjection(value, from: source, to: destination, checked: false) }
-        if case .union(let alternatives) = destination {
-            guard let index = alternatives.firstIndex(where: { program.canProject(source: source, to: $0) }) else {
+        if source.unionAlternatives != nil { return try unionProjection(value, from: source, to: destination, checked: false) }
+        if let alternatives = destination.unionAlternatives {
+            if let index = alternatives.firstIndex(where: { program.canProject(source: source, to: $0) }) {
+                return try unionValue(projected(value, from: source, to: alternatives[index]), type: destination, index: index)
+            }
+            switch source {
+            case .finite, .named: break
+            default:
                 throw unsupported("union injection")
             }
-            return "\(try swiftType(destination)).alternative\(index + 1)(\(try projected(value, from: source, to: alternatives[index])))"
         }
         if case .dictionary(let sourceKey, let sourceValue) = source,
            case .dictionary(let targetKey, let targetValue) = destination {
@@ -313,7 +318,7 @@ struct NativeSwiftEmitter {
             body = try elements.enumerated().map { index, element in
                 "if lhs.\(fieldName(type, index: index)) != rhs.\(fieldName(type, index: index)) { return (\(try ordering(element)))(lhs.\(fieldName(type, index: index)), rhs.\(fieldName(type, index: index))) }"
             }.joined(separator: "\n") + "\nreturn false"
-        case .union(let alternatives): body = try unionOrdering(alternatives)
+        case .union, .oneOf: body = try unionOrdering(type)
         case .unknown: throw unsupported("unresolved structural order")
         }
         return "{ (lhs: \(name), rhs: \(name)) -> Bool in \(body) }"

@@ -15,6 +15,7 @@ package indirect enum CompiledValueType: Hashable, Sendable {
     case named(String)
     case finite([CompiledValue])
     case union([CompiledValueType])
+    case oneOf(CompiledValueType, CompiledValueType)
     case collectionMember(VariableID, swiftType: String)
     case set(CompiledValueType)
     case array(CompiledValueType)
@@ -22,6 +23,14 @@ package indirect enum CompiledValueType: Hashable, Sendable {
     case record([CompiledFieldType])
     case nominalRecord(String, [CompiledFieldType])
     case tuple([CompiledValueType])
+
+    package var unionAlternatives: [CompiledValueType]? {
+        switch self {
+        case .union(let alternatives): alternatives
+        case .oneOf(let first, let second): [first, second]
+        default: nil
+        }
+    }
 
     package var recordFields: [CompiledFieldType]? {
         switch self {
@@ -42,6 +51,7 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         switch self {
         case .set(let value), .array(let value): [value]
         case .dictionary(let key, let value): [key, value]
+        case .oneOf(let first, let second): [first, second]
         case .record(let fields), .nominalRecord(_, let fields): fields.map(\.type)
         case .tuple(let values), .union(let values): values
         default: []
@@ -55,6 +65,7 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         switch (self, other) {
         case (.array(let a), .array(let b)), (.set(let a), .set(let b)): return a.embeds(b)
         case (.dictionary(let a, let b), .dictionary(let c, let d)): return a.embeds(c) && b.embeds(d)
+        case (.oneOf(let a, let b), .oneOf(let c, let d)): return a.embeds(c) && b.embeds(d)
         case (.tuple(let a), .tuple(let b)), (.union(let a), .union(let b)):
             return a.count == b.count && zip(a, b).allSatisfy { $0.embeds($1) }
         case (.record(let a), .record(let b)) where a.map(\.name) == b.map(\.name):
@@ -80,6 +91,7 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         case .nominalRecord(let name, _): name
         case .finite: "FiniteValue"
         case .union: "UnionValue"
+        case .oneOf(let first, let second): "OneOf<\(first.swiftType), \(second.swiftType)>"
         case .collectionMember(_, let name): name
         case .set(let element): "Set<\(element.swiftType)>"
         case .array(let element): "[\(element.swiftType)]"
@@ -94,6 +106,7 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         case .unknown: false
         case .set(let element), .array(let element): element.resolved
         case .dictionary(let key, let value): key.resolved && value.resolved
+        case .oneOf(let first, let second): first.resolved && second.resolved
         case .record(let fields), .nominalRecord(_, let fields): fields.allSatisfy { $0.type.resolved }
         case .tuple(let elements), .union(let elements): elements.allSatisfy(\.resolved)
         default: true
@@ -108,6 +121,9 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         case .dictionary(let key, let value):
             return key.missingTypePaths(from: path + ".key")
                 + value.missingTypePaths(from: path + ".value")
+        case .oneOf(let first, let second):
+            return first.missingTypePaths(from: path + ".first")
+                + second.missingTypePaths(from: path + ".second")
         case .record(let fields), .nominalRecord(_, let fields):
             return fields.flatMap { $0.type.missingTypePaths(from: path + "." + $0.name) }
         case .tuple(let elements), .union(let elements):
@@ -142,6 +158,8 @@ extension CompiledValueType {
         case (.array(let a), .array(let b)): return .array(try merge(a, b))
         case (.dictionary(let ak, let av), .dictionary(let bk, let bv)):
             return .dictionary(try merge(ak, bk), try merge(av, bv))
+        case (.oneOf(let af, let as_), .oneOf(let bf, let bs)):
+            return .oneOf(try merge(af, bf), try merge(as_, bs))
         case (.tuple(let a), .tuple(let b)) where a.count == b.count:
             return .tuple(try zip(a, b).map { try merge($0, $1) })
         case (.record(let a), .record(let b)) where a.map(\.name) == b.map(\.name):
@@ -154,12 +172,42 @@ extension CompiledValueType {
     }
 
 
+    package static func preservingUnion(_ first: Self, _ second: Self,
+                                        namedDomains: [String: Set<CompiledValue>]) throws -> Self {
+        _ = try normalizedUnion([first, second], namedDomains: namedDomains)
+        let a = try normalizedUnion([first], namedDomains: namedDomains)
+        let b = try normalizedUnion([second], namedDomains: namedDomains)
+        func overlaps(_ lhs: Self, _ rhs: Self) -> Bool {
+            if lhs == rhs { return true }
+            if let alternatives = lhs.unionAlternatives { return alternatives.contains { overlaps($0, rhs) } }
+            if let alternatives = rhs.unionAlternatives { return alternatives.contains { overlaps(lhs, $0) } }
+            if case .finite(let left) = lhs, case .finite(let right) = rhs {
+                return !Set(left).isDisjoint(with: right)
+            }
+            if case .finite(let members) = lhs {
+                return members.contains { member in
+                    switch (member, rhs) {
+                    case (.integer, .int), (.boolean, .bool), (.string, .string), (.constant, .modelValue): true
+                    default: false
+                    }
+                }
+            }
+            if case .finite = rhs { return overlaps(rhs, lhs) }
+            return false
+        }
+        guard !overlaps(a, b) else {
+            throw diagnostic("OneOf", "declared alternatives overlap; an untagged formal value cannot preserve its Swift alternative")
+        }
+        return .oneOf(first, second)
+    }
+
     package static func normalizedUnion(_ branches: [CompiledValueType], namedDomains: [String: Set<CompiledValue>]) throws -> CompiledValueType {
         var scalarValues = Set<CompiledValue>()
         var composite: [CompiledValueType] = []
         func append(_ branch: CompiledValueType) throws {
             switch branch {
             case .union(let nested): for item in nested { try append(item) }
+            case .oneOf(let first, let second): try append(first); try append(second)
             case .finite(let values): scalarValues.formUnion(values)
             case .named(let name):
                 guard let values = namedDomains[name] else { throw CompiledValueType.diagnostic("union", "union branch has no finite declared domain") }

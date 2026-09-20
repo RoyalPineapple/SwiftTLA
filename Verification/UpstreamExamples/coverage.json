@@ -175,10 +175,18 @@
           "scope": "The downloaded manifest binds to 0b86465f. All 21 declared file hashes match, and its complete case/file inventory and digests equal the audited f667b679 export. This confirms unchanged emitted bundles for the four canonical cases, not native graph equivalence or upstream completion."
         }
       ],
-      "scope": "Pushed after the preceding main CI became terminal. Includes complete-snapshot reuse, validated fingerprint reuse, AC-01 through AC-04 local contract checks, Majority toy-model removal, and scenario phase markers. Independent candidate validation includes the opt-in unchanged upstream Boulanger diagnostic. Canonical export and Apple examples passed; remaining jobs are pending. No hosted graph recovery or additional configuration match is established. PR 394 remains draft."
+      "scope": "Main CI is terminal: ordinary, upstream, Apple, and export passed; finite-graph and scenario suites each report only Boulanger's five-million-state capacity failure. Independent comparisons remain in progress. This source includes snapshot and fingerprint reuse, AC-01 through AC-04 local checks, Majority toy-model removal, and scenario phase markers. It excludes later local DSL changes and the ten-million-state capacity candidate. PR 394 remains draft."
     },
     "queueRepairCandidate": {
       "sourceSHA": "f667b67983a51f800ee03dd90d0903cc705db7a8",
+      "boulangerGraphFailure": {
+        "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479/job/105972420171",
+        "conclusion": "failure",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479/artifacts/10594867278",
+        "artifactSHA256": "94cd56b9d8637c9076531dd5d2732e2683fc785d0606ca2d58558db3d37b14a2",
+        "failure": "The terminal log reports stateLimitExceeded(5000000) during swift-export. TLC execution and graph comparison were not reached.",
+        "scope": "Terminal log and artifact metadata audited; artifact contents not downloaded. This older source predates snapshot reuse and establishes no complete result."
+      },
       "kvsnapComparison": {
         "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35466588479/job/105972420246",
         "conclusion": "success",
@@ -672,6 +680,29 @@
     ]
   },
   "localDiagnostics": [
+    {
+      "session": "3696",
+      "sourceSHA": "2f5e3d25bb9d85bc59006b764d4bc4a90fe88958",
+      "sourcePatchSHA256": "ba4a21b939a5dbd4d8980d9dd26f144385a7faf928b609e40534e56840d6cbcf",
+      "sourcePatchScope": "git diff -- Sources Tests Package.swift",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SwiftRecordTypeTests|KVsnapCorpusExecutionTests|KVsnapCorpusRenderingTests|FormalUnionTests|NativeTypeDiagnosticTests|GeneratedSwiftRecordTests|FormalValueEqualityTests|SpecificationSourceAuthorityTests|ArrayValueTests|NativeCodeGenerationTests'",
+      "exitCode": 0,
+      "testsRun": 114,
+      "buildSeconds": 589.21,
+      "testSeconds": 1.348,
+      "result": "All 114 focused tests pass with warnings treated as errors. Declared OneOf alternatives survive resolution and native emission; overlapping alternatives are rejected. Explicit imported records validate complete shapes and preserve nominal constructor identity. KVsnap uses ordinary Operation records and arrays, and generated READ/UPDATE/COMMIT frontiers agree with the formal runtime. Strict record round trips, array choice composition, and existing rendering contracts pass.",
+      "scope": "Source stayed fixed throughout the build; only historical evidence changed in the ledger. Static checks and diff checks pass. Ponytail review reused existing checked views and compiler projection paths, removed OperationFields/OperationSchema, and introduced no compatibility spelling or runtime TLA conversion. This is local diagnostic evidence, not independent hosted acceptance, complete KeyValueStore coverage, or proof that Boulanger fits the larger capacity. Full log: /tmp/swifttla-union-diagnostics.EkZPLz/validation-3.log."
+    },
+    {
+      "session": "52083",
+      "sourceSHA": "0bf75b0212fcd74d5d706dd8691f302415e2fd21",
+      "sourcePatchSHA256": "159e9c6e50695ffc3bfb67df18cc3b8310c02b74cafd21f131b9df664c73959d",
+      "command": "DEVELOPER_DIR=/Library/Developer/CommandLineTools scripts/local-validation.sh swiftpm-test 'SwiftRecordTypeTests|KVsnapCorpusExecutionTests|KVsnapCorpusRenderingTests|FormalUnionTests|NativeTypeDiagnosticTests|GeneratedSwiftRecordTests|FormalValueEqualityTests|SpecificationSourceAuthorityTests|ArrayValueTests'",
+      "exitCode": 1,
+      "testsRun": 0,
+      "result": "Production targets and generated Swift test models compiled. The new parity test could not call Operation's synthesized module-internal initializer across the corpus module boundary. The test target now explicitly depends on and test-imports CanonicalUpstreamCorpus; production record access is unchanged.",
+      "scope": "Full log retained at /tmp/swifttla-union-diagnostics.EkZPLz/validation-2.log. Source stayed fixed while historical hosted evidence was recorded. No local acceptance or new hosted credit."
+    },
     {
       "session": "68324",
       "sourceSHA": "0bf75b0212fcd74d5d706dd8691f302415e2fd21",
@@ -4425,21 +4456,24 @@
       "path": "specifications/KeyValueStore",
       "name": "Snapshot Key-Value Store",
       "audit": "reference inputs audited",
-      "gap": "The MCKVsnap fixture removes upstream TxIdSymmetric symmetry. Three MCKVS safety configurations lack exact cases. Small declares no symmetry, unlike Medium and Large. APKeyValueStore has no configuration at the pin. Helper coverage, manual record schemas, and duplicate configuration remain unresolved.",
+      "gap": "The MCKVsnap fixture removes upstream TxIdSymmetric symmetry. Three MCKVS safety configurations lack exact cases. Small declares no symmetry, unlike Medium and Large. APKeyValueStore has no configuration at the pin. The operation-log schema is removed with local evidence; hosted validation of that change, helper coverage, and duplicate configuration remain unresolved.",
       "recordMigrationPrerequisite": {
         "configuration": "specifications/KeyValueStore/MCKVsnap.cfg",
         "criteria": ["AC-13", "AC-17", "AC-19"],
-        "status": "missing",
-        "finding": "KVsnap OperationFields.value declares OneOf<Transaction, NoValue>. SourceTypeResolver resolves OneOf through normalizedUnion, which merges these named finite domains into one anonymous finite type. NativeSwiftEmitter then names that type through NativeTypeDeclarations instead of retaining the declared Swift OneOf field type. Merely replacing OperationSchema with an ordinary Operation struct cannot preserve the field's native type through this path.",
+        "status": "locally checked",
+        "finding": "The original lowering flattened OneOf<Transaction, NoValue> into an anonymous finite type. The resolved oneOf representation now retains ordered declared alternatives through native construction, projection, hashing, ordering, and formal emission. KVsnap Operation owns its op/key/value fields directly; its operation log is [Operation]. Imported r/w results cross an explicit checked ModuleCall(as:) record boundary.",
         "requiredChange": "Retain ordered typed OneOf alternatives through resolved types, projections, constructors, hashing, ordering, and formal emission. Use typed native conversions, not a TLAValue round trip. Then replace the operation-log schema with an ordinary Swift record and array, preserving upstream op/key/value fields, enum/model-value identities, and all transitions. Validate generated read/write operation records and strict boundary conversion before claiming schema removal.",
         "evidence": [
           "Sources/UpstreamParity/CanonicalCorpus/KVsnap.swift",
           "Sources/SwiftTLAPlugin/SourceTypes.swift",
           "Sources/SwiftTLA/CompiledValueType.swift",
           "Sources/SwiftTLAPlugin/NativeTypeDeclarations.swift",
-          "Sources/SwiftTLAPlugin/NativeSwiftEmitter.swift"
+          "Sources/SwiftTLAPlugin/NativeSwiftEmitter.swift",
+          "Tests/SwiftTLAParityTests/KVsnapCorpusExecutionTests.swift",
+          "Tests/SwiftTLATests/SwiftRecordTypeTests.swift",
+          "Tests/SwiftTLATests/NativeCodeGenerationTests.swift"
         ],
-        "scope": "Read-only source audit at 7f402cfb. This identifies a lowering requirement; no migration or compiler experiment has passed, and no coverage credit is assigned. OneOf currently has conditional Equatable but no Hashable conformance, another requirement for the ordinary native operation record. Overlapping alternatives must not be silently flattened or guessed."
+        "scope": "Focused wrapper session 3696 passes 114 tests, including complete formal-state comparisons for the first transaction's READ/UPDATE/COMMIT stages and strict operation-record conversion. This proves the identified local migration contracts, not all DSL criteria, the full KVsnap graph on this patch, symmetry equivalence, or family completion. The older f667b679 hosted graph is baseline evidence only."
       },
       "legacyCleanupComplete": false,
       "modules": [

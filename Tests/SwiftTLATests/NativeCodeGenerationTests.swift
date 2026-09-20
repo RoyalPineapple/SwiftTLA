@@ -488,8 +488,8 @@ struct NativeCodeGenerationTests {
         #expect(!Parser.parse(source: "struct Expansion {\n\(generated)\n}").hasError)
         print("native-code-generation model=counter declarations=\(members.count) sourceBytes=\(generated.utf8.count)")
     }
-    @Test("Finite union state exposes only its admitted native enum cases")
-    func finiteUnionUsesDedicatedNativeType() throws {
+    @Test("Finite union state preserves declared Swift alternatives without anonymous replacement")
+    func finiteUnionPreservesDeclaredTypes() throws {
         let source = Parser.parse(source: """
         struct NativeUnion {
             enum Left: String, TLAValueType {
@@ -520,11 +520,12 @@ struct NativeCodeGenerationTests {
         let model = try TLASpecVerifier.parseAndVerify(declaration)
         var emitter = NativeSwiftEmitter(model: model)
         let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
-        #expect(generated.contains("NativeValue0.member_right_1"))
+        #expect(generated.contains("OneOf<Left, Right>.second"))
         #expect(generated.contains("_NativeMachineOperations.divide"))
-        #expect(NativeTypeDeclarations(program: model.program).finiteValues == [[.constant("left"), .constant("right")]])
-        #expect(generated.contains("public let value: NativeValue0"))
-        #expect(generated.contains("enum NativeValue0: Hashable, Sendable"))
+        let value = try #require(model.program.layout.variables.first { $0.declaration.name == "value" })
+        #expect(model.program.variableTypes[value.id] == .oneOf(.named("Left"), .named("Right")))
+        #expect(!NativeTypeDeclarations(program: model.program).finiteValues.contains([.constant("left"), .constant("right")]))
+        #expect(generated.contains("public let value: OneOf<Left, Right>"))
         #expect(!generated.contains("case member_outside"))
         #expect(!generated.contains("public let value: _ModelValue"))
         #expect(!Parser.parse(source: "struct Expansion {\n\(generated)\n}").hasError)

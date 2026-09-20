@@ -3,7 +3,7 @@ extension StateExpr {
     ///
     /// Quantifiers, functions, local operators, and formal lambdas remove their
     /// bound names. Substitution uses this set to avoid binder capture.
-    var freeVariableNames: Set<String> {
+    package var freeVariableNames: Set<String> {
         return switch self {
         case .sourceIssue, .value, .parameter, .currentProcess, .programCounter, .procedureStack, .controlLocation, .enabledAction:
             []
@@ -99,7 +99,7 @@ extension StateExpr {
         }
     }
 
-    static func freshBoundName(_ preferred: String, avoiding names: Set<String>) -> String {
+    package static func freshBoundName(_ preferred: String, avoiding names: Set<String>) -> String {
         guard names.contains(preferred) else { return preferred }
         var suffix = 1
         while names.contains("\(preferred)_\(suffix)") {

@@ -2,6 +2,24 @@ import Testing
 import SwiftTLA
 
 struct GeneratedSwiftRecordTests {
+    @Test("explicit imported record calls share the checked record boundary")
+    func validatesImportedRecordCalls() {
+        typealias Packet = GeneratedSwiftRecord.Packet
+        let calls: [Expr<Packet>] = [
+            FormalCall(as: Packet.self, "read"),
+            FormalCall(as: Packet.self, "read", 1),
+            FormalCall(as: Packet.self, "read", 1, 2),
+            ModuleCall(as: Packet.self, "CC", "read", 1, 2)
+        ]
+        for call in calls {
+            guard case .assertView(.operatorApplication, let shape) = call.stateExpr else {
+                Issue.record("Expected the imported result to validate its record shape")
+                continue
+            }
+            #expect(shape == Packet.formalValueShape)
+        }
+    }
+
     @Test("ordinary Swift records execute through generated typed transitions")
     func executesRecordTransition() throws {
         var machine = try GeneratedSwiftRecord.makeMachine()

@@ -139,6 +139,23 @@ final class ParserSession {
         }
         return .recordLiteral(.init(orderedFields: fields, nativeType: type))
     }
+
+    private func projectImportedRecord(_ value: StateExpr, call: FunctionCallExprSyntax) -> StateExpr? {
+        guard let witness = call.arguments.first(where: { $0.label?.text == "as" })?.expression
+            .as(MemberAccessExprSyntax.self), witness.declName.baseName.sourceIdentifierName == "self",
+              let source = witness.base, let type = nominalRecordType(source), let fields = type.recordFields else {
+            return value
+        }
+        guard let shape = try? sourceTypeResolver.formalShape(for: source.trimmedDescription), shape.isSupported else {
+            algorithmParseFailure = "Imported record '\(type.swiftType)' requires supported field types for its checked projection."
+            return nil
+        }
+        let name = StateExpr.freshBoundName("__importedRecord", avoiding: value.freeVariableNames)
+        return .letValue(name, .assertView(value, shape), .recordLiteral(.init(
+            orderedFields: fields.map { .init(name: $0.name, value: .recordAccess(.variable(name), $0.name)) },
+            nativeType: type)))
+    }
+
     /// Source bindings visible to the source expression currently being parsed.
     var sourceScope = TypedFacadeScope.empty
     var allowsUnboundValueNames = true
@@ -846,9 +863,9 @@ final class ParserSession {
                 decodeTypedFacadeValue($0.expression, scope: scope)
             }
             guard arguments.count == argumentsSyntax.count - 1 else { return nil }
-            return .operatorApplication(
+            return projectImportedRecord(.operatorApplication(
                 .reference(name, arity: arguments.count), arguments.map(FormalCallArgument.value)
-            )
+            ), call: call)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Range",
@@ -881,10 +898,10 @@ final class ParserSession {
                 decodeTypedFacadeValue($0.expression, scope: scope)
             }
             guard arguments.count == argumentsSyntax.count - 2 else { return nil }
-            return .operatorApplication(
+            return projectImportedRecord(.operatorApplication(
                 .reference("\(instance)!\(operation)", arity: arguments.count),
                 arguments.map(FormalCallArgument.value)
-            )
+            ), call: call)
         }
         // `Pair(first:second:)` and `Pair.literal(_, _)` are normally
         // inferred from an enclosing `SetExpr<Pair<...>>`, so SwiftSyntax

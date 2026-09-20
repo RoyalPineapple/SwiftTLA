@@ -815,7 +815,7 @@ public func FormalCall<Result: TLAValueType>(
   as _: Result.Type,
   _ name: String
 ) -> Expr<Result> {
-  FormalCall(name)
+  checkedImportedRecord(FormalCall(name))
 }
 
 public func FormalCall<Result: TLAValueType, Value: StateExprConvertible>(
@@ -830,7 +830,7 @@ public func FormalCall<Result: TLAValueType, Value: StateExprConvertible>(
   _ name: String,
   _ value: Value
 ) -> Expr<Result> {
-  FormalCall(name, value)
+  checkedImportedRecord(FormalCall(name, value))
 }
 
 public func FormalCall<
@@ -858,7 +858,12 @@ public func FormalCall<
   _ first: First,
   _ second: Second
 ) -> Expr<Result> {
-  FormalCall(name, first, second)
+  checkedImportedRecord(FormalCall(name, first, second))
+}
+
+private func checkedImportedRecord<Result: TLAValueType>(_ value: Expr<Result>) -> Expr<Result> {
+  guard case .record = Result.formalValueShape else { return value }
+  return Expr(.assertView(value.stateExpr, Result.formalValueShape))
 }
 
 /// Applies an executable formal operator exported by a named `INSTANCE`.
@@ -895,8 +900,7 @@ public func ModuleCall<
 
 /// Applies a binary imported operator with an explicit result-type witness.
 ///
-/// The witness is compile-time only; the emitted formal operator remains the
-/// same namespaced TLA+ application.
+/// A record result validates its complete field shape before projection.
 public func ModuleCall<
   Result: TLAValueType,
   First: StateExprConvertible,
@@ -908,7 +912,7 @@ public func ModuleCall<
   _ first: First,
   _ second: Second
 ) -> Expr<Result> {
-  ModuleCall(instance, operatorName, first, second)
+  FormalCall(as: Result.self, "\(instance)!\(operatorName)", first, second)
 }
 
 public struct ImportDecl: SpecComponent {

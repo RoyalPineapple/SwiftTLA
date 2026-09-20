@@ -142,10 +142,21 @@ package struct CompiledTypeContext: Sendable {
         _ source: CompiledValueType, to expected: CompiledValueType,
         checks: inout [ResolvedProjectionPair: Bool]
     ) -> Bool {
-        if case .union(let sources) = source {
+        if let sources = source.unionAlternatives {
             return sources.map { canProjectRead($0, to: expected, checks: &checks) }.allSatisfy { $0 }
         }
-        if case .union(let targets) = expected {
+        if let targets = expected.unionAlternatives {
+            let members: [CompiledValue]?
+            switch source {
+            case .finite(let values): members = values
+            case .named(let name): members = namedDomains[name].map(Array.init)
+            default: members = nil
+            }
+            if let members, !members.isEmpty {
+                return members.allSatisfy { member in
+                    targets.filter { canProjectRead(.finite([member]), to: $0, checks: &checks) }.count == 1
+                }
+            }
             return targets.filter { canProjectRead(source, to: $0, checks: &checks) }.count == 1
         }
         switch (source, expected) {

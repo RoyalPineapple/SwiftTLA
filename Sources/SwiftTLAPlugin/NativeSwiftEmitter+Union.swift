@@ -1,9 +1,21 @@
 import SwiftTLA
 
 extension NativeSwiftEmitter {
+    func unionCase(_ type: CompiledValueType, index: Int) -> String {
+        if case .oneOf = type { return index == 0 ? "first" : "second" }
+        return "alternative\(index + 1)"
+    }
+
+    func unionValue(_ payload: String, type: CompiledValueType, index: Int) throws -> String {
+        let name = try swiftType(type)
+        let value = "\(name).\(unionCase(type, index: index))(\(payload))"
+        if case .oneOf = type { return "(\(value) as \(name))" }
+        return value
+    }
+
     func checkedView(_ value: String, from source: CompiledValueType, to target: CompiledValueType) throws -> String {
         if program.canProject(source: source, to: target) { return try projected(value, from: source, to: target) }
-        if case .union = source { return try unionProjection(value, from: source, to: target, checked: true) }
+        if source.unionAlternatives != nil { return try unionProjection(value, from: source, to: target, checked: true) }
         if case .finite(let members) = source {
             let cases = members.indices.map { index in
                 let result: String
@@ -51,6 +63,7 @@ extension NativeSwiftEmitter {
         case .finite(let members): return members
         case .named(let name): return program.enums.cases[name]?.map(\.value) ?? []
         case .union(let alternatives): return Array(Set(alternatives.flatMap(finiteViewMembers))).sorted()
+        case .oneOf(let first, let second): return Array(Set(finiteViewMembers(first) + finiteViewMembers(second))).sorted()
         default: return []
         }
     }
@@ -63,31 +76,70 @@ extension NativeSwiftEmitter {
     }
 
     func unionProjection(_ value: String, from source: CompiledValueType, to target: CompiledValueType, checked: Bool) throws -> String {
-        guard case .union(let alternatives) = source else { throw unsupported("union projection source") }
+        guard let alternatives = source.unionAlternatives else { throw unsupported("union projection source") }
         let cases = try alternatives.enumerated().map { index, alternative in
             let payload = checked
                 ? try checkedView("payload", from: alternative, to: target)
                 : try projected("payload", from: alternative, to: target)
-            return "case .alternative\(index + 1)(let payload): return \(payload)"
+            return "case .\(unionCase(source, index: index))(let payload): return \(payload)"
         }.joined(separator: "\n")
         let throwing = checked ? " throws" : ""
         let prefix = checked ? "try " : ""
         return "(\(prefix){ (value: \(try swiftType(source)))\(throwing) -> \(try swiftType(target)) in switch value { \(cases) } }(\(value)))"
     }
 
-    func unionOrdering(_ alternatives: [CompiledValueType]) throws -> String {
+    func unionOrdering(_ type: CompiledValueType) throws -> String {
+        guard let alternatives = type.unionAlternatives else { throw unsupported("union ordering source") }
         let cases = try alternatives.enumerated().map { index, alternative in
-            "case (.alternative\(index + 1)(let left), .alternative\(index + 1)(let right)): return (\(try ordering(alternative)))(left, right)"
+            "case (.\(unionCase(type, index: index))(let left), .\(unionCase(type, index: index))(let right)): return (\(try ordering(alternative)))(left, right)"
         }.joined(separator: "\n")
-        let ranks = try alternatives.enumerated().map { index, alternative in
-            "case .alternative\(index + 1)(let payload): return \(try formalKindRank("payload", type: alternative))"
-        }.joined(separator: "\n")
+        let rank = try unionRank("value", type: type, members: finiteViewMembers(type))
         return """
-        func rank(_ value: \(try swiftType(.union(alternatives)))) -> Int { switch value { \(ranks) } }
+        func rank(_ value: \(try swiftType(type))) -> (Int, Int) { return \(rank) }
         switch (lhs, rhs) { \(cases)
         default: return rank(lhs) < rank(rhs)
         }
         """
+    }
+
+    private func unionRank(_ value: String, type: CompiledValueType, members: [CompiledValue]) throws -> String {
+        if let ordinal = try finiteUnionRank(value, type: type, members: members) {
+            return "(\(try formalKindRank(value, type: type)), { () -> Int in \(ordinal) }())"
+        }
+        if let alternatives = type.unionAlternatives {
+            let cases = try alternatives.enumerated().map { index, alternative in
+                "case .\(unionCase(type, index: index))(let payload): return \(try unionRank("payload", type: alternative, members: members))"
+            }.joined(separator: "\n")
+            return "({ () -> (Int, Int) in switch \(value) { \(cases) } }())"
+        }
+        return "(\(try formalKindRank(value, type: type)), 0)"
+    }
+
+    private func finiteUnionRank(_ value: String, type: CompiledValueType, members: [CompiledValue]) throws -> String? {
+        if let alternatives = type.unionAlternatives {
+            var cases: [String] = []
+            for (index, alternative) in alternatives.enumerated() {
+                guard let nested = try finiteUnionRank("payload", type: alternative, members: members) else { return nil }
+                cases.append("case .\(unionCase(type, index: index))(let payload): \(nested)")
+            }
+            return "switch \(value) { \(cases.joined(separator: "\n")) }"
+        }
+        let cases: [String]
+        switch type {
+        case .named(let name):
+            guard let values = program.enums.cases[name] else { return nil }
+            cases = try values.map { item in
+                guard let rank = members.firstIndex(of: item.value) else { throw unsupported("union ordering member") }
+                return "case .`\(item.name)`: return \(rank)"
+            }
+        case .finite(let values):
+            cases = try values.enumerated().map { index, item in
+                guard let rank = members.firstIndex(of: item) else { throw unsupported("union ordering member") }
+                return "case .\(finiteCaseName(values, index: index)): return \(rank)"
+            }
+        default: return nil
+        }
+        return "switch \(value) { \(cases.joined(separator: "\n")) }"
     }
 
     func formalKindRank(_ value: String, type: CompiledValueType) throws -> String {
@@ -100,7 +152,13 @@ extension NativeSwiftEmitter {
         case .set: representative = .set([])
         case .array, .tuple: representative = .tuple([])
         case .dictionary: representative = .function([:])
-        case .record: representative = CompiledValue(formal: .record([:]))
+        case .record, .nominalRecord: representative = CompiledValue(formal: .record([:]))
+        case .oneOf, .union:
+            guard let alternatives = type.unionAlternatives else { throw unsupported("union alternative order") }
+            let cases = try alternatives.enumerated().map { index, alternative in
+                "case .\(unionCase(type, index: index))(let payload): return \(try formalKindRank("payload", type: alternative))"
+            }.joined(separator: "\n")
+            return "({ (value: \(try swiftType(type))) -> Int in switch value { \(cases) } })(\(value))"
         case .finite(let members):
             let cases = members.indices.map { "case .\(finiteCaseName(members, index: $0)): return \(members[$0].orderingKind)" }.joined(separator: "\n")
             return "({ (value: \(try swiftType(type))) -> Int in switch value { \(cases) } })(\(value))"

@@ -39,7 +39,7 @@ package struct DijkstraMutexModel: Sendable {
 
     /// The published model's value before a process first writes `temp`.
     /// It is distinct from every process and set value.
-    private enum TemporaryInitial: String, TLAValueType {
+    enum TemporaryInitial: String, TLAValueType {
         case notAssigned = "defaultInitValue"
 
         static var defaultValue: Self { .notAssigned }

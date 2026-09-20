@@ -1,8 +1,22 @@
 import Testing
 @testable import SwiftTLA
+@testable import CanonicalUpstreamCorpus
 import UpstreamParity
 
 struct KVsnapCorpusExecutionTests {
+    @Test("operation records retain typed transaction and missing-value alternatives")
+    func preservesOperationValueTypes() {
+        typealias Operation = KVsnapModel.Operation
+        let values: [KVsnapModel.Value] = [.first(.t1), .first(.t2), .first(.t3), .second(.noVal)]
+        let records = values.map { Operation(op: .write, key: .k2, value: $0) }
+        #expect(Set(records).count == values.count)
+        for record in records {
+            #expect(Operation(formalValue: record.tlaValue) == record)
+        }
+        #expect(Operation(formalValue: .record(["op": .string("write"), "key": .constant("k2"), "value": .constant("foreign")])) == nil)
+        #expect(Operation(formalValue: .record(["op": .string("write"), "key": .constant("k2")])) == nil)
+    }
+
     @Test("Snapshot-isolation initialization, invariants and choices agree with the formal corpus")
     func nativeSnapshotIsolationRelation() throws {
         let compilation = try KVsnapModel.spec.compile()
@@ -44,5 +58,24 @@ struct KVsnapCorpusExecutionTests {
             Issue.record("Distinct read/write key choices must remain ambiguous")
         } catch GeneratedMachineError.ambiguousAction {}
         #expect(native.state == before)
+        var nativeFrontier = nativeAlternatives.map(\.machine)
+        var formalFrontier = alternatives.map(\.state)
+        let stages: [(String, KVsnapModel.Action)] = [
+            ("READ", .READ(process: .t1)), ("UPDATE", .UPDATE(process: .t1)), ("COMMIT", .COMMIT(process: .t1))
+        ]
+        for (name, action) in stages {
+            let formalAction = try #require(compilation.layout.testActionID(named: name))
+            nativeFrontier = try nativeFrontier.flatMap { machine in
+                try machine.successors().filter { $0.action == action }.map(\.machine)
+            }
+            formalFrontier = try formalFrontier.flatMap { state in
+                try runtime.successors(for: formalAction, from: state).filter {
+                    $0.arguments == [CompiledValue(formal: KVsnapModel.Transaction.t1.tlaValue)]
+                }.map(\.state)
+            }
+            #expect(!nativeFrontier.isEmpty)
+            #expect(try Set(nativeFrontier.map { try $0.formalProjection(of: $0.snapshot) })
+                == Set(formalFrontier.map { try $0.projection(using: compilation.layout) }))
+        }
     }
 }

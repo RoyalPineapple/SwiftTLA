@@ -350,7 +350,7 @@ public func Range<Mapping: FormalDictionaryValue>(
 /// specification and is evaluated by the compiled runtime.
 public func InjectiveSequence<Domain: FormalSetValue>(
   from values: some TypedExpression<Domain>
-) -> Expr<TupleExpr<Domain.Element>> {
+) -> Expr<[Domain.Element]> {
   Expr(.choose(
     .functionSet(.integerRange(.int(1), .cardinality(values.stateExpr)), values.stateExpr),
     "f",

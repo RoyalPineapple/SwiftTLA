@@ -6,6 +6,29 @@ import SwiftTLA
 
 @Suite("Specification source authority")
 struct SpecificationSourceAuthorityTests {
+    @Test("conditional branches retain the declared union instead of narrowing to one alternative", arguments: [false, true])
+    func conditionalUnionContext(_ reverse: Bool) throws {
+        let branches = reverse ? "then: value.expr, else: Value.first(1)" : "then: Value.first(1), else: value.expr"
+        let model = try declaration("""
+        typealias Value = OneOf<Int, Bool>
+        enum Step: String, CaseIterable { case update }
+        static var spec: TLASpec {
+            #spec("ConditionalUnion") { scope in
+                let value: SharedVariable<Value> = scope.sharedVar(initial: Value.second(false))
+                Algorithm("ConditionalUnion") {
+                    Do(Step.update) {
+                        let selected = If(true, \(branches))
+                        Assign(value, to: selected)
+                    }
+                }
+            }
+        }
+        """)
+        let verified = try TLASpecVerifier.parseAndVerify(model)
+        let variable = try #require(verified.program.layout.variables.first { $0.declaration.name == "value" })
+        #expect(verified.program.variableTypes[variable.id] == .oneOf(.int, .bool))
+    }
+
     @Test("Initializers retain their declared type through parentheses", arguments: [
         ("SetExpr<Record<Entry>>.literal()", "SetExpr<Record<Entry>>"),
         ("Function<Key, Record<Entry>>.literal()", "Function<Key, Record<Entry>>"),

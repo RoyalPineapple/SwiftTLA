@@ -40,6 +40,7 @@ public enum OneOf<First: TLAValueType, Second: TLAValueType>: TLAValueType, Send
 }
 
 extension OneOf: Equatable where First: Equatable, Second: Equatable {}
+extension OneOf: Hashable where First: Hashable, Second: Hashable {}
 
 extension TypedExpression {
     /// Checks that the formal value has the requested shape before exposing it

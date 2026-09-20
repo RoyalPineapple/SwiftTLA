@@ -72,6 +72,7 @@ let package = Package(
         .testTarget(name: "SwiftTLAParityTests", dependencies: [
             "SwiftTLA",
             "SwiftTLAMacros",
+            "CanonicalUpstreamCorpus",
             "UpstreamParity",
             "SwiftTLAPlugin"
         ], path: "Tests/SwiftTLAParityTests", swiftSettings: settings)

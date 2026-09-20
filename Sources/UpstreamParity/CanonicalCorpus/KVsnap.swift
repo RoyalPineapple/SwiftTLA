@@ -37,7 +37,7 @@ package struct KVsnapModel: Sendable {
         }
     }
 
-    package enum NoValue: String, TLAValueType {
+    package enum NoValue: String, CaseIterable, FiniteTLAValueDomain {
         case noVal = "NoVal"
 
         package var tlaValue: TLAValue { .constant(rawValue) }
@@ -48,38 +48,16 @@ package struct KVsnapModel: Sendable {
         }
     }
 
-    package enum OperationKind: String, TLAValueType {
+    package enum OperationKind: String, CaseIterable, FiniteTLAValueDomain {
         case read, write
     }
 
     package typealias Value = OneOf<Transaction, NoValue>
 
-    package struct OperationFields {
-        package let operation: OperationKind
+    package struct Operation: Hashable, Sendable {
+        package let op: OperationKind
         package let key: Key
         package let value: Value
-    }
-
-    package enum OperationSchema: TLARecordSchema {
-        package typealias Fields = OperationFields
-
-        package static let fields: [TLARecordFieldDeclaration<Self>] = [
-            .init(operation, default: OperationKind.read),
-            .init(key, default: Key.k1),
-            .init(value, default: Value.second(.noVal)),
-        ]
-
-        package static func fieldName<Value>(for field: KeyPath<OperationFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \OperationFields.operation { return "op" }
-            if key == \OperationFields.key { return "key" }
-            if key == \OperationFields.value { return "value" }
-            return nil
-        }
-
-        package static let operation = field(\OperationFields.operation)
-        package static let key = field(\OperationFields.key)
-        package static let value = field(\OperationFields.value)
     }
 
     private enum Step: String, CaseIterable {
@@ -125,7 +103,7 @@ package struct KVsnapModel: Sendable {
                     )
                     let read_keys: LocalVariable<SetExpr<Key>> = scope.localVar(initial: SetExpr<Key>())
                     let write_keys: LocalVariable<SetExpr<Key>> = scope.localVar(initial: SetExpr<Key>())
-                    let ops: LocalVariable<TupleExpr<Record<OperationSchema>>> = scope.localVar(initial: TupleExpr<Record<OperationSchema>>())
+                    let ops: LocalVariable<[Operation]> = scope.localVar(initial: [])
 
                     Do(Step.start) {
                         Assign(tx, to: tx.inserting(selfID))
@@ -139,8 +117,8 @@ package struct KVsnapModel: Sendable {
                     }
 
                     Do(Step.read) {
-                        let reads: Expr<Set<Record<OperationSchema>>> = read_keys.expr.mapping { key in
-                            ModuleCall("CC", "r", key.expr, snapshotStore[key.expr])
+                        let reads: Expr<Set<Operation>> = read_keys.expr.mapping { key in
+                            ModuleCall(as: Operation.self, "CC", "r", key.expr, snapshotStore[key.expr])
                         }
                         Assign(
                             ops,
@@ -178,8 +156,8 @@ package struct KVsnapModel: Sendable {
                                         else: store[key.expr]
                                     )
                                 })
-                                let writes: Expr<Set<Record<OperationSchema>>> = write_keys.expr.mapping { key in
-                                    ModuleCall("CC", "w", key.expr, Value.first(selfID.expr))
+                                let writes: Expr<Set<Operation>> = write_keys.expr.mapping { key in
+                                    ModuleCall(as: Operation.self, "CC", "w", key.expr, Value.first(selfID.expr))
                                 }
                                 Assign(
                                     ops,

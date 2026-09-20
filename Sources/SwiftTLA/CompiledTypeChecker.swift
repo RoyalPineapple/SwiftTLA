@@ -588,7 +588,7 @@ package struct CompiledTypeChecker: Sendable {
     }
 
     private mutating func checkUnionConstructor(_ expression: CompiledExpression, expected: CompiledValueType) throws -> CheckedType? {
-        guard case .union(let alternatives) = expected else { return nil }
+        guard let alternatives = expected.unionAlternatives else { return nil }
         switch expression.operation {
         case .value, .setLiteral, .tupleLiteral, .recordLiteral, .functionLiteral, .union, .intersection, .setDifference: break
         default: return nil
@@ -674,6 +674,8 @@ package struct CompiledTypeChecker: Sendable {
             return .tuple(try zip(a, b).map { try operandContext($0, $1) })
         case (.record(let a), .record(let b)) where a.map(\.name) == b.map(\.name):
             return .record(try zip(a, b).map { .init(name: $0.name, type: try operandContext($0.type, $1.type)) })
+        case (.oneOf, _), (.union, _): return lhs
+        case (_, .oneOf), (_, .union): return rhs
         case (.collectionMember, .collectionMember), (.named, .named): return try CompiledValueType.merge(lhs, rhs)
         case (.collectionMember, _): return lhs
         case (_, .collectionMember): return rhs
@@ -795,7 +797,7 @@ package struct CompiledTypeChecker: Sendable {
     }
 
     private func literal(_ value: CompiledValue, expected: CompiledValueType = .unknown) throws -> CompiledValueType {
-        if case .union(let alternatives) = expected {
+        if let alternatives = expected.unionAlternatives {
             let matches = alternatives.filter { (try? literal(value, expected: $0)) != nil }
             guard matches.count == 1 else { throw CompiledValueType.diagnostic("union", "literal must belong to exactly one union alternative") }
             return expected
@@ -1265,7 +1267,7 @@ package struct CompiledTypeChecker: Sendable {
             while let task = pending.popLast() {
                 switch task {
                 case .check(let expression, let expected):
-                    if case .union = expected {
+                    if expected.unionAlternatives != nil {
                         switch expression.operation {
                         case .functionLiteral, .setLiteral, .recordLiteral, .union, .intersection, .setDifference:
                             ancestors.append(expression)
@@ -2255,7 +2257,7 @@ package struct CompiledTypeChecker: Sendable {
     }
 
     private mutating func inferResolved(_ expression: CompiledExpression, expected: CompiledValueType = .unknown) throws -> CheckedType {
-        if case .union = expected, let checked = try checkUnionConstructor(expression, expected: expected) {
+        if expected.unionAlternatives != nil, let checked = try checkUnionConstructor(expression, expected: expected) {
             return checked
         }
         let result: CompiledValueType

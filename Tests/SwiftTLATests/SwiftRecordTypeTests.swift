@@ -1,9 +1,50 @@
 import Foundation
+import SwiftParser
+import SwiftSyntax
 import Testing
 @testable import SwiftTLA
 @testable import SwiftTLAPlugin
 
 struct SwiftRecordTypeTests {
+    @Test("explicit imported records validate their shape and preserve nominal identity", arguments: [
+        "FormalCall(as: Packet.self, \"read\", input, 1)",
+        "ModuleCall(as: Packet.self, \"CC\", \"read\", input, 1)"
+    ])
+    func projectsImportedRecords(_ source: String) throws {
+        let metadata = try swiftRecordMetadata("struct Packet { let value: Int }")
+        let parser = ParserSession(sourceTypes: metadata)
+        let syntax = try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
+        let scope = ParserSession.TypedFacadeScope.empty.extending(
+            binding: "input", to: .variable("__importedRecord"), shape: .int)
+        let parsed = try #require(parser.decodeTypedFacadeValue(syntax, scope: scope))
+        guard case .letValue(let name, .assertView(let call, let shape), .recordLiteral(let record)) = parsed else {
+            Issue.record("Expected a checked, single-evaluation record projection")
+            return
+        }
+        #expect(name != "__importedRecord")
+        #expect(call.freeVariableNames == ["__importedRecord"])
+        #expect(shape == .record([.init(name: "value", shape: .integer)]))
+        #expect(record.nativeType == (try SourceTypeResolver(metadata: metadata).resolve("Packet")))
+        #expect(record.fields == [.init(name: "value", value: .recordAccess(.variable(name), "value"))])
+    }
+
+    @Test("record union fields retain ordered Swift alternatives without anonymous value types")
+    func preservesDeclaredUnionFields() throws {
+        let resolver = SourceTypeResolver(metadata: try swiftRecordMetadata("""
+            struct Packet: Hashable, Sendable { let payload: OneOf<Int, Bool> }
+            """))
+        let union = CompiledValueType.oneOf(.int, .bool)
+        #expect(try resolver.resolve("OneOf<Int, Bool>") == union)
+        #expect(try resolver.resolve("Packet") == .nominalRecord("Model.Packet", [.init(name: "payload", type: union)]))
+        #expect(union.components == [.int, .bool])
+        #expect(union.swiftType == "OneOf<Int, Bool>")
+        let declarations = NativeTypeDeclarations(types: [union], literals: [], namedDomains: [:])
+        #expect(declarations.unions.isEmpty)
+        #expect(declarations.finiteValues.isEmpty)
+        #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("OneOf<Int, Int>") }
+        #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("OneOf<OneOf<Int, Bool>, Int>") }
+    }
+
     @Test("record emission uses the original Swift type and preserves formal field ordering")
     func emitsOriginalRecordType() throws {
         let compilation = try TLASpec("RecordBoundary") { Var("value", 0) }.compile()

@@ -41,9 +41,9 @@ extension NativeSwiftEmitter {
             return switching(try members.indices.map {
                 "case .\(finiteCaseName(members, index: $0)): return \(try formalLiteral(members[$0]))"
             })
-        case .union(let alternatives):
-            return switching(try alternatives.enumerated().map {
-                "case .alternative\($0.offset + 1)(let payload): return \(try formalValue("payload", type: $0.element))"
+        case .union, .oneOf:
+            return switching(try (type.unionAlternatives ?? []).enumerated().map {
+                "case .\(unionCase(type, index: $0.offset))(let payload): return \(try formalValue("payload", type: $0.element))"
             })
         case .collectionMember(let variable, _):
             guard let collection = model.api.variables.first(where: { $0.id == variable })?.collection else {

@@ -233,7 +233,7 @@ final class SourceTypeResolver {
                 view: .record(resolvedFields.map { .init(name: $0.name, shape: $0.value.view) }))
         case "OneOf":
             let parts = try resolveArguments(expecting: 2)
-            return .init(type: try CompiledValueType.normalizedUnion(parts.map(\.type), namedDomains: namedDomains),
+            return .init(type: try CompiledValueType.preservingUnion(parts[0].type, parts[1].type, namedDomains: namedDomains),
                 view: .union(parts[0].view, parts[1].view))
         default:
             return try named(source, resolving: resolving)
