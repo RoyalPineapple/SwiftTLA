@@ -706,6 +706,17 @@
   },
   "localDiagnostics": [
     {
+      "session": "52167",
+      "sourceSHA": "3e1958b16c9ed2897e920542751b62b96b4332d1",
+      "sourcePatchSHA256": "d9b5c6510668ab8c2e2b1c8fdf0aad868d864cde4cc98111c5d113a2dc633fb3",
+      "sourcePatchScope": "git diff -- Examples",
+      "command": "cd Examples/SwiftTLADemos && DEVELOPER_DIR=/Library/Developer/CommandLineTools ../../scripts/local-validation.sh swiftpm-test 'ChangRobertsDemoTests'",
+      "exitCode": 1,
+      "testsRun": 0,
+      "result": "ChangRoberts macro parsing rejected the invariant handle's direct argument: state property handles require a predicate closure. Correct the authoring call to LeaderDomain { predicate }; the missing generated record conformance and machine APIs are downstream expansion failures. No record migration acceptance is established.",
+      "scope": "Source remained fixed throughout the wrapper build. Full log: /tmp/swifttla-message-record.zIRV50/validation.log. Local Swift 6.1.2 matches hosted Swift 6.1.2; no local TLC was run."
+    },
+    {
       "session": "72996",
       "sourceSHA": "60e1ed62ea8395bca6f5d9c62c2f40564d00e81a",
       "sourcePatchSHA256": "4b787f4fecfb8e5daa335a7efe969e12d41aacff54b8ea1aed662c37f5c60f36",
