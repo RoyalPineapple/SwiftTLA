@@ -6227,8 +6227,20 @@
     {
       "path": "specifications/NanoBlockchain",
       "name": "Nano Blockchain Protocol",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "partial source and pinned-configuration audit",
+      "gap": "The existing NanoBlockchainModel is a reduced formal-runtime fixture, not an implementation of any MCNano configuration. It has only genesis/send record alternatives and creation actions, uses a private key for genesis.account instead of KeyPair[privateKey], fixes send balance to 1, and adds send blocks only to the creating node's received set instead of broadcasting them. It omits open/receive/change blocks, every processing action, hashFunction and deterministic HashOf/CalculateHashImpl, recursive ownership/balance helpers, cryptographic safety, VIEW, and model-owned configurations. Its string sentinels and fabricated NoBlock record differ from upstream model values. Complete the original model and all three hash-domain configurations; migrating only its two schemas cannot establish upstream coverage.",
+      "sourceAudit": {
+        "swiftSourceSHA": "bba219f340df1f4354de6d1f2ec7a6fe011cfed9",
+        "implementation": "Sources/UpstreamParity/Examples/NanoBlockchain.swift",
+        "test": "Tests/SwiftTLAParityTests/UpstreamParityTests.swift:nanoBlockchainGenesisTransitions",
+        "testScope": "Only the initial state and six nondeterministic genesis transitions of the reduced fixture are asserted through CompiledRuntime. The test explicitly expects the private-key genesis account and synthetic NoBlock record. It neither compares the pinned upstream model nor exercises generated native execution or a complete graph.",
+        "moduleSHA256": "592643677b45b85a7889c784dc97968090813e1697487e60e4858f6b15726a48",
+        "dependencySHA256": "8a4b2d8958a36f9bbeef83b6232e835a72e9b1ccf8e4561c12ab0b66ebb26b82",
+        "configurationContract": "All three configurations select Spec, TypeInvariant, SafetyInvariant, VIEW View, CalculateHash <- CalculateHashImpl, and Nano-instance NoHash/NoBlock overrides bound to NoHashVal/NoBlockVal model values. Deadlock uses TLC's enabled default. PrivateKey={prv1,prv2}, PublicKey={pub1,pub2}, Node={n1,n2}, GenesisBalance=3. Only Hash changes: three, four, or five model values. No symmetry directive or BalanceInvariant selection is present.",
+        "viewContract": "MCNano.View is <<distributedLedger, received>>, excluding hashFunction and lastHash from TLC visited-state identity. MCNano.Next delegates to Nano.Next while any hash is unassigned, then explicitly stutters when hashes are depleted. The native checker and complete graph comparison need an explicit, equivalent configured view contract; silently omitting VIEW or comparing a truncated graph is not equivalent.",
+        "capabilities": "AC-17 needs all five disjoint block-record shapes with public-key genesis accounts, nested signatures, and model-value sentinel unions rather than preservation of the fixture's fake NoBlock record. B-05/B-06 need recursive PublicKeyOf, BalanceAt, and ValueOfSendBlock plus action-level CalculateHash substitution and Nano instance bindings. SumBag/BalanceInvariant exist but are not selected by these configurations; retain an explicit module/operator disposition rather than adding that invariant to the selected checks. All required transitions, TypeInvariant, CryptographicInvariant/SafetyInvariant, deterministic choice, typed maps/sets, and configured state identity must survive lowering and export.",
+        "scope": "Read both pinned modules and all three CFG files directly from tlaplus/Examples at the ledger's upstreamRevision and hashed their exact bytes. No local TLC execution, semantic equivalence evidence, new implementation, or coverage credit. This corrects the previous schema-only planning assumption."
+      },
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -6240,8 +6252,8 @@
         },
         {
           "path": "specifications/NanoBlockchain/Nano.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "algorithm dependency",
+          "reason": "MCNano instantiates Nano as N. It supplies core block types, creation/processing transitions, recursive ledger helpers, and selected type/cryptographic invariants. Module-instance NoHash/NoBlock overrides are required by all three configurations.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -6250,6 +6262,8 @@
         {
           "module": "specifications/NanoBlockchain/MCNano.tla",
           "configuration": "specifications/NanoBlockchain/MCNanoLarge.cfg",
+          "configurationSHA256": "da1cf666fb693335057fc9e93d4a56b2b2f7ea244410dabe09bf7351d0f395d1",
+          "requiredHashDomain": ["h1", "h2", "h3", "h4", "h5"],
           "required": true,
           "status": "missing",
           "upstreamMode": "exhaustive search",
@@ -6260,6 +6274,8 @@
         {
           "module": "specifications/NanoBlockchain/MCNano.tla",
           "configuration": "specifications/NanoBlockchain/MCNanoMedium.cfg",
+          "configurationSHA256": "94be8f566f926f3e7b64228afee39d6c654c55e9cc30fe2f56ce243b7f34330c",
+          "requiredHashDomain": ["h1", "h2", "h3", "h4"],
           "required": true,
           "status": "missing",
           "upstreamMode": "exhaustive search",
@@ -6270,6 +6286,8 @@
         {
           "module": "specifications/NanoBlockchain/MCNano.tla",
           "configuration": "specifications/NanoBlockchain/MCNanoSmall.cfg",
+          "configurationSHA256": "b8ebca7e99b81409fa4831e4ec7304a613324f4dd969ff279002a9c2c2532198",
+          "requiredHashDomain": ["h1", "h2", "h3"],
           "required": true,
           "status": "missing",
           "upstreamMode": "exhaustive search",
@@ -9168,7 +9186,7 @@
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
       "recordUnionGap": {
-        "requiredBy": "NanoBlockchainModel.Block contains NoBlock, genesis(account,balance), and send(previous,balance,destination) record-shaped alternatives. SignedBlock embeds that value; deleting its manual schema requires preserving those distinct formal shapes and native identities.",
+        "requiredBy": "Pinned Nano.tla defines genesis, send, open, receive, and change record alternatives; genesis.account is PublicKey. SignedBlock embeds the block union and a signature record. Ledger and hashFunction also admit the NoBlock model-value sentinel configured through the Nano instance. The current fixture has only genesis/send plus a fabricated NoBlock record and uses PrivateKey for genesis.account; those differences must be removed, not preserved as the target union contract. The NanoBlockchain family sourceAudit records all three required configurations and coupled gaps.",
         "resolver": "SourceTypeResolver routes declared OneOf alternatives through CompiledValueType.preservingUnion and normalizedUnion. normalizedUnion has no nominalRecord kind and rejects multiple composite alternatives with the same kind. Adding nominalRecord alone does not support multiple record shapes.",
         "ordering": "NativeSwiftEmitter.unionOrdering handles matching alternatives with their typed comparator but orders differing composite alternatives only by formal-kind rank and an ordinal of zero. Two record alternatives would therefore compare neither less nor greater. CompiledValue record order instead compares sorted field-name/value pairs lexicographically; shared leading fields must compare their values before a later field-name difference. Sorting only by record type name, case number, or field-name list would change that order.",
         "requiredChecks": "Preserve the declared native alternatives; reject overlapping untagged formal shapes; distinguish disjoint record key sets; compare different record alternatives by the existing formal field/value order, including common leading fields with different values; cover nested unions and collection element ordering; roundtrip exact field sets and reject malformed projections. Do not route native ordering through TLA serialization or an interpreter. NanoBlockchain's associated-value enum and its existing custom type discriminator also need an explicit supported source representation, not an inferred rename.",
