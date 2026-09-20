@@ -3924,9 +3924,9 @@
         {
           "path": "specifications/DieHard/APADieHardest.tla",
           "role": "configured annotation wrapper",
-          "reason": "Direct inspection at the pinned revision establishes that ConstInit binds Goal=4 and the same 5/3 and 5/3/3 capacity functions as MCDieHardest. The module imports DieHardest unchanged and its documented command selects NextInterleaved and NotSolved. Unlike APMajority, it supplies explicit constant bindings, but they duplicate MCDieHardest's configured behavior. The documented length 13 is an Apalache search option, not a model bound or a requirement to exhaust the infinite graph. Disposition remains incomplete until the shared MCDieHardest behavior has implementation and hosted evidence. No Apalache execution is required or claimed.",
-          "implementations": [],
-          "dispositionComplete": false
+          "reason": "At the pinned revision, ConstInit binds Goal=4 and the same 5/3 and 5/3/3 capacity functions as MCDieHardest. The documented command selects NextInterleaved and NotSolved from DieHardest. These bindings and behavior match the retained MCDieHardest implementation and hosted counterexample at 3f5e3ac20cc003efa78d6e530ec3632afd182e80. The length 13 is an Apalache search option, not a model bound. This annotation wrapper adds no independent TLC configuration. No Apalache execution or graph exhaustion is claimed.",
+          "implementations": ["Sources/UpstreamParity/Examples/DieHardest.swift"],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/DieHard/APDieHarder.tla",
@@ -3981,9 +3981,9 @@
         {
           "path": "specifications/DieHard/MCDieHardest.tla",
           "role": "configured root",
-          "reason": "The configuration selects Spec and NotSolved, with Goal=4 and capacities 5/3 versus 5/3/3. The expected counterexample records step counts 6 and 5. That finite witness does not complete its infinite graph.",
+          "reason": "The configuration selects Spec and NotSolved, with Goal=4 and capacities 5/3 versus 5/3/3. Hosted run 35506180618 retains matching native, upstream, and generated counterexamples at 3f5e3ac20cc003efa78d6e530ec3632afd182e80. The complete shortest witness records step counts 6 and 5. This closes the configured root, not the alternative operators in DieHardest or its infinite graph.",
           "implementations": ["Sources/UpstreamParity/Examples/DieHardest.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
