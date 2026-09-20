@@ -193,12 +193,23 @@ extension CompiledValueType {
                 }
             }
             if case .finite = rhs { return overlaps(rhs, lhs) }
+            if let overlap = recordsOverlap(lhs, rhs, namedDomains: namedDomains) { return overlap }
             return false
         }
         guard !overlaps(a, b) else {
             throw diagnostic("OneOf", "declared alternatives overlap; an untagged formal value cannot preserve its Swift alternative")
         }
         return .oneOf(first, second)
+    }
+
+    private static func recordsOverlap(_ lhs: Self, _ rhs: Self,
+                                       namedDomains: [String: Set<CompiledValue>]) -> Bool? {
+        guard let left = lhs.recordFields, let right = rhs.recordFields else { return nil }
+        guard Set(left.map(\.name)) == Set(right.map(\.name)) else { return false }
+        return left.allSatisfy { field in
+            let other = right.first { $0.name == field.name }!.type
+            return (try? preservingUnion(field.type, other, namedDomains: namedDomains)) == nil
+        }
     }
 
     package static func normalizedUnion(_ branches: [CompiledValueType], namedDomains: [String: Set<CompiledValue>]) throws -> CompiledValueType {
@@ -225,19 +236,23 @@ extension CompiledValueType {
             case .modelValue: 8
             case .set: 4
             case .array, .tuple: 5
-            case .record: 6
+            case .record, .nominalRecord: 6
             case .dictionary: 7
             default: nil
             }
         }
         for (index, branch) in composite.enumerated() {
             guard let rank = kind(branch), branch.resolved else { throw CompiledValueType.diagnostic("union", "union alternatives require finite scalars or resolved collection shapes") }
-            if composite.prefix(index).contains(where: { kind($0) == rank }) {
+            if composite.prefix(index).contains(where: { other in
+                guard kind(other) == rank else { return false }
+                if let overlap = recordsOverlap(branch, other, namedDomains: namedDomains) { return overlap }
+                return true
+            }) {
                 throw CompiledValueType.diagnostic("union", "overlapping composite union alternatives are ambiguous")
             }
             if scalarValues.contains(where: { value in
                 switch (value, branch) {
-                case (.set, .set), (.tuple, .array), (.tuple, .tuple), (.record, .record), (.function, .dictionary): true
+                case (.set, .set), (.tuple, .array), (.tuple, .tuple), (.record, .record), (.record, .nominalRecord), (.function, .dictionary): true
                 default: false
                 }
             }) { throw CompiledValueType.diagnostic("union", "finite and composite union alternatives overlap") }
@@ -249,7 +264,7 @@ extension CompiledValueType {
             }
         }
         if composite.isEmpty { return .finite(scalarValues.sorted()) }
-        var alternatives = composite.sorted { kind($0)! < kind($1)! }
+        var alternatives = composite.sorted { (kind($0)!, $0.swiftType) < (kind($1)!, $1.swiftType) }
         if !scalarValues.isEmpty { alternatives.insert(.finite(scalarValues.sorted()), at: 0) }
         return alternatives.count == 1 ? alternatives[0] : .union(alternatives)
     }

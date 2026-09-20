@@ -45,6 +45,22 @@ struct SwiftRecordTypeTests {
         #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("OneOf<OneOf<Int, Bool>, Int>") }
     }
 
+    @Test("record unions preserve nominal alternatives and reject ambiguous field sets")
+    func resolvesRecordAlternatives() throws {
+        let resolver = SourceTypeResolver(metadata: try swiftRecordMetadata("""
+            struct First { let a: Int; let z: Int }
+            struct Second { let a: Int; let b: Int }
+            struct Duplicate { let z: Int; let a: Int }
+            struct Flagged { let a: Bool; let z: Int }
+            """))
+        let first = try resolver.resolve("First")
+        let second = try resolver.resolve("Second")
+        #expect(try resolver.resolve("OneOf<First, Second>") == .oneOf(first, second))
+        #expect(try resolver.resolve("OneOf<First, Flagged>") == .oneOf(first, resolver.resolve("Flagged")))
+        #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("OneOf<First, Duplicate>") }
+        #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("OneOf<First, OneOf<Second, First>>") }
+    }
+
     @Test("record emission uses the original Swift type and preserves formal field ordering")
     func emitsOriginalRecordType() throws {
         let compilation = try TLASpec("RecordBoundary") { Var("value", 0) }.compile()

@@ -90,56 +90,107 @@ extension NativeSwiftEmitter {
 
     func unionOrdering(_ type: CompiledValueType) throws -> String {
         guard let alternatives = type.unionAlternatives else { throw unsupported("union ordering source") }
-        let cases = try alternatives.enumerated().map { index, alternative in
-            "case (.\(unionCase(type, index: index))(let left), .\(unionCase(type, index: index))(let right)): return (\(try ordering(alternative)))(left, right)"
-        }.joined(separator: "\n")
-        let rank = try unionRank("value", type: type, members: finiteViewMembers(type))
-        return """
-        func rank(_ value: \(try swiftType(type))) -> (Int, Int) { return \(rank) }
-        switch (lhs, rhs) { \(cases)
-        default: return rank(lhs) < rank(rhs)
+        let cases = try alternatives.enumerated().flatMap { leftIndex, left in
+            try alternatives.enumerated().map { rightIndex, right in
+                "case (.\(unionCase(type, index: leftIndex))(let left), .\(unionCase(type, index: rightIndex))(let right)): return (\(try crossOrdering(left, right)))(left, right)"
+            }
         }
-        """
+        return "switch (lhs, rhs) { \(cases.joined(separator: "\n")) }"
     }
 
-    private func unionRank(_ value: String, type: CompiledValueType, members: [CompiledValue]) throws -> String {
-        if let ordinal = try finiteUnionRank(value, type: type, members: members) {
-            return "(\(try formalKindRank(value, type: type)), { () -> Int in \(ordinal) }())"
+    private func crossOrdering(_ left: CompiledValueType, _ right: CompiledValueType) throws -> String {
+        if left == right { return try ordering(left) }
+        func closure(_ body: String) throws -> String {
+            "{ (lhs: \(try swiftType(left)), rhs: \(try swiftType(right))) -> Bool in \(body) }"
         }
-        if let alternatives = type.unionAlternatives {
+        func compare(_ lhs: String, _ left: CompiledValueType, _ rhs: String, _ right: CompiledValueType) throws -> String {
+            "if (\(try crossOrdering(left, right)))(\(lhs), \(rhs)) { return true }; if (\(try crossOrdering(right, left)))(\(rhs), \(lhs)) { return false }"
+        }
+        if let alternatives = left.unionAlternatives {
             let cases = try alternatives.enumerated().map { index, alternative in
-                "case .\(unionCase(type, index: index))(let payload): return \(try unionRank("payload", type: alternative, members: members))"
+                "case .\(unionCase(left, index: index))(let payload): return (\(try crossOrdering(alternative, right)))(payload, rhs)"
             }.joined(separator: "\n")
-            return "({ () -> (Int, Int) in switch \(value) { \(cases) } }())"
+            return try closure("switch lhs { \(cases) }")
         }
-        return "(\(try formalKindRank(value, type: type)), 0)"
-    }
-
-    private func finiteUnionRank(_ value: String, type: CompiledValueType, members: [CompiledValue]) throws -> String? {
-        if let alternatives = type.unionAlternatives {
-            var cases: [String] = []
-            for (index, alternative) in alternatives.enumerated() {
-                guard let nested = try finiteUnionRank("payload", type: alternative, members: members) else { return nil }
-                cases.append("case .\(unionCase(type, index: index))(let payload): \(nested)")
-            }
-            return "switch \(value) { \(cases.joined(separator: "\n")) }"
+        if let alternatives = right.unionAlternatives {
+            let cases = try alternatives.enumerated().map { index, alternative in
+                "case .\(unionCase(right, index: index))(let payload): return (\(try crossOrdering(left, alternative)))(lhs, payload)"
+            }.joined(separator: "\n")
+            return try closure("switch rhs { \(cases) }")
         }
-        let cases: [String]
-        switch type {
-        case .named(let name):
-            guard let values = program.enums.cases[name] else { return nil }
-            cases = try values.map { item in
-                guard let rank = members.firstIndex(of: item.value) else { throw unsupported("union ordering member") }
-                return "case .`\(item.name)`: return \(rank)"
+        func members(_ type: CompiledValueType) -> [(name: String, value: CompiledValue)]? {
+            switch type {
+            case .named(let name): return program.enums.cases[name]?.map { ("`\($0.name)`", $0.value) }
+            case .finite(let values): return values.enumerated().map { (finiteCaseName(values, index: $0.offset), $0.element) }
+            default: return nil
             }
-        case .finite(let values):
-            cases = try values.enumerated().map { index, item in
-                guard let rank = members.firstIndex(of: item) else { throw unsupported("union ordering member") }
-                return "case .\(finiteCaseName(values, index: index)): return \(rank)"
-            }
-        default: return nil
         }
-        return "switch \(value) { \(cases.joined(separator: "\n")) }"
+        if let a = members(left), let b = members(right) {
+            let ordered = Set((a + b).map(\.value)).sorted()
+            let ranks = Dictionary(uniqueKeysWithValues: ordered.enumerated().map { ($0.element, $0.offset) })
+            func cases(_ values: [(name: String, value: CompiledValue)]) -> String {
+                values.map { "case .\($0.name): return \(ranks[$0.value]!)" }.joined(separator: "\n")
+            }
+            return try closure("""
+            func leftRank(_ value: \(try swiftType(left))) -> Int { switch value { \(cases(a)) } }
+            func rightRank(_ value: \(try swiftType(right))) -> Int { switch value { \(cases(b)) } }
+            return leftRank(lhs) < rightRank(rhs)
+            """)
+        }
+        if let values = members(left) ?? members(right) {
+            let fromLeft = members(left) != nil
+            let other = fromLeft ? right : left
+            let valueName = fromLeft ? "rhs" : "lhs"
+            let rank = try formalKindRank(valueName, type: other)
+            let cases = try values.map { item in
+                let result: String
+                if let value = try? literal(item.value, as: other) {
+                    result = "(\(try ordering(other)))(\(fromLeft ? value : valueName), \(fromLeft ? valueName : value))"
+                } else {
+                    guard rank != String(item.value.orderingKind) else {
+                        throw unsupported("ordering finite value against incompatible composite shape")
+                    }
+                    result = fromLeft ? "\(item.value.orderingKind) < \(rank)" : "\(rank) < \(item.value.orderingKind)"
+                }
+                return "case .\(item.name): return \(result)"
+            }
+            return try closure("switch \(fromLeft ? "lhs" : "rhs") { \(cases.joined(separator: "\n")) }")
+        }
+        if let a = left.recordFields, let b = right.recordFields {
+            var body = ""
+            for (x, y) in zip(a.sorted { $0.name < $1.name }, b.sorted { $0.name < $1.name }) {
+                if x.name != y.name { return try closure(body + "return \(x.name < y.name)") }
+                body += try compare("lhs.`\(x.name)`", x.type, "rhs.`\(y.name)`", y.type) + "\n"
+            }
+            return try closure(body + "return \(a.count < b.count)")
+        }
+        switch (left, right) {
+        case (.array(let a), .array(let b)), (.set(let a), .set(let b)):
+            let isSet: Bool = if case .set = left { true } else { false }
+            let lhs = isSet ? "lhs.sorted(by: \(try ordering(a)))" : "lhs"
+            let rhs = isSet ? "rhs.sorted(by: \(try ordering(b)))" : "rhs"
+            return try closure("for (a, b) in zip(\(lhs), \(rhs)) { \(try compare("a", a, "b", b)) }; return lhs.count < rhs.count")
+        case (.dictionary(let ak, let av), .dictionary(let bk, let bv)):
+            return try closure("""
+            let a = lhs.sorted { (\(try ordering(ak)))($0.key, $1.key) }
+            let b = rhs.sorted { (\(try ordering(bk)))($0.key, $1.key) }
+            for (x, y) in zip(a, b) {
+                \(try compare("x.key", ak, "y.key", bk))
+                \(try compare("x.value", av, "y.value", bv))
+            }
+            return lhs.count < rhs.count
+            """)
+        case (.tuple(let a), .tuple(let b)):
+            let fields = try zip(a, b).enumerated().map { index, types in
+                try compare("lhs." + fieldName(left, index: index), types.0, "rhs." + fieldName(right, index: index), types.1)
+            }.joined(separator: "\n")
+            return try closure(fields + "\nreturn \(a.count < b.count)")
+        default:
+            let a = try formalKindRank("lhs", type: left)
+            let b = try formalKindRank("rhs", type: right)
+            guard a != b else { throw unsupported("ordering incompatible shapes of the same formal kind") }
+            return try closure("return \(a) < \(b)")
+        }
     }
 
     func formalKindRank(_ value: String, type: CompiledValueType) throws -> String {

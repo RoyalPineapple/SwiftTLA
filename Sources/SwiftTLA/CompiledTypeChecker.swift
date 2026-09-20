@@ -606,7 +606,7 @@ package struct CompiledTypeChecker: Sendable {
             throw CompiledValueType.diagnostic("union", "expression must belong to exactly one declared union alternative")
         }
         self = match.scope
-        return .init(type: expected, computationType: match.checked.resultType,
+        return .init(type: expected, computationType: match.checked.computationType,
             children: match.checked.computation.children)
     }
 

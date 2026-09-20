@@ -8,6 +8,21 @@ import SwiftBasicFormat
 @testable import SwiftTLAPlugin
 
 struct NativeCodeGenerationTests {
+    @Test("finite union ordering emits linear rank switches instead of a Cartesian case table")
+    func boundsFiniteUnionOrderingSize() throws {
+        let compilation = try TLASpec("FiniteOrdering") { Var("value", 0) }.compile()
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
+        let first = CompiledValueType.finite((0..<32).map(CompiledValue.integer))
+        let second = CompiledValueType.finite((32..<64).map(CompiledValue.integer))
+        let declarations = NativeTypeDeclarations(types: [first, second], literals: [], namedDomains: [:])
+        let emitter = NativeSwiftEmitter(
+            model: try MacroCompilation(typeName: "FiniteOrdering", program: program), sharedTypes: declarations)
+        let generated = try emitter.ordering(.oneOf(first, second))
+        #expect(generated.components(separatedBy: "case ").count - 1 <= 8 * 32)
+        #expect(!generated.contains("TLAValue"))
+        #expect(!Parser.parse(source: "let order = \(generated)").hasError)
+    }
+
     @Test("Native bindings retain resolved declaration names")
     func preservesBindingNames() throws {
         let compilation = try TLASpec(name: "BindingNames", variables: [
