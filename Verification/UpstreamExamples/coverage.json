@@ -8773,8 +8773,16 @@
       "id": "AC-08",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Local diagnostic 64107 passes 87 graph-comparison, mismatch-trace, reader, and property-check tests. Complete initial-state sets, state identities, labeled edges, and changed connectivity remain significant even when counts and action names match. Early-stopped and incomplete captures fail, and equal property outcomes over different graphs cannot establish agreement. Complete graph capture remains separate from failing property traces. Hosted acceptance of the strengthened scope and all required end-to-end models remains pending; this is not a verified DSL criterion.",
-      "evidence": []
+      "reason": "Complete initial-state sets, state identities, labeled edges, and changed connectivity remain significant even when counts and action names match. Early-stopped and incomplete captures fail, and equal property outcomes over different graphs cannot establish agreement. Complete graph capture remains separate from failing property traces. These contracts passed hosted ordinary validation at edec23de. Historical evidence is retained; source-aligned admission and all required end-to-end model evidence remain pending, so this criterion is uncredited.",
+      "evidence": [{
+        "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/job/105992632109",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478781660/artifacts/10596135960",
+        "artifactSHA256": "d76ed2004fba91758ff38e6d0caef660a6943a73bccc090a51ecb195ca2901bf",
+        "acceptanceComplete": true,
+        "scope": "Audited complete negative-run comparisons, initial-state identity, changed action labels and endpoints with equal counts, graph-rooted mismatch paths, early-violation incompleteness, missing-footer rejection despite a successful process message, reuse of complete graphs across property checks, and rejection of equal property outcomes on different graphs. GraphComparisonTests, GraphMismatchTracingTests, TLCGraphReaderTests, and TLCPropertyCheckTests pass in the terminal hosted log. Process tests use synthetic transport fixtures, not new upstream TLC runs. Later checked-batch reuse assertions and buffered-publication changes are outside this historical evidence. No configuration credit."
+      }]
     },
     {
       "id": "AC-09",
