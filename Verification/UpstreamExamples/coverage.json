@@ -4128,7 +4128,7 @@
         }
       },
       "audit": "reference inputs audited",
-      "gap": "All four published configurations and three source-defined parallel variants have intended-DSL implementations and audited hosted matches, across recorded revisions. All module dispositions are resolved. MCDieHardest retains its unbounded counters and complete shortest 12-state NotSolved witness. The TwoBuckets consumer uses atomic Do steps and its three focused tests pass. Hosted consumer confirmation, final family cleanup admission, and one green final revision remain pending.",
+      "gap": "All four published configurations and three source-defined parallel variants have audited hosted matches at 26574bc0. All module dispositions are resolved. MCDieHardest retains unbounded counters and its complete shortest 12-state witness. Hosted Apple builds and all ten demo tests pass at 265c7a19, including both TwoBuckets tests and the generated-consumer suite. Ordinary/upstream contracts, final family admission, and one green final revision remain pending.",
       "legacyCleanupComplete": false,
       "legacyCleanupAudit": {
         "corpusFiles": ["Sources/UpstreamParity/Examples/DieHard.swift", "Sources/UpstreamParity/Examples/DieHarder.swift", "Sources/UpstreamParity/Examples/DieHardest.swift", "Sources/UpstreamParity/Examples/DieHardestGlobalFreeze.swift", "Sources/UpstreamParity/Examples/DieHardestParallel.swift"],
@@ -4137,7 +4137,16 @@
         "baseSHA": "d6e7d31d",
         "examplePatchSHA256": "868eb366dfe058ea6e4893e28537a3880c0c73020a5bbf4215dc48fc600c9bcd",
         "diagnosticSession": "64187",
-        "scope": "Repository-wide source search finds five corpus models, including the parallel variants, and the separate TwoBuckets consumer. The corpus uses scoped variables and atomic Do actions. The consumer migration removes six hand-written finite-domain process types and synthetic control state while retaining its UI action names and move guards. All three focused tests pass, including comparison of every reachable transition against direct jug arithmetic. Hosted Apple UI confirmation and final cleanup admission remain pending; this consumer test does not confer upstream-equivalence credit."
+        "hostedConsumerEvidence": {
+          "sourceSHA": "265c7a197eeb9ed3cf22465180daa317138b907b",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518383391/job/106098090651",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35518383391/artifacts/10607183773",
+          "artifactSHA256": "1edf6ac0531a8092674565c3d6cece5e016b64cbda4e5652c8f7fea634b33bcf",
+          "testsPassed": 10,
+          "scope": "The 6004-byte archive digest, source SHA, Xcode 16.4/16F6, Swift 6.1.2, and SDK 24F74 verify. Both TwoBuckets tests and the generated-consumer suite pass. Every enabled jug move across all 16 states matches direct arithmetic, and export has no synthetic pc variable. The job also completes the Apple adoption contracts and SwiftUI demo build. Retained archive: /tmp/swifttla-demo-contracts.rbhN3q/evidence.zip. This proves consumer migration, not final admission."
+        },
+        "scope": "Repository-wide source search finds five corpus models and the separate TwoBuckets consumer. All use scoped variables and atomic Do actions. The consumer removes six singleton process domains and synthetic control state while retaining its UI action names and guards. Local diagnostics and hosted consumer contracts pass. Final family admission remains open."
       },
       "modules": [
         {
