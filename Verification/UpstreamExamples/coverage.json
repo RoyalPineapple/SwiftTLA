@@ -5831,6 +5831,16 @@
     {
       "path": "specifications/LearnProofs",
       "name": "Learn TLA⁺ Proofs",
+      "scheduling": {
+        "label": "Ready",
+        "reason": "Existing sequence domains, parameter bindings, state constraints, and invariants cover the published configuration. Implementation and hosted comparison remain necessary.",
+        "completionCondition": "Preserve lengths 0...4 before MCConstraint, all four invariants, and default deadlock checks. Remove the invented AddTwo bound. Resolve module dispositions without claiming TLAPS proof verification.",
+        "reusableDependency": {
+          "path": "Verification/FiniteGraph/fixtures/boulanger/TLAPS.tla",
+          "sourceCommit": "f14d23363a6409ee616cb6ee12edd53b07660011",
+          "sha256": "9afe54984062748a0568966434cc0945d682f8cd89fdbc38f73b5579751b0c55"
+        }
+      },
       "audit": "reference inputs audited",
       "gap": "MCFindHighest requires separate Nat and Seq substitutions, MCConstraint, and all four published invariants. The Swift port folds the constraint into initialization and omits parts of TypeOK. It has no model-owned scenario or independent reference case. AddTwo adds an upstream-absent x < 10 constraint. Module dispositions, complete hosted evidence, and legacy cleanup remain incomplete.",
       "legacyCleanupComplete": false,
@@ -8774,8 +8784,26 @@
     {
       "path": "specifications/Stones",
       "name": "Stone Scale Puzzle",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "reference inputs audited",
+      "gap": "The published configuration evaluates assumptions with W=40 and N=4 and reports zero states. The native comparison path requires initial machines.",
+      "scheduling": {
+        "label": "Checker gap",
+        "sharedCapability": "assumption-only-checking",
+        "reproducer": "Stones.cfg selects constants W=40 and N=4. Stones.tla has assumptions but no specification, initial predicate, or next predicate.",
+        "nativeBoundary": "NativeScenarioRun requires initial machines. ReachabilityGraph rejects an empty initial machine list.",
+        "completionCondition": "Compare unchanged assumptions through native evaluation, generated TLC, and upstream TLC. Retain zero-state accounting and PrintT solution output without dummy states.",
+        "scope": "Recursion and collection support remain unclassified until a focused implementation test. No smaller constants or invented bounds qualify.",
+        "evidenceKind": "Source audit only; no new execution evidence."
+      },
+      "sourceAudit": {
+        "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
+        "moduleBlob": "2036c26b1672c9e737253c1b9f0c4f1addfe3d88",
+        "configurationBlob": "51c16a85adcf4c3b21819330560badaf59e27d4d",
+        "manifestBlob": "ce4fac137da02c0976afbb5a2e767e386dc35606",
+        "expectedDistinctStates": 0,
+        "expectedTotalStates": 0,
+        "expectedStateDepth": 0
+      },
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -8803,8 +8831,27 @@
     {
       "path": "specifications/sums_even",
       "name": "Proof x+x is Even",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "reference inputs audited",
+      "gap": "The published configuration evaluates assumptions over NatOverride=0..1000000 and reports zero states. The native comparison path requires initial machines.",
+      "scheduling": {
+        "label": "Checker gap",
+        "sharedCapability": "assumption-only-checking",
+        "reproducer": "MC_sums_even.cfg binds MaxNat=1000000 and Nat<-NatOverride. MC_sums_even.tla evaluates ASSUME T1 without a specification, initial predicate, or next predicate.",
+        "nativeBoundary": "NativeScenarioRun requires initial machines. ReachabilityGraph rejects an empty initial machine list.",
+        "completionCondition": "Compare unchanged assumptions through native evaluation, generated TLC, and upstream TLC. Retain zero-state accounting and complete outcomes without dummy states.",
+        "scope": "No smaller domain qualifies. TLAPS proof verification is not required for this finite TLC assumption comparison.",
+        "evidenceKind": "Source audit only; no new execution evidence."
+      },
+      "sourceAudit": {
+        "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
+        "dependencyBlob": "4205795513f2cb6df723115e52a444312af8cfab",
+        "moduleBlob": "fe79a735828907065ebe3a052435831e9b521a60",
+        "configurationBlob": "1969570a8957315de52e575e9c07e140d80040d7",
+        "manifestBlob": "9a6dfbed42dda86307314b6f29b41b726ba2d927",
+        "expectedDistinctStates": 0,
+        "expectedTotalStates": 0,
+        "expectedStateDepth": 0
+      },
       "legacyCleanupComplete": false,
       "modules": [
         {
