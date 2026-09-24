@@ -3,6 +3,7 @@ import Foundation
 /// The operation and binding metadata for a compiled expression.
 package enum CompiledOperation: Hashable, Sendable {
     case value(CompiledValue)
+    case integerSet
     case stateVariable(VariableID)
     case boundValue(BinderID)
     case checkingRegister(CheckingRegisterID)

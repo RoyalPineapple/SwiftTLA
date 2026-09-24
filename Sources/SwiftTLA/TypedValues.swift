@@ -375,10 +375,15 @@ public func Functions<Domain: FormalSetValue, Range: FormalSetValue>(
   Expr(.functionSet(domain.stateExpr, values.stateExpr))
 }
 
-/// All subsets of a finite formal set.
-public func Subsets<Element: TLAValueType>(
-  of values: some TypedExpression<SetExpr<Element>>
-) -> Expr<SetExpr<SetExpr<Element>>> {
+/// The mathematical integer domain, rendered as TLA+ `Int`.
+extension Int {
+  public static var all: Expr<Set<Int>> { Expr(.integerSet) }
+}
+
+/// All subsets of the supplied formal set.
+public func Subsets<Domain: FormalSetValue>(
+  of values: some TypedExpression<Domain>
+) -> Expr<SetExpr<Domain>> {
   Expr(.powerSet(values.stateExpr))
 }
 

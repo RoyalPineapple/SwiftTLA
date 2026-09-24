@@ -1080,6 +1080,9 @@ struct CompiledLowerer {
             case .expression(let expression, let path, let scope):
                 switch expression {
                 case .sourceIssue(let issue): throw issue.compilationDiagnostic(stage: .lowering, path: path)
+                case .integerSet:
+                    requiredStandardModules.insert(.integers)
+                    lowered.append(.init(expression: .init(operation: .integerSet, children: []), operatorReferences: []))
                 case .value(let value):
                     try validateValue(value, at: path)
                     lowered.append(.init(expression: .value(.init(formal: value)), operatorReferences: []))

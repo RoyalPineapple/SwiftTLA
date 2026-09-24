@@ -38,6 +38,7 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case collectionState
     case powerSetTooLarge(actualCount: Int, maximumCount: Int)
     case nonEnumerableSequenceDomain
+    case nonEnumerableIntegerDomain
     case collectionCardinalityOverflow(NativeMachineEvaluationError.CollectionOperation, operands: [Int])
     case divisionByZero
     case negativeModuloDivisor(Int)
@@ -69,6 +70,7 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
             return "Evaluator continuation has \(availableValues) values"
         case .collectionState: return "Collection evaluation reached an invalid state"
         case .nonEnumerableSequenceDomain: return NativeMachineEvaluationError.nonEnumerableSequenceDomain.description
+        case .nonEnumerableIntegerDomain: return NativeMachineEvaluationError.nonEnumerableIntegerDomain.description
         case .powerSetTooLarge(let actualCount, let maximumCount):
             return "Power-set input has \(actualCount) members; the maximum is \(maximumCount)"
         case .collectionCardinalityOverflow(let operation, let operands):
@@ -254,6 +256,7 @@ private enum EvaluatorTask {
     case functionSpaceDomain(candidate: CompiledExpression, scope: EvaluatorScope)
     case functionSpaceMember(domain: Set<CompiledValue>, range: Set<CompiledValue>)
     case sequenceMember
+    case integerDomainMember(CompiledOperation)
     case booleanResult
     case conditional(then: CompiledExpression, otherwise: CompiledExpression, scope: EvaluatorScope)
     case booleanRight(CompiledExpression, scope: EvaluatorScope, shortCircuit: Bool)
@@ -353,6 +356,21 @@ struct CompiledEvaluator: Sendable {
                     values.append(.boolean(matches))
                 } else {
                     values.append(.boolean(false))
+                }
+
+            case .integerDomainMember(let domain):
+                let candidate = try popValue(from: &values)
+                func isInteger(_ value: CompiledValue) -> Bool {
+                    if case .integer = value { return true }
+                    return false
+                }
+                switch (domain, candidate) {
+                case (.powerSet, .set(let members)):
+                    values.append(.boolean(members.allSatisfy(isInteger)))
+                case (.sequenceSet, .tuple(let members)):
+                    values.append(.boolean(members.allSatisfy(isInteger)))
+                case (.integerSet, .integer): values.append(.boolean(true))
+                default: values.append(.boolean(false))
                 }
 
             case .sequenceMember:
@@ -548,6 +566,23 @@ struct CompiledEvaluator: Sendable {
                 values.append(value)
 
             case .expression(let expression, let scope):
+                if case .in = expression.operation, case .integerSet = expression.children[1].operation {
+                    tasks.append(.integerDomainMember(.integerSet))
+                    tasks.append(.expression(expression.children[0], scope))
+                    continue
+                }
+                if case .subset = expression.operation, case .integerSet = expression.children[1].operation {
+                    tasks.append(.integerDomainMember(.powerSet))
+                    tasks.append(.expression(expression.children[0], scope))
+                    continue
+                }
+                if case .in = expression.operation,
+                   [.powerSet, .sequenceSet].contains(expression.children[1].operation),
+                   case .integerSet = expression.children[1].children[0].operation {
+                    tasks.append(.integerDomainMember(expression.children[1].operation))
+                    tasks.append(.expression(expression.children[0], scope))
+                    continue
+                }
                 if case .in = expression.operation,
                    case .sequenceSet = expression.children[1].operation {
                     tasks.append(.sequenceMember)
@@ -741,7 +776,7 @@ struct CompiledEvaluator: Sendable {
                     let body = expression.children[0]
 
                     tasks.append(.expression(body, scope))
-                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .sequenceSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .setSum, .functionSet:
+                case .integerSet, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .sequenceSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .setSum, .functionSet:
                     schedule(expression.operation, expression.children)
 
                 }
@@ -867,6 +902,7 @@ extension CompiledOperation {
                 throw EvalError.expected(.set, actual: [value])
             }
             values.append(.integer(set.count))
+        case .integerSet: throw EvalError.nonEnumerableIntegerDomain
         case .sequenceSet:
             let value = try popValue(from: &values)
             guard case .set(let members) = value else {

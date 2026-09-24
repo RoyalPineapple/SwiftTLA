@@ -348,6 +348,7 @@ struct CompiledTLARenderer {
                 case .nextState, .stutteringStep:
                     try schedule(expression.operation, expression.children)
                 case .value(let value): parts.append(try value.rendered(using: layout).description)
+                case .integerSet: parts.append("Int")
                 case .stateVariable(let variable): parts.append(try stateNames[variable] ?? variableName(variable))
                 case .boundValue(let binder): parts.append(try binderName(binder))
                 case .checkingRegister(let id): parts.append("TLCGet(\(id.ordinal))")

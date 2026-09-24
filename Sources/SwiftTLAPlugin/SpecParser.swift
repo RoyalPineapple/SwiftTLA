@@ -262,6 +262,7 @@ final class ParserSession {
     }
 
     func decodeStateExpr(_ expression: ExprSyntax) -> StateExpr? {
+        if let domain = decodeIntegerDomain(expression) { return domain }
         if let enabled = decodeStepEnabledness(expression, scope: sourceScope) { return enabled }
         if let integer = SourceIntegerLiteral.value(expression) { return .value(.int(integer)) }
         if let call = expression.as(FunctionCallExprSyntax.self), nominalRecordType(call.calledExpression) != nil {
@@ -282,7 +283,7 @@ final class ParserSession {
         if let filledSequence = decodeZeroBasedSequenceFill(expression) {
             return filledSequence
         }
-        if let subsets = decodeBoundedSubsetDomain(expression) {
+        if let subsets = decodeSubsetDomain(expression) {
             return subsets
         }
         if let functions = decodeBoundedFunctionDomain(expression) {
@@ -465,6 +466,14 @@ final class ParserSession {
         return label
     }
 
+    private func decodeIntegerDomain(_ expression: ExprSyntax) -> StateExpr? {
+        guard let member = expression.as(MemberAccessExprSyntax.self),
+              member.declName.baseName.sourceIdentifierName == "all",
+              member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Int"
+        else { return nil }
+        return .integerSet
+    }
+
     private func decodeSequenceDomain(
         _ expression: ExprSyntax,
         scope: TypedFacadeScope = .empty
@@ -513,7 +522,7 @@ final class ParserSession {
         )
     }
 
-    private func decodeBoundedSubsetDomain(
+    private func decodeSubsetDomain(
         _ expression: ExprSyntax,
         scope: TypedFacadeScope = .empty
     ) -> StateExpr? {
@@ -524,7 +533,7 @@ final class ParserSession {
         guard let valuesSyntax = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
               let values = decodeTypedFacadeValue(valuesSyntax, scope: scope)
         else {
-            algorithmParseFailure = "Subsets could not decode its finite formal set."
+            algorithmParseFailure = "Subsets could not decode its formal set."
             return nil
         }
         let subsets = StateExpr.powerSet(values)
@@ -678,6 +687,7 @@ final class ParserSession {
         expectedEnumType: String? = nil
     ) -> StateExpr? {
         if let checking = decodeCheckingExpression(expression, scope: scope) { return checking }
+        if let domain = decodeIntegerDomain(expression) { return domain }
         if let member = expression.as(MemberAccessExprSyntax.self),
            let type = terminalTypeName(in: member.base), enumDefinition(named: type) != nil {
             if let domain = finiteAlgorithmDomain(expression) {
@@ -763,7 +773,7 @@ final class ParserSession {
         if let precedingMembers = decodePrecedingFormalMembers(expression, scope: scope) {
             return precedingMembers
         }
-        if let subsets = decodeBoundedSubsetDomain(expression, scope: scope) {
+        if let subsets = decodeSubsetDomain(expression, scope: scope) {
             return subsets
         }
         if let functions = decodeBoundedFunctionDomain(expression, scope: scope) {
@@ -1597,6 +1607,7 @@ final class ParserSession {
         _ expression: ExprSyntax,
         scope: TypedFacadeScope
     ) -> CompiledValueType? {
+        if decodeIntegerDomain(expression) != nil { return .set(.int) }
         if let checking = decodeCheckingExpression(expression, scope: scope) {
             if case .checkingLevel = checking { return .int }
             return .bool
@@ -1698,6 +1709,7 @@ final class ParserSession {
             let members = call.arguments.first { $0.label?.text == "of" }?.expression
             let element = members.flatMap { typedFacadeValueType($0, scope: scope)?.selectedElement }
             switch reference.baseName.sourceIdentifierName {
+            case "Subsets", "NonEmptySubsets": return .set(.set(element ?? .unknown))
             case "Sequences", "SortedSequences": return .set(.array(element ?? .unknown))
             case "ZeroBasedSequences": return .set(.dictionary(.int, element ?? .unknown))
             default: break

@@ -273,6 +273,7 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
 public indirect enum StateExpr: Hashable, Sendable {
     case sourceIssue(SourceModelIssue)
     case value(TLAValue)
+    case integerSet
     case variable(String)
     case parameter(ParameterReference)
     case checkingRegister(CheckingRegisterReference)

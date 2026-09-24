@@ -22,6 +22,7 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
     case collectionCardinalityOverflow(CollectionOperation, operands: [Int])
     case powerSetTooLarge(actualCount: Int, maximumCount: Int)
     case nonEnumerableSequenceDomain
+    case nonEnumerableIntegerDomain
     case integerOverflow(IntegerOperation, operands: [Int])
     case divisionByZero
     case negativeModuloDivisor(Int)
@@ -47,6 +48,8 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
             return "Power set input has \(actual) elements; maximum representable input is \(maximum)"
         case .nonEnumerableSequenceDomain:
             return "Seq over a nonempty set cannot be exhaustively enumerated"
+        case .nonEnumerableIntegerDomain:
+            return "The mathematical integer domain cannot be exhaustively enumerated"
         case .divisionByZero: return "Division by zero"
         case .negativeModuloDivisor(let divisor): return "Modulo requires a positive divisor; received \(divisor)"
         case .indexOutOfBounds(let index, let count): return "Index \(index) out of bounds (1..\(count))"
@@ -63,6 +66,10 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
 @_documentation(visibility: internal)
 public enum _NativeMachineOperations: Sendable {
     public static let maximumRecursiveDepth = 4_096
+
+    public static func integerSet() throws -> Set<Int> {
+        throw NativeMachineEvaluationError.nonEnumerableIntegerDomain
+    }
 
     public static func add(_ lhs: Int, _ rhs: Int) throws -> Int {
         try checked(lhs.addingReportingOverflow(rhs), operation: .addition, operands: [lhs, rhs])

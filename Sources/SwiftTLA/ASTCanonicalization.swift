@@ -408,6 +408,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
                 schedule(operands, environment: environment) { "\(operation)[\($0.joined(separator: ","))]" }
             case .sourceIssue(let issue): parts.append("sourceIssue(\(issue))")
             case .value(let value): parts.append("value(\(value))")
+            case .integerSet: parts.append("integerSet")
             case .variable(let name): parts.append("var(\(environment[name] ?? name))")
             case .parameter(let reference): parts.append("parameter(\(reference.name))")
             case .checkingRegister(let reference): parts.append("checkingRegister(\(reference.name))")

@@ -2302,6 +2302,7 @@ package struct CompiledTypeChecker: Sendable {
             let value = try checkOperand(expression.children[0], expected: type)
             return try checkedType(.bool, expected: expected, children: [value])
         case .checkingLevel: return try checkedType(.int, expected: expected)
+        case .integerSet: return try checkedType(.set(.int), expected: expected)
         case .assertView(let shape):
             let value = expression.children[0]
 

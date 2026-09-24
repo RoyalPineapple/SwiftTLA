@@ -583,6 +583,7 @@ struct NativeSwiftEmitter {
                 body = "return \(storage)"
             }
             return "(try { () throws -> \(try swiftType(id.resultType)) in\nguard \(context) != nil else { throw NativeMachineEvaluationError.checkingContextRequired }\n\(body)\n}())"
+        case .integerSet: return "(try _NativeMachineOperations.integerSet())"
         case .checkingLevel:
             guard let context = checkingContextName else {
                 return "(try { () throws -> Int in throw NativeMachineEvaluationError.checkingContextRequired }())"
@@ -777,6 +778,14 @@ struct NativeSwiftEmitter {
             }
             return "(\(try emit(1)).contains(\(try emit(0))))"
         case .subset:
+            if hasSymbolicMembership(node.children[1]) {
+                let subsets = CompiledExpression(operation: .powerSet,
+                    resultType: .set(node.children[1].resultType), children: [node.children[1]])
+                let membership = CompiledExpression(operation: .in, resultType: .bool,
+                    children: [node.children[0], subsets])
+                return try self.expression(membership, state: state, substitutions: substitutions,
+                    activeFunctions: activeFunctions)
+            }
             return "(\(try emit(0)).isSubset(of: \(try emit(1))))"
         case .union:
             return "(\(try emit(0)).union(\(try emit(1))))"
@@ -826,7 +835,7 @@ struct NativeSwiftEmitter {
         var functions: Set<ResolvedFunctionID> = []
         while let node = pending.popLast() {
             switch node.operation {
-            case .functionSet, .integerRange, .sequenceSet: return true
+            case .functionSet, .integerRange, .sequenceSet, .integerSet, .powerSet: return true
             case .call(let id) where functions.insert(id).inserted:
                 pending.append(program[id].body)
             case .ifThenElse: pending += node.children.dropFirst()
@@ -861,7 +870,9 @@ struct NativeSwiftEmitter {
         }
         let body: String
         switch node.operation {
-        case .sequenceSet:
+        case .integerSet:
+            body = "return { _ in true }"
+        case .sequenceSet, .powerSet:
             let members = try predicate(node.children[0])
             body = """
             \(members.declaration)
