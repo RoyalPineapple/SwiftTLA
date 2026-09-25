@@ -132,9 +132,19 @@ package struct CanonicalFunctionEntry: Hashable, Sendable {
 
 package struct CanonicalStateKey: Hashable, Codable, Sendable, Comparable, CustomStringConvertible {
     package let canonicalEncoding: String
+    private let cachedHash: Int
 
     package init(canonicalEncoding: String) {
         self.canonicalEncoding = canonicalEncoding
+        cachedHash = canonicalEncoding.hashValue
+    }
+
+    package static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.canonicalEncoding == rhs.canonicalEncoding
+    }
+
+    package func hash(into hasher: inout Hasher) {
+        hasher.combine(cachedHash)
     }
 
     package init(from decoder: Decoder) throws {
@@ -300,9 +310,10 @@ package struct CanonicalGraph: Equatable, Sendable {
         guard states.count == native.transitions.count else {
             throw CanonicalGraphError.missingNativeSnapshot
         }
-        func stateIndex(_ snapshot: Machine.Snapshot) throws -> Dictionary<Machine.Snapshot, CanonicalState>.Index {
-            guard let index = states.index(forKey: snapshot) else { throw CanonicalGraphError.missingNativeSnapshot }
-            return index
+        let stateKeys = states.mapValues(\.key)
+        func stateKey(_ snapshot: Machine.Snapshot) throws -> CanonicalStateKey {
+            guard let key = stateKeys[snapshot] else { throw CanonicalGraphError.missingNativeSnapshot }
+            return key
         }
         var actionNames: [Machine.Action: String] = [:]
         func actionName(_ action: Machine.Action) throws -> String {
@@ -315,13 +326,16 @@ package struct CanonicalGraph: Equatable, Sendable {
         var edges = Set<CanonicalEdge>()
         edges.reserveCapacity(native.transitions.values.reduce(0) { $0 + $1.count })
         for (source, successors) in native.transitions {
-            let sourceKey = states.values[try stateIndex(source)].key
+            let sourceKey = try stateKey(source)
             for successor in successors {
                 edges.insert(CanonicalEdge(source: sourceKey, action: try actionName(successor.action),
-                                           target: states.values[try stateIndex(successor.target)].key))
+                                           target: try stateKey(successor.target)))
             }
         }
-        try self.init(initialStates: native.initialStates.map { states.values[try stateIndex($0)] },
+        try self.init(initialStates: native.initialStates.map {
+                          guard let state = states[$0] else { throw CanonicalGraphError.missingNativeSnapshot }
+                          return state
+                      },
                       states: states.values, edges: edges)
     }
 
