@@ -6689,49 +6689,49 @@
       "path": "specifications/LoopInvariance",
       "name": "Loop Invariance",
       "audit": "pinned sources reviewed; implementation in progress",
-      "gap": "Both published configurations have generated native models and pinned comparison entries. Hosted comparisons remain pending. SumSequence still uses a bounded legacy fixture.",
-      "legacyCleanupComplete": false,
+      "gap": "Both published configurations have complete exact hosted graph, property, and deadlock matches at 85792408. SumSequence's bounded fixture was removed and its unbounded source contract passes focused local tests, but the changed source has not passed hosted CI. The family is not yet complete on a green hosted revision.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/LoopInvariance/BinarySearch.tla",
           "role": "behavior dependency",
-          "reason": "Preserves the configured algorithm, three invariants, Termination, weak fairness, and default deadlock checks. The Seq substitution uses lengths 1..MaxSeqLen. Hosted comparison remains pending.",
+          "reason": "Preserves the configured algorithm, three invariants, Termination, weak fairness, and default deadlock checks. The Seq substitution uses lengths 1..MaxSeqLen. Complete hosted comparison matches at 85792408.",
           "implementations": [
             "Sources/UpstreamParity/Examples/BinarySearch.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/LoopInvariance/MCBinarySearch.tla",
           "role": "configured root",
-          "reason": "Preserves the configured algorithm, three invariants, Termination, weak fairness, and default deadlock checks. The Seq substitution uses lengths 1..MaxSeqLen. Hosted comparison remains pending.",
+          "reason": "Preserves the configured algorithm, three invariants, Termination, weak fairness, and default deadlock checks. The Seq substitution uses lengths 1..MaxSeqLen. Complete hosted comparison matches at 85792408.",
           "implementations": [
             "Sources/UpstreamParity/Examples/BinarySearch.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/LoopInvariance/MCQuicksort.tla",
           "role": "configured root",
-          "reason": "Preserves the configured algorithm, three invariants, Termination, weak fairness, and default deadlock checks. The Seq substitution uses lengths 1..MaxSeqLen. Hosted comparison remains pending.",
+          "reason": "Preserves the configured algorithm, three invariants, Termination, weak fairness, and default deadlock checks. The Seq substitution uses lengths 1..MaxSeqLen. Complete hosted comparison matches at 85792408.",
           "implementations": [
             "Sources/UpstreamParity/Examples/Quicksort.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/LoopInvariance/Quicksort.tla",
           "role": "behavior dependency",
-          "reason": "Preserves the configured algorithm, three invariants, Termination, weak fairness, and default deadlock checks. The Seq substitution uses lengths 1..MaxSeqLen. Hosted comparison remains pending.",
+          "reason": "Preserves the configured algorithm, three invariants, Termination, weak fairness, and default deadlock checks. The Seq substitution uses lengths 1..MaxSeqLen. Complete hosted comparison matches at 85792408.",
           "implementations": [
             "Sources/UpstreamParity/Examples/Quicksort.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/LoopInvariance/SumSequence.tla",
           "role": "unconfigured proof example",
-          "reason": "No published configuration exists. Upstream describes a bounded Seq substitution as an illustration. The current Swift fixture adds fixed domains and omits upstream claims. Migration remains required.",
+          "reason": "No published configuration exists. The Swift #spec retains the unbounded Values and sequence domains, weak fairness, summing loop, and TypeOK, Inv, PCorrect, and Termination claims. The bounded legacy fixture was removed. Focused local generated-machine and formal-export tests pass; hosted CI is pending.",
           "implementations": [
             "Sources/UpstreamParity/Examples/SumSequence.swift"
           ],
@@ -6743,7 +6743,8 @@
           "module": "specifications/LoopInvariance/MCBinarySearch.tla",
           "configuration": "specifications/LoopInvariance/MCBinarySearch.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "85792408b6cd3f8a1065ab06e7c894daeef51233",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -6753,13 +6754,25 @@
               "caseID": "binary-search"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "85792408b6cd3f8a1065ab06e7c894daeef51233",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36132808640",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36132808640/artifacts/10863585241",
+              "artifactDigest": "sha256:4139acdae9aa1130b89fc54d6804ceae75bd9984a7795968719c37a841423f67",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Downloaded retained evidence and compared entire native, pinned upstream TLC, and generated TLC graph files byte-for-byte. All are complete and equal: 6430 initial states, 27953 states, 27953 labeled edges. Inv, resultCorrect, TypeOK, Termination, and deadlock outcomes are exact for both TLC comparisons. The original published configuration and successful hosted case job bind to this source SHA. This historical match does not establish final-revision admission."
+            }
+          ]
         },
         {
           "module": "specifications/LoopInvariance/MCQuicksort.tla",
           "configuration": "specifications/LoopInvariance/MCQuicksort.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "85792408b6cd3f8a1065ab06e7c894daeef51233",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -6769,7 +6782,18 @@
               "caseID": "quicksort"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "85792408b6cd3f8a1065ab06e7c894daeef51233",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36132808640",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36132808640/artifacts/10863600004",
+              "artifactDigest": "sha256:217b1fd367c2c89bcfaa9260505bef3c82027830d60644e4045445ea68a66cde",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Downloaded retained evidence and compared entire native, pinned upstream TLC, and generated TLC graph files byte-for-byte. All are complete and equal: 120 initial states, 4548 states, 11103 labeled edges. Inv, PCorrect, TypeOK, Termination, and deadlock outcomes are exact for both TLC comparisons. The original published configuration and successful hosted case job bind to this source SHA. This historical match does not establish final-revision admission."
+            }
+          ]
         }
       ],
       "partialCases": [],
