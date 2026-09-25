@@ -205,6 +205,9 @@ final class ParserSession {
               let name = extractStringArg(call, index: 0), !name.isEmpty,
               let inputType = call.arguments.first(where: { $0.label?.text == "taking" })?.expression,
               isMetatype(inputType),
+              let metatype = inputType.as(MemberAccessExprSyntax.self),
+              let inputSpelling = metatype.base?.trimmedDescription,
+              let inputShape = try? sourceTypeResolver.resolve(inputSpelling),
               let domainSyntax = call.arguments.first(where: { $0.label?.text == "over" })?.expression,
               let domain = decodeTypedFacadeValue(domainSyntax, scope: scope),
               let definition = call.arguments.dropFirst().first(where: { $0.label == nil })?.expression.as(ClosureExprSyntax.self),
@@ -222,7 +225,7 @@ final class ParserSession {
         let inputName = definitionParameters[1]
         let definitionScope = scope
             .extending(recursiveOperator: definitionParameters[0], named: name)
-            .extending(binding: inputName, to: .variable(inputName))
+            .extending(binding: inputName, to: .variable(inputName), shape: inputShape)
         let bodyScope = scope.extending(recursiveOperator: bodyParameters[0],
             named: name)
         guard let decodedDefinition = decodeTypedFacadeValue(
@@ -806,6 +809,7 @@ final class ParserSession {
             case "first": return .tupleAccess(base, 1)
             case "second": return .tupleAccess(base, 2)
             case "head": return .tupleHead(base)
+            case "tail": return .tupleTail(base)
             default: break
             }
         }
@@ -1270,6 +1274,11 @@ final class ParserSession {
                   let index = decodeTypedFacadeValue(indexSyntax, scope: scope)
             else { return nil }
             return .tupleRemoving(base, index)
+        case "prefix" where call.arguments.first?.label?.text == "length":
+            guard let lengthSyntax = call.arguments.first?.expression,
+                  let length = decodeTypedFacadeValue(lengthSyntax, scope: scope)
+            else { return nil }
+            return .tuplePrefix(base, length)
         case "inserting", "removing":
             guard let elementSyntax = call.arguments.first?.expression,
                   let element = decodeTypedFacadeValue(elementSyntax, scope: scope, expectedEnumType: elementEnumType)
@@ -1725,8 +1734,9 @@ final class ParserSession {
             return element
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           member.declName.baseName.sourceIdentifierName == "removing",
-           call.arguments.first?.label?.text == "at",
+           ((member.declName.baseName.sourceIdentifierName == "removing" && call.arguments.first?.label?.text == "at")
+            || (member.declName.baseName.sourceIdentifierName == "prefix" && call.arguments.first?.label?.text == "length")
+            || (member.declName.baseName.sourceIdentifierName == "tail" && call.arguments.isEmpty)),
            let base = member.base {
             return typedFacadeValueType(base, scope: scope)
         }

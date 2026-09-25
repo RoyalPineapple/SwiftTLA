@@ -1081,7 +1081,7 @@ package struct CompiledTypeChecker: Sendable {
             catch let diagnostic as CompilationDiagnostic { throw annotated(diagnostic, at: expression) }
             if case .checked(let result) = check { return checkedOccurrence(expression, annotation: result) }
             return try checkWorklist(startingWith: .boundValue(id, check, expected: expected))
-        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .recordLiteral, .except, .recordAccess, .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving, .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral, .cardinality, .powerSet, .sequenceSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate, .operatorApplication, .functionApply:
+        case .letValue, .letIn, .and, .or, .not, .ifThenElse, .functionLiteral, .recordLiteral, .except, .recordAccess, .tupleDynamicAccess, .tupleLength, .tupleHead, .tupleTail, .tupleRemoving, .tuplePrefix, .setMap, .setFilter, .choose, .forAll, .exists, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .negate, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .integerRange, .equal, .notEqual, .subset, .union, .intersection, .setDifference, .setLiteral, .cardinality, .powerSet, .sequenceSet, .unionAll, .sequenceFromSet, .functionSet, .tupleAppend, .tupleConcatenate, .operatorApplication, .functionApply:
             return try checkWorklist(startingWith: .check(expression, expected: expected))
         default: break
         }
@@ -1313,7 +1313,7 @@ package struct CompiledTypeChecker: Sendable {
                             .sequenceContext(element: expected, source: source), .check(source, expected: .unknown),
                             .discard, .retainOperand(1), .check(index, expected: .int)
                         ])
-                    case .tupleRemoving:
+                    case .tupleRemoving, .tuplePrefix:
                         let source = expression.children[0]
                         let index = expression.children[1]
 
@@ -2009,7 +2009,7 @@ package struct CompiledTypeChecker: Sendable {
                     switch expression.operation {
                     case .tupleLength: result = .int
                     case .tupleHead, .tupleDynamicAccess: result = try sequenceElementType(source.resultType)
-                    case .tupleTail, .tupleRemoving: result = try .array(sequenceElementType(source.resultType))
+                    case .tupleTail, .tupleRemoving, .tuplePrefix: result = try .array(sequenceElementType(source.resultType))
                     default: throw CompiledValueType.diagnostic("sequence", "unexpected sequence operation")
                     }
                     let operandContexts = operands.sorted { $0.key < $1.key }.map { $0.value.resultType }

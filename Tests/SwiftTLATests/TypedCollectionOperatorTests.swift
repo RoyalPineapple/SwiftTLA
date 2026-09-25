@@ -669,6 +669,29 @@ private struct FoldGeneratedModel {
         #expect(try compiledValue(ordered) == .int(3))
     }
 
+    @Test("Sequence prefixes preserve position and render as SubSeq")
+    func sequencePrefixIsPositional() throws {
+        let values = TupleExpr<Int>.literal(2, 1, 2)
+        let cases: [(Int, [Int])] = [(-2, []), (0, []), (1, [2]), (2, [2, 1]), (3, [2, 1, 2])]
+        for (length, expected) in cases {
+            let prefix = values.prefix(length: length)
+            #expect(try compiledValue(prefix.stateExpr) == .tuple(expected.map(TLAValue.int)))
+        }
+        #expect(throws: EvalError.indexOutOfBounds(4, 3)) {
+            try compiledValue(values.prefix(length: 4).stateExpr)
+        }
+
+        let source = "TupleExpr<Int>.literal(2, 1, 2).prefix(length: 2)"
+        let parsed = try #require(SpecParser.decodeStateExpr(try parseExpression(source)))
+        let built = values.prefix(length: 2).stateExpr
+        #expect(parsed == built)
+        let rendered = try canonicalTestSpec(
+            variables: [], actions: [("prefix", .guard_(.equal(built, .tupleLiteral([.int(2), .int(1)]))), [])],
+            invariants: []
+        ).compile().render().tlaBundle.tla
+        #expect(rendered.contains("SubSeq(<<2, 1, 2>>, 1, 2)"))
+    }
+
     @Test("generated machines preserve formal fold behavior")
     func generatedMachineUsesFormalFold() throws {
         var machine = try FoldGeneratedModel.makeMachine()

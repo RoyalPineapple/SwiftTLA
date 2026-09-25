@@ -1234,6 +1234,7 @@ struct CompiledLowerer {
                 case .tupleAppend(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleAppend, on: &tasks)
                 case .tupleConcatenate(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .tupleConcatenate, on: &tasks)
                 case .tupleRemoving(let tuple, let index): scheduleBinary(tuple, index, at: path, scope: scope, operation: .tupleRemoving, on: &tasks)
+                case .tuplePrefix(let tuple, let length): scheduleBinary(tuple, length, at: path, scope: scope, operation: .tuplePrefix, on: &tasks)
                 case .sequenceSelect(let sequence, let name, let predicate):
                     let nested = try bind([name], at: "\(path).binder", scope: scope)
                     scheduleBinding(sequence, predicate, binder: try bound(name, in: nested, at: path), at: path, scope: scope, bodyScope: nested, build: CompiledExpression.sequenceSelect, on: &tasks)

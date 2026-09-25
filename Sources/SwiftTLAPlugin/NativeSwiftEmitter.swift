@@ -611,7 +611,7 @@ struct NativeSwiftEmitter {
              .setMap, .forAll, .exists, .choose, .sequenceFromSet,
              .powerSet, .sequenceSet, .unionAll, .functionSet, .setSum:
             return try collectionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
-        case .foldFunction, .sequenceSelect, .tupleAccess, .tupleDynamicAccess, .tupleRemoving,
+        case .foldFunction, .sequenceSelect, .tupleAccess, .tupleDynamicAccess, .tupleRemoving, .tuplePrefix,
              .tupleLength, .tupleHead, .tupleTail, .tupleAppend, .tupleConcatenate:
             return try sequenceExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .domain, .functionLiteral, .functionApply:
@@ -1022,6 +1022,16 @@ struct NativeSwiftEmitter {
                 let _sequenceValue = \(try emit(0))
                 let _sequenceIndex = \(try emit(1))
                 return try _NativeMachineOperations.sequenceRemoving(\(elements), at: _sequenceIndex)
+            }())
+            """
+        case .tuplePrefix:
+            let source = childType(0)
+            let elements = try nativeSequenceElements("_sequenceValue", source: source)
+            return """
+            (try { () throws -> \(try swiftType(node.resultType)) in
+                let _sequenceValue = \(try emit(0))
+                let _prefixLength = \(try emit(1))
+                return try _NativeMachineOperations.sequencePrefix(\(elements), length: _prefixLength)
             }())
             """
         case .tupleLength:

@@ -1099,6 +1099,8 @@ enum AlgorithmLowerer {
             case .tupleConcatenate(let lhs, let rhs): return .tupleConcatenate(rewritten(lhs, localRoots: localRoots), rewritten(rhs, localRoots: localRoots))
             case .tupleRemoving(let tuple, let index):
                 return .tupleRemoving(rewritten(tuple, localRoots: localRoots), rewritten(index, localRoots: localRoots))
+            case .tuplePrefix(let tuple, let length):
+                return .tuplePrefix(rewritten(tuple, localRoots: localRoots), rewritten(length, localRoots: localRoots))
             case .sequenceSelect(let sequence, let variable, let predicate):
                 return .sequenceSelect(
                     rewritten(sequence, localRoots: localRoots),

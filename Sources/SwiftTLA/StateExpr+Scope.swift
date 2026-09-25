@@ -55,6 +55,8 @@ extension StateExpr {
                 pending.append((value, bound))
             case .tupleRemoving(let tuple, let index):
                 schedule([tuple, index], bound: bound)
+            case .tuplePrefix(let tuple, let length):
+                schedule([tuple, length], bound: bound)
             case .sequenceSelect(let sequence, let name, let predicate):
                 pending.append((sequence, bound))
                 pending.append((predicate, bound.union([name])))

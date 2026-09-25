@@ -54,6 +54,7 @@ package enum CompiledOperation: Hashable, Sendable {
     case tupleTail
     case tupleConcatenate
     case tupleRemoving
+    case tuplePrefix
     case sequenceSelect(BinderID)
     case recordLiteral([String])
     case recordAccess(String)

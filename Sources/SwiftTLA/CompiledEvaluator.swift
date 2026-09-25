@@ -776,7 +776,7 @@ struct CompiledEvaluator: Sendable {
                     let body = expression.children[0]
 
                     tasks.append(.expression(body, scope))
-                case .integerSet, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .sequenceSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .setSum, .functionSet:
+                case .integerSet, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .sequenceSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .setSum, .functionSet:
                     schedule(expression.operation, expression.children)
 
                 }
@@ -964,6 +964,12 @@ extension CompiledOperation {
             let tuple = try sequenceElements(from: popValue(from: &values))
             values.append(.tuple(try nativeOperation {
                 try _NativeMachineOperations.sequenceRemoving(tuple, at: index)
+            }))
+        case .tuplePrefix:
+            let length = try integer(popValue(from: &values))
+            let tuple = try sequenceElements(from: popValue(from: &values))
+            values.append(.tuple(try nativeOperation {
+                try _NativeMachineOperations.sequencePrefix(tuple, length: length)
             }))
         case .recordLiteral(let fields):
             let fieldValues = try popValues(fields.count, from: &values)

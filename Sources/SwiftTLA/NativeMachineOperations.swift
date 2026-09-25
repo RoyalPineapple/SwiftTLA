@@ -215,6 +215,13 @@ public enum _NativeMachineOperations: Sendable {
         return result
     }
 
+    public static func sequencePrefix<Element: Sendable>(_ sequence: [Element], length: Int) throws -> [Element] {
+        guard length <= sequence.count else {
+            throw NativeMachineEvaluationError.indexOutOfBounds(index: length, count: sequence.count)
+        }
+        return Array(sequence.prefix(Swift.max(0, length)))
+    }
+
     public static func sequenceFunctionValue<Element: Sendable>(_ sequence: [Element], at index: Int) throws -> Element {
         do { return try sequenceElement(sequence, at: index) }
         catch NativeMachineEvaluationError.indexOutOfBounds {

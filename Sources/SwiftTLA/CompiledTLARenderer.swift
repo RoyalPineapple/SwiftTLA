@@ -443,7 +443,7 @@ struct CompiledTLARenderer {
                     rendered.append(.expression(body))
                     rendered.append(.text(")"))
                     schedule(rendered)
-                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .sequenceSelect, .functionApply, .functionSet, .setSum, .integerRange, .negate, .not, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
+                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .setSum, .integerRange, .negate, .not, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
                     try schedule(expression.operation, expression.children)
 
                 }
@@ -647,6 +647,8 @@ extension CompiledOperation {
             parts = [.text("(SubSeq("), .operand(0), .text(", 1, ("), .operand(1),
                 .text(" - 1)) \\o SubSeq("), .operand(0), .text(", ("), .operand(1),
                 .text(" + 1), Len("), .operand(0), .text(")))")]
+        case .tuplePrefix:
+            parts = [.text("SubSeq("), .operand(0), .text(", 1, "), .operand(1), .text(")")]
         case .sequenceSelect(let binder):
             parts = [.text("SelectSeq("), .operand(0), .text(", LAMBDA \(try binderName(binder)): "),
                 .operand(1), .text(")")]

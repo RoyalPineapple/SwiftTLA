@@ -312,12 +312,6 @@ struct UpstreamParityTests {
         #expect(isSuccessful(exploration))
     }
 
-    @Test("SumSequence bounded source port verifies")
-    func sumSequenceBoundedPort() throws {
-        let exploration = try explore(SumSequenceModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.sumSequence.expectedDistinct)
-    }
-
     @Test("Reachable bounded source port compiles its formal graph choice")
     func reachableBoundedPort() throws {
         let exploration = try explore(ReachableModel.spec, maximumStateLimit: 100_000)

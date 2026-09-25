@@ -864,6 +864,11 @@ extension TypedExpression where ExpressionValue: FormalSequenceValue {
     Expr(.tupleRemoving(stateExpr, index.stateExpr))
   }
 
+  /// Returns the first `length` members in formal sequence order.
+  public func prefix(length: some TypedExpression<Int>) -> Expr<ExpressionValue> {
+    Expr(.tuplePrefix(stateExpr, length.stateExpr))
+  }
+
   public func at(_ index: Int) -> Expr<ExpressionValue.Element> {
     Expr(.tupleAccess(stateExpr, index))
   }
@@ -1072,6 +1077,10 @@ extension TypedExpression where ExpressionValue: FormalTupleValue {
 extension TypedExpression where ExpressionValue: FormalSequenceValue {
   public func head() -> Expr<ExpressionValue.Element> {
     Expr(.tupleHead(stateExpr))
+  }
+
+  public func tail() -> Expr<ExpressionValue> {
+    Expr(.tupleTail(stateExpr))
   }
 }
 
