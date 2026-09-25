@@ -59,6 +59,24 @@ struct TLCGraphReaderTests {
     }
   }
 
+  @Test("TLC integer intervals retain their full set value, including nested sets")
+  func parsesIntegerIntervals() throws {
+    #expect(try TLCValueParser.parse("-1..1") == .set([.integer(-1), .integer(0), .integer(1)]))
+    #expect(try TLCValueParser.parse("2..1") == .set([]))
+    #expect(try TLCValueParser.parse("{1..1, 2..2}")
+      == .set([.set([.integer(1)]), .set([.integer(2)])]))
+    #expect(try TLCValueParser.parse(#""1..1""#) == .string("1..1"))
+  }
+
+  @Test("malformed or unrepresentable TLC intervals cannot become graph evidence")
+  func rejectsInvalidIntegerIntervals() throws {
+    for value in ["1..", "1..2..3", "0..9223372036854775807", "-9223372036854775808..0"] {
+      #expect(throws: TLCGraphEventError.unsupportedValue(value)) {
+        try TLCValueParser.parse(value)
+      }
+    }
+  }
+
   @Test("frozen graph stream becomes complete canonical evidence")
   func parsesFrozenGraphIntoGraphRun() throws {
     let finiteGraphCase = try fixtureCase(try testReferencePin())

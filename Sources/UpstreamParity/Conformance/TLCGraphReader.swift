@@ -429,6 +429,19 @@ enum TLCValueParser {
             guard Set(entries.map(\.key)).count == entries.count else { throw TLCGraphEventError.unsupportedValue(text) }
             return try .function(entries)
         }
+        if let separator = value.range(of: "..") {
+            let lowerText = value[..<separator.lowerBound].trimmingCharacters(in: .whitespaces)
+            let upperText = value[separator.upperBound...].trimmingCharacters(in: .whitespaces)
+            guard let lower = Int(lowerText), let upper = Int(upperText) else {
+                throw TLCGraphEventError.unsupportedValue(text)
+            }
+            guard lower <= upper else { return .set([]) }
+            let width = upper.subtractingReportingOverflow(lower)
+            guard !width.overflow, !width.partialValue.addingReportingOverflow(1).overflow else {
+                throw TLCGraphEventError.unsupportedValue(text)
+            }
+            return .set((lower...upper).map(CanonicalValue.integer))
+        }
         guard value.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) != nil else {
             throw TLCGraphEventError.unsupportedValue(text)
         }
