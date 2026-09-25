@@ -81,6 +81,7 @@ private struct NativeReachabilityFound<Machine: StateMachine>: Error {
 public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     private let machine: Machine
     private let predecessors: [Machine.Snapshot: (source: Machine.Snapshot, action: Machine.Action)]
+    private let initialOrder: [Machine.Snapshot]
     public let safetyViolations: [Machine.Snapshot: [SafetyViolation<Machine.Property>]]
     /// States with no executable successor, before constraint filtering or check selection.
     public let deadlockedStates: Set<Machine.Snapshot>
@@ -146,6 +147,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         let reachabilityProperties = Set(Machine.reachabilityProperties).intersection(checking.properties)
         var reachabilityTargets = Dictionary(uniqueKeysWithValues: reachabilityProperties.map { ($0, Set<Machine.Snapshot>()) })
         let initialRoots = Set(initialMachines.map(\.snapshot))
+        let retainPredecessors = stopOnViolation || stopOnReachability != nil
         func path(to snapshot: Machine.Snapshot,
                   from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil)
             -> [(action: Machine.Action?, state: Machine.Snapshot)] {
@@ -209,7 +211,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             }
             guard transitions.count < maximumStates else { throw ExplorationError.stateLimitExceeded(maximumStates) }
             transitions[snapshot] = []
-            predecessors[snapshot] = predecessor
+            if retainPredecessors { predecessors[snapshot] = predecessor }
             try recordReachability(machine)
             pending.append(machine)
             return snapshot
@@ -227,6 +229,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         let initialStates = Set(transitions.keys)
         guard !initialStates.isEmpty else { throw ExplorationError.noInitialStates }
         self.initialStates = initialStates
+        initialOrder = initialMachines.map(\.snapshot).filter(initialStates.contains)
         while !currentLayer.isEmpty || !pending.isEmpty {
             if currentLayer.isEmpty {
                 try context.advanceBreadthFirstLevel()
@@ -279,14 +282,35 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     /// A shortest native execution trace, including its initial state.
     public func trace(to target: Machine.Snapshot) throws -> [(action: Machine.Action?, state: Machine.Snapshot)] {
         guard transitions.index(forKey: target) != nil || safetyViolations.index(forKey: target) != nil || reachabilityResults.values.contains(.reached(target)) else { throw ExplorationError.traceTargetNotReachable }
+        let inGraph = transitions.index(forKey: target) != nil
+        let root = inGraph ? target : predecessors[target]?.source
+        guard let root else { return [(nil, target)] }
+        var queue = initialOrder
+        var visited = Set(queue)
+        var paths: [Machine.Snapshot: (source: Machine.Snapshot, action: Machine.Action)] = [:]
+        var index = 0
+        while !visited.contains(root), index < queue.count {
+            let source = queue[index]
+            index += 1
+            for edge in transitions[source] ?? [] where visited.insert(edge.target).inserted {
+                paths[edge.target] = (source, edge.action)
+                if edge.target == root { break }
+                queue.append(edge.target)
+            }
+        }
+        guard visited.contains(root) else { throw ExplorationError.traceTargetNotReachable }
         var path: [(action: Machine.Action?, state: Machine.Snapshot)] = []
-        var current = target
-        while let previous = predecessors[current] {
+        var current = root
+        while let previous = paths[current] {
             path.append((previous.action, current))
             current = previous.source
         }
         path.append((nil, current))
-        return path.reversed()
+        path.reverse()
+        if !inGraph, let boundary = predecessors[target] {
+            path.append((boundary.action, target))
+        }
+        return path
     }
 }
 
