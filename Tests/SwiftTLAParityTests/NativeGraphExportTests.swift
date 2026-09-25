@@ -3,45 +3,34 @@ import SwiftTLA
 import UpstreamParity
 
 struct NativeGraphExportTests {
-    @Test("provided native projections preserve the complete graph and require every snapshot")
-    func validatesProvidedProjections() throws {
+    @Test("canonical lookup resolves snapshot hash collisions by complete state")
+    func resolvesSnapshotHashCollisions() throws {
+        let first = CollidingExportSnapshot(value: 1)
+        let second = CollidingExportSnapshot(value: 2)
+        let missing = CollidingExportSnapshot(value: 3)
+        let firstKey = CanonicalStateKey(canonicalEncoding: "state:[value=integer:1]")
+        let secondKey = CanonicalStateKey(canonicalEncoding: "state:[value=integer:2]")
+        let missingKey = CanonicalStateKey(canonicalEncoding: "state:[value=integer:3]")
+        var index = NativeCanonicalKeyIndex<CollidingExportSnapshot>()
+        index.insert(first, key: firstKey)
+        index.insert(second, key: secondKey)
+        #expect(try index.key(for: first, projecting: { firstKey }) == firstKey)
+        #expect(try index.key(for: second, projecting: { secondKey }) == secondKey)
+        #expect(throws: CanonicalGraphError.missingNativeSnapshot) {
+            try index.key(for: missing, projecting: { missingKey })
+        }
+    }
+
+    @Test("native projection matches the independent formal exporter")
+    func matchesIndependentExporter() throws {
         let native = try ReachabilityGraph(initialMachines: CyclicExportModel.initialMachines(), maximumStates: 2)
-        let states = try Dictionary(uniqueKeysWithValues: native.transitions.keys.map {
-            ($0, try CanonicalState(native.formalProjection(of: $0)))
-        })
         let formal = try ModelChecker(
             compilation: CyclicExportModel.spec.compile(),
             configuration: .init(maximumStateLimit: 2, symmetryReduction: .disabled)
         ).explore()
         try #require(formal.isComplete)
         let expected = try FormalGraphExporter().export(formal).graph
-        #expect(try CanonicalGraph(native, states: states) == expected)
         #expect(try CanonicalGraph(native) == expected)
-        for snapshot in native.transitions.keys {
-            var missing = states
-            missing.removeValue(forKey: snapshot)
-            #expect(throws: CanonicalGraphError.missingNativeSnapshot) {
-                try CanonicalGraph(native, states: missing)
-            }
-            missing[CyclicExportModel.Snapshot(state: .init(value: 99))] = states[snapshot]
-            #expect(missing.count == states.count)
-            #expect(throws: CanonicalGraphError.missingNativeSnapshot) {
-                try CanonicalGraph(native, states: missing)
-            }
-        }
-    }
-
-    @Test("native export checks projections of sources with no outgoing edges")
-    func rejectsMissingDeadlockedSourceProjection() throws {
-        let initial = try #require(FailingExportModel.initialMachines().first { $0.state.value == 0 })
-        let native = try ReachabilityGraph(initialMachines: [initial], maximumStates: 1)
-        #expect(native.transitions.count == 1)
-        #expect(native.transitions.values.allSatisfy { $0.isEmpty })
-        let projection = try CanonicalState(native.formalProjection(of: initial.snapshot))
-        let states = [FailingExportModel.Snapshot(state: .init(value: 99)): projection]
-        #expect(throws: CanonicalGraphError.missingNativeSnapshot) {
-            try CanonicalGraph(native, states: states)
-        }
     }
 
     @Test("native export retains all reachability targets and a shortest witness without truncation")

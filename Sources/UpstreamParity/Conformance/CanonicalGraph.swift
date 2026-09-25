@@ -248,45 +248,62 @@ package func canonicalStateTable(
     return table
 }
 
+package struct NativeCanonicalKeyIndex<Snapshot: Hashable & Sendable>: Sendable {
+    private var keysByHash: [Int: CanonicalStateKey] = [:]
+    private var collisions: [Int: Set<CanonicalStateKey>] = [:]
+
+    package init(reservingCapacity count: Int = 0) {
+        keysByHash.reserveCapacity(count)
+    }
+
+    package mutating func insert(_ snapshot: Snapshot, key: CanonicalStateKey) {
+        let hash = snapshot.hashValue
+        if let existing = keysByHash[hash] {
+            collisions[hash, default: [existing]].insert(key)
+        } else {
+            keysByHash[hash] = key
+        }
+    }
+
+    package func key(
+        for snapshot: Snapshot,
+        projecting: () throws -> CanonicalStateKey
+    ) throws -> CanonicalStateKey {
+        let hash = snapshot.hashValue
+        guard let key = keysByHash[hash] else { throw CanonicalGraphError.missingNativeSnapshot }
+        guard let candidates = collisions[hash] else { return key }
+        let projected = try projecting()
+        guard candidates.contains(projected) else { throw CanonicalGraphError.missingNativeSnapshot }
+        return projected
+    }
+}
+
 package struct NativeCanonicalStates<Snapshot: Hashable & Sendable>: Sendable {
-    package let keys: [Snapshot: CanonicalStateKey]
+    private let keys: NativeCanonicalKeyIndex<Snapshot>
     package let states: [CanonicalStateKey: CanonicalState]
 
     package init<Machine: StateMachine>(_ native: ReachabilityGraph<Machine>) throws
         where Machine.Snapshot == Snapshot {
-        var keys: [Snapshot: CanonicalStateKey] = [:]
+        var keys = NativeCanonicalKeyIndex<Snapshot>(reservingCapacity: native.transitions.count)
         var states: [CanonicalStateKey: CanonicalState] = [:]
-        keys.reserveCapacity(native.transitions.count)
         states.reserveCapacity(native.transitions.count)
         for snapshot in native.transitions.keys {
             let state = try CanonicalState(native.formalProjection(of: snapshot))
             guard states.updateValue(state, forKey: state.key) == nil else {
                 throw CanonicalGraphError.duplicateState(state.key)
             }
-            keys[snapshot] = state.key
+            keys.insert(snapshot, key: state.key)
         }
         self.keys = keys
         self.states = states
     }
 
-    package init(_ projections: [Snapshot: CanonicalState]) throws {
-        var keys: [Snapshot: CanonicalStateKey] = [:]
-        var states: [CanonicalStateKey: CanonicalState] = [:]
-        keys.reserveCapacity(projections.count)
-        states.reserveCapacity(projections.count)
-        for (snapshot, state) in projections {
-            guard states.updateValue(state, forKey: state.key) == nil else {
-                throw CanonicalGraphError.duplicateState(state.key)
-            }
-            keys[snapshot] = state.key
+    package func key<Machine: StateMachine>(
+        for snapshot: Snapshot, in native: ReachabilityGraph<Machine>
+    ) throws -> CanonicalStateKey where Machine.Snapshot == Snapshot {
+        return try keys.key(for: snapshot) {
+            try CanonicalState(native.formalProjection(of: snapshot)).key
         }
-        self.keys = keys
-        self.states = states
-    }
-
-    package func key(for snapshot: Snapshot) throws -> CanonicalStateKey {
-        guard let key = keys[snapshot] else { throw CanonicalGraphError.missingNativeSnapshot }
-        return key
     }
 }
 
@@ -348,18 +365,10 @@ package struct CanonicalGraph: Equatable, Sendable {
     }
 
     package init<Machine: StateMachine>(
-        _ native: ReachabilityGraph<Machine>, states: [Machine.Snapshot: CanonicalState],
-        renderedActionNames: [String: String] = [:]
-    ) throws {
-        try self.init(native, projectedStates: NativeCanonicalStates(states),
-                      renderedActionNames: renderedActionNames)
-    }
-
-    package init<Machine: StateMachine>(
         _ native: ReachabilityGraph<Machine>, projectedStates: NativeCanonicalStates<Machine.Snapshot>,
         renderedActionNames: [String: String] = [:]
     ) throws {
-        guard projectedStates.keys.count == native.transitions.count else {
+        guard projectedStates.states.count == native.transitions.count else {
             throw CanonicalGraphError.missingNativeSnapshot
         }
         var actionNames: [Machine.Action: String] = [:]
@@ -373,13 +382,13 @@ package struct CanonicalGraph: Equatable, Sendable {
         var edges = Set<CanonicalEdge>()
         edges.reserveCapacity(native.transitions.values.reduce(0) { $0 + $1.count })
         for (source, successors) in native.transitions {
-            let sourceKey = try projectedStates.key(for: source)
+            let sourceKey = try projectedStates.key(for: source, in: native)
             for successor in successors {
                 edges.insert(CanonicalEdge(source: sourceKey, action: try actionName(successor.action),
-                                           target: try projectedStates.key(for: successor.target)))
+                                           target: try projectedStates.key(for: successor.target, in: native)))
             }
         }
-        try self.init(initialStateKeys: Set(try native.initialStates.map(projectedStates.key(for:))),
+        try self.init(initialStateKeys: Set(try native.initialStates.map { try projectedStates.key(for: $0, in: native) }),
                       stateTable: projectedStates.states, edges: edges)
     }
 

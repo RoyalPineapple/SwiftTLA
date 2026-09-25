@@ -119,7 +119,7 @@ package struct NativeModelRun: Sendable {
     }
     let projectedStates = try NativeCanonicalStates(native)
     func stateKey(_ snapshot: Machine.Snapshot) throws -> CanonicalStateKey {
-      try projectedStates.key(for: snapshot)
+      try projectedStates.key(for: snapshot, in: native)
     }
     func path(_ steps: [(action: Machine.Action?, state: Machine.Snapshot)]) throws -> GraphTrace {
       GraphTrace(id: "native-path", steps: try steps.map {

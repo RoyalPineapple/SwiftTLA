@@ -44,3 +44,11 @@ struct CyclicExportModel {
         }
     }
 }
+
+struct CollidingExportSnapshot: Hashable, Sendable {
+    let value: Int
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(0)
+    }
+}
