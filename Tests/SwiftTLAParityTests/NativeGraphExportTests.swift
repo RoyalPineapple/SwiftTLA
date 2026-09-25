@@ -14,7 +14,9 @@ struct NativeGraphExportTests {
             configuration: .init(maximumStateLimit: 2, symmetryReduction: .disabled)
         ).explore()
         try #require(formal.isComplete)
-        #expect(try CanonicalGraph(native, states: states) == FormalGraphExporter().export(formal).graph)
+        let expected = try FormalGraphExporter().export(formal).graph
+        #expect(try CanonicalGraph(native, states: states) == expected)
+        #expect(try CanonicalGraph(native) == expected)
         for snapshot in native.transitions.keys {
             var missing = states
             missing.removeValue(forKey: snapshot)
