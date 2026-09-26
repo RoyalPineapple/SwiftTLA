@@ -446,7 +446,10 @@ package struct NativeCanonicalStates<Snapshot: Hashable & Sendable>: Sendable {
             }
             keys.insert(snapshot, key: state.key)
         }
-        try keys.finalize(sortedKeys: states.keys.sorted())
+        let unorderedKeys = Array(states.keys)
+        var offsets = Array(unorderedKeys.indices)
+        offsets.sort { unorderedKeys[$0] < unorderedKeys[$1] }
+        try keys.finalize(sortedKeys: offsets.map { unorderedKeys[$0] })
         self.keys = keys
         self.states = states
     }
