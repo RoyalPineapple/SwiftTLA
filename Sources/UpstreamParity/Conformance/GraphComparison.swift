@@ -43,10 +43,10 @@ package func compareFiniteGraphs(
     if (tlc.graph.initialStateKeys == swift.graph.initialStateKeys) == false {
         differences.append(.initialStates(tlc: tlc.graph.initialStateKeys, swift: swift.graph.initialStateKeys))
     }
-    if (Set(tlc.graph.states.keys) == Set(swift.graph.states.keys)) == false {
+    if tlc.graph.sortedStateKeys != swift.graph.sortedStateKeys {
         differences.append(.states(tlc: Set(tlc.graph.states.keys), swift: Set(swift.graph.states.keys)))
     }
-    if (tlc.graph.edges == swift.graph.edges) == false {
+    if !tlc.graph.hasSameEdges(as: swift.graph) {
         differences.append(.edges(tlc: tlc.graph.edges, swift: swift.graph.edges))
     }
     if !tlc.isComplete || !swift.isComplete {

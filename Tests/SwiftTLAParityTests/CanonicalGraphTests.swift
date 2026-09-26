@@ -68,6 +68,25 @@ struct CanonicalGraphTests {
         #expect(forward.edges.contains(.init(source: first.key, action: "reset", target: second.key)))
     }
 
+    @Test("indexed edges retain complete byte-distinct labels and canonical order")
+    func indexedEdgesPreserveWireSemantics() throws {
+        let first = CanonicalState(bindings: ["counter": .integer(1)])
+        let second = CanonicalState(bindings: ["counter": .integer(2)])
+        let edges = [
+            CanonicalEdge(source: second.key, action: "é", target: first.key),
+            CanonicalEdge(source: first.key, action: "e\u{301}", target: second.key),
+            CanonicalEdge(source: first.key, action: "é", target: second.key),
+            CanonicalEdge(source: first.key, action: "é", target: second.key)
+        ]
+        let graph = try CanonicalGraph(initialStates: [first], states: [second, first], edges: edges)
+        var ordered: [CanonicalEdge] = []
+        graph.forEachOrderedEdge { ordered.append($0) }
+        #expect(graph.edgeCount == 3)
+        #expect(graph.edges == Set(edges))
+        #expect(ordered == Set(edges).sorted())
+        #expect(graph.containsEdge(edges[1]))
+    }
+
     @Test("prebuilt edge sets and state views preserve the complete labeled relation")
     func preservesStateViewsAndEdgeSets() throws {
         let first = CanonicalState(bindings: ["counter": .integer(1)])

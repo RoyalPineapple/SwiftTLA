@@ -38,10 +38,10 @@ package enum GraphRunRecords {
     for state in run.graph.initialStateKeys.sorted() {
       try emit(["type": "initial", "state": state.canonicalEncoding])
     }
-    for state in run.graph.states.keys.sorted() {
+    for state in run.graph.sortedStateKeys {
       try emit(["type": "state", "state": state.canonicalEncoding])
     }
-    for edge in run.graph.edges.sorted() {
+    try run.graph.forEachOrderedEdge { edge in
       try emit([
         "type": "edge",
         "source": edge.source.canonicalEncoding,
@@ -65,7 +65,7 @@ package enum GraphRunRecords {
       "outcome": outcomeRecord(run.outcome),
       "initialStateCount": run.graph.initialStateKeys.count,
       "stateCount": run.graph.states.count,
-      "edgeCount": run.graph.edges.count,
+      "edgeCount": run.graph.edgeCount,
       "traceCount": run.trace == nil ? 0 : 1
     ])
     try flush()

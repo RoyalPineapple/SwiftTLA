@@ -239,7 +239,7 @@ package struct FiniteGraphCheck: Sendable {
     [
       "initialStates": graph.initialStateKeys.count,
       "states": graph.states.count,
-      "edges": graph.edges.count
+      "edges": graph.edgeCount
     ]
   }
 

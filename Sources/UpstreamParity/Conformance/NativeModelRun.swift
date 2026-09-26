@@ -54,7 +54,7 @@ package struct NativeModelRun: Sendable {
     if case .violated(let trace)? = checks.deadlock {
       try trace.validate(in: graph.graph)
       guard trace.cycleStartIndex == nil, let final = trace.steps.last,
-            !graph.graph.edges.contains(where: { $0.source == final.state }) else {
+            !graph.graph.hasOutgoingEdges(from: final.state) else {
         throw EvidenceFormatError.invalidField(record: rendered.tlaBundle.root.name, field: "deadlock counterexample")
       }
     }

@@ -14,6 +14,9 @@ struct NativeGraphExportTests {
         var index = NativeCanonicalKeyIndex<CollidingExportSnapshot>()
         index.insert(first, key: firstKey)
         index.insert(second, key: secondKey)
+        try index.finalize(sortedKeys: [firstKey, secondKey])
+        #expect(try index.idForKnownSnapshot(first, projecting: { firstKey }) == 0)
+        #expect(try index.idForKnownSnapshot(second, projecting: { secondKey }) == 1)
         #expect(try index.key(for: first, projecting: { firstKey }) == firstKey)
         #expect(try index.key(for: second, projecting: { secondKey }) == secondKey)
         #expect(throws: CanonicalGraphError.missingNativeSnapshot) {

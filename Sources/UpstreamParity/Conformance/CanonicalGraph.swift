@@ -227,6 +227,117 @@ package struct CanonicalEdge: Hashable, Sendable, Comparable {
 
 }
 
+private struct IndexedCanonicalEdge: Hashable, Sendable {
+    let source: Int
+    let action: String
+    let target: Int
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.source == rhs.source && lhs.target == rhs.target
+            && lhs.action.utf8.count == rhs.action.utf8.count
+            && compareUTF8Prefixes(lhs.action, rhs.action) == 0
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(source)
+        hasher.combine(action)
+        hasher.combine(target)
+    }
+}
+
+private struct CanonicalEdgeIndex: Equatable, Sendable {
+    let stateKeys: [CanonicalStateKey]
+    private let hasPrefixOverlap: Bool
+    private let firstIDByHash: [Int: Int]
+    private let collisions: [Int: [Int]]
+    private var indexedEdges: Set<IndexedCanonicalEdge> = []
+    private(set) var actions: Set<String> = []
+
+    init(stateKeys: [CanonicalStateKey], reservingCapacity count: Int = 0) {
+        self.stateKeys = stateKeys
+        hasPrefixOverlap = zip(stateKeys, stateKeys.dropFirst()).contains {
+            $1.canonicalEncoding.hasPrefix($0.canonicalEncoding)
+        }
+        var firstIDByHash: [Int: Int] = [:]
+        firstIDByHash.reserveCapacity(stateKeys.count)
+        var collisions: [Int: [Int]] = [:]
+        for (id, key) in stateKeys.enumerated() {
+            let hash = key.hashValue
+            if firstIDByHash[hash] == nil {
+                firstIDByHash[hash] = id
+            } else {
+                collisions[hash, default: []].append(id)
+            }
+        }
+        self.firstIDByHash = firstIDByHash
+        self.collisions = collisions
+        indexedEdges.reserveCapacity(count)
+    }
+
+    var count: Int { indexedEdges.count }
+
+    func id(for key: CanonicalStateKey) -> Int? {
+        let hash = key.hashValue
+        guard let first = firstIDByHash[hash] else { return nil }
+        if stateKeys[first] == key { return first }
+        return collisions[hash]?.first { stateKeys[$0] == key }
+    }
+
+    mutating func insert(_ edge: CanonicalEdge) throws {
+        guard let source = id(for: edge.source) else { throw CanonicalGraphError.edgeStateMissing(edge.source) }
+        guard let target = id(for: edge.target) else { throw CanonicalGraphError.edgeStateMissing(edge.target) }
+        insert(source: source, action: edge.action, target: target)
+    }
+
+    mutating func insert(source: Int, action: String, target: Int) {
+        indexedEdges.insert(.init(source: source, action: action, target: target))
+        actions.insert(action)
+    }
+
+    func contains(_ edge: CanonicalEdge) -> Bool {
+        guard let source = id(for: edge.source), let target = id(for: edge.target) else { return false }
+        return indexedEdges.contains(.init(source: source, action: edge.action, target: target))
+    }
+
+    func hasSource(_ id: Int) -> Bool { indexedEdges.contains { $0.source == id } }
+
+    func expanded() -> Set<CanonicalEdge> {
+        Set(indexedEdges.map(edge))
+    }
+
+    func forEachOrdered(_ body: (CanonicalEdge) throws -> Void) rethrows {
+        var ordered = Array(indexedEdges)
+        ordered.sort { lhs, rhs in
+            if lhs.source != rhs.source {
+                let left = stateKeys[lhs.source].canonicalEncoding
+                let right = stateKeys[rhs.source].canonicalEncoding
+                if hasPrefixOverlap && (left.hasPrefix(right) || right.hasPrefix(left)) {
+                    return edge(lhs) < edge(rhs)
+                }
+                return lhs.source < rhs.source
+            }
+            let actionOrder = compareUTF8Prefixes(lhs.action, rhs.action)
+            if actionOrder != 0 { return actionOrder < 0 }
+            if lhs.action.utf8.count != rhs.action.utf8.count {
+                return lhs.action.utf8.count < rhs.action.utf8.count
+            }
+            return lhs.target < rhs.target
+        }
+        for item in ordered { try body(edge(item)) }
+    }
+
+    private func edge(_ indexed: IndexedCanonicalEdge) -> CanonicalEdge {
+        CanonicalEdge(source: stateKeys[indexed.source], action: indexed.action,
+                      target: stateKeys[indexed.target])
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        if lhs.stateKeys == rhs.stateKeys { return lhs.indexedEdges == rhs.indexedEdges }
+        return lhs.indexedEdges.allSatisfy { rhs.contains(lhs.edge($0)) }
+    }
+}
+
 package enum CanonicalGraphError: Error, Equatable, Sendable {
     case missingNativeSnapshot
     case duplicateState(CanonicalStateKey)
@@ -251,10 +362,15 @@ package func canonicalStateTable(
 package struct NativeCanonicalKeyIndex<Snapshot: Hashable & Sendable>: Sendable {
     private var keysByHash: [Int: CanonicalStateKey] = [:]
     private var collisions: [Int: Set<CanonicalStateKey>] = [:]
+    private var idsByHash: [Int: Int] = [:]
+    private var collisionIDs: [Int: [(key: CanonicalStateKey, id: Int)]] = [:]
+    private var stateKeys: [CanonicalStateKey] = []
 
     package init(reservingCapacity count: Int = 0) {
         keysByHash.reserveCapacity(count)
     }
+
+    package var sortedKeys: [CanonicalStateKey] { stateKeys }
 
     package mutating func insert(_ snapshot: Snapshot, key: CanonicalStateKey) {
         let hash = snapshot.hashValue
@@ -265,16 +381,52 @@ package struct NativeCanonicalKeyIndex<Snapshot: Hashable & Sendable>: Sendable 
         }
     }
 
+    package mutating func finalize(sortedKeys: [CanonicalStateKey]) throws {
+        var idsByKey: [CanonicalStateKey: Int] = [:]
+        idsByKey.reserveCapacity(sortedKeys.count)
+        for (id, key) in sortedKeys.enumerated() { idsByKey[key] = id }
+        var idsByHash: [Int: Int] = [:]
+        idsByHash.reserveCapacity(keysByHash.count)
+        for (hash, key) in keysByHash {
+            guard let id = idsByKey[key] else { throw CanonicalGraphError.missingNativeSnapshot }
+            idsByHash[hash] = id
+        }
+        var collisionIDs: [Int: [(key: CanonicalStateKey, id: Int)]] = [:]
+        for (hash, candidates) in collisions {
+            collisionIDs[hash] = try candidates.map { key in
+                guard let id = idsByKey[key] else { throw CanonicalGraphError.missingNativeSnapshot }
+                return (key, id)
+            }
+        }
+        self.idsByHash = idsByHash
+        self.collisionIDs = collisionIDs
+        stateKeys = sortedKeys
+        keysByHash.removeAll()
+        collisions.removeAll()
+    }
+
+    package func idForKnownSnapshot(
+        _ snapshot: Snapshot,
+        projecting: () throws -> CanonicalStateKey
+    ) throws -> Int {
+        let hash = snapshot.hashValue
+        guard let id = idsByHash[hash] else { throw CanonicalGraphError.missingNativeSnapshot }
+        guard let candidates = collisionIDs[hash] else { return id }
+        let projected = try projecting()
+        guard let match = candidates.first(where: { $0.key == projected }) else {
+            throw CanonicalGraphError.missingNativeSnapshot
+        }
+        return match.id
+    }
+
     package func key(
         for snapshot: Snapshot,
         projecting: () throws -> CanonicalStateKey
     ) throws -> CanonicalStateKey {
-        let hash = snapshot.hashValue
-        guard let key = keysByHash[hash] else { throw CanonicalGraphError.missingNativeSnapshot }
-        guard let candidates = collisions[hash] else { return key }
         let projected = try projecting()
-        guard candidates.contains(projected) else { throw CanonicalGraphError.missingNativeSnapshot }
-        return projected
+        let id = try idForKnownSnapshot(snapshot, projecting: { projected })
+        guard stateKeys[id] == projected else { throw CanonicalGraphError.missingNativeSnapshot }
+        return stateKeys[id]
     }
 }
 
@@ -294,6 +446,7 @@ package struct NativeCanonicalStates<Snapshot: Hashable & Sendable>: Sendable {
             }
             keys.insert(snapshot, key: state.key)
         }
+        try keys.finalize(sortedKeys: states.keys.sorted())
         self.keys = keys
         self.states = states
     }
@@ -305,13 +458,26 @@ package struct NativeCanonicalStates<Snapshot: Hashable & Sendable>: Sendable {
             try CanonicalState(native.formalProjection(of: snapshot)).key
         }
     }
+
+    package func idForKnownSnapshot<Machine: StateMachine>(
+        _ snapshot: Snapshot, in native: ReachabilityGraph<Machine>
+    ) throws -> Int where Machine.Snapshot == Snapshot {
+        try keys.idForKnownSnapshot(snapshot) {
+            try CanonicalState(native.formalProjection(of: snapshot)).key
+        }
+    }
+
+    package var sortedKeys: [CanonicalStateKey] { keys.sortedKeys }
 }
 
 package struct CanonicalGraph: Equatable, Sendable {
     package let initialStateKeys: Set<CanonicalStateKey>
     package let states: [CanonicalStateKey: CanonicalState]
     /// The labeled transition relation; repeated evaluation witnesses add no behavior.
-    package let edges: Set<CanonicalEdge>
+    private let edgeIndex: CanonicalEdgeIndex
+    package var edges: Set<CanonicalEdge> { edgeIndex.expanded() }
+    package var edgeCount: Int { edgeIndex.count }
+    package var sortedStateKeys: [CanonicalStateKey] { edgeIndex.stateKeys }
     package let observedActions: Set<String>
 
     package init(
@@ -320,14 +486,17 @@ package struct CanonicalGraph: Equatable, Sendable {
         edges: some Sequence<CanonicalEdge>
     ) throws {
         let stateTable = try canonicalStateTable(states)
+        var edgeIndex = CanonicalEdgeIndex(stateKeys: stateTable.keys.sorted(),
+                                           reservingCapacity: edges.underestimatedCount)
+        for edge in edges { try edgeIndex.insert(edge) }
         try self.init(initialStateKeys: Set(initialStates.map(\.key)), stateTable: stateTable,
-                      edges: edges as? Set<CanonicalEdge> ?? Set(edges))
+                      edgeIndex: edgeIndex)
     }
 
     private init(
         initialStateKeys: Set<CanonicalStateKey>,
         stateTable: [CanonicalStateKey: CanonicalState],
-        edges: Set<CanonicalEdge>
+        edgeIndex: CanonicalEdgeIndex
     ) throws {
         let expectedBindings = stateTable.values.first.map { Set($0.bindings.keys) } ?? []
         for state in stateTable.values where state.bindings.count != expectedBindings.count
@@ -342,21 +511,10 @@ package struct CanonicalGraph: Equatable, Sendable {
             throw CanonicalGraphError.initialStateMissing(key)
         }
 
-        var observedActions = Set<String>()
-        for edge in edges {
-            guard stateTable.index(forKey: edge.source) != nil else {
-                throw CanonicalGraphError.edgeStateMissing(edge.source)
-            }
-            guard stateTable.index(forKey: edge.target) != nil else {
-                throw CanonicalGraphError.edgeStateMissing(edge.target)
-            }
-            observedActions.insert(edge.action)
-        }
-
         self.initialStateKeys = initialStateKeys
         self.states = stateTable
-        self.edges = edges
-        self.observedActions = observedActions
+        self.edgeIndex = edgeIndex
+        self.observedActions = edgeIndex.actions
     }
 
     /// Export native topology only; this does not issue a property-checking verdict.
@@ -379,18 +537,31 @@ package struct CanonicalGraph: Equatable, Sendable {
             actionNames[action] = name
             return name
         }
-        var edges = Set<CanonicalEdge>()
-        edges.reserveCapacity(native.transitions.values.reduce(0) { $0 + $1.count })
+        var edgeIndex = CanonicalEdgeIndex(stateKeys: projectedStates.sortedKeys,
+            reservingCapacity: native.transitions.values.reduce(0) { $0 + $1.count })
         for (source, successors) in native.transitions {
-            let sourceKey = try projectedStates.key(for: source, in: native)
+            let sourceID = try projectedStates.idForKnownSnapshot(source, in: native)
             for successor in successors {
-                edges.insert(CanonicalEdge(source: sourceKey, action: try actionName(successor.action),
-                                           target: try projectedStates.key(for: successor.target, in: native)))
+                edgeIndex.insert(source: sourceID, action: try actionName(successor.action),
+                                 target: try projectedStates.idForKnownSnapshot(successor.target, in: native))
             }
         }
         try self.init(initialStateKeys: Set(try native.initialStates.map { try projectedStates.key(for: $0, in: native) }),
-                      stateTable: projectedStates.states, edges: edges)
+                      stateTable: projectedStates.states, edgeIndex: edgeIndex)
     }
+
+    package func containsEdge(_ edge: CanonicalEdge) -> Bool { edgeIndex.contains(edge) }
+
+    package func forEachOrderedEdge(_ body: (CanonicalEdge) throws -> Void) rethrows {
+        try edgeIndex.forEachOrdered(body)
+    }
+
+    package func hasOutgoingEdges(from state: CanonicalStateKey) -> Bool {
+        guard let id = edgeIndex.id(for: state) else { return false }
+        return edgeIndex.hasSource(id)
+    }
+
+    package func hasSameEdges(as other: Self) -> Bool { edgeIndex == other.edgeIndex }
 
     package var variableNames: Set<String> {
         states.values.first.map { Set($0.bindings.keys) } ?? []
@@ -498,7 +669,7 @@ package struct GraphTrace: Hashable, Codable, Sendable {
         for (source, target) in zip(steps, steps.dropFirst()) {
             guard let action = target.action else { continue }
             let edge = CanonicalEdge(source: source.state, action: action, target: target.state)
-            guard graph.edges.contains(edge) else { throw GraphRunError.traceEdgeMissing(edge) }
+            guard graph.containsEdge(edge) else { throw GraphRunError.traceEdgeMissing(edge) }
         }
     }
 

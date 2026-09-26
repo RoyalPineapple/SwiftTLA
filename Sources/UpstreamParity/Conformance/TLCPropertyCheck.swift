@@ -286,7 +286,7 @@ extension TLCPropertyCheck {
     let bound = try boundTrace(trace, to: graph.graph, requiresCycle: outcome == .livenessViolation)
     if check == .deadlock {
       guard bound.cycleStartIndex == nil, let final = bound.steps.last,
-            !graph.graph.edges.contains(where: { $0.source == final.state }) else {
+            !graph.graph.hasOutgoingEdges(from: final.state) else {
         throw EvidenceFormatError.invalidField(record: "deadlock", field: "deadlock counterexample")
       }
     }
@@ -304,7 +304,7 @@ extension TLCPropertyCheck {
     var steps = try [first] + zip(trace.steps, trace.steps.dropFirst()).map { source, target in
       guard let action = target.action else { return target }
       let edge = CanonicalEdge(source: source.state, action: action, target: target.state)
-      if graph.edges.contains(edge) { return target }
+      if graph.containsEdge(edge) { return target }
       // TLC can reuse the preceding action's label for an implicit temporal
       // stutter. An unrelated or unknown action must still fail graph binding.
       guard requiresCycle, source.state == target.state, source.action == action else {
