@@ -188,14 +188,74 @@ struct ValidationEvidenceComparisonTests {
             if flags["notInModel"] as? Bool == true { records[index]["resolvedActions"] = [] }
         }
         let body = try records.dropLast().reduce(into: Data()) { data, record in
-            data.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
+            data.append(try bridgeLine(record))
             data.append(10)
         }
         records[records.count - 1]["bodySha256"] = SHA256.hex(body)
-        let footer = try JSONSerialization.data(withJSONObject: records[records.count - 1],
-            options: [.sortedKeys])
+        let footer = try bridgeLine(records[records.count - 1])
+        try compress(body + footer + Data([10]), to: destination)
+    }
+
+    private func bridgeLine(_ record: [String: Any]) throws -> Data {
+        func field(_ key: String) throws -> String {
+            guard let value = record[key] else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("bridge fixture \(key)")
+            }
+            return try fragment(value)
+        }
+        let type = try field("type")
+        let base = "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":4,\"type\":\(type),\"callback\":\(try field("callback")),\"seq\":\(try field("seq")),\"runId\":\(try field("runId")),\"caseId\":\(try field("caseId"))"
+        let suffix: String
+        switch record["type"] as? String {
+        case "header":
+            suffix = ""
+        case "initial":
+            suffix = ",\"state\":\(try bridgeState(record["state"]))"
+        case "transition":
+            guard let resolved = record["resolvedActions"] as? [[String: Any]],
+                  let flags = record["stateFlags"] as? [String: Any] else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("bridge fixture transition")
+            }
+            let actions = try resolved.map { try bridgeAction($0) }.joined(separator: ",")
+            suffix = ",\"source\":\(try bridgeState(record["source"])),\"target\":\(try bridgeState(record["target"])),\"action\":\(try bridgeAction(record["action"])),\"resolvedActions\":[\(actions)],\"stateFlags\":{\"raw\":\(try fragment(flags["raw"])),\"seen\":\(try fragment(flags["seen"])),\"notInModel\":\(try fragment(flags["notInModel"]))},\"visualization\":\(try field("visualization")),\"predicateLocation\":\(try field("predicateLocation")),\"reachable\":\(try field("reachable"))"
+        case "unsupported":
+            suffix = ",\"reason\":\(try field("reason"))"
+        case "footer":
+            suffix = ",\"status\":\(try field("status")),\"counts\":\(try field("counts")),\"lastBodySeq\":\(try field("lastBodySeq")),\"bodySha256\":\(try field("bodySha256"))"
+        default:
+            throw ValidationEvidenceComparisonError.invalidEvidence("bridge fixture type")
+        }
+        return Data("\(base)\(suffix)}".utf8)
+    }
+
+    private func bridgeState(_ value: Any?) throws -> String {
+        guard let state = value as? [String: Any] else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("bridge fixture state")
+        }
+        let base = "{\"fingerprint\":\(try fragment(state["fingerprint"])),\"level\":\(try fragment(state["level"]))"
+        guard let bindings = state["bindings"] as? [[String: Any]] else { return base + "}" }
+        let fields = try bindings.map { binding in
+            "{\"ordinal\":\(try fragment(binding["ordinal"])),\"name\":\(try fragment(binding["name"])),\"tla\":\(try fragment(binding["tla"]))}"
+        }.joined(separator: ",")
+        return "\(base),\"bindings\":[\(fields)]}"
+    }
+
+    private func bridgeAction(_ value: Any?) throws -> String {
+        guard let action = value as? [String: Any] else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("bridge fixture action")
+        }
+        return "{\"name\":\(try fragment(action["name"])),\"location\":\(try fragment(action["location"])),\"named\":\(try fragment(action["named"]))}"
+    }
+
+    private func fragment(_ value: Any?) throws -> String {
+        guard let value else { throw ValidationEvidenceComparisonError.invalidEvidence("bridge fixture field") }
+        return String(decoding: try JSONSerialization.data(withJSONObject: value,
+            options: [.fragmentsAllowed, .sortedKeys]), as: UTF8.self)
+    }
+
+    private func compress(_ data: Data, to destination: URL) throws {
         let source = destination.deletingLastPathComponent().appendingPathComponent(UUID().uuidString)
-        try (body + footer + Data([10])).write(to: source)
+        try data.write(to: source)
         defer { try? FileManager.default.removeItem(at: source) }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")

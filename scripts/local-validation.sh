@@ -224,8 +224,10 @@ run_guarded() {
         [[ ! -L "$toolchain_key_file" ]] || fail "toolchain key file must not be a symlink"
         if [[ -e "$build_dir" ]]; then
             [[ -d "$build_dir" ]] || fail "cache build path is not a directory"
-            if [[ ! -r "$toolchain_key_file" || "$(<"$toolchain_key_file")" != "$toolchain_key" \
-                  || ! -r "$cache_key_file" || "$(<"$cache_key_file")" != "$cache_key" ]]; then
+            # SwiftPM tracks source dependencies within one toolchain. Retain
+            # its incremental objects across source edits; the source key is
+            # recorded for audit, while toolchain/package changes invalidate.
+            if [[ ! -r "$toolchain_key_file" || "$(<"$toolchain_key_file")" != "$toolchain_key" ]]; then
                 rm -rf -- "$build_dir"
             fi
         fi

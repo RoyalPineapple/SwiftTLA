@@ -260,7 +260,10 @@ package enum ValidationEvidenceComparison {
 
     private static func readTLC(_ url: URL, caseID: String, actions: [RenderedAction],
         in directory: URL) throws -> Spool {
-        let expectedVersion = url.pathExtension == "gz" ? 4 : 3
+        if url.pathExtension == "gz" {
+            return try readCompactTLC(url, caseID: caseID, actions: actions, in: directory)
+        }
+        let expectedVersion = 3
         let states = directory.appendingPathComponent("states.raw")
         let initial = directory.appendingPathComponent("initial.raw")
         let edges = directory.appendingPathComponent("edges.raw")
@@ -396,6 +399,132 @@ package enum ValidationEvidenceComparison {
         return Spool(states: states, initial: initial, edges: edges, stateCount: fingerprints.count)
     }
 
+    private static func readCompactTLC(_ url: URL, caseID: String, actions: [RenderedAction],
+        in directory: URL) throws -> Spool {
+        let states = directory.appendingPathComponent("states.raw")
+        let initial = directory.appendingPathComponent("initial.raw")
+        let edges = directory.appendingPathComponent("edges.raw")
+        var stateOut = try ValidationLineWriter(states)
+        var initialOut = try ValidationLineWriter(initial)
+        var edgeOut = try ValidationLineWriter(edges)
+        defer { try? stateOut.close(); try? initialOut.close(); try? edgeOut.close() }
+        var reader = try ValidationLineReader(url)
+        defer { reader.close() }
+        let actionNames = Dictionary(uniqueKeysWithValues: actions.map {
+            (tlaInvocationLocationIdentity(action: $0.sourceName,
+                arguments: $0.arguments.map(\.description)), $0.renderedName)
+        })
+        var actionCache: [String: [String: String]] = [:]
+        var fingerprints: Set<UInt64> = []
+        var digest = CryptoKit.SHA256()
+        var counts: [String: Int] = [:]
+        var runID: String?
+        var sequence = 0
+        var sawFooter = false
+
+        while let line = try reader.next() {
+            guard !sawFooter else { throw ValidationEvidenceComparisonError.invalidEvidence("TLC record after footer") }
+            let event: CompactTLCGraphEvent
+            do {
+                event = try CompactTLCGraphEvent.parse(line, caseID: caseID,
+                    expectedRunID: runID, sequence: sequence)
+            } catch {
+                throw ValidationEvidenceComparisonError.invalidEvidence("compact TLC event at \(sequence + 1)")
+            }
+            runID = event.runID
+            let type: String
+            switch event.payload {
+            case .header:
+                type = "header"
+            case .initial(let state):
+                type = "initial"
+                let fingerprint = try register(state, known: &fingerprints, output: &stateOut)
+                try initialOut.append(String(fingerprint))
+            case .transition(let source, let target, let seen, let excluded,
+                let rawFlags, let resolved, let predicate, let reachable):
+                type = "transition"
+                if event.callback == "writeState.actionPredicate" {
+                    guard excluded, !seen, rawFlags == 2, reachable == "excluded",
+                          predicate != nil, resolved.isEmpty, target.bindings == nil else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("TLC excluded transition")
+                    }
+                } else {
+                    guard event.callback == "writeState.action", !excluded, reachable == "reachable",
+                          predicate == nil, fingerprints.contains(source) else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("TLC reachable transition")
+                    }
+                    if seen {
+                        guard target.bindings == nil, fingerprints.contains(target.fingerprint) else {
+                            throw ValidationEvidenceComparisonError.invalidEvidence("TLC seen target")
+                        }
+                    } else {
+                        _ = try register(target, known: &fingerprints, output: &stateOut)
+                    }
+                    guard !resolved.isEmpty else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("TLC missing action")
+                    }
+                    for action in resolved {
+                        guard action.named else {
+                            throw ValidationEvidenceComparisonError.invalidEvidence("TLC action")
+                        }
+                        let encodedAction: String
+                        if let cached = actionCache[action.name]?[action.location] {
+                            encodedAction = cached
+                        } else {
+                            encodedAction = encodedBytes(try resolvedAction(name: action.name,
+                                location: action.location, declared: actionNames))
+                            actionCache[action.name, default: [:]][action.location] = encodedAction
+                        }
+                        try edgeOut.append("\(source)\t\(target.fingerprint)\t\(encodedAction)")
+                    }
+                }
+            case .unsupported(let reason):
+                type = "unsupported"
+                guard event.callback == "writeState.visualization",
+                      reason == "callback has no Action identity: STUTTERING" else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("unsupported TLC callback")
+                }
+            case .footer(let footerCounts, let last, let hash):
+                type = "footer"
+                let bodyHash = digest.finalize().map { String(format: "%02x", $0) }.joined()
+                guard last == sequence - 1, hash == bodyHash,
+                      footerCounts == counts, counts["header"] == 1 else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("TLC footer")
+                }
+                sawFooter = true
+            }
+            if type != "footer" {
+                digest.update(data: line)
+                digest.update(data: Data([10]))
+                counts[type, default: 0] += 1
+            }
+            sequence += 1
+        }
+        guard sawFooter else { throw ValidationEvidenceComparisonError.invalidEvidence("TLC missing footer") }
+        try stateOut.close()
+        try initialOut.close()
+        try edgeOut.close()
+        return Spool(states: states, initial: initial, edges: edges, stateCount: fingerprints.count)
+    }
+
+    private static func register(_ state: CompactTLCGraphEvent.State, known: inout Set<UInt64>,
+        output: inout ValidationLineWriter) throws -> UInt64 {
+        guard known.insert(state.fingerprint).inserted, let bindings = state.bindings else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("TLC state identity")
+        }
+        var values: [String: CanonicalValue] = [:]
+        for binding in bindings {
+            guard values[binding.name] == nil else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("TLC state binding")
+            }
+            values[binding.name] = try TLCValueParser.parse(binding.tla)
+        }
+        let key = CanonicalState(bindings: values).key.canonicalEncoding
+        guard validField(key) else { throw ValidationEvidenceComparisonError.invalidEvidence("TLC state key") }
+        try output.append("\(key)\t\(state.fingerprint)")
+        return state.fingerprint
+    }
+
     private static func register(_ state: [String: Any], known: inout Set<UInt64>,
         output: inout ValidationLineWriter) throws -> String {
         guard let fingerprint = state["fingerprint"] as? String,
@@ -427,6 +556,11 @@ package enum ValidationEvidenceComparison {
               let location = action["location"] as? String else {
             throw ValidationEvidenceComparisonError.invalidEvidence("TLC action")
         }
+        return try resolvedAction(name: name, location: location, declared: declared)
+    }
+
+    private static func resolvedAction(name: String, location: String,
+        declared: [String: String]) throws -> String {
         let direct = tlaInvocationLocationIdentity(action: name, arguments: [])
         if let label = declared[direct] { return label }
         let prefix = "<\(name)("
