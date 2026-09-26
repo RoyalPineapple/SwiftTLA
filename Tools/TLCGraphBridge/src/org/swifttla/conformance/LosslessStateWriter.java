@@ -2,6 +2,7 @@ package org.swifttla.conformance;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -12,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.zip.GZIPOutputStream;
 
 import tla2sany.semantic.SemanticNode;
 import tlc2.TLCGlobals;
@@ -27,12 +29,14 @@ public final class LosslessStateWriter implements IStateWriter {
     private static final String OUTPUT_PROPERTY = "swifttla.tlc.graph.path";
     private static final String RUN_ID_PROPERTY = "swifttla.tlc.graph.run-id";
     private static final String CASE_ID_PROPERTY = "swifttla.tlc.graph.case-id";
+    private static final String COMPACT_GZIP_PROPERTY = "swifttla.tlc.graph.compact-gzip";
 
     private final Path outputPath;
     private final BufferedWriter output;
     private final MessageDigest bodyDigest;
     private final String runId;
     private final String caseId;
+    private final boolean compactGzip;
     private final Map<String, Integer> counts = new LinkedHashMap<>();
     private final InstanceActions instanceActions = new InstanceActions();
     private long sequence;
@@ -43,8 +47,14 @@ public final class LosslessStateWriter implements IStateWriter {
             outputPath = Path.of(required(OUTPUT_PROPERTY)).toAbsolutePath().normalize();
             runId = required(RUN_ID_PROPERTY);
             caseId = required(CASE_ID_PROPERTY);
+            compactGzip = Boolean.getBoolean(COMPACT_GZIP_PROPERTY);
             Files.createDirectories(outputPath.getParent());
-            output = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8);
+            if (compactGzip) {
+                GZIPOutputStream zipped = new GZIPOutputStream(Files.newOutputStream(outputPath), 65536, true);
+                output = new BufferedWriter(new OutputStreamWriter(zipped, StandardCharsets.UTF_8), 65536);
+            } else {
+                output = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8);
+            }
             bodyDigest = MessageDigest.getInstance("SHA-256");
             emit("header", "writer.header", "");
             Runtime.getRuntime().addShutdownHook(new Thread(this::close, "swifttla-graph-writer-close"));
@@ -140,8 +150,9 @@ public final class LosslessStateWriter implements IStateWriter {
                             String predicateLocation, String reachable) {
         final List<Action> resolved;
         try {
-            resolved = instanceActions.matching(TLCGlobals.mainChecker == null ? null : TLCGlobals.mainChecker.tool,
-                    action, source, target);
+            resolved = compactGzip && callback.equals("writeState.actionPredicate") ? List.of()
+                    : instanceActions.matching(TLCGlobals.mainChecker == null ? null : TLCGlobals.mainChecker.tool,
+                            action, source, target);
             if (resolved.stream().anyMatch(candidate -> !candidate.isNamed())) {
                 throw new IllegalArgumentException("callback lacks a stable named Action");
             }
@@ -152,8 +163,10 @@ public final class LosslessStateWriter implements IStateWriter {
         String flagsJson = "{\"raw\":" + Integer.toUnsignedString(Short.toUnsignedInt(flags))
                 + ",\"seen\":" + ((flags & IStateWriter.IsSeen) == IStateWriter.IsSeen)
                 + ",\"notInModel\":" + ((flags & IStateWriter.IsNotInModel) == IStateWriter.IsNotInModel) + "}";
-        emit("transition", callback, "\"source\":" + state(source)
-                + ",\"target\":" + state(target)
+        boolean referenceTarget = compactGzip && (callback.equals("writeState.actionPredicate")
+                || (flags & IStateWriter.IsSeen) == IStateWriter.IsSeen);
+        emit("transition", callback, "\"source\":" + (compactGzip ? stateReference(source) : state(source))
+                + ",\"target\":" + (referenceTarget ? stateReference(target) : state(target))
                 + ",\"action\":" + action(action)
                 + ",\"resolvedActions\":" + resolved.stream().map(LosslessStateWriter::action)
                     .collect(Collectors.joining(",", "[", "]"))
@@ -188,6 +201,11 @@ public final class LosslessStateWriter implements IStateWriter {
                 + ",\"level\":" + state.getLevel() + ",\"bindings\":" + bindings + "]}";
     }
 
+    private static String stateReference(TLCState state) {
+        return "{\"fingerprint\":" + quote(Long.toUnsignedString(state.fingerPrint()))
+                + ",\"level\":" + state.getLevel() + "}";
+    }
+
     private void emit(String type, String callback, String fields) {
         ensureOpen();
         String line = base(type, callback) + (fields.isEmpty() ? "}" : "," + fields + "}");
@@ -204,7 +222,7 @@ public final class LosslessStateWriter implements IStateWriter {
     }
 
     private String base(String type, String callback) {
-        return "{\"schema\":\"" + SCHEMA + "\",\"version\":" + VERSION
+        return "{\"schema\":\"" + SCHEMA + "\",\"version\":" + (compactGzip ? 4 : VERSION)
                 + ",\"type\":" + quote(type) + ",\"callback\":" + quote(callback)
                 + ",\"seq\":" + sequence + ",\"runId\":" + quote(runId)
                 + ",\"caseId\":" + quote(caseId);

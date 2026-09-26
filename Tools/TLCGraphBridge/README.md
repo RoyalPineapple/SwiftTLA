@@ -6,7 +6,13 @@ records the complete `IStateWriter` callback surface as append-only
 the event stream and constructs the TLC graph. The graph comparator decides
 formal equality.
 
-The supported schema is `swifttla.tlc.graph-events` version 3. It has a
+The diagnostic schema is `swifttla.tlc.graph-events` version 3. The independent
+validation pipeline uses compressed version 4. It records full values for each
+initial or newly discovered reachable state, but only fingerprints for known
+sources, seen targets, and excluded targets. Excluded callbacks retain their
+flags and original action without resolving actions that cannot become graph
+edges. The compressed stream keeps every reachable labeled edge and is read
+without materializing an uncompressed copy on disk. Both formats have a
 header, state and transition callback records, and a footer whose SHA-256
 covers the exact body bytes. The consumer validates
 strict UTF-8, exact record schemas, sequence/order rules, the footer digest,
@@ -54,6 +60,6 @@ repository.
 The tool directory caches the digest-validated build archive. Neither cache
 changes the accepted input identities.
 
-The hosted finite-graph workflow runs the complete comparison and retains its
-evidence. Local diagnostic checks run only through
+The hosted independent validation workflow runs both parity comparisons and
+retains their evidence. Local diagnostic checks run only through
 `scripts/local-validation.sh` with a focused test filter.

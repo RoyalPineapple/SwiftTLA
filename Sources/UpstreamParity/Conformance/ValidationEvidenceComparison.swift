@@ -108,7 +108,7 @@ package enum ValidationEvidenceComparison {
                 let tlcRoot = directory.appendingPathComponent("tlc")
                 try FileManager.default.createDirectory(at: tlcRoot, withIntermediateDirectories: false)
                 defer { try? FileManager.default.removeItem(at: tlcRoot) }
-                let tlcGraph = try readTLC(oracle.appendingPathComponent("tlc-graph/graph-events.jsonl"),
+                let tlcGraph = try readTLC(oracle.appendingPathComponent("tlc-graph/graph-events.jsonl.gz"),
                     caseID: caseID, actions: actions, in: tlcRoot)
                 difference = try Self.compareGraph(swiftGraph: swiftGraph, tlcGraph: tlcGraph,
                     swiftRoot: swiftRoot, tlcRoot: tlcRoot)
@@ -256,6 +256,7 @@ package enum ValidationEvidenceComparison {
 
     private static func readTLC(_ url: URL, caseID: String, actions: [RenderedAction],
         in directory: URL) throws -> Spool {
+        let expectedVersion = url.pathExtension == "gz" ? 4 : 3
         let states = directory.appendingPathComponent("states.raw")
         let initial = directory.appendingPathComponent("initial.raw")
         let edges = directory.appendingPathComponent("edges.raw")
@@ -279,7 +280,7 @@ package enum ValidationEvidenceComparison {
             let record = try decodeJSONObject(line, line: sequence + 1)
             guard !sawFooter,
                   record["schema"] as? String == "swifttla.tlc.graph-events",
-                  record["version"] as? Int == 3,
+                  record["version"] as? Int == expectedVersion,
                   record["seq"] as? Int == sequence,
                   record["caseId"] as? String == caseID,
                   let currentRun = record["runId"] as? String,
@@ -519,10 +520,27 @@ package enum ValidationEvidenceComparison {
 
 private struct ValidationLineReader {
     private let handle: FileHandle
+    private let decompressor: Process?
     private var buffer = Data()
     private var cursor = 0
+    private var checkedDecompressor = false
 
-    init(_ url: URL) throws { handle = try FileHandle(forReadingFrom: url) }
+    init(_ url: URL) throws {
+        if url.pathExtension == "gz" {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/gunzip")
+            process.arguments = ["-c", url.path]
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = FileHandle.nullDevice
+            try process.run()
+            handle = pipe.fileHandleForReading
+            decompressor = process
+        } else {
+            handle = try FileHandle(forReadingFrom: url)
+            decompressor = nil
+        }
+    }
     mutating func next() throws -> Data? {
         while true {
             if let newline = buffer[cursor...].firstIndex(of: 10) {
@@ -535,6 +553,13 @@ private struct ValidationLineReader {
                 guard cursor == buffer.count else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("unterminated line")
                 }
+                if let decompressor, !checkedDecompressor {
+                    decompressor.waitUntilExit()
+                    checkedDecompressor = true
+                    guard decompressor.terminationStatus == 0 else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("compressed TLC stream")
+                    }
+                }
                 return nil
             }
             if cursor > 0 {
@@ -544,7 +569,10 @@ private struct ValidationLineReader {
             buffer.append(chunk)
         }
     }
-    func close() { try? handle.close() }
+    func close() {
+        try? handle.close()
+        if let decompressor, decompressor.isRunning { decompressor.terminate() }
+    }
 }
 
 private struct ValidationLineWriter {

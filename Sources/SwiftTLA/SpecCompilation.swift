@@ -1905,6 +1905,34 @@ private extension CompiledModuleMetadata {
             case .value(let expression):
                 return "\(name) = \(try renderer.state(expression))"
             case .memberOf(let set):
+                let literal = set.computation
+                func isRecord(_ expression: CompiledExpression) -> Bool {
+                    var value = expression
+                    while case .convert = value.operation { value = value.children[0] }
+                    switch value.operation {
+                    case .recordLiteral, .value(.record): return true
+                    default: return false
+                    }
+                }
+                let unionMembers: Bool = if case .set(let element) = literal.resultType {
+                    element.unionAlternatives != nil
+                } else {
+                    false
+                }
+                let alternatives: [String]? = switch literal.operation {
+                case .value(.set(let values)) where values.contains(where: {
+                    if case .record = $0 { return true }
+                    return false
+                }):
+                    try values.map { try $0.rendered(using: layout).description }
+                case .setLiteral where unionMembers || literal.children.contains(where: isRecord):
+                    try literal.children.map { try renderer.state($0) }
+                default: nil
+                }
+                if let alternatives {
+                    let alternatives = alternatives.sorted().map { "\(name) = \($0)" }
+                    return alternatives.isEmpty ? "FALSE" : "(\(alternatives.joined(separator: " \\/ ")))"
+                }
                 return "\(name) \\in \(try renderer.state(set))"
             }
         }

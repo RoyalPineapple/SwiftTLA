@@ -227,8 +227,8 @@ package enum UpstreamTLCParity {
         if difference == nil && graphCompared {
             difference = try ValidationEvidenceComparison.compareTLCGraphs(
                 caseID: id,
-                generated: generatedGraphOutput.appendingPathComponent("graph-events.jsonl"),
-                reference: referenceGraphOutput.appendingPathComponent("graph-events.jsonl"),
+                generated: generatedGraphOutput.appendingPathComponent("graph-events.jsonl.gz"),
+                reference: referenceGraphOutput.appendingPathComponent("graph-events.jsonl.gz"),
                 actions: rendered.actions, in: directory)
         }
         let report = UpstreamTLCParityReport(

@@ -193,7 +193,6 @@ run_guarded() {
             printf '%s\n' \
                 'swiftpm-local-validation-v1' \
                 "$(git rev-parse --show-toplevel)" \
-                "$(git rev-parse HEAD)" \
                 "$(xcrun --find swift)" \
                 "$(swift --version 2>&1)" \
                 "$(xcrun --show-sdk-version)" \
@@ -223,9 +222,10 @@ run_guarded() {
         [[ ! -L "$build_dir" ]] || fail "cache build directory must not be a symlink"
         [[ ! -L "$cache_key_file" ]] || fail "cache key file must not be a symlink"
         [[ ! -L "$toolchain_key_file" ]] || fail "toolchain key file must not be a symlink"
-        if [[ -r "$toolchain_key_file" ]] && [[ "$(<"$toolchain_key_file")" != "$toolchain_key" ]]; then
-            if [[ -e "$build_dir" ]]; then
-                [[ -d "$build_dir" ]] || fail "cache build path is not a directory"
+        if [[ -e "$build_dir" ]]; then
+            [[ -d "$build_dir" ]] || fail "cache build path is not a directory"
+            if [[ ! -r "$toolchain_key_file" || "$(<"$toolchain_key_file")" != "$toolchain_key" \
+                  || ! -r "$cache_key_file" || "$(<"$cache_key_file")" != "$cache_key" ]]; then
                 rm -rf -- "$build_dir"
             fi
         fi

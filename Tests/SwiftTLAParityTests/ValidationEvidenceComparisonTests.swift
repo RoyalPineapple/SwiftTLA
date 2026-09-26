@@ -42,7 +42,8 @@ struct ValidationEvidenceComparisonTests {
         ] {
             let directory = try fixture(target: 1)
             defer { try? FileManager.default.removeItem(at: directory) }
-            try stream.write(to: directory.appendingPathComponent("oracle/tlc-graph/graph-events.jsonl"))
+            try writeCompressedGraph(stream,
+                to: directory.appendingPathComponent("oracle/tlc-graph/graph-events.jsonl.gz"))
             let result = try ValidationEvidenceComparison.compare(
                 caseID: "fixture", native: directory.appendingPathComponent("native"),
                 oracle: directory.appendingPathComponent("oracle"),
@@ -60,10 +61,10 @@ struct ValidationEvidenceComparisonTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: directory) }
         let source = try completeGraphStream(reference)
-        let generated = directory.appendingPathComponent("generated.jsonl")
-        let upstream = directory.appendingPathComponent("upstream.jsonl")
-        try source.write(to: generated)
-        try source.write(to: upstream)
+        let generated = directory.appendingPathComponent("generated.jsonl.gz")
+        let upstream = directory.appendingPathComponent("upstream.jsonl.gz")
+        try writeCompressedGraph(source, to: generated)
+        try writeCompressedGraph(source, to: upstream)
         #expect(try ValidationEvidenceComparison.compareTLCGraphs(
             caseID: "fixture", generated: generated, reference: upstream,
             actions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")],
@@ -162,7 +163,51 @@ struct ValidationEvidenceComparisonTests {
         try nativeEvents.write(to: native.appendingPathComponent("machine.jsonl"))
         let reference = try fixtureCase(testReferencePin(),
             renderedActions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")])
-        try completeGraphStream(reference).write(to: tlc.appendingPathComponent("graph-events.jsonl"))
+        try writeCompressedGraph(completeGraphStream(reference),
+            to: tlc.appendingPathComponent("graph-events.jsonl.gz"))
         return root
+    }
+
+    private func writeCompressedGraph(_ stream: Data, to destination: URL) throws {
+        var records = try stream.split(separator: 10).map { line -> [String: Any] in
+            guard let record = try JSONSerialization.jsonObject(with: Data(line)) as? [String: Any] else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("fixture graph event")
+            }
+            return record
+        }
+        for index in records.indices {
+            records[index]["version"] = 4
+            guard records[index]["type"] as? String == "transition",
+                  let source = records[index]["source"] as? [String: Any],
+                  let target = records[index]["target"] as? [String: Any],
+                  let flags = records[index]["stateFlags"] as? [String: Any] else { continue }
+            records[index]["source"] = ["fingerprint": source["fingerprint"]!, "level": source["level"]!]
+            if flags["seen"] as? Bool == true || flags["notInModel"] as? Bool == true {
+                records[index]["target"] = ["fingerprint": target["fingerprint"]!, "level": target["level"]!]
+            }
+            if flags["notInModel"] as? Bool == true { records[index]["resolvedActions"] = [] }
+        }
+        let body = try records.dropLast().reduce(into: Data()) { data, record in
+            data.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
+            data.append(10)
+        }
+        records[records.count - 1]["bodySha256"] = SHA256.hex(body)
+        let footer = try JSONSerialization.data(withJSONObject: records[records.count - 1],
+            options: [.sortedKeys])
+        let source = destination.deletingLastPathComponent().appendingPathComponent(UUID().uuidString)
+        try (body + footer + Data([10])).write(to: source)
+        defer { try? FileManager.default.removeItem(at: source) }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
+        process.arguments = ["-n", "-c", source.path]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        try process.run()
+        let compressed = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("fixture compression")
+        }
+        try compressed.write(to: destination)
     }
 }

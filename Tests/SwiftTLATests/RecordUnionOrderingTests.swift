@@ -79,6 +79,16 @@ struct RecordUnionOrderingTests {
         )
     }
 
+    @Test("mixed record domains render as equivalent initial alternatives")
+    func rendersMixedRecordDomainWithoutTLCSetOrdering() throws {
+        let tla = try RecordUnionFieldDomainModel.spec.compile().render().tlaBundle.tla
+        #expect(tla.contains("value = [value |-> -1]"))
+        #expect(tla.contains("value = [value |-> 0]"))
+        #expect(tla.contains("value = [value |-> FALSE]"))
+        #expect(tla.contains("value = [value |-> TRUE]"))
+        #expect(tla.contains("value \\in {[value |->") == false)
+    }
+
     @Test("same-field record unions retain disjoint value types and native ordering")
     func preservesFieldDomains() throws {
         let values = try RecordUnionFieldDomainModel.initialMachines().map { $0.state.value }

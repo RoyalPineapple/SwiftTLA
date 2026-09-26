@@ -158,7 +158,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
       "-Dswifttla.tlc.graph.path=\(graphEvents.path)",
       "-Dswifttla.tlc.graph.run-id=\(runID.uuidString.lowercased())",
       "-Dswifttla.tlc.graph.case-id=\(caseID)"
-    ] : []
+    ] + (graphEvents.pathExtension == "gz" ? ["-Dswifttla.tlc.graph.compact-gzip=true"] : []) : []
     let graphDump = invocation == .finiteGraph
       ? ["-dump", "class,org.swifttla.conformance.LosslessStateWriter"] : []
     let argumentGroups: [[String]] = [
@@ -427,11 +427,12 @@ package struct TLCProcessAdapter: Sendable {
     if let failure {
       try RetainedFiles.writeText(redactingSecrets(in: failure.message), to: logs.appendingPathComponent("tlc.failure.log"))
     }
-    let graphFiles = request.invocation == .finiteGraph ? [(request.graphEvents, "graph-events.jsonl")] : []
+    let graphName = request.graphEvents.pathExtension == "gz" ? "graph-events.jsonl.gz" : "graph-events.jsonl"
+    let graphFiles = request.invocation == .finiteGraph ? [(request.graphEvents, graphName)] : []
     for (source, name) in graphFiles + [(request.traceOutput, "counterexample.json")] {
       guard FileManager.default.fileExists(atPath: source.path) else { continue }
       let destination = directory.appendingPathComponent(name)
-      if name == "graph-events.jsonl" {
+      if name == graphName {
         let root = request.workingDirectory.resolvingSymlinksInPath().standardizedFileURL
         let resolved = try RetainedFiles.resolve(source, beneath: root)
         let values = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
@@ -447,7 +448,7 @@ package struct TLCProcessAdapter: Sendable {
       if FileManager.default.fileExists(atPath: destination.path) {
         try FileManager.default.removeItem(at: destination)
       }
-      if name == "graph-events.jsonl" {
+      if name == graphName {
         // The retained file owns the complete stream; later runs can reuse the working path.
         try FileManager.default.moveItem(at: source, to: destination)
       } else {
