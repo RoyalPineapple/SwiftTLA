@@ -34,16 +34,16 @@ package struct ParallelReachableModel: Sendable {
                 let nodes = SetExpr<Node>.literal(.one, .two, .three, .four)
                 let successors = Select(
                     from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { graph in
-                        All(Node.all) { node in graph[node].cardinality == 2 }
+                        ForAll(Node.all) { node in graph[node].cardinality == 2 }
                     },
                     matching: { graph in graph.expr == graph.expr }
                 )
-                let marked = scope.sharedVar("marked", initial: SetExpr<Node>())
-                let frontier = scope.sharedVar("frontier", initial: SetExpr<Node>.literal(.one))
+                let marked = scope.sharedVar(initial: SetExpr<Node>())
+                let frontier = scope.sharedVar(initial: SetExpr<Node>.literal(.one))
 
                 Each(Worker.all, fairness: .weak, scoped: { _, scope in
-                    let current: LocalVariable<Node> = scope.localVar("current", initial: .one)
-                    let pending: LocalVariable<SetExpr<Node>> = scope.localVar("pending", initial: SetExpr<Node>())
+                    let current: LocalVariable<Node> = scope.localVar(initial: .one)
+                    let pending: LocalVariable<SetExpr<Node>> = scope.localVar(initial: SetExpr<Node>())
 
                     Do(Step.a) {
                         Either {

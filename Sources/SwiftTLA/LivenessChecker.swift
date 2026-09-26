@@ -1,12 +1,12 @@
 import Foundation
 
-package enum TemporalAnalysisStatus: Equatable, Sendable {
+public enum TemporalAnalysisStatus: Equatable, Sendable {
     case satisfied
     case violated
     case unavailable
 }
 
-package enum TemporalDiagnosticReason: String, Equatable, Sendable {
+public enum TemporalDiagnosticReason: String, Equatable, Sendable {
     case satisfied
     case violatingFairLasso = "violating-fair-lasso"
     case missingInitialStateIdentity = "missing-initial-state-identity"
@@ -15,22 +15,17 @@ package enum TemporalDiagnosticReason: String, Equatable, Sendable {
     case unknownAction = "unknown-action"
 }
 
-enum TemporalEvaluationError: Error, Equatable {
-    case predicate(state: StateGraph.StateID, cause: EvalError)
-    case leadsToTrigger(state: StateGraph.StateID, cause: EvalError)
-}
-
-package struct FairLassoWitness: Equatable, Sendable {
-    public let prefix: [StateGraph.StateID]
-    public let cycle: [StateGraph.StateID]
-    public let prefixActions: [String]
-    public let cycleActions: [String]
+public struct FairLassoWitness<State: Hashable & Sendable, Action: Equatable & Sendable>: Equatable, Sendable {
+    public let prefix: [State]
+    public let cycle: [State]
+    public let prefixActions: [Action]
+    public let cycleActions: [Action]
 
     init(
-        prefix: [StateGraph.StateID],
-        cycle: [StateGraph.StateID],
-        prefixActions: [String],
-        cycleActions: [String]
+        prefix: [State],
+        cycle: [State],
+        prefixActions: [Action],
+        cycleActions: [Action]
     ) {
         self.prefix = prefix
         self.cycle = cycle
@@ -39,213 +34,194 @@ package struct FairLassoWitness: Equatable, Sendable {
     }
 }
 
-extension FiniteExploration {
-    package func analyzeTemporalProperties(
-        in compilation: CompiledSpecification
-    ) throws -> [TemporalAnalysis] {
-        try requireValidEvidence(in: compilation)
-        return try LivenessChecker(
-            compilation: compilation,
-            graph: graph,
-            states: compiledStates
-        ).analyze(
-            initialStateIDs: initialStateIDs,
-            isComplete: isComplete
-        )
-    }
-}
-
-package struct TemporalAnalysis: Equatable, Sendable {
+public struct TemporalAnalysis<State: Hashable & Sendable, Action: Equatable & Sendable>: Equatable, Sendable {
     public let status: TemporalAnalysisStatus
     public let reason: TemporalDiagnosticReason
-    public let witness: FairLassoWitness?
-    public let propertyValues: [StateGraph.StateID: Bool]
-    public let enabledActions: [String: [StateGraph.StateID: Bool]]
-    public let fairComponents: [Set<StateGraph.StateID>]
-    public let rejectedComponents: [Set<StateGraph.StateID>]
+    public let witness: FairLassoWitness<State, Action>?
+    public let enabledActions: [String: [State: Bool]]
+    public let fairComponents: [Set<State>]
+    public let rejectedComponents: [Set<State>]
 
     public init(
         status: TemporalAnalysisStatus,
         reason: TemporalDiagnosticReason,
-        witness: FairLassoWitness? = nil,
-        propertyValues: [StateGraph.StateID: Bool] = [:],
-        enabledActions: [String: [StateGraph.StateID: Bool]] = [:],
-        fairComponents: [Set<StateGraph.StateID>] = [],
-        rejectedComponents: [Set<StateGraph.StateID>] = []
+        witness: FairLassoWitness<State, Action>? = nil,
+        enabledActions: [String: [State: Bool]] = [:],
+        fairComponents: [Set<State>] = [],
+        rejectedComponents: [Set<State>] = []
     ) {
         self.status = status
         self.reason = reason
         self.witness = witness
-        self.propertyValues = propertyValues
         self.enabledActions = enabledActions
         self.fairComponents = fairComponents
         self.rejectedComponents = rejectedComponents
     }
+
+    func map<NewState: Hashable & Sendable, NewAction: Equatable & Sendable>(
+        state: (State) throws -> NewState,
+        action: (Action) throws -> NewAction
+    ) rethrows -> TemporalAnalysis<NewState, NewAction> {
+        func values(_ source: [State: Bool]) throws -> [NewState: Bool] {
+            try Dictionary(uniqueKeysWithValues: source.map { (try state($0.key), $0.value) })
+        }
+        return try .init(
+            status: status, reason: reason,
+            witness: witness.map { trace in
+                try .init(prefix: trace.prefix.map(state), cycle: trace.cycle.map(state),
+                    prefixActions: trace.prefixActions.map(action), cycleActions: trace.cycleActions.map(action))
+            },
+            enabledActions: enabledActions.mapValues(values),
+            fairComponents: fairComponents.map { try Set($0.map(state)) },
+            rejectedComponents: rejectedComponents.map { try Set($0.map(state)) }
+        )
+    }
+
 }
 
 /// Bounded liveness checking over `[][Next]_vars` behaviors.
 ///
 /// Every reachable state has an implicit stutter edge. Fairness uses only
-/// explicit, state-changing named-action transitions.
-package struct LivenessChecker {
-    public let graph: StateGraph
-    private let compilation: CompiledSpecification
-    private let states: [StateGraph.StateID: CompiledState]
+/// explicit named-action transitions that change the fairness projection.
+package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Sendable, Scope: Hashable & Sendable>: Sendable {
+    let states: Set<State>
+    let transitions: [State: [GraphEdge<State, Action>]]
+    let matches: @Sendable (Action, Scope) -> Bool
+    let changes: @Sendable (State, State, Scope) -> Bool
+    let actionOrder: @Sendable (Action, Action) -> Bool
+    let stateOrder: @Sendable (State, State) -> Bool
+    private let fairness: [(scope: Scope, isStrong: Bool)]
+    private let enabled: [Scope: [State: Bool]]
 
     init(
-        compilation: CompiledSpecification,
-        graph: StateGraph,
-        states: [StateGraph.StateID: CompiledState]
+        states: Set<State>,
+        transitions: [State: [GraphEdge<State, Action>]],
+        fairness: [(scope: Scope, isStrong: Bool)],
+        matches: @escaping @Sendable (Action, Scope) -> Bool,
+        changes: @escaping @Sendable (State, State, Scope) -> Bool = { before, after, _ in before != after },
+        actionOrder: @escaping @Sendable (Action, Action) -> Bool,
+        stateOrder: @escaping @Sendable (State, State) -> Bool
     ) {
-        self.graph = graph
-        self.compilation = compilation
         self.states = states
-    }
-
-    public func analyze(
-        initialStateIDs: [StateGraph.StateID],
-        isComplete: Bool = true
-    ) throws -> [TemporalAnalysis] {
-        try compilation.semantics.temporalProperties.map {
-            try analyze(
-                $0.expression,
-                fairness: compilation.semantics.fairness,
-                initialStateIDs: initialStateIDs,
-                isComplete: isComplete,
-                compilation: compilation
-            )
-        }
-    }
-
-    private func analyze(
-        _ property: CompiledTemporalExpr,
-        fairness: [CompiledFairnessCondition],
-        initialStateIDs: [StateGraph.StateID],
-        isComplete: Bool,
-        compilation: CompiledSpecification
-    ) throws -> TemporalAnalysis {
-        let form: TemporalForm
-        let predicate: CompiledStateExpr
-        let trigger: CompiledStateExpr?
-        switch property {
-        case .always(let value): form = .always; predicate = value; trigger = nil
-        case .eventually(let value): form = .eventually; predicate = value; trigger = nil
-        case .alwaysEventually(let value): form = .alwaysEventually; predicate = value; trigger = nil
-        case .eventuallyAlways(let value): form = .eventuallyAlways; predicate = value; trigger = nil
-        case .leadsTo(let from, let to): form = .leadsTo; predicate = to; trigger = from
-        }
-        return try analyze(
-            form: form,
-            fairness: fairness,
-            initialStateIDs: initialStateIDs,
-            isComplete: isComplete,
-            predicate: { state in
-                let compiledState = try compiledState(for: state)
-                do {
-                    return try predicateHolds(predicate, in: compiledState, compilation: compilation)
-                } catch let error as EvalError {
-                    throw TemporalEvaluationError.predicate(state: state, cause: error)
+        self.transitions = transitions
+        self.fairness = fairness
+        self.matches = matches
+        self.changes = changes
+        self.actionOrder = actionOrder
+        self.stateOrder = stateOrder
+        enabled = Dictionary(uniqueKeysWithValues: Set(fairness.map(\.scope)).map { scope in
+            let values = Dictionary(uniqueKeysWithValues: states.map { state in
+                let isEnabled = (transitions[state] ?? []).contains { edge in
+                    guard let action = edge.action else { return false }
+                    return matches(action, scope) && changes(state, edge.target, scope)
                 }
-            },
-            trigger: trigger.map { trigger in
-                { state in
-                    let compiledState = try compiledState(for: state)
-                    do {
-                        return try predicateHolds(trigger, in: compiledState, compilation: compilation)
-                    } catch let error as EvalError {
-                        throw TemporalEvaluationError.leadsToTrigger(state: state, cause: error)
+                return (state, isEnabled)
+            })
+            return (scope, values)
+        })
+    }
+
+    private func invalidGraph(initialStates: [State], isComplete: Bool) -> TemporalDiagnosticReason? {
+        guard isComplete else {
+            return .incompleteExploration
+        }
+        guard !initialStates.isEmpty, initialStates.allSatisfy({ states.contains($0) }) else {
+            return .missingInitialStateIdentity
+        }
+
+        guard transitions.allSatisfy({ source, transitions in
+            states.contains(source) && transitions.allSatisfy { states.contains($0.target) }
+        }) else {
+            return .invalidGraphTopology
+        }
+
+        guard hasValidActions() else {
+            return .unknownAction
+        }
+        return nil
+    }
+
+    func analyze(
+        _ property: TemporalCondition<@Sendable (State, State) throws -> Bool>,
+        initialStates: [State],
+        isComplete: Bool = true,
+        renderScope: (Scope) throws -> String
+    ) throws -> TemporalAnalysis<State, Action?> {
+        if case .always(let predicate) = property {
+            return try analyzeAlwaysTransition(predicate, initialStates: initialStates,
+                isComplete: isComplete, renderScope: renderScope)
+        }
+        if let reason = invalidGraph(initialStates: initialStates, isComplete: isComplete) {
+            return .init(status: .unavailable, reason: reason)
+        }
+
+        if case .conditional(let predicate, let yes, let no) = property {
+            var yesStates: [State] = []
+            var noStates: [State] = []
+            for state in initialStates {
+                if try predicate(state, state) { yesStates.append(state) }
+                else { noStates.append(state) }
+            }
+            for (condition, initial) in [(yes, yesStates), (no, noStates)] where !initial.isEmpty {
+                var reachable = Set(initial)
+                var pending = initial
+                while let state = pending.popLast() {
+                    for edge in transitions[state] ?? [] where reachable.insert(edge.target).inserted {
+                        pending.append(edge.target)
                     }
                 }
+                let branch = Self(states: reachable,
+                    transitions: transitions.filter { reachable.contains($0.key) },
+                    fairness: fairness, matches: matches, changes: changes,
+                    actionOrder: actionOrder, stateOrder: stateOrder)
+                let result = try branch.analyze(condition, initialStates: initial,
+                    isComplete: isComplete, renderScope: renderScope)
+                if result.status != .satisfied { return result }
             }
-        )
-    }
+            return try analyze(.always { _, _ in true }, initialStates: initialStates,
+                isComplete: isComplete, renderScope: renderScope)
+        }
 
-    public func computeSCCs() -> [Set<StateGraph.StateID>] {
-        stronglyConnectedComponents(in: Set(graph.states.keys))
-    }
-
-    public func terminalSCCs(from sccs: [Set<StateGraph.StateID>]) -> [Set<StateGraph.StateID>] {
-        let nodeToSCC = Dictionary(uniqueKeysWithValues: sccs.enumerated().flatMap { index, component in
-            component.map { ($0, index) }
-        })
-        return sccs.filter { component in
-            !component.contains { state in
-                explicitEdges(from: state).contains { edge in nodeToSCC[edge.target] != nodeToSCC[state] }
+        if case .all(let conditions) = property {
+            for condition in conditions {
+                let result = try analyze(condition, initialStates: initialStates,
+                    isComplete: isComplete, renderScope: renderScope)
+                if result.status != .satisfied { return result }
             }
-        }
-    }
-
-    private enum TemporalForm {
-        case always
-        case eventually
-        case alwaysEventually
-        case eventuallyAlways
-        case leadsTo
-    }
-
-    private func analyze(
-        form: TemporalForm,
-        fairness: [CompiledFairnessCondition],
-        initialStateIDs: [StateGraph.StateID],
-        isComplete: Bool,
-        predicate: (StateGraph.StateID) throws -> Bool,
-        trigger: ((StateGraph.StateID) throws -> Bool)?
-    ) throws -> TemporalAnalysis {
-        guard isComplete else {
-            return .init(status: .unavailable, reason: .incompleteExploration)
-        }
-        guard !initialStateIDs.isEmpty, initialStateIDs.allSatisfy({ graph.states[$0] != nil }) else {
-            return .init(status: .unavailable, reason: .missingInitialStateIdentity)
+            return try analyze(.always { _, _ in true }, initialStates: initialStates,
+                isComplete: isComplete, renderScope: renderScope)
         }
 
-        guard graph.transitions.allSatisfy({ source, transitions in
-            graph.states[source] != nil && transitions.allSatisfy { graph.states[$0.target] != nil }
-        }) else {
-            return .init(status: .unavailable, reason: .invalidGraphTopology)
+        let predicate: @Sendable (State, State) throws -> Bool
+        switch property {
+        case .eventually(let value), .alwaysEventually(let value), .eventuallyAlways(let value):
+            predicate = value
+        case .leadsTo(_, let target): predicate = target
+        case .always, .all, .conditional: preconditionFailure("Transition and compound conditions are checked before state liveness conditions")
         }
+        let negative = try states.filter { try !predicate($0, $0) }
+        let allStates = states
+        let search: LassoSearch<State>
 
-        guard graphHasOnlyCompiledActions() else {
-            return .init(status: .unavailable, reason: .unknownAction)
-        }
-
-        let values = try Dictionary(uniqueKeysWithValues: graph.states.keys.map { state in
-            (state, try predicate(state))
-        })
-        let enabled = enabledness(for: fairness)
-        let allStates = Set(graph.states.keys)
-        let negative = Set(values.compactMap { $0.value ? nil : $0.key })
-        let search: LassoSearch
-
-        switch form {
-        case .always:
-            search = .init(cycleStates: allStates, prefixStates: negative)
+        switch property {
         case .eventually:
             search = .init(cycleStates: negative, prefixContinuationStates: negative)
         case .alwaysEventually:
             search = .init(cycleStates: negative)
         case .eventuallyAlways:
             search = .init(cycleStates: allStates, cycleRequiredStates: negative)
-        case .leadsTo:
-            guard let trigger else {
-                throw CompilationDiagnostic(
-                    code: .compilationIdentityMismatch,
-                    stage: .checking,
-                    path: "liveness.leadsTo.trigger",
-                    expected: "a compiled trigger predicate",
-                    actual: "the leads-to trigger is absent",
-                    nextSafeAction: "Compile the temporal property again before checking liveness."
-                )
-            }
-            let triggers = Set(try graph.states.keys.compactMap { state in
-                try trigger(state) ? state : nil
+        case .leadsTo(let trigger, _):
+            let triggers = Set(try states.compactMap { state in
+                try trigger(state, state) ? state : nil
             }).intersection(negative)
             search = .init(cycleStates: negative, prefixStates: triggers, prefixContinuationStates: negative)
+        case .always, .all, .conditional: preconditionFailure("Transition and compound conditions are checked before state liveness conditions")
         }
 
         let components = fairComponents(in: search.cycleStates, fairness: fairness, enabled: enabled)
         let witness = findWitness(
             components.fair,
-            initialStates: initialStateIDs,
+            initialStates: initialStates,
             prefixStates: search.prefixStates,
             prefixContinuationStates: search.prefixContinuationStates,
             cycleRequiredStates: search.cycleRequiredStates,
@@ -256,108 +232,115 @@ package struct LivenessChecker {
             status: witness == nil ? .satisfied : .violated,
             reason: witness == nil ? .satisfied : .violatingFairLasso,
             witness: witness,
-            propertyValues: values,
-            enabledActions: try renderedEnabledness(enabled),
+            enabledActions: try renderedEnabledness(enabled, renderScope: renderScope),
             fairComponents: components.fair,
             rejectedComponents: components.rejected
         )
     }
 
+    /// Checks an action predicate on every step of each permitted infinite behavior.
+    private func analyzeAlwaysTransition(
+        _ predicate: @Sendable (State, State) throws -> Bool,
+        initialStates: [State],
+        isComplete: Bool = true,
+        renderScope: (Scope) throws -> String
+    ) throws -> TemporalAnalysis<State, Action?> {
+        if let reason = invalidGraph(initialStates: initialStates, isComplete: isComplete) {
+            return .init(status: .unavailable, reason: reason)
+        }
+        let components = fairComponents(in: states, fairness: fairness, enabled: enabled)
+
+        var reachable = Set(initialStates)
+        var pending = initialStates
+        while let state = pending.popLast() {
+            for edge in explicitEdges(from: state) where reachable.insert(edge.target).inserted {
+                pending.append(edge.target)
+            }
+        }
+        var witness: FairLassoWitness<State, Action?>?
+        for source in reachable.sorted(by: stateOrder) {
+            for edge in edges(from: source).sorted(by: edgeOrder) {
+                guard try !predicate(source, edge.target),
+                      let suffix = findWitness(components.fair, initialStates: [edge.target],
+                        prefixStates: nil, prefixContinuationStates: nil, cycleRequiredStates: nil,
+                        fairness: fairness, enabled: enabled) else { continue }
+                for initial in initialStates.sorted(by: stateOrder) {
+                    guard let prefix = shortestPath(from: initial, to: source, in: nil) else { continue }
+                    let candidate = FairLassoWitness(
+                        prefix: prefix.0 + [edge.target] + suffix.prefix.dropFirst(),
+                        cycle: suffix.cycle,
+                        prefixActions: prefix.1.map(\.action) + [edge.action] + suffix.prefixActions,
+                        cycleActions: suffix.cycleActions)
+                    if let witness, !witnessOrder(candidate, witness) { continue }
+                    witness = candidate
+                }
+            }
+        }
+        return .init(status: witness == nil ? .satisfied : .violated,
+            reason: witness == nil ? .satisfied : .violatingFairLasso, witness: witness,
+            enabledActions: try renderedEnabledness(enabled, renderScope: renderScope),
+            fairComponents: components.fair, rejectedComponents: components.rejected)
+    }
+
+    /// Finds a concrete fair behavior that eventually stops taking an abstract fair action.
+    func fairnessViolation(
+        initialStates: [State], isStrong: Bool, enabledStates: Set<State>,
+        takesAction: @Sendable (State, State) -> Bool
+    ) -> FairLassoWitness<State, Action?>? {
+        guard !enabledStates.isEmpty else { return nil }
+        let cycleStates = isStrong ? states : enabledStates
+        func allowsEdge(_ edge: GraphEdge<State, Action>) -> Bool {
+            !takesAction(edge.source, edge.target)
+        }
+        let components = fairComponents(in: cycleStates, fairness: fairness, enabled: enabled,
+            allowsEdge: allowsEdge)
+        return findWitness(components.fair, initialStates: initialStates,
+            prefixStates: nil, prefixContinuationStates: nil,
+            cycleRequiredStates: isStrong ? enabledStates : nil,
+            fairness: fairness, enabled: enabled, allowsCycleEdge: allowsEdge)
+    }
+
     private func renderedEnabledness(
-        _ enabled: [CompiledFairnessCondition.Scope: [StateGraph.StateID: Bool]]
-    ) throws -> [String: [StateGraph.StateID: Bool]] {
-        var rendered: [String: [StateGraph.StateID: Bool]] = [:]
+        _ enabled: [Scope: [State: Bool]],
+        renderScope: (Scope) throws -> String
+    ) throws -> [String: [State: Bool]] {
+        var rendered: [String: [State: Bool]] = [:]
         for entry in enabled {
-            rendered[try renderedName(for: entry.key)] = entry.value
+            rendered[try renderScope(entry.key)] = entry.value
         }
         return rendered
     }
 
-    private func renderedName(for scope: CompiledFairnessCondition.Scope) throws -> String {
-        switch scope {
-        case .next:
-            return "Next"
-        case .action(let action):
-            return compilation.layout.actions[action.ordinal].declaration.name
-        case .actionCall(let call):
-            let name = compilation.layout.actions[call.action.ordinal].declaration.name
-            return formalActionCall(
-                named: name,
-                arguments: try call.arguments.map { try $0.rendered(using: compilation.layout) }
-            )
-        }
+    private func hasValidActions() -> Bool {
+        transitions.values.allSatisfy { $0.allSatisfy { $0.action != nil } }
     }
 
-    private func predicateHolds(
-        _ predicate: CompiledStateExpr,
-        in state: CompiledState,
-        compilation: CompiledSpecification
-    ) throws -> Bool {
-        return try CompiledRuntime(compilation: compilation).predicateHolds(predicate, in: state)
-    }
-
-    private func compiledState(for state: StateGraph.StateID) throws -> CompiledState {
-        guard let compiledState = states[state] else {
-            throw CompilationDiagnostic(
-                code: .compilationIdentityMismatch,
-                stage: .checking,
-                path: "liveness.state",
-                expected: "a state produced by this compilation",
-                actual: "state \(state) has no compiled value",
-                nextSafeAction: "Explore the compiled specification again before checking liveness."
-            )
-        }
-        return compiledState
-    }
-
-    private func graphHasOnlyCompiledActions() -> Bool {
-        let actions = Set(compilation.semantics.actions.map(\.id))
-        return graph.transitions.values.allSatisfy { transitions in
-            transitions.allSatisfy { transition in
-                guard let call = compiledAction(for: transition.label) else { return false }
-                return actions.contains(call.action)
-            }
-        }
-    }
-
-    private func compiledAction(for label: StateGraph.TransitionLabel) -> CompiledActionCall? {
-        guard let action = label.actionID else { return nil }
-        return .init(action: action, arguments: label.arguments)
-    }
-
-    private func enabledness(for fairness: [CompiledFairnessCondition]) -> [CompiledFairnessCondition.Scope: [StateGraph.StateID: Bool]] {
-        Dictionary(
-            uniqueKeysWithValues: Set(fairness.map(\.scope)).map { scope in
-                let states = Dictionary(uniqueKeysWithValues: graph.states.keys.map { state in
-                    (state, explicitEdges(from: state).contains { edge in
-                        edge.matches(scope) && (edge.target == state) == false
-                    })
-                })
-                return (scope, states)
-            }
-        )
+    private func matches(_ edge: GraphEdge<State, Action>, _ scope: Scope) -> Bool {
+        guard let action = edge.action else { return false }
+        return matches(action, scope) && changes(edge.source, edge.target, scope)
     }
 
     private func fairComponents(
-        in states: Set<StateGraph.StateID>,
-        fairness: [CompiledFairnessCondition],
-        enabled: [CompiledFairnessCondition.Scope: [StateGraph.StateID: Bool]]
-    ) -> (fair: [Set<StateGraph.StateID>], rejected: [Set<StateGraph.StateID>]) {
-        var fair: [Set<StateGraph.StateID>] = []
-        var rejected: [Set<StateGraph.StateID>] = []
+        in states: Set<State>,
+        fairness: [(scope: Scope, isStrong: Bool)],
+        enabled: [Scope: [State: Bool]],
+        allowsEdge: (GraphEdge<State, Action>) -> Bool = { _ in true }
+    ) -> (fair: [Set<State>], rejected: [Set<State>]) {
+        var fair: [Set<State>] = []
+        var rejected: [Set<State>] = []
 
-        func prune(_ candidates: Set<StateGraph.StateID>) {
-            for component in stronglyConnectedComponents(in: candidates) where !component.isEmpty {
-                if let action = fairness.compactMap({ condition -> CompiledFairnessCondition.Scope? in
+        func prune(_ candidates: Set<State>) {
+            for component in stronglyConnectedComponents(in: candidates, allowsEdge: allowsEdge) where !component.isEmpty {
+                if let action = fairness.compactMap({ condition -> Scope? in
                     guard condition.isStrong else { return nil }
-                    return isFair(condition, in: component, enabled: enabled) ? nil : condition.scope
+                    return isFair(condition, in: component, enabled: enabled, allowsEdge: allowsEdge) ? nil : condition.scope
                 }).first {
                     rejected.append(component)
                     let reduced = component.filter { enabled[action]?[$0] != true }
                     if !reduced.isEmpty { prune(Set(reduced)) }
                     continue
                 }
-                if fairness.contains(where: { !isFair($0, in: component, enabled: enabled) }) {
+                if fairness.contains(where: { !isFair($0, in: component, enabled: enabled, allowsEdge: allowsEdge) }) {
                     rejected.append(component)
                 } else {
                     fair.append(component)
@@ -370,13 +353,14 @@ package struct LivenessChecker {
     }
 
     private func isFair(
-        _ condition: CompiledFairnessCondition,
-        in component: Set<StateGraph.StateID>,
-        enabled: [CompiledFairnessCondition.Scope: [StateGraph.StateID: Bool]]
+        _ condition: (scope: Scope, isStrong: Bool),
+        in component: Set<State>,
+        enabled: [Scope: [State: Bool]],
+        allowsEdge: (GraphEdge<State, Action>) -> Bool
     ) -> Bool {
         let taken = component.contains { state in
             explicitEdges(from: state).contains { edge in
-                edge.matches(condition.scope) && (edge.target == state) == false && component.contains(edge.target)
+                allowsEdge(edge) && matches(edge, condition.scope) && component.contains(edge.target)
             }
         }
         if taken { return true }
@@ -388,15 +372,24 @@ package struct LivenessChecker {
 
 extension LivenessChecker {
     private func findWitness(
-        _ components: [Set<StateGraph.StateID>],
-        initialStates: [StateGraph.StateID],
-        prefixStates: Set<StateGraph.StateID>?,
-        prefixContinuationStates: Set<StateGraph.StateID>?,
-        cycleRequiredStates: Set<StateGraph.StateID>?,
-        fairness: [CompiledFairnessCondition],
-        enabled: [CompiledFairnessCondition.Scope: [StateGraph.StateID: Bool]]
-    ) -> FairLassoWitness? {
-        var witnesses: [FairLassoWitness] = []
+        _ components: [Set<State>],
+        initialStates: [State],
+        prefixStates: Set<State>?,
+        prefixContinuationStates: Set<State>?,
+        cycleRequiredStates: Set<State>?,
+        fairness: [(scope: Scope, isStrong: Bool)],
+        enabled: [Scope: [State: Bool]],
+        allowsCycleEdge: (GraphEdge<State, Action>) -> Bool = { _ in true }
+    ) -> FairLassoWitness<State, Action?>? {
+        // A required prefix or cycle state must exist before a witness can exist.
+        guard prefixStates?.isEmpty != true, cycleRequiredStates?.isEmpty != true else { return nil }
+        var bestWitness: FairLassoWitness<State, Action?>?
+        func consider(_ candidate: FairLassoWitness<State, Action?>) {
+            if let bestWitness, !witnessOrder(candidate, bestWitness) { return }
+            bestWitness = candidate
+        }
+        let orderedInitialStates = initialStates.sorted(by: stateOrder)
+        let requiredPrefixStates = prefixStates.map { $0.sorted(by: stateOrder) }
         for component in components {
             let requiredCycle = cycleRequiredStates?.intersection(component) ?? []
             if cycleRequiredStates != nil, requiredCycle.isEmpty { continue }
@@ -406,56 +399,57 @@ extension LivenessChecker {
                     root: cycleStart,
                     requiredStates: requiredCycle,
                     fairness: fairness,
-                    enabled: enabled
+                    enabled: enabled,
+                    allowsEdge: allowsCycleEdge
                 ) else { continue }
-                for initial in initialStates.sorted(by: stateOrder) {
-                    if prefixStates == nil {
+                for initial in orderedInitialStates {
+                    if requiredPrefixStates == nil {
                         if let prefix = shortestPath(from: initial, to: cycleStart, in: prefixContinuationStates) {
-                            witnesses.append(.init(
+                            consider(.init(
                                 prefix: prefix.0,
                                 cycle: cycle.0,
-                                prefixActions: prefix.1.map(\.renderedAction),
-                                cycleActions: cycle.1.map(\.renderedAction)
+                                prefixActions: prefix.1.map(\.action),
+                                cycleActions: cycle.1.map(\.action)
                             ))
                         }
-                    } else if let prefixStates {
-                        for required in prefixStates.sorted(by: stateOrder) {
+                    } else if let requiredPrefixStates {
+                        for required in requiredPrefixStates {
                             guard let first = shortestPath(from: initial, to: required, in: nil),
                                   let second = shortestPath(from: required, to: cycleStart, in: prefixContinuationStates) else { continue }
-                            witnesses.append(.init(
+                            consider(.init(
                                 prefix: first.0 + second.0.dropFirst(),
                                 cycle: cycle.0,
-                                prefixActions: (first.1 + second.1).map(\.renderedAction),
-                                cycleActions: cycle.1.map(\.renderedAction)
+                                prefixActions: (first.1 + second.1).map(\.action),
+                                cycleActions: cycle.1.map(\.action)
                             ))
                         }
                     }
                 }
             }
         }
-        return witnesses.min(by: witnessOrder)
+        return bestWitness
     }
 
     private func makeCycle(
-        in component: Set<StateGraph.StateID>,
-        root: StateGraph.StateID,
-        requiredStates: Set<StateGraph.StateID>,
-        fairness: [CompiledFairnessCondition],
-        enabled: [CompiledFairnessCondition.Scope: [StateGraph.StateID: Bool]]
-    ) -> ([StateGraph.StateID], [GraphEdge])? {
+        in component: Set<State>,
+        root: State,
+        requiredStates: Set<State>,
+        fairness: [(scope: Scope, isStrong: Bool)],
+        enabled: [Scope: [State: Bool]],
+        allowsEdge: (GraphEdge<State, Action>) -> Bool
+    ) -> ([State], [GraphEdge<State, Action>])? {
         let scopes = Set(fairness.map(\.scope))
         func advance(
-            _ configuration: CycleSearchConfiguration,
-            state: StateGraph.StateID,
-            edge: GraphEdge?
-        ) -> CycleSearchConfiguration {
-            let taken = edge.flatMap { edge -> Set<CompiledFairnessCondition.Scope>? in
-                guard (edge.target == edge.source) == false else { return [] }
-                return Set(scopes.filter(edge.matches))
+            _ configuration: CycleSearchConfiguration<State, Scope>,
+            state: State,
+            edge: GraphEdge<State, Action>?
+        ) -> CycleSearchConfiguration<State, Scope> {
+            let taken = edge.flatMap { edge -> Set<Scope>? in
+                return Set(scopes.filter { matches(edge, $0) })
             } ?? []
             let disabled = Set(scopes.filter { (enabled[$0]?[state] == true) == false })
             let present = Set(scopes.filter { enabled[$0]?[state] == true })
-            return CycleSearchConfiguration(
+            return CycleSearchConfiguration<State, Scope>(
                 state: state,
                 visitedRequiredState: configuration.visitedRequiredState || requiredStates.contains(state),
                 takenActions: configuration.takenActions.union(taken),
@@ -463,7 +457,7 @@ extension LivenessChecker {
                 enabledActions: configuration.enabledActions.union(present)
             )
         }
-        func isFair(_ configuration: CycleSearchConfiguration) -> Bool {
+        func isFair(_ configuration: CycleSearchConfiguration<State, Scope>) -> Bool {
             guard requiredStates.isEmpty || configuration.visitedRequiredState else { return false }
             return fairness.allSatisfy { condition in
                 return condition.isStrong
@@ -473,18 +467,18 @@ extension LivenessChecker {
         }
 
         let initial = advance(.initial(at: root), state: root, edge: nil)
-        var frontier: [CycleSearchConfiguration: CycleSearchPath] = [
+        var frontier: [CycleSearchConfiguration<State, Scope>: CycleSearchPath<State, Action>] = [
             initial: .init(states: [root], actions: [])
         ]
-        var seen: [CycleSearchConfiguration: CycleSearchPath] = frontier
+        var seen: [CycleSearchConfiguration<State, Scope>: CycleSearchPath<State, Action>] = frontier
 
         while !frontier.isEmpty {
-            var next: [CycleSearchConfiguration: CycleSearchPath] = [:]
-            var completed: [CycleSearchPath] = []
+            var next: [CycleSearchConfiguration<State, Scope>: CycleSearchPath<State, Action>] = [:]
+            var completed: [CycleSearchPath<State, Action>] = []
             for (configuration, path) in frontier {
-                for edge in edges(from: configuration.state).sorted(by: edgeOrder) where component.contains(edge.target) {
+                for edge in edges(from: configuration.state).sorted(by: edgeOrder) where component.contains(edge.target) && allowsEdge(edge) {
                     let nextConfiguration = advance(configuration, state: edge.target, edge: edge)
-                    let nextPath = CycleSearchPath(
+                    let nextPath = CycleSearchPath<State, Action>(
                         states: path.states + [edge.target],
                         actions: path.actions + [edge]
                     )
@@ -516,22 +510,22 @@ extension LivenessChecker {
     }
 
     private func shortestPath(
-        from source: StateGraph.StateID,
-        to destination: StateGraph.StateID,
-        in allowed: Set<StateGraph.StateID>?
-    ) -> ([StateGraph.StateID], [GraphEdge])? {
+        from source: State,
+        to destination: State,
+        in allowed: Set<State>?
+    ) -> ([State], [GraphEdge<State, Action>])? {
         guard allowed?.contains(source) != false, allowed?.contains(destination) != false else { return nil }
         if source == destination { return ([source], []) }
         var queue = [source]
         var head = 0
-        var predecessors: [StateGraph.StateID: (StateGraph.StateID, GraphEdge)] = [:]
-        var seen: Set<StateGraph.StateID> = [source]
+        var predecessors: [State: (State, GraphEdge<State, Action>)] = [:]
+        var seen: Set<State> = [source]
         while head < queue.count {
             let state = queue[head]; head += 1
             for edge in edges(from: state).sorted(by: edgeOrder) where allowed?.contains(edge.target) != false && !seen.contains(edge.target) {
                 seen.insert(edge.target); predecessors[edge.target] = (state, edge)
                 if edge.target == destination {
-                    var states = [destination]; var actions: [GraphEdge] = []; var current = destination
+                    var states = [destination]; var actions: [GraphEdge<State, Action>] = []; var current = destination
                     while let predecessor = predecessors[current] {
                         actions.append(predecessor.1); states.append(predecessor.0); current = predecessor.0
                     }
@@ -543,61 +537,80 @@ extension LivenessChecker {
         return nil
     }
 
-    private func stronglyConnectedComponents(in allowed: Set<StateGraph.StateID>) -> [Set<StateGraph.StateID>] {
-        var index = 0; var indices: [StateGraph.StateID: Int] = [:]
-        var stack: [StateGraph.StateID] = []; var onStack: Set<StateGraph.StateID> = []; var components: [Set<StateGraph.StateID>] = []
-        func visit(_ state: StateGraph.StateID) -> Int {
-            let stateIndex = index
-            var lowlink = stateIndex
-            indices[state] = stateIndex; index += 1; stack.append(state); onStack.insert(state)
-            for edge in edges(from: state).sorted(by: edgeOrder) where allowed.contains(edge.target) {
-                if let targetIndex = indices[edge.target] {
-                    if onStack.contains(edge.target) { lowlink = min(lowlink, targetIndex) }
-                } else {
-                    lowlink = min(lowlink, visit(edge.target))
+    private func stronglyConnectedComponents(
+        in allowed: Set<State>, allowsEdge: (GraphEdge<State, Action>) -> Bool = { _ in true }
+    ) -> [Set<State>] {
+        var indices: [State: Int] = [:]
+        var stack: [State] = []
+        var onStack: Set<State> = []
+        var components: [Set<State>] = []
+        var pending: [(state: State, successors: ArraySlice<State>, lowlink: Int)] = []
+
+        func discover(_ state: State) {
+            let index = indices.count
+            indices[state] = index
+            stack.append(state)
+            onStack.insert(state)
+            let successors = edges(from: state).sorted(by: edgeOrder)
+                .filter { allowed.contains($0.target) && allowsEdge($0) }
+                .map(\.target)
+            pending.append((state, ArraySlice(successors), index))
+        }
+
+        for root in allowed.sorted(by: stateOrder) where indices[root] == nil {
+            discover(root)
+            while !pending.isEmpty {
+                let current = pending.count - 1
+                if let target = pending[current].successors.popFirst() {
+                    if let targetIndex = indices[target] {
+                        if onStack.contains(target) {
+                            pending[current].lowlink = min(pending[current].lowlink, targetIndex)
+                        }
+                    } else {
+                        discover(target)
+                    }
+                    continue
+                }
+                let completed = pending.removeLast()
+                if completed.lowlink == indices[completed.state] {
+                    var component: Set<State> = []
+                    while let node = stack.popLast() {
+                        onStack.remove(node)
+                        component.insert(node)
+                        if node == completed.state { break }
+                    }
+                    components.append(component)
+                }
+                if !pending.isEmpty {
+                    let parent = pending.count - 1
+                    pending[parent].lowlink = min(pending[parent].lowlink, completed.lowlink)
                 }
             }
-            if lowlink == stateIndex {
-                var component: Set<StateGraph.StateID> = []
-                while let node = stack.popLast() { onStack.remove(node); component.insert(node); if node == state { break } }
-                components.append(component)
-            }
-            return lowlink
         }
-        for state in allowed.sorted(by: stateOrder) where indices[state] == nil { _ = visit(state) }
         return components
     }
 
-    private func explicitEdges(from state: StateGraph.StateID) -> [GraphEdge] {
-        (graph.transitions[state] ?? []).compactMap { transition in
-            guard let action = compiledAction(for: transition.label) else { return nil }
-            return .init(
-                source: state,
-                action: action,
-                renderedAction: transition.action,
-                target: transition.target,
-                isStutter: false
-            )
-        }
+    private func explicitEdges(from state: State) -> [GraphEdge<State, Action>] {
+        transitions[state] ?? []
     }
 
-    private func edges(from state: StateGraph.StateID) -> [GraphEdge] {
-        explicitEdges(from: state) + [.init(source: state, action: nil, renderedAction: "[stutter]", target: state, isStutter: true)]
+    private func edges(from state: State) -> [GraphEdge<State, Action>] {
+        explicitEdges(from: state) + [.init(source: state, action: nil, target: state)]
     }
 }
 
-private struct LassoSearch {
-    let cycleStates: Set<StateGraph.StateID>
+private struct LassoSearch<State: Hashable & Sendable> {
+    let cycleStates: Set<State>
     // nil imposes no visit requirement; an empty set makes the requirement impossible.
-    let prefixStates: Set<StateGraph.StateID>?
-    let prefixContinuationStates: Set<StateGraph.StateID>?
-    let cycleRequiredStates: Set<StateGraph.StateID>?
+    let prefixStates: Set<State>?
+    let prefixContinuationStates: Set<State>?
+    let cycleRequiredStates: Set<State>?
 
     init(
-        cycleStates: Set<StateGraph.StateID>,
-        prefixStates: Set<StateGraph.StateID>? = nil,
-        prefixContinuationStates: Set<StateGraph.StateID>? = nil,
-        cycleRequiredStates: Set<StateGraph.StateID>? = nil
+        cycleStates: Set<State>,
+        prefixStates: Set<State>? = nil,
+        prefixContinuationStates: Set<State>? = nil,
+        cycleRequiredStates: Set<State>? = nil
     ) {
         self.cycleStates = cycleStates
         self.prefixStates = prefixStates
@@ -606,34 +619,20 @@ private struct LassoSearch {
     }
 }
 
-private struct GraphEdge: Hashable {
-    let source: StateGraph.StateID
-    let action: CompiledActionCall?
-    let renderedAction: String
-    let target: StateGraph.StateID
-    let isStutter: Bool
-
-    func matches(_ scope: CompiledFairnessCondition.Scope) -> Bool {
-        guard let action else { return false }
-        switch scope {
-        case .next:
-            return true
-        case .action(let id):
-            return action.action == id
-        case .actionCall(let call):
-            return action == call
-        }
-    }
+package struct GraphEdge<State: Hashable & Sendable, Action: Hashable & Sendable>: Hashable, Sendable {
+    let source: State
+    let action: Action?
+    let target: State
 }
 
-private struct CycleSearchConfiguration: Hashable {
-    let state: StateGraph.StateID
+private struct CycleSearchConfiguration<State: Hashable & Sendable, Scope: Hashable & Sendable>: Hashable {
+    let state: State
     let visitedRequiredState: Bool
-    let takenActions: Set<CompiledFairnessCondition.Scope>
-    let disabledActions: Set<CompiledFairnessCondition.Scope>
-    let enabledActions: Set<CompiledFairnessCondition.Scope>
+    let takenActions: Set<Scope>
+    let disabledActions: Set<Scope>
+    let enabledActions: Set<Scope>
 
-    static func initial(at state: StateGraph.StateID) -> CycleSearchConfiguration {
+    static func initial(at state: State) -> CycleSearchConfiguration {
         .init(
             state: state,
             visitedRequiredState: false,
@@ -644,49 +643,50 @@ private struct CycleSearchConfiguration: Hashable {
     }
 }
 
-private struct CycleSearchPath: Hashable {
-    let states: [StateGraph.StateID]
-    let actions: [GraphEdge]
+private struct CycleSearchPath<State: Hashable & Sendable, Action: Hashable & Sendable>: Hashable {
+    let states: [State]
+    let actions: [GraphEdge<State, Action>]
 }
 
-private func stateOrder(_ lhs: StateGraph.StateID, _ rhs: StateGraph.StateID) -> Bool { lhs.id < rhs.id }
-private func edgeOrder(_ lhs: GraphEdge, _ rhs: GraphEdge) -> Bool {
-    if graphActionOrder(lhs.action, rhs.action) { return true }
-    if graphActionOrder(rhs.action, lhs.action) { return false }
-    if lhs.target.id != rhs.target.id { return lhs.target.id < rhs.target.id }
-    return lhs.isStutter && !rhs.isStutter
-}
+extension LivenessChecker {
+    private func edgeOrder(_ lhs: GraphEdge<State, Action>, _ rhs: GraphEdge<State, Action>) -> Bool {
+        if graphActionOrder(lhs.action, rhs.action) { return true }
+        if graphActionOrder(rhs.action, lhs.action) { return false }
+        return stateOrder(lhs.target, rhs.target)
+    }
 
-private func graphActionOrder(_ lhs: CompiledActionCall?, _ rhs: CompiledActionCall?) -> Bool {
-    switch (lhs, rhs) {
-    case (nil, nil):
+    private func graphActionOrder(_ lhs: Action?, _ rhs: Action?) -> Bool {
+        switch (lhs, rhs) {
+        case (nil, nil):
+            return false
+        case (nil, .some):
+            return false
+        case (.some, nil):
+            return true
+        case (.some(let lhs), .some(let rhs)):
+            return actionOrder(lhs, rhs)
+        }
+    }
+    private func cyclePathOrder(_ lhs: CycleSearchPath<State, Action>, _ rhs: CycleSearchPath<State, Action>) -> Bool {
+        let leftStates = lhs.states
+        let rightStates = rhs.states
+        if leftStates != rightStates { return leftStates.lexicographicallyPrecedes(rightStates, by: stateOrder) }
+        for (left, right) in zip(lhs.actions, rhs.actions) {
+            if graphActionOrder(left.action, right.action) { return true }
+            if graphActionOrder(right.action, left.action) { return false }
+        }
         return false
-    case (nil, .some):
-        return false
-    case (.some, nil):
-        return true
-    case (.some(let lhs), .some(let rhs)):
-        if (lhs.action.ordinal == rhs.action.ordinal) == false { return lhs.action.ordinal < rhs.action.ordinal }
-        return lhs.arguments.lexicographicallyPrecedes(rhs.arguments)
     }
 }
-private func cyclePathOrder(_ lhs: CycleSearchPath, _ rhs: CycleSearchPath) -> Bool {
-    let leftStates = lhs.states.map(\.id)
-    let rightStates = rhs.states.map(\.id)
-    if leftStates != rightStates { return leftStates.lexicographicallyPrecedes(rightStates) }
-    for (left, right) in zip(lhs.actions, rhs.actions) {
-        if graphActionOrder(left.action, right.action) { return true }
-        if graphActionOrder(right.action, left.action) { return false }
+extension LivenessChecker {
+    private func witnessOrder(_ lhs: FairLassoWitness<State, Action?>, _ rhs: FairLassoWitness<State, Action?>) -> Bool {
+        if lhs.prefix.count != rhs.prefix.count { return lhs.prefix.count < rhs.prefix.count }
+        if lhs.cycleActions.count != rhs.cycleActions.count { return lhs.cycleActions.count < rhs.cycleActions.count }
+        let left = lhs.prefix + lhs.cycle
+        let right = rhs.prefix + rhs.cycle
+        if left != right { return left.lexicographicallyPrecedes(right, by: stateOrder) }
+        let leftActions = lhs.prefixActions + lhs.cycleActions
+        let rightActions = rhs.prefixActions + rhs.cycleActions
+        return leftActions.lexicographicallyPrecedes(rightActions, by: graphActionOrder)
     }
-    return false
-}
-private func witnessOrder(_ lhs: FairLassoWitness, _ rhs: FairLassoWitness) -> Bool {
-    if lhs.prefix.count != rhs.prefix.count { return lhs.prefix.count < rhs.prefix.count }
-    if lhs.cycleActions.count != rhs.cycleActions.count { return lhs.cycleActions.count < rhs.cycleActions.count }
-    let left = lhs.prefix.map(\.id) + lhs.cycle.map(\.id)
-    let right = rhs.prefix.map(\.id) + rhs.cycle.map(\.id)
-    if left != right { return left.lexicographicallyPrecedes(right) }
-    let leftActions = lhs.prefixActions + lhs.cycleActions
-    let rightActions = rhs.prefixActions + rhs.cycleActions
-    return leftActions.lexicographicallyPrecedes(rightActions)
 }

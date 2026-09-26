@@ -38,39 +38,13 @@ package struct FiniteExplorationConfiguration: Sendable, Equatable, Codable {
         case maximumPermutationCount
     }
 
-    private struct AnyCodingKey: CodingKey {
-        let stringValue: String
-        let intValue: Int?
-
-        init?(stringValue: String) {
-            self.stringValue = stringValue
-            intValue = nil
-        }
-
-        init?(intValue: Int) {
-            stringValue = String(intValue)
-            self.intValue = intValue
-        }
-    }
-
     private enum SymmetryReductionName: String, Codable {
         case disabled
         case enabled
     }
 
     package init(from decoder: Decoder) throws {
-        let actual = try decoder.container(keyedBy: AnyCodingKey.self)
-        let known = Set(CodingKeys.allCases.map(\.stringValue))
-        let unknown = Set(actual.allKeys.map(\.stringValue)).subtracting(known)
-        guard unknown.isEmpty else {
-            throw DecodingError.dataCorrupted(
-                .init(
-                    codingPath: decoder.codingPath,
-                    debugDescription: "Unknown exploration field: \(unknown.sorted().joined(separator: ", "))"
-                )
-            )
-        }
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let container = try decoder.container(validatingKeys: CodingKeys.self)
         let mode = try container.decode(SymmetryReductionName.self, forKey: .symmetryReduction)
         let symmetryReduction: SymmetryReduction
         switch mode {
@@ -111,7 +85,7 @@ package struct FiniteExplorationConfiguration: Sendable, Equatable, Codable {
 
     func validatePropertySupport(in compilation: CompiledSpecification) throws {
         if case .enabled = symmetryReduction,
-           !compilation.semantics.temporalProperties.isEmpty || !compilation.refinements.isEmpty {
+           !compilation.semantics.behavior.temporalProperties.isEmpty || !compilation.refinements.isEmpty {
             throw FiniteExplorationConfigurationError.symmetryReductionRequiresSafetyOnly
         }
     }
@@ -132,6 +106,7 @@ package struct ModelChecker {
 
     func check() throws -> ModelCheckOutcome {
         let exploration = try explore()
+        if case .invariantViolated = exploration.outcome { return exploration.outcome }
         if let refinementOutcome = try RefinementChecker(compilation: compilation).check(exploration) {
             return refinementOutcome
         }
@@ -139,42 +114,14 @@ package struct ModelChecker {
     }
     func exploreGraph() throws -> StateGraph { try explore().graph }
 
-    package func explore() throws -> FiniteExploration { try runExploration() }
-
-    func checkLiveness() throws -> ModelCheckOutcome {
-        let exploration = try explore()
-        guard case .ok = exploration.outcome else { return exploration.outcome }
-        guard compilation.semantics.temporalProperties.isEmpty == false else { return exploration.outcome }
-
-        let analyses = try exploration.analyzeTemporalProperties(in: compilation)
-        for (property, analysis) in zip(compilation.semantics.temporalProperties, analyses) {
-            switch analysis.status {
-            case .satisfied:
-                continue
-            case .violated:
-                guard let witness = analysis.witness else {
-                    throw CompilationDiagnostic(
-                        code: .compilationIdentityMismatch,
-                        stage: .checking,
-                        path: "temporalProperties.\(property.name).witness",
-                        expected: "a fair-lasso witness for the violated property",
-                        actual: "the violated analysis has no witness",
-                        nextSafeAction: "Explore the compiled specification again before checking liveness."
-                    )
-                }
-                return .livenessViolated(
-                    property: property.name,
-                    reason: analysis.reason,
-                    witness: witness
-                )
-            case .unavailable:
-                return .livenessUnavailable(property: property.name, reason: analysis.reason)
-            }
+    /// Safety violations are retained without truncating the reachable graph.
+    package func explore() throws -> FiniteExploration {
+        guard compilation.semantics.behavior.reachabilityProperties.isEmpty else {
+            throw CompilationDiagnostic(code: .unsupportedReachabilityEvaluation, stage: .validation,
+                path: "reachabilityProperties", expected: "generated native exploration for positive reachability",
+                actual: "the formal parity explorer does not report positive reachability outcomes",
+                nextSafeAction: "Explore the generated machine with ReachabilityGraph.")
         }
-        return .ok(statesCount: exploration.graph.states.count)
-    }
-
-    private func runExploration() throws -> FiniteExploration {
         try configuration.validatePropertySupport(in: compilation)
         let symmetry = try SymmetryPlan(
             compilation: compilation,
@@ -198,7 +145,7 @@ package struct ModelChecker {
             runtime: runtime,
             seeds: initialStates,
             layout: compilation.layout,
-            checkDeadlock: compilation.semantics.checkDeadlock,
+            checkDeadlock: compilation.semantics.behavior.checkDeadlock,
             specificationName: compilation.description.name,
             configuration: configuration,
             symmetry: symmetry
@@ -206,7 +153,8 @@ package struct ModelChecker {
         return FiniteExploration(
             graph: exploration.graph,
             initialStateIDs: exploration.initialStateIDs,
-            outcome: exploration.outcome,
+            completion: exploration.completion,
+            safetyViolations: exploration.safetyViolations,
             compilationIdentity: compilation.identity,
             configuration: configuration,
             compiledStates: exploration.compiledStates
@@ -225,7 +173,7 @@ package struct ModelChecker {
                 states: [:]
             ),
             initialStateIDs: [],
-            outcome: outcome,
+            completion: outcome,
             compilationIdentity: compilation.identity,
             configuration: configuration,
             compiledStates: [:]
@@ -250,6 +198,7 @@ private func compiledBFS(
     var transitions: [StateGraph.StateID: [StateGraph.Transition]] = [:]
     var predecessors: [CompiledState: (CompiledState, ActionID)] = [:]
     var nextID = 0
+    var safetyViolations: [ModelCheckOutcome] = []
 
     func stateProjection(_ state: CompiledState) throws -> TLAStateProjection {
         try state.projection(using: layout)
@@ -272,11 +221,12 @@ private func compiledBFS(
         .init(
             graph: try graph(),
             initialStateIDs: initialStateIDs,
-            outcome: .depthExceeded(
+            completion: .depthExceeded(
                 statesCount: stateToID.count,
                 limit: configuration.maximumStateLimit
             ),
-            compilationIdentity: runtime.compilation.identity,
+            safetyViolations: safetyViolations,
+            compilationIdentity: runtime.identity,
             configuration: configuration,
             compiledStates: idToState
         )
@@ -325,7 +275,29 @@ private func compiledBFS(
         try symmetry.canonicalState(state)
     }
 
+    func checkInvariants(in state: CompiledState, witness: () throws -> (state: CompiledState, steps: [TraceStep])) throws {
+        for invariant in runtime.behavior.invariants where !safetyViolations.contains(where: {
+            if case .invariantViolated(let name, _, _) = $0 { name == invariant.name } else { false }
+        }) {
+            if try !runtime.invariantHolds(invariant, in: state) {
+                let counterexample = try witness()
+                guard try !runtime.invariantHolds(invariant, in: counterexample.state) else {
+                    throw replayFailure("the concrete replay does not violate invariant '\(invariant.name)'")
+                }
+                safetyViolations.append(.invariantViolated(
+                    invariant: invariant.name,
+                    state: try counterexample.state.projection(using: layout),
+                    trace: counterexample.steps
+                ))
+            }
+        }
+    }
+
     for seed in seeds {
+        guard try runtime.constraintHolds(in: seed) else {
+            try checkInvariants(in: seed) { (seed, [try TraceStep(state: seed.projection(using: layout), action: "init")]) }
+            continue
+        }
         let key = try representative(seed)
         guard stateToID[key] == nil else { continue }
         guard stateToID.count < configuration.maximumStateLimit else {
@@ -346,40 +318,30 @@ private func compiledBFS(
         let key = try representative(current)
         guard let currentID = stateToID[key] else { continue }
 
-        for invariant in runtime.compilation.semantics.invariants {
-            guard try runtime.invariantHolds(invariant, in: current) else {
-                let counterexample = try trace(to: current)
-                guard try !runtime.invariantHolds(invariant, in: counterexample.state) else {
-                    throw replayFailure("the concrete replay does not violate invariant '\(invariant.name)'")
-                }
-                return .init(
-                    graph: try graph(),
-                    initialStateIDs: initialStateIDs,
-                    outcome: .invariantViolated(
-                        invariant: invariant.name,
-                        state: try counterexample.state.projection(using: layout),
-                        trace: counterexample.steps
-                    ),
-                    compilationIdentity: runtime.compilation.identity,
-                    configuration: configuration,
-                    compiledStates: idToState
-                )
-            }
-        }
+        try checkInvariants(in: current) { try trace(to: current) }
 
         let successors = try runtime.successors(from: current)
-        if checkDeadlock && successors.isEmpty {
-            return .init(
-                graph: try graph(),
-                initialStateIDs: initialStateIDs,
-                outcome: .deadlocked(state: try current.projection(using: layout)),
-                compilationIdentity: runtime.compilation.identity,
-                configuration: configuration,
-                compiledStates: idToState
-            )
+        if checkDeadlock && successors.isEmpty && !safetyViolations.contains(where: {
+            if case .deadlocked = $0 { true } else { false }
+        }) {
+            safetyViolations.append(.deadlocked(state: try current.projection(using: layout)))
         }
 
         for successor in successors {
+            guard try runtime.constraintHolds(in: successor.state) else {
+                try checkInvariants(in: successor.state) {
+                    let source = try trace(to: current)
+                    let target = try representative(successor.state)
+                    guard let concrete = try runtime.successors(from: source.state).first(where: {
+                        try $0.action == successor.action && representative($0.state) == target
+                    }) else { throw replayFailure("no concrete transition reaches the excluded successor orbit") }
+                    let arguments = try concrete.arguments.map { try $0.rendered(using: layout) }
+                    let step = try TraceStep(state: concrete.state.projection(using: layout),
+                        action: formalActionCall(named: layout.actions[concrete.action.ordinal].declaration.name, arguments: arguments))
+                    return (concrete.state, source.steps + [step])
+                }
+                continue
+            }
             let successorKey = try symmetry.canonicalState(successor.state)
             let formalArguments = try successor.arguments.map { try $0.rendered(using: layout) }
             let targetID: StateGraph.StateID
@@ -417,8 +379,9 @@ private func compiledBFS(
     return .init(
         graph: try graph(),
         initialStateIDs: initialStateIDs,
-        outcome: .ok(statesCount: stateToID.count),
-        compilationIdentity: runtime.compilation.identity,
+        completion: initialStateIDs.isEmpty ? .noInitialStates : .ok(statesCount: stateToID.count),
+        safetyViolations: safetyViolations,
+        compilationIdentity: runtime.identity,
         configuration: configuration,
         compiledStates: idToState
     )
@@ -431,35 +394,19 @@ package enum ModelCheckingFailureKind: String, Sendable, Equatable {
     case invariantViolated
     case deadlock
     case stateLimit
-    case liveness
     case refinement
     case assumption
     case initialState
 }
 
-/// One safely projected state in a counterexample trace.
-package struct ModelTraceEvidence: Sendable, Equatable, CustomStringConvertible {
-    public let action: String
-    public let state: TLAStateProjection
-
-    package init(action: String, state: TLAStateProjection) {
-        self.action = action
-        self.state = state
-    }
-
-    public var description: String {
-        "[\(action)] \(state)"
-    }
-}
-
-/// Inspection-ready evidence for a model-checking failure.
+/// A model-checking failure with its state and counterexample trace.
 package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvertible {
     public let kind: ModelCheckingFailureKind
     public let subject: String?
     public let expected: String
     public let actual: String
     public let state: TLAStateProjection?
-    public let trace: [ModelTraceEvidence]
+    public let trace: [TraceStep]
     public let nextSafeAction: String
 
     public init(
@@ -468,7 +415,7 @@ package struct ModelCheckingDiagnostic: Sendable, Equatable, CustomStringConvert
         expected: String,
         actual: String,
         state: TLAStateProjection? = nil,
-        trace: [ModelTraceEvidence] = [],
+        trace: [TraceStep] = [],
         nextSafeAction: String
     ) {
         self.kind = kind
@@ -500,17 +447,11 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
     case deadlocked(state: TLAStateProjection)
     case noInitialStates
     case assumptionViolated
-    case livenessViolated(
-        property: String,
-        reason: TemporalDiagnosticReason,
-        witness: FairLassoWitness
-    )
-    case livenessUnavailable(property: String, reason: TemporalDiagnosticReason)
-    case refinementViolated(refinement: String, evidence: RefinementFailureEvidence)
+    case refinementViolated(refinement: String, failure: FormalRefinementFailure)
     case refinementUnproven(refinement: String, exploration: ModelCheckOutcome)
 
     /// The typed explanation of a failed check, including projected state and
-    /// counterexample evidence.
+    /// counterexample trace.
     public var diagnostic: ModelCheckingDiagnostic? {
         switch self {
         case .ok:
@@ -522,7 +463,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
                 expected: "the invariant to evaluate to true",
                 actual: "false",
                 state: state,
-                trace: trace.map { .init(action: $0.action, state: $0.state) },
+                trace: trace,
                 nextSafeAction: "Inspect the final trace transition and revise the action guard, update, or invariant."
             )
         case .depthExceeded(let count, let limit):
@@ -554,24 +495,8 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
                 actual: "false",
                 nextSafeAction: "Revise the assumption or its constant inputs."
             )
-        case .livenessViolated(let property, let reason, _):
-            return .init(
-                kind: .liveness,
-                subject: property,
-                expected: "the declared temporal property to hold",
-                actual: reason.rawValue,
-                nextSafeAction: "Inspect the lasso or fairness diagnostic and revise the temporal property or transition relation."
-            )
-        case .livenessUnavailable(let property, let reason):
-            return .init(
-                kind: .liveness,
-                subject: property,
-                expected: "complete typed liveness evidence",
-                actual: reason.rawValue,
-                nextSafeAction: "Complete the declared exploration inputs before checking the temporal property."
-            )
-        case .refinementViolated(let refinement, let evidence):
-            switch evidence {
+        case .refinementViolated(let refinement, let failure):
+            switch failure {
             case .initialState(let mapped, let abstractInitialStates):
                 return .init(
                     kind: .refinement,
@@ -588,7 +513,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
                     expected: "an abstract successor or stuttering step for action \(action)",
                     actual: "\(source) to \(target) maps to \(mappedSource) to \(mappedTarget); abstract successors \(abstractSuccessors)",
                     state: source,
-                    trace: [.init(action: action, state: target)],
+                    trace: [.init(state: target, action: action)],
                     nextSafeAction: "Inspect the refinement mapping and the named action update."
                 )
             }
@@ -611,7 +536,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
         case .depthExceeded(let count, let l):
             return "DEPTH EXCEEDED — explored " + String(count) + " state(s) before hitting limit of " + String(l)
         case .deadlocked, .noInitialStates, .assumptionViolated,
-             .livenessViolated, .livenessUnavailable, .refinementViolated:
+             .refinementViolated:
             return diagnostic?.description ?? "Verification diagnostic unavailable"
         case .refinementUnproven:
             return diagnostic?.description ?? "Refinement is unproven"
@@ -619,7 +544,7 @@ package indirect enum ModelCheckOutcome: Sendable, CustomStringConvertible {
     }
 }
 
-package struct TraceStep: Sendable, CustomStringConvertible {
+package struct TraceStep: Sendable, Equatable, CustomStringConvertible {
     public let state: TLAStateProjection
     public let action: String
     public var description: String { "[" + action + "] " + state.description }

@@ -1,0 +1,90 @@
+import Testing
+@testable import SwiftTLA
+@testable import UpstreamParity
+
+struct ConstraintBoundaryCheckingTests {
+    @Test("canonical export rejects reachability witnesses outside its constrained graph")
+    func rejectsExcludedReachabilityTarget() throws {
+        let graph = try ReachabilityGraph(initialMachines: ConstraintReachabilityCounter.initialMachines(), maximumStates: 10)
+        let targets = try #require(graph.reachabilityTargets[.excluded])
+        #expect(targets.count == 1)
+        let target = try #require(targets.first)
+        #expect(target.state.count == 2)
+        #expect(graph.transitions[target] == nil)
+        #expect(try graph.trace(to: target).map { $0.state.state.count } == [0, 1, 2])
+        var machine = try ConstraintReachabilityCounter.makeMachine()
+        _ = try machine.send(.advance)
+        _ = try machine.send(.advance)
+        #expect(try graph.formalProjection(of: target) == machine.formalProjection(of: machine.snapshot))
+        #expect(throws: EvidenceFormatError.invalidField(record: "ConstraintReachabilityCounter",
+            field: "constraint-boundary counterexamples require evidence beyond the constrained graph")) {
+            try NativeModelRun(graph, rendered: ConstraintReachabilityCounter.render())
+        }
+    }
+
+    @Test("constraints restrict exploration, not application transitions or deadlock enabledness")
+    func boundaryIsNotADeadlock() throws {
+        let configuration = try ConstraintBoundaryCounter.Configuration(safetyLimit: 3)
+        var machine = try ConstraintBoundaryCounter.makeMachine(configuration: configuration)
+        _ = try machine.send(.advance)
+        #expect(try machine.isEnabled(.advance))
+        _ = try machine.send(.advance)
+        #expect(machine.state.count == 2)
+        #expect(try !machine.satisfiesStateConstraint())
+
+        let graph = try ReachabilityGraph(initialMachines: ConstraintBoundaryCounter.initialMachines(configuration: configuration), maximumStates: 10)
+        #expect(Set(graph.transitions.keys.map { $0.state.count }) == [0, 1])
+        #expect(graph.safetyViolations.isEmpty)
+        #expect(graph.deadlockedStates.isEmpty)
+        #expect(graph.transitions.values.flatMap { $0 }.count == 1)
+    }
+
+    @Test("invariants still check excluded successor states and retain their full native trace")
+    func boundaryViolationRetainsTrace() throws {
+        let configuration = try ConstraintBoundaryCounter.Configuration(safetyLimit: 2)
+        let graph = try ReachabilityGraph(initialMachines: ConstraintBoundaryCounter.initialMachines(configuration: configuration), maximumStates: 10)
+        let boundary = try #require(graph.safetyViolations.keys.first)
+        #expect(graph.safetyViolations[boundary] == [.invariant(.Bounded)])
+        #expect(boundary.state.count == 2)
+        #expect(graph.transitions[boundary] == nil)
+        #expect(try graph.trace(to: boundary).map { $0.state.state.count } == [0, 1, 2])
+        #expect(graph.safetyViolations.count == 1)
+        var machine = try ConstraintBoundaryCounter.makeMachine(configuration: configuration)
+        #expect(try graph.formalProjection(of: machine.snapshot) == machine.formalProjection(of: machine.snapshot))
+        _ = try machine.send(.advance)
+        _ = try machine.send(.advance)
+        #expect(try graph.formalProjection(of: boundary) == machine.formalProjection(of: machine.snapshot))
+        _ = try machine.send(.advance)
+        #expect(machine.state.count == 3)
+        #expect(throws: ExplorationError.traceTargetNotReachable) { try graph.formalProjection(of: machine.snapshot) }
+        #expect(throws: ExplorationError.traceTargetNotReachable) { try graph.trace(to: machine.snapshot) }
+        #expect(throws: EvidenceFormatError.invalidField(record: "ConstraintBoundaryCounter",
+            field: "constraint-boundary counterexamples require evidence beyond the constrained graph")) {
+            try NativeModelRun(graph, rendered: ConstraintBoundaryCounter.render(configuration: configuration))
+        }
+    }
+
+    @Test("excluded initial states retain initial invariant witnesses without entering the graph")
+    func initialConstraintRetainsSafetyChecks() throws {
+        let initial = try ConstraintInitialCounter.initialMachines()
+        #expect(initial.count == 3)
+        let graph = try ReachabilityGraph(initialMachines: initial, maximumStates: 10)
+        #expect(Set(graph.initialStates.map { $0.state.count }) == [0, 1])
+        #expect(Set(graph.transitions.keys.map { $0.state.count }) == [0, 1])
+        let boundary = try #require(graph.safetyViolations.keys.first)
+        #expect(boundary.state.count == 2)
+        #expect(graph.safetyViolations[boundary] == [.invariant(.Bounded)])
+        #expect(try graph.trace(to: boundary).map { $0.state.state.count } == [2])
+        let compilation = try ConstraintInitialCounter.spec.compile()
+        let formal = try ModelChecker(compilation: compilation,
+            configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
+        #expect(formal.isComplete)
+        #expect(formal.initialStateIDs.count == 2)
+        #expect(formal.graph.states.count == 2)
+        #expect(formal.safetyViolations.map { $0.diagnostic?.kind } == [.invariantViolated])
+        #expect(formal.outcome.diagnostic?.trace.count == 1)
+        #expect(throws: EvidenceFormatError.self) {
+            try NativeModelRun(graph, rendered: compilation.render())
+        }
+    }
+}

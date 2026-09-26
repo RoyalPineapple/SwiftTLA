@@ -3,6 +3,14 @@ import Testing
 import SwiftTLA
 
 struct GeneratedMachineDocumentationTests {
+    @Test("the documented generated export exposes its module and configuration")
+    func generatedExportMatchesGuide() throws {
+        let bundle = try BoundedCounter.render().tlaBundle
+        #expect(bundle.root.name == "BoundedCounter")
+        #expect(bundle.tla.contains("---- MODULE BoundedCounter ----"))
+        #expect(bundle.cfg.contains("SPECIFICATION Spec"))
+    }
+
     @Test("README clock starts from its declared state and rolls into the next minute")
     func readmeClockUsesExplicitInitialState() throws {
         var machine = try ClockModel.makeMachine(

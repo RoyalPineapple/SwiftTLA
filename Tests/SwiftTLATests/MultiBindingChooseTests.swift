@@ -7,7 +7,7 @@ struct MultiBindingChooseTests {
     @Test("two ordered ranges lower to nested existential choices and enumerate their product")
     func lowersAndEnumeratesOrderedRanges() throws {
         let algorithm = Algorithm("PairChoice", scoped: { scope in
-            let selected = scope.sharedVar("selected", initial: 0)
+            let selected = scope.sharedVar(_name: "selected", initial: 0)
             Each(MultiBindingChooseModel.Node.all) { _ in
                 Do(TestControlLabel.choose) {
                     Choose(1...2, 10...11) { first, second in
@@ -26,7 +26,7 @@ struct MultiBindingChooseTests {
         let selected = try #require(compilation.layout.testVariableID(named: "selected"))
         let values = try Set(successors.map { try $0.value(for: selected).rendered(using: compilation.layout) })
         #expect(values == [.int(110), .int(111), .int(210), .int(211)])
-        #expect(compilation.renderedTLAModuleBundle().tla.contains("\\E"))
+        #expect(try compilation.render().tlaBundle.tla.contains("\\E"))
     }
 
     @Test("macro parser produces the same nested choice model as the builder")
@@ -47,7 +47,7 @@ private struct MultiBindingChooseModel {
     static var spec: TLASpec {
         #spec("MultiBindingChoose") {
             Algorithm("MultiBindingChoose", scoped: { scope in
-                let selected = scope.sharedVar("selected", initial: 0)
+                let selected = scope.sharedVar(_name: "selected", initial: 0)
                 Each(Node.all) { _ in
                     Do(Step.choose) {
                         Choose(1...2, 10...11) { first, second in

@@ -129,7 +129,7 @@ package struct SymmetryOrbitDerivation: Equatable, Sendable {
     var derived: [[CanonicalStateKey]] = []
     var representatives: [CanonicalStateKey: CanonicalStateKey] = [:]
 
-    while let first = unseen.sorted().first {
+    while let first = unseen.min() {
       guard let state = stateTable[first] else { continue }
       let members = Set(try closure.map { try $0.apply(state).key })
       guard members.allSatisfy({ stateTable[$0] != nil }) else {

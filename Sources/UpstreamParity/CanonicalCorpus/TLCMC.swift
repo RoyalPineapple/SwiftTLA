@@ -31,9 +31,7 @@ package struct TLCMCModel: Sendable {
 
     package static let corpusEntry = CanonicalCorpusEntry(
         id: "tlcmc-graph-1",
-        specification: { TLCMCModel.spec },
-        swiftConfiguration: .init(),
-        plusCalConfiguration: .init()
+        rendered: { try TLCMCModel.render() }
     )
 
     package static var spec: TLASpec {
@@ -48,24 +46,19 @@ package struct TLCMCModel: Sendable {
                     (.three, SetExpr<Node>.literal(.four)),
                     (.four, SetExpr<Node>.literal(.three))
                 )
-                let frontier = scope.sharedVar(
-                    "frontier",
-                    in: SetExpr<TupleExpr<Node>>.literal(
+                let frontier = scope.sharedVar(in: SetExpr<TupleExpr<Node>>.literal(
                         TupleExpr<Node>.literal(Node.one, Node.two),
                         TupleExpr<Node>.literal(Node.two, Node.one)
                     )
                 )
-                let closed = scope.sharedVar("closed", initial: SetExpr<Node>())
-                let currentState: SharedVariable<SearchNode> = scope.sharedVar(
-                    "currentState",
-                    initial: SearchNode.second(.value)
+                let closed = scope.sharedVar(initial: SetExpr<Node>())
+                let currentState: SharedVariable<SearchNode> = scope.sharedVar(initial: SearchNode.second(.value)
                 )
-                let successors = scope.sharedVar("successors", initial: SetExpr<Node>())
-                let initialIndex = scope.sharedVar("initialIndex", initial: 1)
-                let counterexample = scope.sharedVar("counterexample", initial: TupleExpr<Node>())
-                let predecessorEdges = scope.sharedVar("predecessorEdges", initial: TupleExpr<Pair<Node, Node>>())
-                let levels: SharedVariable<PartialFunction<Node, Int>> = scope.sharedVar(
-                    "levels", initial: PartialFunction<Node, Int>.empty
+                let successors = scope.sharedVar(initial: SetExpr<Node>())
+                let initialIndex = scope.sharedVar(initial: 1)
+                let counterexample = scope.sharedVar(initial: TupleExpr<Node>())
+                let predecessorEdges = scope.sharedVar(initial: TupleExpr<Pair<Node, Node>>())
+                let levels: SharedVariable<PartialFunction<Node, Int>> = scope.sharedVar(initial: PartialFunction<Node, Int>.empty
                 )
 
                 While(Step.scanInitialStates, initialIndex <= frontier.expr.count) {
@@ -107,7 +100,7 @@ package struct TLCMCModel: Sendable {
                         Goto(Step.dequeue)
                     } else: {
                         With(successors) { successor in
-                            let current = currentState.expr.assumingFirst(Node.self)
+                            let current = currentState.expr.assuming(Node.self)
                             Assign(successors, to: successors.removing(successor.expr))
                             Assign(closed, to: closed.inserting(successor.expr))
                             Assign(frontier, to: frontier.expr.appending(successor.expr))

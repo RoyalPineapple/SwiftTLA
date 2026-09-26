@@ -94,6 +94,7 @@ package enum SymmetryOrbitDifferenceKind: String, Encodable, Sendable {
   case undeclaredAction
   case reducedInitialStates
   case quotientTransition
+  case checkOutcome
 }
 
 package struct SymmetryOrbitDifference: Equatable, Encodable, Sendable {
@@ -108,20 +109,20 @@ package enum SymmetryOrbitComparisonResult: Equatable, Sendable {
 
 package struct SymmetryOrbitComparisonInput: Sendable {
   package let caseID: String
-  package let swiftRaw: CompletedGraphRun
-  package let swiftReduced: CompletedGraphRun
-  package let tlcRaw: CompletedGraphRun
-  package let tlcReduced: CompletedGraphRun
+  package let swiftRaw: GraphRun
+  package let swiftReduced: GraphRun
+  package let tlcRaw: GraphRun
+  package let tlcReduced: GraphRun
   package let renderedActions: [RenderedAction]
   package let permutations: [SymmetryPermutation]
   package let maximumPermutationCount: Int
 
   package init(
     caseID: String,
-    swiftRaw: CompletedGraphRun,
-    swiftReduced: CompletedGraphRun,
-    tlcRaw: CompletedGraphRun,
-    tlcReduced: CompletedGraphRun,
+    swiftRaw: GraphRun,
+    swiftReduced: GraphRun,
+    tlcRaw: GraphRun,
+    tlcReduced: GraphRun,
     renderedActions: [RenderedAction],
     permutations: [SymmetryPermutation],
     maximumPermutationCount: Int
@@ -146,11 +147,27 @@ package func compareSymmetryOrbits(
   _ input: SymmetryOrbitComparisonInput
 ) throws -> SymmetryOrbitComparisonResult {
   let runs = [input.swiftRaw, input.swiftReduced, input.tlcRaw, input.tlcReduced]
-  guard runs.allSatisfy(\.isPassEligible) else {
+  guard runs.allSatisfy({ run in
+    guard run.isComplete else { return false }
+    switch run.outcome {
+    case .noViolation: return true
+    case .deadlock(let state): return !run.graph.edges.contains { $0.source == state }
+    default: return false
+    }
+  }) else {
     return .difference([SymmetryOrbitDifference(
       kind: .incompleteRun,
       detail: "Every raw and reduced SwiftTLA and TLC exploration must complete exhaustively"
     )])
+  }
+
+  let deadlocks = runs.map { run in
+    if case .deadlock = run.outcome { return true }
+    return false
+  }
+  guard deadlocks.allSatisfy({ $0 == deadlocks[0] }) else {
+    return .difference([SymmetryOrbitDifference(kind: .checkOutcome,
+      detail: "Raw and reduced SwiftTLA and TLC deadlock results differ")])
   }
 
   let rawComparison = compareFiniteGraphs(tlc: input.tlcRaw, swift: input.swiftRaw)
@@ -172,7 +189,7 @@ package func compareSymmetryOrbits(
     )])
   }
   let undeclaredActions = Set(runs.flatMap { run in
-    run.graph.edgeOccurrences.keys.map(\.action).filter { !declaredActions.contains($0) }
+    run.graph.observedActions.subtracting(declaredActions)
   })
   guard undeclaredActions.isEmpty else {
     return .difference([SymmetryOrbitDifference(
@@ -240,7 +257,7 @@ package func compareSymmetryOrbits(
 }
 
 private func reducedRepresentatives(
-  _ run: CompletedGraphRun,
+  _ run: GraphRun,
   source: SymmetryGraphSource,
   derivation: SymmetryOrbitDerivation
 ) throws -> [String: String] {
@@ -274,7 +291,7 @@ private func reducedRepresentatives(
 }
 
 private func initialRepresentatives(
-  _ run: CompletedGraphRun,
+  _ run: GraphRun,
   derivation: SymmetryOrbitDerivation
 ) throws -> Set<CanonicalStateKey> {
   try Set(run.graph.initialStateKeys.map { state in
@@ -286,11 +303,11 @@ private func initialRepresentatives(
 }
 
 private func quotientTransitions(
-  _ run: CompletedGraphRun,
+  _ run: GraphRun,
   derivation: SymmetryOrbitDerivation,
   actionPlan: SymmetryActionPlan
 ) throws -> [SymmetryQuotientTransition] {
-  try Set(run.graph.edgeOccurrences.keys.map { edge in
+  try Set(run.graph.edges.map { edge in
     guard let source = derivation.representativeForState[edge.source],
           let target = derivation.representativeForState[edge.target],
           let sourceState = run.graph.states[edge.source] else {

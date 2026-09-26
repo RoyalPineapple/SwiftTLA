@@ -1,232 +1,96 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-package enum MultiCarElevator {
-    package enum PersonID: String, CaseIterable, FiniteTLAValueDomain {
-        case alice, bob
-
-        package static var defaultValue: Self { .alice }
-        package static let finiteValues = allCases
+@TLAModel
+package struct MultiCarElevator: Sendable {
+    package enum PersonID: String, CaseIterable { case alice, bob }
+    package enum CarID: String, CaseIterable { case carA, carB }
+    package enum FloorID: Int, CaseIterable { case ground = 0, middle = 1, top = 2 }
+    package enum Direction: String, CaseIterable { case up, down }
+    package enum Step: String, CaseIterable {
+        case request, assign, move, openDoor, board, closeDoor, completeRide
     }
 
-    package enum CarID: String, CaseIterable, FiniteTLAValueDomain {
-        case carA, carB
-
-        package static var defaultValue: Self { .carA }
-        package static let finiteValues = allCases
-    }
-
-    package enum FloorID: Int, CaseIterable, FiniteTLAValueDomain {
-        case ground = 0, middle = 1, top = 2
-
-        package static var defaultValue: Self { .ground }
-        package static let finiteValues = allCases
-    }
-
-    package enum Direction: String, CaseIterable, FiniteTLAValueDomain {
-        case up, down
-
-        package static var defaultValue: Self { .up }
-        package static let finiteValues = allCases
-    }
-
-    package struct CarFields {
+    package struct Car: Hashable, Sendable {
         package let floor: FloorID
         package let doorsOpen: Bool
         package let rider: String
     }
 
-    package enum CarSchema: TLARecordSchema {
-        package typealias Fields = CarFields
-
-        package static let fields: [TLARecordFieldDeclaration<Self>] = [
-            .init(floor, default: FloorID.ground),
-            .init(doorsOpen, default: false),
-            .init(rider, default: "none"),
-        ]
-
-        package static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \CarFields.floor { return "floor" }
-            if key == \CarFields.doorsOpen { return "doorsOpen" }
-            if key == \CarFields.rider { return "rider" }
-            return nil
-        }
-
-        package static let floor = field(\CarFields.floor)
-        package static let doorsOpen = field(\CarFields.doorsOpen)
-        package static let rider = field(\CarFields.rider)
-    }
-
-    package struct CallFields {
+    package struct Call: Hashable, Sendable {
         package let person: PersonID
         package let floor: FloorID
         package let direction: Direction
     }
 
-    package enum CallSchema: TLARecordSchema {
-        package typealias Fields = CallFields
-
-        package static let fields: [TLARecordFieldDeclaration<Self>] = [
-            .init(person, default: PersonID.alice),
-            .init(floor, default: FloorID.ground),
-            .init(direction, default: Direction.up),
-        ]
-
-        package static func fieldName<Value>(for field: KeyPath<CallFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \CallFields.person { return "person" }
-            if key == \CallFields.floor { return "floor" }
-            if key == \CallFields.direction { return "direction" }
-            return nil
-        }
-
-        package static let person = field(\CallFields.person)
-        package static let floor = field(\CallFields.floor)
-        package static let direction = field(\CallFields.direction)
-    }
-
     package static var spec: TLASpec {
-        let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
-        let calls = Var<SetExpr<Record<CallSchema>>>("calls")
-        let lastMoveDoorClosed = Var<Bool>("lastMoveDoorClosed")
+        #spec("MultiCarElevator") { scope in
+            let cars: SharedVariable<[CarID: Car]> = scope.sharedVar(initial: [
+                .carA: Car(floor: .ground, doorsOpen: false, rider: "none"),
+                .carB: Car(floor: .top, doorsOpen: false, rider: "none")
+            ])
+            let calls = scope.sharedVar(initial: Set<Call>())
+            let lastMoveDoorClosed = scope.sharedVar(initial: true)
+            let riders = Set<String>(["none", "alice", "bob"])
+            let TypeOK = Invariant()
+            let FloorBounds = Invariant()
+            let ClosedDoorMovement = Invariant()
+            let NoDoubleAssignment = Invariant()
 
-        let floorValues = StateExpr.setLiteral(FloorID.tlaValues.map(StateExpr.value))
-        let riderValues = StateExpr.setLiteral([
-            .value(.string("none")), .value(PersonID.alice.tlaValue), .value(PersonID.bob.tlaValue)
-        ])
-
-        func car(_ value: StateExpr) -> StateExpr {
-            .functionApply(cars.stateExpr, value)
-        }
-
-        func carField(_ value: StateExpr, _ field: String) -> StateExpr {
-            .recordAccess(car(value), field)
-        }
-
-        func updatingCar(_ value: StateExpr, field: String, to replacement: StateExpr) -> Expr<Function<CarID, Record<CarSchema>>> {
-            Expr(.except(
-                cars.stateExpr,
-                value,
-                .except(car(value), .value(.string(field)), replacement)
-            ))
-        }
-
-        func boundCall() -> Expr<Record<CallSchema>> {
-            Record<CallSchema>.literal(
-                .init(CallSchema.person, Expr(.variable("person"))),
-                .init(CallSchema.floor, Expr(.variable("floor"))),
-                .init(CallSchema.direction, Expr(.variable("direction")))
-            )
-        }
-
-        func noCarCarries(_ person: StateExpr) -> StateExpr {
-            carField(.value(CarID.carA.tlaValue), "rider") != person
-                && carField(.value(CarID.carB.tlaValue), "rider") != person
-        }
-
-        return #spec("MultiCarElevator") {
-            Variable(cars, TLAValue.function([
-                CarID.carA.tlaValue: TLAValue.record([
-                    "floor": FloorID.ground.tlaValue,
-                    "doorsOpen": .bool(false),
-                    "rider": .string("none")
-                ]),
-                CarID.carB.tlaValue: TLAValue.record([
-                    "floor": FloorID.top.tlaValue,
-                    "doorsOpen": .bool(false),
-                    "rider": .string("none")
-                ])
-            ]))
-            Variable(calls, TLAValue.set([]))
-            Variable(lastMoveDoorClosed, true)
-            Constraint(calls.stateExpr.cardinality <= 1)
-
-            Invariant("TypeOK") {
-                cars[.carA][CarSchema.floor].raw.isIn(floorValues)
-                    && cars[.carB][CarSchema.floor].raw.isIn(floorValues)
-                    && carField(.value(CarID.carA.tlaValue), "rider").isIn(riderValues)
-                    && carField(.value(CarID.carB.tlaValue), "rider").isIn(riderValues)
+            Constraint(calls.cardinality <= 1)
+            TypeOK {
+                FloorID.all.contains(cars[.carA].floor)
+                    && FloorID.all.contains(cars[.carB].floor)
+                    && riders.contains(cars[.carA].rider)
+                    && riders.contains(cars[.carB].rider)
             }
-            Invariant("FloorBounds") {
-                cars[.carA][CarSchema.floor].raw >= 0
-                    && cars[.carA][CarSchema.floor].raw <= 2
-                    && cars[.carB][CarSchema.floor].raw >= 0
-                    && cars[.carB][CarSchema.floor].raw <= 2
+            FloorBounds {
+                cars[.carA].floor.assuming(Int.self) >= 0
+                    && cars[.carA].floor.assuming(Int.self) <= 2
+                    && cars[.carB].floor.assuming(Int.self) >= 0
+                    && cars[.carB].floor.assuming(Int.self) <= 2
             }
-            Invariant("ClosedDoorMovement") { lastMoveDoorClosed == true }
-            Invariant("NoDoubleAssignment") {
-                carField(.value(CarID.carA.tlaValue), "rider") == "none"
-                    || carField(.value(CarID.carB.tlaValue), "rider") == "none"
-                    || carField(.value(CarID.carA.tlaValue), "rider")
-                        != carField(.value(CarID.carB.tlaValue), "rider")
+            ClosedDoorMovement { lastMoveDoorClosed == true }
+            NoDoubleAssignment {
+                cars[.carA].rider == "none"
+                    || cars[.carB].rider == "none"
+                    || cars[.carA].rider != cars[.carB].rider
             }
 
-            SwiftTLA.Action("request", parameters: [
-                ActionParameter("person", values: PersonID.finiteValues),
-                ActionParameter("floor", values: FloorID.finiteValues),
-                ActionParameter("direction", values: Direction.finiteValues)
-            ]) {
-                !calls.contains(boundCall()) && calls.inserting(boundCall())
+            Do(Step.request, over: PersonID.all, FloorID.all, Direction.all) { person, floor, direction in
+                let call = Call.expression(person: person, floor: floor, direction: direction)
+                When(!calls.contains(call))
+                Assign(calls, to: calls.inserting(call))
             }
-            SwiftTLA.Action("assign", parameters: [
-                ActionParameter("person", values: PersonID.finiteValues),
-                ActionParameter("car", values: CarID.finiteValues),
-                ActionParameter("direction", values: Direction.finiteValues)
-            ]) {
-                calls.stateExpr.cardinality == 1
-                    && noCarCarries(.variable("person"))
-                    && carField(.variable("car"), "rider") == "none"
-                    && cars.becomes(updatingCar(.variable("car"), field: "rider", to: .variable("person")))
+            Do(Step.assign, over: PersonID.all, CarID.all, Direction.all) { person, car, direction in
+                When(calls.cardinality == 1
+                    && cars[.carA].rider != person.assuming(String.self)
+                    && cars[.carB].rider != person.assuming(String.self)
+                    && cars[car].rider == "none")
+                Assign(cars[car].rider, to: person.assuming(String.self))
             }
-            SwiftTLA.Action("move", parameters: [
-                ActionParameter("car", values: CarID.finiteValues),
-                ActionParameter("direction", values: Direction.finiteValues),
-                ActionParameter("floor", values: FloorID.finiteValues)
-            ]) {
-                carField(.variable("car"), "doorsOpen") == false
-                    && carField(.variable("car"), "floor") != Expr<FloorID>(.variable("floor"))
-                    && cars.becomes(updatingCar(.variable("car"), field: "floor", to: .variable("floor")))
-                    && lastMoveDoorClosed.becomes(true)
+            Do(Step.move, over: CarID.all, Direction.all, FloorID.all) { car, direction, floor in
+                When(cars[car].doorsOpen == false && cars[car].floor != floor)
+                Assign(cars[car].floor, to: floor)
+                Assign(lastMoveDoorClosed, to: true)
             }
-            SwiftTLA.Action("openDoor", parameters: [
-                ActionParameter("car", values: CarID.finiteValues),
-                ActionParameter("floor", values: FloorID.finiteValues),
-                ActionParameter("direction", values: Direction.finiteValues)
-            ]) {
-                carField(.variable("car"), "doorsOpen") == false
-                    && cars.becomes(updatingCar(.variable("car"), field: "doorsOpen", to: .value(.bool(true))))
+            Do(Step.openDoor, over: CarID.all, FloorID.all, Direction.all) { car, floor, direction in
+                When(cars[car].doorsOpen == false)
+                Assign(cars[car].doorsOpen, to: true)
             }
-            SwiftTLA.Action("board", parameters: [
-                ActionParameter("person", values: PersonID.finiteValues),
-                ActionParameter("car", values: CarID.finiteValues),
-                ActionParameter("floor", values: FloorID.finiteValues)
-            ]) {
-                carField(.variable("car"), "doorsOpen") == true
-                    && carField(.variable("car"), "rider") == .variable("person")
-                    && calls.removing(Record<CallSchema>.literal(
-                        .init(CallSchema.person, Expr(.variable("person"))),
-                        .init(CallSchema.floor, Expr(.variable("floor"))),
-                        .init(CallSchema.direction, .up)
-                    ))
+            Do(Step.board, over: PersonID.all, CarID.all, FloorID.all) { person, car, floor in
+                When(cars[car].doorsOpen == true && cars[car].rider == person.assuming(String.self))
+                Assign(calls, to: calls.removing(Call.expression(person: person, floor: floor, direction: Direction.up)))
             }
-            SwiftTLA.Action("closeDoor", parameters: [
-                ActionParameter("car", values: CarID.finiteValues),
-                ActionParameter("floor", values: FloorID.finiteValues),
-                ActionParameter("direction", values: Direction.finiteValues)
-            ]) {
-                carField(.variable("car"), "doorsOpen") == true
-                    && cars.becomes(updatingCar(.variable("car"), field: "doorsOpen", to: .value(.bool(false))))
+            Do(Step.closeDoor, over: CarID.all, FloorID.all, Direction.all) { car, floor, direction in
+                When(cars[car].doorsOpen == true)
+                Assign(cars[car].doorsOpen, to: false)
             }
-            SwiftTLA.Action("completeRide", parameters: [
-                ActionParameter("person", values: PersonID.finiteValues),
-                ActionParameter("car", values: CarID.finiteValues),
-                ActionParameter("floor", values: FloorID.finiteValues)
-            ]) {
-                carField(.variable("car"), "doorsOpen") == true
-                    && carField(.variable("car"), "rider") == .variable("person")
-                    && carField(.variable("car"), "floor") == .variable("floor")
-                    && cars.becomes(updatingCar(.variable("car"), field: "rider", to: .value(.string("none"))))
+            Do(Step.completeRide, over: PersonID.all, CarID.all, FloorID.all) { person, car, floor in
+                When(cars[car].doorsOpen == true
+                    && cars[car].rider == person.assuming(String.self)
+                    && cars[car].floor == floor)
+                Assign(cars[car].rider, to: "none")
             }
         }
     }

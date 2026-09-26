@@ -15,19 +15,15 @@ let package = Package(
         .library(name: "SwiftTLAMacros", targets: ["SwiftTLAMacros"])
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-syntax", from: "600.0.0")
+        .package(url: "https://github.com/swiftlang/swift-syntax", from: "602.0.0")
     ],
     targets: [
-        .target(name: "SwiftTLA", dependencies: [
-            .product(name: "SwiftParser", package: "swift-syntax"),
-            .product(name: "SwiftBasicFormat", package: "swift-syntax"),
-            .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-            .product(name: "SwiftSyntax", package: "swift-syntax"),
-            .product(name: "SwiftSyntaxMacros", package: "swift-syntax")
-        ], swiftSettings: settings),
+        .target(name: "SwiftTLA", swiftSettings: settings),
         .target(name: "SwiftTLAMacros", dependencies: ["SwiftTLA", "SwiftTLAPlugin"], swiftSettings: settings),
         .macro(name: "SwiftTLAPlugin", dependencies: [
             "SwiftTLA",
+            .product(name: "SwiftBasicFormat", package: "swift-syntax"),
+            .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
             .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
             .product(name: "SwiftSyntax", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
@@ -68,6 +64,7 @@ let package = Package(
             "SwiftTLA",
             "SwiftTLAMacros",
             "SwiftTLAPlugin",
+            "UpstreamParity",
             .product(name: "SwiftParser", package: "swift-syntax"),
             .product(name: "SwiftSyntax", package: "swift-syntax")
         ], swiftSettings: settings),
@@ -75,7 +72,9 @@ let package = Package(
         .testTarget(name: "SwiftTLAParityTests", dependencies: [
             "SwiftTLA",
             "SwiftTLAMacros",
-            "UpstreamParity"
+            "CanonicalUpstreamCorpus",
+            "UpstreamParity",
+            "SwiftTLAPlugin"
         ], path: "Tests/SwiftTLAParityTests", swiftSettings: settings)
     ]
 )

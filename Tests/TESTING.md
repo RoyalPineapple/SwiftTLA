@@ -15,8 +15,9 @@ structured-value, runtime, and generated-machine work:
 
 The filter matches suite and test identifiers the way `swift test --filter`
 does. SwiftPM still builds every test target before running the selected
-suites; the wrapper's isolated scratch directory keeps that build out of the
-working tree.
+suites. The wrapper keeps SwiftPM's incremental build cache under the common
+Git directory and records a source-content key; it retains the repository-wide
+lock and memory guard. Per-run scratch files stay outside the working tree.
 
 `SwiftTLAParityTests` contains the slower upstream corpus, finite-graph,
 and temporal/symmetry conformance checks:

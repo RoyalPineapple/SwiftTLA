@@ -7,7 +7,7 @@ func loweredSourceSpecification(_ algorithm: Algorithm) throws -> TLASpec {
 func renderedSourceAlgorithmPlusCal(_ algorithm: Algorithm) throws -> String {
     try TLASpec(algorithm.model.name) { algorithm }
         .compile()
-        .renderedPlusCalBundle()
+        .render().plusCalBundle()
         .root
         .tla
 }
@@ -16,7 +16,7 @@ func canonicalTestSpec(
     variables: [(name: String, initialization: VariableInitialization)] = [],
     actions: [(name: String, body: ActionExpr, bindings: [ActionBinding])] = [],
     invariants: [(name: String, body: StateExpr)] = [],
-    temporal: [(name: String, expr: TemporalExpr)] = [],
+    temporal: [(name: String, expr: TemporalCondition<StateExpr>)] = [],
     fairness: [FairnessCondition] = [],
     constraint: StateExpr? = nil,
     imports: [TLASpec] = [],
@@ -35,7 +35,7 @@ func canonicalTestSpec(
         actions: actions.map {
             NamedAction(name: $0.name, body: $0.body, bindings: $0.bindings)
         },
-        invariants: invariants.map { NamedInvariant(name: $0.name, body: $0.body) },
+        invariants: invariants.map { NamedStatePredicate(name: $0.name, body: $0.body) },
         temporalProperties: temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
         fairness: fairness,
         constraint: constraint,

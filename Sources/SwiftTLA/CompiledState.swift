@@ -2,14 +2,14 @@ struct CompiledState: Hashable, Sendable, Comparable {
     private let compilationIdentity: CompilationIdentity
     private let values: [CompiledValue]
 
-    init(values: [CompiledValue], compilation: CompiledSpecification) throws {
-        guard values.count == compilation.layout.variables.count else {
+    init(values: [CompiledValue], layout: CompiledLayout, identity: CompilationIdentity) throws {
+        guard values.count == layout.variables.count else {
             throw CompiledEvaluationError.invalidStateLayout(
-                expected: compilation.layout.variables.count,
+                expected: layout.variables.count,
                 actual: values.count
             )
         }
-        self.init(validatedValues: values, compilationIdentity: compilation.identity)
+        self.init(validatedValues: values, compilationIdentity: identity)
     }
 
     func value(for variable: VariableID) throws -> CompiledValue {
@@ -108,26 +108,24 @@ struct CompiledBindings: Sendable {
     }
 }
 
-enum CompiledEvaluationError: Error, Sendable, CustomStringConvertible {
+package enum CompiledEvaluationError: Error, Sendable, CustomStringConvertible {
     case invalidStateLayout(expected: Int, actual: Int)
     case invalidVariableID(VariableID)
     case uninitializedVariable(VariableID)
     case invalidControlLocationID(ControlLocationID)
-    case invalidFieldID(FieldID)
     case invalidRecordKey(CompiledValue)
     case invalidCompilationIdentity(expected: CompilationIdentity, actual: CompilationIdentity)
     case unboundBinder(BinderID)
     case unresolvedOperator
     case conflictingAssignment(VariableID)
 
-    var description: String {
+    package var description: String {
         switch self {
         case .invalidStateLayout(let expected, let actual):
             "Compiled state requires \(expected) slots; received \(actual)"
         case .invalidVariableID(let id): "Variable ID \(id.ordinal) is outside the compiled layout"
         case .uninitializedVariable(let id): "Variable ID \(id.ordinal) has no initialized value"
         case .invalidControlLocationID(let id): "Control location ID \(id.ordinal) is outside the compiled layout"
-        case .invalidFieldID(let id): "Field ID \(id.ordinal) is outside the compiled layout"
         case .invalidRecordKey: "A compiled record key cannot be rendered as a field name"
         case .invalidCompilationIdentity(let expected, let actual):
             "Compiled state identity \(actual) does not match \(expected)"

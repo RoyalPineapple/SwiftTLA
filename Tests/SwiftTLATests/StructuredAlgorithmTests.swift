@@ -54,14 +54,13 @@ private struct StructuredCarModel {
     static var spec: TLASpec {
         #spec("StructuredCar") {
             Algorithm("StructuredCar", scoped: { scope in
-                let cars = scope.sharedVar("cars", initial: Function<Car, Record<CarRecord>>.literal(
+                let cars = scope.sharedVar(_name: "cars", initial: Function<Car, Record<CarRecord>>.literal(
                     (.north, Record.literal(.init(CarRecord.floor, 1), .init(CarRecord.door, Door.closed))),
                     (.south, Record.literal(.init(CarRecord.floor, 2), .init(CarRecord.door, Door.closed)))
                 ))
 
                 Each(Car.all) { car in
-                    Do(Step.open) {
-                        When(cars[car][CarRecord.door] == Door.closed)
+                    Do(Step.open, when: cars[car][CarRecord.door] == Door.closed) {
                         Assign(cars, to: cars.updating(car) { vehicle in
                             vehicle.updating(CarRecord.door, to: Door.open)
                         })
@@ -79,25 +78,18 @@ struct StructuredAlgorithmTests {
         var machine = try StructuredCarModel.makeMachine()
         let transition = try machine.send(.open(process: .north))
 
-        #expect(transition.before.cars[.north]?.tlaValue == .record([
-            "floor": .int(1),
-            "door": .string(StructuredCarModel.Door.closed.rawValue)
-        ]))
-        #expect(transition.after.cars[.north]?.tlaValue == .record([
-            "floor": .int(1),
-            "door": .string(StructuredCarModel.Door.open.rawValue)
-        ]))
-        #expect(transition.after.cars[.south]?.tlaValue == .record([
-            "floor": .int(2),
-            "door": .string(StructuredCarModel.Door.closed.rawValue)
-        ]))
+        #expect(transition.before.cars[.north]?.floor == 1)
+        #expect(transition.before.cars[.north]?.door == .closed)
+        #expect(transition.after.cars[.north]?.floor == 1)
+        #expect(transition.after.cars[.north]?.door == .open)
+        #expect(transition.after.cars[.south]?.floor == 2)
+        #expect(transition.after.cars[.south]?.door == .closed)
     }
 
     @Test("function comprehensions retain typed record values through lowering and evaluation")
     func loweredFunctionComprehensionRetainsRecords() throws {
         let algorithm = Algorithm("StructuredComprehension", scoped: { scope in
-            let cars = scope.sharedVar(
-                "cars",
+            let cars = scope.sharedVar(_name: "cars",
                 initial: Function<StructuredCarModel.Car, Record<StructuredCarModel.CarRecord>>.mapping { _ in
                     Record.literal(
                         .init(StructuredCarModel.CarRecord.floor, 4),

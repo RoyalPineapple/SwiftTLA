@@ -95,14 +95,16 @@ internal struct AlgorithmPlusCalRenderer {
         }
         // The header identifier names the process set. `self` names its
         // current member inside the process body.
-        var lines = ["", "\(fairness)process (\(process.name) \\in \(try set(process.domain)))"]
+        let domain = try process.domain.literalSetMembers.map(set) ?? formalRenderer.state(process.domain)
+        var lines = ["", "\(fairness)process (\(process.name) \\in \(domain))"]
         if process.locals.isEmpty == false {
             lines.append("variables")
             lines += try declarations(process.locals, indent: "  ", terminator: ";")
         }
         lines.append("{")
         for step in process.steps {
-            lines += try render(step: step, indent: "  ")
+            lines += try render(step: step, indent: "  ",
+                fairnessExcluded: process.fairnessExcludedSteps.contains(step.label))
         }
         lines.append("}")
         return lines
@@ -125,16 +127,17 @@ internal struct AlgorithmPlusCalRenderer {
         }
     }
 
-    private func render(step: CompiledAuthoredPlusCalStep, indent: String) throws -> [String] {
+    private func render(step: CompiledAuthoredPlusCalStep, indent: String, fairnessExcluded: Bool = false) throws -> [String] {
+        let suffix = fairnessExcluded ? ":-" : ":"
         if let condition = step.loopCondition {
             let label = try formalRenderer.controlLocationSourceName(step.label)
-            var lines = ["\(indent)\(label): while (\(try expression(condition))) {"]
+            var lines = ["\(indent)\(label)\(suffix) while (\(try expression(condition))) {"]
             lines += try render(statements: step.statements, indent: indent + "  ")
             lines.append("\(indent)};")
             return lines
         }
         let label = try formalRenderer.controlLocationSourceName(step.label)
-        var lines = ["\(indent)\(label):"]
+        var lines = ["\(indent)\(label)\(suffix)"]
         lines += try render(statements: step.statements, indent: indent + "  ")
         return lines
     }
@@ -147,7 +150,7 @@ internal struct AlgorithmPlusCalRenderer {
 
     private func render(statement: CompiledAuthoredPlusCalStatement, indent: String) throws -> [String] {
         switch statement {
-        case .await(let condition): return ["\(indent)await \(try expression(condition));"]
+        case .when(let condition): return ["\(indent)when \(try expression(condition));"]
         case .assert(let condition): return ["\(indent)assert \(try expression(condition));"]
         case .set(let target, let value):
             return ["\(indent)\(try lvalue(target)) := \(try expression(value));"]
@@ -201,12 +204,13 @@ internal struct AlgorithmPlusCalRenderer {
         switch value {
         case .root(let variable):
             return try formalRenderer.variableName(variable)
-        case .function(let root, let key):
-            return "\(try formalRenderer.variableName(root))[\(try expression(key))]"
+        case .function(let base, let key):
+            return "\(try lvalue(base))[\(try expression(key))]"
+        case .field(let base, let name): return "\(try lvalue(base)).\(name)"
         }
     }
 
-    private func expression(_ value: CompiledStateExpr) throws -> String {
+    private func expression(_ value: CompiledExpression) throws -> String {
         try formalRenderer.state(value)
     }
 

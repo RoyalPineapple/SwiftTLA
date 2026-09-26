@@ -1,77 +1,72 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-private struct CoffeeCanFields {
-    let black: Int
-    let white: Int
-}
-
-private enum CoffeeCanSchema: TLARecordSchema {
-    typealias Fields = CoffeeCanFields
-
-    static let fields: [TLARecordFieldDeclaration<Self>] = [
-        .init(black, default: 0),
-        .init(white, default: 0),
-    ]
-
-    static func fieldName<Value>(for field: KeyPath<CoffeeCanFields, Value>) -> String? {
-        let key = field as AnyKeyPath
-        if key == \CoffeeCanFields.black { return "black" }
-        if key == \CoffeeCanFields.white { return "white" }
-        return nil
+@TLAModel
+package struct CoffeeCanModel: Sendable {
+    package struct Can: Hashable, Sendable {
+        package let black: Int
+        package let white: Int
+    }
+    package enum Step: String, CaseIterable {
+        case PickSameColorWhite, PickSameColorBlack, PickDifferentColor, Termination
     }
 
-    static let black = field(\CoffeeCanFields.black)
-    static let white = field(\CoffeeCanFields.white)
-}
+    package static var spec: TLASpec {
+        #spec("CoffeeCan") { scope in
+            Extends(.naturals)
+            let MaxBeanCount = scope.parameter(as: Int.self, in: 1...3000)
+            Assume(MaxBeanCount >= 1)
+            let cans = IntRange(0, through: MaxBeanCount).flatMapping { black in
+                IntRange(0, through: MaxBeanCount).mapping { white in
+                    Can.expression(black: black, white: white)
+                }
+            }
+            let can = scope.sharedVar(in: cans.filtering { value in
+                IntRange(1, through: MaxBeanCount).contains(value.black + value.white)
+            })
+            let beanCount = can.black + can.white
 
-private typealias CoffeeCan = Record<CoffeeCanSchema>
+            Do(Step.PickSameColorWhite) {
+                When(beanCount > 1 && can.white >= 2)
+                Assign(can.black, to: can.black + 1)
+                Assign(can.white, to: can.white - 2)
+            }
+            Do(Step.PickSameColorBlack) {
+                When(beanCount > 1 && can.black >= 2)
+                Assign(can.black, to: can.black - 1)
+            }
+            Do(Step.PickDifferentColor) {
+                When(beanCount > 1 && can.black >= 1 && can.white >= 1)
+                Assign(can.black, to: can.black - 1)
+            }
+            let Termination = Do(Step.Termination, when: beanCount == 1) { Skip() }
+            Termination
+            WeakFairnessNext()
 
-private func coffeeCanDomain(maximumBeanCount: Int) -> Expr<SetExpr<CoffeeCan>> {
-    let cans = (0...maximumBeanCount).flatMap { black in
-        (0...maximumBeanCount).compactMap { white -> StateExpr? in
-            guard (1...maximumBeanCount).contains(black + white) else { return nil }
-            return CoffeeCan.literal(
-                .init(CoffeeCanSchema.black, black),
-                .init(CoffeeCanSchema.white, white)
-            ).raw
-        }
-    }
-    return Expr(.setLiteral(cans))
-}
+            let TypeInvariant = Invariant()
+            TypeInvariant {
+                can.black >= 0 && can.black <= MaxBeanCount
+                    && can.white >= 0 && can.white <= MaxBeanCount
+            }
+            let MonotonicDecrease = Temporal()
+            let EventuallyTerminates = Temporal()
+            let LoopInvariant = Temporal()
+            let TerminationHypothesis = Temporal()
+            MonotonicDecrease(.alwaysStep(on: can) { before, after in
+                after.black + after.white < before.black + before.white
+            })
+            EventuallyTerminates(.eventually(Termination.enabled))
+            LoopInvariant(.alwaysStep(on: can) { before, after in
+                (before.white % 2 == 0) == (after.white % 2 == 0)
+            })
+            TerminationHypothesis(.conditional(can.white % 2 == 0,
+                then: .eventually(can.black == 1 && can.white == 0),
+                else: .eventually(can.black == 0 && can.white == 1)))
 
-func coffeeCanSpec(maxBeanCount: Int) -> TLASpec {
-    let can = Var<CoffeeCan>("can")
-    let black = can[CoffeeCanSchema.black]
-    let white = can[CoffeeCanSchema.white]
-
-    return #spec("CoffeeCan") {
-        Extends(.naturals)
-        Variable(can, in: coffeeCanDomain(maximumBeanCount: maxBeanCount))
-        SwiftTLA.Action("PickSameColorBlack") {
-            black + white > 1
-                && black >= 2
-                && can.becomes(can.updating(CoffeeCanSchema.black, to: black - 1))
-        }
-        SwiftTLA.Action("PickSameColorWhite") {
-            black + white > 1
-                && white >= 2
-                && can.becomes(can
-                    .updating(CoffeeCanSchema.black, to: black + 1)
-                    .updating(CoffeeCanSchema.white, to: white - 2))
-        }
-        SwiftTLA.Action("PickDifferentColor") {
-            black + white > 1
-                && black >= 1
-                && white >= 1
-                && can.becomes(can.updating(CoffeeCanSchema.black, to: black - 1))
-        }
-        SwiftTLA.Action("Termination") {
-            black + white == 1
-        }
-        Invariant("TypeInvariant") {
-            black >= 0 && black <= maxBeanCount
-                && white >= 0 && white <= maxBeanCount
+            Validation("CoffeeCan100Beans") { Bind(MaxBeanCount, to: 100) }
+            Validation("CoffeeCan1000Beans") { Bind(MaxBeanCount, to: 1000) }
+            Validation("CoffeeCan3000Beans") { Bind(MaxBeanCount, to: 3000) }
+            Validation("APCoffeeCan") { Bind(MaxBeanCount, to: 5) }.checking(only: [TypeInvariant])
         }
     }
 }

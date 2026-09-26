@@ -9,213 +9,117 @@ import SwiftTLAMacros
 /// rider phases; a view renders its typed state.
 @TLAModel
 public struct ElevatorBank {
-    public enum Floor: Int, CaseIterable, FiniteTLAValueDomain {
-        case one = 1
-        case two = 2
-        case three = 3
-
-        public static var defaultValue: Self { .one }
-        public static let finiteValues = allCases
-
-        public var tlaValue: TLAValue { .int(rawValue) }
+    public enum Floor: Int, CaseIterable {
+        case one = 1, two = 2, three = 3
     }
 
-    public enum CarID: String, CaseIterable, FiniteTLAValueDomain {
-        case carA
-        case carB
-
-        public static var defaultValue: Self { .carA }
-        public static let finiteValues = allCases
-
-        public var tlaValue: TLAValue { .string(rawValue) }
+    public enum CarID: String, CaseIterable {
+        case carA, carB
     }
 
-    /// `none` is a formal sentinel for an empty car. It is deliberately part
-    /// of the finite rider domain so the car record stays total and typed.
-    public enum Rider: String, CaseIterable, FiniteTLAValueDomain {
-        case none
-        case alice
-        case bob
-
-        public static var defaultValue: Self { .none }
-        public static let finiteValues = allCases
-
-        public var tlaValue: TLAValue { .string(rawValue) }
+    /// `none` represents an empty car and remains part of the total rider domain.
+    public enum Rider: String, CaseIterable {
+        case none, alice, bob
     }
 
-    public enum Door: String, CaseIterable, FiniteTLAValueDomain {
-        case closed
-        case open
-
-        public static var defaultValue: Self { .closed }
-        public static let finiteValues = allCases
-
-        public var tlaValue: TLAValue { .string(rawValue) }
+    public enum Door: String, CaseIterable {
+        case closed, open
     }
 
-    public enum RiderPhase: String, CaseIterable, FiniteTLAValueDomain {
-        case waiting
-        case onboard
-        case arrived
-
-        public static var defaultValue: Self { .waiting }
-        public static let finiteValues = allCases
-
-        public var tlaValue: TLAValue { .string(rawValue) }
+    public enum RiderPhase: String, CaseIterable {
+        case waiting, onboard, arrived
     }
 
     private enum Step: String, CaseIterable {
         case operate
     }
 
-    public struct CarFields {
+    public struct Car: Hashable, Sendable {
         public let floor: Floor
         public let door: Door
         public let rider: Rider
     }
 
-    public enum CarSchema: TLARecordSchema {
-        public typealias Fields = CarFields
-
-        public static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \CarFields.floor { return "floor" }
-            if key == \CarFields.door { return "door" }
-            if key == \CarFields.rider { return "rider" }
-            return nil
-        }
-
-        public static let floor = field(\CarFields.floor)
-        public static let door = field(\CarFields.door)
-        public static let rider = field(\CarFields.rider)
-        public static let fields: [TLARecordFieldDeclaration<Self>] = [
-            TLARecordFieldDeclaration(floor, default: Floor.one),
-            TLARecordFieldDeclaration(door, default: Door.closed),
-            TLARecordFieldDeclaration(rider, default: Rider.none)
-        ]
-    }
-
-    public struct RiderFields {
+    public struct Passenger: Hashable, Sendable {
         public let phase: RiderPhase
         public let floor: Floor
         public let destination: Floor
     }
 
-    public enum RiderSchema: TLARecordSchema {
-        public typealias Fields = RiderFields
-
-        public static func fieldName<Value>(for field: KeyPath<RiderFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \RiderFields.phase { return "phase" }
-            if key == \RiderFields.floor { return "floor" }
-            if key == \RiderFields.destination { return "destination" }
-            return nil
-        }
-
-        public static let phase = field(\RiderFields.phase)
-        public static let floor = field(\RiderFields.floor)
-        public static let destination = field(\RiderFields.destination)
-        public static let fields: [TLARecordFieldDeclaration<Self>] = [
-            TLARecordFieldDeclaration(phase, default: RiderPhase.arrived),
-            TLARecordFieldDeclaration(floor, default: Floor.one),
-            TLARecordFieldDeclaration(destination, default: Floor.one)
-        ]
-    }
-
     public static var spec: TLASpec {
-        #spec("ElevatorBank") {
-            Algorithm("ElevatorBank", scoped: { scope in
-                let cars = scope.sharedVar("cars", initial: Function<CarID, Record<CarSchema>>.literal(
-                    (.carA, Record.literal(.init(CarSchema.floor, .one), .init(CarSchema.door, .closed), .init(CarSchema.rider, .none))),
-                    (.carB, Record.literal(.init(CarSchema.floor, .three), .init(CarSchema.door, .closed), .init(CarSchema.rider, .none)))
-                ))
-                let riders = scope.sharedVar("riders", initial: Function<Rider, Record<RiderSchema>>.literal(
-                    (.none, Record.literal(.init(RiderSchema.phase, .arrived), .init(RiderSchema.floor, .one), .init(RiderSchema.destination, .one))),
-                    (.alice, Record.literal(.init(RiderSchema.phase, .waiting), .init(RiderSchema.floor, .one), .init(RiderSchema.destination, .three))),
-                    (.bob, Record.literal(.init(RiderSchema.phase, .waiting), .init(RiderSchema.floor, .three), .init(RiderSchema.destination, .one)))
-                ))
+        #spec("ElevatorBank") { scope in
+            let cars: SharedVariable<[CarID: Car]> = scope.sharedVar(initial: [
+                .carA: Car(floor: .one, door: .closed, rider: .none),
+                .carB: Car(floor: .three, door: .closed, rider: .none)
+            ])
+            let riders: SharedVariable<[Rider: Passenger]> = scope.sharedVar(initial: [
+                .none: Passenger(phase: .arrived, floor: .one, destination: .one),
+                .alice: Passenger(phase: .waiting, floor: .one, destination: .three),
+                .bob: Passenger(phase: .waiting, floor: .three, destination: .one)
+            ])
+            let CarFloorDomain = Invariant()
 
+            Algorithm("ElevatorBank") {
                 Each(CarID.all, fairness: .weak) { car in
                     Do(Step.operate) {
                         Either {
                             With(Rider.all) { rider in
-                                When(cars[car][CarSchema.door] == .closed)
-                                When(cars[car][CarSchema.rider] == .none)
-                                When(riders[rider][RiderSchema.phase] == .waiting)
-                                When(riders[rider][RiderSchema.floor] == cars[car][CarSchema.floor])
-                                Assign(cars, to: cars.updating(car) { vehicle in
-                                    vehicle.updating(CarSchema.door, to: .open)
-                                })
+                                When(cars[car].door == .closed)
+                                When(cars[car].rider == .none)
+                                When(riders[rider].phase == .waiting)
+                                When(riders[rider].floor == cars[car].floor)
+                                Assign(cars[car].door, to: .open)
                             }
                         } or: {
                             Either {
-                            With(Rider.all) { rider in
-                                When(cars[car][CarSchema.door] == .open)
-                                When(cars[car][CarSchema.rider] == .none)
-                                When(riders[rider][RiderSchema.phase] == .waiting)
-                                When(riders[rider][RiderSchema.floor] == cars[car][CarSchema.floor])
-                                Assign(cars, to: cars.updating(car) { vehicle in
-                                    vehicle
-                                        .updating(CarSchema.rider, to: rider)
-                                        .updating(CarSchema.door, to: .closed)
-                                })
-                                Assign(riders, to: riders.updating(rider) { passenger in
-                                    passenger.updating(RiderSchema.phase, to: .onboard)
-                                })
-                            }
+                                With(Rider.all) { rider in
+                                    When(cars[car].door == .open)
+                                    When(cars[car].rider == .none)
+                                    When(riders[rider].phase == .waiting)
+                                    When(riders[rider].floor == cars[car].floor)
+                                    Assign(cars[car].rider, to: rider)
+                                    Assign(cars[car].door, to: .closed)
+                                    Assign(riders[rider].phase, to: .onboard)
+                                }
                             } or: {
                                 Either {
-                            When(cars[car][CarSchema.door] == .closed)
-                            When(cars[car][CarSchema.rider] != .none)
-                            When(cars[car][CarSchema.floor] < riders[cars[car][CarSchema.rider]][RiderSchema.destination])
-                            Either {
-                                When(cars[car][CarSchema.floor] == .one)
-                                Assign(cars, to: cars.updating(car) { vehicle in
-                                    vehicle.updating(CarSchema.floor, to: .two)
-                                })
-                            } or: {
-                                When(cars[car][CarSchema.floor] == .two)
-                                Assign(cars, to: cars.updating(car) { vehicle in
-                                    vehicle.updating(CarSchema.floor, to: .three)
-                                })
-                            }
+                                    When(cars[car].door == .closed)
+                                    When(cars[car].rider != .none)
+                                    When(cars[car].floor < riders[cars[car].rider].destination)
+                                    Either {
+                                        When(cars[car].floor == .one)
+                                        Assign(cars[car].floor, to: .two)
+                                    } or: {
+                                        When(cars[car].floor == .two)
+                                        Assign(cars[car].floor, to: .three)
+                                    }
                                 } or: {
                                     Either {
-                            When(cars[car][CarSchema.door] == .closed)
-                            When(cars[car][CarSchema.rider] != .none)
-                            When(cars[car][CarSchema.floor] > riders[cars[car][CarSchema.rider]][RiderSchema.destination])
-                            Either {
-                                When(cars[car][CarSchema.floor] == .three)
-                                Assign(cars, to: cars.updating(car) { vehicle in
-                                    vehicle.updating(CarSchema.floor, to: .two)
-                                })
-                            } or: {
-                                When(cars[car][CarSchema.floor] == .two)
-                                Assign(cars, to: cars.updating(car) { vehicle in
-                                    vehicle.updating(CarSchema.floor, to: .one)
-                                })
-                            }
+                                        When(cars[car].door == .closed)
+                                        When(cars[car].rider != .none)
+                                        When(cars[car].floor > riders[cars[car].rider].destination)
+                                        Either {
+                                            When(cars[car].floor == .three)
+                                            Assign(cars[car].floor, to: .two)
+                                        } or: {
+                                            When(cars[car].floor == .two)
+                                            Assign(cars[car].floor, to: .one)
+                                        }
                                     } or: {
                                         Either {
-                            When(cars[car][CarSchema.door] == .closed)
-                            When(cars[car][CarSchema.rider] != .none)
-                            When(cars[car][CarSchema.floor] == riders[cars[car][CarSchema.rider]][RiderSchema.destination])
-                            Assign(cars, to: cars.updating(car) { vehicle in
-                                vehicle.updating(CarSchema.door, to: .open)
-                            })
+                                            When(cars[car].door == .closed)
+                                            When(cars[car].rider != .none)
+                                            When(cars[car].floor == riders[cars[car].rider].destination)
+                                            Assign(cars[car].door, to: .open)
                                         } or: {
-                            When(cars[car][CarSchema.door] == .open)
-                            When(cars[car][CarSchema.rider] != .none)
-                            When(riders[cars[car][CarSchema.rider]][RiderSchema.phase] == .onboard)
-                            When(cars[car][CarSchema.floor] == riders[cars[car][CarSchema.rider]][RiderSchema.destination])
-                            Assign(cars, to: cars.updating(car) { vehicle in
-                                vehicle
-                                    .updating(CarSchema.rider, to: .none)
-                                    .updating(CarSchema.door, to: .closed)
-                            })
-                            Assign(riders, to: riders.updating(cars[car][CarSchema.rider]) { passenger in
-                                passenger.updating(RiderSchema.phase, to: .arrived)
-                            })
+                                            When(cars[car].door == .open)
+                                            When(cars[car].rider != .none)
+                                            When(riders[cars[car].rider].phase == .onboard)
+                                            When(cars[car].floor == riders[cars[car].rider].destination)
+                                            let exitingRider = cars[car].rider
+                                            Assign(cars[car].rider, to: .none)
+                                            Assign(cars[car].door, to: .closed)
+                                            Assign(riders[exitingRider].phase, to: .arrived)
                                         }
                                     }
                                 }
@@ -224,17 +128,12 @@ public struct ElevatorBank {
                         Goto(Step.operate)
                     }
                 }
+            }
 
-                Invariant("CarFloorDomain") {
-                    cars[.carA][CarSchema.floor] == .one
-                        || cars[.carA][CarSchema.floor] == .two
-                        || cars[.carA][CarSchema.floor] == .three
-                    cars[.carB][CarSchema.floor] == .one
-                        || cars[.carB][CarSchema.floor] == .two
-                        || cars[.carB][CarSchema.floor] == .three
-                }
-            })
+            CarFloorDomain {
+                cars[.carA].floor == .one || cars[.carA].floor == .two || cars[.carA].floor == .three
+                cars[.carB].floor == .one || cars[.carB].floor == .two || cars[.carB].floor == .three
+            }
         }
     }
-
 }

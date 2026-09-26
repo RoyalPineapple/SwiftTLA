@@ -12,7 +12,7 @@ struct CompiledSpecificationProjectionTests {
     func downstreamConsumersRetainOneCompilation() throws {
         let specification = TLASpec("CompiledProjection") {
             Algorithm("CompiledProjection", scoped: { scope in
-                let counter = scope.sharedVar("counter", initial: 0)
+                let counter = scope.sharedVar(_name: "counter", initial: 0)
                 Do(CompiledProjectionLabel.advance) {
                     Assign(counter, to: counter + 1)
                     Stop()
@@ -21,8 +21,8 @@ struct CompiledSpecificationProjectionTests {
         }
         let compilation = try specification.compile()
 
-        let tla = compilation.renderedTLAModuleBundle()
-        let plusCal = try compilation.renderedPlusCalBundle()
+        let tla = try compilation.render().tlaBundle
+        let plusCal = try compilation.render().plusCalBundle()
         let exploration = try ModelChecker(
             compilation: compilation,
             configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)
@@ -36,7 +36,7 @@ struct CompiledSpecificationProjectionTests {
             environment: [:],
             pin: try testReferencePin()
         )
-        let completedRun = try SwiftGraphExporter().export(exploration, for: matchingCase)
+        let completedRun = try FormalGraphExporter().export(exploration, for: matchingCase)
 
         #expect(tla.root.tla.contains("MODULE CompiledProjection"))
         #expect(plusCal.root.tla.contains("--algorithm CompiledProjection"))
@@ -54,9 +54,8 @@ struct CompiledSpecificationProjectionTests {
         #expect(exploration.graph.states.count == 2)
         #expect(completedRun.graph.variableNames.contains("counter"))
         #expect(completedRun.graph.initialStateKeys.count == 1)
-        #expect(completedRun.graph.edgeOccurrences.count == 2)
-        #expect(completedRun.graph.edgeOccurrences.values.sorted() == [1, 1])
+        #expect(completedRun.graph.edges.count == 2)
         #expect(completedRun.observableActions == ["Terminating", "advance"])
-        #expect(completedRun.outcome == .exhaustiveSuccess)
+        #expect(completedRun.outcome == .noViolation)
     }
 }

@@ -50,6 +50,7 @@ readonly common_git_dir="$(git rev-parse --git-common-dir)"
 readonly lock_file="$common_git_dir/swifttla-local-validation.advisory.lock"
 require_positive_integer "SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS" "$lock_wait_seconds"
 scratch_dir=""
+build_dir=""
 command_pid=""
 command_group=""
 watchdog_pid=""
@@ -168,10 +169,73 @@ run_guarded() {
     fi
 
     scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
+    export SWIFTTLA_VALIDATION_SCRATCH_PATH="$scratch_dir"
+    if [[ "$mode" == "swiftpm-test" ]]; then
+        local cache_root="$common_git_dir/swifttla-local-validation-cache"
+        local cache_key cache_key_file toolchain_key toolchain_key_file
+        [[ ! -L "$cache_root" ]] || fail "cache root must not be a symlink"
+        mkdir -p "$cache_root"
+        cache_key_file="$cache_root/source-key"
+        toolchain_key_file="$cache_root/toolchain-key"
+        toolchain_key="$({
+            printf '%s\n' \
+                'swiftpm-local-validation-toolchain-v1' \
+                "$(xcrun --find swift)" \
+                "$(swift --version 2>&1)" \
+                "$(xcrun --show-sdk-version)" \
+                "${DEVELOPER_DIR:-}" \
+                "${SDKROOT:-}" \
+                "${SWIFT_EXEC:-}" \
+                "${SWIFTFLAGS:-}"
+            shasum -a 256 -- Package.swift Package.resolved
+        } | shasum -a 256 | awk '{print $1}')"
+        cache_key="$({
+            printf '%s\n' \
+                'swiftpm-local-validation-v1' \
+                "$(git rev-parse --show-toplevel)" \
+                "$(git rev-parse HEAD)" \
+                "$(xcrun --find swift)" \
+                "$(swift --version 2>&1)" \
+                "$(xcrun --show-sdk-version)" \
+                "${DEVELOPER_DIR:-}" \
+                "${SDKROOT:-}" \
+                "${SWIFT_EXEC:-}" \
+                "${SWIFTFLAGS:-}"
+            git ls-files --cached --others --exclude-standard -z |
+                while IFS= read -r -d '' input_path; do
+                    if [[ -f "$input_path" && ! -L "$input_path" ]]; then
+                        printf '%s\0' "$input_path"
+                    fi
+                done | xargs -0 shasum -a 256 --
+            git ls-files --cached --others --exclude-standard -z |
+                while IFS= read -r -d '' input_path; do
+                    if [[ -L "$input_path" ]]; then
+                        printf 'symlink:%s:%s\n' "$input_path" "$(readlink "$input_path")"
+                        if [[ -f "$input_path" ]]; then
+                            shasum -a 256 -- "$input_path"
+                        fi
+                    fi
+                done
+        } | shasum -a 256 | awk '{print $1}')"
+        [[ "$cache_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute source cache key"
+        [[ "$toolchain_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute toolchain cache key"
+        build_dir="$cache_root/.build"
+        [[ ! -L "$build_dir" ]] || fail "cache build directory must not be a symlink"
+        [[ ! -L "$cache_key_file" ]] || fail "cache key file must not be a symlink"
+        [[ ! -L "$toolchain_key_file" ]] || fail "toolchain key file must not be a symlink"
+        if [[ -r "$toolchain_key_file" ]] && [[ "$(<"$toolchain_key_file")" != "$toolchain_key" ]]; then
+            if [[ -e "$build_dir" ]]; then
+                [[ -d "$build_dir" ]] || fail "cache build path is not a directory"
+                rm -rf -- "$build_dir"
+            fi
+        fi
+        printf '%s\n' "$toolchain_key" > "$toolchain_key_file"
+        printf '%s\n' "$cache_key" > "$cache_key_file"
+    fi
     set -m
     case "$mode" in
         swiftpm-test)
-            swift test --filter "$selector" -j 1 --scratch-path "$scratch_dir/.build" &
+            swift test -Xswiftc -warnings-as-errors --filter "$selector" -j 1 --scratch-path "$build_dir" &
             ;;
         xcode-test)
             package_dir="$PWD"
@@ -183,7 +247,7 @@ run_guarded() {
             package_scheme="$(basename "$package_dir")-Package"
             (
                 cd "$package_dir"
-                xcodebuild test -scheme "$package_scheme" -destination 'platform=macOS' \
+                xcodebuild test SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO -scheme "$package_scheme" -destination 'platform=macOS' \
                     "-only-testing:$selector" -parallel-testing-enabled NO \
                     -parallel-testing-worker-count 1 -jobs 1 \
                     -derivedDataPath "$scratch_dir/DerivedData"

@@ -1,51 +1,53 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// A bounded port of the upstream `SumSequence` PlusCal algorithm.
-///
-/// The published algorithm accepts sequences over an arbitrary integer set.
-/// This finite model uses `-1...1` and sequences up to length three, while
-/// preserving the algorithm's state and one-element-at-a-time loop.
+/// The upstream proof example's unbounded sequence-summing algorithm.
+@TLAModel
 package struct SumSequenceModel: Sendable {
     private enum Step: String, CaseIterable {
         case a
     }
 
     package static var spec: TLASpec {
-        #spec("SumSequence") {
+        #spec("SumSequence") { model in
             Extends(.integers)
+            let Values = model.parameter(as: Set<Int>.self, in: Subsets(of: Int.all))
             Algorithm("SumSequence", fairness: .weak, scoped: { scope in
-                let sequence = scope.sharedVar("sequence", in: Sequences(
-                    of: SetExpr<Int>.literal(-1, 0, 1),
-                    lengths: 0...3
-                ))
-                let sum = scope.sharedVar("sum", initial: 0)
-                let index = scope.sharedVar("index", initial: 1)
+                let seq = scope.sharedVar(in: Sequences(of: Values))
+                let sum = scope.sharedVar(initial: 0)
+                let n = scope.sharedVar(initial: 1)
 
-                While(Step.a, index <= sequence.count) {
-                    Assign(sum, to: sum + sequence[index])
-                    Assign(index, to: index + 1)
+                While(Step.a, n <= seq.count) {
+                    Assign(sum, to: sum + seq[n])
+                    Assign(n, to: n + 1)
                 }
 
+                let sums = LetRec("SeqSum", over: Sequences(of: Int.all), taking: [Int].self,
+                    { recursion, current in
+                        If(current.count == 0, then: 0,
+                            else: current.head() + recursion(current.tail()))
+                    }, in: { recursion in
+                        Pair.literal(
+                            recursion(seq.prefix(length: n - 1)),
+                            recursion(seq.expr)
+                        )
+                    })
+                let typeOK = Sequences(of: Values).contains(seq)
+                    && Int.all.contains(sum)
+                    && n >= 1 && n <= seq.count + 1
                 Invariant("TypeOK") {
-                    index >= 1 && index <= sequence.count + 1
-                    sum >= -3 && sum <= 3
+                    typeOK
                 }
-                Invariant("DoneIndex") {
-                    !Finished() || index == sequence.count + 1
+                Invariant("Inv") {
+                    typeOK
+                    sum == sums.first()
+                    !Finished() || n == seq.count + 1
                 }
-                Eventually("EventuallyFinished", Finished())
+                Invariant("PCorrect") {
+                    !Finished() || sum == sums.second()
+                }
+                Eventually("Termination", Finished())
             })
         }
     }
-}
-
-extension Example {
-    /// Local finite bounds pin this fixture's expected state count. The source
-    /// fidelity gate validates its builder and parser representations.
-    package static let sumSequence = FiniteModelFixture(
-        expectedDistinct: 182,
-        maximumStateLimit: 50_000,
-        spec: SumSequenceModel.spec,
-    )
 }

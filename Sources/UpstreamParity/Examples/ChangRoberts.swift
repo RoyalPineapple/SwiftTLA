@@ -6,14 +6,15 @@ import SwiftTLAMacros
 /// The three nodes own a generated program counter. `initiator` is the only
 /// nondeterministic initial value; `processState` is derived from it in the
 /// formal initial state. Every message is explicitly delivered clockwise.
+@TLAModel
 package struct ChangRobertsModel: Sendable {
-    package enum Node: Int, FiniteTLAValueDomain {
+    package enum Node: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
         case two = 2
         case three = 3
 
         package static var defaultValue: Self { .one }
-        package static let finiteValues: [Self] = [.one, .two, .three]
+        package static let finiteValues = allCases
 
         package var tlaValue: TLAValue { .int(rawValue) }
     }
@@ -34,7 +35,7 @@ package struct ChangRobertsModel: Sendable {
     package static var spec: TLASpec {
         #spec("ChangRoberts") {
             Algorithm("ChangRoberts", scoped: { scope in
-                let initiator = scope.sharedVar("initiator", in: SetExpr<Function<Node, Bool>>.literal(
+                let initiator = scope.sharedVar(in: SetExpr<Function<Node, Bool>>.literal(
                     Function<Node, Bool>.literal((.one, false), (.two, false), (.three, false)),
                     Function<Node, Bool>.literal((.one, false), (.two, false), (.three, true)),
                     Function<Node, Bool>.literal((.one, false), (.two, true), (.three, false)),
@@ -44,17 +45,17 @@ package struct ChangRobertsModel: Sendable {
                     Function<Node, Bool>.literal((.one, true), (.two, true), (.three, false)),
                     Function<Node, Bool>.literal((.one, true), (.two, true), (.three, true))
                 ))
-                let processState = scope.sharedVar("processState", initial: Function<Node, ProcessState>.mapping { node in
+                let processState = scope.sharedVar(initial: Function<Node, ProcessState>.mapping { node in
                     If(
                         initiator[node] == true,
                         then: .candidate,
                         else: .lost
                     )
                 })
-                let successor = scope.sharedVar("successor", initial: Function<Node, Node>.literal(
+                let successor = scope.sharedVar(initial: Function<Node, Node>.literal(
                     (.one, .two), (.two, .three), (.three, .one)
                 ))
-                let messages = scope.sharedVar("messages", initial: Function<Node, SetExpr<Node>>.literal(
+                let messages = scope.sharedVar(initial: Function<Node, SetExpr<Node>>.literal(
                     (.one, SetExpr<Node>()),
                     (.two, SetExpr<Node>()),
                     (.three, SetExpr<Node>())
@@ -86,7 +87,7 @@ package struct ChangRobertsModel: Sendable {
                             } or: {
                                 Either {
                                     When(
-                                        processState[node] == .candidate
+                                        processState[node] != .lost
                                             && candidate < node
                                     )
                                     Assign(messages, to: messages
@@ -99,7 +100,7 @@ package struct ChangRobertsModel: Sendable {
                                 } or: {
                                     Either {
                                     When(
-                                        processState[node] == .candidate
+                                        processState[node] != .lost
                                             && candidate > node
                                     )
                                     Assign(messages, to: messages.updating(
@@ -108,7 +109,7 @@ package struct ChangRobertsModel: Sendable {
                                     ))
                                     } or: {
                                         When(
-                                            processState[node] == .candidate
+                                            processState[node] != .lost
                                                 && candidate == node
                                         )
                                         Assign(messages, to: messages.updating(
@@ -124,10 +125,17 @@ package struct ChangRobertsModel: Sendable {
                     }
                 }
 
-                Invariant("NoFalseWinner") {
-                    processState[.one] != .won || initiator[.one] == true
-                    processState[.two] != .won || initiator[.two] == true
-                    processState[.three] != .won || initiator[.three] == true
+                Invariant("Correctness") {
+                    ForAll(Node.all) { winner in
+                        processState[winner] != .won || (
+                            initiator[winner] == true && ForAll(Node.all) { other in
+                                other == winner || (
+                                    processState[other] == .lost
+                                        && (initiator[other] == false || other > winner)
+                                )
+                            }
+                        )
+                    }
                 }
                 LeadsTo(
                     "Liveness",

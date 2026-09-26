@@ -1,9 +1,9 @@
-internal struct AlgorithmModel: Sendable {
-    let name: String
-    let sequentialFairness: SequentialAlgorithmFairness
-    let components: [AlgorithmComponentModel]
+package struct AlgorithmModel: Sendable {
+    package let name: String
+    package let sequentialFairness: SequentialAlgorithmFairness
+    package let components: [AlgorithmComponentModel]
 
-    init(
+    package init(
         name: String,
         sequentialFairness: SequentialAlgorithmFairness = .none,
         components: [AlgorithmComponentModel]
@@ -63,7 +63,7 @@ internal struct AlgorithmModel: Sendable {
                         names.insert($0.label.name)
                         names.formUnion($0.statements.algorithmScopeNames)
                     }
-                case .invariant(let invariant):
+                case .invariant(let invariant), .reachable(let invariant):
                     names.insert(invariant.name)
                 case .temporal(let temporal):
                     names.insert(temporal.name)
@@ -80,13 +80,8 @@ internal struct AlgorithmModel: Sendable {
         return names
     }
 
-    func plusCalProjection() -> AlgorithmModel {
-        let localRoots: Set<String> = Set(processes.flatMap { process in
-            process.components.compactMap { component in
-                guard case .local(let declaration) = component else { return nil }
-                return declaration.root
-            }
-        })
+    /// Resolves ordered reads and writes before execution and export diverge.
+    func resolvingAtomicSteps() -> AlgorithmModel {
         var usedBindings = authoredIdentifiers
         var nextBinding = 0
 
@@ -100,6 +95,34 @@ internal struct AlgorithmModel: Sendable {
             }
         }
 
+        func component(_ value: AlgorithmComponentModel) -> AlgorithmComponentModel {
+            switch value {
+            case .step(let step):
+                return .step(.init(label: step.label, statements: scheduleAtomicStatements(step.statements, binding: binding),
+                    loopCondition: step.loopCondition))
+            case .process(let process):
+                return .process(.init(typeName: process.typeName, domain: process.domain,
+                    fairness: process.fairness, components: process.components.map(component),
+                    resolvedElementType: process.resolvedElementType,
+                    fairnessExcludedLabels: process.fairnessExcludedLabels))
+            case .procedure(let procedure):
+                return .procedure(.init(name: procedure.name, parameters: procedure.parameters,
+                    components: procedure.components.map(component)))
+            default:
+                return value
+            }
+        }
+        return .init(name: name, sequentialFairness: sequentialFairness,
+            components: components.map(component))
+    }
+
+    func plusCalProjection() -> AlgorithmModel {
+        let localRoots: Set<String> = Set(processes.flatMap { process in
+            process.components.compactMap { component in
+                guard case .local(let declaration) = component else { return nil }
+                return declaration.root
+            }
+        })
         func lowerAnonymousLambdas(_ value: StateExpr) -> StateExpr {
             StateExpr.renamingRecursiveCalls(
                 in: value,
@@ -115,16 +138,6 @@ internal struct AlgorithmModel: Sendable {
             return lowerAnonymousLambdas(family.replacingCurrentProcess(with: .variable("self")))
         }
 
-        func temporal(_ value: TemporalExpr) -> TemporalExpr {
-            switch value {
-            case .always(let predicate): return .always(expression(predicate))
-            case .eventually(let predicate): return .eventually(expression(predicate))
-            case .alwaysEventually(let predicate): return .alwaysEventually(expression(predicate))
-            case .eventuallyAlways(let predicate): return .eventuallyAlways(expression(predicate))
-            case .leadsTo(let source, let destination): return .leadsTo(expression(source), expression(destination))
-            }
-        }
-
         func initialization(_ value: VariableInitialization) -> VariableInitialization {
             switch value {
             case .value: return value
@@ -138,7 +151,7 @@ internal struct AlgorithmModel: Sendable {
                 root: value.root,
                 initialization: initialization(value.initialization),
                 swiftTypeName: value.swiftTypeName,
-                isTuple: value.isTuple
+                resolvedValueType: value.resolvedValueType
             )
         }
 
@@ -152,129 +165,7 @@ internal struct AlgorithmModel: Sendable {
             }.map { statement in
                 statement.mappingExpressions(lowerAnonymousLambdas)
             }
-            return schedule(projected)
-        }
-
-        func call(
-            _ target: String,
-            arguments: [StateExpr],
-            after assignments: [AlgorithmAssignmentModel],
-            followedBy suffix: [AlgorithmStatementModel]
-        ) -> [AlgorithmStatementModel] {
-            let assignmentGroup = assignments.isEmpty ? [] : [AlgorithmStatementModel.parallel(assignments)]
-            guard arguments.isEmpty == false, assignments.isEmpty == false else {
-                return assignmentGroup + [.call(target: target, arguments: arguments)] + suffix
-            }
-            let bindings = arguments.map { argument in (name: binding(), value: argument) }
-            let call = AlgorithmStatementModel.call(
-                target: target,
-                arguments: bindings.map { .variable($0.name) }
-            )
-            return bindings.reversed().reduce(assignmentGroup + [call] + suffix) { body, value in
-                [.letBinding(variable: value.name, value: value.value, body)]
-            }
-        }
-
-        func movingScope(
-            _ variable: String,
-            body: [AlgorithmStatementModel],
-            over suffix: [AlgorithmStatementModel]
-        ) -> (String, [AlgorithmStatementModel]) {
-            guard suffix.algorithmScopeNames.contains(variable) else { return (variable, body) }
-            let fresh = StateExpr.freshBoundName(
-                variable,
-                avoiding: usedBindings
-                    .union(body.algorithmScopeNames)
-                    .union(suffix.algorithmScopeNames)
-            )
-            usedBindings.insert(fresh)
-            return (
-                fresh,
-                body.map {
-                    $0.substitutingVariable(
-                        variable,
-                        with: .variable(fresh),
-                        assignmentTargets: .replaceWhenVariable
-                    )
-                }
-            )
-        }
-
-        func assignmentStatements(_ assignments: [AlgorithmAssignmentModel]) -> [AlgorithmStatementModel] {
-            assignments.map { .set(target: $0.target, value: $0.value) }
-        }
-
-        func schedule(_ values: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
-            var reads: [AlgorithmStatementModel] = []
-            var assignments: [AlgorithmAssignmentModel] = []
-            var terminals: [AlgorithmStatementModel] = []
-
-            for (index, statement) in values.enumerated() {
-                let suffix = Array(values.dropFirst(index + 1))
-                switch statement {
-                case .set(let target, let value):
-                    assignments.append(.init(target: target, value: value))
-                case .parallel(let values):
-                    assignments.append(contentsOf: values)
-                case .await, .assert, .skip, .rejected:
-                    reads.append(statement)
-                case .goto, .return:
-                    terminals.append(statement)
-                case .stop:
-                    terminals.append(.goto(.init(name: CompilerControlSymbol.done.rawValue)))
-                case .call(let target, let arguments):
-                    return reads + call(
-                        target,
-                        arguments: arguments,
-                        after: assignments,
-                        followedBy: suffix
-                    ) + terminals
-                case .letBinding(let variable, let value, let body):
-                    let scoped = movingScope(variable, body: body, over: suffix)
-                    return reads + [
-                        .letBinding(
-                            variable: scoped.0,
-                            value: value,
-                            schedule(assignmentStatements(assignments) + scoped.1 + suffix + terminals)
-                        )
-                    ]
-                case .with(let variable, let source, let body):
-                    let scoped = movingScope(variable, body: body, over: suffix)
-                    return reads + [
-                        .with(
-                            variable: scoped.0,
-                            source: source,
-                            schedule(assignmentStatements(assignments) + scoped.1 + suffix + terminals)
-                        )
-                    ]
-                case .choose(let variable, let domain, let body):
-                    let scoped = movingScope(variable, body: body, over: suffix)
-                    return reads + [
-                        .with(
-                            variable: scoped.0,
-                            source: .setLiteral(domain.map(StateExpr.value)),
-                            schedule(assignmentStatements(assignments) + scoped.1 + suffix + terminals)
-                        )
-                    ]
-                case .ifElse(let condition, let then, let otherwise):
-                    return reads + [
-                        .ifElse(
-                            condition,
-                            schedule(assignmentStatements(assignments) + then + suffix + terminals),
-                            schedule(assignmentStatements(assignments) + otherwise + suffix + terminals)
-                        )
-                    ]
-                case .either(let first, let second):
-                    return reads + [
-                        .either(
-                            schedule(assignmentStatements(assignments) + first + suffix + terminals),
-                            schedule(assignmentStatements(assignments) + second + suffix + terminals)
-                        )
-                    ]
-                }
-            }
-            let assignmentGroup = assignments.isEmpty ? [] : [AlgorithmStatementModel.parallel(assignments)]
-            return reads + assignmentGroup + terminals
+            return projected
         }
 
         func step(_ value: AlgorithmStepModel) -> AlgorithmStepModel {
@@ -292,9 +183,11 @@ internal struct AlgorithmModel: Sendable {
                 return .process(
                     .init(
                         typeName: process.typeName,
-                        domain: process.domain,
+                        domain: expression(process.domain),
                         fairness: process.fairness,
-                        components: process.components.map(component)
+                        components: process.components.map(component),
+                        resolvedElementType: process.resolvedElementType,
+                        fairnessExcludedLabels: process.fairnessExcludedLabels
                     )
                 )
             case .procedure(let procedure):
@@ -308,9 +201,12 @@ internal struct AlgorithmModel: Sendable {
                     )
                 )
             case .invariant(let invariant):
-                return .invariant(.init(name: invariant.name, body: expression(invariant.body)))
+                return .invariant(.init(name: invariant.name, body: expression(invariant.body), reference: invariant.reference))
+            case .reachable(let predicate):
+                return .reachable(.init(name: predicate.name, body: expression(predicate.body), reference: predicate.reference))
             case .temporal(let declaration):
-                return .temporal(.init(name: declaration.name, expr: temporal(declaration.expr)))
+                return .temporal(.init(name: declaration.name, expr: declaration.expr.map(expression),
+                    bindings: declaration.bindings, reference: declaration.reference))
             case .invalidPlacement:
                 return value
             case .formalOperator(let definition):
@@ -389,16 +285,20 @@ internal struct AuthoredPlusCalAlgorithmPlan: Sendable {
 internal struct AuthoredPlusCalProcessPlan: Sendable {
     let name: String
     let owner: ControlOwner
-    let domain: [TLAValue]
+    let swiftType: String
+    let domain: StateExpr
     let fairness: AlgorithmFairness
+    let fairnessExcludedLabels: [AlgorithmLabelModel]
     let locals: [AlgorithmStateModel]
     let steps: [AlgorithmStepModel]
 
     init(process: AlgorithmProcessModel, name: String, owner: ControlOwner) {
         self.name = name
         self.owner = owner
+        swiftType = process.typeName
         domain = process.domain
         fairness = process.fairness
+        fairnessExcludedLabels = process.fairnessExcludedLabels
         locals = process.components.compactMap {
             guard case .local(let declaration) = $0 else { return nil }
             return declaration
@@ -414,31 +314,14 @@ internal struct CompiledAuthoredPlusCalAlgorithmPlan: Sendable {
     let procedures: [CompiledAuthoredPlusCalProcedure]
     let processes: [CompiledAuthoredPlusCalProcess]
     let sequentialSteps: [CompiledAuthoredPlusCalStep]
-    let properties: [CompiledAuthoredPlusCalProperty]
+    let properties: [CompiledPropertyLayout]
     let translatorOwnedPropertyNames: Set<String>
-}
-
-internal enum CompiledAuthoredPlusCalProperty: Sendable {
-    case invariant(id: PropertyID, name: String)
-    case temporal(id: PropertyID, name: String)
-
-    var id: PropertyID {
-        switch self {
-        case .invariant(let id, _), .temporal(let id, _): id
-        }
-    }
-
-    var name: String {
-        switch self {
-        case .invariant(_, let name), .temporal(_, let name): name
-        }
-    }
 }
 
 internal struct CompiledAuthoredPlusCalState: Sendable {
     enum Initialization: Sendable {
-        case expression(CompiledStateExpr)
-        case memberOf(CompiledStateExpr)
+        case expression(CompiledExpression)
+        case memberOf(CompiledExpression)
     }
 
     let variable: VariableID
@@ -448,14 +331,18 @@ internal struct CompiledAuthoredPlusCalState: Sendable {
 internal struct CompiledAuthoredPlusCalProcedure: Sendable {
     let id: ProcedureID
     let parameters: [BinderID]
+    let parameterVariables: [VariableID]
     let locals: [CompiledAuthoredPlusCalState]
     let steps: [CompiledAuthoredPlusCalStep]
 }
 
 internal struct CompiledAuthoredPlusCalProcess: Sendable {
     let name: String
-    let domain: [CompiledValue]
+    let binder: BinderID
+    let swiftType: String
+    let domain: CompiledExpression
     let fairness: AlgorithmFairness
+    let fairnessExcludedSteps: Set<ControlLocationID>
     let locals: [CompiledAuthoredPlusCalState]
     let steps: [CompiledAuthoredPlusCalStep]
 }
@@ -463,39 +350,57 @@ internal struct CompiledAuthoredPlusCalProcess: Sendable {
 internal struct CompiledAuthoredPlusCalStep: Sendable {
     let label: ControlLocationID
     let statements: [CompiledAuthoredPlusCalStatement]
-    let loopCondition: CompiledStateExpr?
+    let loopCondition: CompiledExpression?
 }
 
 internal struct CompiledAuthoredPlusCalAssignment: Sendable {
     let target: CompiledAuthoredPlusCalLValue
-    let value: CompiledStateExpr
+    let value: CompiledExpression
 }
 
-internal enum CompiledAuthoredPlusCalLValue: Sendable {
+internal indirect enum CompiledAuthoredPlusCalLValue: Sendable {
     case root(VariableID)
-    case function(root: VariableID, key: CompiledStateExpr)
+    case function(base: CompiledAuthoredPlusCalLValue, key: CompiledExpression)
+    case field(CompiledAuthoredPlusCalLValue, String)
+
+    var expression: CompiledExpression {
+        switch self {
+        case .root(let root): .stateVariable(root)
+        case .function(let base, let key): .init(operation: .functionApply, children: [base.expression, key])
+        case .field(let base, let name): .recordAccess(base.expression, name)
+        }
+    }
+
+    func resolvingRead(_ expression: CompiledExpression) -> Self {
+        switch self {
+        case .root: self
+        case .function(let base, _): .function(base: base.resolvingRead(expression.children[0]), key: expression.children[1])
+        case .field(let base, let name): .field(base.resolvingRead(expression.children[0]), name)
+        }
+    }
 }
 
 internal indirect enum CompiledAuthoredPlusCalStatement: Sendable {
-    case await(CompiledStateExpr)
-    case assert(CompiledStateExpr)
-    case set(target: CompiledAuthoredPlusCalLValue, value: CompiledStateExpr)
+    case when(CompiledExpression)
+    case assert(CompiledExpression)
+    case set(target: CompiledAuthoredPlusCalLValue, value: CompiledExpression)
     case parallel([CompiledAuthoredPlusCalAssignment])
-    case letBinding(variable: BinderID, value: CompiledStateExpr, [CompiledAuthoredPlusCalStatement])
-    case with(variable: BinderID, source: CompiledStateExpr, [CompiledAuthoredPlusCalStatement])
-    case ifElse(CompiledStateExpr, [CompiledAuthoredPlusCalStatement], [CompiledAuthoredPlusCalStatement])
+    case letBinding(variable: BinderID, value: CompiledExpression, [CompiledAuthoredPlusCalStatement])
+    case with(variable: BinderID, source: CompiledExpression, [CompiledAuthoredPlusCalStatement])
+    case ifElse(CompiledExpression, [CompiledAuthoredPlusCalStatement], [CompiledAuthoredPlusCalStatement])
     case either([CompiledAuthoredPlusCalStatement], [CompiledAuthoredPlusCalStatement])
     case goto(ControlLocationID)
-    case call(target: ProcedureID, arguments: [CompiledStateExpr])
+    case call(target: ProcedureID, arguments: [CompiledExpression])
     case `return`
     case skip
 }
 
-internal indirect enum AlgorithmComponentModel: Sendable {
+package indirect enum AlgorithmComponentModel: Sendable {
     case shared(AlgorithmStateModel)
     case process(AlgorithmProcessModel)
     case procedure(AlgorithmProcedureModel)
-    case invariant(NamedInvariant)
+    case invariant(NamedStatePredicate)
+    case reachable(NamedStatePredicate)
     case temporal(NamedTemporal)
     case formalOperator(FormalOperatorDefinition)
     /// A TLC state-space bound whose excluded states are omitted from exploration.
@@ -505,55 +410,60 @@ internal indirect enum AlgorithmComponentModel: Sendable {
     case step(AlgorithmStepModel)
 }
 
-internal enum InvalidAlgorithmComponent: String, Sendable {
+package enum InvalidAlgorithmComponent: String, Sendable {
     case genericFairness
     case assumption
+    case parameterizedStep
 
-    var expectedPlacement: String {
+    package var expectedPlacement: String {
         switch self {
         case .genericFairness:
             "Algorithm(..., fairness:) for sequential fairness or Each(..., fairness:) for process fairness"
         case .assumption:
             "an assumption declared in the formal specification"
+        case .parameterizedStep:
+            "a parameterized Do declared directly in the formal specification"
         }
     }
 
-    var actualPlacement: String {
+    package var actualPlacement: String {
         switch self {
         case .genericFairness: "generic fairness declaration inside Algorithm"
         case .assumption: "Assume declaration inside Algorithm"
+        case .parameterizedStep: "parameterized Do inside Algorithm"
         }
     }
 
-    var nextSafeAction: String {
+    package var nextSafeAction: String {
         switch self {
         case .genericFairness: "Move the fairness requirement to Algorithm or Each."
         case .assumption: "Move the assumption outside Algorithm."
+        case .parameterizedStep: "Declare independent actions outside Algorithm, or use Each for processes and With for local choices."
         }
     }
 }
 
 /// One formal PlusCal procedure.
-internal struct AlgorithmProcedureModel: Sendable {
-    let name: String
-    let parameters: [AlgorithmProcedureParameterModel]
-    let components: [AlgorithmComponentModel]
+package struct AlgorithmProcedureModel: Sendable {
+    package let name: String
+    package let parameters: [AlgorithmProcedureParameterModel]
+    package let components: [AlgorithmComponentModel]
 
-    var locals: [AlgorithmStateModel] {
+    package var locals: [AlgorithmStateModel] {
         components.compactMap {
             guard case .local(let state) = $0 else { return nil }
             return state
         }
     }
 
-    var steps: [AlgorithmStepModel] {
+    package var steps: [AlgorithmStepModel] {
         components.compactMap {
             guard case .step(let step) = $0 else { return nil }
             return step
         }
     }
 
-    init(
+    package init(
         name: String,
         parameters: [AlgorithmProcedureParameterModel],
         components: [AlgorithmComponentModel]
@@ -564,89 +474,134 @@ internal struct AlgorithmProcedureModel: Sendable {
     }
 }
 
-internal struct AlgorithmProcedureParameterModel: Sendable {
-    let root: String
-    let initial: StateExpr
-    let swiftTypeName: String?
+package struct AlgorithmProcedureParameterModel: Sendable {
+    package let root: String
+    package let initial: StateExpr
+    package let swiftTypeName: String?
+
+    package init(root: String, initial: StateExpr, swiftTypeName: String?) {
+        self.root = root
+        self.initial = initial
+        self.swiftTypeName = swiftTypeName
+    }
 }
 
-internal struct AlgorithmProcessModel: Sendable {
-    let typeName: String
-    let domain: [TLAValue]
-    let fairness: AlgorithmFairness
-    let components: [AlgorithmComponentModel]
+package struct AlgorithmProcessModel: Sendable {
+    package let typeName: String
+    package let resolvedElementType: CompiledValueType?
+    package let domain: StateExpr
+    package let fairness: AlgorithmFairness
+    package let fairnessExcludedLabels: [AlgorithmLabelModel]
+    package let components: [AlgorithmComponentModel]
 
-    var steps: [AlgorithmStepModel] {
+    package var steps: [AlgorithmStepModel] {
         components.compactMap {
             guard case .step(let step) = $0 else { return nil }
             return step
         }
     }
+
+    package init(typeName: String, domain: StateExpr, fairness: AlgorithmFairness,
+        components: [AlgorithmComponentModel], resolvedElementType: CompiledValueType? = nil,
+        fairnessExcludedLabels: [AlgorithmLabelModel] = []) {
+        self.typeName = typeName
+        self.resolvedElementType = resolvedElementType
+        self.domain = domain
+        self.fairness = fairness
+        self.fairnessExcludedLabels = fairnessExcludedLabels
+        self.components = components
+    }
 }
 
-internal enum AlgorithmFairness: Sendable {
+package enum AlgorithmFairness: Sendable {
     case none
     case weak
     case strong
 }
 
-internal struct AlgorithmStateModel: Sendable {
-    let root: String
-    let initialization: VariableInitialization
-    let swiftTypeName: String?
-    let isTuple: Bool
+package struct AlgorithmStateModel: Sendable {
+    package let root: String
+    package let initialization: VariableInitialization
+    package let swiftTypeName: String?
+    package let resolvedValueType: CompiledValueType?
 
-    init(
+    package init(
         root: String,
         initialization: VariableInitialization,
         swiftTypeName: String? = nil,
-        isTuple: Bool = false
+        resolvedValueType: CompiledValueType? = nil
     ) {
         self.root = root
         self.initialization = initialization.normalized
         self.swiftTypeName = swiftTypeName
-        self.isTuple = isTuple
+        self.resolvedValueType = resolvedValueType
     }
 }
 
-internal struct AlgorithmStepModel: Sendable {
-    let label: AlgorithmLabelModel
-    let statements: [AlgorithmStatementModel]
+package struct AlgorithmStepModel: Sendable {
+    package let label: AlgorithmLabelModel
+    package let statements: [AlgorithmStatementModel]
     /// A labeled PlusCal `while` loop. A true condition returns to `label`; a
     /// false condition advances to the following step.
-    let loopCondition: StateExpr?
+    package let loopCondition: StateExpr?
 
-    init(label: AlgorithmLabelModel, statements: [AlgorithmStatementModel], loopCondition: StateExpr? = nil) {
+    package init(label: AlgorithmLabelModel, statements: [AlgorithmStatementModel], loopCondition: StateExpr? = nil) {
         self.label = label
         self.statements = statements
         self.loopCondition = loopCondition
     }
 }
 
-internal struct AlgorithmLabelModel: Sendable, Hashable {
-    let name: String
+package struct AlgorithmLabelModel: Sendable, Hashable {
+    package let name: String
+
+    package init(name: String) {
+        self.name = name
+    }
 }
 
-internal enum AlgorithmLValueModel: Sendable, Equatable {
+package indirect enum AlgorithmLValueModel: Sendable, Equatable {
     case root(String)
-    case function(root: String, key: StateExpr)
+    case function(base: AlgorithmLValueModel, key: StateExpr)
+    case field(AlgorithmLValueModel, String)
 
-    var root: String {
+    package var root: String {
         switch self {
-        case .root(let root), .function(let root, _):
-            return root
+        case .root(let root): return root
+        case .function(let base, _), .field(let base, _): return base.root
+        }
+    }
+
+    var expression: StateExpr {
+        switch self {
+        case .root(let root): .variable(root)
+        case .function(let base, let key): .functionApply(base.expression, key)
+        case .field(let base, let name): .recordAccess(base.expression, name)
+        }
+    }
+
+    func assigning(_ value: StateExpr) -> StateExpr {
+        switch self {
+        case .root: value
+        case .function(let base, let key): base.assigning(.except(base.expression, key, value))
+        case .field(let base, let name): base.assigning(.except(base.expression, .value(.string(name)), value))
         }
     }
 }
 
-internal struct AlgorithmAssignmentModel: Sendable, Equatable {
-    let target: AlgorithmLValueModel
-    let value: StateExpr
+package struct AlgorithmAssignmentModel: Sendable, Equatable {
+    package let target: AlgorithmLValueModel
+    package let value: StateExpr
+
+    package init(target: AlgorithmLValueModel, value: StateExpr) {
+        self.target = target
+        self.value = value
+    }
 }
 
-internal indirect enum AlgorithmStatementModel: Sendable, Equatable {
+package indirect enum AlgorithmStatementModel: Sendable, Equatable {
     case rejected(AlgorithmDiagnosticCode)
-    case await(StateExpr)
+    case when(StateExpr)
     case assert(StateExpr)
     case set(target: AlgorithmLValueModel, value: StateExpr)
     case parallel([AlgorithmAssignmentModel])
@@ -660,4 +615,67 @@ internal indirect enum AlgorithmStatementModel: Sendable, Equatable {
     case `return`
     case stop
     case skip
+}
+
+func scheduleAtomicStatements(
+    _ statements: [AlgorithmStatementModel], binding: () -> String
+) -> [AlgorithmStatementModel] {
+    // Snapshot each write where it occurs, then publish one assignment per
+    // root at the end of the atomic branch. PlusCal labels require that form.
+    func schedule(
+        _ values: [AlgorithmStatementModel],
+        assignments: [AlgorithmAssignmentModel] = [],
+        replacements: [String: StateExpr] = [:]
+    ) -> [AlgorithmStatementModel] {
+        let finalWrites = assignments.isEmpty ? [] : [AlgorithmStatementModel.parallel(assignments)]
+        guard let statement = values.first else { return finalWrites }
+        let suffix = Array(values.dropFirst())
+        func expression(_ value: StateExpr) -> StateExpr {
+            StateExpr.substituteVariables(replacements, in: value)
+        }
+        func continued(_ body: [AlgorithmStatementModel]) -> [AlgorithmStatementModel] {
+            schedule(body + suffix, assignments: assignments, replacements: replacements)
+        }
+        switch statement {
+        case .set(let target, let value):
+            let name = binding()
+            let updated = expression(target.assigning(value))
+            let pending = assignments.filter { $0.target.root != target.root }
+                + [.init(target: .root(target.root), value: .variable(name))]
+            var next = replacements
+            next[target.root] = .variable(name)
+            return [.letBinding(variable: name, value: updated,
+                schedule(suffix, assignments: pending, replacements: next))]
+        case .when, .assert, .skip, .rejected:
+            return [statement.mappingExpressions(expression)] + continued([])
+        case .letBinding(let variable, let value, let body):
+            let name = binding()
+            let renamed = body.map {
+                $0.substitutingVariable(variable, with: .variable(name), assignmentTargets: .replaceWhenVariable)
+            }
+            return [.letBinding(variable: name, value: expression(value), continued(renamed))]
+        case .with(let variable, let source, let body):
+            let name = binding()
+            let renamed = body.map {
+                $0.substitutingVariable(variable, with: .variable(name), assignmentTargets: .replaceWhenVariable)
+            }
+            return [.with(variable: name, source: expression(source), continued(renamed))]
+        case .choose(let variable, let domain, let body):
+            return continued([.with(variable: variable,
+                source: .setLiteral(domain.map(StateExpr.value)), body)])
+        case .ifElse(let condition, let then, let otherwise):
+            return [.ifElse(expression(condition), continued(then), continued(otherwise))]
+        case .either(let first, let second):
+            return [.either(continued(first), continued(second))]
+        case .stop:
+            return finalWrites + [.stop]
+        case .goto, .return:
+            return finalWrites + [statement]
+        case .call:
+            return finalWrites + [statement.mappingExpressions(expression)] + suffix
+        case .parallel:
+            preconditionFailure("Atomic statements must only be scheduled once")
+        }
+    }
+    return schedule(statements)
 }

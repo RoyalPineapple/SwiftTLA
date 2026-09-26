@@ -1,9 +1,9 @@
 # Generated machines
 
-`@TLAModel` generates a typed Swift state machine from one compiled
-specification.
-The machine holds one complete `State` and accepts typed `Action` values. Each
-successful action returns a `Transition` with the state before and after it.
+`@TLAModel` generates a typed Swift state machine from one resolved program.
+The machine holds its execution state and exposes declared variables through
+an immutable `State`. It accepts typed `Action` values; each successful action
+returns a `Transition` with the visible state before and after it.
 
 ```swift
 var machine = try Counter.makeMachine()
@@ -11,8 +11,8 @@ let transition = try machine.send(.advance)
 let state = transition.after
 ```
 
-Application code uses the generated machine. TLC and PlusCal tools use the
-rendered bundles published by the compiled specification.
+Application code uses the generated machine. Independent validation uses the
+formal bundles from the generated export API.
 
 ## Generate a machine
 
@@ -41,10 +41,9 @@ struct BoundedCounter {
     static var spec: TLASpec {
         #spec("BoundedCounter") {
             Algorithm("BoundedCounter", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(initial: 0)
                 Each(Process.all) { _ in
-                    Do(Step.advance) {
-                        When(value < 1)
+                    Do(Step.advance, when: value < 1) {
                         Assign(value, to: value + 1)
                         Stop()
                     }
@@ -59,13 +58,34 @@ struct BoundedCounter {
 
 Each generated machine exposes these value types:
 
-- `State` is an immutable value with the declared variables and their Swift types.
+- `State` is an immutable value with the declared variables and their native Swift types.
+- `Snapshot` retains the complete execution state, including compiler-owned control state.
 - `Action` contains declared actions and their typed parameters.
 - `Transition` contains the action and the state before and after it.
+
+Sets, sequences, and functions use standard Swift `Set`, `Array`, and
+`Dictionary` values. Pairs and records become generated immutable structs;
+read their fields directly. Finite unions become generated enums containing
+exactly their declared values. These mappings apply recursively to nested
+values.
 
 `send(_:)` applies one action. `isEnabled(_:)` reports whether that action is
 currently permitted. Both operations can throw a generated-machine diagnostic.
 A rejected action leaves `state` unchanged.
+
+Generated model expressions evaluate `ENABLED` only when expression evaluation reaches that operand.
+A false guard or a satisfied alternative can skip the reference and its dependencies.
+An evaluated reference uses the generated action relation, not a duplicate predicate that approximates its guard.
+Evaluation errors propagate from required references.
+These rules apply to action guards, state predicates, temporal predicates, and refinement mappings.
+The compiler rejects cyclic enabledness dependencies.
+
+`initialMachines()` returns every permitted initial machine. `successors(for:)`
+returns every distinct successor machine for an action without changing the
+receiver. These values retain process control state and application collection
+bindings, so each branch can continue independently. A disabled action returns
+an empty array. `send(_:)` requires exactly one successor and rejects ambiguous
+actions; `makeMachine()` likewise requires exactly one initial state.
 
 **Example ID:** `generated-machine-direct-action`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/DirectAction.swift`
@@ -163,8 +183,8 @@ to the same machine.
 
 ## Actor
 
-`Actor` is a thin asynchronous adapter over one generated machine. It
-serializes `send(_:)` and exposes the same generated `State` and `Action`
+`Actor` owns one generated machine. Actor isolation serializes `send(_:)`,
+and it exposes the same generated `State` and `Action`
 values. Its initializer accepts the same typed initial state as
 `makeMachine(_:)`.
 
@@ -190,10 +210,9 @@ struct CounterHost {
     static var spec: TLASpec {
         #spec("CounterHost") {
             Algorithm("CounterHost", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
+                let value = scope.sharedVar(initial: 0)
                 Each(Process.all) { _ in
-                    Do(Step.advance) {
-                        When(value < 1)
+                    Do(Step.advance, when: value < 1) {
                         Assign(value, to: value + 1)
                         Stop()
                     }
@@ -250,22 +269,64 @@ func runGeneratedMachineTesting() throws {
 }
 ```
 
-## Compile and render
+## Native exploration
 
-Compile the source model before inspection or exploration:
+Generated models conform to `StateMachine`. `successors()` enumerates every
+action and successor using the same functions that `send(_:)` calls.
+`ReachabilityGraph(initialMachines: Model.initialMachines(), maximumStates: limit)`
+explores those native successors without compiling or interpreting expressions
+and without invoking TLC. Supply initial machines from one finite configuration.
+
+The graph retains all initial snapshots and labeled transitions. Snapshot identity
+includes control state: two equal public `State` values can still have different
+successors. Exploration throws on exhaustion of the state limit or cancellation;
+it never returns a truncated graph as complete. Exploration evaluates generated
+assumptions and invariant predicates. It retains invariant and deadlock failures in `safetyViolations` while completing the graph;
+Deadlock reporting is enabled by default; normal algorithm termination is
+not a deadlock. `trace(to:)` reconstructs a
+shortest native execution from the discovery predecessors. False assumptions and
+evaluation errors throw. Temporal checking and independent equivalence validation
+remain separate; empty safety results do not establish liveness or equivalence.
+
+For independent validation, `machine.formalProjection(of: snapshot)` converts the
+complete native snapshot to a validated `TLAStateProjection`. The macro emits
+this conversion from resolved types, including compiler-owned control state.
+Collection members use the machine's configured correspondence to formal IDs;
+unknown members and malformed formal values throw. Use one finite configuration
+for the entire graph. This explicit serialization boundary does not execute the
+formal interpreter or invoke TLC.
+
+## Export formal artifacts
+
+Use the generated export API:
 
 ```swift
-let compilation = try BoundedCounter.spec.compile()
-let bundle = compilation.renderedTLAModuleBundle()
+let bundle = try BoundedCounter.render().tlaBundle
 ```
 
-Compilation validates declarations, binds names, links modules, lowers
-behavior, allocates private identities, renders TLA+/PlusCal text, and
-assembles the formal bundles before it publishes the compiled specification.
-Rendering is the text conversion within that pipeline. The generated machine
-compiles the same source and compares its compilation identity with the
-identity from macro expansion. Explicit compiled specifications drive bounded
-exploration and expose the rendered bundles.
+At build time, the macro resolves declarations, types, bindings, and control flow.
+Native generation and formal export consume that same resolved program.
+The generated `render()` method assembles the formal bundle without runtime compilation.
+Parameterized models require a typed configuration. A model-owned scenario supplies
+its bindings and selected checks through `scenario.render()`.
+
+Generated machines execute native Swift initialization, guards, updates, and property checks.
+Construction and transitions do not compile the specification or interpret formal values.
+Unsupported export operations produce a diagnostic rather than an interpreter fallback.
+The formal-core compilation API remains for explicit compiler and imported-module boundaries,
+not as the application export route.
+
+The inline specification is authoritative. Its getter must contain one direct
+`#spec` declaration (or return that declaration), with statically admitted model
+structure. Unsupported native operations produce build-time diagnostics.
+
+`violatedInvariants()` returns typed `Property` values for false invariants in the current state.
+`assumptionsHold()` evaluates the declared assumptions. These checks do not remove
+invariant violations from the transition relation.
+
+State constraints select states for exploration. They do not disable application
+transitions or resolve an ambiguous action. Exploration retains invariant witnesses
+outside the constraint, even though those states are absent from its transition graph.
 
 ## API reference
 

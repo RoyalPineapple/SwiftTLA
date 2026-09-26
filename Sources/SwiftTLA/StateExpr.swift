@@ -1,4 +1,4 @@
-enum CompilerControlSymbol: String, Sendable {
+package enum CompilerControlSymbol: String, Sendable {
     case programCounter = "pc"
     case stack
     case procedure
@@ -6,7 +6,7 @@ enum CompilerControlSymbol: String, Sendable {
     case terminatingAction = "Terminating"
 }
 
-func generatedBinderName(
+package func generatedBinderName(
     file: StaticString = #fileID,
     line: UInt = #line,
     column: UInt = #column
@@ -101,12 +101,12 @@ public indirect enum FormalCallArgument: Hashable, Sendable {
 /// the name lets the evaluator reject a value where the source requires an
 /// operator, or the reverse, before it evaluates the definition body.
 public enum FormalParameter: Hashable, Sendable {
-    case value(String)
+    case value(String, typeName: String? = nil)
     case `operator`(String, arity: Int)
 
     public var name: String {
         switch self {
-        case .value(let name), .operator(let name, _): name
+        case .value(let name, _), .operator(let name, _): name
         }
     }
 }
@@ -158,17 +158,29 @@ public struct StateRecordExpression: Hashable, Sendable {
     }
 
     public let fields: [Field]
+    package let nativeType: CompiledValueType?
 
     public init(_ fields: [Field]) {
         self.fields = fields.sorted { $0.name < $1.name }
+        nativeType = nil
     }
 
     public init(_ fields: [String: StateExpr]) {
         self.init(fields.map { .init(name: $0.key, value: $0.value) })
     }
 
-    init(orderedFields: [Field]) {
+    public init(orderedFields: [Field]) {
         fields = orderedFields
+        nativeType = nil
+    }
+
+    package init(orderedFields: [Field], nativeType: CompiledValueType?) {
+        fields = orderedFields
+        self.nativeType = nativeType
+    }
+
+    func mapValues(_ transform: (StateExpr) -> StateExpr) -> Self {
+        .init(orderedFields: fields.map { .init(name: $0.name, value: transform($0.value)) }, nativeType: nativeType)
     }
 
     public func value(named name: String) -> StateExpr? {
@@ -178,19 +190,21 @@ public struct StateRecordExpression: Hashable, Sendable {
 
 /// An invalid construct retained in the typed source model until compilation.
 public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
+    public enum FiniteDomainProblem: String, Hashable, Sendable {
+        case empty = "no finite values"
+        case duplicate = "duplicate formal values"
+    }
     case recordField(schema: String)
     case recordLiteral(schema: String, duplicateFields: [String], missingFields: [String])
     case invalidRecordSchema(schema: String, problem: String)
     case functionLiteral(domain: String, duplicateValues: [String], missingValues: [String])
-    case staticSelection(String)
-    case sequenceElementDomain(operation: String)
     case negativeSequenceLength(operation: String, lowerBound: Int)
-    case finiteDomain(type: String, problem: String)
+    case finiteDomain(type: String, problem: FiniteDomainProblem)
     case finiteDomainValue(type: String, value: String)
     case actionBinding(action: String, parameter: String?, problem: String)
     case formalDeclaration(kind: String, name: String?, problem: String)
     case missingVariableInitializer(name: String, type: String)
-    case symmetricMember(collection: String, owner: String)
+    case collectionMember(collection: String, owner: String)
 
     private var diagnostic: (code: CompilationDiagnostic.Code, expected: String, actual: String, nextSafeAction: String) {
         switch self {
@@ -215,14 +229,10 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
                 missing.isEmpty ? nil : "missing domain values: \(missing.joined(separator: ", "))"
             ].compactMap { $0 }.joined(separator: "; ")
             return (.invalidTypedFunctionLiteral, "one value for every member of \(domain)", details, "Provide every finite domain value exactly once, then compile again.")
-        case .staticSelection(let reason):
-            return (.invalidStaticSelection, "a closed formal selection with a matching value", reason, "Use a closed domain with at least one matching value, then compile again.")
-        case .sequenceElementDomain(let operation):
-            return (.invalidSequenceElementDomain, "SetExpr.literal(...) as the element domain for \(operation)", "a symbolic formal set", "Use SetExpr.literal(...) for this bounded sequence declaration, then compile again.")
         case .negativeSequenceLength(let operation, let lowerBound):
             return (.invalidSequenceLength, "a non-negative lower sequence length for \(operation)", "\(lowerBound)", "Use only non-negative sequence lengths, then compile again.")
         case .finiteDomain(let type, let problem):
-            return (.invalidFiniteDomain, "a non-empty finite domain with distinct formal values for \(type)", problem, "Declare one or more distinct finite values, then compile again.")
+            return (.invalidFiniteDomain, "a non-empty finite domain with distinct formal values for \(type)", problem.rawValue, "Declare one or more distinct finite values, then compile again.")
         case .finiteDomainValue(let type, let value):
             return (.invalidFiniteDomainValue, "a value declared by \(type).finiteValues", value, "Use a declared finite-domain value, then compile again.")
         case .actionBinding(let action, let parameter, let problem):
@@ -238,8 +248,8 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
                 "variable '\(name)' has no initial value",
                 "Provide the initial value in Var or Variable, then compile again."
             )
-        case .symmetricMember(let collection, let owner):
-            return (.invalidSymmetricMember, "a member declared by symmetric collection '\(collection)'", "the member belongs to symmetric collection '\(owner)'", "Use a member from '\(collection)', then compile again.")
+        case .collectionMember(let collection, let owner):
+            return (.invalidCollectionMember, "a member declared by model collection '\(collection)'", "the member belongs to model collection '\(owner)'", "Use a member from '\(collection)', then compile again.")
         }
     }
 
@@ -263,7 +273,12 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
 public indirect enum StateExpr: Hashable, Sendable {
     case sourceIssue(SourceModelIssue)
     case value(TLAValue)
+    case integerSet
     case variable(String)
+    case parameter(ParameterReference)
+    case checkingRegister(CheckingRegisterReference)
+    case setCheckingRegister(CheckingRegisterReference, StateExpr)
+    case checkingLevel
     case processLocalFamily(String)
     case currentProcess
     case programCounter
@@ -276,6 +291,9 @@ public indirect enum StateExpr: Hashable, Sendable {
     case divide(StateExpr, StateExpr)
     case modulo(StateExpr, StateExpr)
     case negate(StateExpr)
+    case assertView(StateExpr, FormalValueShape)
+    case nextState(StateExpr)
+    case stutteringStep(StateExpr, StateExpr)
     case integerDivide(StateExpr, StateExpr)
 
     case equal(StateExpr, StateExpr)
@@ -301,6 +319,7 @@ public indirect enum StateExpr: Hashable, Sendable {
     case setFilter(StateExpr, String, StateExpr)
     case setMap(StateExpr, String, StateExpr)
     case powerSet(StateExpr)
+    case sequenceSet(StateExpr)
     case unionAll(StateExpr)
     case integerRange(StateExpr, StateExpr)
 
@@ -313,6 +332,7 @@ public indirect enum StateExpr: Hashable, Sendable {
     case tupleTail(StateExpr)
     case tupleConcatenate(StateExpr, StateExpr)
     case tupleRemoving(StateExpr, StateExpr)
+    case tuplePrefix(StateExpr, StateExpr)
     case sequenceSelect(StateExpr, String, StateExpr)
 
     case recordLiteral(StateRecordExpression)
@@ -346,7 +366,7 @@ extension StateExpr {
     public static func int(_ value: Int) -> StateExpr { .value(.int(value)) }
     public static func bool(_ value: Bool) -> StateExpr { .value(.bool(value)) }
 
-    static func partialFunctionOverriding(
+    package static func partialFunctionOverriding(
         _ function: StateExpr,
         key: StateExpr,
         value: StateExpr

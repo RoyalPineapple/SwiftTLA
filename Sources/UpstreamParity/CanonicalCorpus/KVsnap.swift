@@ -11,31 +11,7 @@ import SwiftTLAMacros
 package struct KVsnapModel: Sendable {
     package static let corpusEntry = CanonicalCorpusEntry(
         id: "kvsnap-upstream-port",
-        specification: { KVsnapModel.spec },
-        swiftConfiguration: .init(
-            checks: [
-                .init("TypeOK", kind: .invariant),
-                .init("SnapshotIsolation", kind: .invariant),
-                .init("Termination", kind: .property)
-            ],
-            constants: [
-                .init("k1", "k1"), .init("k2", "k2"),
-                .init("t1", "t1"), .init("t2", "t2"), .init("t3", "t3"),
-                .init("NoVal", "NoVal")
-            ]
-        ),
-        plusCalConfiguration: .init(
-            checks: [
-                .init("TypeOK", kind: .invariant),
-                .init("SnapshotIsolation", kind: .invariant),
-                .init("Termination", kind: .property)
-            ],
-            constants: [
-                .init("k1", "k1"), .init("k2", "k2"),
-                .init("t1", "t1"), .init("t2", "t2"), .init("t3", "t3"),
-                .init("NoVal", "NoVal")
-            ]
-        )
+        rendered: { try KVsnapModel.render() }
     )
 
     package enum Key: String, CaseIterable, FiniteTLAValueDomain {
@@ -60,7 +36,7 @@ package struct KVsnapModel: Sendable {
         }
     }
 
-    package enum NoValue: String, TLAValueType {
+    package enum NoValue: String, CaseIterable, FiniteTLAValueDomain {
         case noVal = "NoVal"
 
         package var tlaValue: TLAValue { .constant(rawValue) }
@@ -71,38 +47,16 @@ package struct KVsnapModel: Sendable {
         }
     }
 
-    package enum OperationKind: String, TLAValueType {
+    package enum OperationKind: String, CaseIterable, FiniteTLAValueDomain {
         case read, write
     }
 
     package typealias Value = OneOf<Transaction, NoValue>
 
-    package struct OperationFields {
-        package let operation: OperationKind
+    package struct Operation: Hashable, Sendable {
+        package let op: OperationKind
         package let key: Key
         package let value: Value
-    }
-
-    package enum OperationSchema: TLARecordSchema {
-        package typealias Fields = OperationFields
-
-        package static let fields: [TLARecordFieldDeclaration<Self>] = [
-            .init(operation, default: OperationKind.read),
-            .init(key, default: Key.k1),
-            .init(value, default: Value.second(.noVal)),
-        ]
-
-        package static func fieldName<Value>(for field: KeyPath<OperationFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \OperationFields.operation { return "op" }
-            if key == \OperationFields.key { return "key" }
-            if key == \OperationFields.value { return "value" }
-            return nil
-        }
-
-        package static let operation = field(\OperationFields.operation)
-        package static let key = field(\OperationFields.key)
-        package static let value = field(\OperationFields.value)
     }
 
     private enum Step: String, CaseIterable {
@@ -139,31 +93,31 @@ package struct KVsnapModel: Sendable {
                 body: Function<Key, Value>.mapping { _ in Value.second(Expr<NoValue>(.noVal)) }.raw
             )
             Algorithm("KVsnap", scoped: { scope in
-                let store: SharedVariable<Function<Key, Value>> = scope.sharedVar("store", initial: FormalCall("InitialState"))
-                let tx = scope.sharedVar("tx", initial: SetExpr<Transaction>())
-                let missed = scope.sharedVar("missed", initial: Function<Transaction, SetExpr<Key>>.mapping { _ in SetExpr<Key>() })
+                let store: SharedVariable<Function<Key, Value>> = scope.sharedVar(initial: FormalCall("InitialState"))
+                let tx = scope.sharedVar(initial: SetExpr<Transaction>())
+                let missed = scope.sharedVar(initial: Function<Transaction, SetExpr<Key>>.mapping { _ in SetExpr<Key>() })
 
                 Each(Transaction.all, fairness: .weak, scoped: { selfID, scope in
-                    let snapshotStore: LocalVariable<Function<Key, Value>> = scope.localVar("snapshotStore", initial: FormalCall("InitialState")
+                    let snapshotStore: LocalVariable<Function<Key, Value>> = scope.localVar(initial: FormalCall("InitialState")
                     )
-                    let readKeys: LocalVariable<SetExpr<Key>> = scope.localVar("readKeys", initial: SetExpr<Key>())
-                    let writeKeys: LocalVariable<SetExpr<Key>> = scope.localVar("writeKeys", initial: SetExpr<Key>())
-                    let ops: LocalVariable<TupleExpr<Record<OperationSchema>>> = scope.localVar("ops", initial: TupleExpr<Record<OperationSchema>>())
+                    let read_keys: LocalVariable<SetExpr<Key>> = scope.localVar(initial: SetExpr<Key>())
+                    let write_keys: LocalVariable<SetExpr<Key>> = scope.localVar(initial: SetExpr<Key>())
+                    let ops: LocalVariable<[Operation]> = scope.localVar(initial: [])
 
                     Do(Step.start) {
                         Assign(tx, to: tx.inserting(selfID))
                         Assign(snapshotStore, to: store)
                         With(NonEmptySubsets(of: SetExpr<Key>.literal(.k1, .k2))) { reads in
                             With(NonEmptySubsets(of: SetExpr<Key>.literal(.k1, .k2))) { writes in
-                                Assign(readKeys, to: reads.expr)
-                                Assign(writeKeys, to: writes.expr)
+                                Assign(read_keys, to: reads.expr)
+                                Assign(write_keys, to: writes.expr)
                             }
                         }
                     }
 
                     Do(Step.read) {
-                        let reads: Expr<SetExpr<Record<OperationSchema>>> = readKeys.expr.mapping { key in
-                            ModuleCall("CC", "r", key.expr, snapshotStore[key.expr])
+                        let reads: Expr<Set<Operation>> = read_keys.expr.mapping { key in
+                            ModuleCall(as: Operation.self, "CC", "r", key.expr, snapshotStore[key.expr])
                         }
                         Assign(
                             ops,
@@ -176,7 +130,7 @@ package struct KVsnapModel: Sendable {
                     Do(Step.update) {
                         Assign(snapshotStore, to: Function<Key, Value>.mapping { key in
                             If(
-                                writeKeys.expr.contains(key),
+                                write_keys.expr.contains(key),
                                 then: Value.first(selfID.expr),
                                 else: snapshotStore[key.expr]
                             )
@@ -184,25 +138,25 @@ package struct KVsnapModel: Sendable {
                     }
 
                     Do(Step.commit) {
-                        If(missed[selfID].intersection(writeKeys.expr).isEmpty) {
+                        If(missed[selfID].intersection(write_keys.expr).isEmpty) {
                             Let(tx.removing(selfID.expr)) { committedTransactions in
                                 Assign(tx, to: committedTransactions.expr)
                                 Assign(missed, to: Function<Transaction, SetExpr<Key>>.mapping { other in
                                     If(
                                         committedTransactions.expr.contains(other),
-                                        then: missed[other.expr].union(writeKeys.expr),
+                                        then: missed[other.expr].union(write_keys.expr),
                                         else: missed[other.expr]
                                     )
                                 })
                                 Assign(store, to: Function<Key, Value>.mapping { key in
                                     If(
-                                        writeKeys.expr.contains(key),
+                                        write_keys.expr.contains(key),
                                         then: snapshotStore[key.expr],
                                         else: store[key.expr]
                                     )
                                 })
-                                let writes: Expr<SetExpr<Record<OperationSchema>>> = writeKeys.expr.mapping { key in
-                                    ModuleCall("CC", "w", key.expr, Value.first(selfID.expr))
+                                let writes: Expr<Set<Operation>> = write_keys.expr.mapping { key in
+                                    ModuleCall(as: Operation.self, "CC", "w", key.expr, Value.first(selfID.expr))
                                 }
                                 Assign(
                                     ops,
@@ -234,7 +188,7 @@ package struct KVsnapModel: Sendable {
                             to: Subsets(of: SetExpr<Key>.literal(.k1, .k2))
                         ).contains(missed.expr)
                 }
-                Eventually("Termination", All(Transaction.all) { Finished($0) })
+                Eventually("Termination", ForAll(Transaction.all) { Finished($0) })
             })
         }
     }

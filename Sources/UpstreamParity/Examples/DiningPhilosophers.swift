@@ -4,6 +4,7 @@ import SwiftTLAMacros
 // Dining Philosophers — Chandy-Misra solution. NP=5.
 // Upstream: specifications/DiningPhilosophers/DiningPhilosophers.tla
 
+@TLAModel
 package struct DiningPhilosophersModel: Sendable {
     package enum Philosopher: Int, FiniteTLAValueDomain {
         case one = 1
@@ -18,31 +19,12 @@ package struct DiningPhilosophersModel: Sendable {
         package var tlaValue: TLAValue { .int(rawValue) }
     }
 
-    package struct ForkFields {
+    package struct Fork: Hashable, Sendable {
         let holder: Philosopher
         let clean: Bool
     }
 
-    package enum Fork: TLARecordSchema {
-        package typealias Fields = ForkFields
-
-        package static let fields: [TLARecordFieldDeclaration<Self>] = [
-            .init(holder, default: Philosopher.one),
-            .init(clean, default: false),
-        ]
-
-        package static func fieldName<Value>(for field: KeyPath<ForkFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \ForkFields.holder { return "holder" }
-            if key == \ForkFields.clean { return "clean" }
-            return nil
-        }
-
-        package static let holder = field(\ForkFields.holder)
-        package static let clean = field(\ForkFields.clean)
-    }
-
-    private enum Step: String, CaseIterable {
+    package enum Step: String, CaseIterable {
         case loop = "Loop"
         case think = "Think"
         case eat = "Eat"
@@ -51,18 +33,20 @@ package struct DiningPhilosophersModel: Sendable {
     package static var spec: TLASpec {
         #spec("DiningPhilosophers") {
             Extends(.integers)
+            let TypeOK = Invariant()
+            let ExclusiveAccess = Invariant()
 
             Algorithm("DiningPhilosophers", scoped: { scope in
-                let forks = scope.sharedVar("forks", initial: Function<Philosopher, Record<Fork>>.literal(
-                    (Philosopher.one, Record.literal(.init(Fork.holder, Philosopher.one), .init(Fork.clean, false))),
-                    (Philosopher.two, Record.literal(.init(Fork.holder, Philosopher.one), .init(Fork.clean, false))),
-                    (Philosopher.three, Record.literal(.init(Fork.holder, Philosopher.three), .init(Fork.clean, false))),
-                    (Philosopher.four, Record.literal(.init(Fork.holder, Philosopher.four), .init(Fork.clean, false))),
-                    (Philosopher.five, Record.literal(.init(Fork.holder, Philosopher.five), .init(Fork.clean, false)))
+                let forks = scope.sharedVar(initial: Function<Philosopher, Fork>.literal(
+                    (Philosopher.one, Fork(holder: Philosopher.one, clean: false)),
+                    (Philosopher.two, Fork(holder: Philosopher.one, clean: false)),
+                    (Philosopher.three, Fork(holder: Philosopher.three, clean: false)),
+                    (Philosopher.four, Fork(holder: Philosopher.four, clean: false)),
+                    (Philosopher.five, Fork(holder: Philosopher.five, clean: false))
                 ))
 
-                Each(Philosopher.all, scoped: { philosopher, scope in
-                    let hungry = scope.localVar("hungry", initial: true)
+                Each(Philosopher.all, fairness: .weak, scoped: { philosopher, scope in
+                    let hungry = scope.localVar(initial: true)
 
                     Do(Step.loop) {
                         let right = If(philosopher == Philosopher.one, then: Philosopher.two, else:
@@ -75,52 +59,43 @@ package struct DiningPhilosophersModel: Sendable {
                                     If(philosopher == Philosopher.four, then: Philosopher.three, else: Philosopher.four))))
                         let leftFork = forks[philosopher]
                         let rightFork = forks[right]
-                        let canEat = leftFork[Fork.holder] == philosopher
-                            && rightFork[Fork.holder] == philosopher
-                            && leftFork[Fork.clean] == true
-                            && rightFork[Fork.clean] == true
+                        Let(leftFork.holder == philosopher
+                            && rightFork.holder == philosopher
+                            && leftFork.clean == true
+                            && rightFork.clean == true) { canEat in
 
-                        Either {
-                            When(leftFork[Fork.holder] == philosopher && leftFork[Fork.clean] == false)
-                            Assign(forks, to: forks.updating(
-                                philosopher,
-                                to: Record.literal(
-                                    .init(Fork.holder, left),
-                                    .init(Fork.clean, true)
-                                )
-                            ))
-                        } or: {
                             Either {
-                                When(
-                                    rightFork[Fork.holder] == philosopher
-                                        && rightFork[Fork.clean] == false
-                                        && !(leftFork[Fork.holder] == philosopher && leftFork[Fork.clean] == false)
-                                )
-                                Assign(forks, to: forks.updating(
-                                    right,
-                                    to: Record.literal(
-                                        .init(Fork.holder, right),
-                                        .init(Fork.clean, true)
+                                When(leftFork.holder == philosopher && leftFork.clean == false)
+                                Assign(forks[philosopher].holder, to: left)
+                                Assign(forks[philosopher].clean, to: true)
+                            } or: {
+                                Either {
+                                    When(
+                                        rightFork.holder == philosopher
+                                            && rightFork.clean == false
+                                            && !(leftFork.holder == philosopher && leftFork.clean == false)
                                     )
-                                ))
-                            } or: {
-                                When(
-                                    !(leftFork[Fork.holder] == philosopher && leftFork[Fork.clean] == false)
-                                        && !(rightFork[Fork.holder] == philosopher && rightFork[Fork.clean] == false)
-                                )
+                                    Assign(forks[right].holder, to: right)
+                                    Assign(forks[right].clean, to: true)
+                                } or: {
+                                    When(
+                                        !(leftFork.holder == philosopher && leftFork.clean == false)
+                                            && !(rightFork.holder == philosopher && rightFork.clean == false)
+                                    )
+                                }
                             }
-                        }
 
-                        Either {
-                            When(canEat && hungry == true)
-                            Goto(Step.eat)
-                        } or: {
                             Either {
-                                When(!canEat && hungry == true)
-                                Goto(Step.loop)
+                                When(canEat && hungry == true)
+                                Goto(Step.eat)
                             } or: {
-                                When(hungry == false)
-                                Goto(Step.think)
+                                Either {
+                                    When(!canEat && hungry == true)
+                                    Goto(Step.loop)
+                                } or: {
+                                    When(hungry == false)
+                                    Goto(Step.think)
+                                }
                             }
                         }
                     }
@@ -135,30 +110,28 @@ package struct DiningPhilosophersModel: Sendable {
                             If(philosopher == Philosopher.two, then: Philosopher.three, else:
                                 If(philosopher == Philosopher.three, then: Philosopher.four, else:
                                     If(philosopher == Philosopher.four, then: Philosopher.five, else: Philosopher.one))))
-                        let leftFork = forks[philosopher]
-                        let rightFork = forks[right]
                         Assign(hungry, to: false)
-                        Assign(forks, to: forks
-                            .updating(philosopher, to: leftFork.updating(Fork.clean, to: false))
-                            .updating(right, to: rightFork.updating(Fork.clean, to: false))
-                        )
+                        Assign(forks[philosopher].clean, to: false)
+                        Assign(forks[right].clean, to: false)
                         Goto(Step.loop)
                     }
 
-                    Invariant("TypeOK") {
-                        (forks[philosopher][Fork.holder] == .one
-                            || forks[philosopher][Fork.holder] == .two
-                            || forks[philosopher][Fork.holder] == .three
-                            || forks[philosopher][Fork.holder] == .four
-                            || forks[philosopher][Fork.holder] == .five)
+                    AlwaysEventually("NobodyStarves", !hungry)
+
+                    TypeOK {
+                        (forks[philosopher].holder == .one
+                            || forks[philosopher].holder == .two
+                            || forks[philosopher].holder == .three
+                            || forks[philosopher].holder == .four
+                            || forks[philosopher].holder == .five)
                             && (hungry == true || hungry == false)
                             && (At(Step.loop, philosopher) || At(Step.think, philosopher) || At(Step.eat, philosopher))
                     }
                 })
 
-                Invariant("ExclusiveAccess") {
-                    All(Philosopher.all) { first in
-                        All(Philosopher.all) { second in
+                ExclusiveAccess {
+                    ForAll(Philosopher.all) { first in
+                        ForAll(Philosopher.all) { second in
                             first == second
                                 || !(At(Step.eat, first) && At(Step.eat, second)
                                     && ((first == Philosopher.one && second == Philosopher.two)
@@ -170,14 +143,10 @@ package struct DiningPhilosophersModel: Sendable {
                     }
                 }
             })
+            Validation("NP5") {}
+            Validation("AP NP5") {}
+                .checking(only: [TypeOK, ExclusiveAccess])
+                .behavior(.initialAndNext)
         }
     }
-}
-
-extension Example {
-    static let diningPhilosophersNP5 = FiniteModelFixture(
-        expectedDistinct: 67,
-        maximumStateLimit: 50_000,
-        spec: DiningPhilosophersModel.spec,
-    )
 }

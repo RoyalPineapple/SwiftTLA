@@ -51,30 +51,28 @@ public enum GeneratedDemoTestSuite {
         ]
     }
 
-    /// The twelve-node ring has a deliberately large asynchronous state space.
-    /// The release pipeline exhaustively checks it; the app runs these immediate,
-    /// generated-surface checks so its button remains responsive.
+    /// Immediate generated-surface checks, not exhaustive state-space validation.
     private static func ringChecks() -> [GeneratedDemoCheck] {
         [
-            check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Formal surface", action: { () throws -> Void in
-                let description = try ChangRoberts.spec.compile().description
-                guard description.variables.isEmpty == false, description.actions.isEmpty == false else {
-                    throw GeneratedDemoSuiteError.unexpectedFormalSurface
+            check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Generated export", action: { () throws -> Void in
+                let bundle = try ChangRoberts.render().tlaBundle
+                guard bundle.root.name == "ChangRoberts", !bundle.root.tla.isEmpty, !bundle.cfg.isEmpty else {
+                    throw GeneratedDemoSuiteError.unexpectedGeneratedExport
                 }
             }),
             check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Generated state", action: { () throws -> Void in
                 let machine = try ChangRoberts.makeMachine()
-                guard machine.state.leader == 0, machine.state.messages.elements.count == 12 else {
+                guard machine.state.leader == 0, machine.state.messages.count == 12 else {
                     throw GeneratedDemoSuiteError.unexpectedInitialState
                 }
             }),
             check(target: GeneratedDemoTestTarget.duckDuckLeader.title, name: "Typed delivery", action: { () throws -> Void in
                 var machine = try ChangRoberts.makeMachine()
                 _ = try machine.send(.deliver(process: .six))
-                guard machine.state.messages.elements.contains(where: {
-                    $0.value(for: ChangRoberts.MessageSchema.candidate) == 12 &&
-                    $0.value(for: ChangRoberts.MessageSchema.from) == .six &&
-                    $0.value(for: ChangRoberts.MessageSchema.to) == .seven
+                guard machine.state.messages.contains(where: {
+                    $0.candidate == 12 &&
+                    $0.from == .six &&
+                    $0.to == .seven
                 }) else {
                     throw GeneratedDemoSuiteError.deliveryWasNotForwarded
                 }
@@ -101,21 +99,10 @@ public enum GeneratedDemoTestSuite {
         }
     }
 
-    private static func check(
-        target: String,
-        name: String,
-        action: () throws -> String
-    ) -> GeneratedDemoCheck {
-        do {
-            return .init(target: target, check: name, detail: try action(), passed: true)
-        } catch {
-            return .init(target: target, check: name, detail: String(describing: error), passed: false)
-        }
-    }
 }
 
 private enum GeneratedDemoSuiteError: Error {
-    case unexpectedFormalSurface
+    case unexpectedGeneratedExport
     case unexpectedInitialState
     case deliveryWasNotForwarded
     case expectedActionUnavailable

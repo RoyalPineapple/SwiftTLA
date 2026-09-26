@@ -1,3 +1,4 @@
+@testable import SwiftTLAPlugin
 @testable import SwiftTLA
 import SwiftParser
 import SwiftSyntax
@@ -85,7 +86,7 @@ struct SelectSeqContractsTests {
             #expect(error == .expected(.sequence, actual: [.integer(1)]))
         }
 
-        let rendered = try compilation(for: selected.raw).renderedTLAModuleBundle().tla
+        let rendered = try compilation(for: selected.raw).render().tlaBundle.tla
         #expect(rendered.contains("SelectSeq(<<3, 2, 2, 1>>, LAMBDA "))
         #expect(rendered.contains(" >= 2"))
     }

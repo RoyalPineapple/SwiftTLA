@@ -16,7 +16,7 @@ struct CounterexampleTraceTests {
     private func expectTrace(violating: Int, values: [Int], actions: [String]) throws {
         let x = Var<Int>("x")
         let spec = TLASpec("CounterexampleTrace") {
-            Variable(x, in: [0, 10])
+            Variable(x, in: Set([0, 10]))
             Action("advance") { x.becomes(11).when(x == 10) }
             Invariant("safe") { x != violating }
         }

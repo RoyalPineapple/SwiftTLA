@@ -10,8 +10,11 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import tla2sany.semantic.SemanticNode;
+import tlc2.TLCGlobals;
 import tlc2.tool.Action;
 import tlc2.tool.TLCState;
 import tlc2.util.BitVector;
@@ -20,7 +23,7 @@ import tlc2.util.IStateWriter;
 /** TLC v1.8.0 graph-event writer. */
 public final class LosslessStateWriter implements IStateWriter {
     private static final String SCHEMA = "swifttla.tlc.graph-events";
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private static final String OUTPUT_PROPERTY = "swifttla.tlc.graph.path";
     private static final String RUN_ID_PROPERTY = "swifttla.tlc.graph.run-id";
     private static final String CASE_ID_PROPERTY = "swifttla.tlc.graph.case-id";
@@ -31,6 +34,7 @@ public final class LosslessStateWriter implements IStateWriter {
     private final String runId;
     private final String caseId;
     private final Map<String, Integer> counts = new LinkedHashMap<>();
+    private final InstanceActions instanceActions = new InstanceActions();
     private long sequence;
     private boolean closed;
 
@@ -134,22 +138,34 @@ public final class LosslessStateWriter implements IStateWriter {
 
     private void transition(String callback, TLCState source, TLCState target, short flags, Action action,
                             String predicateLocation, String reachable) {
-        if (action == null || !action.isNamed() || action.getName() == null || action.getName().toString().isBlank()) {
-            unsupported(callback, "callback lacks a stable named Action");
+        final List<Action> resolved;
+        try {
+            resolved = instanceActions.matching(TLCGlobals.mainChecker == null ? null : TLCGlobals.mainChecker.tool,
+                    action, source, target);
+            if (resolved.stream().anyMatch(candidate -> !candidate.isNamed())) {
+                throw new IllegalArgumentException("callback lacks a stable named Action");
+            }
+        } catch (RuntimeException error) {
+            unsupported(callback, "Action resolution failed: " + error.getMessage());
             return;
         }
-        String actionJson = "{\"name\":" + quote(action.getName().toString())
-                + ",\"location\":" + quote(action.getLocation()) + ",\"named\":true}";
         String flagsJson = "{\"raw\":" + Integer.toUnsignedString(Short.toUnsignedInt(flags))
                 + ",\"seen\":" + ((flags & IStateWriter.IsSeen) == IStateWriter.IsSeen)
                 + ",\"notInModel\":" + ((flags & IStateWriter.IsNotInModel) == IStateWriter.IsNotInModel) + "}";
         emit("transition", callback, "\"source\":" + state(source)
                 + ",\"target\":" + state(target)
-                + ",\"action\":" + actionJson
+                + ",\"action\":" + action(action)
+                + ",\"resolvedActions\":" + resolved.stream().map(LosslessStateWriter::action)
+                    .collect(Collectors.joining(",", "[", "]"))
                 + ",\"stateFlags\":" + flagsJson
                 + ",\"visualization\":\"none\""
                 + ",\"predicateLocation\":" + predicateLocation
                 + ",\"reachable\":" + quote(reachable));
+    }
+
+    private static String action(Action action) {
+        return "{\"name\":" + quote(action.getName().toString())
+                + ",\"location\":" + quote(action.getLocation()) + ",\"named\":" + action.isNamed() + "}";
     }
 
     private void unsupported(String callback, String reason) {
@@ -179,7 +195,6 @@ public final class LosslessStateWriter implements IStateWriter {
             byte[] bytes = (line + "\n").getBytes(StandardCharsets.UTF_8);
             output.write(line);
             output.write('\n');
-            output.flush();
             bodyDigest.update(bytes);
             counts.merge(type, 1, Integer::sum);
             sequence++;
