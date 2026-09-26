@@ -27,7 +27,7 @@ Their presence does not establish a second application backend or completion of 
 2. Record the full 40-character SwiftTLA commit SHA.
 3. Wait for the required `ci.yml` jobs to pass for that SHA.
 4. Make sure that `canonical-corpus-<SwiftTLA SHA>` exists for that SHA.
-5. Run finite graph comparison against that SHA.
+5. Run independent DSL/native and upstream TLC parity against that SHA.
 6. Run temporal and symmetry comparison against that SHA.
 7. Run PlusCal admission against that SHA.
 8. Record the run URLs, repository SHAs, and corpus artifact digest.
@@ -35,10 +35,11 @@ Their presence does not establish a second application backend or completion of 
 Run the SwiftTLA comparisons:
 
 ```sh
-gh workflow run finite-graph.yml \
+gh workflow run validation-pipeline.yml \
   --repo RoyalPineapple/SwiftTLA \
   --ref main \
-  -f swift_tla_sha="$swift_tla_sha"
+  -f swift_tla_sha="$swift_tla_sha" \
+  -f admission_mode=admission
 
 gh workflow run temporal-symmetry-conformance.yml \
   --repo RoyalPineapple/SwiftTLA \
@@ -61,7 +62,8 @@ gh workflow run pluscal-oracle.yml \
 - The public products build on each advertised Swift and Apple platform.
 - The Swift test jobs pass, including the README and generated-machine fixtures.
 - Canonical corpus export publishes the artifact for the exact SwiftTLA SHA.
-- Every declared finite graph case completes and matches TLC exactly.
+- Every declared generated-machine scenario matches its independent generated-TLA TLC check; complete runs match full graphs.
+- Every declared upstream configuration matches generated TLA through independent TLC checks; complete runs match full graphs.
 - Every declared temporal and symmetry case completes and matches TLC.
 - PlusCal admission uses the corpus artifact for the exact merged SHA.
 - Public documentation describes the generated API in that commit.

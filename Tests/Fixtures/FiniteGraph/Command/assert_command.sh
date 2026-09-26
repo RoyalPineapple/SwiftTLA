@@ -133,8 +133,7 @@ expect_failure "token stayed on the TLC request and option-shaped URL remained a
         --tool-root "$TMP/option-url-tools"
 
 mkdir -p "$TMP/wrappers/scripts"
-cp "$ROOT/scripts/run_finite_graph_check.sh" "$ROOT/scripts/run_temporal_symmetry_conformance.sh" \
-    "$TMP/wrappers/scripts"
+cp "$ROOT/scripts/run_temporal_symmetry_conformance.sh" "$TMP/wrappers/scripts"
 cat >"$TMP/wrappers/scripts/setup-finite-graph-tools.sh" <<'SH'
 #!/bin/bash
 [ "$FINITE_GRAPH_GITHUB_TOKEN" = fixture-token ]
@@ -144,8 +143,6 @@ cat >"$TMP/bin/swift" <<'SH'
 [ -z "${FINITE_GRAPH_GITHUB_TOKEN+x}" ]
 SH
 chmod +x "$TMP/wrappers/scripts/setup-finite-graph-tools.sh" "$TMP/bin/swift"
-env PATH="$TMP/bin:$PATH" FINITE_GRAPH_GITHUB_TOKEN=fixture-token \
-    "$TMP/wrappers/scripts/run_finite_graph_check.sh" --case all --output "$TMP/finite-output"
 env PATH="$TMP/bin:$PATH" FINITE_GRAPH_GITHUB_TOKEN=fixture-token \
     "$TMP/wrappers/scripts/run_temporal_symmetry_conformance.sh" --output "$TMP/temporal-output"
 

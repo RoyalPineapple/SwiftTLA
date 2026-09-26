@@ -1017,37 +1017,22 @@ Each scenario provides `initialMachines()`, `check(maximumStates:)`, `explore(ma
 These methods use the same generated machine and symbolic transition module.
 
 Generated scenarios conform to `ModelValidationScenario`.
-The repository runner derives native results from that interface.
-`check(maximumStates:)` stops at a selected invariant violation or deadlock, or returns an exhausted graph.
-`explore(maximumStates:)` retains exhaustive behavior for explicit graph comparisons.
-An expected violation requires an established result and a complete witness, not an arbitrary exploration cutoff.
-After an early stop, other selected properties remain unavailable. Their selection and expected outcomes do not change.
+The native validator runs against the generated machine and records its states,
+transitions, and selected check outcomes without invoking TLC or rendering TLA+.
+Separately, TLC checks the generated TLA+ bundle. The two reports must agree on
+every selected property and deadlock outcome. When both explorations finish,
+the comparison also requires the complete state and labeled-edge sets to match.
+An early counterexample supplies a decisive check result, not a claim of full
+graph equivalence; unresolved checks are run separately. A state-limit cutoff,
+missing witness, or unsupported check cannot pass as a result.
 
-The runner uses rendered check metadata without compiling the specification again.
-Temporal and refinement declarations remain distinct until TLC configuration output.
-The `tlc-validate scenarios list` command discovers registered model-owned scenarios.
-The hosted `tlc-validate scenarios run --case <id-or-all> --output <directory>` command runs the selected scenarios.
+`tlc-validate native list` discovers registered scenarios. The hosted
+`dsl-native-parity` matrix runs each scenario through `native run`, `oracle run`,
+and `compare run`. A separate `upstream-parity` matrix compares generated and
+pinned upstream TLA+ through TLC. The final hosted gate requires both matrices.
 
-For exhaustive results, the runner retains complete native and TLC graphs and compares every selected property.
-For early counterexamples, the first TLC run uses the unchanged configuration and the runner retains both full witnesses.
-The runner replays each TLC transition through the generated machine and validates the failed invariant or deadlock.
-The runner records the completion kind, selected checks, expectations, and comparison failures in both cases.
-Counterexample agreement does not establish whole-graph equivalence or outcomes for unavailable properties.
-Missing required evidence or disagreeing results fail the run.
-
-TLC represents a reachability query as a negated invariant. Its violation supplies a positive witness, not a safety failure.
-
-If a query stops TLC first, the runner compares its witness with a separate native BFS witness.
-Both witnesses must establish the declared predicate through valid transitions.
-The runner retains the comparison before it removes that answered query from the next TLC configuration.
-Every unanswered query, invariant, temporal property, and deadlock check keeps its selection.
-The next run continues toward the decisive safety result. Other properties remain unavailable unless their evidence establishes an outcome.
-
-The finite-graph workflow derives one job per scenario from this list, with at most four validation jobs at once.
-Every discovered scenario must retain an exact result before the aggregate check can pass.
-Independent TLC agreement still requires successful hosted evidence. The toolchain
-pins a hosted rebuild of the original TLC source revision. Restored tool setup
-does not itself establish model agreement.
+TLC represents a reachability query as a negated invariant. Its violation
+supplies a positive witness, not a safety failure.
 
 ### Same machine, different settings
 

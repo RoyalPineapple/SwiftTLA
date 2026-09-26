@@ -7,9 +7,10 @@ TOOLCHAIN="$PROJECT_ROOT/Verification/FiniteGraph/toolchain.json"
 TOOL_ROOT="$PROJECT_ROOT/.build/finite-graph-tools"
 CASES_FILE="${FINITE_GRAPH_CASES:-$PROJECT_ROOT/Verification/FiniteGraph/cases.json}"
 STAGE_INPUTS_ONLY=false
+SKIP_INPUTS=false
 
 usage() {
-    echo "Usage: $0 [--toolchain <path>] [--tool-root <path>] [--cases <path>] [--stage-inputs-only]" >&2
+    echo "Usage: $0 [--toolchain <path>] [--tool-root <path>] [--cases <path>] [--stage-inputs-only] [--skip-inputs]" >&2
     exit 2
 }
 
@@ -19,6 +20,7 @@ while [ "$#" -gt 0 ]; do
         --tool-root) TOOL_ROOT="${2:-}"; shift 2 ;;
         --cases) CASES_FILE="${2:-}"; shift 2 ;;
         --stage-inputs-only) STAGE_INPUTS_ONLY=true; shift ;;
+        --skip-inputs) SKIP_INPUTS=true; shift ;;
         *) usage ;;
     esac
 done
@@ -295,7 +297,7 @@ if [ "${GITHUB_ACTIONS:-}" = true ]; then
         "$JAVA_HOME/bin/java" "$TLC_JAR" "$TOOL_ROOT/bridge.jar"
 fi
 
-if [ -f "$CASES_FILE" ]; then
+if [ "$SKIP_INPUTS" = false ] && [ -f "$CASES_FILE" ]; then
     stage_declared_inputs "$TOOL_ROOT/inputs"
 fi
 

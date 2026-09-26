@@ -25,9 +25,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.contracts_only && '["ordinary","upstream"]' || '["ordinary","finite-graphs","scenarios","upstream"]') }}
+        suite: ${{ fromJSON('["ordinary","upstream"]') }}
     runs-on: macos-15
-    timeout-minutes: ${{ (matrix.suite == 'scenarios' || matrix.suite == 'finite-graphs') && 125 || 60 }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
         with:
@@ -37,13 +37,11 @@ jobs:
         run: bash Tests/Fixtures/LocalValidation/assert_lock.sh
 
       - name: Run complete Swift test suite
-        timeout-minutes: ${{ (matrix.suite == 'scenarios' || matrix.suite == 'finite-graphs') && 120 || 60 }}
+        timeout-minutes: 55
         run: |
           configuration=release
           case '${{ matrix.suite }}' in
-            ordinary) configuration=debug; selection=(--skip 'FiniteGraphCheckTests|UpstreamParityTests|ScenarioValidationTests') ;;
-            finite-graphs) selection=(--filter FiniteGraphCheckTests) ;;
-            scenarios) selection=(--filter ScenarioValidationTests) ;;
+            ordinary) configuration=debug; selection=(--skip 'UpstreamParityTests|ScenarioValidationTests') ;;
             upstream) selection=(--filter UpstreamParityTests) ;;
             *) exit 64 ;;
           esac

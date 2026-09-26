@@ -195,7 +195,6 @@ public final class LosslessStateWriter implements IStateWriter {
             byte[] bytes = (line + "\n").getBytes(StandardCharsets.UTF_8);
             output.write(line);
             output.write('\n');
-            output.flush();
             bodyDigest.update(bytes);
             counts.merge(type, 1, Integer::sum);
             sequence++;

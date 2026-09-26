@@ -11,6 +11,9 @@ extension NativeSwiftEmitter {
     mutating func refinementDeclarations(nested: Bool) throws -> [DeclSyntax] {
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
+        let unsupported = program.refinements.filter { !supportsNativeRefinement($0) }.map { refinement in
+            "if checking.contains(.\(propertyCases[refinement.id]!)) { throw ExplorationError.unsupportedRefinement(\(String(reflecting: propertyCases[refinement.id]!))) }"
+        }
         if !nested {
             for (index, refinement) in program.refinements.enumerated() where supportsNativeRefinement(refinement) {
                 let name = "_Refinement\(index)"
@@ -48,9 +51,16 @@ extension NativeSwiftEmitter {
                 """)
             }
         }
-        let body = checks.isEmpty ? "return [:]" : "var failures: [Property: RefinementFailure<Snapshot, Action>] = [:]\n" + checks.joined(separator: "\n") + "\nreturn failures"
+        let body = checks.isEmpty
+            ? unsupported.joined(separator: "\n") + "\nreturn [:]"
+            : "var failures: [Property: RefinementFailure<Snapshot, Action>] = [:]\n"
+                + (checks + unsupported).joined(separator: "\n") + "\nreturn failures"
         declarations += try nativeDeclarations("""
+        public static var refinementProperties: [Property] { [\(program.refinements.map { ".\(propertyCases[$0.id]!)" }.joined(separator: ", "))] }
         public func refinementFailures(in graph: inout ReachabilityGraph<Self>, checking: Set<Property> = Set(Property.allCases)) throws -> [Property: RefinementFailure<Snapshot, Action>] {
+            \(body)
+        }
+        public func validationRefinementFailures(in graph: inout MachineValidationGraph<Self>, checking: Set<Property> = Set(Property.allCases)) throws -> [Property: RefinementFailure<Snapshot, Action>] {
             \(body)
         }
         """)

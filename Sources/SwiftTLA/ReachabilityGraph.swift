@@ -20,9 +20,12 @@ public protocol StateMachine: Sendable {
     func fairnessConditions() throws -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool, changes: (@Sendable (Snapshot, Snapshot) throws -> Bool)?)]
     func temporalProperties(checking: Set<Property>) throws -> [Property: TemporalCondition<@Sendable (Snapshot, Snapshot) throws -> Bool>]
     func violatedInvariants(checking: Set<Property>) throws -> [Property]
+    static var invariantProperties: [Property] { get }
     static var reachabilityProperties: [Property] { get }
+    static var refinementProperties: [Property] { get }
     func matchedReachabilityProperties(checking: Set<Property>) throws -> [Property]
     func refinementFailures(in graph: inout ReachabilityGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>]
+    func validationRefinementFailures(in graph: inout MachineValidationGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>]
     func successors() throws -> [(action: Action, machine: Self)]
     func initialCheckingRegisters() throws -> CheckingRegisters
     func successors(checking context: inout CheckingContext<CheckingRegisters>) throws -> [(action: Action, machine: Self)]
@@ -38,6 +41,7 @@ public enum ExplorationError: Error, Equatable, Sendable {
     case traceTargetNotReachable
     case unsupportedRefinement(String)
     case undeclaredReachabilityProperty(String)
+    case unsupportedValidationProperty(String)
 }
 
 public enum ReachabilityOutcome<Snapshot: Hashable & Sendable>: Equatable, Sendable {

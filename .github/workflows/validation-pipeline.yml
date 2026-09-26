@@ -1,0 +1,219 @@
+name: Independent Validation Pipeline
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      swift_tla_sha:
+        description: Immutable SwiftTLA SHA to validate
+        required: true
+        type: string
+      admission_mode:
+        description: Candidate or merged-revision admission
+        required: true
+        default: candidate
+        type: choice
+        options: [candidate, admission]
+      case_id:
+        description: One case or scenario ID for a focused candidate diagnostic (empty runs all)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+  SWIFT_TLA_SHA: ${{ inputs.swift_tla_sha || github.sha }}
+  ADMISSION_MODE: ${{ inputs.admission_mode || 'candidate' }}
+
+jobs:
+  prepare:
+    runs-on: macos-15
+    timeout-minutes: 45
+    outputs:
+      native: ${{ steps.cases.outputs.native }}
+      upstream: ${{ steps.cases.outputs.upstream }}
+    steps:
+      - name: Validate immutable candidate
+        run: '[[ "$SWIFT_TLA_SHA" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          fetch-depth: 0
+          submodules: false
+      - name: Verify revision and admission mode
+        run: |
+          test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          if [ "$ADMISSION_MODE" = admission ]; then
+            git merge-base --is-ancestor "$SWIFT_TLA_SHA" refs/remotes/origin/main
+          fi
+      - name: Build validator for this revision
+        run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
+      - name: Enumerate complete case coverage
+        id: cases
+        env:
+          FOCUSED_CASE: ${{ inputs.case_id }}
+        run: |
+          native=$(.build/release/tlc-validate native list)
+          upstream=$(.build/release/tlc-validate upstream list)
+          if [ -n "$FOCUSED_CASE" ]; then
+            test "$ADMISSION_MODE" = candidate
+            native=$(jq -ce --arg id "$FOCUSED_CASE" '[.[] | select(. == $id)]' <<< "$native")
+            upstream=$(jq -ce --arg id "$FOCUSED_CASE" '[.[] | select(. == $id)]' <<< "$upstream")
+            test "$(jq 'length' <<< "$native")" -gt 0 || test "$(jq 'length' <<< "$upstream")" -gt 0
+            if [ "$(jq 'length' <<< "$native")" -eq 0 ]; then native='["__skip__"]'; fi
+            if [ "$(jq 'length' <<< "$upstream")" -eq 0 ]; then upstream='["__skip__"]'; fi
+          else
+            test "$(jq 'length' <<< "$native")" -gt 0
+            test "$(jq 'length' <<< "$upstream")" -gt 0
+          fi
+          echo "native=$native" >> "$GITHUB_OUTPUT"
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/release/tlc-validate
+          if-no-files-found: error
+
+  dsl-native-parity:
+    name: DSL/native parity ${{ matrix.case }}
+    needs: prepare
+    if: ${{ fromJSON(needs.prepare.outputs.native)[0] != '__skip__' }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        case: ${{ fromJSON(needs.prepare.outputs.native) }}
+    env:
+      CASE_ID: ${{ matrix.case }}
+      FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
+      SWIFTTLA_ORACLE_TIMEOUT_SECONDS: '1800'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          submodules: false
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+      - uses: actions/download-artifact@v5
+        with:
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/validation-bin
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .build/finite-graph-tools/downloads
+            .build/finite-graph-tools/java-arm64
+            .build/finite-graph-tools/java-x86_64
+          key: tlc-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Verification/FiniteGraph/toolchain.json') }}
+      - name: Prepare pinned TLC without upstream examples
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x .build/validation-bin/tlc-validate
+          ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT" --skip-inputs
+      - name: Validate generated machine against generated TLA
+        timeout-minutes: 35
+        run: |
+          set -o pipefail
+          mkdir -p .build/validation-evidence
+          git rev-parse HEAD > .build/validation-evidence/source-sha.txt
+          .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
+            --output .build/validation-evidence/native --maximum-states 10000000
+          .build/validation-bin/tlc-validate oracle run --case "$CASE_ID" \
+            --output .build/validation-evidence/oracle --maximum-states 10000000
+          .build/validation-bin/tlc-validate compare run --case "$CASE_ID" \
+            --native .build/validation-evidence/native \
+            --oracle .build/validation-evidence/oracle \
+            --output .build/validation-evidence/comparison
+          jq -e '.result == "exact"' ".build/validation-evidence/comparison/$CASE_ID/comparison.json"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: dsl-native-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.case }}
+          path: .build/validation-evidence
+          include-hidden-files: true
+          if-no-files-found: error
+
+  upstream-parity:
+    name: Upstream TLC parity ${{ matrix.case }}
+    needs: prepare
+    if: ${{ fromJSON(needs.prepare.outputs.upstream)[0] != '__skip__' }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        case: ${{ fromJSON(needs.prepare.outputs.upstream) }}
+    env:
+      CASE_ID: ${{ matrix.case }}
+      FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
+      FINITE_GRAPH_INPUT_ROOT: ${{ github.workspace }}/.build/finite-graph-tools/inputs
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          submodules: false
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+      - uses: actions/download-artifact@v5
+        with:
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/validation-bin
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .build/finite-graph-tools/downloads
+            .build/finite-graph-tools/java-arm64
+            .build/finite-graph-tools/java-x86_64
+          key: tlc-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Verification/FiniteGraph/toolchain.json') }}
+      - name: Prepare pinned TLC and reference inputs
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x .build/validation-bin/tlc-validate
+          ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT"
+      - name: Compare generated and upstream TLA through TLC
+        timeout-minutes: 35
+        run: |
+          set -o pipefail
+          mkdir -p .build/validation-evidence
+          git rev-parse HEAD > .build/validation-evidence/source-sha.txt
+          .build/validation-bin/tlc-validate upstream run --case "$CASE_ID" \
+            --output .build/validation-evidence/upstream
+          jq -e '.result == "exact"' ".build/validation-evidence/upstream/$CASE_ID/comparison.json"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: upstream-parity-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.case }}
+          path: .build/validation-evidence
+          include-hidden-files: true
+          if-no-files-found: error
+
+  validation-pipeline:
+    name: Independent validation admission
+    needs: [prepare, dsl-native-parity, upstream-parity]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require both independent parity jobs
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          NATIVE_RESULT: ${{ needs.dsl-native-parity.result }}
+          UPSTREAM_RESULT: ${{ needs.upstream-parity.result }}
+          FOCUSED_CASE: ${{ inputs.case_id }}
+        run: |
+          test "$PREPARE_RESULT" = success
+          if [ -n "$FOCUSED_CASE" ]; then
+            { test "$NATIVE_RESULT" = success || test "$NATIVE_RESULT" = skipped; }
+            { test "$UPSTREAM_RESULT" = success || test "$UPSTREAM_RESULT" = skipped; }
+            { test "$NATIVE_RESULT" = success || test "$UPSTREAM_RESULT" = success; }
+          else
+            test "$NATIVE_RESULT" = success
+            test "$UPSTREAM_RESULT" = success
+          fi

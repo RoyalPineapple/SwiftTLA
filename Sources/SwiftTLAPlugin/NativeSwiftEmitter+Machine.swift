@@ -605,6 +605,7 @@ extension NativeSwiftEmitter {
             checks.append("if checking.contains(.\(propertyCases[invariant.id]!)), try !Self._invariant\(invariant.id.ordinal)(in: _execution\(arguments)) { result.append(.\(propertyCases[invariant.id]!)) }")
         }
         declarations += try nativeDeclarations("""
+        public static var invariantProperties: [Property] { [\(program.behavior.invariants.map { ".\(propertyCases[$0.id]!)" }.joined(separator: ", "))] }
         public func violatedInvariants(checking: Set<Property> = Set(Property.allCases)) throws -> [Property] {
             \(checks.isEmpty ? "return []" : "var result: [Property] = []\n" + checks.joined(separator: "\n") + "\nreturn result")
         }

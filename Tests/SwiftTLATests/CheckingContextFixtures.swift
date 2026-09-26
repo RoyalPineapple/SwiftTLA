@@ -30,9 +30,12 @@ struct CheckingContextProbe: StateMachine {
         try machine.temporalProperties(checking: checking)
     }
     func violatedInvariants(checking: Set<Property>) throws -> [Property] { try machine.violatedInvariants(checking: checking) }
+    static var invariantProperties: [Property] { ConvergingFrontiers.invariantProperties }
     static var reachabilityProperties: [Property] { ConvergingFrontiers.reachabilityProperties }
+    static var refinementProperties: [Property] { ConvergingFrontiers.refinementProperties }
     func matchedReachabilityProperties(checking: Set<Property>) throws -> [Property] { try machine.matchedReachabilityProperties(checking: checking) }
     func refinementFailures(in graph: inout ReachabilityGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>] { [:] }
+    func validationRefinementFailures(in graph: inout MachineValidationGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>] { [:] }
     func initialCheckingRegisters() throws -> CheckingRegisters { CheckingRegisters() }
     func successors() throws -> [(action: Action, machine: Self)] { throw Failure.bypassedContext }
 
