@@ -10,6 +10,7 @@ package struct ValidationEvidenceComparisonReport: Codable, Sendable {
     package let difference: String?
     package let properties: [String: ValidationVerdict]
     package let deadlock: ValidationVerdict?
+    package let deadlockSelected: Bool
 }
 
 package enum ValidationEvidenceComparisonError: Error, Equatable {
@@ -83,12 +84,15 @@ package enum ValidationEvidenceComparison {
             from: Data(contentsOf: oracle.appendingPathComponent("oracle.json")))
         guard swift.schema == "swifttla.native-validation-report",
               tlc.schema == "swifttla.generated-tlc-oracle",
-              tlc.caseID == caseID, swift.scenario == tlc.scenario else {
+              tlc.caseID == caseID, swift.scenario == tlc.scenario,
+              swift.deadlockSelected == tlc.deadlockSelected else {
             throw ValidationEvidenceComparisonError.invalidEvidence("report identity")
         }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         var difference: String?
-        if swift.properties != tlc.properties || swift.deadlock != tlc.deadlock {
+        if swift.graphComplete != tlc.graphComplete {
+            difference = "exploration completion"
+        } else if swift.properties != tlc.properties || swift.deadlock != tlc.deadlock {
             difference = "selected property or deadlock verdict"
         }
         let compareGraph = swift.graphComplete && tlc.graphComplete
@@ -113,7 +117,8 @@ package enum ValidationEvidenceComparison {
         let report = ValidationEvidenceComparisonReport(
             schema: "swifttla.validation-evidence-comparison", caseID: caseID,
             result: difference == nil ? "exact" : "different", graphCompared: compareGraph,
-            difference: difference, properties: swift.properties, deadlock: swift.deadlock)
+            difference: difference, properties: swift.properties, deadlock: swift.deadlock,
+            deadlockSelected: swift.deadlockSelected)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("comparison.json"), options: .atomic)

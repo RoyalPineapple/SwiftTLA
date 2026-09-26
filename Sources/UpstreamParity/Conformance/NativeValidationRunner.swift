@@ -17,6 +17,7 @@ package struct NativeValidationReport: Codable, Sendable {
     package let edges: Int
     package let properties: [String: ValidationVerdict]
     package let deadlock: ValidationVerdict?
+    package let deadlockSelected: Bool
 }
 
 package enum NativeValidationRunnerError: Error, Equatable {
@@ -48,6 +49,9 @@ package enum NativeValidationRunner {
         let reachability = Set(Scenario.Machine.reachabilityProperties)
         let temporal = Set(try first.temporalProperties(checking: scenario.checking.properties).keys)
         let refinement = Set(Scenario.Machine.refinementProperties)
+        let expectedInvariantViolation = scenario.expectations.contains {
+            invariant.contains($0.key) && $0.value == .violated
+        }
         let supported = invariant.union(reachability).union(temporal).union(refinement)
         if let property = scenario.checking.properties.subtracting(supported).first {
             throw ExplorationError.unsupportedValidationProperty(names[property]!)
@@ -118,6 +122,9 @@ package enum NativeValidationRunner {
         if scenario.checking.checkDeadlock {
             if batch.deadlockFound { deadlock = .violated }
             else if complete { deadlock = .satisfied }
+            else if expectedInvariantViolation && !batch.violatedInvariants.isEmpty {
+                deadlock = nil
+            }
             else {
                 let isolated = try MachineValidationEvidence.write(
                     scenario: scenario, maximumStates: maximumStates, stopOnViolation: true,
@@ -125,7 +132,7 @@ package enum NativeValidationRunner {
                     to: directory.appendingPathComponent("check-deadlock.jsonl"))
                 deadlock = isolated.deadlockFound ? .violated : .satisfied
             }
-            guard scenario.deadlockExpectation.map({ accepts($0, deadlock!) }) == true else {
+            guard deadlock == nil || scenario.deadlockExpectation.map({ accepts($0, deadlock!) }) == true else {
                 throw NativeValidationRunnerError.expectationMismatch("deadlock")
             }
         } else {
@@ -135,7 +142,8 @@ package enum NativeValidationRunner {
             schema: "swifttla.native-validation-report", scenario: scenario.name,
             graphComplete: complete, initialStates: batch.initialStates,
             states: batch.states, edges: batch.edges,
-            properties: properties, deadlock: deadlock)
+            properties: properties, deadlock: deadlock,
+            deadlockSelected: scenario.checking.checkDeadlock)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("report.json"), options: .atomic)

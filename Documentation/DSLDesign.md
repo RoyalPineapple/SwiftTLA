@@ -1020,10 +1020,12 @@ Generated scenarios conform to `ModelValidationScenario`.
 The native validator runs against the generated machine and records its states,
 transitions, and selected check outcomes without invoking TLC or rendering TLA+.
 Separately, TLC checks the generated TLA+ bundle. The two reports must agree on
-every selected property and deadlock outcome. When both explorations finish,
+every established selected property and deadlock outcome. When both explorations finish,
 the comparison also requires the complete state and labeled-edge sets to match.
 An early counterexample supplies a decisive check result, not a claim of full
-graph equivalence; unresolved checks are run separately. A state-limit cutoff,
+graph equivalence or a deadlock verdict that TLC did not establish. Other
+selected properties run separately; the selected but unresolved deadlock check
+remains explicit in both reports. A state-limit cutoff,
 missing witness, or unsupported check cannot pass as a result.
 
 `tlc-validate native list` discovers registered scenarios. The hosted

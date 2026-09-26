@@ -82,13 +82,13 @@ struct ValidationEvidenceComparisonTests {
         let nativeReport: [String: Any] = [
             "schema": "swifttla.native-validation-report", "scenario": "fixture",
             "graphComplete": false, "initialStates": 0, "states": 0, "edges": 0,
-            "properties": ["Broken": "violated"]
+            "properties": ["Broken": "violated"], "deadlockSelected": true
         ]
         let oracleReport: [String: Any] = [
             "schema": "swifttla.generated-tlc-oracle", "caseID": "fixture",
             "scenario": "fixture", "graphComplete": false,
             "graphInputSHA256": String(repeating: "0", count: 64),
-            "properties": ["Broken": "violated"]
+            "properties": ["Broken": "violated"], "deadlockSelected": true
         ]
         try JSONSerialization.data(withJSONObject: nativeReport).write(to: native.appendingPathComponent("report.json"))
         try JSONSerialization.data(withJSONObject: oracleReport).write(to: oracle.appendingPathComponent("oracle.json"))
@@ -114,6 +114,8 @@ struct ValidationEvidenceComparisonTests {
             to: root.appendingPathComponent("comparison"))
         #expect(result.result == "exact")
         #expect(!result.graphCompared)
+        #expect(result.deadlockSelected)
+        #expect(result.deadlock == nil)
     }
 
     private func fixture(target: Int) throws -> URL {
@@ -126,12 +128,13 @@ struct ValidationEvidenceComparisonTests {
         let nativeReport: [String: Any] = [
             "schema": "swifttla.native-validation-report", "scenario": "fixture",
             "graphComplete": true, "initialStates": 1, "states": 2, "edges": 1,
-            "properties": [:]
+            "properties": [:], "deadlockSelected": false
         ]
         let oracleReport: [String: Any] = [
             "schema": "swifttla.generated-tlc-oracle", "caseID": "fixture",
             "scenario": "fixture", "graphComplete": true,
-            "graphInputSHA256": String(repeating: "0", count: 64), "properties": [:]
+            "graphInputSHA256": String(repeating: "0", count: 64), "properties": [:],
+            "deadlockSelected": false
         ]
         try JSONSerialization.data(withJSONObject: nativeReport).write(
             to: native.appendingPathComponent("report.json"))

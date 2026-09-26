@@ -9,6 +9,7 @@ package struct GeneratedTLCOracleReport: Codable, Sendable {
     package let graphInputSHA256: String
     package let properties: [String: ValidationVerdict]
     package let deadlock: ValidationVerdict?
+    package let deadlockSelected: Bool
 }
 
 /// TLC receives only generated TLA+ and never reads native checker results.
@@ -42,19 +43,30 @@ package enum GeneratedTLCOracle {
               scenario.behavior == rendered.behavior else { throw Error.checkingMismatch }
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        let graphChecks = selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
+        let decisiveName = scenario.expectations.compactMap { property, expectation -> String? in
+            guard expectation == .violated, let name = names[property],
+                  rendered.invariantNames.contains(name) else { return nil }
+            return name
+        }.sorted().first
+        let graphChecks = decisiveName.map { Set([$0]) }
+            ?? selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
+        let graphInvocation: TLCInvocationKind = decisiveName == nil ? .finiteGraph : .propertyCheck
         let graphBundle = try rendered.tlaBundle(checking: graphChecks,
                                                  checkDeadlock: rendered.checksDeadlock)
         try retainGeneratedInputs(graphBundle, in: directory.appendingPathComponent("generated"))
         let graphIdentity = try inputIdentity(bundle: graphBundle, pin: pin,
-                                              arguments: ["-workers", "1", "-fp", "1"])
+                                              arguments: ["-workers", "1", "-fp", "1"],
+                                              invocation: graphInvocation)
         let work = directory.appendingPathComponent("work")
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: false)
         let graphOutcome = try run(bundle: graphBundle, id: id, maximumStates: maximumStates,
                                    timeout: timeout, tools: tools, pin: pin,
                                    workRoot: work, retained: directory.appendingPathComponent("tlc-graph"),
-                                   invocation: .finiteGraph, renderedActions: rendered.actions, process: process)
+                                   invocation: graphInvocation, renderedActions: rendered.actions, process: process)
         let graphComplete = graphOutcome == .completed
+        if decisiveName != nil && graphOutcome != .safetyViolation {
+            throw Error.invalidOutcome("declared decisive invariant: \(graphOutcome)")
+        }
         guard graphComplete || graphOutcome == .safetyViolation || graphOutcome == .deadlock else {
             throw Error.invalidOutcome("graph pass: \(graphOutcome)")
         }
@@ -63,7 +75,10 @@ package enum GeneratedTLCOracle {
         for property in scenario.checking.properties.sorted(by: { names[$0]! < names[$1]! }) {
             let name = names[property]!
             let verdict: ValidationVerdict
-            if graphComplete && rendered.invariantNames.contains(name) {
+            if name == decisiveName {
+                verdict = try Self.verdict(for: name, outcome: graphOutcome,
+                    rendered: rendered, retained: directory.appendingPathComponent("tlc-graph"))
+            } else if graphComplete && rendered.invariantNames.contains(name) {
                 verdict = .satisfied
             } else {
                 let selectedBundles = try rendered.temporalObligationBundles(checking: name)
@@ -98,6 +113,7 @@ package enum GeneratedTLCOracle {
         if rendered.checksDeadlock {
             if graphComplete { deadlock = .satisfied }
             else if graphOutcome == .deadlock { deadlock = .violated }
+            else if decisiveName != nil { deadlock = nil }
             else {
                 let bundle = try rendered.tlaBundle(checking: [], checkDeadlock: true)
                 let retained = directory.appendingPathComponent("check-deadlock")
@@ -111,7 +127,7 @@ package enum GeneratedTLCOracle {
                 deadlock = try verdict(for: "deadlock", outcome: outcome, rendered: rendered,
                                        retained: retained.appendingPathComponent("tlc"))
             }
-            guard scenario.deadlockExpectation.map({ accepts($0, deadlock!) }) == true else {
+            guard deadlock == nil || scenario.deadlockExpectation.map({ accepts($0, deadlock!) }) == true else {
                 throw Error.expectationMismatch("deadlock")
             }
         } else {
@@ -121,7 +137,8 @@ package enum GeneratedTLCOracle {
         let report = GeneratedTLCOracleReport(
             schema: "swifttla.generated-tlc-oracle", caseID: id, scenario: scenario.name,
             graphComplete: graphComplete, graphInputSHA256: graphIdentity,
-            properties: properties, deadlock: deadlock)
+            properties: properties, deadlock: deadlock,
+            deadlockSelected: rendered.checksDeadlock)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("oracle.json"), options: .atomic)
@@ -191,7 +208,8 @@ package enum GeneratedTLCOracle {
         try Data(bundle.cfg.utf8).write(to: directory.appendingPathComponent("\(bundle.root.name).cfg"), options: .atomic)
     }
 
-    package static func inputIdentity(bundle: TLAModuleBundle, pin: TLCReferencePin, arguments: [String]) throws -> String {
+    package static func inputIdentity(bundle: TLAModuleBundle, pin: TLCReferencePin,
+        arguments: [String], invocation: TLCInvocationKind = .finiteGraph) throws -> String {
         let sources = bundle.files.sorted { $0.name < $1.name }.map {
             ["name": $0.name, "sha256": SHA256.hex(Data($0.tla.utf8))]
         }
@@ -202,7 +220,8 @@ package enum GeneratedTLCOracle {
             "tlcTag": pin.tag, "tlcCommit": pin.commit,
             "javaDistribution": pin.javaDistribution, "javaVersion": pin.javaVersion,
             "bridgeClass": pin.bridgeClass, "bridgeBinarySHA256": pin.bridgeBinarySHA256,
-            "bridgeSourceHashes": pin.bridgeSourceHashes, "arguments": arguments
+            "bridgeSourceHashes": pin.bridgeSourceHashes, "arguments": arguments,
+            "invocation": invocation == .finiteGraph ? "finite-graph" : "property-check"
         ]
         let canonical = try JSONSerialization.data(withJSONObject: input, options: [.sortedKeys])
         return SHA256.hex(canonical)

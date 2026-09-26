@@ -11,6 +11,7 @@ package struct UpstreamTLCParityReport: Codable, Sendable {
     package let referenceProperties: [String: ValidationVerdict]
     package let generatedDeadlock: ValidationVerdict?
     package let referenceDeadlock: ValidationVerdict?
+    package let deadlockSelected: Bool
 }
 
 package enum UpstreamTLCParityError: Error, Equatable {
@@ -59,6 +60,71 @@ package enum UpstreamTLCParity {
             throw UpstreamTLCParityError.configurationMismatch(id)
         }
 
+        if decisive {
+            var generatedResults: [String: ValidationVerdict] = [:]
+            var referenceResults: [String: ValidationVerdict] = [:]
+            var generatedDeadlock: ValidationVerdict?
+            var referenceDeadlock: ValidationVerdict?
+            if names.count == 1, let name = names.first {
+                let generatedOutput = directory.appendingPathComponent("generated-decisive")
+                let referenceOutput = directory.appendingPathComponent("reference-decisive")
+                let generatedOutcome = try GeneratedTLCOracle.run(
+                    bundle: rendered.tlaBundle(checking: [name],
+                        checkDeadlock: configuration.checksDeadlock), id: id,
+                    maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
+                    workRoot: work, retained: generatedOutput, invocation: .propertyCheck,
+                    renderedActions: rendered.actions, process: process)
+                let referenceBundle = try rendered.referenceBundle(checking: [name],
+                    checkDeadlock: configuration.checksDeadlock,
+                    declarations: configuration.declarations, in: reference)
+                let referenceOutcome = try GeneratedTLCOracle.run(
+                    bundle: referenceBundle, id: id,
+                    maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
+                    workRoot: work, retained: referenceOutput, invocation: .propertyCheck,
+                    renderedActions: rendered.actions, process: process)
+                if generatedOutcome == .deadlock { generatedDeadlock = .violated }
+                else { generatedResults[name] = try GeneratedTLCOracle.verdict(
+                    for: name, outcome: generatedOutcome, rendered: rendered, retained: generatedOutput) }
+                if referenceOutcome == .deadlock { referenceDeadlock = .violated }
+                else { referenceResults[name] = try GeneratedTLCOracle.verdict(
+                    for: name, outcome: referenceOutcome, rendered: rendered, retained: referenceOutput) }
+            } else {
+                for name in names.sorted() {
+                    let generatedBundles = try rendered.temporalObligationBundles(checking: name)
+                        ?? [rendered.tlaBundle(checking: [name], checkDeadlock: false)]
+                    generatedResults[name] = try check(name: name, bundles: generatedBundles, id: id,
+                        maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
+                        work: work, output: directory.appendingPathComponent("generated-\(name)"),
+                        rendered: rendered, process: process)
+                    let referenceBundle = try rendered.referenceBundle(checking: [name],
+                        checkDeadlock: false, declarations: configuration.declarations, in: reference)
+                    referenceResults[name] = try check(name: name, bundles: [referenceBundle], id: id,
+                        maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
+                        work: work, output: directory.appendingPathComponent("reference-\(name)"),
+                        rendered: rendered, process: process)
+                }
+            }
+            let decisiveResult = generatedResults.values.contains(.violated)
+                || generatedResults.values.contains(.reached) || generatedDeadlock == .violated
+            let difference: String? = if generatedResults != referenceResults
+                || generatedDeadlock != referenceDeadlock {
+                "selected property or deadlock verdict"
+            } else if !decisiveResult {
+                "declared decisive counterexample absent"
+            } else {
+                nil
+            }
+            let report = UpstreamTLCParityReport(
+                schema: "swifttla.upstream-tlc-parity", caseID: id,
+                result: difference == nil ? "exact" : "different",
+                graphCompared: false, difference: difference,
+                generatedProperties: generatedResults, referenceProperties: referenceResults,
+                generatedDeadlock: generatedDeadlock, referenceDeadlock: referenceDeadlock,
+                deadlockSelected: configuration.checksDeadlock)
+            try write(report, to: directory)
+            return report
+        }
+
         let graphChecks = Set(configuration.invariants)
         let generatedGraphBundle = try rendered.tlaBundle(
             checking: graphChecks,
@@ -84,7 +150,7 @@ package enum UpstreamTLCParity {
         }
         var generatedOutcome = generatedCheckingOutcome
         var referenceOutcome = referenceCheckingOutcome
-        if !decisive && generatedOutcome != .completed {
+        if generatedOutcome != .completed {
             generatedGraphOutput = directory.appendingPathComponent("generated-full-graph")
             generatedOutcome = try GeneratedTLCOracle.run(
                 bundle: rendered.tlaBundle(checking: [], checkDeadlock: false), id: id,
@@ -92,7 +158,7 @@ package enum UpstreamTLCParity {
                 workRoot: work, retained: generatedGraphOutput, invocation: .finiteGraph,
                 renderedActions: rendered.actions, process: process)
         }
-        if !decisive && referenceOutcome != .completed {
+        if referenceOutcome != .completed {
             referenceGraphOutput = directory.appendingPathComponent("reference-full-graph")
             referenceOutcome = try GeneratedTLCOracle.run(
                 bundle: rendered.referenceBundle(checking: [], checkDeadlock: false,
@@ -155,7 +221,7 @@ package enum UpstreamTLCParity {
             difference = "selected property or deadlock verdict"
         }
         let graphCompared = generatedComplete && referenceComplete
-        if difference == nil && !decisive && !graphCompared {
+        if difference == nil && !graphCompared {
             difference = "exhaustive configuration stopped early"
         }
         if difference == nil && graphCompared {
@@ -170,11 +236,16 @@ package enum UpstreamTLCParity {
             result: difference == nil ? "exact" : "different",
             graphCompared: graphCompared, difference: difference,
             generatedProperties: generatedResults, referenceProperties: referenceResults,
-            generatedDeadlock: generatedDeadlock, referenceDeadlock: referenceDeadlock)
+            generatedDeadlock: generatedDeadlock, referenceDeadlock: referenceDeadlock,
+            deadlockSelected: configuration.checksDeadlock)
+        try write(report, to: directory)
+        return report
+    }
+
+    private static func write(_ report: UpstreamTLCParityReport, to directory: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("comparison.json"), options: .atomic)
-        return report
     }
 
     private static func check(

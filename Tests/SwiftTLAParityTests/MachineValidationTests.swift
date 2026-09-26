@@ -116,6 +116,8 @@ struct MachineValidationTests {
         #expect(report.properties["trueInvariant"] == .satisfied)
         #expect(report.properties["initialWitness"] == .reached)
         #expect(report.properties["absentWitness"] == .unreachable)
+        #expect(report.deadlockSelected)
+        #expect(report.deadlock == nil)
         #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("check-absentWitness.jsonl").path))
         #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("report.json").path))
     }
