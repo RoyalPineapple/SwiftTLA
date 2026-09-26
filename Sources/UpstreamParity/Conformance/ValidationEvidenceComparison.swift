@@ -37,8 +37,8 @@ package enum ValidationEvidenceComparison {
         let referenceGraph = try readTLC(reference, caseID: caseID, actions: actions, in: referenceRoot)
         let generatedStates = try sorted(generatedGraph.states, in: generatedRoot)
         let referenceStates = try sorted(referenceGraph.states, in: referenceRoot)
-        var generatedRanks: [String: Int] = [:]
-        var referenceRanks: [String: Int] = [:]
+        var generatedRanks: [UInt64: Int] = [:]
+        var referenceRanks: [UInt64: Int] = [:]
         generatedRanks.reserveCapacity(generatedGraph.stateCount)
         referenceRanks.reserveCapacity(referenceGraph.stateCount)
         var left = try ValidationLineReader(generatedStates)
@@ -54,8 +54,10 @@ package enum ValidationEvidenceComparison {
                   previousKey != generatedLine[..<generatedField] else {
                 return "complete state set"
             }
-            let generatedFP = String(decoding: generatedLine[generatedLine.index(after: generatedField)...], as: UTF8.self)
-            let referenceFP = String(decoding: referenceLine[referenceLine.index(after: referenceField)...], as: UTF8.self)
+            guard let generatedFP = UInt64(String(decoding: generatedLine[generatedLine.index(after: generatedField)...], as: UTF8.self)),
+                  let referenceFP = UInt64(String(decoding: referenceLine[referenceLine.index(after: referenceField)...], as: UTF8.self)) else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("TLC fingerprint rank")
+            }
             guard generatedRanks.updateValue(rank, forKey: generatedFP) == nil,
                   referenceRanks.updateValue(rank, forKey: referenceFP) == nil else {
                 return "duplicate TLC fingerprint"
@@ -130,7 +132,7 @@ package enum ValidationEvidenceComparison {
         let swiftStates = try sorted(swiftGraph.states, in: swiftRoot)
         let tlcStates = try sorted(tlcGraph.states, in: tlcRoot)
         var swiftRanks = [Int](repeating: -1, count: swiftGraph.stateCount)
-        var tlcRanks: [String: Int] = [:]
+        var tlcRanks: [UInt64: Int] = [:]
         tlcRanks.reserveCapacity(tlcGraph.stateCount)
         var left = try ValidationLineReader(swiftStates)
         var right = try ValidationLineReader(tlcStates)
@@ -147,7 +149,9 @@ package enum ValidationEvidenceComparison {
                   nativeID >= 0, nativeID < swiftRanks.count, swiftRanks[nativeID] == -1 else {
                 return "complete state set"
             }
-            let fingerprint = String(decoding: tlcLine[tlcLine.index(after: tlcField)...], as: UTF8.self)
+            guard let fingerprint = UInt64(String(decoding: tlcLine[tlcLine.index(after: tlcField)...], as: UTF8.self)) else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("TLC fingerprint rank")
+            }
             guard tlcRanks.updateValue(rank, forKey: fingerprint) == nil else {
                 return "duplicate TLC fingerprint"
             }
@@ -270,13 +274,14 @@ package enum ValidationEvidenceComparison {
             (tlaInvocationLocationIdentity(action: $0.sourceName,
                 arguments: $0.arguments.map(\.description)), $0.renderedName)
         })
-        var fingerprints: Set<String> = []
+        var actionCache: [String: [String: String]] = [:]
+        var fingerprints: Set<UInt64> = []
         var digest = CryptoKit.SHA256()
         var counts: [String: Int] = [:]
         var runID: String?
         var sequence = 0
         var sawFooter = false
-        while let line = try reader.next() {
+        func consume(_ line: Data) throws {
             let record = try decodeJSONObject(line, line: sequence + 1)
             guard !sawFooter,
                   record["schema"] as? String == "swifttla.tlc.graph-events",
@@ -312,6 +317,8 @@ package enum ValidationEvidenceComparison {
                       let target = record["target"] as? [String: Any],
                       let sourceFP = source["fingerprint"] as? String,
                       let targetFP = target["fingerprint"] as? String,
+                      let sourceID = UInt64(sourceFP),
+                      let targetID = UInt64(targetFP),
                       let flags = record["stateFlags"] as? [String: Any],
                       let rawFlags = flags["raw"] as? Int,
                       let seen = flags["seen"] as? Bool,
@@ -330,11 +337,11 @@ package enum ValidationEvidenceComparison {
                 } else {
                     guard callback == "writeState.action", !excluded, reachable == "reachable",
                           record["predicateLocation"] is NSNull,
-                          fingerprints.contains(sourceFP) else {
+                          fingerprints.contains(sourceID) else {
                         throw ValidationEvidenceComparisonError.invalidEvidence("TLC reachable transition")
                     }
                     if seen {
-                        guard fingerprints.contains(targetFP) else {
+                        guard fingerprints.contains(targetID) else {
                             throw ValidationEvidenceComparisonError.invalidEvidence("TLC unseen target")
                         }
                     } else {
@@ -344,8 +351,19 @@ package enum ValidationEvidenceComparison {
                         throw ValidationEvidenceComparisonError.invalidEvidence("TLC missing action")
                     }
                     for action in rawActions {
-                        let name = try resolvedAction(action, declared: actionNames)
-                        try edgeOut.append("\(sourceFP)\t\(targetFP)\t\(encodedBytes(name))")
+                        guard action["named"] as? Bool == true,
+                              let sourceName = action["name"] as? String,
+                              let location = action["location"] as? String else {
+                            throw ValidationEvidenceComparisonError.invalidEvidence("TLC action")
+                        }
+                        let encodedAction: String
+                        if let cached = actionCache[sourceName]?[location] {
+                            encodedAction = cached
+                        } else {
+                            encodedAction = encodedBytes(try resolvedAction(action, declared: actionNames))
+                            actionCache[sourceName, default: [:]][location] = encodedAction
+                        }
+                        try edgeOut.append("\(sourceFP)\t\(targetFP)\t\(encodedAction)")
                     }
                 }
             case "unsupported":
@@ -368,6 +386,9 @@ package enum ValidationEvidenceComparison {
             }
             sequence += 1
         }
+        while let line = try reader.next() {
+            try withValidationAutoreleasePool { try consume(line) }
+        }
         guard sawFooter else { throw ValidationEvidenceComparisonError.invalidEvidence("TLC missing footer") }
         try stateOut.close()
         try initialOut.close()
@@ -375,11 +396,11 @@ package enum ValidationEvidenceComparison {
         return Spool(states: states, initial: initial, edges: edges, stateCount: fingerprints.count)
     }
 
-    private static func register(_ state: [String: Any], known: inout Set<String>,
+    private static func register(_ state: [String: Any], known: inout Set<UInt64>,
         output: inout ValidationLineWriter) throws -> String {
         guard let fingerprint = state["fingerprint"] as? String,
-              UInt64(fingerprint) != nil,
-              known.insert(fingerprint).inserted,
+              let fingerprintID = UInt64(fingerprint),
+              known.insert(fingerprintID).inserted,
               let bindings = state["bindings"] as? [[String: Any]] else {
             throw ValidationEvidenceComparisonError.invalidEvidence("TLC state identity")
         }
@@ -430,9 +451,9 @@ package enum ValidationEvidenceComparison {
         }
     }
 
-    private static func rankInitials(_ raw: URL, ranks: [String: Int], in directory: URL) throws -> URL {
+    private static func rankInitials(_ raw: URL, ranks: [UInt64: Int], in directory: URL) throws -> URL {
         try rewrite(raw, in: directory) { fields in
-            guard fields.count == 1, let rank = ranks[fields[0]] else {
+            guard fields.count == 1, let fingerprint = UInt64(fields[0]), let rank = ranks[fingerprint] else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("TLC initial fingerprint")
             }
             return String(rank)
@@ -451,9 +472,11 @@ package enum ValidationEvidenceComparison {
         }
     }
 
-    private static func rankEdges(_ raw: URL, ranks: [String: Int], in directory: URL) throws -> URL {
+    private static func rankEdges(_ raw: URL, ranks: [UInt64: Int], in directory: URL) throws -> URL {
         try rewrite(raw, in: directory) { fields in
-            guard fields.count == 3, let source = ranks[fields[0]], let target = ranks[fields[1]] else {
+            guard fields.count == 3,
+                  let sourceFP = UInt64(fields[0]), let targetFP = UInt64(fields[1]),
+                  let source = ranks[sourceFP], let target = ranks[targetFP] else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("TLC edge fingerprint")
             }
             return "\(source)\t\(fields[2])\t\(target)"
@@ -516,6 +539,14 @@ package enum ValidationEvidenceComparison {
             throw ValidationEvidenceComparisonError.invalidEvidence("TLC process outcome")
         }
     }
+}
+
+private func withValidationAutoreleasePool<Result>(_ body: () throws -> Result) rethrows -> Result {
+    #if canImport(Darwin)
+    return try autoreleasepool(invoking: body)
+    #else
+    return try body()
+    #endif
 }
 
 private struct ValidationLineReader {

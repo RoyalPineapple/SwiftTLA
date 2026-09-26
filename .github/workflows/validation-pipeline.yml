@@ -143,7 +143,9 @@ jobs:
         if: always()
         with:
           name: dsl-native-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.case }}
-          path: .build/validation-evidence
+          path: |
+            .build/validation-evidence
+            !.build/validation-evidence/**/work/**
           include-hidden-files: true
           if-no-files-found: error
 
@@ -199,7 +201,9 @@ jobs:
         if: always()
         with:
           name: upstream-parity-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.case }}
-          path: .build/validation-evidence
+          path: |
+            .build/validation-evidence
+            !.build/validation-evidence/**/work/**
           include-hidden-files: true
           if-no-files-found: error
 
