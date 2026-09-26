@@ -33,7 +33,7 @@ package enum GeneratedTLCOracle {
         })
         guard names == Scenario.Machine.formalPropertyNames,
               names.values.allSatisfy({
-                  $0.range(of: "^[A-Za-z][A-Za-z0-9_]*$", options: .regularExpression) != nil
+                  $0.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) != nil
               }),
               selected == rendered.checkNames,
               scenario.checking.properties == Set(scenario.expectations.keys),
@@ -42,7 +42,8 @@ package enum GeneratedTLCOracle {
               scenario.behavior == rendered.behavior else { throw Error.checkingMismatch }
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        let graphBundle = try rendered.tlaBundle(checking: selected.intersection(rendered.invariantNames),
+        let graphChecks = selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
+        let graphBundle = try rendered.tlaBundle(checking: graphChecks,
                                                  checkDeadlock: rendered.checksDeadlock)
         try retainGeneratedInputs(graphBundle, in: directory.appendingPathComponent("generated"))
         let graphIdentity = try inputIdentity(bundle: graphBundle, pin: pin,

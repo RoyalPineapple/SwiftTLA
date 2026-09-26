@@ -93,6 +93,18 @@ struct MachineValidationTests {
         #expect(evidence.contains("\"type\":\"complete\""))
     }
 
+    @Test("generated assertions and reachability retain all selected scenario outcomes")
+    func validatesConfiguredCounter() throws {
+        let scenario = try ConfiguredCounter.validationScenarios()[0]
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let report = try NativeValidationRunner.run(scenario: scenario, maximumStates: 100, to: directory)
+        #expect(report.properties["__pcal_assert_0"] == .satisfied)
+        #expect(report.properties["AtLimit"] == .reached)
+        #expect(report.deadlock == .satisfied)
+        #expect(!report.graphComplete)
+    }
+
     @Test("early violations are isolated before every selected check receives a verdict")
     func resolvesChecksAfterEarlyViolation() throws {
         let scenario = try ConstantStateClaims.validationScenarios()[0]

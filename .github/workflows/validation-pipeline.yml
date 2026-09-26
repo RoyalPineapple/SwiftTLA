@@ -25,7 +25,7 @@ permissions:
 
 env:
   DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
-  SWIFT_TLA_SHA: ${{ inputs.swift_tla_sha || github.sha }}
+  SWIFT_TLA_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.swift_tla_sha || github.sha }}
   ADMISSION_MODE: ${{ inputs.admission_mode || 'candidate' }}
 
 jobs:
@@ -49,8 +49,16 @@ jobs:
           if [ "$ADMISSION_MODE" = admission ]; then
             git merge-base --is-ancestor "$SWIFT_TLA_SHA" refs/remotes/origin/main
           fi
+      - uses: actions/cache@v4
+        id: binary-cache
+        with:
+          path: .build/release/tlc-validate
+          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TLA_SHA }}
       - name: Build validator for this revision
+        if: steps.binary-cache.outputs.cache-hit != 'true'
         run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
+      - name: Verify cached or built executable
+        run: test -x .build/release/tlc-validate
       - name: Enumerate complete case coverage
         id: cases
         env:

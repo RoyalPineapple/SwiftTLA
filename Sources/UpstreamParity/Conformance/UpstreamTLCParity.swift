@@ -59,7 +59,7 @@ package enum UpstreamTLCParity {
             throw UpstreamTLCParityError.configurationMismatch(id)
         }
 
-        let graphChecks = Set(configuration.invariants).intersection(rendered.invariantNames)
+        let graphChecks = Set(configuration.invariants)
         let generatedGraphBundle = try rendered.tlaBundle(
             checking: graphChecks,
             checkDeadlock: configuration.checksDeadlock)
@@ -67,28 +67,47 @@ package enum UpstreamTLCParity {
             checking: graphChecks,
             checkDeadlock: configuration.checksDeadlock,
             declarations: configuration.declarations, in: reference)
-        let generatedGraphOutput = directory.appendingPathComponent("generated-graph")
-        let referenceGraphOutput = directory.appendingPathComponent("reference-graph")
-        let generatedOutcome = try GeneratedTLCOracle.run(
+        var generatedGraphOutput = directory.appendingPathComponent("generated-graph")
+        var referenceGraphOutput = directory.appendingPathComponent("reference-graph")
+        let generatedCheckingOutcome = try GeneratedTLCOracle.run(
             bundle: generatedGraphBundle, id: id, maximumStates: maximumStates, timeout: timeout,
             tools: tools, pin: pin, workRoot: work, retained: generatedGraphOutput,
             invocation: .finiteGraph, renderedActions: rendered.actions, process: process)
-        let referenceOutcome = try GeneratedTLCOracle.run(
+        let referenceCheckingOutcome = try GeneratedTLCOracle.run(
             bundle: referenceGraphBundle, id: id, maximumStates: maximumStates, timeout: timeout,
             tools: tools, pin: pin, workRoot: work, retained: referenceGraphOutput,
             invocation: .finiteGraph, renderedActions: rendered.actions, process: process)
-        let generatedComplete = generatedOutcome == .completed
-        let referenceComplete = referenceOutcome == .completed
-        for outcome in [generatedOutcome, referenceOutcome] {
+        for outcome in [generatedCheckingOutcome, referenceCheckingOutcome] {
             guard outcome == .completed || outcome == .safetyViolation || outcome == .deadlock else {
                 throw UpstreamTLCParityError.invalidOutcome("\(id): \(outcome)")
             }
         }
+        var generatedOutcome = generatedCheckingOutcome
+        var referenceOutcome = referenceCheckingOutcome
+        if !decisive && generatedOutcome != .completed {
+            generatedGraphOutput = directory.appendingPathComponent("generated-full-graph")
+            generatedOutcome = try GeneratedTLCOracle.run(
+                bundle: rendered.tlaBundle(checking: [], checkDeadlock: false), id: id,
+                maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
+                workRoot: work, retained: generatedGraphOutput, invocation: .finiteGraph,
+                renderedActions: rendered.actions, process: process)
+        }
+        if !decisive && referenceOutcome != .completed {
+            referenceGraphOutput = directory.appendingPathComponent("reference-full-graph")
+            referenceOutcome = try GeneratedTLCOracle.run(
+                bundle: rendered.referenceBundle(checking: [], checkDeadlock: false,
+                    declarations: configuration.declarations, in: reference), id: id,
+                maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
+                workRoot: work, retained: referenceGraphOutput, invocation: .finiteGraph,
+                renderedActions: rendered.actions, process: process)
+        }
+        let generatedComplete = generatedOutcome == .completed
+        let referenceComplete = referenceOutcome == .completed
         var generatedResults: [String: ValidationVerdict] = [:]
         var referenceResults: [String: ValidationVerdict] = [:]
         for name in names.sorted() {
             let generated: ValidationVerdict
-            if generatedComplete && rendered.invariantNames.contains(name) {
+            if generatedCheckingOutcome == .completed && rendered.invariantNames.contains(name) {
                 generated = .satisfied
             } else {
                 let bundles = try rendered.temporalObligationBundles(checking: name)
@@ -99,7 +118,7 @@ package enum UpstreamTLCParity {
                     rendered: rendered, process: process)
             }
             let upstream: ValidationVerdict
-            if referenceComplete && rendered.invariantNames.contains(name) {
+            if referenceCheckingOutcome == .completed && rendered.invariantNames.contains(name) {
                 upstream = .satisfied
             } else {
                 let bundle = try rendered.referenceBundle(checking: [name],
@@ -117,12 +136,12 @@ package enum UpstreamTLCParity {
         let referenceDeadlock: ValidationVerdict?
         if configuration.checksDeadlock {
             generatedDeadlock = try deadlockVerdict(
-                graphOutcome: generatedOutcome, rendered: rendered, reference: nil,
+                graphOutcome: generatedCheckingOutcome, rendered: rendered, reference: nil,
                 declarations: configuration.declarations, id: id, maximumStates: maximumStates,
                 timeout: timeout, tools: tools, pin: pin, work: work,
                 output: directory.appendingPathComponent("generated-deadlock"), process: process)
             referenceDeadlock = try deadlockVerdict(
-                graphOutcome: referenceOutcome, rendered: rendered, reference: reference,
+                graphOutcome: referenceCheckingOutcome, rendered: rendered, reference: reference,
                 declarations: configuration.declarations, id: id, maximumStates: maximumStates,
                 timeout: timeout, tools: tools, pin: pin, work: work,
                 output: directory.appendingPathComponent("reference-deadlock"), process: process)

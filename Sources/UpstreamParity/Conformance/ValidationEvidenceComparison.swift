@@ -94,20 +94,18 @@ package enum ValidationEvidenceComparison {
         let compareGraph = swift.graphComplete && tlc.graphComplete
         if difference == nil {
             let swiftRoot = directory.appendingPathComponent("swift")
-            let tlcRoot = directory.appendingPathComponent("tlc")
             try FileManager.default.createDirectory(at: swiftRoot, withIntermediateDirectories: false)
-            try FileManager.default.createDirectory(at: tlcRoot, withIntermediateDirectories: false)
-            defer {
-                try? FileManager.default.removeItem(at: swiftRoot)
-                try? FileManager.default.removeItem(at: tlcRoot)
-            }
+            defer { try? FileManager.default.removeItem(at: swiftRoot) }
             let swiftGraph = try readNative(native.appendingPathComponent("machine.jsonl"),
                 expectedComplete: swift.graphComplete, actions: actions, in: swiftRoot)
-            let tlcGraph = try readTLC(oracle.appendingPathComponent("tlc-graph/graph-events.jsonl"),
-                caseID: caseID, actions: actions, in: tlcRoot)
             try verifyTLCProcess(oracle.appendingPathComponent("tlc-graph/tlc-process.json"),
                 expectedComplete: tlc.graphComplete)
             if compareGraph {
+                let tlcRoot = directory.appendingPathComponent("tlc")
+                try FileManager.default.createDirectory(at: tlcRoot, withIntermediateDirectories: false)
+                defer { try? FileManager.default.removeItem(at: tlcRoot) }
+                let tlcGraph = try readTLC(oracle.appendingPathComponent("tlc-graph/graph-events.jsonl"),
+                    caseID: caseID, actions: actions, in: tlcRoot)
                 difference = try Self.compareGraph(swiftGraph: swiftGraph, tlcGraph: tlcGraph,
                     swiftRoot: swiftRoot, tlcRoot: tlcRoot)
             }

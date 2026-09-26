@@ -36,7 +36,7 @@ package enum NativeValidationRunner {
               Set(names.keys) == Set(Scenario.Property.allCases),
               Set(names.values).count == names.count,
               names.values.allSatisfy({
-                  $0.range(of: "^[A-Za-z][A-Za-z0-9_]*$", options: .regularExpression) != nil
+                  $0.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) != nil
               }),
               scenario.checking.properties == Set(scenario.expectations.keys),
               (scenario.deadlockExpectation != nil) == scenario.checking.checkDeadlock else {
@@ -56,6 +56,7 @@ package enum NativeValidationRunner {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let batch = try MachineValidationEvidence.write(
             scenario: scenario, maximumStates: maximumStates, stopOnViolation: true,
+            stopOnReachability: !safety.intersection(reachability).isEmpty,
             checking: .init(properties: safety, checkDeadlock: scenario.checking.checkDeadlock),
             to: directory.appendingPathComponent("machine.jsonl"))
         let complete: Bool

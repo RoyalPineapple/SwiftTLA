@@ -70,6 +70,52 @@ struct ValidationEvidenceComparisonTests {
             in: directory) == nil)
     }
 
+    @Test("matching decisive verdicts do not require a complete TLC graph")
+    func decisiveResultDoesNotRequireGraph() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let native = root.appendingPathComponent("native")
+        let oracle = root.appendingPathComponent("oracle")
+        let tlc = oracle.appendingPathComponent("tlc-graph")
+        try FileManager.default.createDirectory(at: native, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: tlc, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let nativeReport: [String: Any] = [
+            "schema": "swifttla.native-validation-report", "scenario": "fixture",
+            "graphComplete": false, "initialStates": 0, "states": 0, "edges": 0,
+            "properties": ["Broken": "violated"]
+        ]
+        let oracleReport: [String: Any] = [
+            "schema": "swifttla.generated-tlc-oracle", "caseID": "fixture",
+            "scenario": "fixture", "graphComplete": false,
+            "graphInputSHA256": String(repeating: "0", count: 64),
+            "properties": ["Broken": "violated"]
+        ]
+        try JSONSerialization.data(withJSONObject: nativeReport).write(to: native.appendingPathComponent("report.json"))
+        try JSONSerialization.data(withJSONObject: oracleReport).write(to: oracle.appendingPathComponent("oracle.json"))
+        try JSONSerialization.data(withJSONObject: ["invocation": ["exitStatus": 12]]).write(
+            to: tlc.appendingPathComponent("tlc-process.json"))
+        let key = CanonicalState(bindings: ["x": .integer(0)]).key.canonicalEncoding
+        let records: [[String: Any]] = [
+            ["type": "header", "schema": "swifttla.native-validation", "version": 1],
+            ["type": "invariant-failure", "property": "Broken", "key": key]
+        ]
+        let body = try records.reduce(into: Data()) { data, record in
+            data.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
+            data.append(10)
+        }
+        let footer: [String: Any] = [
+            "type": "complete", "completion": "decisive-violation", "states": 0,
+            "initialStates": 0, "edges": 0, "bodySha256": SHA256.hex(body)
+        ]
+        let events = body + (try JSONSerialization.data(withJSONObject: footer, options: [.sortedKeys])) + Data([10])
+        try events.write(to: native.appendingPathComponent("machine.jsonl"))
+        let result = try ValidationEvidenceComparison.compare(
+            caseID: "fixture", native: native, oracle: oracle, actions: [],
+            to: root.appendingPathComponent("comparison"))
+        #expect(result.result == "exact")
+        #expect(!result.graphCompared)
+    }
+
     private func fixture(target: Int) throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let native = root.appendingPathComponent("native")
