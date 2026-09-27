@@ -15,8 +15,27 @@ extension NativeSwiftEmitter {
         declarations += try configurationDeclarations()
         declarations += try propertyIdentityDeclarations()
         declarations += try validationDeclarations()
-        let fields = try program.layout.variables.filter { stateMemberNames[$0.id] == nil }.map { variable in
+        let privateVariables = program.layout.variables.filter { stateMemberNames[$0.id] == nil }
+        let fields = try privateVariables.map { variable in
             "let \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
+        }.joined(separator: "\n")
+        let privateParameters = try privateVariables.map { variable in
+            ", \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
+        }.joined()
+        let privateAssignments = privateVariables.map { variable in
+            "self.\(self.variable(variable.id)) = \(self.variable(variable.id))"
+        }.joined(separator: "\n")
+        // Cache only the standard in-process hashes; equality still checks every typed value.
+        let hashFields = program.layout.variables.map { "let _hash\($0.id.ordinal): Int" }.joined(separator: "\n")
+        let initialHashes = program.layout.variables.map { variable in
+            let value = stateMemberNames[variable.id].map { "state.\($0)" } ?? self.variable(variable.id)
+            return "_hash\(variable.id.ordinal): \(value).hashValue"
+        }.joined(separator: ", ")
+        let equality = (["lhs.state == rhs.state"] + privateVariables.map {
+            "lhs.\(self.variable($0.id)) == rhs.\(self.variable($0.id))"
+        }).joined(separator: " && ")
+        let hashCombines = program.layout.variables.map {
+            "hasher.combine(_hashes._hash\($0.id.ordinal))"
         }.joined(separator: "\n")
         let registers = program.layout.checkingRegisters
         let registerNames = GeneratedMachineAPI.generatedIdentifiers(registers.map { $0.reference.name }, fallback: "register")
@@ -41,6 +60,21 @@ extension NativeSwiftEmitter {
         public struct Snapshot: Hashable, Sendable {
             public let state: State
             \(fields)
+            fileprivate struct Hashes: Sendable {
+                \(hashFields)
+            }
+            fileprivate let _hashes: Hashes
+            fileprivate init(state: State\(privateParameters), cachedHashes: Hashes? = nil) {
+                self.state = state
+                \(privateAssignments)
+                self._hashes = cachedHashes ?? Hashes(\(initialHashes))
+            }
+            public static func == (lhs: Self, rhs: Self) -> Bool {
+                \(equality)
+            }
+            public func hash(into hasher: inout Hasher) {
+                \(hashCombines)
+            }
         }
         private var _execution: Snapshot
         """)
@@ -201,14 +235,15 @@ extension NativeSwiftEmitter {
         """)
     }
 
-    private func executionState(values: (VariableID) -> String) -> String {
+    private func executionState(values: (VariableID) -> String, cachedHashes: String? = nil) -> String {
         let publicFields = model.api.variables.map {
             "\($0.argumentLabel): \(values($0.id))"
         }.joined(separator: ", ")
         let privateFields = program.layout.variables.filter { stateMemberNames[$0.id] == nil }.map {
             ", \(variable($0.id)): \(values($0.id))"
         }.joined()
-        return "Snapshot(state: State(\(publicFields))\(privateFields))"
+        let hashes = cachedHashes.map { ", cachedHashes: \($0)" } ?? ""
+        return "Snapshot(state: State(\(publicFields))\(privateFields)\(hashes))"
     }
 
     func updateDeclarations() throws -> [DeclSyntax] {
@@ -224,7 +259,11 @@ extension NativeSwiftEmitter {
             }
             """
         }.joined(separator: "\n")
-        let updated = executionState { "\(variable($0)) ?? \(stateValue($0))" }
+        let cachedHashes = "Snapshot.Hashes(" + program.layout.variables.map { slot in
+            let name = variable(slot.id)
+            return "_hash\(slot.id.ordinal): \(name).map { $0.hashValue } ?? state._hashes._hash\(slot.id.ordinal)"
+        }.joined(separator: ", ") + ")"
+        let updated = executionState(values: { "\(variable($0)) ?? \(stateValue($0))" }, cachedHashes: cachedHashes)
         return try nativeDeclarations("""
         private struct _Updates: Sendable {
             \(fields)
