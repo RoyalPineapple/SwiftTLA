@@ -85,11 +85,16 @@ struct MachineValidationTests {
             scenario: scenario, caseID: "counter-0", maximumStates: 100,
             stopOnViolation: false, to: output)
         let evidence = try Data(contentsOf: output)
+        let profileURL = output.deletingPathExtension().appendingPathExtension("profile.json")
+        let profile = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: profileURL)) as? [String: Any])
         if case .exhausted = summary.completion {} else { Issue.record("Expected complete traversal") }
         #expect(summary.states >= 3)
         #expect(summary.edges >= 2)
         #expect(evidence.starts(with: Data("STLAGRF1".utf8)))
         #expect(evidence.count > 100)
+        #expect(profile["schema"] as? String == "swifttla.native-validation-profile.v1")
+        #expect(profile["stateEvents"] as? Int == summary.states)
+        #expect(profile["edgeEvents"] as? Int == summary.edges)
     }
 
     @Test("generated assertions and reachability retain all selected scenario outcomes")

@@ -140,8 +140,9 @@ jobs:
           set -o pipefail
           mkdir -p .build/validation-evidence
           git rev-parse HEAD > .build/validation-evidence/source-sha.txt
-          .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
+          /usr/bin/time -l .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
             --output .build/validation-evidence/native --maximum-states 10000000
+          jq -c . ".build/validation-evidence/native/$CASE_ID/machine.profile.json"
       - name: Validate generated TLA with TLC
         if: steps.oracle-cache.outputs.cache-hit != 'true'
         timeout-minutes: 35
@@ -167,7 +168,7 @@ jobs:
         timeout-minutes: 60
         run: |
           set -o pipefail
-          .build/validation-bin/tlc-validate compare run --case "$CASE_ID" \
+          /usr/bin/time -l .build/validation-bin/tlc-validate compare run --case "$CASE_ID" \
             --native .build/validation-evidence/native \
             --oracle .build/validation-evidence/oracle \
             --output .build/validation-evidence/comparison

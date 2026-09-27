@@ -43,7 +43,7 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
         transitions = adjacency
     }
 
-    package func temporalResults(checking: Set<Machine.Property>)
+    public func temporalResults(checking: Set<Machine.Property>)
         throws -> [Machine.Property: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] {
         let properties = try machine.temporalProperties(checking: checking)
         guard !properties.isEmpty else { return [:] }

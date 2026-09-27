@@ -42,6 +42,18 @@ TLC runs only in separate validation infrastructure. Applications, Swift model
 checking, and ordinary Swift tests must not invoke it. Tests of the validation
 protocol may use recorded data and process fixtures without executing TLC.
 
+The product owns the DSL, compiler, generated Swift machine, TLA+ output, and
+native checker in `Sources/SwiftTLA` and `Sources/SwiftTLAPlugin`. A consumer
+can build and check a generated machine using only the `SwiftTLA` and
+`SwiftTLAMacros` products. `Sources/UpstreamParity/Conformance`, the TLC bridge,
+and CI consume product outputs to establish independent agreement; they own
+upstream inputs, evidence comparison, caches, and retained results. They must
+not define a model's transitions or property outcomes, or add case-specific
+behavior to obtain parity. The dependency is one-way. An evidence format may
+be shared, but transition and property evaluation may not be shared between
+the native checker and TLC. Removing parity jobs removes external proof, not
+the ability to generate and check machines.
+
 For each DSL model and finite configuration, derive native exploration, TLA+
 export, state mappings, and canonical comparison data automatically. Compare
 initial-state sets and complete labeled transition graphs, together with invariant
@@ -72,9 +84,10 @@ implementation work; they do not justify removing families from the target.
 ## Current migration boundary
 
 Generated machines expose their complete typed snapshots and all native
-successors. `ReachabilityGraph` explores those successors and returns a complete
-graph or throws. It evaluates generated assumptions, invariants, and termination
-guards, retaining safety violations and shortest native traces.
+successors. `MachineValidator` checks them as a typed event stream; only its
+exhausted result establishes complete exploration. `ReachabilityGraph` retains a
+complete graph for callers that need topology or traces. Both evaluate generated
+assumptions, invariants, and termination guards without TLC.
 Native temporal analysis evaluates generated predicates over the completed graph and uses the declared fairness conditions.
 Supported refinement checks use generated abstract transitions and generated state mappings.
 Independent TLC comparisons cover the registered finite cases and model-owned scenarios.

@@ -273,6 +273,13 @@ func runGeneratedMachineTesting() throws {
 
 Generated models conform to `StateMachine`. `successors()` enumerates every
 action and successor using the same functions that `send(_:)` calls.
+`MachineValidator.run(initialMachines:maximumStates:checking:stopOnViolation:emit:)`
+checks those successors without retaining a complete graph. Its typed events
+let a caller consume states, labeled edges, and decisive failures as they occur.
+Only an `exhausted` summary establishes complete exploration; an early
+counterexample has a valid verdict but only a partial graph. This checker needs
+neither TLC nor the parity harness.
+
 `ReachabilityGraph(initialMachines: Model.initialMachines(), maximumStates: limit)`
 explores those native successors without compiling or interpreting expressions
 and without invoking TLC. Supply initial machines from one finite configuration.

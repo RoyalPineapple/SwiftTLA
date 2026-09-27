@@ -1,7 +1,9 @@
+import Dispatch
+
 /// The generated machine is the execution authority for native validation.
 /// This traversal retains only the seen-state index and the pending frontier;
 /// callers persist evidence as events arrive.
-package enum MachineValidationEvent<Machine: StateMachine> {
+public enum MachineValidationEvent<Machine: StateMachine>: Sendable {
     case state(id: Int, snapshot: Machine.Snapshot, initial: Bool, predecessor: Int?, action: Machine.Action?)
     case edge(source: Int, action: Machine.Action, target: Int)
     case invariantFailure(property: Machine.Property, snapshot: Machine.Snapshot, predecessor: Int?, action: Machine.Action?)
@@ -9,24 +11,34 @@ package enum MachineValidationEvent<Machine: StateMachine> {
     case reachability(property: Machine.Property, snapshot: Machine.Snapshot, predecessor: Int?, action: Machine.Action?)
 }
 
-package struct MachineValidationSummary<Property: Hashable & Sendable>: Sendable {
-    package enum Completion: Sendable {
+public struct MachineValidationSummary<Property: Hashable & Sendable>: Sendable {
+    public enum Completion: Sendable {
         case exhausted
         case decisiveViolation
         case decisiveReachability
     }
 
-    package let completion: Completion
-    package let initialStates: Int
-    package let states: Int
-    package let edges: Int
-    package let violatedInvariants: Set<Property>
-    package let reachedProperties: Set<Property>
-    package let deadlockFound: Bool
+    public let completion: Completion
+    public let initialStates: Int
+    public let states: Int
+    public let edges: Int
+    public let violatedInvariants: Set<Property>
+    public let reachedProperties: Set<Property>
+    public let deadlockFound: Bool
+    public let timing: MachineValidationTiming
 }
 
-package enum MachineValidator {
-    package static func run<Machine: StateMachine>(
+public struct MachineValidationTiming: Sendable {
+    public let elapsedNanoseconds: UInt64
+    public let successorNanoseconds: UInt64
+    public let successorCalls: Int
+}
+
+/// Checks generated Swift transitions without retaining a graph or invoking TLC.
+/// A decisive result contains only the explored prefix; only `exhausted`
+/// establishes that all states and edges were visited within the limit.
+public enum MachineValidator {
+    public static func run<Machine: StateMachine>(
         initialMachines: [Machine],
         maximumStates: Int,
         checking: ModelChecks<Machine.Property>,
@@ -36,6 +48,7 @@ package enum MachineValidator {
     ) throws -> MachineValidationSummary<Machine.Property> {
         guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
         guard let first = initialMachines.first else { throw ExplorationError.noInitialStates }
+        let startedAt = DispatchTime.now().uptimeNanoseconds
         let supported = Set(Machine.invariantProperties).union(Machine.reachabilityProperties)
         if let unsupported = checking.properties.subtracting(supported)
             .map({ Machine.formalPropertyNames[$0] ?? String(reflecting: $0) }).sorted().first {
@@ -51,13 +64,19 @@ package enum MachineValidator {
         var violated: Set<Machine.Property> = []
         var reached: Set<Machine.Property> = []
         var deadlockFound = false
+        var successorNanoseconds: UInt64 = 0
+        var successorCalls = 0
         let reachability = Set(Machine.reachabilityProperties).intersection(checking.properties)
 
         func summary(_ completion: MachineValidationSummary<Machine.Property>.Completion)
             -> MachineValidationSummary<Machine.Property> {
             .init(completion: completion, initialStates: initialCount, states: seen.count,
                   edges: edgeCount, violatedInvariants: violated,
-                  reachedProperties: reached, deadlockFound: deadlockFound)
+                  reachedProperties: reached, deadlockFound: deadlockFound,
+                  timing: .init(
+                    elapsedNanoseconds: DispatchTime.now().uptimeNanoseconds - startedAt,
+                    successorNanoseconds: successorNanoseconds,
+                    successorCalls: successorCalls))
         }
 
         func checkInvariants(_ machine: Machine, predecessor: Int?, action: Machine.Action?) throws -> Bool {
@@ -118,7 +137,10 @@ package enum MachineValidator {
                 let source = seen[machine.snapshot]!
                 pending[head] = nil
                 head += 1
+                let successorStartedAt = DispatchTime.now().uptimeNanoseconds
                 let successors = try machine.successors(checking: &context)
+                successorNanoseconds += DispatchTime.now().uptimeNanoseconds - successorStartedAt
+                successorCalls += 1
                 if successors.isEmpty {
                     deadlockFound = true
                     try emit(.deadlock(state: source))

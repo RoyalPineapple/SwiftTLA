@@ -1,8 +1,25 @@
+import Dispatch
 import Foundation
 import SwiftTLA
 
 package enum MachineValidationEvidenceError: Error, Equatable {
     case invalidPropertyName
+}
+
+private struct MachineValidationProfile: Encodable {
+    let schema: String
+    let caseID: String
+    let elapsedSeconds: Double
+    let explorationSeconds: Double
+    let successorSeconds: Double
+    let successorCalls: Int
+    let stateEvents: Int
+    let edgeEvents: Int
+    let sampledStates: Int
+    let sampledEdges: Int
+    let estimatedStateProjectionSeconds: Double
+    let estimatedStateWriteSeconds: Double
+    let estimatedEdgeWriteSeconds: Double
 }
 
 /// Append-only evidence from the generated Swift machine. TLC is never read by this checker.
@@ -12,6 +29,7 @@ package enum MachineValidationEvidence {
         stopOnReachability: Bool = false,
         checking: ModelChecks<Scenario.Property>? = nil, to output: URL
     ) throws -> MachineValidationSummary<Scenario.Property> {
+        let startedAt = DispatchTime.now().uptimeNanoseconds
         let propertyNames = scenario.formalPropertyNames
         guard Set(propertyNames.keys) == Set(Scenario.Property.allCases),
               Set(propertyNames.values).count == propertyNames.count,
@@ -28,6 +46,13 @@ package enum MachineValidationEvidence {
         var writer = try BinaryGraphEvidenceWriter(to: output, caseID: caseID)
         defer { writer.close() }
         var actionIDs: [Scenario.Machine.Action: UInt32] = [:]
+        var stateEvents = 0
+        var edgeEvents = 0
+        var sampledStates = 0
+        var sampledEdges = 0
+        var stateProjectionNanoseconds: UInt64 = 0
+        var stateWriteNanoseconds: UInt64 = 0
+        var edgeWriteNanoseconds: UInt64 = 0
 
         func actionID(_ action: Scenario.Machine.Action) throws -> UInt32 {
             if let id = actionIDs[action] { return id }
@@ -50,10 +75,30 @@ package enum MachineValidationEvidence {
         ) { event in
             switch event {
             case .state(let id, let snapshot, let isInitial, _, _):
-                try writer.state(id: UInt64(id), key: stateKey(snapshot), initial: isInitial)
+                stateEvents += 1
+                if stateEvents % 256 == 1 {
+                    sampledStates += 1
+                    let projectionStartedAt = DispatchTime.now().uptimeNanoseconds
+                    let key = try stateKey(snapshot)
+                    let writeStartedAt = DispatchTime.now().uptimeNanoseconds
+                    try writer.state(id: UInt64(id), key: key, initial: isInitial)
+                    let finishedAt = DispatchTime.now().uptimeNanoseconds
+                    stateProjectionNanoseconds += writeStartedAt - projectionStartedAt
+                    stateWriteNanoseconds += finishedAt - writeStartedAt
+                } else {
+                    try writer.state(id: UInt64(id), key: stateKey(snapshot), initial: isInitial)
+                }
             case .edge(let source, let action, let target):
                 let action = try actionID(action)
-                try writer.edge(source: UInt64(source), action: action, target: UInt64(target))
+                edgeEvents += 1
+                if edgeEvents % 1024 == 1 {
+                    sampledEdges += 1
+                    let writeStartedAt = DispatchTime.now().uptimeNanoseconds
+                    try writer.edge(source: UInt64(source), action: action, target: UInt64(target))
+                    edgeWriteNanoseconds += DispatchTime.now().uptimeNanoseconds - writeStartedAt
+                } else {
+                    try writer.edge(source: UInt64(source), action: action, target: UInt64(target))
+                }
             case .invariantFailure(let property, let snapshot, let predecessor, let action):
                 guard let name = propertyNames[property] else {
                     throw MachineValidationEvidenceError.invalidPropertyName
@@ -78,6 +123,27 @@ package enum MachineValidationEvidence {
         case .decisiveReachability: 2
         }
         try writer.finish(completion: completion)
+        func seconds(_ nanoseconds: UInt64) -> Double { Double(nanoseconds) / 1_000_000_000 }
+        func estimatedSeconds(_ nanoseconds: UInt64, samples: Int, total: Int) -> Double {
+            guard samples > 0 else { return 0 }
+            return seconds(nanoseconds) * Double(total) / Double(samples)
+        }
+        let profile = MachineValidationProfile(
+            schema: "swifttla.native-validation-profile.v1", caseID: caseID,
+            elapsedSeconds: seconds(DispatchTime.now().uptimeNanoseconds - startedAt),
+            explorationSeconds: seconds(result.timing.elapsedNanoseconds),
+            successorSeconds: seconds(result.timing.successorNanoseconds),
+            successorCalls: result.timing.successorCalls,
+            stateEvents: stateEvents, edgeEvents: edgeEvents,
+            sampledStates: sampledStates, sampledEdges: sampledEdges,
+            estimatedStateProjectionSeconds: estimatedSeconds(
+                stateProjectionNanoseconds, samples: sampledStates, total: stateEvents),
+            estimatedStateWriteSeconds: estimatedSeconds(
+                stateWriteNanoseconds, samples: sampledStates, total: stateEvents),
+            estimatedEdgeWriteSeconds: estimatedSeconds(
+                edgeWriteNanoseconds, samples: sampledEdges, total: edgeEvents))
+        try JSONEncoder().encode(profile).write(
+            to: output.deletingPathExtension().appendingPathExtension("profile.json"), options: .atomic)
         return result
     }
 }
