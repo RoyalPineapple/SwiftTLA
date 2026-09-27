@@ -1,4 +1,5 @@
 import CryptoKit
+import Dispatch
 import Foundation
 import SwiftTLA
 
@@ -22,6 +23,15 @@ package enum ValidationEvidenceComparisonError: Error, Equatable {
 /// Exact, bounded-memory comparison. State keys are sorted once and assigned
 /// common ranks; full edges are then compared as sorted rank/action/rank records.
 package enum ValidationEvidenceComparison {
+    private static func measured<Result>(_ phase: String, _ body: () throws -> Result) rethrows -> Result {
+        let started = DispatchTime.now().uptimeNanoseconds
+        defer {
+            let elapsed = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
+            fputs("comparison phase \(phase): \(elapsed) s\n", stderr)
+        }
+        return try body()
+    }
+
     package static func compareTLCGraphs(
         caseID: String, generated: URL, reference: URL,
         actions: [RenderedAction], in directory: URL, spoolExecutable: URL? = nil
@@ -104,9 +114,11 @@ package enum ValidationEvidenceComparison {
             let swiftRoot = directory.appendingPathComponent("swift")
             try FileManager.default.createDirectory(at: swiftRoot, withIntermediateDirectories: false)
             spoolDirectories.append(swiftRoot)
-            let swiftGraph = try spoolNative(native.appendingPathComponent("machine.bin"),
-                caseID: caseID, expectedComplete: swift.graphComplete, actions: actions,
-                in: swiftRoot, executable: spoolExecutable)
+            let swiftGraph = try measured("native spool") {
+                try spoolNative(native.appendingPathComponent("machine.bin"),
+                    caseID: caseID, expectedComplete: swift.graphComplete, actions: actions,
+                    in: swiftRoot, executable: spoolExecutable)
+            }
             guard swiftGraph.stateCount == swift.states,
                   swiftGraph.initialCount == swift.initialStates,
                   swiftGraph.edgeCount == swift.edges else {
@@ -118,12 +130,16 @@ package enum ValidationEvidenceComparison {
                 let tlcRoot = directory.appendingPathComponent("tlc")
                 try FileManager.default.createDirectory(at: tlcRoot, withIntermediateDirectories: false)
                 spoolDirectories.append(tlcRoot)
-                let tlcGraph = try spoolTLC(
-                    oracle.appendingPathComponent("tlc-graph/graph-events.bin"),
-                    caseID: caseID, actions: actions, in: tlcRoot,
-                    executable: spoolExecutable, kind: "native")
-                difference = try Self.compareGraph(swiftGraph: swiftGraph, tlcGraph: tlcGraph,
-                    swiftRoot: swiftRoot, tlcRoot: tlcRoot)
+                let tlcGraph = try measured("TLC spool") {
+                    try spoolTLC(
+                        oracle.appendingPathComponent("tlc-graph/graph-events.bin"),
+                        caseID: caseID, actions: actions, in: tlcRoot,
+                        executable: spoolExecutable, kind: "native")
+                }
+                difference = try measured("complete graph") {
+                    try Self.compareGraph(swiftGraph: swiftGraph, tlcGraph: tlcGraph,
+                        swiftRoot: swiftRoot, tlcRoot: tlcRoot)
+                }
             }
         }
         let report = ValidationEvidenceComparisonReport(
@@ -177,23 +193,25 @@ package enum ValidationEvidenceComparison {
         _ left: URL, _ right: URL, leftRoot: URL, rightRoot: URL,
         expectedCount: Int, assign: (UInt64, UInt64, Int) throws -> Void
     ) throws -> Bool {
-        let leftBuckets = try partitionStates(left, in: leftRoot)
-        let rightBuckets = try partitionStates(right, in: rightRoot)
-        var rank = 0
-        for index in leftBuckets.indices {
-            let lhs = try stateRecords(leftBuckets[index])
-            let rhs = try stateRecords(rightBuckets[index])
-            guard lhs.count == rhs.count else { return false }
-            var previous: Data?
-            for offset in lhs.indices {
-                guard lhs[offset].key == rhs[offset].key,
-                      previous != lhs[offset].key else { return false }
-                try assign(lhs[offset].id, rhs[offset].id, rank)
-                previous = lhs[offset].key
-                rank += 1
+        let leftBuckets = try measured("left state partition") { try partitionStates(left, in: leftRoot) }
+        let rightBuckets = try measured("right state partition") { try partitionStates(right, in: rightRoot) }
+        return try measured("state sort and match") {
+            var rank = 0
+            for index in leftBuckets.indices {
+                let lhs = try stateRecords(leftBuckets[index])
+                let rhs = try stateRecords(rightBuckets[index])
+                guard lhs.count == rhs.count else { return false }
+                var previous: Data?
+                for offset in lhs.indices {
+                    guard lhs[offset].key == rhs[offset].key,
+                          previous != lhs[offset].key else { return false }
+                    try assign(lhs[offset].id, rhs[offset].id, rank)
+                    previous = lhs[offset].key
+                    rank += 1
+                }
             }
+            return rank == expectedCount
         }
-        return rank == expectedCount
     }
 
     private static func partitionStates(_ input: URL, in directory: URL) throws -> [URL] {
@@ -582,14 +600,20 @@ package enum ValidationEvidenceComparison {
         leftRoot: URL, rightRoot: URL,
         leftRank: (UInt64) throws -> UInt32,
         rightRank: (UInt64) throws -> UInt32) throws -> Bool {
-        let leftBuckets = try partitionEdges(left, in: leftRoot, rank: leftRank)
-        let rightBuckets = try partitionEdges(right, in: rightRoot, rank: rightRank)
-        for index in leftBuckets.indices {
-            if try uniqueEdges(leftBuckets[index]) != uniqueEdges(rightBuckets[index]) {
-                return false
-            }
+        let leftBuckets = try measured("left edge partition") {
+            try partitionEdges(left, in: leftRoot, rank: leftRank)
         }
-        return true
+        let rightBuckets = try measured("right edge partition") {
+            try partitionEdges(right, in: rightRoot, rank: rightRank)
+        }
+        return try measured("edge sort and match") {
+            for index in leftBuckets.indices {
+                if try uniqueEdges(leftBuckets[index]) != uniqueEdges(rightBuckets[index]) {
+                    return false
+                }
+            }
+            return true
+        }
     }
 
     private static func partitionEdges(_ input: URL, in directory: URL,
