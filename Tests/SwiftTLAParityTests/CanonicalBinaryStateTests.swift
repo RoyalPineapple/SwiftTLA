@@ -16,6 +16,18 @@ struct CanonicalBinaryStateTests {
         #expect(try CanonicalBinaryState.encode(projection) == expected)
         try CanonicalBinaryState.validate(expected)
         #expect(try CanonicalBinaryState.encode(state([("x", .bool(true))])) != expected)
+
+        let nested = Data([
+            0x53, 0x54, 0x4c, 0x41, 0x53, 0x56, 0x30, 0x31,
+            0, 0, 0, 1,
+            0, 0, 0, 1, 0x78,
+            6, 0, 0, 0, 16,
+            0, 0, 0, 2,
+            2, 0, 0, 0, 1, 1,
+            3, 0, 0, 0, 1, 0x41
+        ])
+        #expect(try CanonicalBinaryState.encode(state([("x", .tuple([.bool(true), .string("A")]))])) == nested)
+        try CanonicalBinaryState.validate(nested)
     }
 
     @Test("canonical state decoding rejects truncated and invalid UTF-8 values")

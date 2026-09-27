@@ -18,7 +18,7 @@ enum CanonicalBinaryState {
         try appendCount(entries.count, to: &output)
         for entry in entries {
             try appendString(entry.token.description, to: &output)
-            output.append(try encode(entry.value))
+            try encode(entry.value, to: &output)
         }
         return output
     }
@@ -141,82 +141,111 @@ enum CanonicalBinaryState {
     }
 
     private static func encode(_ value: TLAValue) throws -> Data {
-        var payload = Data()
-        let tag: UInt8
+        var output = Data()
+        try encode(value, to: &output)
+        return output
+    }
+
+    private static func encode(_ value: TLAValue, to output: inout Data) throws {
         switch value {
         case .int(let integer):
-            tag = 1
-            appendUInt64(UInt64(bitPattern: Int64(integer)), to: &payload)
+            let lengthOffset = beginValue(tag: 1, to: &output)
+            appendUInt64(UInt64(bitPattern: Int64(integer)), to: &output)
+            try finishValue(lengthOffset: lengthOffset, in: &output)
         case .bool(let boolean):
-            tag = 2
-            payload.append(boolean ? 1 : 0)
+            let lengthOffset = beginValue(tag: 2, to: &output)
+            output.append(boolean ? 1 : 0)
+            try finishValue(lengthOffset: lengthOffset, in: &output)
         case .string(let string):
-            tag = 3
-            payload.append(contentsOf: string.utf8)
+            let lengthOffset = beginValue(tag: 3, to: &output)
+            output.append(contentsOf: string.utf8)
+            try finishValue(lengthOffset: lengthOffset, in: &output)
         case .constant(let constant):
-            tag = 4
-            payload.append(contentsOf: constant.utf8)
+            let lengthOffset = beginValue(tag: 4, to: &output)
+            output.append(contentsOf: constant.utf8)
+            try finishValue(lengthOffset: lengthOffset, in: &output)
         case .set(let members):
-            tag = 5
             let ordered = try members.map(encode).sorted(by: { $0.lexicographicallyPrecedes($1) })
             var unique: [Data] = []
             unique.reserveCapacity(ordered.count)
             for member in ordered where unique.last != member { unique.append(member) }
-            try appendCount(unique.count, to: &payload)
-            for member in unique { payload.append(member) }
+            let lengthOffset = beginValue(tag: 5, to: &output)
+            try appendCount(unique.count, to: &output)
+            for member in unique { output.append(member) }
+            try finishValue(lengthOffset: lengthOffset, in: &output)
         case .tuple(let members):
-            tag = 6
-            try appendCount(members.count, to: &payload)
-            for member in members { payload.append(try encode(member)) }
+            let lengthOffset = beginValue(tag: 6, to: &output)
+            try appendCount(members.count, to: &output)
+            for member in members { try encode(member, to: &output) }
+            try finishValue(lengthOffset: lengthOffset, in: &output)
         case .record(let record):
-            return try encodeRecord(record.fields.map { ($0.name, $0.value) })
+            try encodeRecord(record.fields.map { ($0.name, $0.value) }, to: &output)
         case .function(let mapping):
-            if mapping.isEmpty { return try encode(.tuple([])) }
+            if mapping.isEmpty {
+                try encode(.tuple([]), to: &output)
+                return
+            }
             let indexed = mapping.compactMap { key, value -> (Int, TLAValue)? in
                 guard case .int(let index) = key else { return nil }
                 return (index, value)
             }.sorted { $0.0 < $1.0 }
             if indexed.count == mapping.count,
                indexed.enumerated().allSatisfy({ $0.offset + 1 == $0.element.0 }) {
-                return try encode(.tuple(indexed.map(\.1)))
+                try encode(.tuple(indexed.map(\.1)), to: &output)
+                return
             }
             let fields = mapping.compactMap { key, value -> (String, TLAValue)? in
                 guard case .string(let name) = key else { return nil }
                 return (name, value)
             }
-            if fields.count == mapping.count { return try encodeRecord(fields) }
-            tag = 8
+            if fields.count == mapping.count {
+                try encodeRecord(fields, to: &output)
+                return
+            }
+            let lengthOffset = beginValue(tag: 8, to: &output)
             let entries = try mapping.map { (try encode($0.key), try encode($0.value)) }
                 .sorted { $0.0.lexicographicallyPrecedes($1.0) }
             for index in 1..<entries.count where entries[index - 1].0 == entries[index].0 {
                 throw CodingError.duplicateFunctionKey
             }
-            try appendCount(entries.count, to: &payload)
+            try appendCount(entries.count, to: &output)
             for (key, value) in entries {
-                payload.append(key)
-                payload.append(value)
+                output.append(key)
+                output.append(value)
             }
+            try finishValue(lengthOffset: lengthOffset, in: &output)
         }
-        return try wrap(tag: tag, payload: payload)
     }
 
-    private static func encodeRecord(_ fields: [(String, TLAValue)]) throws -> Data {
-        var payload = Data()
-        if fields.isEmpty { return try encode(.tuple([])) }
+    private static func encodeRecord(_ fields: [(String, TLAValue)], to output: inout Data) throws {
+        if fields.isEmpty {
+            try encode(.tuple([]), to: &output)
+            return
+        }
+        let lengthOffset = beginValue(tag: 7, to: &output)
         let ordered = fields.sorted { $0.0.utf8.lexicographicallyPrecedes($1.0.utf8) }
-        try appendCount(ordered.count, to: &payload)
+        try appendCount(ordered.count, to: &output)
         for (name, value) in ordered {
-            try appendString(name, to: &payload)
-            payload.append(try encode(value))
+            try appendString(name, to: &output)
+            try encode(value, to: &output)
         }
-        return try wrap(tag: 7, payload: payload)
+        try finishValue(lengthOffset: lengthOffset, in: &output)
     }
 
-    private static func wrap(tag: UInt8, payload: Data) throws -> Data {
-        var output = Data([tag])
-        try appendCount(payload.count, to: &output)
-        output.append(payload)
-        return output
+    private static func beginValue(tag: UInt8, to output: inout Data) -> Int {
+        output.append(tag)
+        let lengthOffset = output.count
+        output.append(contentsOf: [0, 0, 0, 0])
+        return lengthOffset
+    }
+
+    private static func finishValue(lengthOffset: Int, in output: inout Data) throws {
+        guard let length = UInt32(exactly: output.count - lengthOffset - 4) else {
+            throw CodingError.lengthOverflow
+        }
+        for index in 0..<4 {
+            output[lengthOffset + index] = UInt8(truncatingIfNeeded: length >> (24 - index * 8))
+        }
     }
 
     private static func appendString(_ value: String, to output: inout Data) throws {
