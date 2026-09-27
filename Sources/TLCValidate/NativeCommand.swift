@@ -39,7 +39,7 @@ func runNative(arguments: [String]) -> Never {
         var failures = 0
         for (id, scenario) in selected {
             do {
-                let result = try writeNativeEvidence(scenario: scenario, maximumStates: maximumStates,
+                let result = try writeNativeEvidence(scenario: scenario, caseID: id, maximumStates: maximumStates,
                                                      to: output.appendingPathComponent(id))
                 print("native \(id): \(result.graphComplete ? "complete graph" : "decisive result")")
             } catch {
@@ -55,7 +55,8 @@ func runNative(arguments: [String]) -> Never {
 }
 
 private func writeNativeEvidence<Scenario: ModelValidationScenario>(
-    scenario: Scenario, maximumStates: Int, to output: URL
+    scenario: Scenario, caseID: String, maximumStates: Int, to output: URL
 ) throws -> NativeValidationReport {
-    try NativeValidationRunner.run(scenario: scenario, maximumStates: maximumStates, to: output)
+    try NativeValidationRunner.run(scenario: scenario, caseID: caseID,
+        maximumStates: maximumStates, to: output)
 }

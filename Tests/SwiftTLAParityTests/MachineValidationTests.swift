@@ -80,17 +80,16 @@ struct MachineValidationTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let output = directory.appendingPathComponent("native.jsonl")
+        let output = directory.appendingPathComponent("native.bin")
         let summary = try MachineValidationEvidence.write(
-            scenario: scenario, maximumStates: 100, stopOnViolation: false, to: output)
-        let evidence = try String(contentsOf: output)
+            scenario: scenario, caseID: "counter-0", maximumStates: 100,
+            stopOnViolation: false, to: output)
+        let evidence = try Data(contentsOf: output)
         if case .exhausted = summary.completion {} else { Issue.record("Expected complete traversal") }
         #expect(summary.states >= 3)
         #expect(summary.edges >= 2)
-        #expect(evidence.contains("\"type\":\"header\""))
-        #expect(evidence.contains("\"type\":\"state\""))
-        #expect(evidence.contains("\"type\":\"edge\""))
-        #expect(evidence.contains("\"type\":\"complete\""))
+        #expect(evidence.starts(with: Data("STLAGRF1".utf8)))
+        #expect(evidence.count > 100)
     }
 
     @Test("generated assertions and reachability retain all selected scenario outcomes")
@@ -98,7 +97,13 @@ struct MachineValidationTests {
         let scenario = try ConfiguredCounter.validationScenarios()[0]
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let report = try NativeValidationRunner.run(scenario: scenario, maximumStates: 100, to: directory)
+        let report = try NativeValidationRunner.run(scenario: scenario, caseID: "counter-0",
+            maximumStates: 100, to: directory)
+        var evidence = try BinaryGraphEvidenceReader(directory.appendingPathComponent("machine.bin"))
+        #expect(try evidence.bytes(8) == Data("STLAGRF1".utf8))
+        #expect(try evidence.byte() == 2)
+        #expect(try evidence.string() == "counter-0")
+        evidence.close()
         #expect(report.properties["__pcal_assert_0"] == .satisfied)
         #expect(report.properties["AtLimit"] == .reached)
         #expect(report.deadlock == .satisfied)
@@ -110,7 +115,8 @@ struct MachineValidationTests {
         let scenario = try ConstantStateClaims.validationScenarios()[0]
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let report = try NativeValidationRunner.run(scenario: scenario, maximumStates: 10, to: directory)
+        let report = try NativeValidationRunner.run(scenario: scenario, caseID: "constant-state-claims-0",
+            maximumStates: 10, to: directory)
         #expect(!report.graphComplete)
         #expect(report.properties["falseInvariant"] == .violated)
         #expect(report.properties["trueInvariant"] == .satisfied)
@@ -118,7 +124,7 @@ struct MachineValidationTests {
         #expect(report.properties["absentWitness"] == .unreachable)
         #expect(report.deadlockSelected)
         #expect(report.deadlock == nil)
-        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("check-absentWitness.jsonl").path))
+        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("check-absentWitness.bin").path))
         #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("report.json").path))
     }
 
@@ -133,9 +139,10 @@ struct MachineValidationTests {
             try? FileManager.default.removeItem(at: refinementDirectory)
         }
         let temporalReport = try NativeValidationRunner.run(
-            scenario: temporal, maximumStates: 10, to: temporalDirectory)
+            scenario: temporal, caseID: "selected-checks-0", maximumStates: 10, to: temporalDirectory)
         let refinementReport = try NativeValidationRunner.run(
-            scenario: refinement, maximumStates: 10, to: refinementDirectory)
+            scenario: refinement, caseID: "refinement-counter-1", maximumStates: 10,
+            to: refinementDirectory)
         #expect(temporalReport.properties["StaysZero"] == .violated)
         #expect(refinementReport.properties["UnitSteps"] == .violated)
     }

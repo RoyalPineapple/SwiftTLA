@@ -37,7 +37,7 @@ func runCompare(arguments: [String]) -> Never {
             let actions = try spoolActions(caseID: arguments[2], kind: "native")
             try ValidationEvidenceComparison.writeNativeSpool(
                 URL(fileURLWithPath: arguments[4]).standardizedFileURL,
-                expectedComplete: arguments[6] == "true", actions: actions,
+                caseID: arguments[2], expectedComplete: arguments[6] == "true", actions: actions,
                 in: URL(fileURLWithPath: arguments[8]).standardizedFileURL)
             exit(0)
         }

@@ -427,7 +427,11 @@ package struct TLCProcessAdapter: Sendable {
     if let failure {
       try RetainedFiles.writeText(redactingSecrets(in: failure.message), to: logs.appendingPathComponent("tlc.failure.log"))
     }
-    let graphName = request.graphEvents.pathExtension == "gz" ? "graph-events.jsonl.gz" : "graph-events.jsonl"
+    let graphName = switch request.graphEvents.pathExtension {
+    case "bin": "graph-events.bin"
+    case "gz": "graph-events.jsonl.gz"
+    default: "graph-events.jsonl"
+    }
     let graphFiles = request.invocation == .finiteGraph ? [(request.graphEvents, graphName)] : []
     for (source, name) in graphFiles + [(request.traceOutput, "counterexample.json")] {
       guard FileManager.default.fileExists(atPath: source.path) else { continue }

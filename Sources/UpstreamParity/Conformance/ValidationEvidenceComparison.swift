@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import SwiftTLA
 
@@ -76,9 +75,11 @@ package enum ValidationEvidenceComparison {
         let generatedInitial = try rankInitials(generatedGraph.initial, ranks: generatedRanks, in: generatedRoot)
         let referenceInitial = try rankInitials(referenceGraph.initial, ranks: referenceRanks, in: referenceRoot)
         if try firstDifference(generatedInitial, referenceInitial) != nil { return "initial state set" }
-        let generatedEdges = try rankEdges(generatedGraph.edges, ranks: generatedRanks, in: generatedRoot)
-        let referenceEdges = try rankEdges(referenceGraph.edges, ranks: referenceRanks, in: referenceRoot)
-        if try firstDifference(generatedEdges, referenceEdges) != nil { return "complete labeled edge set" }
+        let same = try compareBinaryEdges(generatedGraph.edges, referenceGraph.edges,
+            leftRoot: generatedRoot, rightRoot: referenceRoot,
+            leftRank: { try Self.rank($0, in: generatedRanks) },
+            rightRank: { try Self.rank($0, in: referenceRanks) })
+        if !same { return "complete labeled edge set" }
         exact = true
         return nil
     }
@@ -117,9 +118,14 @@ package enum ValidationEvidenceComparison {
             let swiftRoot = directory.appendingPathComponent("swift")
             try FileManager.default.createDirectory(at: swiftRoot, withIntermediateDirectories: false)
             spoolDirectories.append(swiftRoot)
-            let swiftGraph = try spoolNative(native.appendingPathComponent("machine.jsonl"),
+            let swiftGraph = try spoolNative(native.appendingPathComponent("machine.bin"),
                 caseID: caseID, expectedComplete: swift.graphComplete, actions: actions,
                 in: swiftRoot, executable: spoolExecutable)
+            guard swiftGraph.stateCount == swift.states,
+                  swiftGraph.initialCount == swift.initialStates,
+                  swiftGraph.edgeCount == swift.edges else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("native report counts")
+            }
             try verifyTLCProcess(oracle.appendingPathComponent("tlc-graph/tlc-process.json"),
                 expectedComplete: tlc.graphComplete)
             if compareGraph {
@@ -127,7 +133,7 @@ package enum ValidationEvidenceComparison {
                 try FileManager.default.createDirectory(at: tlcRoot, withIntermediateDirectories: false)
                 spoolDirectories.append(tlcRoot)
                 let tlcGraph = try spoolTLC(
-                    oracle.appendingPathComponent("tlc-graph/graph-events.jsonl.gz"),
+                    oracle.appendingPathComponent("tlc-graph/graph-events.bin"),
                     caseID: caseID, actions: actions, in: tlcRoot,
                     executable: spoolExecutable, kind: "native")
                 difference = try Self.compareGraph(swiftGraph: swiftGraph, tlcGraph: tlcGraph,
@@ -183,9 +189,11 @@ package enum ValidationEvidenceComparison {
         let swiftInitial = try rankInitials(swiftGraph.initial, ranks: swiftRanks, in: swiftRoot)
         let tlcInitial = try rankInitials(tlcGraph.initial, ranks: tlcRanks, in: tlcRoot)
         if try firstDifference(swiftInitial, tlcInitial) != nil { return "initial state set" }
-        let swiftEdges = try rankEdges(swiftGraph.edges, ranks: swiftRanks, in: swiftRoot)
-        let tlcEdges = try rankEdges(tlcGraph.edges, ranks: tlcRanks, in: tlcRoot)
-        if try firstDifference(swiftEdges, tlcEdges) != nil { return "complete labeled edge set" }
+        let same = try compareBinaryEdges(swiftGraph.edges, tlcGraph.edges,
+            leftRoot: swiftRoot, rightRoot: tlcRoot,
+            leftRank: { try Self.rank($0, in: swiftRanks) },
+            rightRank: { try Self.rank($0, in: tlcRanks) })
+        if !same { return "complete labeled edge set" }
         return nil
     }
 
@@ -194,11 +202,28 @@ package enum ValidationEvidenceComparison {
         let initial: URL
         let edges: URL
         let stateCount: Int
+        let initialCount: Int
+        let edgeCount: Int
+        let binaryEdges: Bool
+
+        init(states: URL, initial: URL, edges: URL, stateCount: Int,
+            initialCount: Int = 0, edgeCount: Int = 0, binaryEdges: Bool = false) {
+            self.states = states
+            self.initial = initial
+            self.edges = edges
+            self.stateCount = stateCount
+            self.initialCount = initialCount
+            self.edgeCount = edgeCount
+            self.binaryEdges = binaryEdges
+        }
     }
 
     private struct SpoolManifest: Codable {
         let schema: String
         let stateCount: Int
+        let initialCount: Int
+        let edgeCount: Int
+        let binaryEdges: Bool
     }
 
     package static func writeTLCSpool(_ input: URL, caseID: String,
@@ -207,16 +232,17 @@ package enum ValidationEvidenceComparison {
         try writeManifest(spool, in: directory)
     }
 
-    package static func writeNativeSpool(_ input: URL, expectedComplete: Bool,
+    package static func writeNativeSpool(_ input: URL, caseID: String, expectedComplete: Bool,
         actions: [RenderedAction], in directory: URL) throws {
-        let spool = try readNative(input, expectedComplete: expectedComplete,
+        let spool = try readNative(input, caseID: caseID, expectedComplete: expectedComplete,
             actions: actions, in: directory)
         try writeManifest(spool, in: directory)
     }
 
     private static func writeManifest(_ spool: Spool, in directory: URL) throws {
-        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v1",
-            stateCount: spool.stateCount)
+        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v2",
+            stateCount: spool.stateCount, initialCount: spool.initialCount,
+            edgeCount: spool.edgeCount, binaryEdges: spool.binaryEdges)
         try JSONEncoder().encode(manifest).write(
             to: directory.appendingPathComponent("spool.json"), options: .atomic)
     }
@@ -224,8 +250,9 @@ package enum ValidationEvidenceComparison {
     private static func readManifest(in directory: URL) throws -> Spool {
         let manifest = try JSONDecoder().decode(SpoolManifest.self,
             from: Data(contentsOf: directory.appendingPathComponent("spool.json")))
-        guard manifest.schema == "swifttla.validation-spool-v1",
-              manifest.stateCount >= 0 else {
+        guard manifest.schema == "swifttla.validation-spool-v2", manifest.binaryEdges,
+              manifest.stateCount >= 0, manifest.initialCount >= 0,
+              manifest.edgeCount >= 0 else {
             throw ValidationEvidenceComparisonError.invalidEvidence("spool manifest")
         }
         let files = ["states.raw", "initial.raw", "edges.raw"].map(directory.appendingPathComponent)
@@ -236,7 +263,184 @@ package enum ValidationEvidenceComparison {
             }
         }
         return Spool(states: files[0], initial: files[1], edges: files[2],
-            stateCount: manifest.stateCount)
+            stateCount: manifest.stateCount, initialCount: manifest.initialCount,
+            edgeCount: manifest.edgeCount, binaryEdges: manifest.binaryEdges)
+    }
+
+    private static func readBinary(_ url: URL, caseID: String, actions: [RenderedAction],
+        producer: UInt8, expectedComplete: Bool, in directory: URL) throws -> Spool {
+        let states = directory.appendingPathComponent("states.raw")
+        let initial = directory.appendingPathComponent("initial.raw")
+        let edges = directory.appendingPathComponent("edges.raw")
+        var stateOut = try ValidationLineWriter(states)
+        var initialOut = try ValidationLineWriter(initial)
+        var edgeOut = try BinaryEdgeWriter(edges)
+        defer { try? stateOut.close(); try? initialOut.close(); try? edgeOut.close() }
+        var reader = try BinaryGraphEvidenceReader(url)
+        defer { reader.close() }
+        guard try reader.bytes(8) == Data("STLAGRF1".utf8),
+              try reader.byte() == producer,
+              try reader.string() == caseID else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("binary graph header")
+        }
+        let runID = try reader.string()
+        guard producer == 1 ? UUID(uuidString: runID) != nil : runID.isEmpty else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("binary graph run ID")
+        }
+        let declaredNative = Dictionary(uniqueKeysWithValues: actions.map {
+            ($0.sourceInvocationName, $0.renderedName)
+        })
+        let declaredTLC = Dictionary(uniqueKeysWithValues: actions.map {
+            (tlaInvocationLocationIdentity(action: $0.sourceName,
+                arguments: $0.arguments.map(\.description)), $0.renderedName)
+        })
+        let labels = Array(Set(actions.map(\.renderedName))).sorted()
+        let labelIDs = Dictionary(uniqueKeysWithValues: labels.enumerated().map {
+            ($0.element, UInt32($0.offset))
+        })
+        var actionIDs: [UInt32] = []
+        var fingerprints: Set<UInt64> = []
+        var stateCount = 0
+        var initialCount = 0
+        var edgeCount = 0
+        var excludedCount = 0
+        var unsupportedCount = 0
+        var violationCount = 0
+        var deadlockCount = 0
+        var reachabilityCount = 0
+        while true {
+            let footerOffset = reader.offset
+            let tag = try reader.byte()
+            switch tag {
+            case 1:
+                let id = try reader.uint32()
+                guard UInt64(id) == UInt64(actionIDs.count) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("binary action order")
+                }
+                let name = try reader.string()
+                let location = try reader.string()
+                let label: String
+                if producer == 1 {
+                    label = try resolvedAction(name: name, location: location, declared: declaredTLC)
+                } else {
+                    guard location.isEmpty, let resolved = declaredNative[name] else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("native action")
+                    }
+                    label = resolved
+                }
+                guard let labelID = labelIDs[label] else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("binary action label")
+                }
+                actionIDs.append(labelID)
+            case 2:
+                let identity = try reader.uint64()
+                let initialFlag = try reader.byte()
+                guard initialFlag <= 1 else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("binary initial flag")
+                }
+                let key: String
+                if producer == 1 {
+                    guard fingerprints.insert(identity).inserted else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("TLC state identity")
+                    }
+                    var values: [String: CanonicalValue] = [:]
+                    for _ in 0..<Int(try reader.uint32()) {
+                        let name = try reader.string()
+                        let value = try reader.string()
+                        guard values[name] == nil else {
+                            throw ValidationEvidenceComparisonError.invalidEvidence("TLC state binding")
+                        }
+                        values[name] = try TLCValueParser.parse(value)
+                    }
+                    key = CanonicalState(bindings: values).key.canonicalEncoding
+                } else {
+                    guard identity == UInt64(stateCount) else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("native state identity")
+                    }
+                    key = try reader.string()
+                }
+                guard validField(key) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("binary state key")
+                }
+                try stateOut.append("\(key)\t\(identity)")
+                stateCount += 1
+                if initialFlag == 1 {
+                    initialCount += 1
+                    try initialOut.append(String(identity))
+                }
+            case 3:
+                let source = try reader.uint64()
+                let action = try reader.uint32()
+                let target = try reader.uint64()
+                let known = producer == 1
+                    ? fingerprints.contains(source) && fingerprints.contains(target)
+                    : source < UInt64(stateCount) && target < UInt64(stateCount)
+                guard known, UInt64(action) < UInt64(actionIDs.count) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("binary edge identity")
+                }
+                try edgeOut.append(source: source, action: actionIDs[Int(action)], target: target)
+                edgeCount += 1
+            case 4:
+                let source = try reader.uint64()
+                _ = try reader.uint64()
+                let flags = try reader.uint16()
+                let predicate = try reader.string()
+                guard producer == 1, fingerprints.contains(source), flags == 2,
+                      !predicate.isEmpty else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("TLC excluded transition")
+                }
+                excludedCount += 1
+            case 5:
+                let callback = try reader.string()
+                let reason = try reader.string()
+                guard producer == 1, callback == "writeState.visualization",
+                      reason == "callback has no Action identity: STUTTERING" else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("unsupported TLC callback")
+                }
+                unsupportedCount += 1
+            case 6, 8:
+                guard producer == 2 else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("TLC property event")
+                }
+                let property = try reader.string()
+                let key = try reader.string()
+                let predecessor = try reader.uint64()
+                let action = try reader.uint32()
+                guard !property.isEmpty, validField(key),
+                      predecessor == UInt64.max || predecessor < UInt64(stateCount),
+                      action == UInt32.max || UInt64(action) < UInt64(actionIDs.count) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("native property event")
+                }
+                if tag == 6 { violationCount += 1 }
+                else { reachabilityCount += 1 }
+            case 7:
+                let state = try reader.uint64()
+                guard producer == 2, state < UInt64(stateCount) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("native deadlock event")
+                }
+                deadlockCount += 1
+            case 255:
+                let counts = try (0..<8).map { _ in try reader.uint64() }
+                let completion = try reader.byte()
+                let checksum = try reader.bytes(32)
+                let expectedCompletion = producer == 1 ? completion == 0
+                    : expectedComplete ? completion == 0 : completion == 1 || completion == 2
+                guard counts == [stateCount, initialCount, edgeCount, excludedCount,
+                    unsupportedCount, violationCount, deadlockCount, reachabilityCount].map(UInt64.init),
+                    expectedCompletion, reader.atEnd,
+                    checksum == (try binaryGraphSHA256(url, prefixLength: footerOffset)) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("binary graph footer")
+                }
+                try stateOut.close()
+                try initialOut.close()
+                try edgeOut.close()
+                return Spool(states: states, initial: initial, edges: edges,
+                    stateCount: stateCount, initialCount: initialCount,
+                    edgeCount: edgeCount, binaryEdges: true)
+            default:
+                throw ValidationEvidenceComparisonError.invalidEvidence("binary graph event")
+            }
+        }
     }
 
     private static func spoolTLC(_ input: URL, caseID: String, actions: [RenderedAction],
@@ -252,7 +456,7 @@ package enum ValidationEvidenceComparison {
     private static func spoolNative(_ input: URL, caseID: String, expectedComplete: Bool,
         actions: [RenderedAction], in directory: URL, executable: URL?) throws -> Spool {
         guard let executable else {
-            return try readNative(input, expectedComplete: expectedComplete,
+            return try readNative(input, caseID: caseID, expectedComplete: expectedComplete,
                 actions: actions, in: directory)
         }
         try runSpool(executable, arguments: ["compare", "spool-native", "--case", caseID,
@@ -282,388 +486,23 @@ package enum ValidationEvidenceComparison {
         }
     }
 
-    private static func readNative(_ url: URL, expectedComplete: Bool,
+    private static func readNative(_ url: URL, caseID: String, expectedComplete: Bool,
         actions: [RenderedAction], in directory: URL) throws -> Spool {
-        let states = directory.appendingPathComponent("states.raw")
-        let initial = directory.appendingPathComponent("initial.raw")
-        let edges = directory.appendingPathComponent("edges.raw")
-        var stateOut = try ValidationLineWriter(states)
-        var initialOut = try ValidationLineWriter(initial)
-        var edgeOut = try ValidationLineWriter(edges)
-        let actionNames = Dictionary(uniqueKeysWithValues: actions.map { ($0.sourceInvocationName, $0.renderedName) })
-        defer { try? stateOut.close(); try? initialOut.close(); try? edgeOut.close() }
-        var reader = try ValidationLineReader(url)
-        defer { reader.close() }
-        var digest = CryptoKit.SHA256()
-        var count = 0
-        var stateCount = 0
-        var edgeCount = 0
-        var initialCount = 0
-        var sawFooter = false
-        try consumeValidationLines(&reader) { line in
-            let record = try decodeJSONObject(line, line: count + 1)
-            guard let type = record["type"] as? String, !sawFooter else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("native record order")
-            }
-            if type != "complete" {
-                digest.update(data: line)
-                digest.update(data: Data([10]))
-            }
-            switch type {
-            case "header":
-                guard count == 0, record["schema"] as? String == "swifttla.native-validation",
-                      record["version"] as? Int == 1 else {
-                    throw ValidationEvidenceComparisonError.invalidEvidence("native header")
-                }
-            case "state":
-                guard let id = record["id"] as? Int, id == stateCount,
-                      let key = record["key"] as? String, validField(key),
-                      let isInitial = record["initial"] as? Bool else {
-                    throw ValidationEvidenceComparisonError.invalidEvidence("native state")
-                }
-                try stateOut.append("\(key)\t\(id)")
-                if isInitial {
-                    try initialOut.append(String(id))
-                    initialCount += 1
-                }
-                stateCount += 1
-            case "edge":
-                guard let source = record["source"] as? Int, source >= 0, source < stateCount,
-                      let target = record["target"] as? Int, target >= 0, target < stateCount,
-                      let action = record["action"] as? String,
-                      let label = actionNames[action] else {
-                    throw ValidationEvidenceComparisonError.invalidEvidence("native edge")
-                }
-                try edgeOut.append("\(source)\t\(target)\t\(encodedBytes(label))")
-                edgeCount += 1
-            case "invariant-failure", "deadlock", "reachability":
-                break
-            case "complete":
-                let hash = digest.finalize().map { String(format: "%02x", $0) }.joined()
-                let completion = record["completion"] as? String
-                guard (expectedComplete && completion == "exhausted")
-                        || (!expectedComplete && (completion == "decisive-violation"
-                            || completion == "decisive-reachability")),
-                      record["bodySha256"] as? String == hash,
-                      record["states"] as? Int == stateCount,
-                      record["initialStates"] as? Int == initialCount,
-                      record["edges"] as? Int == edgeCount else {
-                    throw ValidationEvidenceComparisonError.invalidEvidence("native completion")
-                }
-                sawFooter = true
-            default:
-                throw ValidationEvidenceComparisonError.invalidEvidence("native event type")
-            }
-            count += 1
+        guard url.pathExtension == "bin" else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("native binary evidence required")
         }
-        guard sawFooter else { throw ValidationEvidenceComparisonError.invalidEvidence("native footer") }
-        try stateOut.close()
-        try initialOut.close()
-        try edgeOut.close()
-        return Spool(states: states, initial: initial, edges: edges, stateCount: stateCount)
+        return try readBinary(url, caseID: caseID, actions: actions,
+            producer: 2, expectedComplete: expectedComplete, in: directory)
     }
 
     private static func readTLC(_ url: URL, caseID: String, actions: [RenderedAction],
         in directory: URL) throws -> Spool {
-        if url.pathExtension == "gz" {
-            return try readCompactTLC(url, caseID: caseID, actions: actions, in: directory)
+        guard url.pathExtension == "bin" else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("TLC binary evidence required")
         }
-        let expectedVersion = 3
-        let states = directory.appendingPathComponent("states.raw")
-        let initial = directory.appendingPathComponent("initial.raw")
-        let edges = directory.appendingPathComponent("edges.raw")
-        var stateOut = try ValidationLineWriter(states)
-        var initialOut = try ValidationLineWriter(initial)
-        var edgeOut = try ValidationLineWriter(edges)
-        defer { try? stateOut.close(); try? initialOut.close(); try? edgeOut.close() }
-        var reader = try ValidationLineReader(url)
-        defer { reader.close() }
-        let actionNames = Dictionary(uniqueKeysWithValues: actions.map {
-            (tlaInvocationLocationIdentity(action: $0.sourceName,
-                arguments: $0.arguments.map(\.description)), $0.renderedName)
-        })
-        var actionCache: [String: [String: String]] = [:]
-        var fingerprints: Set<UInt64> = []
-        var digest = CryptoKit.SHA256()
-        var counts: [String: Int] = [:]
-        var runID: String?
-        var sequence = 0
-        var sawFooter = false
-        func consume(_ line: Data) throws {
-            let record = try decodeJSONObject(line, line: sequence + 1)
-            guard !sawFooter,
-                  record["schema"] as? String == "swifttla.tlc.graph-events",
-                  record["version"] as? Int == expectedVersion,
-                  record["seq"] as? Int == sequence,
-                  record["caseId"] as? String == caseID,
-                  let currentRun = record["runId"] as? String,
-                  UUID(uuidString: currentRun) != nil,
-                  runID == nil || runID == currentRun,
-                  let type = record["type"] as? String else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("TLC event identity")
-            }
-            runID = currentRun
-            if type != "footer" {
-                digest.update(data: line)
-                digest.update(data: Data([10]))
-                counts[type, default: 0] += 1
-            }
-            switch type {
-            case "header":
-                guard sequence == 0, record["callback"] as? String == "writer.header" else {
-                    throw ValidationEvidenceComparisonError.invalidEvidence("TLC header")
-                }
-            case "initial":
-                guard record["callback"] as? String == "writeState.initial",
-                      let state = record["state"] as? [String: Any] else {
-                    throw ValidationEvidenceComparisonError.invalidEvidence("TLC initial state")
-                }
-                let fingerprint = try register(state, known: &fingerprints, output: &stateOut)
-                try initialOut.append(fingerprint)
-            case "transition":
-                guard let source = record["source"] as? [String: Any],
-                      let target = record["target"] as? [String: Any],
-                      let sourceFP = source["fingerprint"] as? String,
-                      let targetFP = target["fingerprint"] as? String,
-                      let sourceID = UInt64(sourceFP),
-                      let targetID = UInt64(targetFP),
-                      let flags = record["stateFlags"] as? [String: Any],
-                      let rawFlags = flags["raw"] as? Int,
-                      let seen = flags["seen"] as? Bool,
-                      let excluded = flags["notInModel"] as? Bool,
-                      let reachable = record["reachable"] as? String,
-                      let callback = record["callback"] as? String,
-                      record["visualization"] as? String == "none",
-                      let rawActions = record["resolvedActions"] as? [[String: Any]] else {
-                    throw ValidationEvidenceComparisonError.invalidEvidence("TLC transition")
-                }
-                if callback == "writeState.actionPredicate" {
-                    guard excluded, !seen, rawFlags == 2, reachable == "excluded",
-                          record["predicateLocation"] is String else {
-                        throw ValidationEvidenceComparisonError.invalidEvidence("TLC excluded transition")
-                    }
-                } else {
-                    guard callback == "writeState.action", !excluded, reachable == "reachable",
-                          record["predicateLocation"] is NSNull,
-                          fingerprints.contains(sourceID) else {
-                        throw ValidationEvidenceComparisonError.invalidEvidence("TLC reachable transition")
-                    }
-                    if seen {
-                        guard fingerprints.contains(targetID) else {
-                            throw ValidationEvidenceComparisonError.invalidEvidence("TLC unseen target")
-                        }
-                    } else {
-                        _ = try register(target, known: &fingerprints, output: &stateOut)
-                    }
-                    guard !rawActions.isEmpty else {
-                        throw ValidationEvidenceComparisonError.invalidEvidence("TLC missing action")
-                    }
-                    for action in rawActions {
-                        guard action["named"] as? Bool == true,
-                              let sourceName = action["name"] as? String,
-                              let location = action["location"] as? String else {
-                            throw ValidationEvidenceComparisonError.invalidEvidence("TLC action")
-                        }
-                        let encodedAction: String
-                        if let cached = actionCache[sourceName]?[location] {
-                            encodedAction = cached
-                        } else {
-                            encodedAction = encodedBytes(try resolvedAction(action, declared: actionNames))
-                            actionCache[sourceName, default: [:]][location] = encodedAction
-                        }
-                        try edgeOut.append("\(sourceFP)\t\(targetFP)\t\(encodedAction)")
-                    }
-                }
-            case "unsupported":
-                guard record["callback"] as? String == "writeState.visualization",
-                      record["reason"] as? String == "callback has no Action identity: STUTTERING" else {
-                    throw ValidationEvidenceComparisonError.invalidEvidence("unsupported TLC callback")
-                }
-            case "footer":
-                let hash = digest.finalize().map { String(format: "%02x", $0) }.joined()
-                guard record["status"] as? String == "closed",
-                      record["lastBodySeq"] as? Int == sequence - 1,
-                      record["bodySha256"] as? String == hash,
-                      let footerCounts = record["counts"] as? [String: Int],
-                      footerCounts == counts, counts["header"] == 1 else {
-                    throw ValidationEvidenceComparisonError.invalidEvidence("TLC footer")
-                }
-                sawFooter = true
-            default:
-                throw ValidationEvidenceComparisonError.invalidEvidence("TLC event type")
-            }
-            sequence += 1
-        }
-        while let line = try reader.next() {
-            try withValidationAutoreleasePool { try consume(line) }
-        }
-        guard sawFooter else { throw ValidationEvidenceComparisonError.invalidEvidence("TLC missing footer") }
-        try stateOut.close()
-        try initialOut.close()
-        try edgeOut.close()
-        return Spool(states: states, initial: initial, edges: edges, stateCount: fingerprints.count)
+        return try readBinary(url, caseID: caseID, actions: actions,
+            producer: 1, expectedComplete: true, in: directory)
     }
-
-    private static func readCompactTLC(_ url: URL, caseID: String, actions: [RenderedAction],
-        in directory: URL) throws -> Spool {
-        let states = directory.appendingPathComponent("states.raw")
-        let initial = directory.appendingPathComponent("initial.raw")
-        let edges = directory.appendingPathComponent("edges.raw")
-        var stateOut = try ValidationLineWriter(states)
-        var initialOut = try ValidationLineWriter(initial)
-        var edgeOut = try ValidationLineWriter(edges)
-        defer { try? stateOut.close(); try? initialOut.close(); try? edgeOut.close() }
-        var reader = try ValidationLineReader(url)
-        defer { reader.close() }
-        let actionNames = Dictionary(uniqueKeysWithValues: actions.map {
-            (tlaInvocationLocationIdentity(action: $0.sourceName,
-                arguments: $0.arguments.map(\.description)), $0.renderedName)
-        })
-        var actionCache: [String: [String: String]] = [:]
-        var fingerprints: Set<UInt64> = []
-        var digest = CryptoKit.SHA256()
-        var counts: [String: Int] = [:]
-        var runID: String?
-        var sequence = 0
-        var sawFooter = false
-
-        try consumeValidationLines(&reader) { line in
-            guard !sawFooter else { throw ValidationEvidenceComparisonError.invalidEvidence("TLC record after footer") }
-            let event: CompactTLCGraphEvent
-            do {
-                event = try CompactTLCGraphEvent.parse(line, caseID: caseID,
-                    expectedRunID: runID, sequence: sequence)
-            } catch {
-                throw ValidationEvidenceComparisonError.invalidEvidence("compact TLC event at \(sequence + 1)")
-            }
-            runID = event.runID
-            let type: String
-            switch event.payload {
-            case .header:
-                type = "header"
-            case .initial(let state):
-                type = "initial"
-                let fingerprint = try register(state, known: &fingerprints, output: &stateOut)
-                try initialOut.append(String(fingerprint))
-            case .transition(let source, let target, let seen, let excluded,
-                let rawFlags, let resolved, let predicate, let reachable):
-                type = "transition"
-                if event.callback == "writeState.actionPredicate" {
-                    guard excluded, !seen, rawFlags == 2, reachable == "excluded",
-                          predicate != nil, resolved.isEmpty, target.bindings == nil else {
-                        throw ValidationEvidenceComparisonError.invalidEvidence("TLC excluded transition")
-                    }
-                } else {
-                    guard event.callback == "writeState.action", !excluded, reachable == "reachable",
-                          predicate == nil, fingerprints.contains(source) else {
-                        throw ValidationEvidenceComparisonError.invalidEvidence("TLC reachable transition")
-                    }
-                    if seen {
-                        guard target.bindings == nil, fingerprints.contains(target.fingerprint) else {
-                            throw ValidationEvidenceComparisonError.invalidEvidence("TLC seen target")
-                        }
-                    } else {
-                        _ = try register(target, known: &fingerprints, output: &stateOut)
-                    }
-                    guard !resolved.isEmpty else {
-                        throw ValidationEvidenceComparisonError.invalidEvidence("TLC missing action")
-                    }
-                    for action in resolved {
-                        guard action.named else {
-                            throw ValidationEvidenceComparisonError.invalidEvidence("TLC action")
-                        }
-                        let encodedAction: String
-                        if let cached = actionCache[action.name]?[action.location] {
-                            encodedAction = cached
-                        } else {
-                            encodedAction = encodedBytes(try resolvedAction(name: action.name,
-                                location: action.location, declared: actionNames))
-                            actionCache[action.name, default: [:]][action.location] = encodedAction
-                        }
-                        try edgeOut.append("\(source)\t\(target.fingerprint)\t\(encodedAction)")
-                    }
-                }
-            case .unsupported(let reason):
-                type = "unsupported"
-                guard event.callback == "writeState.visualization",
-                      reason == "callback has no Action identity: STUTTERING" else {
-                    throw ValidationEvidenceComparisonError.invalidEvidence("unsupported TLC callback")
-                }
-            case .footer(let footerCounts, let last, let hash):
-                type = "footer"
-                let bodyHash = digest.finalize().map { String(format: "%02x", $0) }.joined()
-                guard last == sequence - 1, hash == bodyHash,
-                      footerCounts == counts, counts["header"] == 1 else {
-                    throw ValidationEvidenceComparisonError.invalidEvidence("TLC footer")
-                }
-                sawFooter = true
-            }
-            if type != "footer" {
-                digest.update(data: line)
-                digest.update(data: Data([10]))
-                counts[type, default: 0] += 1
-            }
-            sequence += 1
-        }
-        guard sawFooter else { throw ValidationEvidenceComparisonError.invalidEvidence("TLC missing footer") }
-        try stateOut.close()
-        try initialOut.close()
-        try edgeOut.close()
-        return Spool(states: states, initial: initial, edges: edges, stateCount: fingerprints.count)
-    }
-
-    private static func register(_ state: CompactTLCGraphEvent.State, known: inout Set<UInt64>,
-        output: inout ValidationLineWriter) throws -> UInt64 {
-        guard known.insert(state.fingerprint).inserted, let bindings = state.bindings else {
-            throw ValidationEvidenceComparisonError.invalidEvidence("TLC state identity")
-        }
-        var values: [String: CanonicalValue] = [:]
-        for binding in bindings {
-            guard values[binding.name] == nil else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("TLC state binding")
-            }
-            values[binding.name] = try TLCValueParser.parse(binding.tla)
-        }
-        let key = CanonicalState(bindings: values).key.canonicalEncoding
-        guard validField(key) else { throw ValidationEvidenceComparisonError.invalidEvidence("TLC state key") }
-        try output.append("\(key)\t\(state.fingerprint)")
-        return state.fingerprint
-    }
-
-    private static func register(_ state: [String: Any], known: inout Set<UInt64>,
-        output: inout ValidationLineWriter) throws -> String {
-        guard let fingerprint = state["fingerprint"] as? String,
-              let fingerprintID = UInt64(fingerprint),
-              known.insert(fingerprintID).inserted,
-              let bindings = state["bindings"] as? [[String: Any]] else {
-            throw ValidationEvidenceComparisonError.invalidEvidence("TLC state identity")
-        }
-        var values: [String: CanonicalValue] = [:]
-        for (ordinal, binding) in bindings.enumerated() {
-            guard binding["ordinal"] as? Int == ordinal,
-                  let name = binding["name"] as? String,
-                  let raw = binding["tla"] as? String,
-                  values[name] == nil else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("TLC state binding")
-            }
-            values[name] = try TLCValueParser.parse(raw)
-        }
-        let key = CanonicalState(bindings: values).key.canonicalEncoding
-        guard validField(key) else { throw ValidationEvidenceComparisonError.invalidEvidence("TLC state key") }
-        try output.append("\(key)\t\(fingerprint)")
-        return fingerprint
-    }
-
-    private static func resolvedAction(_ action: [String: Any],
-        declared: [String: String]) throws -> String {
-        guard action["named"] as? Bool == true,
-              let name = action["name"] as? String,
-              let location = action["location"] as? String else {
-            throw ValidationEvidenceComparisonError.invalidEvidence("TLC action")
-        }
-        return try resolvedAction(name: name, location: location, declared: declared)
-    }
-
     private static func resolvedAction(name: String, location: String,
         declared: [String: String]) throws -> String {
         let direct = tlaInvocationLocationIdentity(action: name, arguments: [])
@@ -690,35 +529,101 @@ package enum ValidationEvidenceComparison {
         }
     }
 
+    private static func rank(_ id: UInt64, in ranks: [Int]) throws -> UInt32 {
+        guard id < UInt64(ranks.count), ranks[Int(id)] >= 0,
+              let result = UInt32(exactly: ranks[Int(id)]) else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("native edge rank")
+        }
+        return result
+    }
+
+    private static func rank(_ id: UInt64, in ranks: [UInt64: Int]) throws -> UInt32 {
+        guard let value = ranks[id], let result = UInt32(exactly: value) else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("TLC edge rank")
+        }
+        return result
+    }
+
+    private struct RankedEdge: Comparable {
+        let source: UInt32
+        let action: UInt32
+        let target: UInt32
+
+        static func < (lhs: Self, rhs: Self) -> Bool {
+            if lhs.source != rhs.source { return lhs.source < rhs.source }
+            if lhs.action != rhs.action { return lhs.action < rhs.action }
+            return lhs.target < rhs.target
+        }
+    }
+
+    private static func compareBinaryEdges(_ left: URL, _ right: URL,
+        leftRoot: URL, rightRoot: URL,
+        leftRank: (UInt64) throws -> UInt32,
+        rightRank: (UInt64) throws -> UInt32) throws -> Bool {
+        let leftBuckets = try partitionEdges(left, in: leftRoot, rank: leftRank)
+        let rightBuckets = try partitionEdges(right, in: rightRoot, rank: rightRank)
+        for index in leftBuckets.indices {
+            if try uniqueEdges(leftBuckets[index]) != uniqueEdges(rightBuckets[index]) {
+                return false
+            }
+        }
+        return true
+    }
+
+    private static func partitionEdges(_ input: URL, in directory: URL,
+        rank: (UInt64) throws -> UInt32) throws -> [URL] {
+        let bucketCount = 64
+        let urls = (0..<bucketCount).map {
+            directory.appendingPathComponent("edge-bucket-\($0).bin")
+        }
+        var writers = try urls.map(BinaryEdgeWriter.init)
+        defer { for index in writers.indices { try? writers[index].close() } }
+        var reader = try BinaryGraphEvidenceReader(input)
+        defer { reader.close() }
+        while !reader.atEnd {
+            let source = try rank(reader.uint64())
+            let action = try reader.uint32()
+            let target = try rank(reader.uint64())
+            let bucket = Int(source) % bucketCount
+            try writers[bucket].appendRanked(source: source, action: action, target: target)
+        }
+        for index in writers.indices { try writers[index].close() }
+        return urls
+    }
+
+    private static func uniqueEdges(_ url: URL) throws -> [RankedEdge] {
+        let bytes = try Data(contentsOf: url, options: .mappedIfSafe)
+        guard bytes.count.isMultiple(of: 12) else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("ranked edge length")
+        }
+        func word(_ index: Int) -> UInt32 {
+            (UInt32(bytes[index]) << 24) | (UInt32(bytes[index + 1]) << 16)
+                | (UInt32(bytes[index + 2]) << 8) | UInt32(bytes[index + 3])
+        }
+        var edges: [RankedEdge] = []
+        edges.reserveCapacity(bytes.count / 12)
+        for index in stride(from: 0, to: bytes.count, by: 12) {
+            edges.append(RankedEdge(source: word(index), action: word(index + 4),
+                target: word(index + 8)))
+        }
+        edges.sort()
+        var unique = 0
+        for index in edges.indices {
+            if unique == 0 || edges[index] != edges[unique - 1] {
+                edges[unique] = edges[index]
+                unique += 1
+            }
+        }
+        edges.removeLast(edges.count - unique)
+        return edges
+    }
+
     private static func rankInitials(_ raw: URL, ranks: [UInt64: Int], in directory: URL) throws -> URL {
         try rewrite(raw, in: directory) { fields in
             guard fields.count == 1, let fingerprint = UInt64(fields[0]), let rank = ranks[fingerprint] else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("TLC initial fingerprint")
             }
             return String(rank)
-        }
-    }
-
-    private static func rankEdges(_ raw: URL, ranks: [Int], in directory: URL) throws -> URL {
-        try rewrite(raw, in: directory) { fields in
-            guard fields.count == 3,
-                  let source = Int(fields[0]), let target = Int(fields[1]),
-                  source >= 0, source < ranks.count, target >= 0, target < ranks.count,
-                  ranks[source] >= 0, ranks[target] >= 0 else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("native edge ID")
-            }
-            return "\(ranks[source])\t\(fields[2])\t\(ranks[target])"
-        }
-    }
-
-    private static func rankEdges(_ raw: URL, ranks: [UInt64: Int], in directory: URL) throws -> URL {
-        try rewrite(raw, in: directory) { fields in
-            guard fields.count == 3,
-                  let sourceFP = UInt64(fields[0]), let targetFP = UInt64(fields[1]),
-                  let source = ranks[sourceFP], let target = ranks[targetFP] else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("TLC edge fingerprint")
-            }
-            return "\(source)\t\(fields[2])\t\(target)"
         }
     }
 
@@ -806,26 +711,11 @@ private func consumeValidationLines(_ reader: inout ValidationLineReader,
 
 private struct ValidationLineReader {
     private let handle: FileHandle
-    private let decompressor: Process?
     private var buffer = Data()
     private var cursor = 0
-    private var checkedDecompressor = false
 
     init(_ url: URL) throws {
-        if url.pathExtension == "gz" {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/gunzip")
-            process.arguments = ["-c", url.path]
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = FileHandle.nullDevice
-            try process.run()
-            handle = pipe.fileHandleForReading
-            decompressor = process
-        } else {
-            handle = try FileHandle(forReadingFrom: url)
-            decompressor = nil
-        }
+        handle = try FileHandle(forReadingFrom: url)
     }
     mutating func next() throws -> Data? {
         while true {
@@ -839,13 +729,6 @@ private struct ValidationLineReader {
                 guard cursor == buffer.count else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("unterminated line")
                 }
-                if let decompressor, !checkedDecompressor {
-                    decompressor.waitUntilExit()
-                    checkedDecompressor = true
-                    guard decompressor.terminationStatus == 0 else {
-                        throw ValidationEvidenceComparisonError.invalidEvidence("compressed TLC stream")
-                    }
-                }
                 return nil
             }
             if cursor > 0 {
@@ -857,7 +740,6 @@ private struct ValidationLineReader {
     }
     func close() {
         try? handle.close()
-        if let decompressor, decompressor.isRunning { decompressor.terminate() }
     }
 }
 

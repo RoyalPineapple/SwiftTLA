@@ -5,343 +5,172 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct ValidationEvidenceComparisonTests {
-    @Test("independent graph spooling retains every state and labeled edge")
-    func completeGraphSpoolsAreReusable() throws {
-        let directory = try fixture(target: 1)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let nativeSpool = directory.appendingPathComponent("native-spool")
-        let tlcSpool = directory.appendingPathComponent("tlc-spool")
-        try FileManager.default.createDirectory(at: nativeSpool, withIntermediateDirectories: false)
-        try FileManager.default.createDirectory(at: tlcSpool, withIntermediateDirectories: false)
-        let actions = [RenderedAction(sourceName: "Next", arguments: [], renderedName: "Next")]
-        try ValidationEvidenceComparison.writeNativeSpool(
-            directory.appendingPathComponent("native/machine.jsonl"),
-            expectedComplete: true, actions: actions, in: nativeSpool)
-        try ValidationEvidenceComparison.writeTLCSpool(
-            directory.appendingPathComponent("oracle/tlc-graph/graph-events.jsonl.gz"),
-            caseID: "fixture", actions: actions, in: tlcSpool)
-        for spool in [nativeSpool, tlcSpool] {
-            let manifest = try JSONSerialization.jsonObject(with:
-                Data(contentsOf: spool.appendingPathComponent("spool.json"))) as? [String: Any]
-            #expect(manifest?["stateCount"] as? Int == 2)
-            #expect(try Data(contentsOf: spool.appendingPathComponent("states.raw"))
-                .split(separator: 10).count == 2)
-            #expect(try Data(contentsOf: spool.appendingPathComponent("edges.raw"))
-                .split(separator: 10).count == 1)
-        }
-    }
+    private let actions = [RenderedAction(sourceName: "Next", arguments: [], renderedName: "Next")]
 
-    @Test("compact TLC evidence reads every event across memory-release batches")
-    func compactGraphSpoolsAcrossBatches() throws {
-        let directory = try fixture(target: 1)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let reference = try fixtureCase(testReferencePin(),
-            renderedActions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")])
-        let source = try completeGraphStream(reference)
-        var records = try source.split(separator: 10).map { line -> [String: Any] in
-            guard let record = try JSONSerialization.jsonObject(with: Data(line)) as? [String: Any] else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("fixture graph event")
-            }
-            return record
-        }
-        let repeated = 1_100
-        for offset in 0..<repeated {
-            var transition = records[2]
-            transition["seq"] = offset + 3
-            transition["stateFlags"] = ["raw": 1, "seen": true, "notInModel": false]
-            records.insert(transition, at: records.count - 1)
-        }
-        records[records.count - 1]["seq"] = repeated + 3
-        records[records.count - 1]["lastBodySeq"] = repeated + 2
-        records[records.count - 1]["counts"] = ["header": 1, "initial": 1,
-            "transition": repeated + 1]
-        let expanded = try records.reduce(into: Data()) { data, record in
-            data.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
-            data.append(10)
-        }
-        let graph = directory.appendingPathComponent("oracle/tlc-graph/graph-events.jsonl.gz")
-        try writeCompressedGraph(expanded, to: graph)
-        let spool = directory.appendingPathComponent("tlc-spool")
-        try FileManager.default.createDirectory(at: spool, withIntermediateDirectories: false)
-        try ValidationEvidenceComparison.writeTLCSpool(graph, caseID: "fixture",
-            actions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")], in: spool)
-        #expect(try Data(contentsOf: spool.appendingPathComponent("states.raw"))
-            .split(separator: 10).count == 2)
-        #expect(try Data(contentsOf: spool.appendingPathComponent("edges.raw"))
-            .split(separator: 10).count == repeated + 1)
-    }
-
-    @Test("complete generated-machine and TLC records match by full state and labeled edge")
+    @Test("binary producers compare the complete labeled graph")
     func completeGraphMatches() throws {
-        let directory = try fixture(target: 1)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let result = try ValidationEvidenceComparison.compare(
-            caseID: "fixture", native: directory.appendingPathComponent("native"),
-            oracle: directory.appendingPathComponent("oracle"),
-            actions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")],
-            to: directory.appendingPathComponent("comparison"))
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let result = try compare(root)
         #expect(result.result == "exact")
         #expect(result.graphCompared)
         #expect(result.difference == nil)
-        #expect(!FileManager.default.fileExists(
-            atPath: directory.appendingPathComponent("comparison/swift").path))
-        #expect(!FileManager.default.fileExists(
-            atPath: directory.appendingPathComponent("comparison/tlc").path))
     }
 
-    @Test("a different complete state cannot pass through matching counts")
+    @Test("a changed state fails despite matching counts")
     func differentStateFails() throws {
-        let directory = try fixture(target: 2)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let result = try ValidationEvidenceComparison.compare(
-            caseID: "fixture", native: directory.appendingPathComponent("native"),
-            oracle: directory.appendingPathComponent("oracle"),
-            actions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")],
-            to: directory.appendingPathComponent("comparison"))
-        #expect(result.result == "different")
-        #expect(result.difference == "complete state set")
-    }
-
-    @Test("constraint exclusions and stuttering observations do not become reachable edges")
-    func ignoresNonGraphObservations() throws {
-        let reference = try fixtureCase(testReferencePin(),
-            renderedActions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")])
-        for stream in [
-            try completeGraphStreamWithExcludedPredicateObservation(reference),
-            try completeGraphStreamWithStutteringObservation(reference)
-        ] {
-            let directory = try fixture(target: 1)
-            defer { try? FileManager.default.removeItem(at: directory) }
-            try writeCompressedGraph(stream,
-                to: directory.appendingPathComponent("oracle/tlc-graph/graph-events.jsonl.gz"))
-            let result = try ValidationEvidenceComparison.compare(
-                caseID: "fixture", native: directory.appendingPathComponent("native"),
-                oracle: directory.appendingPathComponent("oracle"),
-                actions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")],
-                to: directory.appendingPathComponent("comparison"))
-            #expect(result.result == "exact")
-        }
-    }
-
-    @Test("two independently captured TLC graphs compare by state rather than fingerprint")
-    func comparesTLCGraphs() throws {
-        let reference = try fixtureCase(testReferencePin(),
-            renderedActions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")])
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let source = try completeGraphStream(reference)
-        let generated = directory.appendingPathComponent("generated.jsonl.gz")
-        let upstream = directory.appendingPathComponent("upstream.jsonl.gz")
-        try writeCompressedGraph(source, to: generated)
-        try writeCompressedGraph(source, to: upstream)
-        #expect(try ValidationEvidenceComparison.compareTLCGraphs(
-            caseID: "fixture", generated: generated, reference: upstream,
-            actions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")],
-            in: directory) == nil)
-        #expect(!FileManager.default.fileExists(
-            atPath: directory.appendingPathComponent("generated-graph-spool").path))
-        #expect(!FileManager.default.fileExists(
-            atPath: directory.appendingPathComponent("reference-graph-spool").path))
-    }
-
-    @Test("matching decisive verdicts do not require a complete TLC graph")
-    func decisiveResultDoesNotRequireGraph() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let native = root.appendingPathComponent("native")
-        let oracle = root.appendingPathComponent("oracle")
-        let tlc = oracle.appendingPathComponent("tlc-graph")
-        try FileManager.default.createDirectory(at: native, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: tlc, withIntermediateDirectories: true)
+        let root = try fixture(nativeTarget: 2)
         defer { try? FileManager.default.removeItem(at: root) }
-        let nativeReport: [String: Any] = [
-            "schema": "swifttla.native-validation-report", "scenario": "fixture",
-            "graphComplete": false, "initialStates": 0, "states": 0, "edges": 0,
-            "properties": ["Broken": "violated"], "deadlockSelected": true
-        ]
-        let oracleReport: [String: Any] = [
-            "schema": "swifttla.generated-tlc-oracle", "caseID": "fixture",
-            "scenario": "fixture", "graphComplete": false,
-            "graphInputSHA256": String(repeating: "0", count: 64),
-            "properties": ["Broken": "violated"], "deadlockSelected": true
-        ]
-        try JSONSerialization.data(withJSONObject: nativeReport).write(to: native.appendingPathComponent("report.json"))
-        try JSONSerialization.data(withJSONObject: oracleReport).write(to: oracle.appendingPathComponent("oracle.json"))
-        try JSONSerialization.data(withJSONObject: ["invocation": ["exitStatus": 12]]).write(
-            to: tlc.appendingPathComponent("tlc-process.json"))
-        let key = CanonicalState(bindings: ["x": .integer(0)]).key.canonicalEncoding
-        let records: [[String: Any]] = [
-            ["type": "header", "schema": "swifttla.native-validation", "version": 1],
-            ["type": "invariant-failure", "property": "Broken", "key": key]
-        ]
-        let body = try records.reduce(into: Data()) { data, record in
-            data.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
-            data.append(10)
-        }
-        let footer: [String: Any] = [
-            "type": "complete", "completion": "decisive-violation", "states": 0,
-            "initialStates": 0, "edges": 0, "bodySha256": SHA256.hex(body)
-        ]
-        let events = body + (try JSONSerialization.data(withJSONObject: footer, options: [.sortedKeys])) + Data([10])
-        try events.write(to: native.appendingPathComponent("machine.jsonl"))
-        let result = try ValidationEvidenceComparison.compare(
-            caseID: "fixture", native: native, oracle: oracle, actions: [],
-            to: root.appendingPathComponent("comparison"))
-        #expect(result.result == "exact")
-        #expect(!result.graphCompared)
-        #expect(result.deadlockSelected)
-        #expect(result.deadlock == nil)
+        #expect(try compare(root).difference == "complete state set")
     }
 
-    private func fixture(target: Int) throws -> URL {
+    @Test("a changed edge fails despite matching counts")
+    func differentEdgeFails() throws {
+        let root = try fixture(nativeEdgeTarget: 0)
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(try compare(root).difference == "complete labeled edge set")
+    }
+
+    @Test("a changed initial state fails despite matching state and edge sets")
+    func differentInitialFails() throws {
+        let root = try fixture(nativeInitial: 1)
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(try compare(root).difference == "initial state set")
+    }
+
+    @Test("a damaged binary footer is rejected")
+    func corruptFooterFails() throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("oracle/tlc-graph/graph-events.bin")
+        var bytes = try Data(contentsOf: url)
+        bytes[bytes.count - 1] ^= 1
+        try bytes.write(to: url)
+        #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
+    }
+
+    @Test("binary spools retain all edges across buffered reads")
+    func binarySpoolsAcrossBatches() throws {
+        let root = try fixture(edgeCount: 60_000)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let spool = root.appendingPathComponent("tlc-spool")
+        try FileManager.default.createDirectory(at: spool, withIntermediateDirectories: false)
+        try ValidationEvidenceComparison.writeTLCSpool(
+            root.appendingPathComponent("oracle/tlc-graph/graph-events.bin"),
+            caseID: "fixture", actions: actions, in: spool)
+        let manifest = try #require(JSONSerialization.jsonObject(with:
+            Data(contentsOf: spool.appendingPathComponent("spool.json"))) as? [String: Any])
+        #expect(manifest["stateCount"] as? Int == 2)
+        #expect(manifest["edgeCount"] as? Int == 60_000)
+        #expect(try Data(contentsOf: spool.appendingPathComponent("edges.raw")).count == 1_200_000)
+        #expect(try compare(root).result == "exact")
+    }
+
+    @Test("two TLC runs compare full states despite different fingerprint IDs")
+    func tlcGraphsMatchByValue() throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let generated = root.appendingPathComponent("generated.bin")
+        let reference = root.appendingPathComponent("reference.bin")
+        try tlcGraph(edgeCount: 1).write(to: generated)
+        try tlcGraph(edgeCount: 1, source: 303, target: 404).write(to: reference)
+        #expect(try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+            generated: generated, reference: reference, actions: actions, in: root) == nil)
+    }
+
+    private func compare(_ root: URL) throws -> ValidationEvidenceComparisonReport {
+        try ValidationEvidenceComparison.compare(caseID: "fixture",
+            native: root.appendingPathComponent("native"),
+            oracle: root.appendingPathComponent("oracle"), actions: actions,
+            to: root.appendingPathComponent("comparison"))
+    }
+
+    private func fixture(nativeTarget: Int = 1, nativeEdgeTarget: UInt64 = 1,
+        nativeInitial: UInt64 = 0,
+        edgeCount: Int = 1) throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let native = root.appendingPathComponent("native")
-        let oracle = root.appendingPathComponent("oracle")
-        let tlc = oracle.appendingPathComponent("tlc-graph")
+        let tlc = root.appendingPathComponent("oracle/tlc-graph")
         try FileManager.default.createDirectory(at: native, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: tlc, withIntermediateDirectories: true)
         let nativeReport: [String: Any] = [
             "schema": "swifttla.native-validation-report", "scenario": "fixture",
-            "graphComplete": true, "initialStates": 1, "states": 2, "edges": 1,
-            "properties": [:], "deadlockSelected": false
+            "graphComplete": true, "initialStates": 1, "states": 2,
+            "edges": edgeCount, "properties": [:], "deadlockSelected": false
         ]
         let oracleReport: [String: Any] = [
             "schema": "swifttla.generated-tlc-oracle", "caseID": "fixture",
             "scenario": "fixture", "graphComplete": true,
-            "graphInputSHA256": String(repeating: "0", count: 64), "properties": [:],
-            "deadlockSelected": false
+            "graphInputSHA256": String(repeating: "0", count: 64),
+            "properties": [:], "deadlockSelected": false
         ]
-        try JSONSerialization.data(withJSONObject: nativeReport).write(
-            to: native.appendingPathComponent("report.json"))
+        try JSONSerialization.data(withJSONObject: nativeReport).write(to: native.appendingPathComponent("report.json"))
         try JSONSerialization.data(withJSONObject: oracleReport).write(
-            to: oracle.appendingPathComponent("oracle.json"))
-        try JSONSerialization.data(withJSONObject: ["invocation": ["exitStatus": 0]]).write(
-            to: tlc.appendingPathComponent("tlc-process.json"))
-        let key0 = CanonicalState(bindings: ["x": .integer(0)]).key.canonicalEncoding
-        let key1 = CanonicalState(bindings: ["x": .integer(target)]).key.canonicalEncoding
-        let records: [[String: Any]] = [
-            ["type": "header", "schema": "swifttla.native-validation", "version": 1],
-            ["type": "state", "id": 0, "key": key0, "initial": true],
-            ["type": "state", "id": 1, "key": key1, "initial": false],
-            ["type": "edge", "source": 0, "target": 1, "action": "Next"]
-        ]
-        let body = try records.reduce(into: Data()) { data, record in
-            data.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
-            data.append(10)
+            to: root.appendingPathComponent("oracle/oracle.json"))
+        try JSONSerialization.data(withJSONObject: ["invocation": ["exitStatus": 0]])
+            .write(to: tlc.appendingPathComponent("tlc-process.json"))
+        var writer = try BinaryGraphEvidenceWriter(to: native.appendingPathComponent("machine.bin"),
+            caseID: "fixture")
+        try writer.action(id: 0, name: "Next")
+        try writer.state(id: 0, key: key(0), initial: nativeInitial == 0)
+        try writer.state(id: 1, key: key(nativeTarget), initial: nativeInitial == 1)
+        for _ in 0..<edgeCount {
+            try writer.edge(source: 0, action: 0, target: nativeEdgeTarget)
         }
-        let footer: [String: Any] = [
-            "type": "complete", "completion": "exhausted", "states": 2,
-            "initialStates": 1, "edges": 1, "bodySha256": SHA256.hex(body)
-        ]
-        let nativeEvents = body + (try JSONSerialization.data(withJSONObject: footer, options: [.sortedKeys])) + Data([10])
-        try nativeEvents.write(to: native.appendingPathComponent("machine.jsonl"))
-        let reference = try fixtureCase(testReferencePin(),
-            renderedActions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")])
-        try writeCompressedGraph(completeGraphStream(reference),
-            to: tlc.appendingPathComponent("graph-events.jsonl.gz"))
+        try writer.finish(completion: 0)
+        try tlcGraph(edgeCount: edgeCount).write(to: tlc.appendingPathComponent("graph-events.bin"))
         return root
     }
 
-    private func writeCompressedGraph(_ stream: Data, to destination: URL) throws {
-        var records = try stream.split(separator: 10).map { line -> [String: Any] in
-            guard let record = try JSONSerialization.jsonObject(with: Data(line)) as? [String: Any] else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("fixture graph event")
-            }
-            return record
-        }
-        for index in records.indices {
-            records[index]["version"] = 4
-            guard records[index]["type"] as? String == "transition",
-                  let source = records[index]["source"] as? [String: Any],
-                  let target = records[index]["target"] as? [String: Any],
-                  let flags = records[index]["stateFlags"] as? [String: Any] else { continue }
-            records[index]["source"] = ["fingerprint": source["fingerprint"]!, "level": source["level"]!]
-            if flags["seen"] as? Bool == true || flags["notInModel"] as? Bool == true {
-                records[index]["target"] = ["fingerprint": target["fingerprint"]!, "level": target["level"]!]
-            }
-            if flags["notInModel"] as? Bool == true { records[index]["resolvedActions"] = [] }
-        }
-        let body = try records.dropLast().reduce(into: Data()) { data, record in
-            data.append(try bridgeLine(record))
-            data.append(10)
-        }
-        records[records.count - 1]["bodySha256"] = SHA256.hex(body)
-        let footer = try bridgeLine(records[records.count - 1])
-        try compress(body + footer + Data([10]), to: destination)
+    private func key(_ value: Int) -> String {
+        CanonicalState(bindings: ["x": .integer(value)]).key.canonicalEncoding
     }
 
-    private func bridgeLine(_ record: [String: Any]) throws -> Data {
-        func field(_ key: String) throws -> String {
-            guard let value = record[key] else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("bridge fixture \(key)")
-            }
-            return try fragment(value)
+    private func tlcGraph(edgeCount: Int, source: UInt64 = 101, target: UInt64 = 202) -> Data {
+        var body = Data("STLAGRF1".utf8)
+        body.append(1)
+        append("fixture", to: &body)
+        append("00000000-0000-4000-8000-000000000001", to: &body)
+        for (fingerprint, value, initial) in [(source, "0", true), (target, "1", false)] {
+            body.append(2)
+            append(fingerprint, to: &body)
+            body.append(initial ? 1 : 0)
+            append(UInt32(1), to: &body)
+            append("x", to: &body)
+            append(value, to: &body)
         }
-        let type = try field("type")
-        let base = "{\"schema\":\"swifttla.tlc.graph-events\",\"version\":4,\"type\":\(type),\"callback\":\(try field("callback")),\"seq\":\(try field("seq")),\"runId\":\(try field("runId")),\"caseId\":\(try field("caseId"))"
-        let suffix: String
-        switch record["type"] as? String {
-        case "header":
-            suffix = ""
-        case "initial":
-            suffix = ",\"state\":\(try bridgeState(record["state"]))"
-        case "transition":
-            guard let resolved = record["resolvedActions"] as? [[String: Any]],
-                  let flags = record["stateFlags"] as? [String: Any] else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("bridge fixture transition")
-            }
-            let actions = try resolved.map { try bridgeAction($0) }.joined(separator: ",")
-            suffix = ",\"source\":\(try bridgeState(record["source"])),\"target\":\(try bridgeState(record["target"])),\"action\":\(try bridgeAction(record["action"])),\"resolvedActions\":[\(actions)],\"stateFlags\":{\"raw\":\(try fragment(flags["raw"])),\"seen\":\(try fragment(flags["seen"])),\"notInModel\":\(try fragment(flags["notInModel"]))},\"visualization\":\(try field("visualization")),\"predicateLocation\":\(try field("predicateLocation")),\"reachable\":\(try field("reachable"))"
-        case "unsupported":
-            suffix = ",\"reason\":\(try field("reason"))"
-        case "footer":
-            suffix = ",\"status\":\(try field("status")),\"counts\":\(try field("counts")),\"lastBodySeq\":\(try field("lastBodySeq")),\"bodySha256\":\(try field("bodySha256"))"
-        default:
-            throw ValidationEvidenceComparisonError.invalidEvidence("bridge fixture type")
+        body.append(1)
+        append(UInt32(0), to: &body)
+        append("Next", to: &body)
+        append("", to: &body)
+        for _ in 0..<edgeCount {
+            body.append(3)
+            append(source, to: &body)
+            append(UInt32(0), to: &body)
+            append(target, to: &body)
         }
-        return Data("\(base)\(suffix)}".utf8)
+        let digest = Data(CryptoKit.SHA256.hash(data: body))
+        body.append(255)
+        for count in [2, 1, edgeCount, 0, 0, 0, 0, 0] { append(UInt64(count), to: &body) }
+        body.append(0)
+        body.append(digest)
+        return body
     }
 
-    private func bridgeState(_ value: Any?) throws -> String {
-        guard let state = value as? [String: Any] else {
-            throw ValidationEvidenceComparisonError.invalidEvidence("bridge fixture state")
-        }
-        let base = "{\"fingerprint\":\(try fragment(state["fingerprint"])),\"level\":\(try fragment(state["level"]))"
-        guard let bindings = state["bindings"] as? [[String: Any]] else { return base + "}" }
-        let fields = try bindings.map { binding in
-            "{\"ordinal\":\(try fragment(binding["ordinal"])),\"name\":\(try fragment(binding["name"])),\"tla\":\(try fragment(binding["tla"]))}"
-        }.joined(separator: ",")
-        return "\(base),\"bindings\":[\(fields)]}"
+    private func append(_ value: String, to bytes: inout Data) {
+        append(UInt32(value.utf8.count), to: &bytes)
+        bytes.append(contentsOf: value.utf8)
     }
 
-    private func bridgeAction(_ value: Any?) throws -> String {
-        guard let action = value as? [String: Any] else {
-            throw ValidationEvidenceComparisonError.invalidEvidence("bridge fixture action")
+    private func append(_ value: UInt32, to bytes: inout Data) {
+        for shift in stride(from: 24, through: 0, by: -8) {
+            bytes.append(UInt8(truncatingIfNeeded: value >> shift))
         }
-        return "{\"name\":\(try fragment(action["name"])),\"location\":\(try fragment(action["location"])),\"named\":\(try fragment(action["named"]))}"
     }
 
-    private func fragment(_ value: Any?) throws -> String {
-        guard let value else { throw ValidationEvidenceComparisonError.invalidEvidence("bridge fixture field") }
-        return String(decoding: try JSONSerialization.data(withJSONObject: value,
-            options: [.fragmentsAllowed, .sortedKeys]), as: UTF8.self)
-    }
-
-    private func compress(_ data: Data, to destination: URL) throws {
-        let source = destination.deletingLastPathComponent().appendingPathComponent(UUID().uuidString)
-        try data.write(to: source)
-        defer { try? FileManager.default.removeItem(at: source) }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
-        process.arguments = ["-n", "-c", source.path]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        try process.run()
-        let compressed = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            throw ValidationEvidenceComparisonError.invalidEvidence("fixture compression")
+    private func append(_ value: UInt64, to bytes: inout Data) {
+        for shift in stride(from: 56, through: 0, by: -8) {
+            bytes.append(UInt8(truncatingIfNeeded: value >> shift))
         }
-        try compressed.write(to: destination)
     }
 }

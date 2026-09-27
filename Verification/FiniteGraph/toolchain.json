@@ -37,7 +37,7 @@
     "sources": {
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/ConfigurationParser.java": "7afa755bb4bb512519ff4bdb518619f3390683b7f2da9ff5033cfe8b660061be",
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/InstanceActions.java": "1197df262b61e26cdd062bab4f549f66c78dc26df23210a84f95ad18957e9dbc",
-    "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java": "e35a9f951802475845be3d446ce255b6733f4e6f7737a802174e68309424939d"
+    "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java": "78ea824d6c38ddad543e61a4044556c3b43dec3f8c8615ad130a84854cbb586d"
     }
   }
 }

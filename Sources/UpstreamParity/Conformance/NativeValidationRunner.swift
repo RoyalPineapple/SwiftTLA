@@ -30,7 +30,7 @@ package enum NativeValidationRunnerError: Error, Equatable {
 /// when a decisive early result leaves another selected check unresolved.
 package enum NativeValidationRunner {
     package static func run<Scenario: ModelValidationScenario>(
-        scenario: Scenario, maximumStates: Int, to directory: URL
+        scenario: Scenario, caseID: String, maximumStates: Int, to directory: URL
     ) throws -> NativeValidationReport {
         let names = scenario.formalPropertyNames
         guard names == Scenario.Machine.formalPropertyNames,
@@ -59,10 +59,10 @@ package enum NativeValidationRunner {
         let safety = scenario.checking.properties.intersection(invariant.union(reachability))
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let batch = try MachineValidationEvidence.write(
-            scenario: scenario, maximumStates: maximumStates, stopOnViolation: true,
+            scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: true,
             stopOnReachability: !safety.intersection(reachability).isEmpty,
             checking: .init(properties: safety, checkDeadlock: scenario.checking.checkDeadlock),
-            to: directory.appendingPathComponent("machine.jsonl"))
+            to: directory.appendingPathComponent("machine.bin"))
         let complete: Bool
         switch batch.completion {
         case .exhausted: complete = true
@@ -86,9 +86,9 @@ package enum NativeValidationRunner {
                 else if complete { verdict = .satisfied }
                 else {
                     let isolated = try MachineValidationEvidence.write(
-                        scenario: scenario, maximumStates: maximumStates, stopOnViolation: true,
+                        scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: true,
                         checking: .init(properties: [property], checkDeadlock: false),
-                        to: directory.appendingPathComponent("check-\(name).jsonl"))
+                        to: directory.appendingPathComponent("check-\(name).bin"))
                     verdict = isolated.violatedInvariants.contains(property) ? .violated : .satisfied
                 }
             } else if reachability.contains(property) {
@@ -96,10 +96,10 @@ package enum NativeValidationRunner {
                 else if complete { verdict = .unreachable }
                 else {
                     let isolated = try MachineValidationEvidence.write(
-                        scenario: scenario, maximumStates: maximumStates, stopOnViolation: true,
+                        scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: true,
                         stopOnReachability: true,
                         checking: .init(properties: [property], checkDeadlock: false),
-                        to: directory.appendingPathComponent("check-\(name).jsonl"))
+                        to: directory.appendingPathComponent("check-\(name).bin"))
                     verdict = isolated.reachedProperties.contains(property) ? .reached : .unreachable
                 }
             } else if let analysis = temporalResults[property] {
@@ -127,9 +127,9 @@ package enum NativeValidationRunner {
             }
             else {
                 let isolated = try MachineValidationEvidence.write(
-                    scenario: scenario, maximumStates: maximumStates, stopOnViolation: true,
+                    scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: true,
                     checking: .init(properties: [], checkDeadlock: true),
-                    to: directory.appendingPathComponent("check-deadlock.jsonl"))
+                    to: directory.appendingPathComponent("check-deadlock.bin"))
                 deadlock = isolated.deadlockFound ? .violated : .satisfied
             }
             guard deadlock == nil || scenario.deadlockExpectation.map({ accepts($0, deadlock!) }) == true else {

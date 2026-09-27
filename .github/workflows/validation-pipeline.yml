@@ -53,7 +53,7 @@ jobs:
         id: binary-cache
         with:
           path: .build/release/tlc-validate
-          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TLA_SHA }}
+          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-xcode-16.4-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
       - name: Build validator for this revision
         if: steps.binary-cache.outputs.cache-hit != 'true'
         run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
@@ -262,7 +262,7 @@ jobs:
           if-no-files-found: error
 
   validation-pipeline:
-    name: Independent validation admission
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.case_id != '' && 'Independent validation diagnostic' || 'Independent validation admission' }}
     needs: [prepare, dsl-native-parity, upstream-parity]
     if: always()
     runs-on: ubuntu-latest
