@@ -31,6 +31,46 @@ struct ValidationEvidenceComparisonTests {
         }
     }
 
+    @Test("compact TLC evidence reads every event across memory-release batches")
+    func compactGraphSpoolsAcrossBatches() throws {
+        let directory = try fixture(target: 1)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let reference = try fixtureCase(testReferencePin(),
+            renderedActions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")])
+        let source = try completeGraphStream(reference)
+        var records = try source.split(separator: 10).map { line -> [String: Any] in
+            guard let record = try JSONSerialization.jsonObject(with: Data(line)) as? [String: Any] else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("fixture graph event")
+            }
+            return record
+        }
+        let repeated = 1_100
+        for offset in 0..<repeated {
+            var transition = records[2]
+            transition["seq"] = offset + 3
+            transition["stateFlags"] = ["raw": 1, "seen": true, "notInModel": false]
+            records.insert(transition, at: records.count - 1)
+        }
+        records[records.count - 1]["seq"] = repeated + 3
+        records[records.count - 1]["lastBodySeq"] = repeated + 2
+        records[records.count - 1]["counts"] = ["header": 1, "initial": 1,
+            "transition": repeated + 1]
+        let expanded = try records.reduce(into: Data()) { data, record in
+            data.append(try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]))
+            data.append(10)
+        }
+        let graph = directory.appendingPathComponent("oracle/tlc-graph/graph-events.jsonl.gz")
+        try writeCompressedGraph(expanded, to: graph)
+        let spool = directory.appendingPathComponent("tlc-spool")
+        try FileManager.default.createDirectory(at: spool, withIntermediateDirectories: false)
+        try ValidationEvidenceComparison.writeTLCSpool(graph, caseID: "fixture",
+            actions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")], in: spool)
+        #expect(try Data(contentsOf: spool.appendingPathComponent("states.raw"))
+            .split(separator: 10).count == 2)
+        #expect(try Data(contentsOf: spool.appendingPathComponent("edges.raw"))
+            .split(separator: 10).count == repeated + 1)
+    }
+
     @Test("complete generated-machine and TLC records match by full state and labeled edge")
     func completeGraphMatches() throws {
         let directory = try fixture(target: 1)

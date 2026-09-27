@@ -300,7 +300,7 @@ package enum ValidationEvidenceComparison {
         var edgeCount = 0
         var initialCount = 0
         var sawFooter = false
-        while let line = try reader.next() {
+        try consumeValidationLines(&reader) { line in
             let record = try decodeJSONObject(line, line: count + 1)
             guard let type = record["type"] as? String, !sawFooter else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("native record order")
@@ -527,7 +527,7 @@ package enum ValidationEvidenceComparison {
         var sequence = 0
         var sawFooter = false
 
-        while let line = try reader.next() {
+        try consumeValidationLines(&reader) { line in
             guard !sawFooter else { throw ValidationEvidenceComparisonError.invalidEvidence("TLC record after footer") }
             let event: CompactTLCGraphEvent
             do {
@@ -729,7 +729,7 @@ package enum ValidationEvidenceComparison {
         let ranked = directory.appendingPathComponent(raw.lastPathComponent + ".ranked")
         var writer = try ValidationLineWriter(ranked)
         defer { try? writer.close() }
-        while let line = try reader.next() {
+        try consumeValidationLines(&reader) { line in
             let fields = String(decoding: line, as: UTF8.self).split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
             try writer.append(transform(fields))
         }
@@ -786,6 +786,22 @@ private func withValidationAutoreleasePool<Result>(_ body: () throws -> Result) 
     #else
     return try body()
     #endif
+}
+
+private func consumeValidationLines(_ reader: inout ValidationLineReader,
+    _ consume: (Data) throws -> Void) throws {
+    var finished = false
+    while !finished {
+        try withValidationAutoreleasePool {
+            for _ in 0..<1_024 {
+                guard let line = try reader.next() else {
+                    finished = true
+                    break
+                }
+                try consume(line)
+            }
+        }
+    }
 }
 
 private struct ValidationLineReader {
