@@ -64,7 +64,7 @@ public enum MachineValidator {
 
         var context = CheckingContext(registers: try first.initialCheckingRegisters())
         var seen: [Machine.Snapshot: Int] = [:]
-        var pending: [Machine?] = []
+        var pending: [(id: Int, machine: Machine?)] = []
         var head = 0
         var initialCount = 0
         var edgeCount = 0
@@ -164,7 +164,7 @@ public enum MachineValidator {
             let insertStarted = DispatchTime.now().uptimeNanoseconds
             seen[snapshot] = id
             seenInsertNanoseconds += DispatchTime.now().uptimeNanoseconds - insertStarted
-            pending.append(machine)
+            pending.append((id, machine))
             if initial { initialCount += 1 }
             try emitEvent(.state(id: id, snapshot: snapshot, initial: initial,
                             predecessor: predecessor, action: action))
@@ -188,9 +188,9 @@ public enum MachineValidator {
             let layerEnd = pending.count
             while head < layerEnd {
                 try Task.checkCancellation()
-                let machine = pending[head]!
-                let source = stateID(machine.snapshot)!
-                pending[head] = nil
+                let source = pending[head].id
+                let machine = pending[head].machine!
+                pending[head].machine = nil
                 head += 1
                 let successorStartedAt = DispatchTime.now().uptimeNanoseconds
                 let successors = try machine.successors(checking: &context)
