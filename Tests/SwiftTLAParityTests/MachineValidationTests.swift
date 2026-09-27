@@ -92,7 +92,9 @@ struct MachineValidationTests {
         #expect(summary.edges >= 2)
         #expect(evidence.starts(with: Data("STLAGRF2".utf8)))
         #expect(evidence.count > 100)
-        #expect(profile["schema"] as? String == "swifttla.native-validation-profile.v1")
+        #expect(profile["schema"] as? String == "swifttla.native-validation-profile.v2")
+        #expect(profile["estimatedTypedProjectionSeconds"] as? Double != nil)
+        #expect(profile["estimatedCanonicalEncodingSeconds"] as? Double != nil)
         #expect(profile["stateEvents"] as? Int == summary.states)
         #expect(profile["edgeEvents"] as? Int == summary.edges)
     }

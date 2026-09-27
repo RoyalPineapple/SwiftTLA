@@ -24,7 +24,8 @@ private struct MachineValidationProfile: Encodable {
     let edgeEvents: Int
     let sampledStates: Int
     let sampledEdges: Int
-    let estimatedStateProjectionSeconds: Double
+    let estimatedTypedProjectionSeconds: Double
+    let estimatedCanonicalEncodingSeconds: Double
     let estimatedStateWriteSeconds: Double
     let estimatedEdgeWriteSeconds: Double
 }
@@ -57,7 +58,8 @@ package enum MachineValidationEvidence {
         var edgeEvents = 0
         var sampledStates = 0
         var sampledEdges = 0
-        var stateProjectionNanoseconds: UInt64 = 0
+        var typedProjectionNanoseconds: UInt64 = 0
+        var canonicalEncodingNanoseconds: UInt64 = 0
         var stateWriteNanoseconds: UInt64 = 0
         var edgeWriteNanoseconds: UInt64 = 0
 
@@ -86,11 +88,14 @@ package enum MachineValidationEvidence {
                 if stateEvents % 256 == 1 {
                     sampledStates += 1
                     let projectionStartedAt = DispatchTime.now().uptimeNanoseconds
-                    let key = try stateKey(snapshot)
+                    let projection = try machine.formalProjection(of: snapshot)
+                    let encodingStartedAt = DispatchTime.now().uptimeNanoseconds
+                    let key = try CanonicalBinaryState.encode(projection)
                     let writeStartedAt = DispatchTime.now().uptimeNanoseconds
                     try writer.state(id: UInt64(id), key: key, initial: isInitial)
                     let finishedAt = DispatchTime.now().uptimeNanoseconds
-                    stateProjectionNanoseconds += writeStartedAt - projectionStartedAt
+                    typedProjectionNanoseconds += encodingStartedAt - projectionStartedAt
+                    canonicalEncodingNanoseconds += writeStartedAt - encodingStartedAt
                     stateWriteNanoseconds += finishedAt - writeStartedAt
                 } else {
                     try writer.state(id: UInt64(id), key: stateKey(snapshot), initial: isInitial)
@@ -136,7 +141,7 @@ package enum MachineValidationEvidence {
             return seconds(nanoseconds) * Double(total) / Double(samples)
         }
         let profile = MachineValidationProfile(
-            schema: "swifttla.native-validation-profile.v1", caseID: caseID,
+            schema: "swifttla.native-validation-profile.v2", caseID: caseID,
             elapsedSeconds: seconds(DispatchTime.now().uptimeNanoseconds - startedAt),
             explorationSeconds: seconds(result.timing.elapsedNanoseconds),
             successorSeconds: seconds(result.timing.successorNanoseconds),
@@ -150,8 +155,10 @@ package enum MachineValidationEvidence {
             successorCalls: result.timing.successorCalls,
             stateEvents: stateEvents, edgeEvents: edgeEvents,
             sampledStates: sampledStates, sampledEdges: sampledEdges,
-            estimatedStateProjectionSeconds: estimatedSeconds(
-                stateProjectionNanoseconds, samples: sampledStates, total: stateEvents),
+            estimatedTypedProjectionSeconds: estimatedSeconds(
+                typedProjectionNanoseconds, samples: sampledStates, total: stateEvents),
+            estimatedCanonicalEncodingSeconds: estimatedSeconds(
+                canonicalEncodingNanoseconds, samples: sampledStates, total: stateEvents),
             estimatedStateWriteSeconds: estimatedSeconds(
                 stateWriteNanoseconds, samples: sampledStates, total: stateEvents),
             estimatedEdgeWriteSeconds: estimatedSeconds(
