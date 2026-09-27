@@ -14,7 +14,22 @@ struct CanonicalBinaryStateTests {
             1, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 1
         ])
         #expect(try CanonicalBinaryState.encode(projection) == expected)
+        try CanonicalBinaryState.validate(expected)
         #expect(try CanonicalBinaryState.encode(state([("x", .bool(true))])) != expected)
+    }
+
+    @Test("canonical state decoding rejects truncated and invalid UTF-8 values")
+    func malformedStateBytes() throws {
+        var valid = try CanonicalBinaryState.encode(state([("x", .string("value"))]))
+        var truncated = valid
+        truncated.removeLast()
+        #expect(throws: CanonicalBinaryState.CodingError.self) {
+            try CanonicalBinaryState.validate(truncated)
+        }
+        valid[16] = 0xff
+        #expect(throws: CanonicalBinaryState.CodingError.self) {
+            try CanonicalBinaryState.validate(valid)
+        }
     }
 
     @Test("unordered values are stable while tuple order remains significant")

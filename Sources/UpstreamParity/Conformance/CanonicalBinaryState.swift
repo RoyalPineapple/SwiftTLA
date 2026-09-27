@@ -52,7 +52,7 @@ enum CanonicalBinaryState {
                 throw CodingError.malformed
             }
             defer { offset += length }
-            return data.subdata(in: offset..<(offset + length))
+            return data[offset..<(offset + length)]
         }
 
         mutating func byte() throws -> UInt8 {
@@ -62,8 +62,11 @@ enum CanonicalBinaryState {
         }
 
         mutating func count() throws -> Int {
-            let bytes = try take(4)
-            return bytes.reduce(0) { ($0 << 8) | Int($1) }
+            guard data.count - offset >= 4 else { throw CodingError.malformed }
+            let value = (Int(data[offset]) << 24) | (Int(data[offset + 1]) << 16)
+                | (Int(data[offset + 2]) << 8) | Int(data[offset + 3])
+            offset += 4
+            return value
         }
 
         mutating func stringBytes() throws -> Data {
@@ -84,7 +87,7 @@ enum CanonicalBinaryState {
             switch tag {
             case 1:
                 guard length == 8 else { throw CodingError.malformed }
-                _ = try take(8)
+                offset += 8
             case 2:
                 guard length == 1, try byte() <= 1 else { throw CodingError.malformed }
             case 3, 4:
@@ -101,7 +104,7 @@ enum CanonicalBinaryState {
                     let memberStart = offset
                     try value()
                     if tag == 5 {
-                        let encoded = data.subdata(in: memberStart..<offset)
+                        let encoded = data[memberStart..<offset]
                         guard previous.map({ $0.lexicographicallyPrecedes(encoded) }) ?? true else {
                             throw CodingError.malformed
                         }
@@ -122,7 +125,7 @@ enum CanonicalBinaryState {
                         field = try stringBytes()
                     } else {
                         try value()
-                        field = data.subdata(in: fieldStart..<offset)
+                        field = data[fieldStart..<offset]
                     }
                     guard previous.map({ $0.lexicographicallyPrecedes(field) }) ?? true else {
                         throw CodingError.malformed
