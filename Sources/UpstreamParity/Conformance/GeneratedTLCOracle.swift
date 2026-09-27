@@ -21,6 +21,71 @@ package enum GeneratedTLCOracle {
         case unsafeModuleName(String)
     }
 
+    /// Identifies every TLC input used by a scenario, independent of the Swift source SHA.
+    /// An unchanged generated machine can reuse its previously captured TLC evidence.
+    package static func cacheKey<Scenario: ModelValidationScenario>(
+        scenario: Scenario, id: String, maximumStates: Int, pin: TLCReferencePin
+    ) throws -> String {
+        let rendered = try scenario.render()
+        let names = scenario.formalPropertyNames
+        let selected = try Set(scenario.checking.properties.map { property -> String in
+            guard let name = names[property] else { throw Error.checkingMismatch }
+            return name
+        })
+        guard names == Scenario.Machine.formalPropertyNames,
+              names.values.allSatisfy({
+                  $0.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) != nil
+              }),
+              selected == rendered.checkNames,
+              scenario.checking.properties == Set(scenario.expectations.keys),
+              scenario.checking.checkDeadlock == rendered.checksDeadlock,
+              (scenario.deadlockExpectation != nil) == rendered.checksDeadlock,
+              scenario.behavior == rendered.behavior else {
+            throw Error.checkingMismatch
+        }
+        let decisiveName = scenario.expectations.compactMap { property, expectation -> String? in
+            guard expectation == .violated, let name = names[property],
+                  rendered.invariantNames.contains(name) else { return nil }
+            return name
+        }.sorted().first
+        let graphChecks = decisiveName.map { Set([$0]) }
+            ?? selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
+        let graphInvocation: TLCInvocationKind = decisiveName == nil ? .finiteGraph : .propertyCheck
+        let graph = try inputIdentity(
+            bundle: rendered.tlaBundle(checking: graphChecks, checkDeadlock: rendered.checksDeadlock),
+            pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: graphInvocation)
+        var checks: [[String: Any]] = []
+        for name in selected.sorted() where name != decisiveName {
+            let bundles = try rendered.temporalObligationBundles(checking: name)
+                ?? [rendered.tlaBundle(checking: [name], checkDeadlock: false)]
+            checks.append(["name": name, "inputs": try bundles.map {
+                try inputIdentity(bundle: $0, pin: pin,
+                    arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck)
+            }])
+        }
+        let deadlockInput: String? = rendered.checksDeadlock
+            ? try inputIdentity(bundle: rendered.tlaBundle(checking: [], checkDeadlock: true),
+                pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck)
+            : nil
+        let identity: [String: Any] = [
+            "schema": "swifttla.oracle-cache-key-v1",
+            "caseID": id,
+            "scenario": scenario.name,
+            "maximumStates": maximumStates,
+            "graph": graph,
+            "checks": checks,
+            "deadlockInput": deadlockInput ?? NSNull(),
+            "expectations": scenario.expectations.map { property, expectation in
+                ["property": names[property] ?? "", "verdict": String(describing: expectation)]
+            }.sorted { $0["property"]! < $1["property"]! },
+            "deadlockExpectation": scenario.deadlockExpectation.map { String(describing: $0) } ?? "none",
+            "actions": rendered.actions.map {
+                ["invocation": $0.sourceInvocationName, "rendered": $0.renderedName]
+            }
+        ]
+        return SHA256.hex(try JSONSerialization.data(withJSONObject: identity, options: [.sortedKeys]))
+    }
+
     package static func capture<Scenario: ModelValidationScenario>(
         scenario: Scenario, id: String, maximumStates: Int, timeout: TimeInterval,
         tools: ResolvedTLCToolchain, pin: TLCReferencePin, to directory: URL,

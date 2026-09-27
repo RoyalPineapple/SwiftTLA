@@ -14,8 +14,9 @@ default:
     Usage: tlc-validate <command>
       native list | run --case <id-or-all> --output <directory> --maximum-states <positive-integer>
       oracle run --case <id-or-all> --output <directory> --maximum-states <positive-integer>
+      oracle cache-key --case <id> --maximum-states <positive-integer>
       compare run --case <id-or-all> --native <directory> --oracle <directory> --output <directory>
-      upstream list | run --case <id-or-all> --output <directory>
+      upstream list | run --case <id-or-all> --output <directory> | cache-key --case <id>
       temporal-symmetry run --output <directory>
     """, stderr)
     exit(1)

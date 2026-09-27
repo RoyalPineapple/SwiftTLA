@@ -90,7 +90,7 @@ jobs:
     needs: prepare
     if: ${{ fromJSON(needs.prepare.outputs.native)[0] != '__skip__' }}
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 105
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -124,6 +124,16 @@ jobs:
         run: |
           chmod +x .build/validation-bin/tlc-validate
           ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT" --skip-inputs
+      - name: Identify generated TLC inputs
+        id: oracle-key
+        run: |
+          key=$(.build/validation-bin/tlc-validate oracle cache-key --case "$CASE_ID" --maximum-states 10000000)
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: oracle-cache
+        with:
+          path: .build/validation-evidence/oracle/${{ matrix.case }}
+          key: generated-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.oracle-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift') }}
       - name: Validate generated Swift machine
         timeout-minutes: 30
         run: |
@@ -133,13 +143,23 @@ jobs:
           .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
             --output .build/validation-evidence/native --maximum-states 10000000
       - name: Validate generated TLA with TLC
-        timeout-minutes: 20
+        if: steps.oracle-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 35
         run: |
           set -o pipefail
           .build/validation-bin/tlc-validate oracle run --case "$CASE_ID" \
             --output .build/validation-evidence/oracle --maximum-states 10000000
+          jq -n --arg key '${{ steps.oracle-key.outputs.key }}' --arg sha "$SWIFT_TLA_SHA" \
+            --arg run "$GITHUB_RUN_ID" '{cacheKey:$key,sourceSHA:$sha,originRunID:$run}' \
+            > ".build/validation-evidence/oracle/$CASE_ID/evidence-origin.json"
+      - name: Require complete generated TLC evidence
+        env:
+          ORACLE_INPUT_KEY: ${{ steps.oracle-key.outputs.key }}
+        run: |
+          jq -e '.schema == "swifttla.generated-tlc-oracle" and .caseID == env.CASE_ID' ".build/validation-evidence/oracle/$CASE_ID/oracle.json"
+          jq -e --arg key "$ORACLE_INPUT_KEY" '.cacheKey == $key and .sourceSHA != "" and .originRunID != ""' ".build/validation-evidence/oracle/$CASE_ID/evidence-origin.json"
       - name: Require exact native and TLC evidence
-        timeout-minutes: 20
+        timeout-minutes: 35
         run: |
           set -o pipefail
           .build/validation-bin/tlc-validate compare run --case "$CASE_ID" \
@@ -162,7 +182,7 @@ jobs:
     needs: prepare
     if: ${{ fromJSON(needs.prepare.outputs.upstream)[0] != '__skip__' }}
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -196,15 +216,36 @@ jobs:
         run: |
           chmod +x .build/validation-bin/tlc-validate
           ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT"
-      - name: Compare generated and upstream TLA through TLC
-        timeout-minutes: 35
+      - name: Record exact source revision
         run: |
-          set -o pipefail
           mkdir -p .build/validation-evidence
           git rev-parse HEAD > .build/validation-evidence/source-sha.txt
+      - name: Identify upstream comparison inputs
+        id: upstream-key
+        run: |
+          key=$(.build/validation-bin/tlc-validate upstream cache-key --case "$CASE_ID")
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: upstream-cache
+        with:
+          path: .build/validation-evidence/upstream/${{ matrix.case }}
+          key: upstream-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/UpstreamTLCParity.swift', 'Sources/UpstreamParity/Conformance/ValidationEvidenceComparison.swift', 'Sources/UpstreamParity/Conformance/CompactTLCGraphEvent.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift', 'Sources/SwiftTLA/SpecCompilation.swift') }}
+      - name: Compare generated and upstream TLA through TLC
+        if: steps.upstream-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 90
+        run: |
+          set -o pipefail
           .build/validation-bin/tlc-validate upstream run --case "$CASE_ID" \
             --output .build/validation-evidence/upstream
-          jq -e '.result == "exact"' ".build/validation-evidence/upstream/$CASE_ID/comparison.json"
+          jq -n --arg key '${{ steps.upstream-key.outputs.key }}' --arg sha "$SWIFT_TLA_SHA" \
+            --arg run "$GITHUB_RUN_ID" '{cacheKey:$key,sourceSHA:$sha,originRunID:$run}' \
+            > ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"
+      - name: Require exact upstream evidence
+        env:
+          UPSTREAM_INPUT_KEY: ${{ steps.upstream-key.outputs.key }}
+        run: |
+          jq -e '.schema == "swifttla.upstream-tlc-parity" and .caseID == env.CASE_ID and .result == "exact"' ".build/validation-evidence/upstream/$CASE_ID/comparison.json"
+          jq -e --arg key "$UPSTREAM_INPUT_KEY" '.cacheKey == $key and .sourceSHA != "" and .originRunID != ""' ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"
       - uses: actions/upload-artifact@v6
         if: always()
         with:

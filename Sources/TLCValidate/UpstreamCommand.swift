@@ -11,7 +11,7 @@ private enum UpstreamCommandError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            "Usage: tlc-validate upstream list | upstream run --case <id-or-all> --output <directory>"
+            "Usage: tlc-validate upstream list | upstream run --case <id-or-all> --output <directory> | upstream cache-key --case <id>"
         case .unknownCase(let id): "unknown upstream case: \(id)"
         case .invalidToolchain: "invalid pinned TLC toolchain"
         case .outputExists(let path): "output already exists: \(path)"
@@ -26,6 +26,38 @@ func runUpstream(arguments: [String]) -> Never {
             at: root.appendingPathComponent("Verification/FiniteGraph/cases.json"))
         if arguments == ["list"] {
             print(String(decoding: try JSONEncoder().encode(manifest.cases.map(\.id)), as: UTF8.self))
+            exit(0)
+        }
+        if arguments.count == 3, arguments[0] == "cache-key", arguments[1] == "--case" {
+            guard let declaration = manifest.cases.first(where: { $0.id == arguments[2] }) else {
+                throw UpstreamCommandError.unknownCase(arguments[2])
+            }
+            let environment = ProcessInfo.processInfo.environment
+            let toolRoot = URL(fileURLWithPath: try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", environment))
+            let inputRoot = try requiredEnvironment("FINITE_GRAPH_INPUT_ROOT", environment)
+            let lock = try decode(PinnedTLCToolchain.self,
+                at: root.appendingPathComponent("Verification/FiniteGraph/toolchain.json"))
+            guard lock.schema == "TLCReferencePin",
+                  let archive = lock.java.archives[try normalizedArchitecture()] else {
+                throw UpstreamCommandError.invalidToolchain
+            }
+            let pin = try referencePin(from: lock, javaArchive: archive, toolRoot: toolRoot)
+            let scenario = try declaration.resolveScenario()
+            let rendered = try scenario?.render() ?? declaration.sourceModel.render()
+            let reference = try TLCProcessRequest.declaredBundle(
+                root: inputPath(declaration.module, within: inputRoot),
+                configuration: inputPath(declaration.configuration, within: inputRoot),
+                imports: try declaration.imports.map { try inputPath($0, within: inputRoot) },
+                dependencies: declaration.dependencies.enumerated().map { index, edge in
+                    .init(importingModule: edge.importingModule,
+                          importedModule: edge.importedModule,
+                          structuralPath: [declaration.id, "dependencies", String(index)])
+                })
+            print(try UpstreamTLCParity.cacheKey(id: declaration.id, rendered: rendered,
+                reference: reference, expectedModuleSHA256: declaration.moduleSHA256,
+                expectedCFGSHA256: declaration.cfgSHA256,
+                maximumStates: declaration.exploration.maximumStateLimit,
+                decisive: declaration.comparisonMode == .decisiveCounterexample, pin: pin))
             exit(0)
         }
         guard arguments.count == 5, arguments[0] == "run", arguments[1] == "--case",

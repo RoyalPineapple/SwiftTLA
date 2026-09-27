@@ -23,6 +23,31 @@ package enum UpstreamTLCParityError: Error, Equatable {
 /// The upstream comparison runs TLC on both module bundles. It never invokes
 /// the Swift machine or native checker.
 package enum UpstreamTLCParity {
+    package static func cacheKey(
+        id: String, rendered: RenderedSpecification, reference: TLAModuleBundle,
+        expectedModuleSHA256: String, expectedCFGSHA256: String,
+        maximumStates: Int, decisive: Bool, pin: TLCReferencePin
+    ) throws -> String {
+        let generated = try rendered.tlaBundle(
+            checking: rendered.checkNames, checkDeadlock: rendered.checksDeadlock)
+        let identity: [String: Any] = [
+            "schema": "swifttla.upstream-cache-key-v1",
+            "caseID": id,
+            "maximumStates": maximumStates,
+            "decisive": decisive,
+            "expectedModuleSHA256": expectedModuleSHA256,
+            "expectedCFGSHA256": expectedCFGSHA256,
+            "generated": try GeneratedTLCOracle.inputIdentity(bundle: generated, pin: pin,
+                arguments: ["-workers", "1", "-fp", "1"]),
+            "reference": try GeneratedTLCOracle.inputIdentity(bundle: reference, pin: pin,
+                arguments: ["-workers", "1", "-fp", "1"]),
+            "actions": rendered.actions.map {
+                ["invocation": $0.sourceInvocationName, "rendered": $0.renderedName]
+            }
+        ]
+        return SHA256.hex(try JSONSerialization.data(withJSONObject: identity, options: [.sortedKeys]))
+    }
+
     package static func run(
         id: String, rendered: RenderedSpecification, reference: TLAModuleBundle,
         expectedModuleSHA256: String, expectedCFGSHA256: String,
