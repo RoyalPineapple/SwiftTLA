@@ -124,7 +124,7 @@ private struct TypedCollectionGeneratedModel {
 
 @TLAModel
 private struct TypedQuantifierGeneratedModel {
-    enum Step: String, CaseIterable { case findEven }
+    enum Step: String, CaseIterable { case findEven, allPositive, emptyAll, emptyAny }
 
     static var spec: TLASpec {
         #spec("TypedQuantifierGeneratedModel") { scope in
@@ -134,6 +134,17 @@ private struct TypedQuantifierGeneratedModel {
                     Assign(result, to: Exists(in: IntRange(1, through: 4)) { value in
                         value.expr % 2 == 0
                     })
+                }
+                Do(Step.allPositive) {
+                    Assign(result, to: ForAll(in: IntRange(1, through: 4)) { value in
+                        value.expr > 0
+                    })
+                }
+                Do(Step.emptyAll) {
+                    Assign(result, to: ForAll(in: IntRange(2, through: 1)) { value in value.expr < 0 })
+                }
+                Do(Step.emptyAny) {
+                    Assign(result, to: Exists(in: IntRange(2, through: 1)) { value in value.expr >= 0 })
                 }
             })
         }
@@ -816,8 +827,10 @@ private struct FoldGeneratedModel {
         #expect(try compiledValue(everyPositive.raw) == .bool(true))
 
         var machine = try TypedQuantifierGeneratedModel.makeMachine()
-        let transition = try machine.send(.findEven)
-        #expect(transition.after.result == true)
+        #expect(try machine.send(.findEven).after.result)
+        #expect(try machine.send(.allPositive).after.result)
+        #expect(try machine.send(.emptyAll).after.result)
+        #expect(try !machine.send(.emptyAny).after.result)
         #expect(try TypedQuantifierGeneratedModel.spec.compile().render().tlaBundle.tla.contains("\\E"))
     }
 }

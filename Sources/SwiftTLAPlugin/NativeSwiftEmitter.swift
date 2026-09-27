@@ -739,6 +739,27 @@ struct NativeSwiftEmitter {
         func emit(_ index: Int) throws -> String {
             try self.expression(node.children[index], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         }
+        func quantifier(_ binding: BinderID, all: Bool) throws -> String {
+            guard case .set(let element) = childType(0) else { throw unsupported("quantifier domain") }
+            let method = all ? "allSatisfy" : "contains"
+            if case .integerRange = node.children[0].operation {
+                let range = node.children[0]
+                let lower = try self.expression(range.children[0], state: state,
+                    substitutions: substitutions, activeFunctions: activeFunctions)
+                let upper = try self.expression(range.children[1], state: state,
+                    substitutions: substitutions, activeFunctions: activeFunctions)
+                let predicate = try emit(1)
+                return """
+                (try { () throws -> Bool in
+                    guard let bounds = try _NativeMachineOperations.integerRangeBounds(\(lower), \(upper)) else { return \(all) }
+                    return try bounds.\(method) { (\(binder(binding)): Int) throws -> Bool in \(predicate) }
+                }())
+                """
+            }
+            let domain = try emit(0)
+            let predicate = try emit(1)
+            return "(try \(domain).sorted(by: \(try ordering(element))).\(method) { (\(binder(binding)): \(try swiftType(element))) throws -> Bool in \(predicate) })"
+        }
         switch expression {
         case .setLiteral:
             guard case .set(let element) = node.resultType else { throw unsupported("set literal") }
@@ -802,12 +823,8 @@ struct NativeSwiftEmitter {
             guard case .set(let element) = node.resultType else { throw unsupported("set map") }
             guard case .set(let input) = childType(1) else { throw unsupported("set map domain") }
             return "Set<\(try swiftType(element))>(try \(try emit(1)).sorted(by: \(try ordering(input))).map { (\(binder(binding)): \(try swiftType(input))) throws -> \(try swiftType(element)) in \(try emit(0)) })"
-        case .forAll(let binding):
-            guard case .set(let element) = childType(0) else { throw unsupported("quantifier domain") }
-            return "(try \(try emit(0)).sorted(by: \(try ordering(element))).allSatisfy { (\(binder(binding)): \(try swiftType(element))) throws -> Bool in \(try emit(1)) })"
-        case .exists(let binding):
-            guard case .set(let element) = childType(0) else { throw unsupported("quantifier domain") }
-            return "(try \(try emit(0)).sorted(by: \(try ordering(element))).contains { (\(binder(binding)): \(try swiftType(element))) throws -> Bool in \(try emit(1)) })"
+        case .forAll(let binding): return try quantifier(binding, all: true)
+        case .exists(let binding): return try quantifier(binding, all: false)
         case .choose(let binding):
             let element = node.resultType
             let order = try ordering(element)
