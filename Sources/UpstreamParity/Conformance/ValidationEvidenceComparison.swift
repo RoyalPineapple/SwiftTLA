@@ -187,6 +187,7 @@ package enum ValidationEvidenceComparison {
     private struct StateRecord {
         let key: Data
         let id: UInt64
+        let sortKey: UInt64
     }
 
     private static func matchStates(
@@ -241,9 +242,14 @@ package enum ValidationEvidenceComparison {
         while !reader.atEnd {
             let key = try reader.bytes(Int(reader.uint32()))
             let id = try reader.uint64()
-            records.append(StateRecord(key: key, id: id))
+            let digest = CryptoKit.SHA256.hash(data: key)
+            let sortKey = digest.prefix(8).reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+            records.append(StateRecord(key: key, id: id, sortKey: sortKey))
         }
-        records.sort { $0.key.lexicographicallyPrecedes($1.key) }
+        records.sort {
+            if $0.sortKey != $1.sortKey { return $0.sortKey < $1.sortKey }
+            return $0.key.lexicographicallyPrecedes($1.key)
+        }
         return records
     }
 
