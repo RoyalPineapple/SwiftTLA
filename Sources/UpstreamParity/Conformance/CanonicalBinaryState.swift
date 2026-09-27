@@ -12,14 +12,16 @@ enum CanonicalBinaryState {
 
     static func encode(_ projection: TLAStateProjection) throws -> Data {
         var output = Data("STLASV01".utf8)
+        var lengthPatches: [LengthPatch] = []
         let entries = projection.entries.sorted {
             $0.token.description.utf8.lexicographicallyPrecedes($1.token.description.utf8)
         }
         try appendCount(entries.count, to: &output)
         for entry in entries {
             try appendString(entry.token.description, to: &output)
-            try encode(entry.value, to: &output)
+            try encode(entry.value, to: &output, lengthPatches: &lengthPatches)
         }
+        apply(lengthPatches, to: &output)
         return output
     }
 
@@ -142,28 +144,32 @@ enum CanonicalBinaryState {
 
     private static func encode(_ value: TLAValue) throws -> Data {
         var output = Data()
-        try encode(value, to: &output)
+        var lengthPatches: [LengthPatch] = []
+        try encode(value, to: &output, lengthPatches: &lengthPatches)
+        apply(lengthPatches, to: &output)
         return output
     }
 
-    private static func encode(_ value: TLAValue, to output: inout Data) throws {
+    private static func encode(
+        _ value: TLAValue, to output: inout Data, lengthPatches: inout [LengthPatch]
+    ) throws {
         switch value {
         case .int(let integer):
             let lengthOffset = beginValue(tag: 1, to: &output)
             appendUInt64(UInt64(bitPattern: Int64(integer)), to: &output)
-            try finishValue(lengthOffset: lengthOffset, in: &output)
+            try finishValue(lengthOffset: lengthOffset, in: output, patches: &lengthPatches)
         case .bool(let boolean):
             let lengthOffset = beginValue(tag: 2, to: &output)
             output.append(boolean ? 1 : 0)
-            try finishValue(lengthOffset: lengthOffset, in: &output)
+            try finishValue(lengthOffset: lengthOffset, in: output, patches: &lengthPatches)
         case .string(let string):
             let lengthOffset = beginValue(tag: 3, to: &output)
             output.append(contentsOf: string.utf8)
-            try finishValue(lengthOffset: lengthOffset, in: &output)
+            try finishValue(lengthOffset: lengthOffset, in: output, patches: &lengthPatches)
         case .constant(let constant):
             let lengthOffset = beginValue(tag: 4, to: &output)
             output.append(contentsOf: constant.utf8)
-            try finishValue(lengthOffset: lengthOffset, in: &output)
+            try finishValue(lengthOffset: lengthOffset, in: output, patches: &lengthPatches)
         case .set(let members):
             let ordered = try members.map(encode).sorted(by: { $0.lexicographicallyPrecedes($1) })
             var unique: [Data] = []
@@ -172,17 +178,20 @@ enum CanonicalBinaryState {
             let lengthOffset = beginValue(tag: 5, to: &output)
             try appendCount(unique.count, to: &output)
             for member in unique { output.append(member) }
-            try finishValue(lengthOffset: lengthOffset, in: &output)
+            try finishValue(lengthOffset: lengthOffset, in: output, patches: &lengthPatches)
         case .tuple(let members):
             let lengthOffset = beginValue(tag: 6, to: &output)
             try appendCount(members.count, to: &output)
-            for member in members { try encode(member, to: &output) }
-            try finishValue(lengthOffset: lengthOffset, in: &output)
+            for member in members {
+                try encode(member, to: &output, lengthPatches: &lengthPatches)
+            }
+            try finishValue(lengthOffset: lengthOffset, in: output, patches: &lengthPatches)
         case .record(let record):
-            try encodeRecord(record.fields.map { ($0.name, $0.value) }, to: &output)
+            try encodeRecord(record.fields.map { ($0.name, $0.value) }, to: &output,
+                             lengthPatches: &lengthPatches)
         case .function(let mapping):
             if mapping.isEmpty {
-                try encode(.tuple([]), to: &output)
+                try encode(.tuple([]), to: &output, lengthPatches: &lengthPatches)
                 return
             }
             let indexed = mapping.compactMap { key, value -> (Int, TLAValue)? in
@@ -191,7 +200,8 @@ enum CanonicalBinaryState {
             }.sorted { $0.0 < $1.0 }
             if indexed.count == mapping.count,
                indexed.enumerated().allSatisfy({ $0.offset + 1 == $0.element.0 }) {
-                try encode(.tuple(indexed.map(\.1)), to: &output)
+                try encode(.tuple(indexed.map(\.1)), to: &output,
+                           lengthPatches: &lengthPatches)
                 return
             }
             let fields = mapping.compactMap { key, value -> (String, TLAValue)? in
@@ -199,7 +209,7 @@ enum CanonicalBinaryState {
                 return (name, value)
             }
             if fields.count == mapping.count {
-                try encodeRecord(fields, to: &output)
+                try encodeRecord(fields, to: &output, lengthPatches: &lengthPatches)
                 return
             }
             let lengthOffset = beginValue(tag: 8, to: &output)
@@ -213,13 +223,16 @@ enum CanonicalBinaryState {
                 output.append(key)
                 output.append(value)
             }
-            try finishValue(lengthOffset: lengthOffset, in: &output)
+            try finishValue(lengthOffset: lengthOffset, in: output, patches: &lengthPatches)
         }
     }
 
-    private static func encodeRecord(_ fields: [(String, TLAValue)], to output: inout Data) throws {
+    private static func encodeRecord(
+        _ fields: [(String, TLAValue)], to output: inout Data,
+        lengthPatches: inout [LengthPatch]
+    ) throws {
         if fields.isEmpty {
-            try encode(.tuple([]), to: &output)
+            try encode(.tuple([]), to: &output, lengthPatches: &lengthPatches)
             return
         }
         let lengthOffset = beginValue(tag: 7, to: &output)
@@ -227,9 +240,9 @@ enum CanonicalBinaryState {
         try appendCount(ordered.count, to: &output)
         for (name, value) in ordered {
             try appendString(name, to: &output)
-            try encode(value, to: &output)
+            try encode(value, to: &output, lengthPatches: &lengthPatches)
         }
-        try finishValue(lengthOffset: lengthOffset, in: &output)
+        try finishValue(lengthOffset: lengthOffset, in: output, patches: &lengthPatches)
     }
 
     private static func beginValue(tag: UInt8, to output: inout Data) -> Int {
@@ -239,12 +252,28 @@ enum CanonicalBinaryState {
         return lengthOffset
     }
 
-    private static func finishValue(lengthOffset: Int, in output: inout Data) throws {
+    private struct LengthPatch {
+        let offset: Int
+        let length: UInt32
+    }
+
+    private static func finishValue(
+        lengthOffset: Int, in output: Data, patches: inout [LengthPatch]
+    ) throws {
         guard let length = UInt32(exactly: output.count - lengthOffset - 4) else {
             throw CodingError.lengthOverflow
         }
-        for index in 0..<4 {
-            output[lengthOffset + index] = UInt8(truncatingIfNeeded: length >> (24 - index * 8))
+        patches.append(LengthPatch(offset: lengthOffset, length: length))
+    }
+
+    private static func apply(_ patches: [LengthPatch], to output: inout Data) {
+        output.withUnsafeMutableBytes { (bytes: UnsafeMutableRawBufferPointer) in
+            for patch in patches {
+                for index in 0..<4 {
+                    bytes[patch.offset + index] = UInt8(truncatingIfNeeded:
+                        patch.length >> (24 - index * 8))
+                }
+            }
         }
     }
 
