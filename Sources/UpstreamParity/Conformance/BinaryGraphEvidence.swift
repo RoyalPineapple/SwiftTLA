@@ -152,13 +152,24 @@ struct BinaryGraphEvidenceWriter {
 struct BinaryGraphEvidenceReader {
     private let handle: FileHandle
     private let fileSize: UInt64
+    private let digestPrefixLength: UInt64?
+    private var digest = CryptoKit.SHA256()
+    private var digestedBytes: UInt64 = 0
     private var buffer = Data()
     private var cursor = 0
     private(set) var offset: UInt64 = 0
 
-    init(_ url: URL) throws {
+    init(_ url: URL, checksumFooterLength: UInt64? = nil) throws {
         handle = try FileHandle(forReadingFrom: url)
         fileSize = UInt64(try handle.seekToEnd())
+        if let checksumFooterLength {
+            guard checksumFooterLength <= fileSize else {
+                throw BinaryGraphEvidenceError.invalid("truncated footer")
+            }
+            digestPrefixLength = fileSize - checksumFooterLength
+        } else {
+            digestPrefixLength = nil
+        }
         try handle.seek(toOffset: 0)
     }
 
@@ -221,6 +232,13 @@ struct BinaryGraphEvidenceReader {
 
     mutating func close() { try? handle.close() }
 
+    mutating func sha256Prefix(endingAt offset: UInt64) throws -> Data {
+        guard digestPrefixLength == offset, digestedBytes == offset else {
+            throw BinaryGraphEvidenceError.invalid("checksum prefix")
+        }
+        return Data(digest.finalize())
+    }
+
     private mutating func ensure(_ count: Int) throws {
         guard UInt64(count) <= fileSize - offset else {
             throw BinaryGraphEvidenceError.invalid("truncated record")
@@ -232,23 +250,14 @@ struct BinaryGraphEvidenceReader {
             }
             let chunk = try handle.read(upToCount: max(1_048_576, count - buffer.count)) ?? Data()
             guard !chunk.isEmpty else { throw BinaryGraphEvidenceError.invalid("truncated record") }
+            if let digestPrefixLength, digestedBytes < digestPrefixLength {
+                let length = Int(min(UInt64(chunk.count), digestPrefixLength - digestedBytes))
+                digest.update(data: chunk.prefix(length))
+                digestedBytes += UInt64(length)
+            }
             buffer.append(chunk)
         }
     }
-}
-
-func binaryGraphSHA256(_ url: URL, prefixLength: UInt64) throws -> Data {
-    let handle = try FileHandle(forReadingFrom: url)
-    defer { try? handle.close() }
-    var digest = CryptoKit.SHA256()
-    var remaining = prefixLength
-    while remaining > 0 {
-        let chunk = try handle.read(upToCount: Int(min(remaining, 1_048_576))) ?? Data()
-        guard !chunk.isEmpty else { throw BinaryGraphEvidenceError.invalid("truncated digest input") }
-        digest.update(data: chunk)
-        remaining -= UInt64(chunk.count)
-    }
-    return Data(digest.finalize())
 }
 
 struct BinaryEdgeWriter {

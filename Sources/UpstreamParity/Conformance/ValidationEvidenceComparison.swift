@@ -332,7 +332,8 @@ package enum ValidationEvidenceComparison {
         var initialOut = try ValidationLineWriter(initial)
         var edgeOut = try BinaryEdgeWriter(edges)
         defer { try? stateOut.close(); try? initialOut.close(); try? edgeOut.close() }
-        var reader = try BinaryGraphEvidenceReader(url)
+        let footerLength: UInt64 = 1 + 8 * 8 + 1 + 32
+        var reader = try BinaryGraphEvidenceReader(url, checksumFooterLength: footerLength)
         defer { reader.close() }
         guard try reader.bytes(8) == Data("STLAGRF2".utf8),
               try reader.byte() == producer,
@@ -474,7 +475,7 @@ package enum ValidationEvidenceComparison {
                 guard counts == [stateCount, initialCount, edgeCount, excludedCount,
                     unsupportedCount, violationCount, deadlockCount, reachabilityCount].map(UInt64.init),
                     expectedCompletion, reader.atEnd,
-                    checksum == (try binaryGraphSHA256(url, prefixLength: footerOffset)) else {
+                    checksum == (try reader.sha256Prefix(endingAt: footerOffset)) else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("binary graph footer")
                 }
                 try stateOut.close()
