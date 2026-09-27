@@ -12,9 +12,16 @@ It consumes generated machines, rendered TLA+ bundles, and native check events.
 It does not define transitions, property predicates, or native check results.
 SwiftTLA does not depend on these targets.
 
-Some parity adapters still read package-scoped rendering metadata. This is an
-API boundary gap, not a second source of model semantics. The boundary is
-complete only when the adapters use a public typed export for that metadata.
+SwiftTLA exports the resolved check kinds and formal names as a
+`RenderedCheckSelection`. The parity target alone combines those selections
+with upstream reference declarations; no upstream reference bundle is
+constructed by the product. The module bundle's public configuration-copy
+operation preserves the original source, imports, and provenance.
+
+Parity adapters read SwiftTLA's public rendered actions, check metadata, and
+selected TLA+ bundles. The private configuration and compiler representation
+remain inside SwiftTLA. The adapter may select and compare checks, but it may
+not supply their model semantics.
 
 The native checker and TLC use separate transition and property logic. Their
 output adapters write the same evidence format for comparison. If the parity

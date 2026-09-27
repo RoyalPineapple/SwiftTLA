@@ -6,7 +6,8 @@ package enum FiniteExplorationConfigurationError: Error, Sendable, Equatable {
     case symmetryReductionRequiresSafetyOnly
 }
 
-package enum SymmetryReduction: Sendable, Equatable {
+/// Whether a rendered TLA+ bundle enables its declared symmetry reduction.
+public enum SymmetryReduction: Sendable, Equatable {
     case disabled
     case enabled(maximumPermutationCount: Int)
 }

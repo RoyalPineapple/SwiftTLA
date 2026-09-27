@@ -87,3 +87,16 @@ extension TLCReferenceConfiguration {
     checksDeadlock = try fields.decode(Bool.self, forKey: .checksDeadlock)
   }
 }
+
+extension RenderedSpecification {
+  /// Keep the upstream model's own source and declarations; only the selected
+  /// check directives come from the independently rendered SwiftTLA model.
+  package func referenceBundle(checking names: Set<String>, checkDeadlock: Bool,
+    declarations: String, in reference: TLAModuleBundle) throws -> TLAModuleBundle {
+    let selected = try checkSelection(checking: names, checkDeadlock: checkDeadlock)
+    let directives = selected.tlcInvariantNames.map { "INVARIANT \($0)" }
+      + selected.tlcPropertyNames.map { "PROPERTY \($0)" }
+      + [selected.checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
+    return reference.replacingConfiguration(declarations + "\n" + directives.joined(separator: "\n") + "\n")
+  }
+}

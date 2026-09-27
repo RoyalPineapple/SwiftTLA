@@ -117,6 +117,13 @@ public struct TLAModuleBundle: Sendable, Equatable {
   public var cfg: String { root.cfg ?? "" }
   public var files: [TLAModuleFile] { imports + [root] }
 
+  /// Preserve the module and its declared closure while selecting a different
+  /// configuration for a formal-tool invocation.
+  public func replacingConfiguration(_ configuration: String) -> Self {
+    Self(root: .init(name: root.name, tla: root.tla, cfg: configuration),
+      imports: imports, provenance: provenance)
+  }
+
   /// Checks that the bundle materializes its declared module closure.
   package func validateDeclaredClosure() throws {
     var sources: [String: TLAModuleFile] = [:]

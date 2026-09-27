@@ -129,9 +129,22 @@ public struct RenderedAction: Sendable, Equatable {
         self.renderedName = renderedName
     }
 
-    package var sourceInvocationName: String {
+    public var sourceInvocationName: String {
         guard !arguments.isEmpty else { return sourceName }
         return "\(sourceName)(\(arguments.map(\.description).joined(separator: ", ")))"
+    }
+}
+
+/// Resolved TLC directive kinds for checks selected from a rendered model.
+public struct RenderedCheckSelection: Sendable, Equatable {
+    public let tlcInvariantNames: [String]
+    public let tlcPropertyNames: [String]
+    public let checkDeadlock: Bool
+
+    fileprivate init(configuration: TLCConfiguration) {
+        tlcInvariantNames = configuration.invariants + configuration.reachabilityProperties
+        tlcPropertyNames = configuration.properties + configuration.refinements
+        checkDeadlock = configuration.checkDeadlock
     }
 }
 
@@ -339,7 +352,7 @@ public struct CompiledSpecification: Sendable {
 public struct RenderedSpecification: Sendable {
     public let tlaBundle: TLAModuleBundle
     fileprivate let configuration: TLCConfiguration
-    package let actions: [RenderedAction]
+    public let actions: [RenderedAction]
     fileprivate let renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?
     package let temporalObligations: [String: [_RenderedTemporalObligation]]
 
@@ -416,7 +429,7 @@ public struct RenderedSpecification: Sendable {
             temporalObligations: _generatedTemporalObligations)
     }
 
-    package func tlaBundle(
+    public func tlaBundle(
         symmetryReduction: SymmetryReduction
     ) -> TLAModuleBundle {
         switch symmetryReduction {
@@ -435,15 +448,15 @@ public struct RenderedSpecification: Sendable {
         }
     }
 
-    package var invariantNames: Set<String> { Set(configuration.invariants) }
-    package var reachabilityNames: Set<String> { Set(configuration.reachabilityProperties) }
-    package var temporalNames: Set<String> { Set(configuration.properties) }
-    package var refinementNames: Set<String> { Set(configuration.refinements) }
-    package var checkNames: Set<String> { Set(configuration.invariants + configuration.reachabilityProperties + configuration.properties + configuration.refinements) }
-    package var checksDeadlock: Bool { configuration.checkDeadlock }
-    package var behavior: ModelBehavior { configuration.behavior }
+    public var invariantNames: Set<String> { Set(configuration.invariants) }
+    public var reachabilityNames: Set<String> { Set(configuration.reachabilityProperties) }
+    public var temporalNames: Set<String> { Set(configuration.properties) }
+    public var refinementNames: Set<String> { Set(configuration.refinements) }
+    public var checkNames: Set<String> { Set(configuration.invariants + configuration.reachabilityProperties + configuration.properties + configuration.refinements) }
+    public var checksDeadlock: Bool { configuration.checkDeadlock }
+    public var behavior: ModelBehavior { configuration.behavior }
 
-    package func temporalObligationBundles(checking name: String) throws -> [TLAModuleBundle]? {
+    public func temporalObligationBundles(checking name: String) throws -> [TLAModuleBundle]? {
         _ = try configuration.selecting([name], checkDeadlock: false)
         guard let obligations = temporalObligations[name], !obligations.isEmpty else { return nil }
         let source = tlaBundle.root.tla
@@ -499,7 +512,7 @@ public struct RenderedSpecification: Sendable {
 
     /// Selects declared checks for an independent validation pass without rendering the model again.
     /// Symmetry defaults to disabled so the pass retains the complete, unreduced graph.
-    package func tlaBundle(checking checks: Set<String>, checkDeadlock: Bool,
+    public func tlaBundle(checking checks: Set<String>, checkDeadlock: Bool,
         symmetryReduction: SymmetryReduction = .disabled, behavior: ModelBehavior? = nil) throws -> TLAModuleBundle {
         let selected = try configuration.selecting(checks, checkDeadlock: checkDeadlock, behavior: behavior)
         let usesSymmetryReduction = if case .enabled = symmetryReduction { true } else { false }
@@ -510,17 +523,10 @@ public struct RenderedSpecification: Sendable {
         )
     }
 
-    /// Adds selected checks to a reference model definition with check directives removed.
-    /// Its specification, constants, constraints, and module closure remain authoritative.
-    package func referenceBundle(checking names: Set<String>, checkDeadlock: Bool, declarations: String, in reference: TLAModuleBundle) throws -> TLAModuleBundle {
-        let selected = try configuration.selecting(names, checkDeadlock: checkDeadlock)
-        let directives = (selected.invariants + selected.reachabilityProperties).map { "INVARIANT \($0)" }
-            + (selected.properties + selected.refinements).map { "PROPERTY \($0)" }
-            + [checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
-        return TLAModuleBundle(
-            root: .init(name: reference.root.name, tla: reference.root.tla,
-                cfg: declarations + "\n" + directives.joined(separator: "\n") + "\n"),
-            imports: reference.imports, provenance: reference.provenance)
+    /// Select only checks declared by this rendered model, retaining their
+    /// resolved formal names and TLC check kinds.
+    public func checkSelection(checking names: Set<String>, checkDeadlock: Bool) throws -> RenderedCheckSelection {
+        RenderedCheckSelection(configuration: try configuration.selecting(names, checkDeadlock: checkDeadlock))
     }
 
     /// Returns the source-faithful PlusCal bundle produced by rendering.
