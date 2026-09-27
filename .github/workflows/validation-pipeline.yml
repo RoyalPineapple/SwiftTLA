@@ -90,7 +90,7 @@ jobs:
     needs: prepare
     if: ${{ fromJSON(needs.prepare.outputs.native)[0] != '__skip__' }}
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -124,16 +124,24 @@ jobs:
         run: |
           chmod +x .build/validation-bin/tlc-validate
           ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT" --skip-inputs
-      - name: Validate generated machine against generated TLA
-        timeout-minutes: 35
+      - name: Validate generated Swift machine
+        timeout-minutes: 30
         run: |
           set -o pipefail
           mkdir -p .build/validation-evidence
           git rev-parse HEAD > .build/validation-evidence/source-sha.txt
           .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
             --output .build/validation-evidence/native --maximum-states 10000000
+      - name: Validate generated TLA with TLC
+        timeout-minutes: 20
+        run: |
+          set -o pipefail
           .build/validation-bin/tlc-validate oracle run --case "$CASE_ID" \
             --output .build/validation-evidence/oracle --maximum-states 10000000
+      - name: Require exact native and TLC evidence
+        timeout-minutes: 20
+        run: |
+          set -o pipefail
           .build/validation-bin/tlc-validate compare run --case "$CASE_ID" \
             --native .build/validation-evidence/native \
             --oracle .build/validation-evidence/oracle \
