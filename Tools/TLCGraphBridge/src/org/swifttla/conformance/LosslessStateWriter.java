@@ -68,7 +68,7 @@ public final class LosslessStateWriter implements IStateWriter {
                         new BufferedOutputStream(Files.newOutputStream(outputPath), 1 << 20), bodyDigest);
                 binaryOutput = new DataOutputStream(digestOutput);
                 output = null;
-                binaryOutput.write("STLAGRF1".getBytes(StandardCharsets.US_ASCII));
+                binaryOutput.write("STLAGRF2".getBytes(StandardCharsets.US_ASCII));
                 binaryOutput.writeByte(1);
                 binaryString(caseId);
                 binaryString(runId);
@@ -293,12 +293,9 @@ public final class LosslessStateWriter implements IStateWriter {
         binaryOutput.writeByte(2);
         binaryOutput.writeLong(state.fingerPrint());
         binaryOutput.writeByte(initial ? 1 : 0);
-        String[] names = state.getVarsAsStrings();
-        binaryOutput.writeInt(names.length);
-        for (String name : names) {
-            binaryString(name);
-            binaryString(String.valueOf(state.lookup(name)));
-        }
+        byte[] key = CanonicalBinaryState.encode(state);
+        binaryOutput.writeInt(key.length);
+        binaryOutput.write(key);
         binaryStates++;
         if (initial) {
             binaryInitials++;

@@ -20,7 +20,7 @@ struct BinaryGraphEvidenceWriter {
         try Data().write(to: url, options: .withoutOverwriting)
         handle = try FileHandle(forWritingTo: url)
         buffer.reserveCapacity(1_048_576)
-        append(Data("STLAGRF1".utf8))
+        append(Data("STLAGRF2".utf8))
         byte(2)
         try string(caseID)
         try string("")
@@ -34,11 +34,11 @@ struct BinaryGraphEvidenceWriter {
         try flushIfNeeded()
     }
 
-    mutating func state(id: UInt64, key: String, initial: Bool) throws {
+    mutating func state(id: UInt64, key: Data, initial: Bool) throws {
         byte(2)
         uint64(id)
         byte(initial ? 1 : 0)
-        try string(key)
+        try bytes(key)
         states += 1
         if initial { initials += 1 }
         try flushIfNeeded()
@@ -53,11 +53,11 @@ struct BinaryGraphEvidenceWriter {
         try flushIfNeeded()
     }
 
-    mutating func invariantFailure(property: String, key: String,
+    mutating func invariantFailure(property: String, key: Data,
         predecessor: UInt64?, action: UInt32?) throws {
         byte(6)
         try string(property)
-        try string(key)
+        try bytes(key)
         uint64(predecessor ?? UInt64.max)
         uint32(action ?? UInt32.max)
         violations += 1
@@ -71,11 +71,11 @@ struct BinaryGraphEvidenceWriter {
         try flushIfNeeded()
     }
 
-    mutating func reached(property: String, key: String,
+    mutating func reached(property: String, key: Data,
         predecessor: UInt64?, action: UInt32?) throws {
         byte(8)
         try string(property)
-        try string(key)
+        try bytes(key)
         uint64(predecessor ?? UInt64.max)
         uint32(action ?? UInt32.max)
         reachability += 1
@@ -125,6 +125,14 @@ struct BinaryGraphEvidenceWriter {
         }
         uint32(length)
         buffer.append(contentsOf: value.utf8)
+    }
+
+    private mutating func bytes(_ value: Data) throws {
+        guard let length = UInt32(exactly: value.count) else {
+            throw BinaryGraphEvidenceError.invalid("byte length")
+        }
+        uint32(length)
+        buffer.append(value)
     }
 
     private mutating func append(_ data: Data) { buffer.append(data) }
@@ -282,6 +290,42 @@ struct BinaryEdgeWriter {
         for shift in stride(from: 56, through: 0, by: -8) {
             buffer.append(UInt8(truncatingIfNeeded: value >> shift))
         }
+    }
+
+    private mutating func flush() throws {
+        guard !buffer.isEmpty else { return }
+        try handle.write(contentsOf: buffer)
+        buffer.removeAll(keepingCapacity: true)
+    }
+}
+
+struct BinaryStateWriter {
+    private let handle: FileHandle
+    private var buffer = Data()
+
+    init(_ url: URL) throws {
+        try Data().write(to: url, options: .withoutOverwriting)
+        handle = try FileHandle(forWritingTo: url)
+        buffer.reserveCapacity(1_048_576)
+    }
+
+    mutating func append(key: Data, id: UInt64) throws {
+        guard let length = UInt32(exactly: key.count) else {
+            throw BinaryGraphEvidenceError.invalid("state key length")
+        }
+        for shift in stride(from: 24, through: 0, by: -8) {
+            buffer.append(UInt8(truncatingIfNeeded: length >> shift))
+        }
+        buffer.append(key)
+        for shift in stride(from: 56, through: 0, by: -8) {
+            buffer.append(UInt8(truncatingIfNeeded: id >> shift))
+        }
+        if buffer.count >= 1_048_576 { try flush() }
+    }
+
+    mutating func close() throws {
+        try flush()
+        try handle.close()
     }
 
     private mutating func flush() throws {

@@ -90,7 +90,7 @@ struct MachineValidationTests {
         if case .exhausted = summary.completion {} else { Issue.record("Expected complete traversal") }
         #expect(summary.states >= 3)
         #expect(summary.edges >= 2)
-        #expect(evidence.starts(with: Data("STLAGRF1".utf8)))
+        #expect(evidence.starts(with: Data("STLAGRF2".utf8)))
         #expect(evidence.count > 100)
         #expect(profile["schema"] as? String == "swifttla.native-validation-profile.v1")
         #expect(profile["stateEvents"] as? Int == summary.states)
@@ -105,7 +105,7 @@ struct MachineValidationTests {
         let report = try NativeValidationRunner.run(scenario: scenario, caseID: "counter-0",
             maximumStates: 100, to: directory)
         var evidence = try BinaryGraphEvidenceReader(directory.appendingPathComponent("machine.bin"))
-        #expect(try evidence.bytes(8) == Data("STLAGRF1".utf8))
+        #expect(try evidence.bytes(8) == Data("STLAGRF2".utf8))
         #expect(try evidence.byte() == 2)
         #expect(try evidence.string() == "counter-0")
         evidence.close()

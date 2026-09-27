@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import SwiftTLA
 
@@ -40,38 +41,23 @@ package enum ValidationEvidenceComparison {
             in: generatedRoot, executable: spoolExecutable, kind: "upstream")
         let referenceGraph = try spoolTLC(reference, caseID: caseID, actions: actions,
             in: referenceRoot, executable: spoolExecutable, kind: "upstream")
-        let generatedStates = try sorted(generatedGraph.states, in: generatedRoot)
-        let referenceStates = try sorted(referenceGraph.states, in: referenceRoot)
         var generatedRanks: [UInt64: Int] = [:]
         var referenceRanks: [UInt64: Int] = [:]
         generatedRanks.reserveCapacity(generatedGraph.stateCount)
         referenceRanks.reserveCapacity(referenceGraph.stateCount)
-        var left = try ValidationLineReader(generatedStates)
-        var right = try ValidationLineReader(referenceStates)
-        defer { left.close(); right.close() }
-        var rank = 0
-        var previousKey: Data?
-        while let generatedLine = try left.next() {
-            guard let referenceLine = try right.next(),
-                  let generatedField = generatedLine.lastIndex(of: 9),
-                  let referenceField = referenceLine.lastIndex(of: 9),
-                  generatedLine[..<generatedField] == referenceLine[..<referenceField],
-                  previousKey != generatedLine[..<generatedField] else {
-                return "complete state set"
+        let equalStates = try matchStates(
+            generatedGraph.states, referenceGraph.states,
+            leftRoot: generatedRoot, rightRoot: referenceRoot,
+            expectedCount: generatedGraph.stateCount
+        ) { generatedID, referenceID, rank in
+            guard generatedRanks.updateValue(rank, forKey: generatedID) == nil,
+                  referenceRanks.updateValue(rank, forKey: referenceID) == nil else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("duplicate TLC fingerprint")
             }
-            guard let generatedFP = UInt64(String(decoding: generatedLine[generatedLine.index(after: generatedField)...], as: UTF8.self)),
-                  let referenceFP = UInt64(String(decoding: referenceLine[referenceLine.index(after: referenceField)...], as: UTF8.self)) else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("TLC fingerprint rank")
-            }
-            guard generatedRanks.updateValue(rank, forKey: generatedFP) == nil,
-                  referenceRanks.updateValue(rank, forKey: referenceFP) == nil else {
-                return "duplicate TLC fingerprint"
-            }
-            previousKey = Data(generatedLine[..<generatedField])
-            rank += 1
         }
-        guard try right.next() == nil, rank == generatedGraph.stateCount,
-              rank == referenceGraph.stateCount else { return "complete state set" }
+        guard equalStates, generatedGraph.stateCount == referenceGraph.stateCount else {
+            return "complete state set"
+        }
         let generatedInitial = try rankInitials(generatedGraph.initial, ranks: generatedRanks, in: generatedRoot)
         let referenceInitial = try rankInitials(referenceGraph.initial, ranks: referenceRanks, in: referenceRoot)
         if try firstDifference(generatedInitial, referenceInitial) != nil { return "initial state set" }
@@ -154,38 +140,23 @@ package enum ValidationEvidenceComparison {
 
     private static func compareGraph(swiftGraph: Spool, tlcGraph: Spool,
         swiftRoot: URL, tlcRoot: URL) throws -> String? {
-        let swiftStates = try sorted(swiftGraph.states, in: swiftRoot)
-        let tlcStates = try sorted(tlcGraph.states, in: tlcRoot)
         var swiftRanks = [Int](repeating: -1, count: swiftGraph.stateCount)
         var tlcRanks: [UInt64: Int] = [:]
         tlcRanks.reserveCapacity(tlcGraph.stateCount)
-        var left = try ValidationLineReader(swiftStates)
-        var right = try ValidationLineReader(tlcStates)
-        defer { left.close(); right.close() }
-        var rank = 0
-        var previousKey: Data?
-        while let nativeLine = try left.next() {
-            guard let tlcLine = try right.next(),
-                  let nativeField = nativeLine.lastIndex(of: 9),
-                  let tlcField = tlcLine.lastIndex(of: 9),
-                  nativeLine[..<nativeField] == tlcLine[..<tlcField],
-                  previousKey != nativeLine[..<nativeField],
-                  let nativeID = Int(String(decoding: nativeLine[nativeLine.index(after: nativeField)...], as: UTF8.self)),
-                  nativeID >= 0, nativeID < swiftRanks.count, swiftRanks[nativeID] == -1 else {
-                return "complete state set"
+        let equalStates = try matchStates(
+            swiftGraph.states, tlcGraph.states,
+            leftRoot: swiftRoot, rightRoot: tlcRoot,
+            expectedCount: swiftGraph.stateCount
+        ) { nativeID, fingerprint, rank in
+            guard nativeID < UInt64(swiftRanks.count), swiftRanks[Int(nativeID)] == -1,
+                  tlcRanks.updateValue(rank, forKey: fingerprint) == nil else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("duplicate state identity")
             }
-            guard let fingerprint = UInt64(String(decoding: tlcLine[tlcLine.index(after: tlcField)...], as: UTF8.self)) else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("TLC fingerprint rank")
-            }
-            guard tlcRanks.updateValue(rank, forKey: fingerprint) == nil else {
-                return "duplicate TLC fingerprint"
-            }
-            previousKey = Data(nativeLine[..<nativeField])
-            swiftRanks[nativeID] = rank
-            rank += 1
+            swiftRanks[Int(nativeID)] = rank
         }
-        guard try right.next() == nil, rank == swiftGraph.stateCount,
-              rank == tlcGraph.stateCount else { return "complete state set" }
+        guard equalStates, swiftGraph.stateCount == tlcGraph.stateCount else {
+            return "complete state set"
+        }
         let swiftInitial = try rankInitials(swiftGraph.initial, ranks: swiftRanks, in: swiftRoot)
         let tlcInitial = try rankInitials(tlcGraph.initial, ranks: tlcRanks, in: tlcRoot)
         if try firstDifference(swiftInitial, tlcInitial) != nil { return "initial state set" }
@@ -195,6 +166,67 @@ package enum ValidationEvidenceComparison {
             rightRank: { try Self.rank($0, in: tlcRanks) })
         if !same { return "complete labeled edge set" }
         return nil
+    }
+
+    private struct StateRecord {
+        let key: Data
+        let id: UInt64
+    }
+
+    private static func matchStates(
+        _ left: URL, _ right: URL, leftRoot: URL, rightRoot: URL,
+        expectedCount: Int, assign: (UInt64, UInt64, Int) throws -> Void
+    ) throws -> Bool {
+        let leftBuckets = try partitionStates(left, in: leftRoot)
+        let rightBuckets = try partitionStates(right, in: rightRoot)
+        var rank = 0
+        for index in leftBuckets.indices {
+            let lhs = try stateRecords(leftBuckets[index])
+            let rhs = try stateRecords(rightBuckets[index])
+            guard lhs.count == rhs.count else { return false }
+            var previous: Data?
+            for offset in lhs.indices {
+                guard lhs[offset].key == rhs[offset].key,
+                      previous != lhs[offset].key else { return false }
+                try assign(lhs[offset].id, rhs[offset].id, rank)
+                previous = lhs[offset].key
+                rank += 1
+            }
+        }
+        return rank == expectedCount
+    }
+
+    private static func partitionStates(_ input: URL, in directory: URL) throws -> [URL] {
+        let bucketCount = 64
+        let urls = (0..<bucketCount).map {
+            directory.appendingPathComponent("state-bucket-\($0).bin")
+        }
+        var writers = try urls.map(BinaryStateWriter.init)
+        defer { for index in writers.indices { try? writers[index].close() } }
+        var reader = try BinaryGraphEvidenceReader(input)
+        defer { reader.close() }
+        while !reader.atEnd {
+            let key = try reader.bytes(Int(reader.uint32()))
+            let id = try reader.uint64()
+            let digest = CryptoKit.SHA256.hash(data: key)
+            let bucket = digest.withUnsafeBytes { Int($0[0]) & (bucketCount - 1) }
+            try writers[bucket].append(key: key, id: id)
+        }
+        for index in writers.indices { try writers[index].close() }
+        return urls
+    }
+
+    private static func stateRecords(_ input: URL) throws -> [StateRecord] {
+        var reader = try BinaryGraphEvidenceReader(input)
+        defer { reader.close() }
+        var records: [StateRecord] = []
+        while !reader.atEnd {
+            let key = try reader.bytes(Int(reader.uint32()))
+            let id = try reader.uint64()
+            records.append(StateRecord(key: key, id: id))
+        }
+        records.sort { $0.key.lexicographicallyPrecedes($1.key) }
+        return records
     }
 
     private struct Spool {
@@ -240,7 +272,7 @@ package enum ValidationEvidenceComparison {
     }
 
     private static func writeManifest(_ spool: Spool, in directory: URL) throws {
-        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v2",
+        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v3",
             stateCount: spool.stateCount, initialCount: spool.initialCount,
             edgeCount: spool.edgeCount, binaryEdges: spool.binaryEdges)
         try JSONEncoder().encode(manifest).write(
@@ -250,7 +282,7 @@ package enum ValidationEvidenceComparison {
     private static func readManifest(in directory: URL) throws -> Spool {
         let manifest = try JSONDecoder().decode(SpoolManifest.self,
             from: Data(contentsOf: directory.appendingPathComponent("spool.json")))
-        guard manifest.schema == "swifttla.validation-spool-v2", manifest.binaryEdges,
+        guard manifest.schema == "swifttla.validation-spool-v3", manifest.binaryEdges,
               manifest.stateCount >= 0, manifest.initialCount >= 0,
               manifest.edgeCount >= 0 else {
             throw ValidationEvidenceComparisonError.invalidEvidence("spool manifest")
@@ -272,13 +304,13 @@ package enum ValidationEvidenceComparison {
         let states = directory.appendingPathComponent("states.raw")
         let initial = directory.appendingPathComponent("initial.raw")
         let edges = directory.appendingPathComponent("edges.raw")
-        var stateOut = try ValidationLineWriter(states)
+        var stateOut = try BinaryStateWriter(states)
         var initialOut = try ValidationLineWriter(initial)
         var edgeOut = try BinaryEdgeWriter(edges)
         defer { try? stateOut.close(); try? initialOut.close(); try? edgeOut.close() }
         var reader = try BinaryGraphEvidenceReader(url)
         defer { reader.close() }
-        guard try reader.bytes(8) == Data("STLAGRF1".utf8),
+        guard try reader.bytes(8) == Data("STLAGRF2".utf8),
               try reader.byte() == producer,
               try reader.string() == caseID else {
             throw ValidationEvidenceComparisonError.invalidEvidence("binary graph header")
@@ -338,31 +370,19 @@ package enum ValidationEvidenceComparison {
                 guard initialFlag <= 1 else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("binary initial flag")
                 }
-                let key: String
                 if producer == 1 {
                     guard fingerprints.insert(identity).inserted else {
                         throw ValidationEvidenceComparisonError.invalidEvidence("TLC state identity")
                     }
-                    var values: [String: CanonicalValue] = [:]
-                    for _ in 0..<Int(try reader.uint32()) {
-                        let name = try reader.string()
-                        let value = try reader.string()
-                        guard values[name] == nil else {
-                            throw ValidationEvidenceComparisonError.invalidEvidence("TLC state binding")
-                        }
-                        values[name] = try TLCValueParser.parse(value)
-                    }
-                    key = CanonicalState(bindings: values).key.canonicalEncoding
                 } else {
                     guard identity == UInt64(stateCount) else {
                         throw ValidationEvidenceComparisonError.invalidEvidence("native state identity")
                     }
-                    key = try reader.string()
                 }
-                guard validField(key) else {
-                    throw ValidationEvidenceComparisonError.invalidEvidence("binary state key")
-                }
-                try stateOut.append("\(key)\t\(identity)")
+                let key = try reader.bytes(Int(reader.uint32()))
+                do { try CanonicalBinaryState.validate(key) }
+                catch { throw ValidationEvidenceComparisonError.invalidEvidence("binary state key") }
+                try stateOut.append(key: key, id: identity)
                 stateCount += 1
                 if initialFlag == 1 {
                     initialCount += 1
@@ -403,10 +423,12 @@ package enum ValidationEvidenceComparison {
                     throw ValidationEvidenceComparisonError.invalidEvidence("TLC property event")
                 }
                 let property = try reader.string()
-                let key = try reader.string()
+                let key = try reader.bytes(Int(reader.uint32()))
                 let predecessor = try reader.uint64()
                 let action = try reader.uint32()
-                guard !property.isEmpty, validField(key),
+                do { try CanonicalBinaryState.validate(key) }
+                catch { throw ValidationEvidenceComparisonError.invalidEvidence("native property state") }
+                guard !property.isEmpty,
                       predecessor == UInt64.max || predecessor < UInt64(stateCount),
                       action == UInt32.max || UInt64(action) < UInt64(actionIDs.count) else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("native property event")
@@ -668,10 +690,6 @@ package enum ValidationEvidenceComparison {
             if a != b { return "records differ" }
             if a == nil { return nil }
         }
-    }
-
-    private static func validField(_ value: String) -> Bool {
-        !value.isEmpty && !value.utf8.contains(9) && !value.utf8.contains(10)
     }
 
     private static func verifyTLCProcess(_ url: URL, expectedComplete: Bool) throws {

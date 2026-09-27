@@ -49,6 +49,32 @@ struct ValidationEvidenceComparisonTests {
         #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
     }
 
+    @Test("a malformed complete value is rejected even with a valid footer digest")
+    func malformedStateFails() throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("native/machine.bin")
+        var bytes = try Data(contentsOf: url)
+        let key = try #require(bytes.range(of: Data("STLASV01".utf8)))
+        bytes[key.lowerBound + 17] = 0xff
+        let footer = bytes.count - (1 + 8 * 8 + 1 + 32)
+        bytes.replaceSubrange((bytes.count - 32)..<bytes.count,
+            with: Data(CryptoKit.SHA256.hash(data: bytes[..<footer])))
+        try bytes.write(to: url)
+        #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
+    }
+
+    @Test("a truncated binary stream cannot establish parity")
+    func truncatedEvidenceFails() throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("oracle/tlc-graph/graph-events.bin")
+        var bytes = try Data(contentsOf: url)
+        bytes.removeLast()
+        try bytes.write(to: url)
+        #expect(throws: BinaryGraphEvidenceError.self) { _ = try compare(root) }
+    }
+
     @Test("binary spools retain all edges across buffered reads")
     func binarySpoolsAcrossBatches() throws {
         let root = try fixture(edgeCount: 60_000)
@@ -122,22 +148,25 @@ struct ValidationEvidenceComparisonTests {
         return root
     }
 
-    private func key(_ value: Int) -> String {
-        CanonicalState(bindings: ["x": .integer(value)]).key.canonicalEncoding
+    private func key(_ value: Int) throws -> Data {
+        let token = try #require(TLAStateProjection.Token(validating: "x"))
+        return try CanonicalBinaryState.encode(TLAStateProjection(validating: [
+            .init(token: token, value: .int(value))
+        ]))
     }
 
     private func tlcGraph(edgeCount: Int, source: UInt64 = 101, target: UInt64 = 202) -> Data {
-        var body = Data("STLAGRF1".utf8)
+        var body = Data("STLAGRF2".utf8)
         body.append(1)
         append("fixture", to: &body)
         append("00000000-0000-4000-8000-000000000001", to: &body)
-        for (fingerprint, value, initial) in [(source, "0", true), (target, "1", false)] {
+        for (fingerprint, value, initial) in [(source, 0, true), (target, 1, false)] {
             body.append(2)
             append(fingerprint, to: &body)
             body.append(initial ? 1 : 0)
-            append(UInt32(1), to: &body)
-            append("x", to: &body)
-            append(value, to: &body)
+            let key = tlcKey(value)
+            append(UInt32(key.count), to: &body)
+            body.append(key)
         }
         body.append(1)
         append(UInt32(0), to: &body)
@@ -155,6 +184,16 @@ struct ValidationEvidenceComparisonTests {
         body.append(0)
         body.append(digest)
         return body
+    }
+
+    private func tlcKey(_ value: Int) -> Data {
+        var key = Data("STLASV01".utf8)
+        append(UInt32(1), to: &key)
+        append("x", to: &key)
+        key.append(1)
+        append(UInt32(8), to: &key)
+        append(UInt64(bitPattern: Int64(value)), to: &key)
+        return key
     }
 
     private func append(_ value: String, to bytes: inout Data) {

@@ -64,8 +64,8 @@ package enum MachineValidationEvidence {
             return id
         }
 
-        func stateKey(_ snapshot: Scenario.Machine.Snapshot) throws -> String {
-            try CanonicalState(machine.formalProjection(of: snapshot)).key.canonicalEncoding
+        func stateKey(_ snapshot: Scenario.Machine.Snapshot) throws -> Data {
+            try CanonicalBinaryState.encode(machine.formalProjection(of: snapshot))
         }
 
         let result = try MachineValidator.run(
