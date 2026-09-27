@@ -289,7 +289,31 @@ rm -rf "$TOOL_ROOT/bridge-classes"
 mkdir -p "$TOOL_ROOT/bridge-classes"
 "$JAVA_HOME/bin/javac" --release 17 -cp "$TLC_JAR" -d "$TOOL_ROOT/bridge-classes" "${BRIDGE_SOURCES[@]}"
 [ -f "$BRIDGE_CLASS" ] || fail "bridge compilation produced no class"
-"$JAVA_HOME/bin/jar" --create --file "$TOOL_ROOT/bridge.jar" -C "$TOOL_ROOT/bridge-classes" .
+python3 - "$TOOL_ROOT/bridge-classes" "$TOOL_ROOT/bridge.jar" <<'PY'
+from pathlib import Path
+import os
+import sys
+import zipfile
+
+classes_root = Path(sys.argv[1])
+output = Path(sys.argv[2])
+temporary = output.with_suffix(".jar.partial")
+entries = sorted(path for path in classes_root.rglob("*.class") if path.is_file())
+if not entries:
+    raise SystemExit("bridge compilation produced no classes")
+
+def add(archive, name, contents):
+    entry = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+    entry.compress_type = zipfile.ZIP_STORED
+    entry.external_attr = 0o644 << 16
+    archive.writestr(entry, contents)
+
+with zipfile.ZipFile(temporary, "w") as archive:
+    add(archive, "META-INF/MANIFEST.MF", b"Manifest-Version: 1.0\r\n\r\n")
+    for path in entries:
+        add(archive, path.relative_to(classes_root).as_posix(), path.read_bytes())
+os.replace(temporary, output)
+PY
 python3 "$PROJECT_ROOT/Tools/TLCGraphBridge/check-configuration-parser.py" \
     "$JAVA_HOME/bin/java" "$TLC_JAR" "$TOOL_ROOT/bridge.jar"
 if [ "${GITHUB_ACTIONS:-}" = true ]; then
