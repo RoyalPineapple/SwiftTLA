@@ -1,5 +1,26 @@
 # Independent validation pipeline
 
+## Product and validation boundary
+
+The SwiftTLA product owns the DSL, compiler, generated Swift machine, TLA+ export,
+and native checker. An application can generate and check a machine without TLC,
+the upstream examples, this pipeline, or GitHub Actions.
+
+Validation infrastructure owns the `CanonicalUpstreamCorpus` and `UpstreamParity`
+targets, `tlc-validate`, the TLC bridge, evidence caches, and hosted comparison.
+It consumes generated machines, rendered TLA+ bundles, and native check events.
+It does not define transitions, property predicates, or native check results.
+SwiftTLA does not depend on these targets.
+
+Some parity adapters still read package-scoped rendering metadata. This is an
+API boundary gap, not a second source of model semantics. The boundary is
+complete only when the adapters use a public typed export for that metadata.
+
+The native checker and TLC use separate transition and property logic. Their
+output adapters write the same evidence format for comparison. If the parity
+jobs are removed, SwiftTLA can still generate and check machines. Only the
+external agreement evidence is lost.
+
 The generated Swift machine and generated TLA+ are checked independently.
 The native checker reads only generated machine state and transitions. TLC reads
 only the generated TLA+ bundle. Neither checker consumes the other's result.
@@ -54,3 +75,14 @@ The former all-in-one finite-graph runner is removed. It must not be used to
 credit a configuration. The separate temporal/symmetry conformance suite
 continues to check its specialized contract, but is not a substitute for
 the two parity jobs.
+
+## Reachability evidence
+
+The TLC adapter maps a finite TLC counterexample to a positive reachability
+witness. It checks the complete path and requires an endpoint that satisfies
+the native predicate. Different valid witnesses can establish the same outcome.
+The complete graph comparison remains independent of property outcomes.
+
+Reference checks require an explicit property-kind match. The adapter rejects
+a witness at a constraint boundary because it cannot export that witness yet.
+Hosted TLC evidence remains necessary for an independent agreement claim.

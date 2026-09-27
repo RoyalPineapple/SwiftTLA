@@ -94,15 +94,11 @@ Scalar scenario bindings retain parameter identities and checked value types.
 Missing, duplicate, and foreign bindings fail explicitly. Collection bindings
 and refinement expectations remain unfinished.
 
-Repository validation derives canonical graphs and native results directly from
-scenarios. It validates expected outcomes only after complete exploration.
-The adapter reads rendered check metadata without compiling the specification again.
-The hosted scenario command compares complete native and TLC graphs and every
-selected result. Its check-coverage artifact lists selected properties, omitted
-properties, and deadlock selection. Agreement for a subset does not establish
-outcomes for omitted properties. Expected failures change the verdict, not the model or checks.
-Independent agreement still requires successful hosted evidence. The toolchain
-pins a hosted rebuild of the original TLC source revision.
+The native checker uses the generated machine and its selected checks. It does
+not invoke TLC or the repository parity tools. Expected failures change the
+expected verdict, not the model or selected checks. See the
+[independent validation pipeline](../../../Documentation/FiniteGraphComparison.md)
+for external agreement evidence.
 
 ## Positive reachability
 
@@ -123,12 +119,6 @@ A witness can end outside the constrained graph. Its state and trace remain
 available without adding that state to the graph.
 
 TLA+ export negates the predicate only at the final rendering boundary and
-retains metadata that identifies the positive claim. The parity adapter converts
-a finite TLC counterexample into a positive witness. It validates the complete
-path and requires an endpoint that satisfies the native predicate. Different
-valid witnesses can establish the same outcome. Complete graph comparison remains
-independent of property outcomes.
-
-Reference checks require an explicit property-kind match. Constraint-boundary
-witness export remains unsupported and fails explicitly. Hosted TLC evidence
-is still required to establish independent agreement.
+retains metadata that identifies the positive claim. The adapter that interprets
+TLC counterexamples belongs to validation infrastructure, not the generated
+machine.
