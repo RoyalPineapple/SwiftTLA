@@ -31,6 +31,13 @@ public struct MachineValidationSummary<Property: Hashable & Sendable>: Sendable 
 public struct MachineValidationTiming: Sendable {
     public let elapsedNanoseconds: UInt64
     public let successorNanoseconds: UInt64
+    public let invariantNanoseconds: UInt64
+    public let reachabilityNanoseconds: UInt64
+    public let constraintNanoseconds: UInt64
+    public let seenLookupNanoseconds: UInt64
+    public let seenInsertNanoseconds: UInt64
+    public let configurationNanoseconds: UInt64
+    public let eventNanoseconds: UInt64
     public let successorCalls: Int
 }
 
@@ -65,6 +72,13 @@ public enum MachineValidator {
         var reached: Set<Machine.Property> = []
         var deadlockFound = false
         var successorNanoseconds: UInt64 = 0
+        var invariantNanoseconds: UInt64 = 0
+        var reachabilityNanoseconds: UInt64 = 0
+        var constraintNanoseconds: UInt64 = 0
+        var seenLookupNanoseconds: UInt64 = 0
+        var seenInsertNanoseconds: UInt64 = 0
+        var configurationNanoseconds: UInt64 = 0
+        var eventNanoseconds: UInt64 = 0
         var successorCalls = 0
         let reachability = Set(Machine.reachabilityProperties).intersection(checking.properties)
 
@@ -76,14 +90,50 @@ public enum MachineValidator {
                   timing: .init(
                     elapsedNanoseconds: DispatchTime.now().uptimeNanoseconds - startedAt,
                     successorNanoseconds: successorNanoseconds,
+                    invariantNanoseconds: invariantNanoseconds,
+                    reachabilityNanoseconds: reachabilityNanoseconds,
+                    constraintNanoseconds: constraintNanoseconds,
+                    seenLookupNanoseconds: seenLookupNanoseconds,
+                    seenInsertNanoseconds: seenInsertNanoseconds,
+                    configurationNanoseconds: configurationNanoseconds,
+                    eventNanoseconds: eventNanoseconds,
                     successorCalls: successorCalls))
         }
 
+        func emitEvent(_ event: MachineValidationEvent<Machine>) throws {
+            let started = DispatchTime.now().uptimeNanoseconds
+            try emit(event)
+            eventNanoseconds += DispatchTime.now().uptimeNanoseconds - started
+        }
+
+        func constraintHolds(_ machine: Machine) throws -> Bool {
+            let started = DispatchTime.now().uptimeNanoseconds
+            let result = try machine.satisfiesStateConstraint()
+            constraintNanoseconds += DispatchTime.now().uptimeNanoseconds - started
+            return result
+        }
+
+        func sameConfiguration(_ machine: Machine) -> Bool {
+            let started = DispatchTime.now().uptimeNanoseconds
+            let result = machine.hasSameConfiguration(as: first)
+            configurationNanoseconds += DispatchTime.now().uptimeNanoseconds - started
+            return result
+        }
+
+        func stateID(_ snapshot: Machine.Snapshot) -> Int? {
+            let started = DispatchTime.now().uptimeNanoseconds
+            let result = seen[snapshot]
+            seenLookupNanoseconds += DispatchTime.now().uptimeNanoseconds - started
+            return result
+        }
+
         func checkInvariants(_ machine: Machine, predecessor: Int?, action: Machine.Action?) throws -> Bool {
+            let started = DispatchTime.now().uptimeNanoseconds
             let failures = try machine.violatedInvariants(checking: checking.properties)
+            invariantNanoseconds += DispatchTime.now().uptimeNanoseconds - started
             for property in failures {
                 violated.insert(property)
-                try emit(.invariantFailure(property: property, snapshot: machine.snapshot,
+                try emitEvent(.invariantFailure(property: property, snapshot: machine.snapshot,
                                            predecessor: predecessor, action: action))
             }
             return !failures.isEmpty
@@ -91,13 +141,16 @@ public enum MachineValidator {
 
         func checkReachability(_ machine: Machine, predecessor: Int?, action: Machine.Action?) throws -> Bool {
             var found = false
-            for property in try machine.matchedReachabilityProperties(checking: checking.properties) {
+            let started = DispatchTime.now().uptimeNanoseconds
+            let matches = try machine.matchedReachabilityProperties(checking: checking.properties)
+            reachabilityNanoseconds += DispatchTime.now().uptimeNanoseconds - started
+            for property in matches {
                 guard reachability.contains(property) else {
                     throw ExplorationError.undeclaredReachabilityProperty(String(reflecting: property))
                 }
                 guard reached.insert(property).inserted else { continue }
                 found = true
-                try emit(.reachability(property: property, snapshot: machine.snapshot,
+                try emitEvent(.reachability(property: property, snapshot: machine.snapshot,
                                        predecessor: predecessor, action: action))
             }
             return found
@@ -105,25 +158,27 @@ public enum MachineValidator {
 
         func discover(_ machine: Machine, initial: Bool, predecessor: Int?, action: Machine.Action?) throws -> Int {
             let snapshot = machine.snapshot
-            if let existing = seen[snapshot] { return existing }
+            if let existing = stateID(snapshot) { return existing }
             guard seen.count < maximumStates else { throw ExplorationError.stateLimitExceeded(maximumStates) }
             let id = seen.count
+            let insertStarted = DispatchTime.now().uptimeNanoseconds
             seen[snapshot] = id
+            seenInsertNanoseconds += DispatchTime.now().uptimeNanoseconds - insertStarted
             pending.append(machine)
             if initial { initialCount += 1 }
-            try emit(.state(id: id, snapshot: snapshot, initial: initial,
+            try emitEvent(.state(id: id, snapshot: snapshot, initial: initial,
                             predecessor: predecessor, action: action))
             return id
         }
 
         for machine in initialMachines {
-            guard machine.hasSameConfiguration(as: first) else { throw ExplorationError.configurationMismatch }
+            guard sameConfiguration(machine) else { throw ExplorationError.configurationMismatch }
             guard try machine.assumptionsHold() else { throw ExplorationError.assumptionViolated }
             let reached = try checkReachability(machine, predecessor: nil, action: nil)
             let failed = try checkInvariants(machine, predecessor: nil, action: nil)
             if failed && stopOnViolation { return summary(.decisiveViolation) }
             if reached && stopOnReachability { return summary(.decisiveReachability) }
-            guard try machine.satisfiesStateConstraint() else { continue }
+            guard try constraintHolds(machine) else { continue }
             _ = try discover(machine, initial: true, predecessor: nil, action: nil)
         }
         guard initialCount > 0 else { throw ExplorationError.noInitialStates }
@@ -134,7 +189,7 @@ public enum MachineValidator {
             while head < layerEnd {
                 try Task.checkCancellation()
                 let machine = pending[head]!
-                let source = seen[machine.snapshot]!
+                let source = stateID(machine.snapshot)!
                 pending[head] = nil
                 head += 1
                 let successorStartedAt = DispatchTime.now().uptimeNanoseconds
@@ -143,19 +198,19 @@ public enum MachineValidator {
                 successorCalls += 1
                 if successors.isEmpty {
                     deadlockFound = true
-                    try emit(.deadlock(state: source))
+                    try emitEvent(.deadlock(state: source))
                     if checking.checkDeadlock && stopOnViolation { return summary(.decisiveViolation) }
                 }
                 for successor in successors {
-                    guard successor.machine.hasSameConfiguration(as: first) else {
+                    guard sameConfiguration(successor.machine) else {
                         throw ExplorationError.configurationMismatch
                     }
                     // State predicates and the constraint are functions of a complete
                     // snapshot. A previously discovered target has already passed
                     // those checks; only its additional labeled edge is new.
-                    if let target = seen[successor.machine.snapshot] {
+                    if let target = stateID(successor.machine.snapshot) {
                         edgeCount += 1
-                        try emit(.edge(source: source, action: successor.action, target: target))
+                        try emitEvent(.edge(source: source, action: successor.action, target: target))
                         continue
                     }
                     let reached = try checkReachability(successor.machine, predecessor: source,
@@ -164,11 +219,11 @@ public enum MachineValidator {
                                                      action: successor.action)
                     if failed && stopOnViolation { return summary(.decisiveViolation) }
                     if reached && stopOnReachability { return summary(.decisiveReachability) }
-                    guard try successor.machine.satisfiesStateConstraint() else { continue }
+                    guard try constraintHolds(successor.machine) else { continue }
                     let target = try discover(successor.machine, initial: false,
                                               predecessor: source, action: successor.action)
                     edgeCount += 1
-                    try emit(.edge(source: source, action: successor.action, target: target))
+                    try emitEvent(.edge(source: source, action: successor.action, target: target))
                 }
             }
             // The frontier has no reason to retain machines already expanded.

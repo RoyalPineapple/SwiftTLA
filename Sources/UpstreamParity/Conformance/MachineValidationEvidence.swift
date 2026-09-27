@@ -12,6 +12,13 @@ private struct MachineValidationProfile: Encodable {
     let elapsedSeconds: Double
     let explorationSeconds: Double
     let successorSeconds: Double
+    let invariantSeconds: Double
+    let reachabilitySeconds: Double
+    let constraintSeconds: Double
+    let seenLookupSeconds: Double
+    let seenInsertSeconds: Double
+    let configurationSeconds: Double
+    let eventSeconds: Double
     let successorCalls: Int
     let stateEvents: Int
     let edgeEvents: Int
@@ -133,6 +140,13 @@ package enum MachineValidationEvidence {
             elapsedSeconds: seconds(DispatchTime.now().uptimeNanoseconds - startedAt),
             explorationSeconds: seconds(result.timing.elapsedNanoseconds),
             successorSeconds: seconds(result.timing.successorNanoseconds),
+            invariantSeconds: seconds(result.timing.invariantNanoseconds),
+            reachabilitySeconds: seconds(result.timing.reachabilityNanoseconds),
+            constraintSeconds: seconds(result.timing.constraintNanoseconds),
+            seenLookupSeconds: seconds(result.timing.seenLookupNanoseconds),
+            seenInsertSeconds: seconds(result.timing.seenInsertNanoseconds),
+            configurationSeconds: seconds(result.timing.configurationNanoseconds),
+            eventSeconds: seconds(result.timing.eventNanoseconds),
             successorCalls: result.timing.successorCalls,
             stateEvents: stateEvents, edgeEvents: edgeEvents,
             sampledStates: sampledStates, sampledEdges: sampledEdges,
