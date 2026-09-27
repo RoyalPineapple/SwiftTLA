@@ -22,6 +22,13 @@ default:
     exit(1)
 }
 
+func validationExecutableURL() -> URL {
+    let argument = CommandLine.arguments[0]
+    if argument.hasPrefix("/") { return URL(fileURLWithPath: argument).standardizedFileURL }
+    return URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        .appendingPathComponent(argument).standardizedFileURL
+}
+
 struct PinnedTLCToolchain: Decodable {
     let schema: String
     let tlc: TLC

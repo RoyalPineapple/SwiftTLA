@@ -101,7 +101,8 @@ func runUpstream(arguments: [String]) -> Never {
                     maximumStates: declaration.exploration.maximumStateLimit,
                     timeout: declaration.timeoutSeconds,
                     decisive: declaration.comparisonMode == .decisiveCounterexample,
-                    tools: tools, pin: pin, to: output.appendingPathComponent(declaration.id))
+                    tools: tools, pin: pin, to: output.appendingPathComponent(declaration.id),
+                    spoolExecutable: validationExecutableURL())
                 print("upstream \(declaration.id): \(report.result)")
                 if report.result != "exact" { failures += 1 }
             } catch {

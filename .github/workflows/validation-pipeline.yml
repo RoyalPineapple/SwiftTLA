@@ -90,7 +90,7 @@ jobs:
     needs: prepare
     if: ${{ fromJSON(needs.prepare.outputs.native)[0] != '__skip__' }}
     runs-on: macos-15
-    timeout-minutes: 105
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -129,7 +129,7 @@ jobs:
         run: |
           key=$(.build/validation-bin/tlc-validate oracle cache-key --case "$CASE_ID" --maximum-states 10000000)
           echo "key=$key" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         id: oracle-cache
         with:
           path: .build/validation-evidence/oracle/${{ matrix.case }}
@@ -158,8 +158,13 @@ jobs:
         run: |
           jq -e '.schema == "swifttla.generated-tlc-oracle" and .caseID == env.CASE_ID' ".build/validation-evidence/oracle/$CASE_ID/oracle.json"
           jq -e --arg key "$ORACLE_INPUT_KEY" '.cacheKey == $key and .sourceSHA != "" and .originRunID != ""' ".build/validation-evidence/oracle/$CASE_ID/evidence-origin.json"
+      - uses: actions/cache/save@v4
+        if: steps.oracle-cache.outputs.cache-hit != 'true'
+        with:
+          path: .build/validation-evidence/oracle/${{ matrix.case }}
+          key: generated-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.oracle-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift') }}
       - name: Require exact native and TLC evidence
-        timeout-minutes: 35
+        timeout-minutes: 60
         run: |
           set -o pipefail
           .build/validation-bin/tlc-validate compare run --case "$CASE_ID" \
@@ -182,7 +187,7 @@ jobs:
     needs: prepare
     if: ${{ fromJSON(needs.prepare.outputs.upstream)[0] != '__skip__' }}
     runs-on: macos-15
-    timeout-minutes: 120
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -232,7 +237,7 @@ jobs:
           key: upstream-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/UpstreamTLCParity.swift', 'Sources/UpstreamParity/Conformance/ValidationEvidenceComparison.swift', 'Sources/UpstreamParity/Conformance/CompactTLCGraphEvent.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift', 'Sources/SwiftTLA/SpecCompilation.swift') }}
       - name: Compare generated and upstream TLA through TLC
         if: steps.upstream-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 90
+        timeout-minutes: 120
         run: |
           set -o pipefail
           .build/validation-bin/tlc-validate upstream run --case "$CASE_ID" \

@@ -16,6 +16,7 @@ package struct ValidationEvidenceComparisonReport: Codable, Sendable {
 package enum ValidationEvidenceComparisonError: Error, Equatable {
     case invalidEvidence(String)
     case sortingFailed(Int32)
+    case spoolingFailed(Int32)
 }
 
 /// Exact, bounded-memory comparison. State keys are sorted once and assigned
@@ -23,18 +24,23 @@ package enum ValidationEvidenceComparisonError: Error, Equatable {
 package enum ValidationEvidenceComparison {
     package static func compareTLCGraphs(
         caseID: String, generated: URL, reference: URL,
-        actions: [RenderedAction], in directory: URL
+        actions: [RenderedAction], in directory: URL, spoolExecutable: URL? = nil
     ) throws -> String? {
         let generatedRoot = directory.appendingPathComponent("generated-graph-spool")
         let referenceRoot = directory.appendingPathComponent("reference-graph-spool")
         try FileManager.default.createDirectory(at: generatedRoot, withIntermediateDirectories: false)
         try FileManager.default.createDirectory(at: referenceRoot, withIntermediateDirectories: false)
+        var exact = false
         defer {
-            try? FileManager.default.removeItem(at: generatedRoot)
-            try? FileManager.default.removeItem(at: referenceRoot)
+            if exact {
+                try? FileManager.default.removeItem(at: generatedRoot)
+                try? FileManager.default.removeItem(at: referenceRoot)
+            }
         }
-        let generatedGraph = try readTLC(generated, caseID: caseID, actions: actions, in: generatedRoot)
-        let referenceGraph = try readTLC(reference, caseID: caseID, actions: actions, in: referenceRoot)
+        let generatedGraph = try spoolTLC(generated, caseID: caseID, actions: actions,
+            in: generatedRoot, executable: spoolExecutable, kind: "upstream")
+        let referenceGraph = try spoolTLC(reference, caseID: caseID, actions: actions,
+            in: referenceRoot, executable: spoolExecutable, kind: "upstream")
         let generatedStates = try sorted(generatedGraph.states, in: generatedRoot)
         let referenceStates = try sorted(referenceGraph.states, in: referenceRoot)
         var generatedRanks: [UInt64: Int] = [:]
@@ -73,11 +79,13 @@ package enum ValidationEvidenceComparison {
         let generatedEdges = try rankEdges(generatedGraph.edges, ranks: generatedRanks, in: generatedRoot)
         let referenceEdges = try rankEdges(referenceGraph.edges, ranks: referenceRanks, in: referenceRoot)
         if try firstDifference(generatedEdges, referenceEdges) != nil { return "complete labeled edge set" }
+        exact = true
         return nil
     }
 
     package static func compare(
-        caseID: String, native: URL, oracle: URL, actions: [RenderedAction], to directory: URL
+        caseID: String, native: URL, oracle: URL, actions: [RenderedAction], to directory: URL,
+        spoolExecutable: URL? = nil
     ) throws -> ValidationEvidenceComparisonReport {
         let decoder = JSONDecoder()
         let swift = try decoder.decode(NativeValidationReport.self,
@@ -91,6 +99,13 @@ package enum ValidationEvidenceComparison {
             throw ValidationEvidenceComparisonError.invalidEvidence("report identity")
         }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        var exact = false
+        var spoolDirectories: [URL] = []
+        defer {
+            if exact {
+                for spool in spoolDirectories { try? FileManager.default.removeItem(at: spool) }
+            }
+        }
         var difference: String?
         if swift.graphComplete != tlc.graphComplete {
             difference = "exploration completion"
@@ -101,17 +116,20 @@ package enum ValidationEvidenceComparison {
         if difference == nil {
             let swiftRoot = directory.appendingPathComponent("swift")
             try FileManager.default.createDirectory(at: swiftRoot, withIntermediateDirectories: false)
-            defer { try? FileManager.default.removeItem(at: swiftRoot) }
-            let swiftGraph = try readNative(native.appendingPathComponent("machine.jsonl"),
-                expectedComplete: swift.graphComplete, actions: actions, in: swiftRoot)
+            spoolDirectories.append(swiftRoot)
+            let swiftGraph = try spoolNative(native.appendingPathComponent("machine.jsonl"),
+                caseID: caseID, expectedComplete: swift.graphComplete, actions: actions,
+                in: swiftRoot, executable: spoolExecutable)
             try verifyTLCProcess(oracle.appendingPathComponent("tlc-graph/tlc-process.json"),
                 expectedComplete: tlc.graphComplete)
             if compareGraph {
                 let tlcRoot = directory.appendingPathComponent("tlc")
                 try FileManager.default.createDirectory(at: tlcRoot, withIntermediateDirectories: false)
-                defer { try? FileManager.default.removeItem(at: tlcRoot) }
-                let tlcGraph = try readTLC(oracle.appendingPathComponent("tlc-graph/graph-events.jsonl.gz"),
-                    caseID: caseID, actions: actions, in: tlcRoot)
+                spoolDirectories.append(tlcRoot)
+                let tlcGraph = try spoolTLC(
+                    oracle.appendingPathComponent("tlc-graph/graph-events.jsonl.gz"),
+                    caseID: caseID, actions: actions, in: tlcRoot,
+                    executable: spoolExecutable, kind: "native")
                 difference = try Self.compareGraph(swiftGraph: swiftGraph, tlcGraph: tlcGraph,
                     swiftRoot: swiftRoot, tlcRoot: tlcRoot)
             }
@@ -124,6 +142,7 @@ package enum ValidationEvidenceComparison {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("comparison.json"), options: .atomic)
+        exact = difference == nil
         return report
     }
 
@@ -175,6 +194,92 @@ package enum ValidationEvidenceComparison {
         let initial: URL
         let edges: URL
         let stateCount: Int
+    }
+
+    private struct SpoolManifest: Codable {
+        let schema: String
+        let stateCount: Int
+    }
+
+    package static func writeTLCSpool(_ input: URL, caseID: String,
+        actions: [RenderedAction], in directory: URL) throws {
+        let spool = try readTLC(input, caseID: caseID, actions: actions, in: directory)
+        try writeManifest(spool, in: directory)
+    }
+
+    package static func writeNativeSpool(_ input: URL, expectedComplete: Bool,
+        actions: [RenderedAction], in directory: URL) throws {
+        let spool = try readNative(input, expectedComplete: expectedComplete,
+            actions: actions, in: directory)
+        try writeManifest(spool, in: directory)
+    }
+
+    private static func writeManifest(_ spool: Spool, in directory: URL) throws {
+        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v1",
+            stateCount: spool.stateCount)
+        try JSONEncoder().encode(manifest).write(
+            to: directory.appendingPathComponent("spool.json"), options: .atomic)
+    }
+
+    private static func readManifest(in directory: URL) throws -> Spool {
+        let manifest = try JSONDecoder().decode(SpoolManifest.self,
+            from: Data(contentsOf: directory.appendingPathComponent("spool.json")))
+        guard manifest.schema == "swifttla.validation-spool-v1",
+              manifest.stateCount >= 0 else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("spool manifest")
+        }
+        let files = ["states.raw", "initial.raw", "edges.raw"].map(directory.appendingPathComponent)
+        for file in files {
+            let values = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            guard values.isRegularFile == true, values.isSymbolicLink != true else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("spool file")
+            }
+        }
+        return Spool(states: files[0], initial: files[1], edges: files[2],
+            stateCount: manifest.stateCount)
+    }
+
+    private static func spoolTLC(_ input: URL, caseID: String, actions: [RenderedAction],
+        in directory: URL, executable: URL?, kind: String) throws -> Spool {
+        guard let executable else {
+            return try readTLC(input, caseID: caseID, actions: actions, in: directory)
+        }
+        try runSpool(executable, arguments: ["compare", "spool-tlc", "--kind", kind,
+            "--case", caseID, "--input", input.path, "--output", directory.path])
+        return try readManifest(in: directory)
+    }
+
+    private static func spoolNative(_ input: URL, caseID: String, expectedComplete: Bool,
+        actions: [RenderedAction], in directory: URL, executable: URL?) throws -> Spool {
+        guard let executable else {
+            return try readNative(input, expectedComplete: expectedComplete,
+                actions: actions, in: directory)
+        }
+        try runSpool(executable, arguments: ["compare", "spool-native", "--case", caseID,
+            "--input", input.path, "--complete", expectedComplete ? "true" : "false",
+            "--output", directory.path])
+        return try readManifest(in: directory)
+    }
+
+    private static func runSpool(_ executable: URL, arguments: [String]) throws {
+        guard FileManager.default.isExecutableFile(atPath: executable.path) else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("spool executable")
+        }
+        let process = Process()
+        #if canImport(Darwin)
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/time")
+        process.arguments = ["-l", executable.path] + arguments
+        #else
+        process.executableURL = executable
+        process.arguments = arguments
+        #endif
+        process.standardOutput = FileHandle.standardOutput
+        process.standardError = FileHandle.standardError
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationReason == .exit, process.terminationStatus == 0 else {
+            throw ValidationEvidenceComparisonError.spoolingFailed(process.terminationStatus)
+        }
     }
 
     private static func readNative(_ url: URL, expectedComplete: Bool,

@@ -53,7 +53,7 @@ package enum UpstreamTLCParity {
         expectedModuleSHA256: String, expectedCFGSHA256: String,
         maximumStates: Int, timeout: TimeInterval, decisive: Bool,
         tools: ResolvedTLCToolchain, pin: TLCReferencePin, to directory: URL,
-        process: TLCProcessAdapter = TLCProcessAdapter()
+        process: TLCProcessAdapter = TLCProcessAdapter(), spoolExecutable: URL? = nil
     ) throws -> UpstreamTLCParityReport {
         guard SHA256.hex(Data(reference.tla.utf8)) == expectedModuleSHA256,
               SHA256.hex(Data(reference.cfg.utf8)) == expectedCFGSHA256 else {
@@ -254,7 +254,7 @@ package enum UpstreamTLCParity {
                 caseID: id,
                 generated: generatedGraphOutput.appendingPathComponent("graph-events.jsonl.gz"),
                 reference: referenceGraphOutput.appendingPathComponent("graph-events.jsonl.gz"),
-                actions: rendered.actions, in: directory)
+                actions: rendered.actions, in: directory, spoolExecutable: spoolExecutable)
         }
         let report = UpstreamTLCParityReport(
             schema: "swifttla.upstream-tlc-parity", caseID: id,

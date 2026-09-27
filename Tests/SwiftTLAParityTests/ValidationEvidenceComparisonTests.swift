@@ -5,6 +5,32 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct ValidationEvidenceComparisonTests {
+    @Test("independent graph spooling retains every state and labeled edge")
+    func completeGraphSpoolsAreReusable() throws {
+        let directory = try fixture(target: 1)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let nativeSpool = directory.appendingPathComponent("native-spool")
+        let tlcSpool = directory.appendingPathComponent("tlc-spool")
+        try FileManager.default.createDirectory(at: nativeSpool, withIntermediateDirectories: false)
+        try FileManager.default.createDirectory(at: tlcSpool, withIntermediateDirectories: false)
+        let actions = [RenderedAction(sourceName: "Next", arguments: [], renderedName: "Next")]
+        try ValidationEvidenceComparison.writeNativeSpool(
+            directory.appendingPathComponent("native/machine.jsonl"),
+            expectedComplete: true, actions: actions, in: nativeSpool)
+        try ValidationEvidenceComparison.writeTLCSpool(
+            directory.appendingPathComponent("oracle/tlc-graph/graph-events.jsonl.gz"),
+            caseID: "fixture", actions: actions, in: tlcSpool)
+        for spool in [nativeSpool, tlcSpool] {
+            let manifest = try JSONSerialization.jsonObject(with:
+                Data(contentsOf: spool.appendingPathComponent("spool.json"))) as? [String: Any]
+            #expect(manifest?["stateCount"] as? Int == 2)
+            #expect(try Data(contentsOf: spool.appendingPathComponent("states.raw"))
+                .split(separator: 10).count == 2)
+            #expect(try Data(contentsOf: spool.appendingPathComponent("edges.raw"))
+                .split(separator: 10).count == 1)
+        }
+    }
+
     @Test("complete generated-machine and TLC records match by full state and labeled edge")
     func completeGraphMatches() throws {
         let directory = try fixture(target: 1)
@@ -17,6 +43,10 @@ struct ValidationEvidenceComparisonTests {
         #expect(result.result == "exact")
         #expect(result.graphCompared)
         #expect(result.difference == nil)
+        #expect(!FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("comparison/swift").path))
+        #expect(!FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("comparison/tlc").path))
     }
 
     @Test("a different complete state cannot pass through matching counts")
@@ -69,6 +99,10 @@ struct ValidationEvidenceComparisonTests {
             caseID: "fixture", generated: generated, reference: upstream,
             actions: [.init(sourceName: "Next", arguments: [], renderedName: "Next")],
             in: directory) == nil)
+        #expect(!FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("generated-graph-spool").path))
+        #expect(!FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("reference-graph-spool").path))
     }
 
     @Test("matching decisive verdicts do not require a complete TLC graph")
