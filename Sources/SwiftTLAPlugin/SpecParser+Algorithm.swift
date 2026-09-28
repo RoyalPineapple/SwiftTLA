@@ -909,12 +909,11 @@ extension ParserSession {
                 swiftTypeName: declaredValueType ?? initialValueTypeName(from: initialSyntax)
             )
             inferredType = state.swiftTypeName == nil ? typedFacadeValueType(initialSyntax, scope: scope) : nil
-        } else if kind == .shared,
-                  let domainSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression {
-            guard let domain = finiteSharedVariableDomain(domainSyntax, declaredElementType: declaredValueType, scope: scope)
+        } else if let domainSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression {
+            guard let domain = finiteStateVariableDomain(domainSyntax, declaredElementType: declaredValueType, scope: scope)
             else {
                 algorithmParseFailure = algorithmParseFailure
-                    ?? ("scope.sharedVar(_:in:) requires a supported finite formal set expression; "
+                    ?? ("A state domain requires a supported finite formal set expression; "
                         + "could not decode '\(domainSyntax.description.trimmingCharacters(in: .whitespacesAndNewlines))'.")
                 return nil
             }

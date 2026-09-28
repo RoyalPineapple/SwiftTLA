@@ -152,18 +152,25 @@ enum AlgorithmLowerer {
             }
             let localRoots = Set(localStates.map(\.root))
             for state in localStates {
-                let initial = deterministicInitialization(
-                    state.initialization,
-                    path: "processes.\(process.typeName).locals.\(state.root)"
-                )
+                let initialization: VariableInitialization
+                switch state.initialization {
+                case .memberOf(let domain):
+                    initialization = .memberOf(.functionSet(process.domain, domain))
+                case .value, .expression:
+                    let initial = deterministicInitialization(
+                        state.initialization,
+                        path: "processes.\(process.typeName).locals.\(state.root)"
+                    )
+                    initialization = .expression(constantFunction(
+                        domain: process.domain,
+                        value: initial,
+                        localRoots: localRoots
+                    ))
+                }
                 variables.append(
                     NamedVar(
                         name: state.root,
-                        initialization: .expression(constantFunction(
-                            domain: process.domain,
-                            value: initial,
-                            localRoots: localRoots
-                        )),
+                        initialization: initialization,
                         generatedSwiftType: state.swiftTypeName.map { "[\(process.typeName): \($0)]" },
                         resolvedValueType: process.resolvedElementType.flatMap { key in
                             state.resolvedValueType.map { .dictionary(key, $0) }

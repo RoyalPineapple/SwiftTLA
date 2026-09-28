@@ -318,6 +318,11 @@ public struct LocalVariable<Value: TLAValueType>: TypedExpression {
         )
     }
 
+    fileprivate init<Domain: FormalSetValue>(name: String, in values: some TypedExpression<Domain>)
+    where Domain.Element == Value {
+        self.init(name: name, initialization: .memberOf(values.stateExpr))
+    }
+
     public var stateExpr: StateExpr { .variable(name) }
 
     /// The typed expression for the current process-local formal value.
@@ -563,6 +568,14 @@ public final class ProcessScope {
 
     public func localVar<Value: TLAValueType>(_name name: String = "", initial: some TypedExpression<Value>) -> LocalVariable<Value> {
         let variable = LocalVariable(name: name, initial: initial)
+        declarations.append(localDeclaration(variable))
+        return variable
+    }
+
+    public func localVar<Domain: FormalSetValue>(
+        _name name: String = "", in values: some TypedExpression<Domain>
+    ) -> LocalVariable<Domain.Element> {
+        let variable = LocalVariable(name: name, in: values)
         declarations.append(localDeclaration(variable))
         return variable
     }

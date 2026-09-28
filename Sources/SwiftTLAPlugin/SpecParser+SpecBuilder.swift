@@ -415,7 +415,7 @@ extension ParserSession {
             let name = args.first(where: { $0.label?.text == "_name" })?
                 .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? patternName
             if let range = args.first(where: { $0.label?.text == "in" })?.expression,
-               let domain = finiteSharedVariableDomain(range, declaredElementType: varTypeName, scope: sourceScope) {
+               let domain = finiteStateVariableDomain(range, declaredElementType: varTypeName, scope: sourceScope) {
                 components.variables.append(.init(name: name, initialization: .memberOf(domain.expression),
                     generatedSwiftType: varTypeName ?? domain.elementType, origin: .source))
             } else if let value = args.first(where: { $0.label?.text == "initial" })?.expression,
@@ -557,7 +557,7 @@ extension ParserSession {
         return lower...upper
     }
 
-    func finiteSharedVariableDomain(
+    func finiteStateVariableDomain(
         _ expression: ExprSyntax, declaredElementType: String?, scope: TypedFacadeScope
     ) -> (expression: StateExpr, elementType: String)? {
         if let range = parseIntegerClosedRange(expression) {
