@@ -79,7 +79,9 @@ package enum GeneratedTLCOracle {
                 ["property": names[property] ?? "", "verdict": String(describing: expectation)]
             }.sorted { $0["property"]! < $1["property"]! },
             "deadlockExpectation": scenario.deadlockExpectation.map { String(describing: $0) } ?? "none",
-            "actions": rendered.actions.map {
+            "actions": rendered.actions.sorted {
+                ($0.sourceInvocationName, $0.renderedName) < ($1.sourceInvocationName, $1.renderedName)
+            }.map {
                 ["invocation": $0.sourceInvocationName, "rendered": $0.renderedName]
             }
         ]

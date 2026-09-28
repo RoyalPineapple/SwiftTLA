@@ -1,9 +1,18 @@
 import Foundation
 import Testing
 import SwiftTLA
-import UpstreamParity
+@testable import UpstreamParity
 
 struct GeneratedTLCOracleTests {
+    @Test("unchanged Boulanger TLC inputs retain a stable oracle cache key")
+    func boulangerCacheKeyIsStableAcrossRevisions() throws {
+        let scenario = try #require(BoulangerModel.validationScenarios().first)
+        let key = try GeneratedTLCOracle.cacheKey(
+            scenario: scenario, id: "boulanger-0", maximumStates: 10_000_000,
+            pin: testReferencePin())
+        #expect(key == "b40c7bac7b8b42e2f975c796ecf1420401c5c6c551f9418621610f6cb828c849")
+    }
+
     @Test("cached TLC evidence is bound to its scenario and exploration limit")
     func cacheKeyRejectsDifferentScenarioOrLimit() throws {
         let selected = try #require(modelValidationScenarios().first)
