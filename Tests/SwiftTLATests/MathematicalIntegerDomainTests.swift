@@ -15,7 +15,7 @@ struct MathematicalIntegerDomainTests {
                 try MathematicalIntegerDomainModel.initialMachines(configuration: configuration)
             }
             let bundle = try MathematicalIntegerDomainModel.render(configuration: configuration).tlaBundle
-            #expect(bundle.tla.contains("ASSUME Values \\in SUBSET Int"))
+            #expect(bundle.tla.contains("ASSUME Values \\in SUBSET (Int)"))
             #expect(bundle.tla.contains("value \\in Int"))
             #expect(bundle.tla.contains("Seq(Values)"))
             #expect(bundle.tla.contains("Integers"))

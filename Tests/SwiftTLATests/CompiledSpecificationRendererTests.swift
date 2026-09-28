@@ -4,6 +4,18 @@ import Testing
 
 @Suite("Compiled specification rendering")
 struct CompiledSpecificationRendererTests {
+    @Test("Powerset operands retain their grouping inside function domains")
+    func groupsPowersetRangeOperand() throws {
+        let compiled = try TLASpec(name: "PowersetDomain", variables: [], actions: [], invariants: []).compile()
+        let renderer = CompiledTLARenderer(moduleName: "PowersetDomain", reservedNames: [], layout: compiled.layout,
+            bindings: .init(), operators: compiled.semantics.operators, actions: [], functions: [])
+        let interval = CompiledExpression(operation: .integerRange,
+            children: [.value(.integer(1)), .value(.integer(2))])
+        let domain = CompiledExpression(operation: .functionSet, children: [interval,
+            .init(operation: .powerSet, children: [interval])])
+        #expect(try renderer.state(domain) == "[1..2 -> SUBSET (1..2)]")
+    }
+
     @Test("Independent record comprehensions retain their exact Cartesian domain at serialization")
     func rendersCartesianRecordDomains() throws {
         let compiled = try TLASpec(name: "RecordDomains", variables: [], actions: [], invariants: []).compile()

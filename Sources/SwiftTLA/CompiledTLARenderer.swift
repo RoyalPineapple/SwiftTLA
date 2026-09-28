@@ -599,7 +599,7 @@ extension CompiledOperation {
         case .nextState: ("(", "", ")'")
         case .not: ("(~", "", ")")
         case .cardinality: ("Cardinality(", "", ")")
-        case .powerSet: ("SUBSET ", "", "")
+        case .powerSet: ("SUBSET (", "", ")")
         case .sequenceSet: ("Seq(", "", ")")
         case .unionAll: ("UNION ", "", "")
         case .tupleLength: ("Len(", "", ")")
