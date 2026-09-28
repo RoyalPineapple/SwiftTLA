@@ -108,15 +108,13 @@ struct BinaryGraphEvidenceWriter {
     private mutating func byte(_ value: UInt8) { buffer.append(value) }
 
     private mutating func uint32(_ value: UInt32) {
-        for shift in stride(from: 24, through: 0, by: -8) {
-            byte(UInt8(truncatingIfNeeded: value >> shift))
-        }
+        var bigEndian = value.bigEndian
+        withUnsafeBytes(of: &bigEndian) { buffer.append(contentsOf: $0) }
     }
 
     private mutating func uint64(_ value: UInt64) {
-        for shift in stride(from: 56, through: 0, by: -8) {
-            byte(UInt8(truncatingIfNeeded: value >> shift))
-        }
+        var bigEndian = value.bigEndian
+        withUnsafeBytes(of: &bigEndian) { buffer.append(contentsOf: $0) }
     }
 
     private mutating func string(_ value: String) throws {
@@ -185,8 +183,9 @@ struct BinaryGraphEvidenceReader {
 
     mutating func uint32() throws -> UInt32 {
         try ensure(4)
-        let value = (UInt32(buffer[cursor]) << 24) | (UInt32(buffer[cursor + 1]) << 16)
-            | (UInt32(buffer[cursor + 2]) << 8) | UInt32(buffer[cursor + 3])
+        let value = buffer.withUnsafeBytes {
+            UInt32(bigEndian: $0.loadUnaligned(fromByteOffset: cursor, as: UInt32.self))
+        }
         cursor += 4
         offset += 4
         return value
@@ -194,7 +193,9 @@ struct BinaryGraphEvidenceReader {
 
     mutating func uint16() throws -> UInt16 {
         try ensure(2)
-        let value = (UInt16(buffer[cursor]) << 8) | UInt16(buffer[cursor + 1])
+        let value = buffer.withUnsafeBytes {
+            UInt16(bigEndian: $0.loadUnaligned(fromByteOffset: cursor, as: UInt16.self))
+        }
         cursor += 2
         offset += 2
         return value
@@ -202,9 +203,8 @@ struct BinaryGraphEvidenceReader {
 
     mutating func uint64() throws -> UInt64 {
         try ensure(8)
-        var value: UInt64 = 0
-        for index in cursor..<(cursor + 8) {
-            value = (value << 8) | UInt64(buffer[index])
+        let value = buffer.withUnsafeBytes {
+            UInt64(bigEndian: $0.loadUnaligned(fromByteOffset: cursor, as: UInt64.self))
         }
         cursor += 8
         offset += 8
@@ -290,15 +290,13 @@ struct BinaryEdgeWriter {
     }
 
     private mutating func uint32(_ value: UInt32) {
-        for shift in stride(from: 24, through: 0, by: -8) {
-            buffer.append(UInt8(truncatingIfNeeded: value >> shift))
-        }
+        var bigEndian = value.bigEndian
+        withUnsafeBytes(of: &bigEndian) { buffer.append(contentsOf: $0) }
     }
 
     private mutating func uint64(_ value: UInt64) {
-        for shift in stride(from: 56, through: 0, by: -8) {
-            buffer.append(UInt8(truncatingIfNeeded: value >> shift))
-        }
+        var bigEndian = value.bigEndian
+        withUnsafeBytes(of: &bigEndian) { buffer.append(contentsOf: $0) }
     }
 
     private mutating func flush() throws {
@@ -322,13 +320,11 @@ struct BinaryStateWriter {
         guard let length = UInt32(exactly: key.count) else {
             throw BinaryGraphEvidenceError.invalid("state key length")
         }
-        for shift in stride(from: 24, through: 0, by: -8) {
-            buffer.append(UInt8(truncatingIfNeeded: length >> shift))
-        }
+        var bigEndianLength = length.bigEndian
+        withUnsafeBytes(of: &bigEndianLength) { buffer.append(contentsOf: $0) }
         buffer.append(key)
-        for shift in stride(from: 56, through: 0, by: -8) {
-            buffer.append(UInt8(truncatingIfNeeded: id >> shift))
-        }
+        var bigEndianID = id.bigEndian
+        withUnsafeBytes(of: &bigEndianID) { buffer.append(contentsOf: $0) }
         if buffer.count >= 1_048_576 { try flush() }
     }
 
