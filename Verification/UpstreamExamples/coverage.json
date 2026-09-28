@@ -31,13 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "reviewed; sums_even selected",
+      "status": "sums_even verified; Stones selected",
       "candidates": [
         "specifications/sums_even",
         "specifications/Stones",
         "specifications/FiniteMonotonic"
       ],
-      "scope": "Pinned-source review selects sums_even as the smallest assumption-only case. Its sole configuration checks T1 over NatOverride=0..1000000 and has no state graph. Stones shares the zero-state assumption gap but adds recursive partitions and PrintT output. FiniteMonotonic has five configurations, including symbolic models, action composition, and a liveness failure. Complete sums_even before expanding to Stones and CarTalkPuzzle. No candidate receives hosted credit from this review."
+      "scope": "The sole sums_even configuration matched native, generated TLC, and pinned upstream TLC on hosted SHA 0edfbd0. Stones is next: it retains zero-state assumption checking but requires recursive partitions and exact PrintT output. CarTalkPuzzle follows only after the output path is proved. FiniteMonotonic has five configurations, including symbolic models, action composition, and a liveness failure. No unverified candidate receives hosted credit."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -61,12 +61,12 @@
   },
   "ci": {
     "prHeadFullMatrix": {
-      "sourceSHA": "28dec1043cbe3e6b928849d30005fef94b0d2b0b",
-      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690169",
-      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185",
+      "sourceSHA": "0edfbd0afb9945a950f5ec59c1d4c41989a2b3e0",
+      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36472668587",
+      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36472668767",
       "observedStatus": "completed",
       "conclusion": "success",
-      "jobs": "All 114 required independent-validation jobs passed. The optional comparison replay diagnostic was skipped. All five ordinary CI jobs passed.",
+      "jobs": "All 116 non-skipped independent-validation jobs passed, including both sums-even-0 comparisons and admission. The optional comparison replay diagnostic was skipped. All five ordinary CI jobs passed.",
       "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. Exhaustive comparisons retained complete initial states, states, labeled edges, and selected check outcomes. Decisive early stops retained verdict and witness evidence. This verified PR head does not mean all 78 families are complete."
     },
     "bakeryBoulangerieFamilyCandidate": {
@@ -2790,7 +2790,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": "specifications/sums_even",
+  "nextFamily": "specifications/Stones",
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -9674,17 +9674,8 @@
     {
       "path": "specifications/sums_even",
       "name": "Proof x+x is Even",
-      "audit": "implementation staged; hosted comparison pending",
-      "gap": "The typed assumption-only model and pinned reference are registered. Local source and evidence-contract diagnostics do not establish TLC parity. Completion requires matching native, generated-TLC, and upstream-TLC verdicts on a green hosted revision, without a dummy state or smaller domain. TLAPS proof verification is outside this TLC configuration claim.",
-      "scheduling": {
-        "label": "Checker gap",
-        "sharedCapability": "assumption-only-checking",
-        "reproducer": "MC_sums_even.cfg binds MaxNat=1000000 and Nat<-NatOverride. MC_sums_even.tla evaluates ASSUME T1 without a specification, initial predicate, or next predicate.",
-        "nativeBoundary": "An assumption-only scenario evaluates the generated Swift assumption directly; it does not invoke the state-machine explorer or fabricate an initial state.",
-        "completionCondition": "Compare unchanged assumptions through native evaluation, generated TLC, and upstream TLC. Retain zero-state accounting and complete outcomes without dummy states.",
-        "scope": "No smaller domain qualifies. TLAPS proof verification is not required for this finite TLC assumption comparison.",
-        "evidenceKind": "Focused local diagnostics only; hosted TLC comparison is pending."
-      },
+      "audit": "complete at verified revision",
+      "gap": "None for this TLC family at 0edfbd0. Its sole configuration matched native, generated-TLC, and pinned upstream-TLC assumption verdicts on a green hosted revision. The full million-value domain and zero-state behavior were retained. This does not verify the upstream TLAPS proof or replace final-revision admission.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "dependencyBlob": "4205795513f2cb6df723115e52a444312af8cfab",
@@ -9695,21 +9686,21 @@
         "expectedTotalStates": 0,
         "expectedStateDepth": 0
       },
-      "legacyCleanupComplete": false,
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/sums_even/MC_sums_even.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
           "implementations": ["Sources/UpstreamParity/Examples/SumsEven.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/sums_even/sums_even.tla",
           "role": "mathematical dependency and proof companion",
           "reason": "MC_sums_even imports the theorem T1 and evaluates it through ASSUME. The upstream module also contains TLAPS proof steps. It has no separate TLC configuration or state graph. The configured assumption check requires its theorem statement, but does not imply that SwiftTLA or TLC verifies the TLAPS proof.",
           "implementations": ["Sources/UpstreamParity/Examples/SumsEven.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -9717,7 +9708,7 @@
           "module": "specifications/sums_even/MC_sums_even.tla",
           "configuration": "specifications/sums_even/MC_sums_even.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -9727,7 +9718,22 @@
               "caseID": "sums-even-0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "0edfbd0afb9945a950f5ec59c1d4c41989a2b3e0",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36472668767",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36472668767/artifacts/10994741652",
+              "artifactSHA256": "e5a05358aed1da78ef4251af35333f8003e9769c94528ef627def53cac98ad87",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36472668767/artifacts/10996656277",
+              "nativeArtifactSHA256": "e2fa60d52b9be8dce24a14767ff84a3d187abcfe4944969c021c31fde3efd794",
+              "completion": "assumptions-only",
+              "assumptionCompared": true,
+              "completeGraph": false,
+              "scope": "Native, generated TLC, and pinned upstream TLC all returned satisfied. Both retained comparisons are exact, source receipts bind to 0edfbd0 and TLC v1.8.0, and no state graph was fabricated. The original MaxNat=1000000 binding and theorem statement were retained; TLAPS proof verification is not claimed. Ordinary CI and the full independent-validation admission passed on the same SHA."
+            }
+          ],
+          "verifiedSourceSHA": "0edfbd0afb9945a950f5ec59c1d4c41989a2b3e0"
         }
       ],
       "partialCases": []
