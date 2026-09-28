@@ -689,6 +689,31 @@ struct NativeSwiftEmitter {
         func binary(_ operation: String) throws -> String {
             "(\(try emit(0)) \(operation) \(try emit(1)))"
         }
+        func domainRangeEquality(
+            domain: CompiledExpression, range: CompiledExpression, domainFirst: Bool
+        ) throws -> String? {
+            guard case .domain = domain.operation,
+                  case .dictionary(.int, _) = domain.children[0].resultType,
+                  case .integerRange = range.operation else { return nil }
+            let function = try self.expression(domain.children[0], state: state,
+                substitutions: substitutions, activeFunctions: activeFunctions)
+            let lower = try self.expression(range.children[0], state: state,
+                substitutions: substitutions, activeFunctions: activeFunctions)
+            let upper = try self.expression(range.children[1], state: state,
+                substitutions: substitutions, activeFunctions: activeFunctions)
+            let functionBinding = "let _domainFunction = \(function)"
+            let boundsBinding = "let _domainBounds = try _NativeMachineOperations.integerRangeBounds(\(lower), \(upper))"
+            let bindings = domainFirst
+                ? [functionBinding, boundsBinding] : [boundsBinding, functionBinding]
+            return """
+            (try { () throws -> Bool in
+                \(bindings.joined(separator: "\n"))
+                guard let _domainBounds else { return _domainFunction.isEmpty }
+                return _domainFunction.count == _domainBounds.count
+                    && _domainFunction.keys.allSatisfy { _domainBounds.contains($0) }
+            }())
+            """
+        }
         switch expression {
         case .value(let value): return try literal(value, as: node.resultType)
         case .stateVariable(let id):
@@ -714,7 +739,14 @@ struct NativeSwiftEmitter {
             return try projected(emit(0), from: childType(0), to: node.resultType)
         case .assertView:
             return try checkedView(emit(0), from: childType(0), to: node.resultType)
-        case .equal: return try binary("==")
+        case .equal:
+            if let optimized = try domainRangeEquality(
+                domain: node.children[0], range: node.children[1], domainFirst: true
+            ) { return optimized }
+            if let optimized = try domainRangeEquality(
+                domain: node.children[1], range: node.children[0], domainFirst: false
+            ) { return optimized }
+            return try binary("==")
         case .notEqual: return try binary("!=")
         case .lessThan: return try binary("<")
         case .lessOrEqual: return try binary("<=")
