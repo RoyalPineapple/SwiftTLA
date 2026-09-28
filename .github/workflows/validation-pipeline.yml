@@ -98,9 +98,10 @@ jobs:
           echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v6
         with:
-          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
           path: .build/release/tlc-validate
           if-no-files-found: error
+          overwrite: true
 
   dsl-native-parity:
     name: DSL/native parity ${{ matrix.case }}
@@ -128,7 +129,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
       - uses: actions/download-artifact@v5
         with:
-          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
           path: .build/validation-bin
       - uses: actions/cache@v4
         with:
@@ -249,7 +250,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
       - uses: actions/download-artifact@v5
         with:
-          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
           path: .build/validation-bin
       - uses: actions/cache@v4
         with:
