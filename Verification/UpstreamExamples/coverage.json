@@ -3026,16 +3026,15 @@
         "invariantMapping": "The process-scoped typeOK predicate is reused by TypeOK and Inv. Inv retains IInv clauses 1-5 directly and clause 7 through nxt family lookup. Clauses 6, 8, and 9 share one universal other-member predicate: the disjunction of their applicable antecedents implies the complete Before(self, other) body. This factoring avoids duplicate Before expressions while preserving each antecedent; it remains subject to generated execution and independent hosted validation."
       },
       "audit": "reference inputs audited",
-      "gap": "Both published configurations have SwiftTLA ports and pinned reference inputs. MCBakery's invariant-defined initial states and selected checks pass focused local diagnostics, but complete independent hosted graph and property comparisons are still required for the new candidate. The legacy BakeryN2Model remains to be removed after parity is proved; the family is incomplete.",
-      "legacyCleanupComplete": false,
+      "gap": "Both published configurations have SwiftTLA ports and pinned reference inputs. MCBakery has exact focused hosted comparisons and green ordinary CI on de8cb4ae. MCBoulanger parity and full-matrix admission remain outstanding; the family is incomplete.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/Bakery-Boulangerie/Bakery.tla",
           "role": "behavior dependency",
-          "reason": "This module contains the Bakery algorithm, safety invariants, ISpec, and proofs. The canonical BakeryModel selects Inv-defined initial states for MCBakery; the older BakeryN2Model remains a non-equivalent fixed-Init fixture pending cleanup. Complete hosted parity is not yet established.",
+          "reason": "This module contains the Bakery algorithm, safety invariants, ISpec, and proofs. The canonical BakeryModel selects Inv-defined initial states for MCBakery. Its generated TLA and native machine each have exact focused hosted parity with their independent TLC oracles on de8cb4ae; full-family admission remains outstanding.",
           "implementations": [
-            "Sources/UpstreamParity/CanonicalCorpus/Bakery.swift",
-            "Sources/UpstreamParity/Examples/Bakery.swift"
+            "Sources/UpstreamParity/CanonicalCorpus/Bakery.swift"
           ],
           "dispositionComplete": false
         },
@@ -3076,16 +3075,17 @@
           "module": "specifications/Bakery-Boulangerie/MCBakery.tla",
           "configuration": "specifications/Bakery-Boulangerie/MCBakery.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "de8cb4ae4281e07cab04d101a5e25f570a817aab",
           "capabilityAudit": {
             "moduleBlobSHA": "d9f40ecf2cb3cfb04e412dbe92265c803117766d",
             "configurationBlobSHA": "b0af6112a142d531d26c36dd06ff3b5dea258d74",
             "behaviorBlobSHA": "7f9329e1e3e9360b3939abb2713f638e7a2cbc72",
             "initialization": "Bakery.tla line 502 defines ISpec as Inv /\\ [][Next]_vars. Inv is TypeOK /\\ IInv, not the fixed initial assignments of Init. Initial states must range over the finite typed shared/local functions and all nine declared control labels, then satisfy IInv. A native port starting only at ncs with zero tickets is not equivalent.",
             "behavior": "The published configuration binds N=2 and MaxNat=2, substitutes NatOverride=0..MaxNat for Nat, and checks MutualExclusion, TypeOK, and Inv. ISpec has no fairness conjuncts. CHECK_DEADLOCK is explicitly FALSE, and the two commented temporal properties are not selected.",
-            "requiredCapability": "Typed invariant-defined initial-state selection, including compiler-owned process control locations, now feeds generated initial machines and TLA+ export from one model through InitialStates(satisfying:). The published MCBakery configuration remains unverified until independent hosted graph and property parity completes.",
+            "requiredCapability": "Typed invariant-defined initial-state selection, including compiler-owned process control locations, feeds generated initial machines and TLA+ export from one model through InitialStates(satisfying:). Both focused hosted parity paths and ordinary CI are green on de8cb4ae; full admission remains outstanding.",
             "criteria": ["AC-04", "AC-06", "AC-08", "AC-09", "AC-15", "AC-19"],
-            "scope": "The pinned input audit identified this capability. The new model, manifest case, and local configuration diagnostics implement it; no hosted initial-state count, complete graph match, or completion credit is claimed."
+            "scope": "The pinned input audit identified this capability. The canonical model, manifest case, and focused hosted comparisons establish 655200 complete initial states and exact graph/property parity on de8cb4ae. No full-matrix admission or family completion is claimed."
           },
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
@@ -3096,7 +3096,28 @@
               "caseID": "bakery"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "de8cb4ae4281e07cab04d101a5e25f570a817aab",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36407093411",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36407093411/artifacts/10963746794",
+              "artifactDigest": "sha256:f4c7c2ad06bd655e95a5bc4484f3c6a196a9d25f351eea2f478a83d5ec710ad4",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Focused generated-TLA versus pinned upstream TLC comparison is exact, including complete initial states, labeled graph, Inv, MutualExclusion, TypeOK, and disabled deadlock checking. The input-keyed TLC evidence originated at 130e319c; this run replayed it on de8cb4ae. Not full admission."
+            },
+            {
+              "sourceSHA": "de8cb4ae4281e07cab04d101a5e25f570a817aab",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36407092527",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36407092527/artifacts/10963777237",
+              "artifactDigest": "sha256:16abd41835d2ab83109c5f36ad0a4158affa60eedbd2289049c46e3a1dab7eef",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Focused native Swift versus generated-TLA TLC comparison is exact: 655200 initial states, 655200 states, 2748384 distinct labeled edges, and all three selected invariants satisfied. Native exploration took 39.28 seconds. Ordinary CI run 36407092553 passed on the same SHA. Not full admission."
+            }
+          ]
         },
         {
           "module": "specifications/Bakery-Boulangerie/MCBoulanger.tla",
@@ -3119,7 +3140,7 @@
         {
           "caseID": "bakery",
           "implementation": "Sources/UpstreamParity/CanonicalCorpus/Bakery.swift",
-          "reason": "The invariant-defined initial-state port and byte-identical pinned reference are registered. Focused local diagnostics pass; complete independent hosted comparisons and legacy cleanup remain required. No hosted completion credit."
+          "reason": "Both independent focused hosted comparisons and ordinary CI passed on de8cb4ae; the obsolete fixed-Init fixture has been removed. MCBoulanger and full-matrix admission remain required; no family completion credit."
         },
         {
           "caseID": "boulanger",
