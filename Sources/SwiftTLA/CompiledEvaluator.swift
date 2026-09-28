@@ -47,6 +47,7 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
     case recursionDepthExceeded(Int)
     case transitionPredicateRequiresGeneratedChecking
     case registersRequireGeneratedChecking
+    case printTRequiresGeneratedEvaluation
 
     package var description: String {
         switch self {
@@ -85,6 +86,8 @@ package enum EvalError: Error, CustomStringConvertible, Equatable, Sendable {
             return "Transition predicates require generated native checking with both states"
         case .registersRequireGeneratedChecking:
             return "Checking registers require the generated native run context"
+        case .printTRequiresGeneratedEvaluation:
+            return "PrintT requires a generated native evaluation with an output recorder"
         }
     }
 }
@@ -776,7 +779,7 @@ struct CompiledEvaluator: Sendable {
                     let body = expression.children[0]
 
                     tasks.append(.expression(body, scope))
-                case .integerSet, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .sequenceSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .setSum, .functionSet:
+                case .integerSet, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .printT, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .sequenceSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .sequenceFromFunction, .setSum, .functionSet:
                     schedule(expression.operation, expression.children)
 
                 }
@@ -806,6 +809,8 @@ extension CompiledOperation {
         switch self {
         case .nextState, .stutteringStep:
             throw EvalError.transitionPredicateRequiresGeneratedChecking
+        case .printT:
+            throw EvalError.printTRequiresGeneratedEvaluation
         case .assertView(let shape):
             guard operandCount == 1, let value = values.last else {
                 throw EvalError.invalidContinuation(availableValues: values.count)
@@ -1043,6 +1048,9 @@ extension CompiledOperation {
                 throw EvalError.expected(.set, actual: [value])
             }
             values.append(.tuple(CompiledValue.sorted(set)))
+        case .sequenceFromFunction:
+            let value = try popValue(from: &values)
+            values.append(.tuple(try sequenceElements(from: value)))
         case .setSum:
             let membersValue = try popValue(from: &values)
             let functionValue = try popValue(from: &values)

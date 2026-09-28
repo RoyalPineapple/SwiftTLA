@@ -216,7 +216,7 @@ package enum GeneratedTLCOracle {
         bundle: TLAModuleBundle, id: String, maximumStates: Int, timeout: TimeInterval,
         tools: ResolvedTLCToolchain, pin: TLCReferencePin, workRoot: URL,
         retained: URL, invocation: TLCInvocationKind, renderedActions: [RenderedAction],
-        process: TLCProcessAdapter
+        process: TLCProcessAdapter, captureEvaluations: Bool = false
     ) throws -> TLCExecutionOutcome {
         let work = workRoot.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: false)
@@ -231,6 +231,7 @@ package enum GeneratedTLCOracle {
             javaExecutable: tools.java, jar: tools.jar, bridgeJar: tools.bridgeJar,
             bundle: bundle, graphEvents: work.appendingPathComponent("events.bin"),
             traceOutput: work.appendingPathComponent("counterexample.json"),
+            evaluationOutput: captureEvaluations ? work.appendingPathComponent("evaluations.bin") : nil,
             workingDirectory: work, finiteGraphCase: launch, runID: UUID(),
             timeout: timeout, invocation: invocation, referenceArtifacts: tools.artifacts)
         return try process.run(request, retainingIn: retained)
@@ -276,11 +277,12 @@ package enum GeneratedTLCOracle {
     }
 
     package static func inputIdentity(bundle: TLAModuleBundle, pin: TLCReferencePin,
-        arguments: [String], invocation: TLCInvocationKind = .finiteGraph) throws -> String {
+        arguments: [String], invocation: TLCInvocationKind = .finiteGraph,
+        captureEvaluations: Bool = false) throws -> String {
         let sources = bundle.files.sorted { $0.name < $1.name }.map {
             ["name": $0.name, "sha256": SHA256.hex(Data($0.tla.utf8))]
         }
-        let input: [String: Any] = [
+        var input: [String: Any] = [
             "schema": "swifttla.tlc-oracle-input", "version": 1,
             "sources": sources, "cfgSHA256": SHA256.hex(Data(bundle.cfg.utf8)),
             "jarSHA256": pin.jarSHA256, "javaArchiveSHA256": pin.javaArchiveSHA256,
@@ -290,6 +292,7 @@ package enum GeneratedTLCOracle {
             "bridgeSourceHashes": pin.bridgeSourceHashes, "arguments": arguments,
             "invocation": invocation == .finiteGraph ? "finite-graph" : "property-check"
         ]
+        if captureEvaluations { input["captureEvaluations"] = true }
         let canonical = try JSONSerialization.data(withJSONObject: input, options: [.sortedKeys])
         return SHA256.hex(canonical)
     }

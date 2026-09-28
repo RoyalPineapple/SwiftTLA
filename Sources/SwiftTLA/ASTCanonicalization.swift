@@ -390,6 +390,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .tupleTail(let value): schedule("tupleTail", [value], environment: environment)
             case .domain(let value): schedule("domain", [value], environment: environment)
             case .sequenceFromSet(let value): schedule("sequence", [value], environment: environment)
+            case .sequenceFromFunction(let value): schedule("sequenceFromFunction", [value], environment: environment)
             case .ifThenElse(let condition, let then, let otherwise):
                 schedule("if", [condition, then, otherwise], environment: environment)
             case .and, .or:
@@ -463,6 +464,8 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
                 tasks.append(.bind(.choose, variable: variable, body: predicate, environment: environment))
                 tasks.append(.expression(set, environment: environment))
             case .enabledAction(let name): parts.append("enabled(\(name))")
+            case .printT(let value):
+                schedule([value], environment: environment) { "printT(\($0[0]))" }
             case .foldFunction(let operation, let initial, let sequence):
                 let (parameters, extended) = allocate(operation.parameters, environment: environment)
                 tasks.append(.finish(3) {

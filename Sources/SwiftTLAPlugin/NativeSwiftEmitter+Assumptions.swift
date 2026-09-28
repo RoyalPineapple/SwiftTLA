@@ -11,15 +11,29 @@ extension NativeSwiftEmitter {
             throw unsupported("assumption-only module with no state, actions, or selected state checks")
         }
         var declarations = try configurationDeclarations(includeStoredConfiguration: false)
+        declarations += try valueTypeDeclarations()
         let configured = !program.layout.parameters.isEmpty
         let parameterArgument = configured ? "configuration: Configuration" : ""
         let parameterCall = configured ? "configuration: configuration" : ""
         let substitutions = Dictionary(uniqueKeysWithValues: program.layout.parameters.map {
             ($0.binder, "configuration.`\($0.reference.name)`")
         })
+        printTOutputName = "_evaluatedValues"
+        defer { printTOutputName = nil }
+        let assumptionExpression = try expression(assumption.expression, state: "", substitutions: substitutions)
+        var pending = [assumption.expression]
+        var recordsOutput = false
+        while let candidate = pending.popLast() {
+            if case .printT = candidate.operation { recordsOutput = true; break }
+            pending.append(contentsOf: candidate.children)
+        }
         declarations += try nativeDeclarations("""
-        public static func checkAssumptions(\(parameterArgument)) throws -> Bool {
-            return \(try expression(assumption.expression, state: "", substitutions: substitutions))
+        public static func evaluateAssumptions(\(parameterArgument)) throws -> AssumptionEvaluation {
+            \(recordsOutput ? "var" : "let") _evaluatedValues: [TLAValue] = []
+            let satisfied = \(assumptionExpression)
+            return AssumptionEvaluation(
+                satisfied: satisfied,
+                evaluatedValues: _evaluatedValues)
         }
         """)
         let scenarios = try program.behavior.validationScenarios.map { scenario -> String in
@@ -39,8 +53,8 @@ extension NativeSwiftEmitter {
         public struct ValidationScenario: AssumptionValidationScenario {
             public let name: String
             \(configured ? "public let configuration: Configuration" : "")
-            public func checkAssumptions() throws -> Bool {
-                try \(model.typeName).checkAssumptions(\(parameterCall))
+            public func evaluateAssumptions() throws -> AssumptionEvaluation {
+                try \(model.typeName).evaluateAssumptions(\(parameterCall))
             }
             public func render() throws -> RenderedSpecification {
                 try \(model.typeName).render(\(parameterCall))

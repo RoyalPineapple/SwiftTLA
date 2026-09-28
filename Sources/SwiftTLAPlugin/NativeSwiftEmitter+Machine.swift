@@ -113,6 +113,12 @@ extension NativeSwiftEmitter {
             }
             """)
         }
+        declarations += try valueTypeDeclarations()
+        return declarations
+    }
+
+    func valueTypeDeclarations() throws -> [DeclSyntax] {
+        var declarations: [DeclSyntax] = []
         let modelValues = typeDeclarations.modelValueCases.sorted { $0.key < $1.key }
         if !modelValues.isEmpty {
             declarations += try nativeDeclarations("""

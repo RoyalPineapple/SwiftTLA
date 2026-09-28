@@ -20,6 +20,7 @@ struct NativeSwiftEmitter {
     private var hasDepthScope = false
     private var nextMembershipPredicate = 0
     var checkingContextName: String?
+    var printTOutputName: String?
 
     init(model: MacroCompilation, sharedTypes: NativeTypeDeclarations? = nil) {
         self.model = model
@@ -595,6 +596,11 @@ struct NativeSwiftEmitter {
             let after = try expression(id.children[0], state: "nextState.", substitutions: substitutions, activeFunctions: activeFunctions)
             let predicate = try expression(id.children[1], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
             return "((\(before) == \(after)) ? true : \(predicate))"
+        case .printT:
+            guard let printTOutputName else { throw unsupported("PrintT outside generated evaluation") }
+            let value = try expression(id.children[0], state: state, substitutions: substitutions,
+                activeFunctions: activeFunctions)
+            return "(try { () throws -> Bool in let printed = \(value); \(printTOutputName).append(printed.tlaValue); return true }())"
         case .nextState:
             guard state != "nextState." else { throw unsupported("nested successor-state read") }
             return try expression(id.children[0], state: "nextState.", substitutions: substitutions,
@@ -608,7 +614,7 @@ struct NativeSwiftEmitter {
             return try scalarExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .setLiteral, .tupleLiteral, .in, .subset, .union,
              .intersection, .setDifference, .cardinality, .integerRange, .setFilter,
-             .setMap, .forAll, .exists, .choose, .sequenceFromSet,
+             .setMap, .forAll, .exists, .choose, .sequenceFromSet, .sequenceFromFunction,
              .powerSet, .sequenceSet, .unionAll, .functionSet, .setSum:
             return try collectionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .foldFunction, .sequenceSelect, .tupleAccess, .tupleDynamicAccess, .tupleRemoving, .tuplePrefix,
@@ -864,6 +870,8 @@ struct NativeSwiftEmitter {
         case .sequenceFromSet:
             guard case .set(let element) = childType(0) else { throw unsupported("sequence from set") }
             return "(\(try emit(0)).sorted(by: \(try ordering(element))))"
+        case .sequenceFromFunction:
+            return "(try _NativeMachineOperations.sequenceElements(\(try emit(0))))"
         case .powerSet: return "(try _NativeMachineOperations.powerSet(\(try emit(0))))"
         case .sequenceSet: return "(try _NativeMachineOperations.sequenceSet(\(try emit(0))))"
         case .unionAll:

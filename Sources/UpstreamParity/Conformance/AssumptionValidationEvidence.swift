@@ -6,6 +6,7 @@ package struct NativeAssumptionReport: Codable, Sendable {
     package let caseID: String
     package let scenario: String
     package let verdict: ValidationVerdict
+    package let evaluatedValues: [String]
     package let moduleSHA256: String
     package let cfgSHA256: String
 }
@@ -15,6 +16,7 @@ package struct TLCAssumptionReport: Codable, Sendable {
     package let caseID: String
     package let scenario: String
     package let verdict: ValidationVerdict
+    package let evaluatedValues: [String]
     package let moduleSHA256: String
     package let cfgSHA256: String
     package let inputIdentity: String
@@ -37,16 +39,18 @@ package enum AssumptionValidationError: Error, Equatable {
     case invalidEvidence(String)
 }
 
-/// A state-free check compares the assumption verdict, never a fabricated graph.
+/// A state-free check compares the assumption verdict and complete evaluated values.
 package enum AssumptionValidationEvidence {
     package static func native(
         scenario: any AssumptionValidationScenario, id: String, to directory: URL
     ) throws -> NativeAssumptionReport {
         let rendered = try scenario.render()
         try requireAssumptionsOnly(rendered, id: id)
+        let evaluation = try scenario.evaluateAssumptions()
         let report = NativeAssumptionReport(
             schema: "swifttla.native-assumption", caseID: id, scenario: scenario.name,
-            verdict: try scenario.checkAssumptions() ? .satisfied : .violated,
+            verdict: evaluation.satisfied ? .satisfied : .violated,
+            evaluatedValues: try evaluation.evaluatedValues.map { try CanonicalValue($0).canonicalEncoding },
             moduleSHA256: SHA256.hex(Data(rendered.tlaBundle.tla.utf8)),
             cfgSHA256: SHA256.hex(Data(rendered.tlaBundle.cfg.utf8)))
         try write(report, in: directory, name: "report.json")
@@ -60,10 +64,11 @@ package enum AssumptionValidationEvidence {
         let rendered = try scenario.render()
         try requireAssumptionsOnly(rendered, id: id)
         let identity: [String: Any] = [
-            "schema": "swifttla.assumption-oracle-cache-v1",
+            "schema": "swifttla.assumption-oracle-cache-v2",
             "caseID": id, "scenario": scenario.name, "maximumStates": maximumStates,
             "input": try GeneratedTLCOracle.inputIdentity(bundle: rendered.tlaBundle, pin: pin,
-                arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck)
+                arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck,
+                captureEvaluations: true)
         ]
         return SHA256.hex(try JSONSerialization.data(withJSONObject: identity, options: [.sortedKeys]))
     }
@@ -84,14 +89,18 @@ package enum AssumptionValidationEvidence {
         let outcome = try GeneratedTLCOracle.run(
             bundle: rendered.tlaBundle, id: id, maximumStates: maximumStates,
             timeout: timeout, tools: tools, pin: pin, workRoot: work,
-            retained: retained, invocation: .propertyCheck, renderedActions: [], process: process)
+            retained: retained, invocation: .propertyCheck, renderedActions: [], process: process,
+            captureEvaluations: true)
+        let evaluatedValues = try capturedValues(in: retained)
         let report = TLCAssumptionReport(
             schema: "swifttla.tlc-assumption", caseID: id, scenario: scenario.name,
             verdict: try verdict(outcome, id: id),
+            evaluatedValues: evaluatedValues,
             moduleSHA256: SHA256.hex(Data(rendered.tlaBundle.tla.utf8)),
             cfgSHA256: SHA256.hex(Data(rendered.tlaBundle.cfg.utf8)),
             inputIdentity: try GeneratedTLCOracle.inputIdentity(bundle: rendered.tlaBundle,
-                pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck))
+                pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck,
+                captureEvaluations: true))
         try write(report, in: directory, name: "oracle.json", create: false)
         return report
     }
@@ -111,7 +120,16 @@ package enum AssumptionValidationEvidence {
         try verifyProcess(oracle.appendingPathComponent("tlc/tlc-process.json"),
             id: id, verdict: right.verdict, moduleSHA256: right.moduleSHA256,
             cfgSHA256: right.cfgSHA256)
-        let difference = left.verdict == right.verdict ? nil : "assumption verdict"
+        guard right.evaluatedValues == (try capturedValues(in: oracle.appendingPathComponent("tlc"))) else {
+            throw AssumptionValidationError.invalidEvidence("TLC evaluated values")
+        }
+        let difference: String? = if left.verdict != right.verdict {
+            "assumption verdict"
+        } else if left.evaluatedValues != right.evaluatedValues {
+            "evaluated values"
+        } else {
+            nil
+        }
         let report = AssumptionComparisonReport(
             schema: "swifttla.assumption-comparison", caseID: id,
             result: difference == nil ? "exact" : "different", assumptionCompared: true,
@@ -130,12 +148,14 @@ package enum AssumptionValidationEvidence {
         try requireReference(reference, id: id, moduleSHA256: expectedModuleSHA256,
             cfgSHA256: expectedCFGSHA256)
         let identity: [String: Any] = [
-            "schema": "swifttla.assumption-upstream-cache-v1", "caseID": id,
+            "schema": "swifttla.assumption-upstream-cache-v2", "caseID": id,
             "maximumStates": maximumStates, "expectedVerdict": expectedVerdict.rawValue,
             "generated": try GeneratedTLCOracle.inputIdentity(bundle: rendered.tlaBundle,
-                pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck),
+                pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck,
+                captureEvaluations: true),
             "reference": try GeneratedTLCOracle.inputIdentity(bundle: reference,
-                pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck)
+                pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck,
+                captureEvaluations: true)
         ]
         return SHA256.hex(try JSONSerialization.data(withJSONObject: identity, options: [.sortedKeys]))
     }
@@ -181,11 +201,13 @@ package enum AssumptionValidationEvidence {
         let generated = try GeneratedTLCOracle.run(
             bundle: rendered.tlaBundle, id: id, maximumStates: maximumStates, timeout: timeout,
             tools: tools, pin: pin, workRoot: work, retained: generatedOutput,
-            invocation: .propertyCheck, renderedActions: [], process: process)
+            invocation: .propertyCheck, renderedActions: [], process: process,
+            captureEvaluations: true)
         let upstream = try GeneratedTLCOracle.run(
             bundle: reference, id: id, maximumStates: maximumStates, timeout: timeout,
             tools: tools, pin: pin, workRoot: work, retained: referenceOutput,
-            invocation: .propertyCheck, renderedActions: [], process: process)
+            invocation: .propertyCheck, renderedActions: [], process: process,
+            captureEvaluations: true)
         let left = try verdict(generated, id: id)
         let right = try verdict(upstream, id: id)
         let generatedSHA = SHA256.hex(Data(rendered.tlaBundle.tla.utf8))
@@ -195,10 +217,14 @@ package enum AssumptionValidationEvidence {
         try verifyProcess(referenceOutput.appendingPathComponent("tlc-process.json"),
             id: id, verdict: right, moduleSHA256: expectedModuleSHA256,
             cfgSHA256: expectedCFGSHA256)
+        let generatedValues = try capturedValues(in: generatedOutput)
+        let upstreamValues = try capturedValues(in: referenceOutput)
         let difference: String? = if left != right {
             "assumption verdict"
         } else if left.rawValue != expectedVerdict.rawValue {
             "published assumption outcome"
+        } else if generatedValues != upstreamValues {
+            "evaluated values"
         } else {
             nil
         }
@@ -233,6 +259,11 @@ package enum AssumptionValidationEvidence {
         }
     }
 
+    private static func capturedValues(in directory: URL) throws -> [String] {
+        try TLCEvaluationOutput(reading: directory.appendingPathComponent("tlc-evaluation.bin"))
+            .values.map(\.canonicalEncoding)
+    }
+
     private static func verifyProcess(_ url: URL, id: String, verdict: ValidationVerdict,
         moduleSHA256: String, cfgSHA256: String) throws {
         let data = try Data(contentsOf: url)
@@ -240,6 +271,9 @@ package enum AssumptionValidationEvidence {
               process["caseID"] as? String == id,
               let invocation = process["invocation"] as? [String: Any],
               invocation["exitStatus"] as? Int == (verdict == .satisfied ? 0 : 10),
+              let arguments = invocation["arguments"] as? [String],
+              arguments.contains("org.swifttla.conformance.TLCEvaluationOutput"),
+              arguments.contains(where: { $0.hasPrefix("-Dswifttla.tlc.evaluation.path=") }),
               let inputs = process["inputs"] as? [[String: String]],
               inputs.contains(where: { $0["file"]?.hasSuffix(".tla") == true
                   && $0["sha256"] == moduleSHA256 }),

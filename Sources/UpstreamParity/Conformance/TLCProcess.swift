@@ -98,6 +98,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
   package let bundle: TLAModuleBundle
   package let graphEvents: URL
   package let traceOutput: URL
+  package let evaluationOutput: URL?
   package let workingDirectory: URL
   package let finiteGraphCase: FiniteGraphCase
   package let runID: UUID
@@ -112,6 +113,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
     bundle: TLAModuleBundle,
     graphEvents: URL,
     traceOutput: URL,
+    evaluationOutput: URL? = nil,
     workingDirectory: URL,
     finiteGraphCase: FiniteGraphCase,
     runID: UUID,
@@ -125,6 +127,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
     self.bundle = bundle
     self.graphEvents = graphEvents
     self.traceOutput = traceOutput
+    self.evaluationOutput = evaluationOutput
     self.workingDirectory = workingDirectory
     self.finiteGraphCase = finiteGraphCase
     self.runID = runID
@@ -161,9 +164,15 @@ package struct TLCProcessRequest: Equatable, Sendable {
     ] + (graphEvents.pathExtension == "gz" ? ["-Dswifttla.tlc.graph.compact-gzip=true"] : []) : []
     let graphDump = invocation == .finiteGraph
       ? ["-dump", "class,org.swifttla.conformance.LosslessStateWriter"] : []
+    let evaluationOptions = evaluationOutput.map {
+      ["-Dswifttla.tlc.evaluation.path=\($0.path)"]
+    } ?? []
+    let mainClass = evaluationOutput == nil
+      ? "tlc2.TLC" : "org.swifttla.conformance.TLCEvaluationOutput"
     let argumentGroups: [[String]] = [
       graphOptions,
-      ["-cp", "\(jar.path):\(bridgeJar.path)", "tlc2.TLC"],
+      evaluationOptions,
+      ["-cp", "\(jar.path):\(bridgeJar.path)", mainClass],
       graphDump,
       ["-dumpTrace", "json", traceOutput.path],
       finiteGraphCase.arguments,
@@ -368,6 +377,7 @@ package struct TLCProcessAdapter: Sendable {
     retainingIn directory: URL
   ) throws -> TLCExecutionOutcome {
     try RetainedFiles.createDirectory(directory, beneath: directory.deletingLastPathComponent())
+    try validateEvaluationOutput(for: request, retainingIn: directory)
     try clearTraceOutput(for: request, retainingIn: directory)
     let process: TLCProcessResult
     do {
@@ -378,6 +388,27 @@ package struct TLCProcessAdapter: Sendable {
     }
     try retain(request, process: process, in: directory)
     return TLCExecutionOutcome(process: process, invocation: request.invocation)
+  }
+
+  private func validateEvaluationOutput(
+    for request: TLCProcessRequest, retainingIn directory: URL
+  ) throws {
+    guard let target = request.evaluationOutput else { return }
+    let root = request.workingDirectory.resolvingSymlinksInPath().standardizedFileURL
+    let resolved = try RetainedFiles.resolve(target, beneath: root)
+    let retained = directory.resolvingSymlinksInPath().standardizedFileURL
+    let input = request.inputDirectory.resolvingSymlinksInPath().standardizedFileURL
+    let protected = [request.javaExecutable, request.jar, request.bridgeJar,
+                     request.graphEvents, request.traceOutput]
+      .map { $0.resolvingSymlinksInPath().standardizedFileURL }
+    guard request.invocation == .propertyCheck, resolved != root,
+          resolved != retained, !resolved.path.hasPrefix(retained.path + "/"),
+          resolved != input, !resolved.path.hasPrefix(input.path + "/"),
+          !protected.contains(resolved),
+          !FileManager.default.fileExists(atPath: target.path) else {
+      throw EvidenceFormatError.invalidField(record: target.path,
+          field: "evaluation output must be a new property-check working file")
+    }
   }
 
   private func clearTraceOutput(for request: TLCProcessRequest, retainingIn directory: URL) throws {
@@ -433,10 +464,11 @@ package struct TLCProcessAdapter: Sendable {
     default: "graph-events.jsonl"
     }
     let graphFiles = request.invocation == .finiteGraph ? [(request.graphEvents, graphName)] : []
-    for (source, name) in graphFiles + [(request.traceOutput, "counterexample.json")] {
+    let evaluationFiles = request.evaluationOutput.map { [($0, "tlc-evaluation.bin")] } ?? []
+    for (source, name) in graphFiles + evaluationFiles + [(request.traceOutput, "counterexample.json")] {
       guard FileManager.default.fileExists(atPath: source.path) else { continue }
       let destination = directory.appendingPathComponent(name)
-      if name == graphName {
+      if name == graphName || name == "tlc-evaluation.bin" {
         let root = request.workingDirectory.resolvingSymlinksInPath().standardizedFileURL
         let resolved = try RetainedFiles.resolve(source, beneath: root)
         let values = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
@@ -446,13 +478,13 @@ package struct TLCProcessAdapter: Sendable {
         guard values.isRegularFile == true, values.isSymbolicLink != true,
               resolved != root, !protected.contains(resolved),
               resolved != inputs, !resolved.path.hasPrefix(inputs.path + "/") else {
-          throw EvidenceFormatError.invalidField(record: source.path, field: "graph output must be a distinct regular working file")
+          throw EvidenceFormatError.invalidField(record: source.path, field: "tool output must be a distinct regular working file")
         }
       }
       if FileManager.default.fileExists(atPath: destination.path) {
         try FileManager.default.removeItem(at: destination)
       }
-      if name == graphName {
+      if name == graphName || name == "tlc-evaluation.bin" {
         // The retained file owns the complete stream; later runs can reuse the working path.
         try FileManager.default.moveItem(at: source, to: destination)
       } else {

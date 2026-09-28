@@ -308,6 +308,7 @@ public indirect enum StateExpr: Hashable, Sendable {
     case not(StateExpr)
 
     case ifThenElse(StateExpr, StateExpr, StateExpr)
+    case printT(StateExpr)
 
     case setLiteral([StateExpr])
     case `in`(StateExpr, StateExpr)
@@ -349,6 +350,7 @@ public indirect enum StateExpr: Hashable, Sendable {
     case enabledAction(String)
 
     case sequenceFromSet(StateExpr)
+    case sequenceFromFunction(StateExpr)
     case setSum(StateExpr, StateExpr)
     case functionSet(StateExpr, StateExpr)
     case foldFunction(FormalLambda, initial: StateExpr, sequence: StateExpr)
@@ -399,4 +401,9 @@ extension StateExpr: ExpressibleByBooleanLiteral {
 
 extension StateExpr: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) { self = .value(.string(value)) }
+}
+
+/// Evaluates and records one formal value, then yields TRUE like TLC's PrintT.
+public func PrintT<Value: TLAValueType>(_ value: some TypedExpression<Value>) -> Expr<Bool> {
+    Expr(.printT(value.stateExpr))
 }

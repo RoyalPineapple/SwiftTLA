@@ -683,6 +683,22 @@ public struct ZeroBasedSequence<Element: TLAValueType>: TLAValueType, Hashable, 
 public protocol FormalZeroBasedSequenceValue: TLAValueType {}
 extension ZeroBasedSequence: FormalZeroBasedSequenceValue {}
 
+/// Builds a one-based sequence by evaluating a typed expression at each index.
+///
+/// The generated TLA+ is `[i \in 1..length |-> body]`; the native value is an
+/// array in that same index order.
+public func SequenceMapping<Value: TLAValueType, Result: TypedExpression<Value>>(
+  length: some TypedExpression<Int>,
+  file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+  _ body: (WithValue<Int>) -> Result
+) -> Expr<[Value]> {
+  let binder = generatedBinderName(file: file, line: line, column: column)
+  let mapping = StateExpr.functionLiteral(
+    .integerRange(.int(1), length.stateExpr), binder,
+    body(WithValue(expression: .variable(binder))).stateExpr)
+  return Expr(.sequenceFromFunction(mapping))
+}
+
 /// All finite sequences over the element domain, with no length bound.
 public func Sequences<Domain: FormalSetValue>(
   of elements: some TypedExpression<Domain>
@@ -842,6 +858,14 @@ extension TypedExpression where ExpressionValue: FormalSetValue {
 }
 
 extension TypedExpression where ExpressionValue: FormalSequenceValue {
+  public func prepending(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<ExpressionValue> {
+    Expr(.tupleConcatenate(.tupleLiteral([element.stateExpr]), stateExpr))
+  }
+
+  public func prepending(_ element: ExpressionValue.Element) -> Expr<ExpressionValue> {
+    prepending(element.expr)
+  }
+
   public func appending(_ element: some TypedExpression<ExpressionValue.Element>) -> Expr<ExpressionValue> {
     Expr(.tupleAppend(stateExpr, element.stateExpr))
   }

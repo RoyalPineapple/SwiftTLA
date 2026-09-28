@@ -1221,6 +1221,7 @@ struct CompiledLowerer {
                     successorScope.allowsNextState = false
                     scheduleUnary(value, at: path, scope: successorScope, operation: .nextState, on: &tasks)
                 case .not(let value): scheduleUnary(value, at: path, scope: scope, operation: .not, on: &tasks)
+                case .printT(let value): scheduleUnary(value, at: path, scope: scope, operation: .printT, on: &tasks)
                 case .cardinality(let value): scheduleUnary(value, at: path, scope: scope, operation: .cardinality, on: &tasks)
                 case .powerSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .powerSet, on: &tasks)
                 case .sequenceSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .sequenceSet, on: &tasks)
@@ -1230,6 +1231,7 @@ struct CompiledLowerer {
                 case .tupleTail(let value): scheduleUnary(value, at: path, scope: scope, operation: .tupleTail, on: &tasks)
                 case .domain(let value): scheduleUnary(value, at: path, scope: scope, operation: .domain, on: &tasks)
                 case .sequenceFromSet(let value): scheduleUnary(value, at: path, scope: scope, operation: .sequenceFromSet, on: &tasks)
+                case .sequenceFromFunction(let value): scheduleUnary(value, at: path, scope: scope, operation: .sequenceFromFunction, on: &tasks)
                 case .add(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .add, on: &tasks)
                 case .subtract(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .subtract, on: &tasks)
                 case .multiply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .multiply, on: &tasks)

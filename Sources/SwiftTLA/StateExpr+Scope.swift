@@ -36,10 +36,10 @@ extension StateExpr {
                  .tupleAppend(let lhs, let rhs), .tupleConcatenate(let lhs, let rhs),
                  .functionApply(let lhs, let rhs), .functionSet(let lhs, let rhs):
                 schedule([lhs, rhs], bound: bound)
-            case .assertView(let value, _), .nextState(let value), .negate(let value), .not(let value), .cardinality(let value),
+            case .assertView(let value, _), .nextState(let value), .negate(let value), .not(let value), .printT(let value), .cardinality(let value),
                  .powerSet(let value), .sequenceSet(let value), .unionAll(let value), .tupleLength(let value),
                  .tupleHead(let value), .tupleTail(let value), .domain(let value),
-                 .sequenceFromSet(let value):
+                 .sequenceFromSet(let value), .sequenceFromFunction(let value):
                 pending.append((value, bound))
             case .ifThenElse(let condition, let then, let otherwise):
                 schedule([condition, then, otherwise], bound: bound)

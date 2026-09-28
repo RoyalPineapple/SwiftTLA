@@ -32,6 +32,7 @@ package enum CompiledOperation: Hashable, Sendable {
     case or
     case not
     case ifThenElse
+    case printT
     case setLiteral
     case `in`
     case subset
@@ -68,6 +69,7 @@ package enum CompiledOperation: Hashable, Sendable {
     case choose(BinderID)
     case enabledAction(ActionID)
     case sequenceFromSet
+    case sequenceFromFunction
     case setSum
     case functionSet
     case foldFunction([BinderID])
@@ -166,6 +168,9 @@ extension CompiledExpression {
     package static func ifThenElse(_ condition: Self, _ then: Self, _ otherwise: Self) -> Self {
         .init(operation: .ifThenElse, children: [condition, then, otherwise])
     }
+    package static func printT(_ value: Self) -> Self {
+        .init(operation: .printT, children: [value])
+    }
     package static func setLiteral(_ members: [Self]) -> Self {
         .init(operation: .setLiteral, children: members)
     }
@@ -195,6 +200,9 @@ extension CompiledExpression {
     }
     package static func functionLiteral(_ domain: Self, _ binder: BinderID, _ value: Self) -> Self {
         .init(operation: .functionLiteral(binder), children: [domain, value])
+    }
+    package static func sequenceFromFunction(_ function: Self) -> Self {
+        .init(operation: .sequenceFromFunction, children: [function])
     }
     package static func except(_ function: Self, _ key: Self, _ value: Self) -> Self {
         .init(operation: .except, children: [function, key, value])

@@ -845,8 +845,11 @@ extension ParserSession {
         case "Reachable":
             parseStateProperty(call, into: &components, reachability: true)
         case "Constraint", "Assume":
-            if call.arguments.count == 1, let argument = call.arguments.first,
-               let expression = decodeTypedFacadeValue(argument.expression, scope: sourceScope) {
+            let previousFailure = algorithmParseFailure
+            let expression = call.arguments.count == 1
+                ? call.arguments.first.flatMap { decodeTypedFacadeValue($0.expression, scope: sourceScope) }
+                : nil
+            if let expression {
                 if name == "Assume" {
                     components.assume = components.assume.map { .and($0, expression) } ?? expression
                 } else {
@@ -854,7 +857,8 @@ extension ParserSession {
                 }
             } else {
                 components.diagnostics.append(.init(
-                    message: "\(name) requires one supported state expression.",
+                    message: algorithmParseFailure != previousFailure
+                        ? algorithmParseFailure! : "\(name) requires one supported state expression.",
                     source: call
                 ))
             }

@@ -2317,6 +2317,9 @@ package struct CompiledTypeChecker: Sendable {
             let value = try checkOperand(expression.children[0])
             let predicate = try checkOperand(expression.children[1], expected: .bool)
             return try checkedType(.bool, expected: expected, children: [value, predicate])
+        case .printT:
+            let value = try checkOperand(expression.children[0])
+            return try checkedType(.bool, expected: expected, children: [value])
         case .value(let value):
             let type = try literal(value, expected: expected)
             return .init(type: type, computationType: type)
@@ -2336,6 +2339,13 @@ package struct CompiledTypeChecker: Sendable {
             let predicate = expression.children[1]
 
             return try inferSequenceSelection(sequence, binder: id, predicate: predicate, expected: expected)
+        case .sequenceFromFunction:
+            let element: CompiledValueType = if case .array(let item) = expected { item } else { .unknown }
+            let source = try checkOperand(expression.children[0], expected: .dictionary(.int, element))
+            guard case .dictionary(.int, let value) = source.resultType else {
+                throw CompiledValueType.diagnostic("sequence", "expected integer-indexed function")
+            }
+            return try checkedType(.array(value), expected: expected, children: [source])
         case .setSum:
             let function = expression.children[0]
             let domain = expression.children[1]

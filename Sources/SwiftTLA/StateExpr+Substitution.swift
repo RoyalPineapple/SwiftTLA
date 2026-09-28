@@ -165,6 +165,8 @@ extension StateExpr {
             let scoped = underBinder(binder, body: predicate)
             return .choose(sub(set), scoped.name, scoped.body)
         case .sequenceFromSet(let s): return .sequenceFromSet(sub(s))
+        case .sequenceFromFunction(let function): return .sequenceFromFunction(sub(function))
+        case .printT(let value): return .printT(sub(value))
         case .setSum(let f, let s): return .setSum(sub(f), sub(s))
         case .functionSet(let d, let r): return .functionSet(sub(d), sub(r))
         case .foldFunction(let operation, let initial, let sequence):
@@ -311,6 +313,8 @@ extension StateExpr {
             case .exists(let set, let name, let body): return .exists(visit(set), name, visitUnderBindings([name], body))
             case .choose(let set, let name, let body): return .choose(visit(set), name, visitUnderBindings([name], body))
             case .sequenceFromSet(let value): return .sequenceFromSet(visit(value))
+            case .sequenceFromFunction(let function): return .sequenceFromFunction(visit(function))
+            case .printT(let value): return .printT(visit(value))
             case .setSum(let function, let set): return .setSum(visit(function), visit(set))
             case .functionSet(let domain, let range): return .functionSet(visit(domain), visit(range))
             case .foldFunction(let operation, let initial, let sequence):

@@ -38,3 +38,32 @@ public func LetRec<
         body(recursion).stateExpr
     ))
 }
+
+/// Defines a recursive operator without restricting its argument domain.
+///
+/// The definition must terminate for every argument reached by its caller.
+public func LetRec<
+    Input: TLAValueType,
+    Output: TLAValueType,
+    Definition: TypedExpression,
+    Result: TypedExpression
+>(
+    _ name: String,
+    taking _: Input.Type,
+    _ definition: (LocalRecursion<Input, Output>, WithValue<Input>) -> Definition,
+    file: StaticString = #fileID,
+    line: UInt = #line,
+    column: UInt = #column,
+    in body: (LocalRecursion<Input, Output>) -> Result
+) -> Expr<Result.ExpressionValue> where Definition.ExpressionValue == Output {
+    let inputName = generatedBinderName(file: file, line: line, column: column)
+    let recursion = LocalRecursion<Input, Output>(name: name)
+    return Expr(.letIn(
+        [LocalOperator(
+            name,
+            parameters: [inputName],
+            body: definition(recursion, WithValue(expression: .variable(inputName))).stateExpr
+        )],
+        body(recursion).stateExpr
+    ))
+}

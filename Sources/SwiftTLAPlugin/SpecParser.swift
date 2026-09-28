@@ -108,11 +108,15 @@ final class ParserSession {
             Self(bindings: bindings + [Binding(sourceName: sourceName, meaning: .value(value), shape: shape)])
         }
 
-        func extending(recursiveOperator sourceName: String, named name: String) -> Self {
+        func extending(
+            recursiveOperator sourceName: String,
+            named name: String,
+            resultShape: CompiledValueType?
+        ) -> Self {
             Self(bindings: bindings + [Binding(
                 sourceName: sourceName,
                 meaning: .recursiveOperator(name),
-                shape: nil
+                shape: resultShape
             )])
         }
 
@@ -208,8 +212,6 @@ final class ParserSession {
               let metatype = inputType.as(MemberAccessExprSyntax.self),
               let inputSpelling = metatype.base?.trimmedDescription,
               let inputShape = try? sourceTypeResolver.resolve(inputSpelling),
-              let domainSyntax = call.arguments.first(where: { $0.label?.text == "over" })?.expression,
-              let domain = decodeTypedFacadeValue(domainSyntax, scope: scope),
               let definition = call.arguments.dropFirst().first(where: { $0.label == nil })?.expression.as(ClosureExprSyntax.self),
               let body = call.arguments.first(where: { $0.label?.text == "in" })?.expression.as(ClosureExprSyntax.self),
               definition.statements.count == 1,
@@ -221,18 +223,32 @@ final class ParserSession {
         let definitionParameters = closureParameterNames(in: definition)
         let bodyParameters = closureParameterNames(in: body)
         guard definitionParameters.count == 2, bodyParameters.count == 1 else { return nil }
+        let resultShape: CompiledValueType? = { () -> CompiledValueType? in
+            guard case .parameterClause(let clause) = definition.signature?.parameterClause,
+                  let parameterType = clause.parameters.first?.type?.as(IdentifierTypeSyntax.self),
+                  parameterType.name.text == "LocalRecursion",
+                  let arguments = parameterType.genericArgumentClause?.arguments,
+                  arguments.count == 2
+            else { return nil }
+            return try? sourceTypeResolver.resolve(
+                arguments[arguments.index(after: arguments.startIndex)].argument.trimmedDescription)
+        }()
+
+        let domainSyntax = call.arguments.first(where: { $0.label?.text == "over" })?.expression
+        let domain = domainSyntax.flatMap { decodeTypedFacadeValue($0, scope: scope) }
+        guard domainSyntax == nil || domain != nil else { return nil }
 
         let inputName = definitionParameters[1]
         let definitionScope = scope
-            .extending(recursiveOperator: definitionParameters[0], named: name)
+            .extending(recursiveOperator: definitionParameters[0], named: name, resultShape: resultShape)
             .extending(binding: inputName, to: .variable(inputName), shape: inputShape)
         let bodyScope = scope.extending(recursiveOperator: bodyParameters[0],
-            named: name)
+            named: name, resultShape: resultShape)
         guard let decodedDefinition = decodeTypedFacadeValue(
             definitionExpression, scope: definitionScope
         ) else {
             algorithmParseFailure = algorithmParseFailure
-                ?? "LetRec '\(name)' could not decode its bounded recursive body."
+                ?? "LetRec '\(name)' could not decode its recursive body."
             return nil
         }
         guard let decodedBody = decodeTypedFacadeValue(bodyExpression, scope: bodyScope) else {
@@ -650,7 +666,11 @@ final class ParserSession {
             let domainSyntax = argument.expression
             guard let domain = finiteAlgorithmDomain(domainSyntax).map({
                 StateExpr.setLiteral($0.values.map(StateExpr.value))
-            }) ?? decodeTypedFacadeValue(domainSyntax, scope: scope) else { return nil }
+            }) ?? decodeTypedFacadeValue(domainSyntax, scope: scope) else {
+                algorithmParseFailure = algorithmParseFailure
+                    ?? "\(name) could not decode domain '\(domainSyntax.trimmedDescription)'."
+                return nil
+            }
             let sourceName = parameters.isEmpty ? "$\(index)" : parameters[index]
             let binder = sourceName.hasPrefix("$") || sourceName == "_" || scope.containsBinding(named: sourceName)
                 ? generatedBinderName(line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset), column: UInt(index))
@@ -675,7 +695,10 @@ final class ParserSession {
         } else {
             return nil
         }
-        guard let bodySyntax, var predicate = decodeTypedFacadeValue(bodySyntax, scope: bodyScope) else { return nil }
+        guard let bodySyntax, var predicate = decodeTypedFacadeValue(bodySyntax, scope: bodyScope) else {
+            algorithmParseFailure = algorithmParseFailure ?? "\(name) could not decode its predicate."
+            return nil
+        }
         for binding in bindings.reversed() {
             predicate = name == "ForAll"
                 ? .forAll(binding.domain, binding.name, predicate)
@@ -801,6 +824,15 @@ final class ParserSession {
             return .functionApply(function, argument)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
+           compilerGrammarName(in: call.calledExpression) == "PrintT",
+           call.arguments.count == 1, call.arguments.first?.label == nil,
+           call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+           let value = call.arguments.first.flatMap({
+               decodeTypedFacadeValue($0.expression, scope: scope)
+           }) {
+            return .printT(value)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            call.arguments.isEmpty,
            let access = call.calledExpression.as(MemberAccessExprSyntax.self),
            let baseSyntax = access.base,
@@ -873,6 +905,22 @@ final class ParserSession {
            let lower = decodeTypedFacadeValue(lowerSyntax, scope: scope),
            let upper = decodeTypedFacadeValue(upperSyntax, scope: scope) {
             return .integerRange(lower, upper)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SequenceMapping",
+           let lengthSyntax = call.arguments.first(where: { $0.label?.text == "length" })?.expression,
+           let length = decodeTypedFacadeValue(lengthSyntax, scope: scope),
+           let closure = call.trailingClosure,
+           let parameter = closureParameterNames(in: closure).first,
+           closureParameterNames(in: closure).count == 1,
+           closure.statements.count == 1,
+           case .expr(let bodySyntax) = closure.statements.first?.item {
+            let binder = generatedBinderName(
+                line: UInt(closure.positionAfterSkippingLeadingTrivia.utf8Offset), column: 0)
+            let bodyScope = scope.extending(binding: parameter, to: .variable(binder), shape: .int)
+            guard let body = decodeTypedFacadeValue(bodySyntax, scope: bodyScope) else { return nil }
+            return .sequenceFromFunction(
+                .functionLiteral(.integerRange(.int(1), length), binder, body))
         }
         // `OneOf` alternatives retain their underlying TLA+ value.
         if let call = expression.as(FunctionCallExprSyntax.self),
@@ -961,18 +1009,21 @@ final class ParserSession {
            call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "If",
            let conditionSyntax = call.arguments.first?.expression,
            let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
-           let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
-           let condition = decodeTypedFacadeValue(conditionSyntax, scope: scope),
-           let thenValue = decodeTypedFacadeValue(
-                thenSyntax,
-                scope: scope,
-                expectedEnumType: expectedEnumType
-           ),
-           let elseValue = decodeTypedFacadeValue(
-                elseSyntax,
-                scope: scope,
-                expectedEnumType: expectedEnumType
-           ) {
+           let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression {
+            guard let condition = decodeTypedFacadeValue(conditionSyntax, scope: scope) else {
+                algorithmParseFailure = algorithmParseFailure ?? "If could not decode its condition."
+                return nil
+            }
+            guard let thenValue = decodeTypedFacadeValue(
+                thenSyntax, scope: scope, expectedEnumType: expectedEnumType) else {
+                algorithmParseFailure = algorithmParseFailure ?? "If could not decode its then value."
+                return nil
+            }
+            guard let elseValue = decodeTypedFacadeValue(
+                elseSyntax, scope: scope, expectedEnumType: expectedEnumType) else {
+                algorithmParseFailure = algorithmParseFailure ?? "If could not decode its else value."
+                return nil
+            }
             return .ifThenElse(condition, thenValue, elseValue)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
@@ -1264,6 +1315,11 @@ final class ParserSession {
                   let element = decodeTypedFacadeValue(elementSyntax, scope: scope, expectedEnumType: elementEnumType)
             else { return nil }
             return .tupleAppend(base, element)
+        case "prepending":
+            guard let elementSyntax = call.arguments.first?.expression,
+                  let element = decodeTypedFacadeValue(elementSyntax, scope: scope, expectedEnumType: elementEnumType)
+            else { return nil }
+            return .tupleConcatenate(.tupleLiteral([element]), base)
         case "concatenating":
             guard let otherSyntax = call.arguments.first?.expression,
                   let other = decodeTypedFacadeValue(otherSyntax, scope: scope)
@@ -1297,13 +1353,20 @@ final class ParserSession {
             else { return nil }
             return .partialFunctionOverriding(base, key: selection.selector, value: value)
         case "filtering", "mapping", "flatMapping":
-            guard let closure = collectionClosure(in: call),
-                  let expression = decodeTypedFacadeValue(
-                    closure.body,
-                    scope: scope.extending(binding: closure.sourceName, to: .variable(closure.binder),
-                        shape: typedFacadeValueType(baseSyntax, scope: scope)?.selectedElement)
-                  )
-            else { return nil }
+            guard let closure = collectionClosure(in: call) else {
+                algorithmParseFailure = algorithmParseFailure
+                    ?? "\(access.declName.baseName.sourceIdentifierName) requires one typed closure."
+                return nil
+            }
+            guard let expression = decodeTypedFacadeValue(
+                closure.body,
+                scope: scope.extending(binding: closure.sourceName, to: .variable(closure.binder),
+                    shape: typedFacadeValueType(baseSyntax, scope: scope)?.selectedElement)
+            ) else {
+                algorithmParseFailure = algorithmParseFailure
+                    ?? "\(access.declName.baseName.sourceIdentifierName) could not decode its body."
+                return nil
+            }
             switch access.declName.baseName.sourceIdentifierName {
             case "filtering": return .setFilter(base, closure.binder, expression)
             case "flatMapping": return .unionAll(.setMap(expression, closure.binder, base))
@@ -1661,6 +1724,21 @@ final class ParserSession {
             }
         }
         guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
+        if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
+           scope.recursiveOperator(for: reference) != nil {
+            return scope.shape(for: reference)
+        }
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           call.arguments.isEmpty,
+           let base = member.base,
+           case .tuple(let elements) = typedFacadeValueType(base, scope: scope) {
+            switch member.declName.baseName.sourceIdentifierName {
+            case "first": return elements.first
+            case "second": return elements.count > 1 ? elements[1] : nil
+            default: break
+            }
+        }
+        if compilerGrammarName(in: call.calledExpression) == "PrintT" { return .bool }
         if compilerGrammarName(in: call.calledExpression) == "IntRange" { return .set(.int) }
         if compilerGrammarName(in: call.calledExpression) == "Select",
            let candidates = call.arguments.first(where: { $0.label?.text == "from" })?.expression {
@@ -1721,6 +1799,13 @@ final class ParserSession {
             case "Subsets", "NonEmptySubsets": return .set(.set(element ?? .unknown))
             case "Sequences", "SortedSequences": return .set(.array(element ?? .unknown))
             case "ZeroBasedSequences": return .set(.dictionary(.int, element ?? .unknown))
+            case "SequenceMapping":
+                guard let closure = call.trailingClosure,
+                      let parameter = closureParameterNames(in: closure).first,
+                      closure.statements.count == 1,
+                      case .expr(let body) = closure.statements.first?.item else { return nil }
+                let bodyScope = scope.extending(binding: parameter, to: .variable(parameter), shape: .int)
+                return typedFacadeValueType(body, scope: bodyScope).map(CompiledValueType.array)
             default: break
             }
         }
@@ -1741,7 +1826,7 @@ final class ParserSession {
             return typedFacadeValueType(base, scope: scope)
         }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
-           ["appending", "concatenating", "selecting", "filtering", "union", "intersection", "subtracting", "inserting", "removing", "updating", "overriding"].contains(member.declName.baseName.sourceIdentifierName),
+           ["prepending", "appending", "concatenating", "selecting", "filtering", "union", "intersection", "subtracting", "inserting", "removing", "updating", "overriding"].contains(member.declName.baseName.sourceIdentifierName),
            let base = member.base {
             return typedFacadeValueType(base, scope: scope)
         }
@@ -2024,7 +2109,7 @@ final class ParserSession {
         let selfExpr = base.flatMap { decodeStateExpr($0) }
         switch methodName {
         case "isIn", "contains", "union", "intersection", "subtracting", "isSubset", "applying",
-             "filtering", "mapping", "appending", "concatenating", "integerDivided":
+             "filtering", "mapping", "prepending", "appending", "concatenating", "integerDivided":
             guard let selfExpr, let arg = args.first?.expression, let argExpr = decodeStateExpr(arg) else { return nil }
             switch methodName {
             case "isIn": return .in(selfExpr, argExpr)
@@ -2037,6 +2122,7 @@ final class ParserSession {
             case "filtering": return .setFilter(selfExpr, generatedBinderName(), argExpr)
             case "mapping": return .setMap(argExpr, generatedBinderName(), selfExpr)
             case "appending": return .tupleAppend(selfExpr, argExpr)
+            case "prepending": return .tupleConcatenate(.tupleLiteral([argExpr]), selfExpr)
             case "concatenating": return .tupleConcatenate(selfExpr, argExpr)
             default: return .integerDivide(selfExpr, argExpr)
             }

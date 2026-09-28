@@ -975,6 +975,28 @@
       "moduleSHA256": "82c5c8f9390d51c7f3e397badd51fdbf7d36c46a02a45249f5b76213ebac7251",
       "cfgSHA256": "54556c1c0ee9732b0602292ed53e61d545519096dff8c4dfe8fbdcf56e93eb1f",
       "timeoutSeconds": 1800
+    },
+    {
+      "id": "stones-0",
+      "sourceModel": "stones",
+      "scenario": "Stones",
+      "comparisonMode": "assumptions-only",
+      "assumptionExpectation": "satisfied",
+      "module": "stones/Stones.tla",
+      "configuration": "stones/Stones.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Stones/Stones.tla",
+        "sha256": "76099e8a5c9c85806fd881b23eb09fc958d402f5e0c3d04653fbfbb2d8996eed"
+      },
+      "exploration": {
+        "maximumStateLimit": 1,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "76099e8a5c9c85806fd881b23eb09fc958d402f5e0c3d04653fbfbb2d8996eed",
+      "cfgSHA256": "243cfe7d5175e0858921aa80de50cd44b5c278133a4214d993c1a052ae87429b",
+      "timeoutSeconds": 600
     }
   ]
 }

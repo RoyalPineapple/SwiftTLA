@@ -327,7 +327,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             case .coffeeCan:
                 scenarios = try CoffeeCanModel.validationScenarios()
             default:
-                guard scenario == nil || sourceModel == .sumsEven else {
+                guard scenario == nil || sourceModel == .sumsEven || sourceModel == .stones else {
                     throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
                 }
                 return nil
@@ -340,8 +340,13 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         package func resolveAssumptionScenario() throws -> (any AssumptionValidationScenario)? {
-            guard sourceModel == .sumsEven else { return nil }
-            let matches = try SumsEvenModel.validationScenarios().filter { $0.name == scenario }
+            let scenarios: [any AssumptionValidationScenario]
+            switch sourceModel {
+            case .sumsEven: scenarios = try SumsEvenModel.validationScenarios()
+            case .stones: scenarios = try StonesModel.validationScenarios()
+            default: return nil
+            }
+            let matches = scenarios.filter { $0.name == scenario }
             guard matches.count == 1 else {
                 throw EvidenceFormatError.invalidField(record: id, field: "model-owned assumption scenario")
             }
@@ -352,7 +357,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             guard comparisonMode == .exhaustive || scenario != nil else {
                 throw EvidenceFormatError.invalidField(record: id, field: "non-exhaustive comparison requires a model-owned scenario")
             }
-            guard (comparisonMode == .assumptionsOnly) == (sourceModel == .sumsEven) else {
+            guard (comparisonMode == .assumptionsOnly) == (sourceModel == .sumsEven || sourceModel == .stones) else {
                 throw EvidenceFormatError.invalidField(record: id, field: "assumption comparison mode")
             }
             guard (comparisonMode == .assumptionsOnly) == (assumptionExpectation != nil) else {
@@ -438,6 +443,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case stringLiterals = "string-literals"
     case actionReferences = "action-references"
     case sumsEven = "sums-even"
+    case stones
 
     package func nativeRun(rendered: RenderedSpecification, checkingDeadlock: Bool,
         scenario: (any ModelValidationScenario)? = nil, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {
@@ -456,7 +462,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .kvsnap: return try explore(KVsnapModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
-        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan, .sumsEven:
+        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan, .sumsEven, .stones:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
@@ -473,6 +479,11 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .actionReferences: return try ActionReferencesModel.render()
         case .sumsEven:
             guard let scenario = try SumsEvenModel.validationScenarios().first else {
+                throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned assumption scenario")
+            }
+            return try scenario.render()
+        case .stones:
+            guard let scenario = try StonesModel.validationScenarios().first else {
                 throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned assumption scenario")
             }
             return try scenario.render()

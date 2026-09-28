@@ -71,10 +71,21 @@ public protocol ModelValidationScenario: Sendable {
     var formalPropertyNames: [Property: String] { get }
 }
 
+/// The product result for a configured module with no state machine.
+public struct AssumptionEvaluation: Sendable {
+    public let satisfied: Bool
+    public let evaluatedValues: [TLAValue]
+
+    public init(satisfied: Bool, evaluatedValues: [TLAValue]) {
+        self.satisfied = satisfied
+        self.evaluatedValues = evaluatedValues
+    }
+}
+
 /// A configured module that evaluates assumptions but declares no state machine.
 public protocol AssumptionValidationScenario: Sendable {
     var name: String { get }
-    func checkAssumptions() throws -> Bool
+    func evaluateAssumptions() throws -> AssumptionEvaluation
     func render() throws -> RenderedSpecification
 }
 

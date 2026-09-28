@@ -111,6 +111,17 @@ private struct GeneratedTopLevelTypedFormalDefinitionModel {
 
 @Suite("Local TLA+ operators")
 struct LocalOperatorTests {
+  @Test("unbounded typed recursion runs in the generated checker and exports as a recursive operator")
+  func generatedUnboundedLocalRecursion() throws {
+    let scenario = try #require(UnboundedLocalRecursionFixture.validationScenarios().first)
+    #expect(try scenario.evaluateAssumptions().satisfied)
+    let rendered = try scenario.render().tlaBundle.tla
+    let declaration = try #require(rendered.split(separator: "\n").first { $0.hasPrefix("RECURSIVE ") })
+    let name = try #require(declaration.dropFirst("RECURSIVE ".count).split(separator: "(").first)
+    #expect(rendered.contains("\(name)(number) =="))
+    #expect(rendered.contains("\(name)(4) = 10"))
+  }
+
   @Test("LET result types follow the body independently of recursive output")
   func localRecursionPreservesBodyResultType() throws {
     let predicate: Expr<Bool> = LetRec("Constant", over: IntRange(0, through: 1), taking: Int.self,
