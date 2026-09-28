@@ -336,6 +336,32 @@ State constraints select states for exploration. They do not disable application
 transitions or resolve an ambiguous action. Exploration retains invariant witnesses
 outside the constraint, even though those states are absent from its transition graph.
 
+## Evaluate a module without states
+
+A module with only constants and assumptions has no machine graph. Its model-owned
+`Validation` scenarios provide typed constant bindings. Each scenario has an
+`evaluateAssumptions()` method and a `render()` method.
+
+`evaluateAssumptions()` returns an `AssumptionEvaluation`. Its `satisfied` value
+reports the assumption result. Its `evaluatedValues` array contains each value
+recorded by an evaluated `PrintT` call, in evaluation order. `PrintT` returns
+true. A skipped branch does not record a value. These product APIs need no TLC
+installation or upstream corpus.
+
+The [printed-assumption fixture](../Tests/SwiftTLATests/AssumptionOnlyValidationFixtures.swift)
+shows both a solution branch and a fallback branch. The
+[Stones model](../Sources/UpstreamParity/Examples/Stones.swift) uses the same API
+for a recursive puzzle. `LetRec(_:taking:_:in:)` defines a typed recursive
+operator without a domain restriction. If each call must satisfy a finite
+domain, use `LetRec(_:over:taking:_:in:)`. The recursion must terminate for
+each argument that the model reaches.
+
+`SequenceMapping(length:_:)` builds a one-based formal sequence. Its generated
+Swift value is an array in the same order. `prepending(_:)` puts one value at
+the start of a typed sequence. The
+[sequence test](../Tests/SwiftTLATests/SequenceMappingTests.swift)
+compares the native value with its TLA+ output.
+
 ## API reference
 
 | Name | Role |
@@ -350,3 +376,6 @@ outside the constraint, even though those states are absent from its transition 
 | Generated `isEnabled(_:)` | Tests whether one typed action is currently permitted. |
 | Generated `Actor` | Serializes access to one generated machine. |
 | Generated `enabledActions()` | Lists the typed actions enabled by the current state. |
+| Generated `validationScenarios()` | Lists the model-owned configurations. |
+| Scenario `evaluateAssumptions()` | Returns the verdict and evaluated `PrintT` values for a state-free module. |
+| Scenario `render()` | Exports TLA+ and configuration from the same model. |
