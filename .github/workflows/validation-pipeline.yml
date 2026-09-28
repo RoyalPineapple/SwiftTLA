@@ -18,6 +18,10 @@ on:
         description: One case or scenario ID for a focused candidate diagnostic (empty runs all)
         type: string
         default: ''
+      profile_native:
+        description: Sample the native checker during one focused candidate diagnostic
+        type: boolean
+        default: false
       replay_run_id:
         description: Prior hosted run ID whose retained evidence is replayed without either checker
         type: string
@@ -113,6 +117,8 @@ jobs:
       CASE_ID: ${{ matrix.case }}
       FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
       SWIFTTLA_ORACLE_TIMEOUT_SECONDS: '1800'
+      PROFILE_NATIVE: ${{ inputs.profile_native && 'true' || 'false' }}
+      FOCUSED_CASE: ${{ inputs.case_id }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -153,8 +159,31 @@ jobs:
           set -o pipefail
           mkdir -p .build/validation-evidence
           git rev-parse HEAD > .build/validation-evidence/source-sha.txt
-          /usr/bin/time -l .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
-            --output .build/validation-evidence/native --maximum-states 10000000
+          if [ "$PROFILE_NATIVE" = true ]; then
+            test "$ADMISSION_MODE" = candidate
+            test "$FOCUSED_CASE" = "$CASE_ID"
+            /usr/bin/time -l .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
+              --output .build/validation-evidence/native --maximum-states 10000000 &
+            timed_pid=$!
+            sleep 90
+            native_pid=$(pgrep -P "$timed_pid" -f 'tlc-validate native run' | head -n 1 || true)
+            if [ -z "$native_pid" ]; then
+              wait "$timed_pid" || true
+              echo 'Native checker process was unavailable for sampling' >&2
+              exit 1
+            fi
+            mkdir -p .build/validation-evidence/native-profiles
+            sample_status=0
+            sample "$native_pid" 20 5 \
+              -file ".build/validation-evidence/native-profiles/$CASE_ID.sample.txt" || sample_status=$?
+            native_status=0
+            wait "$timed_pid" || native_status=$?
+            test "$sample_status" -eq 0
+            test "$native_status" -eq 0
+          else
+            /usr/bin/time -l .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
+              --output .build/validation-evidence/native --maximum-states 10000000
+          fi
           jq -c . ".build/validation-evidence/native/$CASE_ID/machine.profile.json"
       - name: Validate generated TLA with TLC
         if: steps.oracle-cache.outputs.cache-hit != 'true'
