@@ -225,8 +225,10 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package enum ComparisonMode: String, Decodable, Sendable {
             case exhaustive
             case decisiveCounterexample = "decisive-counterexample"
+            case assumptionsOnly = "assumptions-only"
         }
         package let comparisonMode: ComparisonMode
+        package let assumptionExpectation: ValidationExpectation?
         package let sourceModel: FiniteGraphSourceModel
         package let scenario: String?
         package let id: String
@@ -241,7 +243,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package let timeoutSeconds: TimeInterval
 
         private enum CodingKeys: String, CodingKey, CaseIterable {
-            case id, sourceModel, scenario, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration, timeoutSeconds, comparisonMode
+            case id, sourceModel, scenario, module, configuration, imports, dependencies, sourceInput, moduleSHA256, cfgSHA256, exploration, timeoutSeconds, comparisonMode, assumptionExpectation
         }
 
         package struct Dependency: Decodable, Sendable {
@@ -264,6 +266,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             id = try container.decode(String.self, forKey: .id)
             sourceModel = try container.decode(FiniteGraphSourceModel.self, forKey: .sourceModel)
             comparisonMode = try container.decodeIfPresent(ComparisonMode.self, forKey: .comparisonMode) ?? .exhaustive
+            assumptionExpectation = try container.decodeIfPresent(ValidationExpectation.self, forKey: .assumptionExpectation)
             scenario = try container.decodeIfPresent(String.self, forKey: .scenario)
             module = try container.decode(String.self, forKey: .module)
             configuration = try container.decode(String.self, forKey: .configuration)
@@ -324,7 +327,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             case .coffeeCan:
                 scenarios = try CoffeeCanModel.validationScenarios()
             default:
-                guard scenario == nil else {
+                guard scenario == nil || sourceModel == .sumsEven else {
                     throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
                 }
                 return nil
@@ -336,9 +339,24 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             return matches[0]
         }
 
+        package func resolveAssumptionScenario() throws -> (any AssumptionValidationScenario)? {
+            guard sourceModel == .sumsEven else { return nil }
+            let matches = try SumsEvenModel.validationScenarios().filter { $0.name == scenario }
+            guard matches.count == 1 else {
+                throw EvidenceFormatError.invalidField(record: id, field: "model-owned assumption scenario")
+            }
+            return matches[0]
+        }
+
         private func validate() throws {
             guard comparisonMode == .exhaustive || scenario != nil else {
-                throw EvidenceFormatError.invalidField(record: id, field: "decisive comparison requires a model-owned scenario")
+                throw EvidenceFormatError.invalidField(record: id, field: "non-exhaustive comparison requires a model-owned scenario")
+            }
+            guard (comparisonMode == .assumptionsOnly) == (sourceModel == .sumsEven) else {
+                throw EvidenceFormatError.invalidField(record: id, field: "assumption comparison mode")
+            }
+            guard (comparisonMode == .assumptionsOnly) == (assumptionExpectation != nil) else {
+                throw EvidenceFormatError.invalidField(record: id, field: "assumption expectation")
             }
             let allowedIDCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-_")
             guard !id.isEmpty, id != "all", id.unicodeScalars.allSatisfy(allowedIDCharacters.contains) else {
@@ -419,6 +437,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case diningPhilosophers = "dining-philosophers"
     case stringLiterals = "string-literals"
     case actionReferences = "action-references"
+    case sumsEven = "sums-even"
 
     package func nativeRun(rendered: RenderedSpecification, checkingDeadlock: Bool,
         scenario: (any ModelValidationScenario)? = nil, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {
@@ -437,7 +456,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .kvsnap: return try explore(KVsnapModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
-        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
+        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan, .sumsEven:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
@@ -452,6 +471,11 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .tlcmcGraph1: return try TLCMCModel.render()
         case .stringLiterals: return try StringLiteralModel.render()
         case .actionReferences: return try ActionReferencesModel.render()
+        case .sumsEven:
+            guard let scenario = try SumsEvenModel.validationScenarios().first else {
+                throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned assumption scenario")
+            }
+            return try scenario.render()
         case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
             throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned scenario")
         }

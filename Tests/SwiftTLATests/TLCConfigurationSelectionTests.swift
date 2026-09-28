@@ -2,6 +2,24 @@ import Testing
 @testable import SwiftTLA
 
 struct TLCConfigurationSelectionTests {
+    @Test("an assumption-only module exports a TLC configuration without a state-machine directive")
+    func rendersAssumptionOnlyConfiguration() throws {
+        let rendered = try TLASpec("AssumptionOnly") {
+            Constant("MaxNat", 7)
+            Assume(true)
+        }.compile().render()
+        #expect(rendered.tlaBundle.tla.contains("ASSUME TRUE"))
+        #expect(!rendered.tlaBundle.tla.contains("VARIABLES"))
+        #expect(!rendered.tlaBundle.tla.contains("Init =="))
+        #expect(rendered.tlaBundle.cfg == "CONSTANT MaxNat = 7\n")
+        #expect(rendered.isAssumptionsOnly)
+        #expect(!rendered.checksDeadlock)
+        #expect(try rendered.tlaBundle(checking: [], checkDeadlock: false).cfg == "CONSTANT MaxNat = 7\n")
+        #expect(throws: CompilationDiagnostic.self) {
+            try rendered.tlaBundle(checking: [], checkDeadlock: true)
+        }
+    }
+
     @Test("validation selects declared checks without changing the emitted model")
     func selectsChecksFromRenderedModel() throws {
         let x = Var<Int>("x")

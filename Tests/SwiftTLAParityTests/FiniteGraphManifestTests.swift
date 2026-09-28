@@ -45,6 +45,21 @@ struct FiniteGraphManifestTests {
     }
   }
 
+  @Test("an assumption-only case requires an explicit expected verdict")
+  func requiresAssumptionExpectation() throws {
+    let path = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent("Verification/FiniteGraph/cases.json")
+    let source = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any])
+    let cases = try #require(source["cases"] as? [[String: Any]])
+    var declaration = try #require(cases.first { $0["id"] as? String == "sums-even-0" })
+    declaration.removeValue(forKey: "assumptionExpectation")
+    #expect(throws: EvidenceFormatError.invalidField(record: "sums-even-0", field: "assumption expectation")) {
+      try JSONDecoder().decode(FiniteGraphManifest.Case.self,
+        from: JSONSerialization.data(withJSONObject: declaration))
+    }
+  }
+
   private func decodeCases(ids: [String?]) throws -> FiniteGraphManifest {
     let path = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

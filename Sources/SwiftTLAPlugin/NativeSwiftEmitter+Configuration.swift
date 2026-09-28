@@ -19,7 +19,7 @@ extension NativeSwiftEmitter {
             + model.api.collections.map(\.membersIdentifier)
     }
 
-    mutating func configurationDeclarations() throws -> [DeclSyntax] {
+    mutating func configurationDeclarations(includeStoredConfiguration: Bool = true) throws -> [DeclSyntax] {
         guard !program.layout.parameters.isEmpty else { return [] }
         let parameters = program.layout.parameters
         let inputs = Dictionary(uniqueKeysWithValues: parameters.map { ($0.binder, "_parameter\($0.binder.ordinal)") })
@@ -56,7 +56,7 @@ extension NativeSwiftEmitter {
                 \(body.joined(separator: "\n"))
             }
         }
-        public let configuration: Configuration
+        \(includeStoredConfiguration ? "public let configuration: Configuration" : "")
         """)
     }
 }

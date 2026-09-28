@@ -98,6 +98,7 @@ extension NativeSwiftEmitter {
                 refinements: \(String(reflecting: module.configuration.refinements)),
                 symmetry: \(String(reflecting: module.configuration.symmetry)),
                 actions: _actions, _generatedPlusCal: \(plusCal),
+                _assumptionsOnly: \(module.configuration.assumptionsOnly),
                 _generatedParameters: [\(parameterBindings.joined(separator: ", "))],
                 _generatedImports: [\(imports)], _generatedDependencies: [\(dependencies)],
                 _generatedTemporalObligations: _obligations)

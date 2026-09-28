@@ -264,7 +264,7 @@ package enum GeneratedTLCOracle {
         }
     }
 
-    private static func retainGeneratedInputs(_ bundle: TLAModuleBundle, in directory: URL) throws {
+    package static func retainGeneratedInputs(_ bundle: TLAModuleBundle, in directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         for file in bundle.files {
             guard file.name.range(of: "^[A-Za-z][A-Za-z0-9_]*$", options: .regularExpression) != nil else {

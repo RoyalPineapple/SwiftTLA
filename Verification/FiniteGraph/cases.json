@@ -941,6 +941,40 @@
       "moduleSHA256": "81a761e4c05f2795c8a39de2b3cef74196b3bfcdba9b30172d6b3137477d6a5c",
       "cfgSHA256": "11abbe6d397c417b676b6f47671d7cbaaba8691cdeeae44d959c7d18454d5a97",
       "timeoutSeconds": 60
+    },
+    {
+      "id": "sums-even-0",
+      "sourceModel": "sums-even",
+      "scenario": "MC_sums_even",
+      "comparisonMode": "assumptions-only",
+      "assumptionExpectation": "satisfied",
+      "module": "sums-even/MC_sums_even.tla",
+      "configuration": "sums-even/MC_sums_even.cfg",
+      "imports": [
+        "sums-even/sums_even.tla",
+        "boulanger/TLAPS.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MC_sums_even",
+          "importedModule": "sums_even"
+        },
+        {
+          "importingModule": "sums_even",
+          "importedModule": "TLAPS"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/sums_even/MC_sums_even.tla",
+        "sha256": "82c5c8f9390d51c7f3e397badd51fdbf7d36c46a02a45249f5b76213ebac7251"
+      },
+      "exploration": {
+        "maximumStateLimit": 1,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "82c5c8f9390d51c7f3e397badd51fdbf7d36c46a02a45249f5b76213ebac7251",
+      "cfgSHA256": "54556c1c0ee9732b0602292ed53e61d545519096dff8c4dfe8fbdcf56e93eb1f",
+      "timeoutSeconds": 1800
     }
   ]
 }

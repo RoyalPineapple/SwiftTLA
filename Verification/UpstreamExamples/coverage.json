@@ -16,7 +16,7 @@
     "missing": "No audited implementation for this exact configuration. A partial or legacy port can still exist.",
     "implemented": "A registered model-owned scenario and byte-identical upstream module/configuration reference exist. Semantic equivalence is not established.",
     "locallyChecked": "Complete focused diagnostics have retained results for the recorded source SHA and matching hosted toolchain.",
-    "hostedMatch": "Retained hosted evidence for the recorded source SHA matches the upstream configuration, selected checks, checking mode, and stopping behavior. Exhaustive comparisons require complete initial states, states, and labeled edges. A check that stops on a decisive violation requires its complete verdict and valid witness, including any upstream shortest-path requirement. Unevaluated checks remain unevaluated. A completed check does not imply whole-graph equivalence.",
+    "hostedMatch": "Retained hosted evidence for the recorded source SHA matches the upstream configuration, selected checks, checking mode, and stopping behavior. Exhaustive state-machine comparisons require complete initial states, states, and labeled edges. Assumption-only configurations require exact native, generated-TLC, and upstream-TLC assumption verdicts, with no invented state graph. A check that stops on a decisive violation requires its complete verdict and valid witness, including any upstream shortest-path requirement. Unevaluated checks remain unevaluated. A completed check does not imply whole-graph equivalence.",
     "familyCompletion": "Every required configuration is a hosted match. All module dispositions and legacy cleanup are complete. Partial coverage never counts.",
     "evidence": "A successful job, count, digest, timeout, or truncated graph alone cannot establish a match. Historical evidence needs explicit review before credit.",
     "dsl": "Each criterion needs complete acceptance evidence. Each new capability must name an upstream configuration and acceptance criteria.",
@@ -31,13 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "reviewed; LoopInvariance selected",
+      "status": "reviewed; sums_even selected",
       "candidates": [
-        "specifications/LoopInvariance",
-        "specifications/FiniteMonotonic",
-        "specifications/CarTalkPuzzle"
+        "specifications/sums_even",
+        "specifications/Stones",
+        "specifications/FiniteMonotonic"
       ],
-      "scope": "Pinned-source review selects LoopInvariance. FiniteMonotonic needs action composition and configuration applicability review. CarTalkPuzzle needs assumption-only result handling. No candidate receives hosted credit from this review."
+      "scope": "Pinned-source review selects sums_even as the smallest assumption-only case. Its sole configuration checks T1 over NatOverride=0..1000000 and has no state graph. Stones shares the zero-state assumption gap but adds recursive partitions and PrintT output. FiniteMonotonic has five configurations, including symbolic models, action composition, and a liveness failure. Complete sums_even before expanding to Stones and CarTalkPuzzle. No candidate receives hosted credit from this review."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -60,6 +60,15 @@
     "completionRule": "Scheduling labels and queue positions confer no evidence credit. Count only retained hosted configuration matches. Declare a family complete only after every applicable configuration and variant is verified, module dispositions are resolved, and legacy code is removed. The next deliverable is one fully verified family on a green hosted revision through the intended DSL and correct checking path."
   },
   "ci": {
+    "prHeadFullMatrix": {
+      "sourceSHA": "28dec1043cbe3e6b928849d30005fef94b0d2b0b",
+      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690169",
+      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185",
+      "observedStatus": "completed",
+      "conclusion": "success",
+      "jobs": "All 114 required independent-validation jobs passed. The optional comparison replay diagnostic was skipped. All five ordinary CI jobs passed.",
+      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. Exhaustive comparisons retained complete initial states, states, labeled edges, and selected check outcomes. Decisive early stops retained verdict and witness evidence. This verified PR head does not mean all 78 families are complete."
+    },
     "bakeryBoulangerieFamilyCandidate": {
       "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36437472645",
@@ -2781,7 +2790,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": "specifications/LoopInvariance",
+  "nextFamily": "specifications/sums_even",
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -3011,7 +3020,7 @@
       "path": "specifications/Bakery-Boulangerie",
       "name": "The Boulangerie Algorithm",
       "audit": "complete at verified revision",
-      "gap": "None for this family at fb1439bb. Both published configurations have exact full-matrix hosted comparisons. All four module dispositions and legacy cleanup are complete. Ordinary CI and independent admission on the final PR-head SHA remain separate requirements.",
+      "gap": "None. Both published configurations have exact full-matrix hosted comparisons. All four module dispositions and legacy cleanup are complete. Ordinary CI and independent validation passed on PR head 28dec104.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -4039,8 +4048,8 @@
     {
       "path": "specifications/CoffeeCan",
       "name": "The Coffee Can Bean Problem",
-      "audit": "reference inputs audited",
-      "gap": "All four configurations have exact reference inputs. CoffeeCan100Beans, CoffeeCan1000Beans, and APCoffeeCan have complete hosted graph and property matches on the audited SHA. CoffeeCan3000Beans still needs a complete hosted comparison. All three module dispositions and legacy cleanup are complete. CoffeeCan_proof is a proof companion, not another configured graph. The canonical suite retains graph, property, and dispatch checks.",
+      "audit": "complete at verified revision",
+      "gap": "None. All four published configurations have complete hosted graph and selected-check matches. All three module dispositions and legacy cleanup are complete. CoffeeCan_proof is a proof companion, not another configured graph. The full matrix and ordinary CI passed on PR head 28dec104.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -4219,7 +4228,8 @@
           "module": "specifications/CoffeeCan/CoffeeCan.tla",
           "configuration": "specifications/CoffeeCan/CoffeeCan3000Beans.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "28dec1043cbe3e6b928849d30005fef94b0d2b0b",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -4229,7 +4239,28 @@
               "caseID": "coffee-can-3000"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "28dec1043cbe3e6b928849d30005fef94b0d2b0b",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185/artifacts/10983956301",
+              "artifactDigest": "sha256:b2bf0d0a2dac5332f96a10d0a1ef2a62ab885c007230773d6f659c0f149e4866",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Full-matrix generated-TLA and pinned-upstream TLC comparison is exact for the complete graph and selected checks. The upstream job passed on PR head 28dec104."
+            },
+            {
+              "sourceSHA": "28dec1043cbe3e6b928849d30005fef94b0d2b0b",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185/artifacts/10985141400",
+              "artifactDigest": "sha256:a91bb6d5ed2159196b69173b2d8396235f605cd09e690d176f75fdc3dfaf6806",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Full-matrix generated Swift machine and generated-TLA TLC comparison is exact for the complete graph and selected checks. The native job passed on PR head 28dec104."
+            }
+          ]
         }
       ],
       "partialCases": []
@@ -4889,8 +4920,8 @@
     {
       "path": "specifications/DiningPhilosophers",
       "name": "The Dining Philosophers Problem",
-      "audit": "reference inputs audited",
-      "gap": "Both pinned NP=5 configurations have complete hosted graph and property matches on the audited SHA. The Spec case includes per-process weak fairness and NobodyStarves. The INIT/NEXT case preserves its distinct safety-only selection. Both module dispositions and legacy cleanup are complete. Hosted application-dispatch replay covers every native graph edge. No family gap remains at this evidence revision.",
+      "audit": "complete at verified revision",
+      "gap": "None. Both pinned NP=5 configurations have complete hosted graph and selected-check matches. The Spec case includes per-process weak fairness and NobodyStarves. The INIT/NEXT case retains its distinct safety-only selection. Both module dispositions and legacy cleanup are complete. The full matrix and ordinary CI passed on PR head 28dec104.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -6585,8 +6616,8 @@
     {
       "path": "specifications/LeastCircularSubstring",
       "name": "Minimal Circular Substring",
-      "audit": "reference inputs audited",
-      "gap": "No family gap remains at source SHA 3ed06dbe87cea6c4d4fe9f9ded8a2dd406e21217. Small and Medium have complete independent hosted graph and selected-property matches at that SHA. The pinned manifest lists exactly these two configurations; neither selects Termination or defines an environment variant. All three module dispositions and legacy cleanup are complete. Family completion does not establish full DSL acceptance or qualify subsequent source changes.",
+      "audit": "complete at verified revision",
+      "gap": "None. Small and Medium have complete hosted graph and selected-check matches. The pinned manifest lists exactly these two configurations. Neither selects Termination or defines an environment variant. All three module dispositions and legacy cleanup are complete. The full matrix and ordinary CI passed on PR head 28dec104.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -6777,8 +6808,8 @@
     {
       "path": "specifications/LoopInvariance",
       "name": "Loop Invariance",
-      "audit": "pinned sources reviewed; implementation in progress",
-      "gap": "Both published configurations have complete exact hosted graph, property, and deadlock matches at 85792408. SumSequence's bounded fixture was removed and its unbounded source contract passes focused local tests, but the changed source has not passed hosted CI. The family is not yet complete on a green hosted revision.",
+      "audit": "complete at verified revision",
+      "gap": "None. Both published configurations have complete hosted graph, property, and deadlock matches. SumSequence has no published configuration. Its unbounded source contract passed hosted source-contract tests. The bounded legacy fixture is removed. The full matrix and ordinary CI passed on PR head 28dec104. No TLAPS proof-verification claim is made.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -6820,11 +6851,11 @@
         {
           "path": "specifications/LoopInvariance/SumSequence.tla",
           "role": "unconfigured proof example",
-          "reason": "No published configuration exists. The Swift #spec retains the unbounded Values and sequence domains, weak fairness, summing loop, and TypeOK, Inv, PCorrect, and Termination claims. The bounded legacy fixture was removed. Focused local generated-machine and formal-export tests pass; hosted CI is pending.",
+          "reason": "No published configuration exists. The Swift #spec retains the unbounded Values and sequence domains, weak fairness, summing loop, and TypeOK, Inv, PCorrect, and Termination claims. The bounded legacy fixture was removed. Generated-machine and formal-export source-contract tests passed in ordinary CI on 28dec104. No TLAPS proof-verification claim is made.",
           "implementations": [
             "Sources/UpstreamParity/Examples/SumSequence.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -6833,7 +6864,7 @@
           "configuration": "specifications/LoopInvariance/MCBinarySearch.cfg",
           "required": true,
           "status": "hosted match",
-          "verifiedSourceSHA": "85792408b6cd3f8a1065ab06e7c894daeef51233",
+          "verifiedSourceSHA": "28dec1043cbe3e6b928849d30005fef94b0d2b0b",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -6853,6 +6884,26 @@
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Downloaded retained evidence and compared entire native, pinned upstream TLC, and generated TLC graph files byte-for-byte. All are complete and equal: 6430 initial states, 27953 states, 27953 labeled edges. Inv, resultCorrect, TypeOK, Termination, and deadlock outcomes are exact for both TLC comparisons. The original published configuration and successful hosted case job bind to this source SHA. This historical match does not establish final-revision admission."
+            },
+            {
+              "sourceSHA": "28dec1043cbe3e6b928849d30005fef94b0d2b0b",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185/artifacts/10980907962",
+              "artifactDigest": "sha256:36a2d652a8db959229ad47ec0c82090e8480eef48ec1d1cce9678e5e153ecf62",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Full-matrix generated-TLA and pinned-upstream TLC comparison is exact for complete initial states, states, labeled edges, and selected checks."
+            },
+            {
+              "sourceSHA": "28dec1043cbe3e6b928849d30005fef94b0d2b0b",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185/artifacts/10983457357",
+              "artifactDigest": "sha256:fa32f6ac0763280c089a22b2918c0890e664cb537e350b9a2b4acceaab779c4b",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Full-matrix generated Swift machine and generated-TLA TLC comparison is exact: 6430 initial states, 27953 states, and 27953 labeled edges. Selected property and deadlock outcomes match."
             }
           ]
         },
@@ -6861,7 +6912,7 @@
           "configuration": "specifications/LoopInvariance/MCQuicksort.cfg",
           "required": true,
           "status": "hosted match",
-          "verifiedSourceSHA": "85792408b6cd3f8a1065ab06e7c894daeef51233",
+          "verifiedSourceSHA": "28dec1043cbe3e6b928849d30005fef94b0d2b0b",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -6881,6 +6932,26 @@
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Downloaded retained evidence and compared entire native, pinned upstream TLC, and generated TLC graph files byte-for-byte. All are complete and equal: 120 initial states, 4548 states, 11103 labeled edges. Inv, PCorrect, TypeOK, Termination, and deadlock outcomes are exact for both TLC comparisons. The original published configuration and successful hosted case job bind to this source SHA. This historical match does not establish final-revision admission."
+            },
+            {
+              "sourceSHA": "28dec1043cbe3e6b928849d30005fef94b0d2b0b",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185/artifacts/10980873080",
+              "artifactDigest": "sha256:fc03216a5405a62ab8ff82d462041016d3adc4c9a9b9e369bcac7eb37c5dcbea",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Full-matrix generated-TLA and pinned-upstream TLC comparison is exact for complete initial states, states, labeled edges, and selected checks."
+            },
+            {
+              "sourceSHA": "28dec1043cbe3e6b928849d30005fef94b0d2b0b",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36444690185/artifacts/10983637750",
+              "artifactDigest": "sha256:d72ac179c8a7b89f0c9a872d72ec14501fbc8f31b33c24f41d19f7c28a0c919b",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Full-matrix generated Swift machine and generated-TLA TLC comparison is exact: 120 initial states, 4548 states, and 11103 labeled edges. Selected property and deadlock outcomes match."
             }
           ]
         }
@@ -6924,8 +6995,8 @@
     {
       "path": "specifications/Majority",
       "name": "Boyer-Moore Majority Vote",
-      "audit": "reference inputs audited",
-      "gap": "No family gap remains at source SHA bba219f340df1f4354de6d1f2ec7a6fe011cfed9. The sole published MCMajority configuration has a freshly audited complete native/upstream/generated graph and property match. All four module dispositions and legacy cleanup are complete. Direct inspection of the pinned APMajority source, directory, manifest, and README establishes an annotation wrapper, not an additional configured transition system. This does not qualify later source changes or satisfy the separate requirement for a green final hosted revision.",
+      "audit": "complete at verified revision",
+      "gap": "None. The sole published MCMajority configuration has a complete hosted graph and selected-check match. All four module dispositions and legacy cleanup are complete. Pinned APMajority is an annotation wrapper without an additional configuration. The full matrix and ordinary CI passed on PR head 28dec104.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -9603,16 +9674,16 @@
     {
       "path": "specifications/sums_even",
       "name": "Proof x+x is Even",
-      "audit": "reference inputs audited",
-      "gap": "The published configuration evaluates assumptions over NatOverride=0..1000000 and reports zero states. The native comparison path requires initial machines.",
+      "audit": "implementation staged; hosted comparison pending",
+      "gap": "The typed assumption-only model and pinned reference are registered. Local source and evidence-contract diagnostics do not establish TLC parity. Completion requires matching native, generated-TLC, and upstream-TLC verdicts on a green hosted revision, without a dummy state or smaller domain. TLAPS proof verification is outside this TLC configuration claim.",
       "scheduling": {
         "label": "Checker gap",
         "sharedCapability": "assumption-only-checking",
         "reproducer": "MC_sums_even.cfg binds MaxNat=1000000 and Nat<-NatOverride. MC_sums_even.tla evaluates ASSUME T1 without a specification, initial predicate, or next predicate.",
-        "nativeBoundary": "NativeScenarioRun requires initial machines. ReachabilityGraph rejects an empty initial machine list.",
+        "nativeBoundary": "An assumption-only scenario evaluates the generated Swift assumption directly; it does not invoke the state-machine explorer or fabricate an initial state.",
         "completionCondition": "Compare unchanged assumptions through native evaluation, generated TLC, and upstream TLC. Retain zero-state accounting and complete outcomes without dummy states.",
         "scope": "No smaller domain qualifies. TLAPS proof verification is not required for this finite TLC assumption comparison.",
-        "evidenceKind": "Source audit only; no new execution evidence."
+        "evidenceKind": "Focused local diagnostics only; hosted TLC comparison is pending."
       },
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
@@ -9630,14 +9701,14 @@
           "path": "specifications/sums_even/MC_sums_even.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": ["Sources/UpstreamParity/Examples/SumsEven.swift"],
           "dispositionComplete": false
         },
         {
           "path": "specifications/sums_even/sums_even.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
-          "implementations": [],
+          "role": "mathematical dependency and proof companion",
+          "reason": "MC_sums_even imports the theorem T1 and evaluates it through ASSUME. The upstream module also contains TLAPS proof steps. It has no separate TLC configuration or state graph. The configured assumption check requires its theorem statement, but does not imply that SwiftTLA or TLC verifies the TLAPS proof.",
+          "implementations": ["Sources/UpstreamParity/Examples/SumsEven.swift"],
           "dispositionComplete": false
         }
       ],
@@ -9646,10 +9717,16 @@
           "module": "specifications/sums_even/MC_sums_even.tla",
           "configuration": "specifications/sums_even/MC_sums_even.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/SumsEven.swift",
+              "scenario": "MC_sums_even",
+              "caseID": "sums-even-0"
+            }
+          ],
           "evidence": []
         }
       ],

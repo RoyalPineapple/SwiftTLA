@@ -71,6 +71,13 @@ public protocol ModelValidationScenario: Sendable {
     var formalPropertyNames: [Property: String] { get }
 }
 
+/// A configured module that evaluates assumptions but declares no state machine.
+public protocol AssumptionValidationScenario: Sendable {
+    var name: String { get }
+    func checkAssumptions() throws -> Bool
+    func render() throws -> RenderedSpecification
+}
+
 extension ModelValidationScenario {
     public func check(maximumStates: Int) throws -> NativeCheckResult<Machine> {
         try ReachabilityGraph.check(initialMachines: initialMachines(), maximumStates: maximumStates,

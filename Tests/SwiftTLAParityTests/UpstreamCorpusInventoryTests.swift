@@ -19,6 +19,7 @@ struct UpstreamCorpusInventoryTests {
             let allPropertiesMatch: Bool?
             let completion: FiniteGraphManifest.Case.ComparisonMode?
             let completeCounterexampleMatch: Bool?
+            let assumptionCompared: Bool?
             let acceptanceComplete: Bool?
             let environment: [String: String]?
 
@@ -32,6 +33,10 @@ struct UpstreamCorpusInventoryTests {
                     return completion == .decisiveCounterexample
                         && completeCounterexampleMatch == true && completeGraph == false
                         && allPropertiesMatch != true
+                case .assumptionsOnly:
+                    return completion == .assumptionsOnly
+                        && assumptionCompared == true && completeGraph != true
+                        && allPropertiesMatch != true && completeCounterexampleMatch != true
                 }
             }
 
@@ -286,7 +291,7 @@ struct UpstreamCorpusInventoryTests {
         let evidence = Coverage.Evidence(sourceSHA: "source", developerToolsVersion: "16.4",
             runURL: "", artifactURL: "", completeGraph: true, allPropertiesMatch: true,
             completion: nil, completeCounterexampleMatch: nil,
-            acceptanceComplete: nil, environment: environment)
+            assumptionCompared: nil, acceptanceComplete: nil, environment: environment)
         #expect(evidence.matches(sourceSHA: "source", developerToolsVersion: "16.4", environment: environment))
         #expect(!evidence.matches(sourceSHA: "other", developerToolsVersion: "16.4", environment: environment))
         #expect(!evidence.matches(sourceSHA: "source", developerToolsVersion: "16.3", environment: environment))
@@ -308,7 +313,7 @@ struct UpstreamCorpusInventoryTests {
                 runURL: "", artifactURL: "", completeGraph: completeGraph,
                 allPropertiesMatch: allPropertiesMatch, completion: completion,
                 completeCounterexampleMatch: completeCounterexampleMatch,
-                acceptanceComplete: nil, environment: nil)
+                assumptionCompared: nil, acceptanceComplete: nil, environment: nil)
         }
         let decisive = evidence()
         #expect(decisive.provesConfiguration(.decisiveCounterexample))
@@ -324,5 +329,16 @@ struct UpstreamCorpusInventoryTests {
             #expect(!invalid.provesConfiguration(.decisiveCounterexample))
         }
         #expect(!evidence(completeGraph: true, allPropertiesMatch: true).provesConfiguration(.exhaustive))
+    }
+
+    @Test("assumption evidence cannot be credited as a graph or counterexample")
+    func distinguishesAssumptionEvidence() {
+        let evidence = Coverage.Evidence(sourceSHA: "source", developerToolsVersion: "16.4",
+            runURL: "", artifactURL: "", completeGraph: false, allPropertiesMatch: nil,
+            completion: .assumptionsOnly, completeCounterexampleMatch: nil,
+            assumptionCompared: true, acceptanceComplete: nil, environment: nil)
+        #expect(evidence.provesConfiguration(.assumptionsOnly))
+        #expect(!evidence.provesConfiguration(.exhaustive))
+        #expect(!evidence.provesConfiguration(.decisiveCounterexample))
     }
 }

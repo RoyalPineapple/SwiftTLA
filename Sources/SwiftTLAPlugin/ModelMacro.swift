@@ -38,7 +38,7 @@ enum TLASpecVerifier {
         let parser = ParserSession(sourceTypes: sourceMetadata)
         let parsed = parser.parseSpecClosure(named: source.name, source.closure)
         let compilation = try parsed.compile()
-        if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty {
+        if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty && parsed.assume == nil {
             throw ModelMacroError.emptyState
         }
 
@@ -463,6 +463,9 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
         do {
             let model = try TLASpecVerifier.parseAndVerify(declaration)
             var emitter = NativeSwiftEmitter(model: model)
+            if model.program.layout.variables.isEmpty && model.program.behavior.actions.isEmpty {
+                return try emitter.assumptionMembers()
+            }
             return try emitter.machineMembers()
         } catch let diagnostic as SourceParseDiagnostic {
             context.diagnose(parserDiagnostic(diagnostic, in: declaration))

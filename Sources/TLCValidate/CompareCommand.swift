@@ -45,8 +45,12 @@ func runCompare(arguments: [String]) -> Never {
               arguments[3] == "--native", arguments[5] == "--oracle",
               arguments[7] == "--output" else { throw CompareCommandError.usage }
         let scenarios = try modelValidationScenarios()
+        let assumptions = try assumptionValidationScenarios()
         let selected = scenarios.filter { arguments[2] == "all" || $0.id == arguments[2] }
-        guard !selected.isEmpty else { throw CompareCommandError.unknownScenario(arguments[2]) }
+        let selectedAssumptions = assumptions.filter { arguments[2] == "all" || $0.id == arguments[2] }
+        guard !selected.isEmpty || !selectedAssumptions.isEmpty else {
+            throw CompareCommandError.unknownScenario(arguments[2])
+        }
         let native = URL(fileURLWithPath: arguments[4]).standardizedFileURL
         let oracle = URL(fileURLWithPath: arguments[6]).standardizedFileURL
         let output = URL(fileURLWithPath: arguments[8]).standardizedFileURL
@@ -61,6 +65,19 @@ func runCompare(arguments: [String]) -> Never {
                     native: native.appendingPathComponent(id),
                     oracle: oracle.appendingPathComponent(id),
                     output: output.appendingPathComponent(id))
+                print("compare \(id): \(result.result)")
+                if result.result != "exact" { failures += 1 }
+            } catch {
+                failures += 1
+                fputs("compare \(id): \(error)\n", stderr)
+            }
+        }
+        for (id, _) in selectedAssumptions {
+            do {
+                let result = try AssumptionValidationEvidence.compareNative(
+                    id: id, native: native.appendingPathComponent(id),
+                    oracle: oracle.appendingPathComponent(id),
+                    to: output.appendingPathComponent(id))
                 print("compare \(id): \(result.result)")
                 if result.result != "exact" { failures += 1 }
             } catch {

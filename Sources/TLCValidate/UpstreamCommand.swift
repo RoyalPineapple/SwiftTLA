@@ -53,11 +53,23 @@ func runUpstream(arguments: [String]) -> Never {
                           importedModule: edge.importedModule,
                           structuralPath: [declaration.id, "dependencies", String(index)])
                 })
-            print(try UpstreamTLCParity.cacheKey(id: declaration.id, rendered: rendered,
-                reference: reference, expectedModuleSHA256: declaration.moduleSHA256,
-                expectedCFGSHA256: declaration.cfgSHA256,
-                maximumStates: declaration.exploration.maximumStateLimit,
-                decisive: declaration.comparisonMode == .decisiveCounterexample, pin: pin))
+            if let assumption = try declaration.resolveAssumptionScenario() {
+                guard let expected = declaration.assumptionExpectation else {
+                    throw EvidenceFormatError.invalidField(record: declaration.id, field: "assumption expectation")
+                }
+                print(try AssumptionValidationEvidence.upstreamCacheKey(
+                    id: declaration.id, scenario: assumption, reference: reference,
+                    expectedModuleSHA256: declaration.moduleSHA256,
+                    expectedCFGSHA256: declaration.cfgSHA256,
+                    expectedVerdict: expected,
+                    maximumStates: declaration.exploration.maximumStateLimit, pin: pin))
+            } else {
+                print(try UpstreamTLCParity.cacheKey(id: declaration.id, rendered: rendered,
+                    reference: reference, expectedModuleSHA256: declaration.moduleSHA256,
+                    expectedCFGSHA256: declaration.cfgSHA256,
+                    maximumStates: declaration.exploration.maximumStateLimit,
+                    decisive: declaration.comparisonMode == .decisiveCounterexample, pin: pin))
+            }
             exit(0)
         }
         guard arguments.count == 5, arguments[0] == "run", arguments[1] == "--case",
@@ -94,17 +106,33 @@ func runUpstream(arguments: [String]) -> Never {
                               importedModule: edge.importedModule,
                               structuralPath: [declaration.id, "dependencies", String(index)])
                     })
-                let report = try UpstreamTLCParity.run(
-                    id: declaration.id, rendered: rendered, reference: reference,
-                    expectedModuleSHA256: declaration.moduleSHA256,
-                    expectedCFGSHA256: declaration.cfgSHA256,
-                    maximumStates: declaration.exploration.maximumStateLimit,
-                    timeout: declaration.timeoutSeconds,
-                    decisive: declaration.comparisonMode == .decisiveCounterexample,
-                    tools: tools, pin: pin, to: output.appendingPathComponent(declaration.id),
-                    spoolExecutable: validationExecutableURL())
-                print("upstream \(declaration.id): \(report.result)")
-                if report.result != "exact" { failures += 1 }
+                if let assumption = try declaration.resolveAssumptionScenario() {
+                    guard let expected = declaration.assumptionExpectation else {
+                        throw EvidenceFormatError.invalidField(record: declaration.id, field: "assumption expectation")
+                    }
+                    let report = try AssumptionValidationEvidence.compareUpstream(
+                        id: declaration.id, scenario: assumption, reference: reference,
+                        expectedModuleSHA256: declaration.moduleSHA256,
+                        expectedCFGSHA256: declaration.cfgSHA256,
+                        expectedVerdict: expected,
+                        maximumStates: declaration.exploration.maximumStateLimit,
+                        timeout: declaration.timeoutSeconds, tools: tools, pin: pin,
+                        to: output.appendingPathComponent(declaration.id))
+                    print("upstream \(declaration.id): \(report.result)")
+                    if report.result != "exact" { failures += 1 }
+                } else {
+                    let report = try UpstreamTLCParity.run(
+                        id: declaration.id, rendered: rendered, reference: reference,
+                        expectedModuleSHA256: declaration.moduleSHA256,
+                        expectedCFGSHA256: declaration.cfgSHA256,
+                        maximumStates: declaration.exploration.maximumStateLimit,
+                        timeout: declaration.timeoutSeconds,
+                        decisive: declaration.comparisonMode == .decisiveCounterexample,
+                        tools: tools, pin: pin, to: output.appendingPathComponent(declaration.id),
+                        spoolExecutable: validationExecutableURL())
+                    print("upstream \(declaration.id): \(report.result)")
+                    if report.result != "exact" { failures += 1 }
+                }
             } catch {
                 failures += 1
                 fputs("upstream \(declaration.id): \(error)\n", stderr)

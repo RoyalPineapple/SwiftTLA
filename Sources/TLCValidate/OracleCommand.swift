@@ -25,7 +25,9 @@ func runOracle(arguments: [String]) -> Never {
            arguments[3] == "--maximum-states", let maximumStates = Int(arguments[4]),
            maximumStates > 0 {
             let scenarios = try modelValidationScenarios()
-            guard let scenario = scenarios.first(where: { $0.id == arguments[2] }) else {
+            let assumptions = try assumptionValidationScenarios()
+            guard scenarios.contains(where: { $0.id == arguments[2] })
+                || assumptions.contains(where: { $0.id == arguments[2] }) else {
                 throw OracleCommandError.unknownScenario(arguments[2])
             }
             let root = try RetainedFiles.projectRoot(URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
@@ -37,8 +39,14 @@ func runOracle(arguments: [String]) -> Never {
                 throw OracleCommandError.invalidToolchain
             }
             let pin = try referencePin(from: lock, javaArchive: archive, toolRoot: toolRoot)
-            print(try GeneratedTLCOracle.cacheKey(scenario: scenario.scenario, id: scenario.id,
-                maximumStates: maximumStates, pin: pin))
+            if let scenario = scenarios.first(where: { $0.id == arguments[2] }) {
+                print(try GeneratedTLCOracle.cacheKey(scenario: scenario.scenario, id: scenario.id,
+                    maximumStates: maximumStates, pin: pin))
+            } else if let scenario = assumptions.first(where: { $0.id == arguments[2] }) {
+                print(try AssumptionValidationEvidence.oracleCacheKey(
+                    scenario: scenario.scenario, id: scenario.id,
+                    maximumStates: maximumStates, pin: pin))
+            }
             exit(0)
         }
         guard arguments.count == 7, arguments[0] == "run", arguments[1] == "--case",
@@ -47,8 +55,12 @@ func runOracle(arguments: [String]) -> Never {
             throw OracleCommandError.usage
         }
         let scenarios = try modelValidationScenarios()
+        let assumptions = try assumptionValidationScenarios()
         let selected = scenarios.filter { arguments[2] == "all" || $0.id == arguments[2] }
-        guard !selected.isEmpty else { throw OracleCommandError.unknownScenario(arguments[2]) }
+        let selectedAssumptions = assumptions.filter { arguments[2] == "all" || $0.id == arguments[2] }
+        guard !selected.isEmpty || !selectedAssumptions.isEmpty else {
+            throw OracleCommandError.unknownScenario(arguments[2])
+        }
         let output = URL(fileURLWithPath: arguments[4]).standardizedFileURL
         guard !FileManager.default.fileExists(atPath: output.path) else {
             throw OracleCommandError.outputExists(output.path)
@@ -73,6 +85,18 @@ func runOracle(arguments: [String]) -> Never {
                                                 timeout: timeout, tools: tools, pin: pin,
                                                 to: output.appendingPathComponent(id))
                 print("oracle \(id): \(outcome.graphComplete ? "complete graph" : "decisive result")")
+            } catch {
+                failures += 1
+                fputs("oracle \(id): \(error)\n", stderr)
+            }
+        }
+        for (id, scenario) in selectedAssumptions {
+            do {
+                let report = try AssumptionValidationEvidence.oracle(
+                    scenario: scenario, id: id, maximumStates: maximumStates,
+                    timeout: timeout, tools: tools, pin: pin,
+                    to: output.appendingPathComponent(id))
+                print("oracle \(id): assumption \(report.verdict)")
             } catch {
                 failures += 1
                 fputs("oracle \(id): \(error)\n", stderr)

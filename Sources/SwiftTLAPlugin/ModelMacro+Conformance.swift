@@ -12,7 +12,9 @@ extension ModelMacro: ExtensionMacro {
     ) throws -> [ExtensionDeclSyntax] {
         // Swift supplies only conformances the declaration does not already have.
         // Restrict to the same struct hosts accepted by the member expansion.
-        guard declaration.is(StructDeclSyntax.self), !protocols.isEmpty else { return [] }
+        guard declaration.is(StructDeclSyntax.self), !protocols.isEmpty,
+              let model = try? TLASpecVerifier.parseAndVerify(declaration),
+              !model.program.layout.variables.isEmpty else { return [] }
         return [try ExtensionDeclSyntax("extension \(type): SwiftTLA.StateMachine {}")]
     }
 }

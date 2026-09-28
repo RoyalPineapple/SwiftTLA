@@ -20,8 +20,9 @@ private enum NativeCommandError: Error, CustomStringConvertible {
 func runNative(arguments: [String]) -> Never {
     do {
         let scenarios = try modelValidationScenarios()
+        let assumptions = try assumptionValidationScenarios()
         if arguments == ["list"] {
-            print(String(decoding: try JSONEncoder().encode(scenarios.map(\.id)), as: UTF8.self))
+            print(String(decoding: try JSONEncoder().encode(scenarios.map(\.id) + assumptions.map(\.id)), as: UTF8.self))
             exit(0)
         }
         guard arguments.count == 7, arguments[0] == "run", arguments[1] == "--case",
@@ -30,7 +31,10 @@ func runNative(arguments: [String]) -> Never {
             throw NativeCommandError.usage
         }
         let selected = scenarios.filter { arguments[2] == "all" || $0.id == arguments[2] }
-        guard !selected.isEmpty else { throw NativeCommandError.unknownScenario(arguments[2]) }
+        let selectedAssumptions = assumptions.filter { arguments[2] == "all" || $0.id == arguments[2] }
+        guard !selected.isEmpty || !selectedAssumptions.isEmpty else {
+            throw NativeCommandError.unknownScenario(arguments[2])
+        }
         let output = URL(fileURLWithPath: arguments[4]).standardizedFileURL
         guard !FileManager.default.fileExists(atPath: output.path) else {
             throw NativeCommandError.outputExists(output.path)
@@ -42,6 +46,16 @@ func runNative(arguments: [String]) -> Never {
                 let result = try writeNativeEvidence(scenario: scenario, caseID: id, maximumStates: maximumStates,
                                                      to: output.appendingPathComponent(id))
                 print("native \(id): \(result.graphComplete ? "complete graph" : "decisive result")")
+            } catch {
+                failures += 1
+                fputs("native \(id): \(error)\n", stderr)
+            }
+        }
+        for (id, scenario) in selectedAssumptions {
+            do {
+                let report = try AssumptionValidationEvidence.native(
+                    scenario: scenario, id: id, to: output.appendingPathComponent(id))
+                print("native \(id): assumption \(report.verdict)")
             } catch {
                 failures += 1
                 fputs("native \(id): \(error)\n", stderr)

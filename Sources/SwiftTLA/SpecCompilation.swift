@@ -375,6 +375,7 @@ public struct RenderedSpecification: Sendable {
     public init(_generatedModule name: String, source: String, compilationIdentity: String,
         declarations: [String], checkDeadlock: Bool, invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
         symmetry: [String], actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil,
+        _assumptionsOnly: Bool = false,
         _generatedParameters: [(name: String, value: TLAValue)] = [],
         _generatedImports: [(name: String, source: String, structuralPath: [String])] = [],
         _generatedDependencies: [(importingModule: String, importedModule: String, structuralPath: [String])] = [],
@@ -403,7 +404,14 @@ public struct RenderedSpecification: Sendable {
             }
             return String(source[..<end.lowerBound]) + definitions.joined(separator: "\n") + "\n" + source[end.lowerBound...]
         }
-        let configuration = TLCConfiguration(declarations: declarations, checkDeadlock: checkDeadlock,
+        if _assumptionsOnly && (checkDeadlock || !invariants.isEmpty || !reachabilityProperties.isEmpty
+            || !properties.isEmpty || !refinements.isEmpty || !symmetry.isEmpty || !actions.isEmpty) {
+            throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
+                path: "assumption-only export", expected: "assumptions without state-machine checks",
+                actual: "state-machine selection", nextSafeAction: "Remove state checks from this state-free model.")
+        }
+        let configuration = TLCConfiguration(assumptionsOnly: _assumptionsOnly,
+            declarations: declarations, checkDeadlock: checkDeadlock,
             invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements, symmetry: symmetry)
         let bundle = TLAModuleBundle(root: .init(name: name, tla: try configuredSource(source),
             cfg: configuration.render(usesSymmetryReduction: true)),
@@ -454,6 +462,7 @@ public struct RenderedSpecification: Sendable {
     public var refinementNames: Set<String> { Set(configuration.refinements) }
     public var checkNames: Set<String> { Set(configuration.invariants + configuration.reachabilityProperties + configuration.properties + configuration.refinements) }
     public var checksDeadlock: Bool { configuration.checkDeadlock }
+    public var isAssumptionsOnly: Bool { configuration.assumptionsOnly }
     public var behavior: ModelBehavior { configuration.behavior }
 
     public func temporalObligationBundles(checking name: String) throws -> [TLAModuleBundle]? {
@@ -1618,7 +1627,8 @@ extension CompiledProgram {
             definitions: [], definitionsBeforeInstances: [], definitionsAfterInstances: [], instances: instances,
             recursiveFunctions: renderer.resolvedFunctionDefinitions(), renderedRefinements: renderedRefinements,
             renderedFormalModuleReplacements: formalModuleReplacements.map(renderer.formalModuleReplacement),
-            configuration: metadata.tlcConfiguration(behavior: behavior, replacements: replacements, refinementNames: refinements.map(\.name)),
+            configuration: metadata.tlcConfiguration(behavior: behavior, replacements: replacements,
+                refinementNames: refinements.map(\.name), hasState: !layout.variables.isEmpty),
             requiredStandardModules: requiredStandardModules,
             importedNames: metadata.imports.map { moduleNames[$0] ?? $0 }, instancesAfterBehavior: true)
         result.moduleReplacements = replacements
@@ -1688,7 +1698,8 @@ private extension CompiledModuleMetadata {
             renderedRefinements: renderedRefinements,
             renderedFormalModuleReplacements: renderedFormalModuleReplacements,
             configuration: tlcConfiguration(behavior: semantics.behavior,
-                replacements: semantics.formalModuleReplacements.map { $0.configuration(moduleNames: moduleNames) }, refinementNames: refinements.map(\.name)),
+                replacements: semantics.formalModuleReplacements.map { $0.configuration(moduleNames: moduleNames) },
+                refinementNames: refinements.map(\.name), hasState: !layout.variables.isEmpty),
             requiredStandardModules: requiredStandardModules, importedNames: imports)
     }
 
@@ -1991,7 +2002,7 @@ private extension CompiledModuleMetadata {
     }
 
     func tlcConfiguration(behavior: CompiledBehavior, replacements: [TLCModuleReplacement],
-        refinementNames: [String]) -> TLCConfiguration {
+        refinementNames: [String], hasState: Bool) -> TLCConfiguration {
         var lines: [String] = []
         for constant in constants.sorted(by: { $0.name < $1.name }) {
             lines.append("CONSTANT \(constant.name) = \(constant.value)")
@@ -2005,9 +2016,14 @@ private extension CompiledModuleMetadata {
             lines.append("CONSTANT \(name) = \(name)")
         }
         if behavior.constraint != nil { lines.append("CONSTRAINT StateConstraint") }
+        let assumptionsOnly = !hasState && behavior.actions.isEmpty
+            && behavior.invariants.isEmpty && behavior.reachabilityProperties.isEmpty
+            && behavior.temporalProperties.isEmpty && refinementNames.isEmpty && behavior.assume != nil
+            && behavior.constraint == nil && behavior.fairness.isEmpty
         return TLCConfiguration(
+            assumptionsOnly: assumptionsOnly,
             declarations: lines,
-            checkDeadlock: behavior.checkDeadlock,
+            checkDeadlock: assumptionsOnly ? false : behavior.checkDeadlock,
             invariants: behavior.invariants.map(\.name),
             reachabilityProperties: behavior.reachabilityProperties.map(\.name),
             properties: behavior.temporalProperties.map(\.name),
