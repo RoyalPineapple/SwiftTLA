@@ -9,8 +9,9 @@ struct MachineValidationTests {
         var states: [Int: Int] = [:]
         var initials: Set<Int> = []
         var edges: Set<String> = []
+        let initial = try ReachabilityExportModel.initialMachines()
         let result = try MachineValidator.run(
-            initialMachines: ReachabilityExportModel.initialMachines(), maximumStates: 3,
+            initialMachines: initial + initial, maximumStates: 3,
             checking: .init(properties: [.Positive, .BeyondLimit], checkDeadlock: false),
             stopOnViolation: false
         ) { event in
