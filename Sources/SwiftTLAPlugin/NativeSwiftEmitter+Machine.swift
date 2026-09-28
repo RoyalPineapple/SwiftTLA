@@ -277,7 +277,14 @@ extension NativeSwiftEmitter {
                 closing += "}\n"
             }
         }
-        code += "result.append(\(executionState(values: variable)))\n" + closing
+        if let selected = program.behavior.initialInvariant {
+            let arguments = arguments.isEmpty ? "" : ", " + arguments
+            code += "let candidate = \(executionState(values: variable))\n"
+            code += "if try Self._invariant\(selected.ordinal)(in: candidate\(arguments)) { result.append(candidate) }\n"
+        } else {
+            code += "result.append(\(executionState(values: variable)))\n"
+        }
+        code += closing
         let validationArguments = arguments.isEmpty ? "" : ", " + arguments
         code += "for state in result { try _validateCollections(state\(validationArguments)) }\nreturn result"
         let appendedParameters = parameters.isEmpty ? "" : ", " + parameters

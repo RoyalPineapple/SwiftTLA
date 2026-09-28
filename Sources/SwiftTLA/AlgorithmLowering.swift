@@ -47,14 +47,16 @@ enum AlgorithmLowerer {
     static func lower(
         _ algorithm: AlgorithmModel,
         processNames: [String],
-        formalOperatorDefinitions: [FormalOperatorDefinition] = []
+        formalOperatorDefinitions: [FormalOperatorDefinition] = [],
+        enumerateInitialControl: Bool = false
     ) throws -> TLASpec {
         let resolvedFormalOperators = formalOperatorDefinitions + algorithm.formalOperatorDefinitions
         let processes = algorithm.processes
         if processes.isEmpty, !algorithm.sequentialSteps.isEmpty {
             return try lowerSequential(
                 algorithm,
-                formalOperatorDefinitions: resolvedFormalOperators
+                formalOperatorDefinitions: resolvedFormalOperators,
+                enumerateInitialControl: enumerateInitialControl
             )
         }
         let requiresProgramCounter = requiresProgramCounter(for: algorithm)
@@ -204,13 +206,34 @@ enum AlgorithmLowerer {
                     control.location(first.label.name)
                 ]
             }
+            let initialControl: VariableInitialization
+            if enumerateInitialControl {
+                let locationsByProcess = processes.enumerated().map { index, process in
+                    let control = ControlFlow(algorithm: algorithm.name,
+                        owner: .process(algorithm: algorithm.name, ordinal: index, typeName: process.typeName))
+                    return process.steps.map { control.location($0.label.name) }
+                }
+                let space = StateExpr.functionSet(controlDomain,
+                    .setLiteral(locationsByProcess.flatMap { $0 }))
+                if processes.count > 1 {
+                    let candidate = "__pcal_initial_control"
+                    let restrictions = zip(processes, locationsByProcess).map { process, locations in
+                        StateExpr.forAll(process.domain, controlBinding,
+                            .in(.functionApply(.variable(candidate), .variable(controlBinding)),
+                                .setLiteral(locations)))
+                    }
+                    initialControl = .memberOf(.setFilter(space, candidate,
+                        restrictions.dropFirst().reduce(restrictions[0], StateExpr.and)))
+                } else {
+                    initialControl = .memberOf(space)
+                }
+            } else {
+                initialControl = .expression(.functionLiteral(controlDomain, controlBinding,
+                    .caseExpr(controlCases, nil)))
+            }
             variables.insert(NamedVar(
                 name: CompilerControlSymbol.programCounter.rawValue,
-                initialization: .expression(.functionLiteral(
-                    controlDomain,
-                    controlBinding,
-                    .caseExpr(controlCases, nil)
-                )),
+                initialization: initialControl,
                 origin: .programCounter
             ), at: 0)
         }
@@ -480,7 +503,8 @@ enum AlgorithmLowerer {
     /// unparameterized action labels.
     private static func lowerSequential(
         _ algorithm: AlgorithmModel,
-        formalOperatorDefinitions: [FormalOperatorDefinition]
+        formalOperatorDefinitions: [FormalOperatorDefinition],
+        enumerateInitialControl: Bool
     ) throws -> TLASpec {
         let steps = algorithm.sequentialSteps
         let procedures = algorithm.procedures
@@ -562,7 +586,9 @@ enum AlgorithmLowerer {
         let needsProgramCounter = !procedures.isEmpty || !isControlFreeLoop(steps)
         var variables = (needsProgramCounter ? [NamedVar(
             name: CompilerControlSymbol.programCounter.rawValue,
-            initialization: .expression(sequentialControl.location(first.label.name)),
+            initialization: enumerateInitialControl
+                ? .memberOf(.setLiteral(steps.map { sequentialControl.location($0.label.name) }))
+                : .expression(sequentialControl.location(first.label.name)),
             origin: .programCounter
         )] : [])
             + sharedVariables

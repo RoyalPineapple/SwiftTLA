@@ -459,6 +459,7 @@ package struct CompiledTypeChecker: Sendable {
             checkingRegisterInitializations: checkingRegisterInitializations,
             validationScenarios: scenarios,
             initializations: initializations,
+            initialInvariant: inputs.semantics.behavior.initialInvariant,
             actions: actions,
             enabledActionIndices: inputs.semantics.behavior.enabledActionIndices,
             enabledActionDependencies: inputs.semantics.behavior.enabledActionDependencies,

@@ -277,6 +277,7 @@ public struct TLASpec: Sendable {
   package var formalParameters: [FormalModuleParameter]
   package var actions: [NamedAction]
   package var invariants: [NamedStatePredicate]
+  package var initialInvariantSelections: [PropertyReference] = []
   package var reachabilityProperties: [NamedStatePredicate]
   package var temporalProperties: [NamedTemporal]
   package var fairness: [FairnessCondition]
@@ -413,6 +414,16 @@ public struct InvDecl: ModelProperty, SpecComponent {
     self.name = reference.name
     self.body = body
   }
+}
+
+public struct InitialStatesDecl: SpecComponent {
+  package let invariant: PropertyReference
+}
+
+/// Selects a declared invariant as the model's initial-state predicate.
+/// Variable domains must enumerate every value the predicate permits.
+public func InitialStates(satisfying invariant: InvariantHandle) -> InitialStatesDecl {
+  .init(invariant: invariant.reference)
 }
 public struct ReachableDecl: ModelProperty, SpecComponent {
   public let reference: PropertyReference
@@ -676,6 +687,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: VarDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ActionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: InvDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: InitialStatesDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ReachableDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ValidationDeclaration) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }

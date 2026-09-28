@@ -5,6 +5,7 @@ package struct CompiledBehavior: Sendable {
     package let checkingRegisterInitializations: [CheckingRegisterID: CompiledExpression]
     package let validationScenarios: [CompiledValidationScenario]
     package let initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)]
+    package let initialInvariant: PropertyID?
     package let actions: [CompiledAction]
     /// Indices into actions, with ENABLED dependencies before their users.
     package let enabledActionIndices: [Int]
@@ -32,6 +33,7 @@ package struct CompiledBehavior: Sendable {
             initializations: initializations.map {
                 (variable: $0.variable, initialization: try $0.initialization.map(transform))
             },
+            initialInvariant: initialInvariant,
             actions: actions.map { try $0.map(transform) },
             enabledActionIndices: enabledActionIndices,
             enabledActionDependencies: enabledActionDependencies,

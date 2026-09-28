@@ -51,7 +51,7 @@ struct CompiledRuntime {
                 }
             }
         }
-        return try assignments.map { values in
+        let candidates = try assignments.map { values in
             try CompiledState(values: layout.variables.map { variable in
                 guard let value = values[variable.id] else {
                     throw CompiledEvaluationError.uninitializedVariable(variable.id)
@@ -59,6 +59,11 @@ struct CompiledRuntime {
                 return value
             }, layout: layout, identity: identity)
         }
+        guard let selected = behavior.initialInvariant else { return candidates }
+        guard let invariant = behavior.invariants.first(where: { $0.id == selected }) else {
+            preconditionFailure("Compiled initial invariant is absent from its behavior")
+        }
+        return try candidates.filter { try invariantHolds(invariant, in: $0) }
     }
 
     func successors(from state: CompiledState) throws -> [CompiledSuccessor] {

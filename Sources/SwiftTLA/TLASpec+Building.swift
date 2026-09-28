@@ -43,6 +43,8 @@ extension TLASpec {
         validationScenarios.append(scenario)
       } else if let i = comp as? InvDecl {
         invariants.append(NamedStatePredicate(name: i.name, body: i.body, reference: i.reference))
+      } else if let initial = comp as? InitialStatesDecl {
+        initialInvariantSelections.append(initial.invariant)
       } else if let property = comp as? ReachableDecl {
         reachabilityProperties.append(.init(name: property.name, body: property.body, reference: property.reference))
       } else if let t = comp as? TemporalDecl {
@@ -131,7 +133,8 @@ extension TLASpec {
         let lowered = try AlgorithmLowerer.lower(
           resolved,
           processNames: authoredPlusCalPlan.processNames,
-          formalOperatorDefinitions: formalOperatorDefinitions
+          formalOperatorDefinitions: formalOperatorDefinitions,
+          enumerateInitialControl: !initialInvariantSelections.isEmpty
         )
         authoredPlusCalAlgorithmPlan = authoredPlusCalPlan
         variables += lowered.variables
@@ -194,6 +197,7 @@ extension TLASpec {
     lowered.parameters = parameters
     lowered.checkingRegisters = checkingRegisters
     lowered.validationScenarios = validationScenarios
+    lowered.initialInvariantSelections = initialInvariantSelections
     lowered.algorithmPhase = .lowered
     return lowered
   }

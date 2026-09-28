@@ -701,6 +701,14 @@ Native checking uses the same initial states and transitions, without the fairne
 conjuncts from `Spec`. Application transitions and complete graph capture do not change.
 Temporal and refinement outcomes can change because the permitted infinite behaviors differ.
 
+`InitialStates(satisfying: Inv)` is a model declaration, not a validation
+modifier. It selects complete initial states from the declared finite variable
+domains by the named invariant. Generated Swift initialization and TLA+ `Init`
+use that same selection, including compiler-owned process control locations.
+Without it, declared variable initializers define the initial states. A foreign
+or duplicate selection fails compilation. The selected invariant remains a
+normal property and is checked only when the scenario selects it.
+
 Generated scenarios retain this choice as a typed `ModelBehavior` value.
 Native checking and export consume the same choice. Duplicate behavior modifiers
 produce a diagnostic. Expected outcomes do not select or alter behavior.

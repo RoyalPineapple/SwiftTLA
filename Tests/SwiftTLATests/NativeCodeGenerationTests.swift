@@ -383,7 +383,8 @@ struct NativeCodeGenerationTests {
             parameterDomains: [:],
             checkingRegisterInitializations: [:],
             validationScenarios: [],
-            initializations: [], actions: [], enabledActionIndices: [], enabledActionDependencies: [:],
+            initializations: [], initialInvariant: nil,
+            actions: [], enabledActionIndices: [], enabledActionDependencies: [:],
             invariants: [], reachabilityProperties: [], temporalProperties: [], fairness: compilation.semantics.behavior.fairness,
             constraint: nil, assume: nil)
         let program = CompiledProgram(identity: compilation.identity, moduleMetadata: compilation.moduleMetadata,

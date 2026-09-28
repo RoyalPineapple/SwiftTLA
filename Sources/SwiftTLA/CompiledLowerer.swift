@@ -199,6 +199,24 @@ struct CompiledLowerer {
                     at: "\($0.1.declaration.kind == .invariant ? "invariants" : "reachabilityProperties").\($0.0.name).body", scope: rootScope)
             )
         }
+        guard spec.initialInvariantSelections.count <= 1 else {
+            throw CompilationDiagnostic(code: .duplicateInvariant, stage: .binding,
+                path: "initialStates", expected: "one selected invariant",
+                actual: "\(spec.initialInvariantSelections.count) selections",
+                nextSafeAction: "Select one declared invariant for the initial-state predicate.")
+        }
+        let initialInvariant: PropertyID?
+        if let selected = spec.initialInvariantSelections.first {
+            guard let index = spec.invariants.firstIndex(where: { $0.reference == selected }) else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .binding,
+                    path: "initialStates", expected: "a declared invariant in this model",
+                    actual: "an undeclared or foreign invariant handle",
+                    nextSafeAction: "Declare the selected invariant in the same #spec block.")
+            }
+            initialInvariant = layout.stateProperties[index].id
+        } else {
+            initialInvariant = nil
+        }
         let temporalBodies = try zip(spec.temporalProperties, layout.temporalProperties).map { property, declaration in
             var scope = rootScope
             let path = "temporalProperties.\(property.name)"
@@ -369,6 +387,7 @@ struct CompiledLowerer {
                 checkingRegisterInitializations: checkingRegisterInitializations,
                 validationScenarios: scenarios,
                 initializations: orderedInitializations,
+                initialInvariant: initialInvariant,
                 actions: actions,
                 enabledActionIndices: enabledActions.indices,
                 enabledActionDependencies: enabledActions.dependencies,

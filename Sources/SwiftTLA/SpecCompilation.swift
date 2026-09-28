@@ -1266,6 +1266,9 @@ private struct CanonicalSpecificationEncoder {
             node("invariant", [$0.name, canonicalExpression($0.body)])
         }
         list("invariants", invariants) { $0 }
+        list("initialInvariantSelections", spec.initialInvariantSelections) { selected in
+            String(spec.invariants.firstIndex(where: { $0.reference == selected }) ?? -1)
+        }
         if !spec.reachabilityProperties.isEmpty {
             let reachability = spec.reachabilityProperties.map {
                 node("reachable", [$0.name, canonicalExpression($0.body)])
@@ -1895,7 +1898,7 @@ private extension CompiledModuleMetadata {
                 ($0.variable, $0.initialization)
             }
         )
-        let initialPredicates = try layout.variables.map { variable -> String in
+        var initialPredicates = try layout.variables.map { variable -> String in
             let name = variable.declaration.name
             guard let initialization = initializations[variable.id] else {
                 throw CompilationDiagnostic(
@@ -1941,6 +1944,14 @@ private extension CompiledModuleMetadata {
                 }
                 return "\(name) \\in \(try renderer.state(set))"
             }
+        }
+        if let selected = behavior.initialInvariant {
+            guard let invariant = behavior.invariants.first(where: { $0.id == selected }) else {
+                throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                    path: "initialStates", expected: "the selected compiled invariant",
+                    actual: "missing invariant", nextSafeAction: "Compile the model again from its current source.")
+            }
+            initialPredicates.append(invariant.name)
         }
         if initialPredicates.count == 1 {
             lines.append("Init == \(initialPredicates[0])")

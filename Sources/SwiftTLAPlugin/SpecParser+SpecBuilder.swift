@@ -831,6 +831,17 @@ extension ParserSession {
             }
         case "Invariant":
             parseStateProperty(call, into: &components)
+        case "InitialStates":
+            if call.arguments.count == 1, let argument = call.arguments.first,
+               argument.label?.text == "satisfying",
+               let reference = argument.expression.as(DeclReferenceExprSyntax.self),
+               let invariant = specBindings.properties[reference.baseName.sourceIdentifierName] as? InvariantHandle {
+                components.initialInvariantSelections.append(invariant.reference)
+            } else {
+                components.diagnostics.append(.init(
+                    message: "InitialStates requires a model-owned invariant handle.", source: call
+                ))
+            }
         case "Reachable":
             parseStateProperty(call, into: &components, reachability: true)
         case "Constraint", "Assume":
