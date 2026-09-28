@@ -185,7 +185,8 @@ extension NativeSwiftEmitter {
         let checks = model.api.variables.compactMap { variable -> String? in
             guard let collection = variable.collection else { return nil }
             return """
-            guard Set(\(stateValue(variable.id)).keys) == Set(\(collection.membersIdentifier)) else {
+            guard \(stateValue(variable.id)).count == \(collection.membersIdentifier).count,
+                  \(collection.membersIdentifier).allSatisfy({ \(stateValue(variable.id))[$0] != nil }) else {
                 throw GeneratedMachineStateDiagnostic.typeMismatch(
                     path: \(String(reflecting: collection.formalName)),
                     expected: "exactly the application IDs bound when the machine was created",
