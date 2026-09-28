@@ -9643,16 +9643,16 @@
     {
       "path": "specifications/Stones",
       "name": "Stone Scale Puzzle",
-      "audit": "reference inputs audited",
-      "gap": "The published configuration evaluates assumptions with W=40 and N=4 and reports zero states. The native comparison path requires initial machines.",
+      "audit": "implementation staged; hosted comparison pending",
+      "gap": "The model-owned W=40/N=4 assumption scenario and byte-identical pinned reference are registered. Focused local checks cover the recursive solution and captured PrintT value, but only the hosted native/generated-TLC/upstream-TLC comparison can establish parity. No state graph is expected or fabricated.",
       "scheduling": {
-        "label": "Checker gap",
+        "label": "Capacity/evidence gap",
         "sharedCapability": "assumption-only-checking",
         "reproducer": "Stones.cfg selects constants W=40 and N=4. Stones.tla has assumptions but no specification, initial predicate, or next predicate.",
-        "nativeBoundary": "NativeScenarioRun requires initial machines. ReachabilityGraph rejects an empty initial machine list.",
+        "nativeBoundary": "The native assumption-only scenario evaluates without initial machines and captures exact printed values independently of TLC.",
         "completionCondition": "Compare unchanged assumptions through native evaluation, generated TLC, and upstream TLC. Retain zero-state accounting and PrintT solution output without dummy states.",
-        "scope": "Recursion and collection support remain unclassified until a focused implementation test. No smaller constants or invented bounds qualify.",
-        "evidenceKind": "Source audit only; no new execution evidence."
+        "scope": "Typed unbounded recursion, sequence mapping, and prepending are implemented for the published constants. No smaller constants or invented bounds qualify.",
+        "evidenceKind": "Focused local diagnostics only; hosted TLC comparison is pending."
       },
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
@@ -9668,8 +9668,8 @@
         {
           "path": "specifications/Stones/Stones.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
+          "reason": "Published assumption-only configuration bound to the typed Stones scenario; hosted outcome comparison remains pending.",
+          "implementations": ["Sources/UpstreamParity/Examples/Stones.swift"],
           "dispositionComplete": false
         }
       ],
@@ -9678,10 +9678,16 @@
           "module": "specifications/Stones/Stones.tla",
           "configuration": "specifications/Stones/Stones.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Stones.swift",
+              "scenario": "Stones",
+              "caseID": "stones-0"
+            }
+          ],
           "evidence": []
         }
       ],
