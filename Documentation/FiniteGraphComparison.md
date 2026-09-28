@@ -35,13 +35,18 @@ only the generated TLA+ bundle. Neither checker consumes the other's result.
 The `dsl-native-parity` job compares their selected invariant, reachability,
 temporal, refinement, and deadlock verdicts. When both finish exhaustive
 exploration, it also compares the **complete** initial-state set, canonical
-state set, and labeled edge set. The comparator sorts full state identities
-and edges on disk; equal counts or fingerprints alone cannot establish parity.
+state set, and labeled edge set.
+
+The comparator assigns one rank to each complete canonical state value. It
+maps each edge to its source rank, action label, and destination rank. It
+compares directed edge sets, so repeated identical edges count once. Edge
+multiplicity is not part of graph equality. Equal counts or fingerprints alone
+cannot establish parity.
+
 A legitimate early counterexample can establish a selected check's verdict,
 but does not claim complete graph parity or a verdict for a selected deadlock
 check that TLC never reached. The reports retain that selection explicitly.
-Missing, malformed, truncated, or
-unsupported evidence fails closed.
+Missing, malformed, truncated, or unsupported evidence fails closed.
 
 The `upstream-parity` job is separate. It runs TLC on the DSL-generated TLA+
 and the pinned upstream TLA+ fixture using the declared configuration. It

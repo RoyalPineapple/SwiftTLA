@@ -64,8 +64,9 @@ Each generated machine exposes these value types:
 - `Transition` contains the action and the state before and after it.
 
 Sets, sequences, and functions use standard Swift `Set`, `Array`, and
-`Dictionary` values. Pairs and records become generated immutable structs;
-read their fields directly. Finite unions become generated enums containing
+`Dictionary` values. Tuples and structural records use generated immutable
+structs. Named Swift records keep their declared types. Both record forms
+expose typed fields. Finite unions become generated enums containing
 exactly their declared values. These mappings apply recursively to nested
 values.
 
