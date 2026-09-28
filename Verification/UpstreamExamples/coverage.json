@@ -60,6 +60,14 @@
     "completionRule": "Scheduling labels and queue positions confer no evidence credit. Count only retained hosted configuration matches. Declare a family complete only after every applicable configuration and variant is verified, module dispositions are resolved, and legacy code is removed. The next deliverable is one fully verified family on a green hosted revision through the intended DSL and correct checking path."
   },
   "ci": {
+    "bakeryBoulangerieFamilyCandidate": {
+      "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36437472645",
+      "observedStatus": "completed",
+      "conclusion": "success",
+      "jobs": "All 114 required jobs passed. The optional comparison replay diagnostic was skipped.",
+      "scope": "Both published configurations matched in the full matrix. Generated TLA matched pinned upstream TLC. The generated Swift machine matched generated-TLA TLC. Both comparisons used complete initial states, states, labeled edges, and selected check results. The candidate run does not replace ordinary CI or PR-head admission on the final pushed SHA."
+    },
     "learnProofsFamilyCandidate": {
       "sourceSHA": "8a9543c71ded59fa44a9a12a5f27381f80771d6a",
       "observedStatus": "completed",
@@ -3002,41 +3010,18 @@
     {
       "path": "specifications/Bakery-Boulangerie",
       "name": "The Boulangerie Algorithm",
-      "capacityInvestigation": {
-        "upstreamManifest": "https://github.com/tlaplus/Examples/blob/ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Bakery-Boulangerie/manifest.json",
-        "observation": "The pinned MCBoulanger entry records successful exhaustive search with runtime 00:01:00, but supplies no state count. MCBakery's separate 655200-state figure must not be attributed to MCBoulanger.",
-        "diagnostic": "The candidate-only diagnose_boulanger dispatch input in .github/workflows/finite-graph.yml adds an opt-in upstream TLC run before any native export prerequisite. It preserves the original configuration and pinned tools, retains source and input hashes, command, Java version, timing and TLC output, and uploads under a separate diagnostic artifact prefix. Existing comparison jobs and admission requirements remain unchanged. Wrapper static checks pass; hosted execution is pending. This diagnostic earns no coverage credit.",
-        "remaining": "Run the unchanged upstream MCBoulanger configuration in hosted TLC before choosing a larger native runner limit. Retain source, tool, configuration, timing, and state-count evidence. The historical runtime is not a comparable benchmark. Native overhead and semantic mismatch remain distinct possibilities. An upstream-only diagnostic cannot establish graph or property equivalence."
-      },
-      "pendingMigration": {
-        "configuration": "MCBoulanger.cfg",
-        "scope": "The working patch replaces the fixed two-member port with the model-owned N=3, MaxNat=3 scenario, ordinary typed dictionaries and sets, the ncs fairness exemption, TypeOK, and all nine IInv clauses with Before. Reused named process predicates supply TypeOK within Inv. Typed At and Finished accept configured process expressions. Original MCBoulanger module/configuration and Boulanger dependency replace the reduced fixture; the TLAPS helper is staged with its license and source digest.",
-        "diagnosticSession": "57124",
-        "previousDiagnostic": "Sessions 88060, 71645, and 41454 failed before tests. The generated throwing-domain error was removed, but splitting predicates did not resolve Swift's type-checking diagnostic. Source inspection then identified IntRange returning legacy SetExpr<Int> while configured dictionary keys and locals use Set<Int>. Session 89609 was intentionally stopped before source edits after finding dependent mapping and parser type spellings. The working patch migrates IntRange and set mapping to Swift Set results, updates affected callers, and permits InjectiveSequence to consume any typed set. It also retains quantified lexical expressions and gives shadowing quantifiers distinct binders. Session 4945 is the focused retry; no successful result is claimed yet.",
-        "latestDiagnostic": "Session 57124 passed all 330 focused tests after a 591.09-second build and 14.794 seconds of tests. Coverage includes Boulanger native dispatch and rendering, all 63 scenario identities, KVsnap regressions, configured process families, fairness exemptions, collection types, quantifier lexical scope and shadowing, recursion, and parser/compiler fidelity. The approved wrapper exited successfully. Only documentation and ledger files changed during this build.",
-        "localEvidence": {
-          "sourceBaseSHA": "61d75eafc1cae0e71b0e85f4824f6b52001796ba",
-          "sourcePatchSHA256": "5a0f4424ec926b07e6fd4f22e8ff02222dffe1c95d31a5b8036e1878028441d7",
-          "patchCommand": "git diff --binary HEAD -- Sources Tests Tools",
-          "session": "57124",
-          "testsPassed": 330,
-          "authority": "Local diagnostic only; independent hosted equivalence remains required."
-        },
-        "remaining": "Independent complete hosted comparisons remain required. The all-model scenario enumerator includes Boulanger, with its inventory assertion updated to 63. N in 0...MaxNat preserves the upstream N-in-Nat assumption after substitution. Source review maps all nine transitions and all nine IInv clauses to the pinned reference. The configured control domain is compiler-owned and still requires complete graph-boundary comparison. No hosted completion credit is assigned.",
-        "invariantMapping": "The process-scoped typeOK predicate is reused by TypeOK and Inv. Inv retains IInv clauses 1-5 directly and clause 7 through nxt family lookup. Clauses 6, 8, and 9 share one universal other-member predicate: the disjunction of their applicable antecedents implies the complete Before(self, other) body. This factoring avoids duplicate Before expressions while preserving each antecedent; it remains subject to generated execution and independent hosted validation."
-      },
-      "audit": "reference inputs audited",
-      "gap": "Both published configurations have SwiftTLA ports and pinned reference inputs. MCBakery has exact focused hosted comparisons and green ordinary CI on de8cb4ae. MCBoulanger parity and full-matrix admission remain outstanding; the family is incomplete.",
+      "audit": "complete at verified revision",
+      "gap": "None for this family at fb1439bb. Both published configurations have exact full-matrix hosted comparisons. All four module dispositions and legacy cleanup are complete. Ordinary CI and independent admission on the final PR-head SHA remain separate requirements.",
       "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/Bakery-Boulangerie/Bakery.tla",
           "role": "behavior dependency",
-          "reason": "This module contains the Bakery algorithm, safety invariants, ISpec, and proofs. The canonical BakeryModel selects Inv-defined initial states for MCBakery. Its generated TLA and native machine each have exact focused hosted parity with their independent TLC oracles on de8cb4ae; full-family admission remains outstanding.",
+          "reason": "This module contains the Bakery algorithm, safety invariants, ISpec, and proofs. The canonical BakeryModel selects Inv-defined initial states for MCBakery. Its generated TLA and native machine each matched their independent hosted oracles in the full matrix on fb1439bb.",
           "implementations": [
             "Sources/UpstreamParity/CanonicalCorpus/Bakery.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/Bakery-Boulangerie/Boulanger.tla",
@@ -3046,28 +3031,28 @@
             "candidateSource": "https://github.com/tlaplus/tlapm/blob/f14d23363a6409ee616cb6ee12edd53b07660011/library/TLAPS.tla",
             "gitBlobSHA": "d99c4bb1be3d09f9cd17504e0af2fa53dea16d07",
             "sha256": "9afe54984062748a0568966434cc0945d682f8cd89fdbc38f73b5579751b0c55",
-            "status": "Staged byte-identically as a declared MCBoulanger dependency with the upstream license. Hosted SANY/TLC acceptance remains required; no TLAPS proof-verification claim is made."
+            "status": "Staged byte-identically as a declared MCBoulanger dependency with the upstream license. Hosted SANY/TLC accepted it on fb1439bb. No TLAPS proof-verification claim is made."
           },
           "role": "behavior dependency",
-          "reason": "The configured Swift port retains all nine transitions, TypeOK, MutualExclusion, all nine IInv clauses with Before, and the ncs fairness exemption. Process-local family views retain configured integer keys through ordinary typed dictionaries. The original upstream module and its TLAPS helper are retained. Focused diagnostics passed; complete independent hosted comparisons remain required. No TLAPS proof-verification claim is made.",
+          "reason": "The Swift port retains all nine transitions, TypeOK, MutualExclusion, all nine IInv clauses with Before, and the ncs fairness exemption. Typed dictionaries retain configured process keys. The pinned upstream module and TLAPS helper remain unchanged. Both full-matrix hosted comparisons matched on fb1439bb. No TLAPS proof-verification claim is made.",
           "implementations": [
             "Sources/UpstreamParity/CanonicalCorpus/Boulanger.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/Bakery-Boulangerie/MCBakery.tla",
           "role": "configured root",
           "reason": "The configuration binds N=2 and MaxNat=2, replaces Nat with 0..MaxNat, and selects ISpec. It checks MutualExclusion, TypeOK, and Inv with deadlock checking disabled. DeadlockFree and StarvationFree are commented out.",
           "implementations": ["Sources/UpstreamParity/CanonicalCorpus/Bakery.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/Bakery-Boulangerie/MCBoulanger.tla",
           "role": "configured root",
           "reason": "The configuration binds N=3 and MaxNat=3, replaces Nat with 0..MaxNat, and selects Spec. StateConstraint requires every ticket to be less than MaxNat. MutualExclusion, TypeOK, Inv, and default deadlock checking remain required.",
           "implementations": ["Sources/UpstreamParity/CanonicalCorpus/Boulanger.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -3076,16 +3061,16 @@
           "configuration": "specifications/Bakery-Boulangerie/MCBakery.cfg",
           "required": true,
           "status": "hosted match",
-          "verifiedSourceSHA": "de8cb4ae4281e07cab04d101a5e25f570a817aab",
+          "verifiedSourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
           "capabilityAudit": {
             "moduleBlobSHA": "d9f40ecf2cb3cfb04e412dbe92265c803117766d",
             "configurationBlobSHA": "b0af6112a142d531d26c36dd06ff3b5dea258d74",
             "behaviorBlobSHA": "7f9329e1e3e9360b3939abb2713f638e7a2cbc72",
             "initialization": "Bakery.tla line 502 defines ISpec as Inv /\\ [][Next]_vars. Inv is TypeOK /\\ IInv, not the fixed initial assignments of Init. Initial states must range over the finite typed shared/local functions and all nine declared control labels, then satisfy IInv. A native port starting only at ncs with zero tickets is not equivalent.",
             "behavior": "The published configuration binds N=2 and MaxNat=2, substitutes NatOverride=0..MaxNat for Nat, and checks MutualExclusion, TypeOK, and Inv. ISpec has no fairness conjuncts. CHECK_DEADLOCK is explicitly FALSE, and the two commented temporal properties are not selected.",
-            "requiredCapability": "Typed invariant-defined initial-state selection, including compiler-owned process control locations, feeds generated initial machines and TLA+ export from one model through InitialStates(satisfying:). Both focused hosted parity paths and ordinary CI are green on de8cb4ae; full admission remains outstanding.",
+            "requiredCapability": "InitialStates(satisfying:) selects typed initial states and compiler-owned process locations for native checking and TLA+ export. Both full-matrix hosted parity paths passed on fb1439bb. Final PR-head admission remains outstanding.",
             "criteria": ["AC-04", "AC-06", "AC-08", "AC-09", "AC-15", "AC-19"],
-            "scope": "The pinned input audit identified this capability. The canonical model, manifest case, and focused hosted comparisons establish 655200 complete initial states and exact graph/property parity on de8cb4ae. No full-matrix admission or family completion is claimed."
+            "scope": "The pinned input audit identified this capability. The canonical model and full-matrix hosted comparisons establish 655200 initial states and exact graph and check parity on fb1439bb."
           },
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
@@ -3116,6 +3101,46 @@
               "completeGraph": true,
               "allPropertiesMatch": true,
               "scope": "Focused native Swift versus generated-TLA TLC comparison is exact: 655200 initial states, 655200 states, 2748384 distinct labeled edges, and all three selected invariants satisfied. Native exploration took 39.28 seconds. Ordinary CI run 36407092553 passed on the same SHA. Not full admission."
+            },
+            {
+              "sourceSHA": "0c12949d4749868ec4540e402bd8c0dcf80fbb17",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36429662656",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36429662656/artifacts/10973083794",
+              "artifactDigest": "sha256:3e70440f47cae4a0e9d413b02791134f03f300f6278e3c26a800fed31690d093",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Full-matrix generated-TLA versus pinned upstream TLC job is exact on 0c12949d: complete initial states and labeled graph, Inv, MutualExclusion, TypeOK, and disabled deadlock checking. The aggregate later failed on Boulanger evidence upload."
+            },
+            {
+              "sourceSHA": "0c12949d4749868ec4540e402bd8c0dcf80fbb17",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36429662656",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36429662656/artifacts/10973786588",
+              "artifactDigest": "sha256:4b2a2d634b2d31139f04b21a34baf6b028a270719f80ea2916b75114d47442bb",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Full-matrix generated Swift machine versus generated-TLA TLC job is exact on 0c12949d: 655200 complete initial states, 655200 states, 2748384 labeled edges, and all three selected invariants satisfied. The generated-TLA oracle is input-keyed and originated on de8cb4ae; native validation and comparison ran on 0c12949d. The aggregate later failed on Boulanger evidence upload."
+            },
+            {
+              "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36437472645",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36437472645/artifacts/10976098943",
+              "artifactDigest": "sha256:1b4787f55d967bc2485ded0d321938c40c6deeb34f039d07c6e30e42f8c3b2c8",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "The full-matrix generated-TLA and pinned-upstream TLC comparison matched exactly. It retained complete initial states, states, labeled edges, Inv, MutualExclusion, TypeOK, and disabled deadlock checking. The upstream input-keyed oracle was reused with its verified origin."
+            },
+            {
+              "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36437472645",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36437472645/artifacts/10977011762",
+              "artifactDigest": "sha256:d311f7de83ffd752ad16d95fd95f2fe29320ed2d6f0f9da3a23b2c4ff135ef65",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "The full-matrix generated Swift machine and generated-TLA TLC comparison matched exactly. It retained 655200 initial states, 655200 states, 2748384 labeled edges, and all three selected invariant results. Native exploration took 35.26 seconds. Complete-graph comparison took 6.46 seconds."
             }
           ]
         },
@@ -3123,7 +3148,8 @@
           "module": "specifications/Bakery-Boulangerie/MCBoulanger.tla",
           "configuration": "specifications/Bakery-Boulangerie/MCBoulanger.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -3133,21 +3159,51 @@
               "caseID": "boulanger"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "0c12949d4749868ec4540e402bd8c0dcf80fbb17",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36421430682",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36421430682/artifacts/10970774412",
+              "artifactDigest": "sha256:8a1692638bf08866859c0e4c986904ca48f1bc1ba697b6f14d78e632ffd7f10e",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Focused generated-TLA versus pinned upstream TLC comparison is exact for complete initial states and labeled graph, Inv, MutualExclusion, TypeOK, and default deadlock checking. The hosted report and process pins were inspected; ordinary CI run 36421430728 passed on the same SHA. Not full-matrix admission."
+            },
+            {
+              "sourceSHA": "0c12949d4749868ec4540e402bd8c0dcf80fbb17",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36421431135",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36421431135/artifacts/10972216583",
+              "artifactDigest": "sha256:90b4b3a02972d5380b3453cd44502fd7b4a173aa54eb8984acd9d570a5525777",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Focused generated Swift machine versus generated-TLA TLC comparison is exact: 1 initial state, 7866982 states, 52701220 labeled edges, and selected Inv, MutualExclusion, TypeOK, and default deadlock verdicts. Native exploration took 1180.01 seconds. Not full-matrix admission."
+            },
+            {
+              "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36437472645",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36437472645/artifacts/10979621158",
+              "artifactDigest": "sha256:f9004f72758222a0e80e999f061456a408c89218cf2ca52ceaef5f6d623e3979",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "The full-matrix generated-TLA and pinned-upstream TLC comparison matched exactly. It retained complete initial states, states, labeled edges, Inv, MutualExclusion, TypeOK, and default deadlock checking. The upstream input-keyed oracle was reused with its verified origin."
+            },
+            {
+              "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36437472645",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36437472645/artifacts/10979146790",
+              "artifactDigest": "sha256:06ae0fed3722c74b9550effa6068ebd7184fdaa07de20fe6d4af9f58eb6d177c",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "The full-matrix generated Swift machine and generated-TLA TLC comparison matched exactly. It retained one initial state, 7866982 states, 52701220 labeled edges, and the selected check results. Native exploration took 1207.39 seconds. Complete-graph comparison took 113.25 seconds."
+            }
+          ]
         }
       ],
-      "partialCases": [
-        {
-          "caseID": "bakery",
-          "implementation": "Sources/UpstreamParity/CanonicalCorpus/Bakery.swift",
-          "reason": "Both independent focused hosted comparisons and ordinary CI passed on de8cb4ae; the obsolete fixed-Init fixture has been removed. MCBoulanger and full-matrix admission remain required; no family completion credit."
-        },
-        {
-          "caseID": "boulanger",
-          "implementation": "Sources/UpstreamParity/CanonicalCorpus/Boulanger.swift",
-          "reason": "The registered MCBoulanger reference module and configuration are byte-identical to upstream. Focused diagnostics passed, but complete independent hosted comparisons remain missing. No hosted completion credit."
-        }
-      ]
+      "partialCases": []
     },
     {
       "path": "specifications/barriers",
@@ -10395,7 +10451,7 @@
       "id": "AC-12",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "NativeCodeGenerationTests rejects interpreter, runtime compilation, and formal-value references in generated counter execution, but that does not cover all callers. Production validation in Sources/UpstreamParity/Conformance/TemporalSymmetryCheck.swift still calls symmetryConformanceSpec(scope:).compile() and constructs both raw and reduced Swift graphs through ModelChecker and FormalGraphExporter. Its legacy ModelCollection/CollectionAction fixture is not a generated native model. This production Swift-checking path requires migration, not merely a test-only formal-oracle justification. ReachabilityGraph exposes no symmetry-reduction policy yet. Complete caller coverage and remaining formal-tool boundary dispositions remain unaudited.",
+      "reason": "Generated counter execution has no interpreter fallback, but that does not cover every Swift checking path. The active .github/workflows/temporal-symmetry-conformance.yml runs tlc-validate temporal-symmetry, whose symmetry arm in Sources/UpstreamParity/Conformance/TemporalSymmetryCheck.swift compiles symmetryConformanceSpec(scope:) and builds raw and reduced Swift graphs through ModelChecker and FormalGraphExporter. That legacy ModelCollection/CollectionAction fixture does not check a generated native machine; ReachabilityGraph exposes no symmetry-reduction policy. This is an active Swift-checking migration gap, distinct from the permitted TLC oracle. Complete caller coverage and formal-tool boundary dispositions remain unaudited.",
       "evidence": []
     },
     {
