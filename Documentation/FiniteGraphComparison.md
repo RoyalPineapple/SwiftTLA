@@ -78,6 +78,11 @@ job requires both independent parity matrices to pass. A focused diagnostic
 is not complete corpus admission. Host-side evidence, not local test results,
 is the authority for a candidate.
 
+`Comparison replay diagnostic` can run a changed comparator against retained
+native/TLC evidence without rerunning either checker. It records both source
+and evidence SHAs and reports only on the recorded evidence; it is never an
+admission check for the new source revision.
+
 The former all-in-one finite-graph runner is removed. It must not be used to
 credit a configuration. The separate temporal/symmetry conformance suite
 continues to check its specialized contract, but is not a substitute for

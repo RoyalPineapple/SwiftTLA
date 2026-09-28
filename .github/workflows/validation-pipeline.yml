@@ -314,20 +314,18 @@ jobs:
           ref: ${{ env.SWIFT_TLA_SHA }}
           fetch-depth: 0
           submodules: false
-      - name: Require an immutable comparator-only candidate
+      - name: Require immutable diagnostic and evidence revisions
         run: |
           test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
           [[ "$REPLAY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$REPLAY_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           test -n "$CASE_ID"
           test -n "$REPLAY_ARTIFACT_NAME"
           git cat-file -e "$REPLAY_SHA^{commit}"
-          changed=$(git diff --name-only "$REPLAY_SHA" "$SWIFT_TLA_SHA")
-          while IFS= read -r path; do
-            case "$path" in
-              ''|Sources/UpstreamParity/Conformance/ValidationEvidenceComparison.swift|.github/workflows/validation-pipeline.yml|Documentation/FiniteGraphComparison.md|Sources/SwiftTLA/SwiftTLA.docc/GeneratedMachineSurface.md) ;;
-              *) echo "Replay cannot certify changed producer input: $path" >&2; exit 1 ;;
-            esac
-          done <<< "$changed"
+          case "$REPLAY_ARTIFACT_NAME" in
+            "dsl-native-$REPLAY_SHA-$REPLAY_RUN_ID-"*"-$CASE_ID") ;;
+            *) echo "Replay artifact does not match evidence revision and case" >&2; exit 1 ;;
+          esac
       - uses: actions/download-artifact@v5
         with:
           run-id: ${{ inputs.replay_run_id }}
