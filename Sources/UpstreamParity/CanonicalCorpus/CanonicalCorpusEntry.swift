@@ -9,6 +9,7 @@ package struct CanonicalCorpusEntry: Sendable {
 /// The corpus registry has no case-specific export or link behavior.
 package enum CanonicalCorpus {
     package static let entries: [CanonicalCorpusEntry] = [
+        BakeryModel.corpusEntry,
         BoulangerModel.corpusEntry,
         KVsnapModel.corpusEntry,
         TLCMCModel.corpusEntry,

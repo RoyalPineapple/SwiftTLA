@@ -3026,14 +3026,15 @@
         "invariantMapping": "The process-scoped typeOK predicate is reused by TypeOK and Inv. Inv retains IInv clauses 1-5 directly and clause 7 through nxt family lookup. Clauses 6, 8, and 9 share one universal other-member predicate: the disjunction of their applicable antecedents implies the complete Before(self, other) body. This factoring avoids duplicate Before expressions while preserving each antecedent; it remains subject to generated execution and independent hosted validation."
       },
       "audit": "reference inputs audited",
-      "gap": "MCBoulanger now has the published N=3, MaxNat=3 configuration, original references, all selected invariants, ncs fairness exemption, and successful focused diagnostics. Complete independent hosted graph and property comparisons remain missing. MCBakery still lacks its published ISpec configuration: its initial predicate is Inv rather than the Init used by the legacy Bakery fixture. The family remains incomplete.",
+      "gap": "Both published configurations have SwiftTLA ports and pinned reference inputs. MCBakery's invariant-defined initial states and selected checks pass focused local diagnostics, but complete independent hosted graph and property comparisons are still required for the new candidate. The legacy BakeryN2Model remains to be removed after parity is proved; the family is incomplete.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/Bakery-Boulangerie/Bakery.tla",
           "role": "behavior dependency",
-          "reason": "This module contains the Bakery algorithm, safety invariants, ISpec, and proofs. MCBakery imports its executable definitions. BakeryN2Model covers only a fixed initial-state model, not the published ISpec configuration.",
+          "reason": "This module contains the Bakery algorithm, safety invariants, ISpec, and proofs. The canonical BakeryModel selects Inv-defined initial states for MCBakery; the older BakeryN2Model remains a non-equivalent fixed-Init fixture pending cleanup. Complete hosted parity is not yet established.",
           "implementations": [
+            "Sources/UpstreamParity/CanonicalCorpus/Bakery.swift",
             "Sources/UpstreamParity/Examples/Bakery.swift"
           ],
           "dispositionComplete": false
@@ -3059,7 +3060,7 @@
           "path": "specifications/Bakery-Boulangerie/MCBakery.tla",
           "role": "configured root",
           "reason": "The configuration binds N=2 and MaxNat=2, replaces Nat with 0..MaxNat, and selects ISpec. It checks MutualExclusion, TypeOK, and Inv with deadlock checking disabled. DeadlockFree and StarvationFree are commented out.",
-          "implementations": [],
+          "implementations": ["Sources/UpstreamParity/CanonicalCorpus/Bakery.swift"],
           "dispositionComplete": false
         },
         {
@@ -3075,20 +3076,26 @@
           "module": "specifications/Bakery-Boulangerie/MCBakery.tla",
           "configuration": "specifications/Bakery-Boulangerie/MCBakery.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "capabilityAudit": {
             "moduleBlobSHA": "d9f40ecf2cb3cfb04e412dbe92265c803117766d",
             "configurationBlobSHA": "b0af6112a142d531d26c36dd06ff3b5dea258d74",
             "behaviorBlobSHA": "7f9329e1e3e9360b3939abb2713f638e7a2cbc72",
             "initialization": "Bakery.tla line 502 defines ISpec as Inv /\\ [][Next]_vars. Inv is TypeOK /\\ IInv, not the fixed initial assignments of Init. Initial states must range over the finite typed shared/local functions and all nine declared control labels, then satisfy IInv. A native port starting only at ncs with zero tickets is not equivalent.",
             "behavior": "The published configuration binds N=2 and MaxNat=2, substitutes NatOverride=0..MaxNat for Nat, and checks MutualExclusion, TypeOK, and Inv. ISpec has no fairness conjuncts. CHECK_DEADLOCK is explicitly FALSE, and the two commented temporal properties are not selected.",
-            "requiredCapability": "Typed invariant-defined initial-state selection, including compiler-owned process control locations, must feed generated initial machines and TLA+ export from one model. Current ModelBehavior only selects specification versus initialAndNext over the same initial states; it cannot select ISpec. Resolve the authoring contract before implementation. Do not expose raw pc maps or add a second execution backend.",
+            "requiredCapability": "Typed invariant-defined initial-state selection, including compiler-owned process control locations, now feeds generated initial machines and TLA+ export from one model through InitialStates(satisfying:). The published MCBakery configuration remains unverified until independent hosted graph and property parity completes.",
             "criteria": ["AC-04", "AC-06", "AC-08", "AC-09", "AC-15", "AC-19"],
-            "scope": "Read-only audit of the pinned upstream blobs and current DSL/compiler surface. No model implementation, initial-state count, graph match, or completion credit is claimed."
+            "scope": "The pinned input audit identified this capability. The new model, manifest case, and local configuration diagnostics implement it; no hosted initial-state count, complete graph match, or completion credit is claimed."
           },
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/CanonicalCorpus/Bakery.swift",
+              "scenario": "MCBakery",
+              "caseID": "bakery"
+            }
+          ],
           "evidence": []
         },
         {
@@ -3109,6 +3116,11 @@
         }
       ],
       "partialCases": [
+        {
+          "caseID": "bakery",
+          "implementation": "Sources/UpstreamParity/CanonicalCorpus/Bakery.swift",
+          "reason": "The invariant-defined initial-state port and byte-identical pinned reference are registered. Focused local diagnostics pass; complete independent hosted comparisons and legacy cleanup remain required. No hosted completion credit."
+        },
         {
           "caseID": "boulanger",
           "implementation": "Sources/UpstreamParity/CanonicalCorpus/Boulanger.swift",

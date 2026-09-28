@@ -11,13 +11,14 @@ struct CanonicalCorpusEntryTests {
         try rendered.tlaBundle.validateDeclaredClosure()
         #expect(rendered.tlaBundle.cfg.contains("PROPERTY Refines\n"))
         #expect(CanonicalCorpus.entries.map(\.id) == [
-            "boulanger-upstream-port", "kvsnap-upstream-port", "tlcmc-graph-1", "voteproof-upstream-port"
+            "bakery-upstream-port", "boulanger-upstream-port", "kvsnap-upstream-port",
+            "tlcmc-graph-1", "voteproof-upstream-port"
         ])
     }
 
     @Test("corpus exports retain every compiled check in both backends")
     func configurationIncludesAllDeclaredChecks() throws {
-        let sources = [BoulangerModel.spec, KVsnapModel.spec, TLCMCModel.spec, VoteProofModel.spec]
+        let sources = [BakeryModel.spec, BoulangerModel.spec, KVsnapModel.spec, TLCMCModel.spec, VoteProofModel.spec]
         for entry in CanonicalCorpus.entries {
             let rendered = try entry.rendered()
             let source = try #require(sources.first { $0.name == rendered.tlaBundle.root.name })

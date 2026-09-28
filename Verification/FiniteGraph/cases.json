@@ -764,6 +764,29 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "bakery",
+      "sourceModel": "bakery",
+      "scenario": "MCBakery",
+      "module": "bakery/MCBakery.tla",
+      "configuration": "bakery/MCBakery.cfg",
+      "imports": ["bakery/Bakery.tla", "boulanger/TLAPS.tla"],
+      "dependencies": [
+        {"importingModule": "MCBakery", "importedModule": "Bakery"},
+        {"importingModule": "Bakery", "importedModule": "TLAPS"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Bakery-Boulangerie/MCBakery.tla",
+        "sha256": "e30e4fc5558357406b890b3249eda6ec0ec7d5e191b1469adc3774990c1fbe25"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "e30e4fc5558357406b890b3249eda6ec0ec7d5e191b1469adc3774990c1fbe25",
+      "cfgSHA256": "27204f5e0a0a6dc62748f1148d7aa65ed0a8d7e1cb0bf9daf59beee57246c8f5",
+      "timeoutSeconds": 1800
+    },
+    {
       "id": "boulanger",
       "sourceModel": "boulanger",
       "scenario": "MCBoulanger",

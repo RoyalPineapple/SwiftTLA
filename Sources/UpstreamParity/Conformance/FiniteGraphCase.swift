@@ -283,6 +283,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package func resolveScenario() throws -> (any ModelValidationScenario)? {
             let scenarios: [any ModelValidationScenario]
             switch sourceModel {
+            case .bakery:
+                scenarios = try BakeryModel.validationScenarios()
             case .boulanger:
                 scenarios = try BoulangerModel.validationScenarios()
             case .diningPhilosophers:
@@ -393,6 +395,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
 package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, Sendable {
     case channel
     case majority
+    case bakery
     case boulanger
     case voteProof = "voteproof"
     case kvsnap
@@ -434,7 +437,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .kvsnap: return try explore(KVsnapModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
-        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
+        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
@@ -449,7 +452,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .tlcmcGraph1: return try TLCMCModel.render()
         case .stringLiterals: return try StringLiteralModel.render()
         case .actionReferences: return try ActionReferencesModel.render()
-        case .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
+        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
             throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned scenario")
         }
     }
