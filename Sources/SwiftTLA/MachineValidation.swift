@@ -1,5 +1,20 @@
 import Dispatch
 
+/// A cached lookup hash never substitutes for equality of complete snapshots.
+private struct IndexedSnapshot<Value: Hashable>: Hashable {
+    let value: Value
+    private let cachedHash: Int
+
+    init(_ value: Value) {
+        self.value = value
+        cachedHash = value.hashValue
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.value == rhs.value }
+
+    func hash(into hasher: inout Hasher) { hasher.combine(cachedHash) }
+}
+
 /// The generated machine is the execution authority for native validation.
 /// This traversal retains only the seen-state index and the pending frontier;
 /// callers persist evidence as events arrive.
@@ -63,7 +78,7 @@ public enum MachineValidator {
         }
 
         var context = CheckingContext(registers: try first.initialCheckingRegisters())
-        var seen: [Machine.Snapshot: Int] = [:]
+        var seen: [IndexedSnapshot<Machine.Snapshot>: Int] = [:]
         var pending: [(id: Int, machine: Machine?)] = []
         var head = 0
         var initialCount = 0
@@ -120,11 +135,12 @@ public enum MachineValidator {
             return result
         }
 
-        func stateID(_ snapshot: Machine.Snapshot) -> Int? {
+        func stateID(_ snapshot: Machine.Snapshot) -> (IndexedSnapshot<Machine.Snapshot>, Int?) {
             let started = DispatchTime.now().uptimeNanoseconds
-            let result = seen[snapshot]
+            let key = IndexedSnapshot(snapshot)
+            let result = seen[key]
             seenLookupNanoseconds += DispatchTime.now().uptimeNanoseconds - started
-            return result
+            return (key, result)
         }
 
         func checkInvariants(_ machine: Machine, predecessor: Int?, action: Machine.Action?) throws -> Bool {
@@ -156,16 +172,16 @@ public enum MachineValidator {
             return found
         }
 
-        func insertDiscovered(_ machine: Machine, snapshot: Machine.Snapshot,
+        func insertDiscovered(_ machine: Machine, key: IndexedSnapshot<Machine.Snapshot>,
             initial: Bool, predecessor: Int?, action: Machine.Action?) throws -> Int {
             guard seen.count < maximumStates else { throw ExplorationError.stateLimitExceeded(maximumStates) }
             let id = seen.count
             let insertStarted = DispatchTime.now().uptimeNanoseconds
-            seen[snapshot] = id
+            seen[key] = id
             seenInsertNanoseconds += DispatchTime.now().uptimeNanoseconds - insertStarted
             pending.append((id, machine))
             if initial { initialCount += 1 }
-            try emitEvent(.state(id: id, snapshot: snapshot, initial: initial,
+            try emitEvent(.state(id: id, snapshot: key.value, initial: initial,
                             predecessor: predecessor, action: action))
             return id
         }
@@ -179,8 +195,9 @@ public enum MachineValidator {
             if reached && stopOnReachability { return summary(.decisiveReachability) }
             guard try constraintHolds(machine) else { continue }
             let snapshot = machine.snapshot
-            if stateID(snapshot) == nil {
-                _ = try insertDiscovered(machine, snapshot: snapshot,
+            let (key, existing) = stateID(snapshot)
+            if existing == nil {
+                _ = try insertDiscovered(machine, key: key,
                     initial: true, predecessor: nil, action: nil)
             }
         }
@@ -212,7 +229,8 @@ public enum MachineValidator {
                     // snapshot. A previously discovered target has already passed
                     // those checks; only its additional labeled edge is new.
                     let snapshot = successor.machine.snapshot
-                    if let target = stateID(snapshot) {
+                    let (key, existing) = stateID(snapshot)
+                    if let target = existing {
                         edgeCount += 1
                         try emitEvent(.edge(source: source, action: successor.action, target: target))
                         continue
@@ -224,7 +242,7 @@ public enum MachineValidator {
                     if failed && stopOnViolation { return summary(.decisiveViolation) }
                     if reached && stopOnReachability { return summary(.decisiveReachability) }
                     guard try constraintHolds(successor.machine) else { continue }
-                    let target = try insertDiscovered(successor.machine, snapshot: snapshot,
+                    let target = try insertDiscovered(successor.machine, key: key,
                         initial: false, predecessor: source, action: successor.action)
                     edgeCount += 1
                     try emitEvent(.edge(source: source, action: successor.action, target: target))

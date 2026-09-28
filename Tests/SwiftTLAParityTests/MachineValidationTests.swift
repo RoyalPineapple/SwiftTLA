@@ -4,6 +4,21 @@ import SwiftTLA
 import Foundation
 
 struct MachineValidationTests {
+    @Test("distinct generated states remain distinct when their snapshot hashes collide")
+    func retainsFullStateIdentityAcrossHashCollisions() throws {
+        let initial = try ReachabilityExportModel.initialMachines().map(CollidingReachabilityMachine.init(base:))
+        var values: Set<Int> = []
+        _ = try MachineValidator.run(
+            initialMachines: initial, maximumStates: 3,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false
+        ) { event in
+            if case .state(_, let snapshot, _, _, _) = event {
+                values.insert(snapshot.base.state.value)
+            }
+        }
+        #expect(values == [0, 1, 2])
+    }
+
     @Test("generated machine validation emits each reachable state and transition")
     func emitsCompleteFiniteBehavior() throws {
         var states: [Int: Int] = [:]
