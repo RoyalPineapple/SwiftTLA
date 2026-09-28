@@ -12,6 +12,7 @@ enum CanonicalBinaryState {
 
     static func encode(_ projection: TLAStateProjection) throws -> Data {
         var output = Data("STLASV01".utf8)
+        output.reserveCapacity(512)
         var lengthPatches: [LengthPatch] = []
         let entries = projection.entries.sorted {
             $0.token.description.utf8.lexicographicallyPrecedes($1.token.description.utf8)
@@ -284,14 +285,12 @@ enum CanonicalBinaryState {
 
     private static func appendCount(_ count: Int, to output: inout Data) throws {
         guard let value = UInt32(exactly: count) else { throw CodingError.lengthOverflow }
-        for shift in stride(from: 24, through: 0, by: -8) {
-            output.append(UInt8(truncatingIfNeeded: value >> shift))
-        }
+        var bigEndian = value.bigEndian
+        withUnsafeBytes(of: &bigEndian) { output.append(contentsOf: $0) }
     }
 
     private static func appendUInt64(_ value: UInt64, to output: inout Data) {
-        for shift in stride(from: 56, through: 0, by: -8) {
-            output.append(UInt8(truncatingIfNeeded: value >> shift))
-        }
+        var bigEndian = value.bigEndian
+        withUnsafeBytes(of: &bigEndian) { output.append(contentsOf: $0) }
     }
 }
