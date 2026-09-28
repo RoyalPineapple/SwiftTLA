@@ -2,6 +2,13 @@ import Testing
 @testable import UpstreamParity
 
 struct BakeryCorpusConfigurationTests {
+    @Test("MCBakery is available to independent native validation")
+    func nativePipelineSelectsPublishedConfiguration() throws {
+        #expect(try modelValidationScenarios().contains {
+            $0.id == "bakery-0" && $0.scenario.name == "MCBakery"
+        })
+    }
+
     @Test("MCBakery enumerates the pinned ISpec initial-state population")
     func publishedInitialPopulation() throws {
         let scenario = try #require(BakeryModel.validationScenarios().first)
