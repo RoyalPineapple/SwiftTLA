@@ -72,7 +72,8 @@ package enum ValidationEvidenceComparison {
         let referenceInitial = try rankInitials(referenceGraph.initial, ranks: referenceRanks, in: referenceRoot)
         if try firstDifference(generatedInitial, referenceInitial) != nil { return "initial state set" }
         let same = try compareBinaryEdges(generatedGraph.edges, referenceGraph.edges,
-            leftRoot: generatedRoot, rightRoot: referenceRoot,
+            stateCount: generatedGraph.stateCount,
+            leftEdgeCount: generatedGraph.edgeCount, rightEdgeCount: referenceGraph.edgeCount,
             leftRank: { try Self.rank($0, in: generatedRanks) },
             rightRank: { try Self.rank($0, in: referenceRanks) })
         if !same { return "complete labeled edge set" }
@@ -177,7 +178,8 @@ package enum ValidationEvidenceComparison {
         let tlcInitial = try rankInitials(tlcGraph.initial, ranks: tlcRanks, in: tlcRoot)
         if try firstDifference(swiftInitial, tlcInitial) != nil { return "initial state set" }
         let same = try compareBinaryEdges(swiftGraph.edges, tlcGraph.edges,
-            leftRoot: swiftRoot, rightRoot: tlcRoot,
+            stateCount: swiftGraph.stateCount,
+            leftEdgeCount: swiftGraph.edgeCount, rightEdgeCount: tlcGraph.edgeCount,
             leftRank: { try Self.rank($0, in: swiftRanks) },
             rightRank: { try Self.rank($0, in: tlcRanks) })
         if !same { return "complete labeled edge set" }
@@ -591,84 +593,88 @@ package enum ValidationEvidenceComparison {
         return result
     }
 
-    private struct RankedEdge: Comparable {
-        let source: UInt32
-        let action: UInt32
-        let target: UInt32
-
-        static func < (lhs: Self, rhs: Self) -> Bool {
-            if lhs.source != rhs.source { return lhs.source < rhs.source }
-            if lhs.action != rhs.action { return lhs.action < rhs.action }
-            return lhs.target < rhs.target
-        }
+    private struct RankedAdjacency {
+        let offsets: [Int]
+        let pairs: [UInt64]
     }
 
     private static func compareBinaryEdges(_ left: URL, _ right: URL,
-        leftRoot: URL, rightRoot: URL,
+        stateCount: Int, leftEdgeCount: Int, rightEdgeCount: Int,
         leftRank: (UInt64) throws -> UInt32,
         rightRank: (UInt64) throws -> UInt32) throws -> Bool {
-        let leftBuckets = try measured("left edge partition") {
-            try partitionEdges(left, in: leftRoot, rank: leftRank)
+        let lhs = try measured("left edge ranking") {
+            try rankedAdjacency(left, stateCount: stateCount,
+                edgeCount: leftEdgeCount, rank: leftRank)
         }
-        let rightBuckets = try measured("right edge partition") {
-            try partitionEdges(right, in: rightRoot, rank: rightRank)
+        let rhs = try measured("right edge ranking") {
+            try rankedAdjacency(right, stateCount: stateCount,
+                edgeCount: rightEdgeCount, rank: rightRank)
         }
-        return try measured("edge sort and match") {
-            for index in leftBuckets.indices {
-                if try uniqueEdges(leftBuckets[index]) != uniqueEdges(rightBuckets[index]) {
-                    return false
+        return measured("edge match") {
+            for source in 0..<stateCount {
+                var leftIndex = lhs.offsets[source]
+                var rightIndex = rhs.offsets[source]
+                let leftEnd = lhs.offsets[source + 1]
+                let rightEnd = rhs.offsets[source + 1]
+                while leftIndex < leftEnd && rightIndex < rightEnd {
+                    let pair = lhs.pairs[leftIndex]
+                    if pair != rhs.pairs[rightIndex] { return false }
+                    repeat { leftIndex += 1 } while leftIndex < leftEnd && lhs.pairs[leftIndex] == pair
+                    repeat { rightIndex += 1 } while rightIndex < rightEnd && rhs.pairs[rightIndex] == pair
                 }
+                if leftIndex != leftEnd || rightIndex != rightEnd { return false }
             }
             return true
         }
     }
 
-    private static func partitionEdges(_ input: URL, in directory: URL,
-        rank: (UInt64) throws -> UInt32) throws -> [URL] {
-        let bucketCount = 64
-        let urls = (0..<bucketCount).map {
-            directory.appendingPathComponent("edge-bucket-\($0).bin")
+    private static func rankedAdjacency(_ input: URL, stateCount: Int, edgeCount: Int,
+        rank: (UInt64) throws -> UInt32) throws -> RankedAdjacency {
+        let bytes = try Data(contentsOf: input, options: .mappedIfSafe)
+        guard stateCount >= 0, stateCount < Int.max,
+              edgeCount >= 0, edgeCount <= Int.max / 20,
+              bytes.count == edgeCount * 20 else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("raw edge length")
         }
-        var writers = try urls.map(BinaryEdgeWriter.init)
-        defer { for index in writers.indices { try? writers[index].close() } }
-        var reader = try BinaryGraphEvidenceReader(input)
-        defer { reader.close() }
-        while !reader.atEnd {
-            let source = try rank(reader.uint64())
-            let action = try reader.uint32()
-            let target = try rank(reader.uint64())
-            let bucket = Int(source) % bucketCount
-            try writers[bucket].appendRanked(source: source, action: action, target: target)
-        }
-        for index in writers.indices { try writers[index].close() }
-        return urls
-    }
-
-    private static func uniqueEdges(_ url: URL) throws -> [RankedEdge] {
-        let bytes = try Data(contentsOf: url, options: .mappedIfSafe)
-        guard bytes.count.isMultiple(of: 12) else {
-            throw ValidationEvidenceComparisonError.invalidEvidence("ranked edge length")
-        }
-        func word(_ index: Int) -> UInt32 {
-            (UInt32(bytes[index]) << 24) | (UInt32(bytes[index + 1]) << 16)
-                | (UInt32(bytes[index + 2]) << 8) | UInt32(bytes[index + 3])
-        }
-        var edges: [RankedEdge] = []
-        edges.reserveCapacity(bytes.count / 12)
-        for index in stride(from: 0, to: bytes.count, by: 12) {
-            edges.append(RankedEdge(source: word(index), action: word(index + 4),
-                target: word(index + 8)))
-        }
-        edges.sort()
-        var unique = 0
-        for index in edges.indices {
-            if unique == 0 || edges[index] != edges[unique - 1] {
-                edges[unique] = edges[index]
-                unique += 1
+        var offsets = [Int](repeating: 0, count: stateCount + 1)
+        var sources = [UInt32](repeating: 0, count: edgeCount)
+        try bytes.withUnsafeBytes { raw in
+            for edge in 0..<edgeCount {
+                let base = edge * 20
+                let identity = UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base, as: UInt64.self))
+                let source = try rank(identity)
+                guard UInt64(source) < UInt64(stateCount) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("source edge rank")
+                }
+                sources[edge] = source
+                offsets[Int(source) + 1] += 1
             }
         }
-        edges.removeLast(edges.count - unique)
-        return edges
+        for index in 1..<offsets.count { offsets[index] += offsets[index - 1] }
+        var cursors = offsets
+        var pairs = [UInt64](repeating: 0, count: edgeCount)
+        try bytes.withUnsafeBytes { raw in
+            for edge in 0..<edgeCount {
+                let base = edge * 20
+                let action = UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base + 8, as: UInt32.self))
+                let identity = UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base + 12, as: UInt64.self))
+                let target = try rank(identity)
+                let source = Int(sources[edge])
+                pairs[cursors[source]] = (UInt64(action) << 32) | UInt64(target)
+                cursors[source] += 1
+            }
+        }
+        pairs.withUnsafeMutableBufferPointer { buffer in
+            for source in 0..<stateCount {
+                let start = offsets[source]
+                let end = offsets[source + 1]
+                if end - start > 1 {
+                    var segment = UnsafeMutableBufferPointer(rebasing: buffer[start..<end])
+                    segment.sort()
+                }
+            }
+        }
+        return RankedAdjacency(offsets: offsets, pairs: pairs)
     }
 
     private static func rankInitials(_ raw: URL, ranks: [UInt64: Int], in directory: URL) throws -> URL {

@@ -277,13 +277,6 @@ struct BinaryEdgeWriter {
         if buffer.count >= 1_048_576 { try flush() }
     }
 
-    mutating func appendRanked(source: UInt32, action: UInt32, target: UInt32) throws {
-        uint32(source)
-        uint32(action)
-        uint32(target)
-        if buffer.count >= 1_048_576 { try flush() }
-    }
-
     mutating func close() throws {
         try flush()
         try handle.close()

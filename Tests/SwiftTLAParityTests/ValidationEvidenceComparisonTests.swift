@@ -31,6 +31,15 @@ struct ValidationEvidenceComparisonTests {
         #expect(try compare(root).difference == "complete labeled edge set")
     }
 
+    @Test("repeated transitions count as one labeled graph edge")
+    func duplicateEdgesHaveSetSemantics() throws {
+        let root = try fixture(edgeCount: 2)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try tlcGraph(edgeCount: 1).write(
+            to: root.appendingPathComponent("oracle/tlc-graph/graph-events.bin"))
+        #expect(try compare(root).result == "exact")
+    }
+
     @Test("a changed initial state fails despite matching state and edge sets")
     func differentInitialFails() throws {
         let root = try fixture(nativeInitial: 1)
