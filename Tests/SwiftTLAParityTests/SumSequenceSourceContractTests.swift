@@ -28,7 +28,7 @@ struct SumSequenceSourceContractTests {
     func exportsSourceClaims() throws {
         let configuration = try SumSequenceModel.Configuration(Values: [-2, 1])
         let bundle = try SumSequenceModel.render(configuration: configuration).tlaBundle
-        #expect(bundle.tla.contains("Values \\in SUBSET Int"))
+        #expect(bundle.tla.contains("Values \\in SUBSET (Int)"))
         #expect(bundle.tla.contains("Seq(Values)"))
         #expect(bundle.tla.contains("SubSeq("))
         #expect(bundle.tla.contains("RECURSIVE "))
