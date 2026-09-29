@@ -5,6 +5,7 @@ package struct GeneratedTLCOracleReport: Codable, Sendable {
     package let schema: String
     package let caseID: String
     package let scenario: String
+    package let maximumStates: Int
     package let graphComplete: Bool
     package let graphInputSHA256: String
     package let properties: [String: ValidationVerdict]
@@ -203,6 +204,7 @@ package enum GeneratedTLCOracle {
 
         let report = GeneratedTLCOracleReport(
             schema: "swifttla.generated-tlc-oracle", caseID: id, scenario: scenario.name,
+            maximumStates: maximumStates,
             graphComplete: graphComplete, graphInputSHA256: graphIdentity,
             properties: properties, deadlock: deadlock,
             deadlockSelected: rendered.checksDeadlock)

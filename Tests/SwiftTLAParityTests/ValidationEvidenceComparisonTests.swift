@@ -107,6 +107,48 @@ struct ValidationEvidenceComparisonTests {
         #expect(!result.graphCompared)
     }
 
+    @Test("a partial result without a TLC trace cannot be exact")
+    func partialWitnessIsRequired() throws {
+        let root = try fixture(graphComplete: false, tlcExitStatus: 12)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.removeItem(at: root.appendingPathComponent("oracle/tlc-graph/counterexample.json"))
+        #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
+    }
+
+    @Test("a TLC counterexample with an impossible transition cannot certify parity")
+    func impossiblePartialWitnessFails() throws {
+        let root = try fixture(graphComplete: false, tlcExitStatus: 12)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let trace = root.appendingPathComponent("oracle/tlc-graph/counterexample.json")
+        let corrupted = try String(contentsOf: trace, encoding: .utf8)
+            .replacingOccurrences(of: #""value":1"#, with: #""value":2"#)
+        try Data(corrupted.utf8).write(to: trace)
+        #expect(throws: TLCTraceError.self) { _ = try compare(root) }
+    }
+
+    @Test("early reachability and deadlock witnesses replay against generated transitions")
+    func otherPartialWitnessesReplay() throws {
+        let root = try fixture(graphComplete: false, tlcExitStatus: 12)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let scenario = try #require(SelectedChecksModel.validationScenarios().first)
+        let rendered = try scenario.render()
+        let oracle = root.appendingPathComponent("oracle")
+        let reportURL = oracle.appendingPathComponent("oracle.json")
+        let stdout = oracle.appendingPathComponent("tlc-graph/logs/tlc.stdout.log")
+        try Data("Error: Invariant Reached is violated.\n".utf8).write(to: stdout)
+        let reachability = try JSONDecoder().decode(GeneratedTLCOracleReport.self,
+            from: Data(contentsOf: reportURL))
+        try PartialWitnessVerification.verify(scenario: scenario, report: reachability,
+            exitStatus: 12, oracle: oracle, rendered: rendered)
+
+        var deadlockJSON = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: reportURL)) as? [String: Any])
+        deadlockJSON["deadlock"] = "violated"
+        let deadlock = try JSONDecoder().decode(GeneratedTLCOracleReport.self,
+            from: JSONSerialization.data(withJSONObject: deadlockJSON))
+        try PartialWitnessVerification.verify(scenario: scenario, report: deadlock,
+            exitStatus: 11, oracle: oracle, rendered: rendered)
+    }
+
     @Test("binary spools retain all edges across buffered reads")
     func binarySpoolsAcrossBatches() throws {
         let root = try fixture(edgeCount: 60_000)
@@ -137,7 +179,8 @@ struct ValidationEvidenceComparisonTests {
     }
 
     private func compare(_ root: URL) throws -> ValidationEvidenceComparisonReport {
-        try ValidationEvidenceComparison.compare(caseID: "fixture",
+        let scenario = try #require(SelectedChecksModel.validationScenarios().first)
+        return try ValidationEvidenceComparison.compare(scenario: scenario, caseID: "fixture",
             native: root.appendingPathComponent("native"),
             oracle: root.appendingPathComponent("oracle"), actions: actions,
             to: root.appendingPathComponent("comparison"))
@@ -152,22 +195,33 @@ struct ValidationEvidenceComparisonTests {
         try FileManager.default.createDirectory(at: native, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: tlc, withIntermediateDirectories: true)
         let nativeReport: [String: Any] = [
-            "schema": "swifttla.native-validation-report", "scenario": "fixture",
+            "schema": "swifttla.native-validation-report", "scenario": "All", "maximumStates": 100,
             "graphComplete": graphComplete, "initialStates": 1, "states": 2,
-            "edges": edgeCount, "properties": graphComplete ? [:] : ["Broken": "violated"],
-            "deadlockSelected": false
+            "edges": edgeCount, "properties": graphComplete ? [:] : [
+                "InitiallyZero": "violated", "Reached": "reached", "Safe": "satisfied", "StaysZero": "violated"
+            ], "deadlockSelected": true
         ]
         let oracleReport: [String: Any] = [
             "schema": "swifttla.generated-tlc-oracle", "caseID": "fixture",
-            "scenario": "fixture", "graphComplete": graphComplete,
+            "scenario": "All", "maximumStates": 100, "graphComplete": graphComplete,
             "graphInputSHA256": String(repeating: "0", count: 64),
-            "properties": graphComplete ? [:] : ["Broken": "violated"], "deadlockSelected": false
+            "properties": graphComplete ? [:] : [
+                "InitiallyZero": "violated", "Reached": "reached", "Safe": "satisfied", "StaysZero": "violated"
+            ], "deadlockSelected": true
         ]
         try JSONSerialization.data(withJSONObject: nativeReport).write(to: native.appendingPathComponent("report.json"))
         try JSONSerialization.data(withJSONObject: oracleReport).write(
             to: root.appendingPathComponent("oracle/oracle.json"))
         try JSONSerialization.data(withJSONObject: ["invocation": ["exitStatus": tlcExitStatus]])
             .write(to: tlc.appendingPathComponent("tlc-process.json"))
+        if !graphComplete {
+            try FileManager.default.createDirectory(at: tlc.appendingPathComponent("logs"),
+                withIntermediateDirectories: false)
+            try Data("Error: Invariant InitiallyZero is violated.\n".utf8)
+                .write(to: tlc.appendingPathComponent("logs/tlc.stdout.log"))
+            try Data(#"{"vars":["value","pc"],"counterexample":{"state":[[1,{"value":0,"pc":"advance"}],[2,{"value":1,"pc":"advance"}]],"action":[[[1,{"value":0,"pc":"advance"}],{"name":"advance"},[2,{"value":1,"pc":"advance"}]]]}}"#.utf8)
+                .write(to: tlc.appendingPathComponent("counterexample.json"))
+        }
         var writer = try BinaryGraphEvidenceWriter(to: native.appendingPathComponent("machine.bin"),
             caseID: "fixture")
         try writer.action(id: 0, name: "Next")
@@ -177,7 +231,7 @@ struct ValidationEvidenceComparisonTests {
             try writer.edge(source: 0, action: 0, target: nativeEdgeTarget)
         }
         if !graphComplete {
-            try writer.invariantFailure(property: "Broken", key: key(2), predecessor: 1, action: 0)
+            try writer.invariantFailure(property: "InitiallyZero", key: key(1), predecessor: 0, action: 0)
         }
         try writer.finish(completion: graphComplete ? 0 : 1)
         try tlcGraph(edgeCount: edgeCount).write(to: tlc.appendingPathComponent("graph-events.bin"))

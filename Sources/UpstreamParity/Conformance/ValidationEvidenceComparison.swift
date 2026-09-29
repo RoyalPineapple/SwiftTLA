@@ -81,9 +81,9 @@ package enum ValidationEvidenceComparison {
         return nil
     }
 
-    package static func compare(
-        caseID: String, native: URL, oracle: URL, actions: [RenderedAction], to directory: URL,
-        spoolExecutable: URL? = nil
+    package static func compare<Scenario: ModelValidationScenario>(
+        scenario: Scenario, caseID: String, native: URL, oracle: URL,
+        actions: [RenderedAction], to directory: URL, spoolExecutable: URL? = nil
     ) throws -> ValidationEvidenceComparisonReport {
         let decoder = JSONDecoder()
         let swift = try decoder.decode(NativeValidationReport.self,
@@ -93,6 +93,7 @@ package enum ValidationEvidenceComparison {
         guard swift.schema == "swifttla.native-validation-report",
               tlc.schema == "swifttla.generated-tlc-oracle",
               tlc.caseID == caseID, swift.scenario == tlc.scenario,
+              swift.maximumStates > 0, swift.maximumStates == tlc.maximumStates,
               swift.deadlockSelected == tlc.deadlockSelected else {
             throw ValidationEvidenceComparisonError.invalidEvidence("report identity")
         }
@@ -125,7 +126,8 @@ package enum ValidationEvidenceComparison {
                   swiftGraph.edgeCount == swift.edges else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("native report counts")
             }
-            try verifyTLCProcess(oracle.appendingPathComponent("tlc-graph/tlc-process.json"), report: tlc)
+            let tlcExitStatus = try verifyTLCProcess(
+                oracle.appendingPathComponent("tlc-graph/tlc-process.json"), report: tlc)
             if compareGraph {
                 let tlcRoot = directory.appendingPathComponent("tlc")
                 try FileManager.default.createDirectory(at: tlcRoot, withIntermediateDirectories: false)
@@ -140,6 +142,9 @@ package enum ValidationEvidenceComparison {
                     try Self.compareGraph(swiftGraph: swiftGraph, tlcGraph: tlcGraph,
                         swiftRoot: swiftRoot, tlcRoot: tlcRoot)
                 }
+            } else {
+                try PartialWitnessVerification.verify(scenario: scenario, report: tlc,
+                    exitStatus: tlcExitStatus, oracle: oracle, rendered: scenario.render())
             }
         }
         let report = ValidationEvidenceComparisonReport(
@@ -728,7 +733,7 @@ package enum ValidationEvidenceComparison {
         }
     }
 
-    private static func verifyTLCProcess(_ url: URL, report: GeneratedTLCOracleReport) throws {
+    private static func verifyTLCProcess(_ url: URL, report: GeneratedTLCOracleReport) throws -> Int {
         let data = try Data(contentsOf: url)
         guard let process = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let invocation = process["invocation"] as? [String: Any],
@@ -741,6 +746,7 @@ package enum ValidationEvidenceComparison {
             || (!report.graphComplete && status == 12 && decisiveSafety) else {
             throw ValidationEvidenceComparisonError.invalidEvidence("TLC process outcome")
         }
+        return status
     }
 }
 

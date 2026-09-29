@@ -11,6 +11,7 @@ package enum ValidationVerdict: String, Codable, Sendable {
 package struct NativeValidationReport: Codable, Sendable {
     package let schema: String
     package let scenario: String
+    package let maximumStates: Int
     package let graphComplete: Bool
     package let initialStates: Int
     package let states: Int
@@ -140,6 +141,7 @@ package enum NativeValidationRunner {
         }
         let report = NativeValidationReport(
             schema: "swifttla.native-validation-report", scenario: scenario.name,
+            maximumStates: maximumStates,
             graphComplete: complete, initialStates: batch.initialStates,
             states: batch.states, edges: batch.edges,
             properties: properties, deadlock: deadlock,

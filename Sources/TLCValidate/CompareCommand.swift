@@ -97,8 +97,8 @@ private func compareScenario<Scenario: ModelValidationScenario>(
 ) throws -> ValidationEvidenceComparisonReport {
     let rendered = try scenario.render()
     return try ValidationEvidenceComparison.compare(
-        caseID: id, native: native, oracle: oracle, actions: rendered.actions, to: output,
-        spoolExecutable: validationExecutableURL())
+        scenario: scenario, caseID: id, native: native, oracle: oracle,
+        actions: rendered.actions, to: output, spoolExecutable: validationExecutableURL())
 }
 
 private func spoolActions(caseID: String, kind: String) throws -> [RenderedAction] {
