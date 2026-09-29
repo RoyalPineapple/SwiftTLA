@@ -31,13 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "Chameneos candidate frozen at 89c78da; GameOfLife is the provisional next family after hosted resolution",
+      "status": "Chameneos 89c78da failed upstream action-label comparison; corrected local candidate is not yet hosted",
       "candidates": [
         "specifications/GameOfLife",
         "specifications/CarTalkPuzzle",
         "specifications/KnuthYao"
       ],
-      "scope": "Chameneos has a complete local native diagnostic but still needs hosted graph/property parity and ordinary CI on frozen SHA 89c78da. GameOfLife has one published exhaustive configuration (65,536 initial grids) and a legacy fixed-blinker Swift model to replace; typed function-space and set-mapping operations already exist, though their integration for this case remains unproved. CarTalkPuzzle has three configurations, including an unknown Model_3 result, so partial work would not finish the family. KnuthYao's published configuration uses generation mode and external/statistical side effects; it remains required but is not a ready finite-graph port. Do not start another implementation family or credit an unverified configuration before Chameneos is resolved."
+      "scope": "The frozen 89c78da run passed ordinary CI and Chameneos native/generated parity, but upstream comparison rejected Next versus Meet(cid) action labels. The two-file local correction uses one Next action with typed With and preserves the full native graph; it still needs a new frozen hosted revision, including generated/upstream and native/generated parity plus ordinary CI. GameOfLife has one published exhaustive configuration (65,536 initial grids) and a legacy fixed-blinker Swift model to replace; typed function-space and set-mapping operations already exist, though their integration for this case remains unproved. CarTalkPuzzle has three configurations, including an unknown Model_3 result, so partial work would not finish the family. KnuthYao's published configuration uses generation mode and external/statistical side effects; it remains required but is not a ready finite-graph port. Do not start another implementation family or credit an unverified configuration before Chameneos is resolved."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -1236,6 +1236,15 @@
     "toolchainGap": "Command Line Tools 16.4 supports focused SwiftPM diagnostics with the same SDK build shown in hosted Apple logs. Full Xcode 16.4 is absent locally. Earlier beta-toolchain passes remain uncredited."
   },
   "hostedComparisonFailures": {
+    "chameneosActionGranularity": {
+      "sourceSHA": "89c78da2ac7b5d3d524038f8a005716f450917c2",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36508347335",
+      "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36508347335/job/109218526457",
+      "conclusion": "failure",
+      "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36508347335/artifacts/11008569348",
+      "artifactSHA256": "ee9fccc1c0460120fd4c635c94eff9d719159e4e55066b29601a2db33535a0d0",
+      "scope": "Both hosted TLC processes exited successfully, but the exact generated/upstream comparison rejected the reference action location before graph parity: pinned upstream TLC emitted one Next action, while generated TLC emitted Meet(1) through Meet(4). This is an action-granularity mismatch, not a state-count proof or a completed family. DSL/native Chameneos parity and all ordinary CI jobs passed on the same SHA. A separate record-union-sentinel job failed while downloading its preparation artifact, before validation; its job log endpoint returned BlobNotFound. The local candidate now expresses one Next action with a typed With over configured creature IDs, but that change has no hosted credit until a new frozen SHA passes both paths and ordinary CI."
+    },
     "boulangerNativeExportTimeout": {
       "sourceSHA": "edec23de112923eaf335ee102e5a51067c385db7",
       "jobURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/35478788954/job/105995753064",
@@ -3868,7 +3877,7 @@
       "path": "specifications/Chameneos",
       "name": "Chameneos, a Concurrency Game",
       "audit": "source and implementation audited; hosted parity pending",
-      "gap": "The sole published configuration has a typed model-owned implementation and a complete local native diagnostic. Exact generated-TLA/upstream-TLA and native/generated-TLA graph and property parity have not been established by hosted TLC.",
+      "gap": "The sole published configuration has a typed model-owned implementation and a complete local native diagnostic. On hosted SHA 89c78da, native/generated-TLA parity passed but generated/upstream-TLA comparison stopped on Next versus Meet(cid) action granularity. The local source now uses one Next action with a typed With choice; exact generated/upstream and native/generated graph/property parity still require a new green hosted SHA.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "annotationBlob": "613d2c886850a803636ae856a608be178eec2d40",
@@ -3891,7 +3900,7 @@
         {
           "path": "specifications/Chameneos/Chameneos.tla",
           "role": "configured root",
-          "reason": "The model-owned scenario preserves N=4, M=4, Faded and MeetingPlaceEmpty model values, the complete initial function domain, Meet, TypeOK, SumMet, and disabled deadlock checking. Hosted semantic parity remains pending.",
+          "reason": "The model-owned scenario preserves N=4, M=4, Faded and MeetingPlaceEmpty model values, the complete initial function domain, one Next action over a typed nondeterministic creature choice, TypeOK, SumMet, and disabled deadlock checking. Hosted semantic parity for the revised source remains pending.",
           "implementations": ["Sources/UpstreamParity/Examples/Chameneos.swift"],
           "dispositionComplete": true
         }
