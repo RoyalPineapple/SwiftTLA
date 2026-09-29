@@ -31,13 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "sums_even verified; Stones selected",
+      "status": "Stones comparison jobs exact on cc1e191e; full validation admission pending; Chameneos staged next",
       "candidates": [
         "specifications/sums_even",
         "specifications/Stones",
         "specifications/FiniteMonotonic"
       ],
-      "scope": "The sole sums_even configuration matched native, generated TLC, and pinned upstream TLC on hosted SHA 0edfbd0. Stones is next: it retains zero-state assumption checking but requires recursive partitions and exact PrintT output. CarTalkPuzzle follows only after the output path is proved. FiniteMonotonic has five configurations, including symbolic models, action composition, and a liveness failure. No unverified candidate receives hosted credit."
+      "scope": "The sole sums_even configuration matched native, generated TLC, and pinned upstream TLC on hosted SHA 0edfbd0. Stones retains zero-state assumption checking, recursive partitions, and exact PrintT output; both comparison jobs on cc1e191e are exact, but the full matrix is pending. Chameneos is staged as the next one-configuration family because its complete local native exploration matches upstream state counts; hosted graph/property parity is still required. CarTalkPuzzle's three configurations, including one with an unknown expected result, require a source audit before implementation. FiniteMonotonic has five configurations, including symbolic models, action composition, and a liveness failure. No unverified candidate receives hosted credit."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -9644,7 +9644,7 @@
       "path": "specifications/Stones",
       "name": "Stone Scale Puzzle",
       "audit": "implementation staged; hosted comparison pending",
-      "gap": "The model-owned W=40/N=4 assumption scenario and byte-identical pinned reference are registered. Focused local checks cover the recursive solution and captured PrintT value, but only the hosted native/generated-TLC/upstream-TLC comparison can establish parity. No state graph is expected or fabricated.",
+      "gap": "Both Stones comparison jobs on frozen SHA cc1e191e are exact, including the captured PrintT value. The full independent-validation run is still in progress, so hosted family completion and final-revision admission remain pending. No state graph is expected or fabricated.",
       "scheduling": {
         "label": "Capacity/evidence gap",
         "sharedCapability": "assumption-only-checking",
@@ -9652,7 +9652,7 @@
         "nativeBoundary": "The native assumption-only scenario evaluates without initial machines and captures exact printed values independently of TLC.",
         "completionCondition": "Compare unchanged assumptions through native evaluation, generated TLC, and upstream TLC. Retain zero-state accounting and PrintT solution output without dummy states.",
         "scope": "Typed unbounded recursion, sequence mapping, and prepending are implemented for the published constants. No smaller constants or invented bounds qualify.",
-        "evidenceKind": "Focused local diagnostics only; hosted TLC comparison is pending."
+        "evidenceKind": "Retained hosted comparison artifacts on cc1e191e; full independent-validation admission is pending."
       },
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
@@ -9688,7 +9688,21 @@
               "caseID": "stones-0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "cc1e191e23da17489b13430b3721af07af1a5430",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36503423647",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36503423647/artifacts/11006887127",
+              "artifactSHA256": "0240995fa1ae403b43346a14266591f8d289d4f5ceec22754f7f4db382af91ce",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36503423647/artifacts/11007373087",
+              "nativeArtifactSHA256": "dc5572922c9c151da8dbd214fe747dfab742069a18e67b202c35475f38f6265e",
+              "completion": "assumptions-only",
+              "assumptionCompared": true,
+              "completeGraph": false,
+              "scope": "Both hosted comparison jobs completed successfully on cc1e191e. Native, generated TLC, and pinned upstream TLC all returned satisfied; both comparisons are exact. Native and generated TLC captured tuple <<1, 3, 9, 27>>; the generated and upstream TLC evaluation streams are byte-identical (SHA-256 ac0163a0f1a45f08eb44152f748d780d4418633033dceac5f85bcd51e316b5f3). The original W=40/N=4 binding and zero-state behavior were retained. Ordinary CI passed on the same SHA, but the full independent-validation aggregate was still running when this evidence was recorded; no family-completion claim is made."
+            }
+          ]
         }
       ],
       "partialCases": []
