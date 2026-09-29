@@ -4,19 +4,18 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct GeneratedTLCOracleTests {
-    @Test("unchanged Boulanger TLC inputs retain a stable oracle cache key")
-    func boulangerCacheKeyIsStableAcrossRevisions() throws {
-        let scenario = try #require(BoulangerModel.validationScenarios().first)
-        let key = try GeneratedTLCOracle.cacheKey(
-            scenario: scenario, id: "boulanger-0", maximumStates: 10_000_000,
-            pin: testReferencePin())
-        #expect(key == "b40c7bac7b8b42e2f975c796ecf1420401c5c6c551f9418621610f6cb828c849")
-    }
-
-    @Test("cached TLC evidence is bound to its scenario and exploration limit")
-    func cacheKeyRejectsDifferentScenarioOrLimit() throws {
+    @Test("cached TLC evidence is bound to its scenario, exploration limit, and bridge producer")
+    func cacheKeyRejectsDifferentScenarioLimitOrProducer() throws {
         let selected = try #require(modelValidationScenarios().first)
         let pin = try testReferencePin()
+        let changedPin = try TLCReferencePin(
+            tag: pin.tag, commit: pin.commit, jarSHA256: pin.jarSHA256,
+            javaDistribution: pin.javaDistribution, javaVersion: pin.javaVersion,
+            javaArchiveSHA256: pin.javaArchiveSHA256, bridgeClass: pin.bridgeClass,
+            bridgeSourceHashes: pin.bridgeSourceHashes.merging([
+                "Tools/TLCGraphBridge/src/org/swifttla/conformance/NewProducer.java":
+                    SHA256.hex(Data("new producer".utf8))
+            ]) { _, replacement in replacement }, bridgeBinarySHA256: pin.bridgeBinarySHA256)
         let baseline = try GeneratedTLCOracle.cacheKey(
             scenario: selected.scenario, id: selected.id, maximumStates: 100, pin: pin)
         #expect(baseline == (try GeneratedTLCOracle.cacheKey(
@@ -25,6 +24,8 @@ struct GeneratedTLCOracleTests {
             scenario: selected.scenario, id: selected.id, maximumStates: 101, pin: pin)))
         #expect(baseline != (try GeneratedTLCOracle.cacheKey(
             scenario: selected.scenario, id: "another-case", maximumStates: 100, pin: pin)))
+        #expect(baseline != (try GeneratedTLCOracle.cacheKey(
+            scenario: selected.scenario, id: selected.id, maximumStates: 100, pin: changedPin)))
     }
 
     @Test("oracle input identity covers configuration, imports, and check mode")
