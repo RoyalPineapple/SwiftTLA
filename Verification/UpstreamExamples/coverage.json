@@ -31,13 +31,12 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "TwoPhase is green on hosted SHA 86b33df8; TeachingConcurrency is the active first-pass family",
+      "status": "TeachingConcurrency is green on hosted SHA bcde589; Prisoners is the active next family",
       "candidates": [
-        "specifications/TeachingConcurrency",
         "specifications/Prisoners",
         "specifications/SingleLaneBridge"
       ],
-      "scope": "The two published TeachingConcurrency configurations use already modeled PlusCal algorithms. Simple uses the published N=5 binding; SimpleRegular uses N=8. Both select PCorrect, TypeOK, Inv, and default deadlock checking; TLAPS is only a proof-text dependency. Generated TLA matched pinned upstream TLC for both complete graphs and selected checks on green SHA 50e611d3, but that matrix omitted both native cases. Require exact native-versus-generated-TLA comparisons for both configurations on one green hosted SHA before starting another family. Prisoners remains the smallest audited shared-capability case for the second pass."
+      "scope": "Both published TeachingConcurrency configurations have exact complete generated-TLA-versus-pinned-upstream and native-versus-generated-TLA graph and selected-check comparisons on green SHA bcde589. Prisoners is the next audited shared-capability case: its configured direct TLA actions require separate weak fairness for every NonCounterStep(i). Typed initial choices, domain-scoped function values and updates, and local set recursion already exist; expose the existing per-instance fairness semantics through the typed independent-step API without manufacturing a PlusCal algorithm."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -61,13 +60,13 @@
   },
   "ci": {
     "prHeadFullMatrix": {
-      "sourceSHA": "86b33df8acc10a8ff76099e0b16c5fd6126ef463",
-      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36551020572",
-      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36551020392",
+      "sourceSHA": "bcde58919466b453beaf60c58a9c4d340dc01502",
+      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36576790253",
+      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36576790201",
       "observedStatus": "completed",
       "conclusion": "success",
-      "jobs": "All 123 non-skipped independent-validation jobs passed, including both two-phase-0 comparisons and admission. The optional comparison replay diagnostic was skipped. All five ordinary CI jobs passed.",
-      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. TwoPhase retained complete one-initial/four-state/four-edge exact graphs and satisfied Inv and default deadlock checking. Assumption-only cases retained exact verdicts without fabricated graphs; decisive early stops retained verdict and witness evidence. This verified PR head does not mean all 78 families or 19 DSL criteria are complete."
+      "jobs": "All 128 non-skipped independent-validation jobs passed, including both TeachingConcurrency configurations on both comparison paths and the admission gate. The optional comparison replay diagnostic was skipped. All five ordinary CI jobs passed.",
+      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. TeachingConcurrency Simple and SimpleRegular retained complete exact graphs with one initial state and respectively 723 states/1,841 edges and 277,726 states/1,454,775 edges; PCorrect, TypeOK, Inv, and default deadlock checks matched and were satisfied. Input-keyed TLC cache reuse was verified by the hosted jobs. This verified PR head does not mean all 78 families or 19 DSL criteria are complete."
     },
     "bakeryBoulangerieFamilyCandidate": {
       "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
@@ -2799,7 +2798,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": "specifications/TeachingConcurrency",
+  "nextFamily": "specifications/Prisoners",
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -7989,8 +7988,8 @@
     {
       "path": "specifications/Prisoners",
       "name": "The Prisoners & Switches Puzzle",
-      "audit": "pinned source, sole published configuration, and unconfigured module roles inspected; no Swift implementation or hosted parity",
-      "gap": "Prisoners.cfg binds four prisoners with p1 as Counter and checks TypeOK, CountInvariant, Safety, Liveness, and default deadlock. Its Spec includes WF_vars(CounterStep) and a separate WF_vars(NonCounterStep(i)) for each non-counter prisoner. A faithful port needs nondeterministic initial switch values, typed total-function indexed updates, the recursive finite-set sum in CountInvariant, parameterized independent actions, and quantified action fairness without manufacturing a PlusCal algorithm. No model-owned scenario, exact reference case, or retained hosted comparison exists. APPrisoners and MCPrisoners remain unconfigured modules requiring explicit final dispositions.",
+      "audit": "pinned source, sole published configuration, unconfigured module roles, typed implementation, and focused local graph/check diagnostics audited",
+      "gap": "Prisoners.cfg binds four prisoners with p1 as Counter and checks TypeOK, CountInvariant, Safety, Liveness, and default deadlock. The typed direct-TLA model, registered scenario, and byte-identical reference case now exist. Focused local diagnostics reproduce four initial states, 214 distinct states, 856 labeled edges, and satisfied selected checks, but generated-TLA-versus-pinned-upstream and native-versus-generated-TLA hosted comparisons remain required. The unconfigured APPrisoners and MCPrisoners modules have explicit dispositions without invented TLC configurations.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "moduleBlob": "6a4471dff0a97d6c04408dffdc709942f461948b",
@@ -8000,28 +7999,28 @@
         "expectedTotalStates": 860,
         "expectedStateDepth": 14
       },
-      "legacyCleanupComplete": false,
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/Prisoners/APPrisoners.tla",
           "role": "unconfigured Apalache type-annotation wrapper",
-          "reason": "This module instantiates Prisoners with tool-specific type annotations and declares concrete three-prisoner values for a cfg file absent from the pinned inventory. It has no published TLC configuration. Decide its final variant disposition without claiming a separate hosted graph match.",
+          "reason": "This module instantiates Prisoners with Apalache-specific type annotations and declares concrete three-prisoner values for a cfg file absent from the pinned inventory. It has no published TLC configuration or distinct transition definition. The configured Prisoners behavior is represented by the typed model; this disposition does not claim Apalache validation.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/Prisoners/MCPrisoners.tla",
           "role": "unconfigured inductive-invariant harness",
-          "reason": "This module EXTENDS Prisoners and defines InvTestSpec with TypeOK /\\ CountInvariant as its initial predicate and the same Next relation. It has no published TLC configuration, but its distinct initial-state semantics need explicit final variant disposition rather than being counted as the configured Spec run.",
+          "reason": "This module EXTENDS Prisoners and defines InvTestSpec with TypeOK /\\ CountInvariant as its initial predicate and the same Next relation. It has no published TLC configuration. Its alternative initial predicate is documented as an unconfigured inductiveness harness, not conflated with the configured Spec run or counted as a graph match; no configuration is invented.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/Prisoners/Prisoners.tla",
           "role": "configured root",
-          "reason": "The sole published TLC configuration selects Spec, TypeOK, CountInvariant, Safety, and Liveness, with default deadlock checking. Spec includes individually quantified weak fairness for CounterStep and every NonCounterStep(i). No Swift port exists yet.",
-          "implementations": [],
-          "dispositionComplete": false
+          "reason": "The sole published TLC configuration selects Spec, TypeOK, CountInvariant, Safety, and Liveness, with default deadlock checking. The typed direct-TLA port preserves four initial switch settings, a separate weak-fairness obligation for CounterStep and each NonCounterStep(i), and the recursive CountInvariant; hosted parity remains pending.",
+          "implementations": ["Sources/UpstreamParity/Examples/Prisoners.swift"],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -8029,10 +8028,16 @@
           "module": "specifications/Prisoners/Prisoners.tla",
           "configuration": "specifications/Prisoners/Prisoners.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Prisoners.swift",
+              "scenario": "Prisoners",
+              "caseID": "prisoners-0"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -9934,8 +9939,8 @@
     {
       "path": "specifications/TeachingConcurrency",
       "name": "Teaching Concurrency",
-      "audit": "pinned modules, both published configurations, focused native checks, and exact hosted generated-TLA/upstream comparisons inspected; hosted native comparisons pending",
-      "gap": "Simple N=5 and SimpleRegular N=8 have exact complete generated-TLA-versus-upstream-TLC graph and selected-check comparisons on green hosted SHA 50e611d3. That matrix did not schedule either native scenario, so native-versus-generated-TLA parity remains unproven and neither configuration receives hosted-match credit. The proof-only wrappers are not separate TLC configurations or TLAPS proof-verification claims.",
+      "audit": "pinned modules, both published configurations, legacy cleanup, and complete independent hosted parity audited on bcde589",
+      "gap": "No published TLC-configuration gap remains. Simple N=5 and SimpleRegular N=8 have exact complete generated-TLA-versus-pinned-upstream and native-versus-generated-TLA graph and selected-check comparisons on green hosted SHA bcde589. The proof-only wrappers are not separate TLC configurations or TLAPS proof-verification claims. Full DSL and 78-family completion remain separate requirements.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "manifestSHA256": "bd6c42be599abd6dbdd51535f24e50049af55c8fd2b4f624e9c7cd97ea2f66fe",
@@ -9980,57 +9985,52 @@
           "module": "specifications/TeachingConcurrency/Simple.tla",
           "configuration": "specifications/TeachingConcurrency/Simple.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "bcde58919466b453beaf60c58a9c4d340dc01502",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
             {"file": "Sources/UpstreamParity/Examples/TeachingConcurrency_Simple.swift", "scenario": "Simple", "caseID": "teaching-simple-5"}
           ],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "bcde58919466b453beaf60c58a9c4d340dc01502",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36576790201",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36576790201/artifacts/11039826464",
+            "artifactSHA256": "56e11c05fd38298cb4f660b6bdc28f5d2a70315c4f0279073b6632a6ca611e5a",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36576790201/artifacts/11040805981",
+            "nativeArtifactSHA256": "e185145a2f44f108ae7ea618f4d86b2485733d60faa8339fab85394722fa4306",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Generated TLA matched pinned upstream TLC and the generated Swift machine matched generated-TLA TLC: one initial state, 723 complete states, and 1,841 labeled edges on each path. PCorrect, TypeOK, Inv, and default deadlock checking were selected, satisfied, and equal. Retained reports say exact with graphCompared=true; binary evidence has complete integrity footers. The source marker is bcde589; input-keyed cached TLC evidence has checked origins and pinned tool inputs. All 128 non-skipped independent-validation jobs and five ordinary CI jobs passed on that SHA."
+          }]
         },
         {
           "module": "specifications/TeachingConcurrency/SimpleRegular.tla",
           "configuration": "specifications/TeachingConcurrency/SimpleRegular.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "bcde58919466b453beaf60c58a9c4d340dc01502",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
             {"file": "Sources/UpstreamParity/Examples/TeachingConcurrency_SimpleRegular.swift", "scenario": "SimpleRegular", "caseID": "teaching-simple-regular-8"}
           ],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "bcde58919466b453beaf60c58a9c4d340dc01502",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36576790201",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36576790201/artifacts/11039960122",
+            "artifactSHA256": "191d5e9624221d2c09aef46002df01974f6cfdf2180277305d1553438511deb7",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36576790201/artifacts/11040980650",
+            "nativeArtifactSHA256": "575850830734a6fdb0e496183ce804466af398c5eee6f59b2c7a8fe9a81bc953",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Generated TLA matched pinned upstream TLC and the generated Swift machine matched generated-TLA TLC: one initial state, 277,726 complete states, and 1,454,775 labeled edges on each path. PCorrect, TypeOK, Inv, and default deadlock checking were selected, satisfied, and equal. Retained reports say exact with graphCompared=true; binary evidence has complete integrity footers. The source marker is bcde589; input-keyed cached TLC evidence has checked origins and pinned tool inputs. All 128 non-skipped independent-validation jobs and five ordinary CI jobs passed on that SHA."
+          }]
         }
       ],
-      "partialCases": [
-        {
-          "caseID": "teaching-simple-5",
-          "implementation": "Sources/UpstreamParity/Examples/TeachingConcurrency_Simple.swift",
-          "reason": "Generated TLA matched pinned upstream TLC, but the native validation matrix omitted this model. No complete-configuration credit.",
-          "evidence": [{
-            "sourceSHA": "50e611d3a2ed0855413c63c9c43e1e82557c75c5",
-            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36561602278",
-            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36561602278/artifacts/11031347343",
-            "artifactSHA256": "da467c7922c39e000c50a33926efb99624cf93fc4ed6ff50b11b6023baa5bc0f",
-            "completeGraph": true,
-            "allPropertiesMatch": true,
-            "scope": "Generated-TLA and pinned-upstream TLC complete graph comparison was exact: 723 distinct states; PCorrect, TypeOK, Inv, and default deadlock checking were selected and satisfied. Native-versus-generated-TLA comparison was not scheduled."
-          }]
-        },
-        {
-          "caseID": "teaching-simple-regular-8",
-          "implementation": "Sources/UpstreamParity/Examples/TeachingConcurrency_SimpleRegular.swift",
-          "reason": "Generated TLA matched pinned upstream TLC, but the native validation matrix omitted this model. No complete-configuration credit.",
-          "evidence": [{
-            "sourceSHA": "50e611d3a2ed0855413c63c9c43e1e82557c75c5",
-            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36561602278",
-            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36561602278/artifacts/11031142686",
-            "artifactSHA256": "85ba9091c76371623c63ad632988662633ccb195b6d234a8732de15606f5f547",
-            "completeGraph": true,
-            "allPropertiesMatch": true,
-            "scope": "Generated-TLA and pinned-upstream TLC complete graph comparison was exact: 277726 distinct states; PCorrect, TypeOK, Inv, and default deadlock checking were selected and satisfied. Native-versus-generated-TLA comparison was not scheduled."
-          }]
-        }
-      ]
+      "partialCases": []
     },
     {
       "path": "specifications/TLC",

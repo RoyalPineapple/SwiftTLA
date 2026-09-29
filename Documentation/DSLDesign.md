@@ -202,6 +202,24 @@ WeakFairness(finish)
 `step.enabled` tests whether the step has a successor, including its guards and local choices.
 Parameterized steps quantify over their configured arguments. An empty argument domain makes the step disabled.
 `WeakFairness(step)` and `StrongFairness(step)` refer to that same registered action.
+For a parameterized independent step, these forms apply to the action as a whole.
+`WeakFairness(each: step)` and `StrongFairness(each: step)` instead apply separately
+to every tuple in the step's immutable argument domains. The exported meaning is
+`\A member \in domain: WF_vars(step(member))` or the corresponding `SF_vars`.
+An empty domain makes the per-instance obligation vacuous. The declaration does
+not change the generated scheduler or transitions. A mutable domain is rejected.
+
+```swift
+let visit = Do(Step.visit, over: members) { member in
+    Assign(seen[member], to: true)
+}
+visit
+WeakFairness(each: visit)
+```
+
+`WeakFairness(each: missing)` is invalid because `missing` is not a registered
+independent step. `WeakFairness(each: visit, on: value)` is not a supported
+form: per-instance fairness currently uses the complete execution state.
 Missing registration and duplicate registration fail compilation.
 
 #### Parameterized independent steps

@@ -891,6 +891,12 @@ public func WeakFairness(_ step: AtomicStep) -> FairnessDecl {
 public func StrongFairness(_ step: AtomicStep) -> FairnessDecl {
   FairnessDecl(.strongFairness(step.model.label.name))
 }
+public func WeakFairness(each step: AtomicStep) -> FairnessDecl {
+  FairnessDecl(.weakFairnessEachAction(step.model.label.name))
+}
+public func StrongFairness(each step: AtomicStep) -> FairnessDecl {
+  FairnessDecl(.strongFairnessEachAction(step.model.label.name))
+}
 public func WeakFairness(_ step: AtomicStep, on projection: some TypedExpression) -> FairnessDecl {
   FairnessDecl(.projected(.weakFairness(step.model.label.name), projection.stateExpr))
 }

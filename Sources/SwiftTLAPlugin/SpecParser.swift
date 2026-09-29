@@ -2887,18 +2887,24 @@ extension ParserSession {
         let hasAction = name == "WeakFairness" || name == "StrongFairness"
         let offset = hasAction ? 1 : 0
         guard arguments.count == offset || arguments.count == offset + 1 else { return nil }
-        if hasAction, arguments.first?.label != nil { return nil }
+        let eachAction = hasAction && arguments.first?.label?.text == "each"
+        if hasAction, arguments.first?.label != nil, !eachAction { return nil }
         switch name {
         case "WeakFairness":
-            guard let name = actionName(call.arguments.first?.expression) else { return nil }
-            condition = .weakFairness(name)
+            guard let name = eachAction
+                ? atomicStepName(call.arguments.first?.expression)
+                : actionName(call.arguments.first?.expression) else { return nil }
+            condition = eachAction ? .weakFairnessEachAction(name) : .weakFairness(name)
         case "StrongFairness":
-            guard let name = actionName(call.arguments.first?.expression) else { return nil }
-            condition = .strongFairness(name)
+            guard let name = eachAction
+                ? atomicStepName(call.arguments.first?.expression)
+                : actionName(call.arguments.first?.expression) else { return nil }
+            condition = eachAction ? .strongFairnessEachAction(name) : .strongFairness(name)
         case "WeakFairnessNext": condition = .weakFairnessNext
         case "StrongFairnessNext": condition = .strongFairnessNext
         default: return nil
         }
+        if eachAction, arguments.count > offset { return nil }
         guard arguments.count > offset else { return condition }
         guard arguments[offset].label?.text == "on",
               let projection = decodeTypedFacadeValue(arguments[offset].expression, scope: scope) else { return nil }
@@ -2914,6 +2920,11 @@ extension ParserSession {
         guard let reference = expression?.as(DeclReferenceExprSyntax.self) else { return nil }
         return specBindings.atomicSteps[reference.baseName.sourceIdentifierName]?.model.label.name
             ?? actionReference(expression)?.name
+    }
+
+    private func atomicStepName(_ expression: ExprSyntax?) -> String? {
+        guard let reference = expression?.as(DeclReferenceExprSyntax.self) else { return nil }
+        return specBindings.atomicSteps[reference.baseName.sourceIdentifierName]?.model.label.name
     }
 
 }

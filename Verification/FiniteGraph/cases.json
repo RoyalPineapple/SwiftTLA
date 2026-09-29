@@ -1112,6 +1112,26 @@
       "moduleSHA256": "76099e8a5c9c85806fd881b23eb09fc958d402f5e0c3d04653fbfbb2d8996eed",
       "cfgSHA256": "243cfe7d5175e0858921aa80de50cd44b5c278133a4214d993c1a052ae87429b",
       "timeoutSeconds": 600
+    },
+    {
+      "id": "prisoners-0",
+      "sourceModel": "prisoners",
+      "scenario": "Prisoners",
+      "module": "prisoners/Prisoners.tla",
+      "configuration": "prisoners/Prisoners.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Prisoners/Prisoners.tla",
+        "sha256": "b6c5c267a76320897c0fc7ebe57aa4267bf2ee836c89967eb53298d08817e140"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "b6c5c267a76320897c0fc7ebe57aa4267bf2ee836c89967eb53298d08817e140",
+      "cfgSHA256": "465601262352075359e4f7dbe818a1eaa9e09907827528a093ddd156436549a2",
+      "timeoutSeconds": 300
     }
   ]
 }

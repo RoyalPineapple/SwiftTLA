@@ -927,11 +927,14 @@ extension ParserSession {
             } else {
                 let action = call.arguments.first?.expression
                     .as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
+                let each = call.arguments.first?.label?.text == "each"
                 components.diagnostics.append(.init(
-                    message: action.map { "Fairness action reference '\($0)' is not bound by a local Action declaration." }
+                    message: action.map { each
+                        ? "Per-instance fairness reference '\($0)' is not bound by a local Do declaration."
+                        : "Fairness action reference '\($0)' is not bound by a local Action declaration." }
                         ?? "Fairness declaration requires a structural action reference.",
                     source: call,
-                    expected: "WeakFairness(action), StrongFairness(action), WeakFairnessNext(), or StrongFairnessNext()"
+                    expected: "WeakFairness(action), WeakFairness(each: step), StrongFairness(action), StrongFairness(each: step), WeakFairnessNext(), or StrongFairnessNext()"
                 ))
             }
         case "Import":

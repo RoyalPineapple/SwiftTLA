@@ -8,6 +8,45 @@ struct IndependentAtomicStepTests {
         .init(enums: [parserTestEnum("Step", cases: ["next": .string("next"), "other": .string("other")])])
     }
 
+    @Test("per-instance fairness on a typed independent step retains each action binding")
+    func perInstanceFairness() throws {
+        let spec = SpecParser.parseSpecClosure(named: "FairIndependentStep", try parseSpecTestClosure("""
+        { scope in
+            let value = scope.sharedVar(initial: 0)
+            let next = Do(Step.next, over: Set<Int>([1, 2])) { member in
+                Assign(value, to: member)
+            }
+            next
+            WeakFairness(each: next)
+            StrongFairness(each: next)
+        }
+        """), sourceTypes: sourceTypes)
+        #expect(spec.diagnostics.isEmpty)
+        #expect(spec.fairness == [.weakFairnessEachAction("next"), .strongFairnessEachAction("next")])
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: spec.compile()))
+        let module = try program.renderModule().renderedModuleSource
+        #expect(module.contains("(\\A member \\in"))
+        #expect(module.contains(": WF_"))
+        #expect(module.contains(": SF_"))
+    }
+
+    @Test("per-instance fairness rejects a bound legacy action that is not an independent step")
+    func rejectsNonStepFairness() throws {
+        let spec = SpecParser.parseSpecClosure(named: "NotAnIndependentStep", try parseSpecTestClosure("""
+        {
+            let count = Var<Int>("count", initial: 0)
+            Variable(count)
+            let advance = Action("advance") { count.becomes(count + 1) }
+            advance
+            WeakFairness(each: advance)
+        }
+        """))
+        #expect(spec.fairness.isEmpty)
+        #expect(spec.diagnostics.map(\.message) == [
+            "Per-instance fairness reference 'advance' is not bound by a local Do declaration."
+        ])
+    }
+
     @Test("specification statement macros expand in ordinary and parameterized independent steps")
     func expandsSpecificationMacros() throws {
         let spec = SpecParser.parseSpecClosure(named: "SharedMacro", try parseSpecTestClosure("""
