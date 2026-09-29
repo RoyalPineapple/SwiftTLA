@@ -31,15 +31,15 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "GameOfLife is green on hosted SHA 4caf4845; TwoPhase is the sole family in implementation",
+      "status": "TwoPhase is green on hosted SHA 86b33df8; Prisoners is the next selected family",
       "candidates": [
-        "specifications/TwoPhase",
         "specifications/Prisoners",
-        "specifications/SingleLaneBridge"
+        "specifications/SingleLaneBridge",
+        "specifications/TransitiveClosure"
       ],
-      "scope": "On 4caf4845, ordinary CI and the full independent matrix passed, including exact GameOfLife graph, TypeOK, and deadlock parity. TwoPhase has one published four-state exhaustive TLC configuration and no fairness requirement. Prisoners and SingleLaneBridge require independently quantified action fairness, so remain later capability cases. Do not start another family until TwoPhase's complete evidence and ordinary CI pass on one frozen SHA."
+      "scope": "On 86b33df8, ordinary CI and the full independent matrix passed, including TwoPhase's sole exact configuration. Pinned-source audit of the next three candidates selects Prisoners as the smallest shared-capability case: its one published 214-state configuration checks TypeOK, CountInvariant, Safety, Liveness, and default deadlock under weak fairness for CounterStep and every NonCounterStep(i). Its APPrisoners type-annotation wrapper and MCPrisoners inductive-invariant harness have no published TLC configurations but still need explicit module dispositions. SingleLaneBridge additionally needs leadsto properties and recursive sequence initialization over a 3605-state graph; TransitiveClosure is a zero-state assumption-evaluation module with recursive and operator-valued definitions. Implement Prisoners' exact semantics and missing DSL support, not a safety-only or fairness-free port."
     },
-    "implementationFamiliesInProgress": 1,
+    "implementationFamiliesInProgress": 0,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
     "regressionAnchors": ["DiningPhilosophers", "LeastCircularSubstring", "N-Queens"],
     "inspectionWaves": {
@@ -61,13 +61,13 @@
   },
   "ci": {
     "prHeadFullMatrix": {
-      "sourceSHA": "8ee6671073ff8e58e5385931e056031ff8dc3a06",
-      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36515324261",
-      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36515324706",
+      "sourceSHA": "86b33df8acc10a8ff76099e0b16c5fd6126ef463",
+      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36551020572",
+      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36551020392",
       "observedStatus": "completed",
       "conclusion": "success",
-      "jobs": "All 120 non-skipped independent-validation jobs passed, including both chameneos-0 comparisons and admission. The optional comparison replay diagnostic was skipped. All five ordinary CI jobs passed.",
-      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. Chameneos retained complete 81-initial/34534-state/104616-edge exact graphs and satisfied TypeOK and SumMet with deadlock disabled. Assumption-only cases retained exact verdicts without fabricated graphs; decisive early stops retained verdict and witness evidence. This verified PR head does not mean all 78 families are complete."
+      "jobs": "All 123 non-skipped independent-validation jobs passed, including both two-phase-0 comparisons and admission. The optional comparison replay diagnostic was skipped. All five ordinary CI jobs passed.",
+      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. TwoPhase retained complete one-initial/four-state/four-edge exact graphs and satisfied Inv and default deadlock checking. Assumption-only cases retained exact verdicts without fabricated graphs; decisive early stops retained verdict and witness evidence. This verified PR head does not mean all 78 families or 19 DSL criteria are complete."
     },
     "bakeryBoulangerieFamilyCandidate": {
       "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
@@ -2799,7 +2799,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": "specifications/TwoPhase",
+  "nextFamily": "specifications/Prisoners",
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -7989,28 +7989,37 @@
     {
       "path": "specifications/Prisoners",
       "name": "The Prisoners & Switches Puzzle",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned source, sole published configuration, and unconfigured module roles inspected; no Swift implementation or hosted parity",
+      "gap": "Prisoners.cfg binds four prisoners with p1 as Counter and checks TypeOK, CountInvariant, Safety, Liveness, and default deadlock. Its Spec includes WF_vars(CounterStep) and a separate WF_vars(NonCounterStep(i)) for each non-counter prisoner. A faithful port needs nondeterministic initial switch values, typed total-function indexed updates, the recursive finite-set sum in CountInvariant, parameterized independent actions, and quantified action fairness without manufacturing a PlusCal algorithm. No model-owned scenario, exact reference case, or retained hosted comparison exists. APPrisoners and MCPrisoners remain unconfigured modules requiring explicit final dispositions.",
+      "sourceAudit": {
+        "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
+        "moduleBlob": "6a4471dff0a97d6c04408dffdc709942f461948b",
+        "configurationBlob": "7772b15742a70c176cac91a690f3c6cb435c0308",
+        "manifestBlob": "1ba3305d44bba981f6f0d89d9bd92457c63fa6f3",
+        "expectedDistinctStates": 214,
+        "expectedTotalStates": 860,
+        "expectedStateDepth": 14
+      },
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/Prisoners/APPrisoners.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured Apalache type-annotation wrapper",
+          "reason": "This module instantiates Prisoners with tool-specific type annotations and declares concrete three-prisoner values for a cfg file absent from the pinned inventory. It has no published TLC configuration. Decide its final variant disposition without claiming a separate hosted graph match.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/Prisoners/MCPrisoners.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured inductive-invariant harness",
+          "reason": "This module EXTENDS Prisoners and defines InvTestSpec with TypeOK /\\ CountInvariant as its initial predicate and the same Next relation. It has no published TLC configuration, but its distinct initial-state semantics need explicit final variant disposition rather than being counted as the configured Spec run.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/Prisoners/Prisoners.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The sole published TLC configuration selects Spec, TypeOK, CountInvariant, Safety, and Liveness, with default deadlock checking. Spec includes individually quantified weak fairness for CounterStep and every NonCounterStep(i). No Swift port exists yet.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -10356,8 +10365,8 @@
     {
       "path": "specifications/TwoPhase",
       "name": "Two-Phase Handshaking",
-      "audit": "pinned source, module roles, and sole published configuration inspected; hosted parity pending",
-      "gap": "The registered model-owned MCTwoPhase scenario and byte-identical pinned source bundle pass the focused local model check and related manifest/inventory/compilation tests. Complete hosted generated/upstream-TLC and native/generated-TLC graph, Inv, and deadlock comparisons remain required. No legacy TwoPhase port exists.",
+      "audit": "pinned source, module roles, sole published configuration, and complete hosted parity audited on 86b33df8",
+      "gap": "No published TLC-configuration gap remains. Both independent comparisons match complete initial states, states, labeled edges, Inv, and default deadlock outcomes on green hosted SHA 86b33df8. The unconfigured refinement theorem and proof companion are not TLAPS proof-admission claims; broader DSL refinement support remains a separate requirement. No legacy TwoPhase port exists.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -10394,7 +10403,8 @@
           "module": "specifications/TwoPhase/MCTwoPhase.tla",
           "configuration": "specifications/TwoPhase/MCTwoPhase.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "86b33df8acc10a8ff76099e0b16c5fd6126ef463",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -10404,7 +10414,20 @@
               "caseID": "two-phase-0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "86b33df8acc10a8ff76099e0b16c5fd6126ef463",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36551020392",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36551020392/artifacts/11025771319",
+              "artifactSHA256": "24e84dde879686f03f3a559ce4a57a63c3594da9e03e0d1c6a23e74244028197",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36551020392/artifacts/11027515112",
+              "nativeArtifactSHA256": "60835e38ffdf90aca9adb119cbed494d0badf1cf34f7d2d74e3850b97286342b",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "The generated-TLA-vs-pinned-upstream and native-vs-generated-TLA comparisons independently report exact complete graph parity: one initial state, four states, four labeled edges. All three checkers satisfy Inv and default deadlock checking. The upstream root TLA SHA-256 c2e0ab8004043d22833818fe2c4426bb393bbfde26bfddd9f904ee76a605a061 matches the ceeaa904 pin; the original CFG fixture is pinned and its selected checks are preserved by the staged configuration. Downloaded artifacts retain source SHA, origin run, tool pins, and exact comparison records. All 123 non-skipped validation jobs and five ordinary CI jobs passed on this SHA. No TLAPS proof-verification claim or credit for other configurations is made."
+            }
+          ]
         }
       ],
       "partialCases": []
