@@ -284,7 +284,13 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         package func resolveScenario() throws -> (any ModelValidationScenario)? {
-            guard sourceModel != .sumsEven, sourceModel != .stones, let scenario else { return nil }
+            guard sourceModel != .sumsEven, sourceModel != .stones else { return nil }
+            guard let scenario else {
+                guard !hasModelValidationRegistration(sourceModel.nativeModelID) else {
+                    throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
+                }
+                return nil
+            }
             guard let scenarios = try modelValidationScenarios(for: sourceModel.nativeModelID) else {
                 throw EvidenceFormatError.invalidField(record: id, field: "native validation registration")
             }
