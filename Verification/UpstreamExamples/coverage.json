@@ -6017,8 +6017,8 @@
     {
       "path": "specifications/GameOfLife",
       "name": "Conway's Game of Life",
-      "audit": "pinned source, configuration, and existing Swift implementation audited; implementation pending",
-      "gap": "The existing Swift model fixes N=4 and initializes one blinker, while the sole pinned configuration binds N=4 and admits every total Boolean function over the 4-by-4 position domain (65,536 initial states). Replace the manual tuple/TLAValue projection and legacy Action with typed #spec authoring, preserve the complete initial function space and synchronous eight-neighbor Next relation, then establish hosted generated/upstream TLC and native/generated-TLA graph and TypeOK parity. No existing Swift case or evidence is credited.",
+      "audit": "pinned source and configuration audited; typed implementation and reference case locally checked; hosted parity pending",
+      "gap": "The typed #spec port and model-owned N=4 scenario replace the fixed-blinker legacy implementation. Local diagnostics enumerate all 65,536 initial grids, exercise a synchronous generated-machine transition, and render the registered case. Neither complete graph nor TypeOK/deadlock parity is credited until both hosted generated/upstream-TLC and native/generated-TLA comparisons pass on one source SHA.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "moduleBlob": "2664cf344f9b48f3a7d8ca6499f42ce77c16481c",
@@ -6028,13 +6028,15 @@
         "expectedTotalStates": 131072,
         "expectedStateDepth": 1
       },
-      "legacyCleanupComplete": false,
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/GameOfLife/GameOfLife.tla",
           "role": "configured root",
-          "reason": "The sole published TLC configuration checks N=4, TypeOK, and Spec; the module's Init permits all total Boolean grids and Next updates every cell synchronously. The current fixed-blinker Swift implementation does not represent that configured initial set.",
-          "implementations": [],
+          "reason": "The sole published TLC configuration checks N=4, TypeOK, and Spec with deadlock checking enabled. The typed model admits every total Boolean grid over the 4-by-4 position domain and defines a synchronous eight-neighbor Next relation. Complete hosted graph and property parity remain unverified.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/GameOfLife.swift"
+          ],
           "dispositionComplete": false
         }
       ],
@@ -6043,10 +6045,16 @@
           "module": "specifications/GameOfLife/GameOfLife.tla",
           "configuration": "specifications/GameOfLife/GameOfLife.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/GameOfLife.swift",
+              "scenario": "GameOfLife",
+              "caseID": "game-of-life-0"
+            }
+          ],
           "evidence": []
         }
       ],

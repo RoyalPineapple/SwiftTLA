@@ -1,100 +1,55 @@
 import SwiftTLA
 import SwiftTLAMacros
 
+// Upstream: specifications/GameOfLife/GameOfLife.tla
+@TLAModel
 package struct GameOfLifeModel: Sendable {
-    package struct Position: FiniteTLAValueDomain {
-        package let column: Int
-        package let row: Int
+    package typealias Position = Pair<Int, Int>
+    package enum Step: String, CaseIterable { case Next }
 
-        private init(column: Int, row: Int) {
-            self.column = column
-            self.row = row
-        }
-
-        package static let defaultValue = Self(column: 1, row: 1)
-        package static let finiteValues = (1...4).flatMap { column in
-            (1...4).map { row in Self(column: column, row: row) }
-        }
-
-        package init?(formalValue: TLAValue) {
-            guard case .tuple(let coordinates) = formalValue,
-                  coordinates.count == 2,
-                  case .int(let column) = coordinates[0],
-                  case .int(let row) = coordinates[1],
-                  (1...4).contains(column),
-                  (1...4).contains(row)
-            else { return nil }
-            self.init(column: column, row: row)
-        }
-
-        package var tlaValue: TLAValue {
-            .tuple([.int(column), .int(row)])
-        }
-    }
-}
-
-private extension Expr where T == GameOfLifeModel.Position {
-    var column: Expr<Int> { Expr<Int>(.tupleAccess(raw, 1)) }
-    var row: Expr<Int> { Expr<Int>(.tupleAccess(raw, 2)) }
-}
-
-extension GameOfLifeModel {
     package static var spec: TLASpec {
         #spec("GameOfLife") { scope in
-            Extends(.integers)
-            let grid = scope.sharedVar(initial: Function<Position, Bool>.mapping { boundPosition in
-                    let position = boundPosition.expr
-                    return position.column == 2 && position.row >= 2 && position.row <= 4
-                }
-            )
+            let N = scope.parameter(as: Int.self, in: Int.all)
+            let TypeOK = Invariant()
+            Assume(N >= 0)
 
-            Invariant("TypeOK") {
-                for position in Position.finiteValues {
-                    StateExpr.in(
-                        grid[position].stateExpr,
-                        SetExpr<Bool>.literal(false, true).stateExpr
-                    )
+            let positions = IntRange(1, through: N).flatMapping { column in
+                IntRange(1, through: N).mapping { row in
+                    Pair<Int, Int>.literal(column.expr, row.expr)
                 }
             }
+            let grids = Functions(from: positions, to: SetExpr<Bool>.literal(false, true))
 
-            SwiftTLA.Action("Next") {
-                grid.becomes(Function<Position, Bool>.mapping { position in
-                    nextCell(in: grid, at: position.expr)
+            let grid: SharedVariable<[Position: Bool]> = scope.sharedVar(in: grids)
+
+            Do(Step.Next) {
+                Assign(grid, to: Dictionary<Position, Bool>.mapping(over: positions) { cell in
+                    positions.filtering { neighbor in
+                        IntRange(cell.expr.first() - 1, through: cell.expr.first() + 1)
+                            .contains(neighbor.expr.first())
+                            && IntRange(cell.expr.second() - 1, through: cell.expr.second() + 1)
+                                .contains(neighbor.expr.second())
+                            && (neighbor.expr.first() != cell.expr.first()
+                                || neighbor.expr.second() != cell.expr.second())
+                            && grid[neighbor.expr]
+                    }.cardinality == 3
+                        || (grid[cell.expr] && positions.filtering { neighbor in
+                            IntRange(cell.expr.first() - 1, through: cell.expr.first() + 1)
+                                .contains(neighbor.expr.first())
+                                && IntRange(cell.expr.second() - 1, through: cell.expr.second() + 1)
+                                    .contains(neighbor.expr.second())
+                                && (neighbor.expr.first() != cell.expr.first()
+                                    || neighbor.expr.second() != cell.expr.second())
+                                && grid[neighbor.expr]
+                        }.cardinality == 2)
                 })
             }
-        }
-    }
 
-    private static func nextCell(
-        in grid: SharedVariable<Function<Position, Bool>>,
-        at position: Expr<Position>
-    ) -> Expr<Bool> {
-        var neighborCount = Expr<Int>(0)
-        let neighborOffsets = [
-            (-1, -1), (-1, 0), (-1, 1),
-            (0, -1), (0, 1),
-            (1, -1), (1, 0), (1, 1),
-        ]
-        for (columnOffset, rowOffset) in neighborOffsets {
-            let neighborColumn = position.column + columnOffset
-            let neighborRow = position.row + rowOffset
-            let isInBounds = neighborColumn >= 1
-                && neighborColumn <= 4
-                && neighborRow >= 1
-                && neighborRow <= 4
-            let neighbor = Expr<Position>(.tupleLiteral([
-                neighborColumn.stateExpr,
-                neighborRow.stateExpr,
-            ]))
-            neighborCount = neighborCount + If(
-                isInBounds,
-                then: If(grid[neighbor], then: 1, else: 0),
-                else: 0
-            )
-        }
+            TypeOK { grids.contains(grid) }
 
-        let alive = grid[position]
-        return alive == true && neighborCount >= 2 && neighborCount <= 3
-            || alive == false && neighborCount == 3
+            Validation("GameOfLife") {
+                Bind(N, to: 4)
+            }
+        }
     }
 }

@@ -977,6 +977,26 @@
       "timeoutSeconds": 1800
     },
     {
+      "id": "game-of-life-0",
+      "sourceModel": "game-of-life",
+      "scenario": "GameOfLife",
+      "module": "game-of-life/GameOfLife.tla",
+      "configuration": "game-of-life/GameOfLife.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/GameOfLife/GameOfLife.tla",
+        "sha256": "dcd6d626946faab35ac22ad38a031b0d9bd9bc274d8750340506acc407dccbc6"
+      },
+      "exploration": {
+        "maximumStateLimit": 100000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "dcd6d626946faab35ac22ad38a031b0d9bd9bc274d8750340506acc407dccbc6",
+      "cfgSHA256": "89b3dd94f35fb6cee4b093fa2b9a2e0f44e6cf0d3e43707b82c801690eeb9bf3",
+      "timeoutSeconds": 1800
+    },
+    {
       "id": "chameneos-0",
       "sourceModel": "chameneos",
       "scenario": "Chameneos",

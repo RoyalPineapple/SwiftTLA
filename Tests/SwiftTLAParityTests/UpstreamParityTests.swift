@@ -3,41 +3,6 @@ import Testing
 @testable import UpstreamParity
 
 struct UpstreamParityTests {
-    @Test("Game of Life preserves the blinker transition")
-    func gameOfLifeBlinkerTransition() throws {
-        func grid(alive: Set<TLAValue>) -> TLAValue {
-            .function(Dictionary(uniqueKeysWithValues: (1...4).flatMap { column in
-                (1...4).map { row in
-                    let position = TLAValue.tuple([.int(column), .int(row)])
-                    return (position, .bool(alive.contains(position)))
-                }
-            }))
-        }
-
-        let vertical: Set<TLAValue> = [
-            .tuple([.int(2), .int(2)]),
-            .tuple([.int(2), .int(3)]),
-            .tuple([.int(2), .int(4)]),
-        ]
-        let horizontal: Set<TLAValue> = [
-            .tuple([.int(1), .int(3)]),
-            .tuple([.int(2), .int(3)]),
-            .tuple([.int(3), .int(3)]),
-        ]
-        let compilation = try GameOfLifeModel.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let initial = try #require(try runtime.initialStates().first)
-        let token = try #require(TLAStateProjection.Token(validating: "grid"))
-        #expect(try initial.projection(using: compilation.layout).value(for: token) == grid(alive: vertical))
-
-        let first = try #require(try runtime.successors(from: initial).first)
-        #expect(try runtime.successors(from: initial).count == 1)
-        #expect(try first.state.projection(using: compilation.layout).value(for: token) == grid(alive: horizontal))
-
-        let second = try #require(try runtime.successors(from: first.state).first)
-        #expect(try second.state.projection(using: compilation.layout).value(for: token) == grid(alive: vertical))
-    }
-
     @Test("NanoBlockchain preserves its six genesis transitions")
     func nanoBlockchainGenesisTransitions() throws {
         let noBlock = TLAValue.record([

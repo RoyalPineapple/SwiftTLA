@@ -35,6 +35,7 @@ package func modelValidationScenarios() throws -> [(id: String, scenario: any Mo
         ("queens", try QueensModel.validationScenarios()),
         ("coffee-can", try CoffeeCanModel.validationScenarios()),
         ("chameneos", try ChameneosModel.validationScenarios()),
+        ("game-of-life", try GameOfLifeModel.validationScenarios()),
         ("hour-clock", try HourClockModel.validationScenarios()),
         ("hour-clock-2", try HourClock2Model.validationScenarios()),
         ("least-circular-substring", try LeastCircularSubstringModel.validationScenarios()),
