@@ -10711,7 +10711,7 @@
       "id": "AC-10",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLAParityTests/GraphComparisonTests.swift rejects matching timeouts, execution errors, and incomplete graphs. Tests/SwiftTLAParityTests/TLCGraphReaderTests.swift checks process timeouts, malformed streams, closure, counts, and body digests. Tests/SwiftTLAParityTests/TLCPropertyCheckTests.swift rejects unavailable branches and incomplete shared graphs. Tests/SwiftTLAParityTests/ScenarioValidationTests.swift rejects incomplete expected failures and missing comparison results. Complete resource-limit and unsupported-construct acceptance coverage remains unaudited. Independent hosted evidence remains unverified.",
+      "reason": "GraphComparisonTests rejects matching timeouts, execution errors, and incomplete graphs; TLCGraphReaderTests checks process timeouts, malformed streams, closure, counts, and digests; TLCPropertyCheckTests and ScenarioValidationTests reject unavailable or incomplete expected-failure evidence. On current PR SHA bd27c6a1, MachineValidationTests also rejects a state limit for an expected invariant violation, and ValidationEvidenceComparisonTests rejects inconclusive TLC exits, missing or impossible partial witnesses, malformed values, and corrupt or truncated binary streams. These focused tests protect distinct runner and evidence-boundary failures; they do not yet prove complete resource-limit and unsupported-construct acceptance coverage. Hosted admission for bd27c6a1 is still pending, so no complete-criterion credit is claimed.",
       "evidence": []
     },
     {
