@@ -133,6 +133,19 @@ struct MachineValidationTests {
         #expect(!report.graphComplete)
     }
 
+    @Test("a state limit cannot satisfy an expected invariant violation")
+    func rejectsLimitedExpectedFailure() throws {
+        let scenario = try #require(TraceReplayCounter.validationScenarios().first)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        #expect(throws: ExplorationError.stateLimitExceeded(1)) {
+            try NativeValidationRunner.run(scenario: scenario, caseID: "limited-counter",
+                maximumStates: 1, to: directory)
+        }
+        #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("report.json").path))
+    }
+
     @Test("early violations are isolated before every selected check receives a verdict")
     func resolvesChecksAfterEarlyViolation() throws {
         let scenario = try ConstantStateClaims.validationScenarios()[0]
