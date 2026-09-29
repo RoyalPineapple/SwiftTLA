@@ -8062,7 +8062,7 @@
       "path": "specifications/Prisoners_Single_Switch",
       "name": "The Prisoners & Switch Puzzle",
       "audit": "pinned module, four published TLC configurations, unconfigured module role, and absent Swift implementation audited; no parity evidence yet",
-      "gap": "Implement one typed model with the known/unknown-light and one/three-prisoner bindings, preserve WardenAction(p) weak fairness and Terminating, TypeOK, VictoryOK, and default deadlock checks, then verify all four complete graphs and verdicts on both hosted comparison paths. No legacy Swift port or registered scenario exists.",
+      "gap": "Implement one typed model with the known/unknown-light and one/three-prisoner bindings, preserve WardenAction(p) weak fairness and Terminating, TypeOK, VictoryOK, and default deadlock checks, then verify all four complete graphs and verdicts on both hosted comparison paths. Exercise the solo configurations first: NormalPrisoner is empty, so signalled is an empty function, while DesignatedCounter comes from CHOOSE. Generic empty-function and generated CHOOSE support exists, but this exact native/TLC parity is unverified. No legacy Swift port or registered scenario exists.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "moduleBlob": "09ac8c2ca33655a040eb944023bbda8f62bcd375",
