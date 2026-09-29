@@ -31,14 +31,15 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "TeachingConcurrency is green on hosted SHA bcde589; Prisoners is the active next family",
+      "status": "Prisoners has complete hosted parity on green SHA 3c8b1d7d; the next family audit has not selected an implementation",
       "candidates": [
-        "specifications/Prisoners",
-        "specifications/SingleLaneBridge"
+        "specifications/Prisoners_Single_Switch",
+        "specifications/SingleLaneBridge",
+        "specifications/ReadersWriters"
       ],
-      "scope": "Both published TeachingConcurrency configurations have exact complete generated-TLA-versus-pinned-upstream and native-versus-generated-TLA graph and selected-check comparisons on green SHA bcde589. Prisoners is the next audited shared-capability case: its configured direct TLA actions require separate weak fairness for every NonCounterStep(i). Typed initial choices, domain-scoped function values and updates, and local set recursion already exist; expose the existing per-instance fairness semantics through the typed independent-step API without manufacturing a PlusCal algorithm."
+      "scope": "Audit these candidates against their pinned modules and every published configuration before choosing the next family. Prisoners_Single_Switch is distinct from the completed Prisoners family. Do not expand the corpus while the current PR-head admission run is unresolved."
     },
-    "implementationFamiliesInProgress": 1,
+    "implementationFamiliesInProgress": 0,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
     "regressionAnchors": ["DiningPhilosophers", "LeastCircularSubstring", "N-Queens"],
     "inspectionWaves": {
@@ -2798,7 +2799,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": "specifications/Prisoners",
+  "nextFamily": "specifications/Prisoners_Single_Switch",
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -7988,8 +7989,8 @@
     {
       "path": "specifications/Prisoners",
       "name": "The Prisoners & Switches Puzzle",
-      "audit": "pinned source, sole published configuration, unconfigured module roles, typed implementation, and focused local graph/check diagnostics audited",
-      "gap": "Prisoners.cfg binds four prisoners with p1 as Counter and checks TypeOK, CountInvariant, Safety, Liveness, and default deadlock. The typed direct-TLA model, registered scenario, and byte-identical reference case now exist. Focused local diagnostics reproduce four initial states, 214 distinct states, 856 labeled edges, and satisfied selected checks, but generated-TLA-versus-pinned-upstream and native-versus-generated-TLA hosted comparisons remain required. The unconfigured APPrisoners and MCPrisoners modules have explicit dispositions without invented TLC configurations.",
+      "audit": "pinned source, sole published configuration, unconfigured module roles, typed implementation, and complete hosted parity audited on 3c8b1d7d",
+      "gap": "No published TLC-configuration gap remains. On green hosted SHA 3c8b1d7d, generated TLA matched pinned upstream and the generated Swift machine matched generated TLA: four initial states, 214 states, 856 labeled edges, TypeOK, CountInvariant, Safety, Liveness, and default deadlock all matched. The unconfigured APPrisoners and MCPrisoners modules have explicit dispositions without invented TLC configurations. This does not complete the separate Prisoners_Single_Switch family.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "moduleBlob": "6a4471dff0a97d6c04408dffdc709942f461948b",
@@ -8018,7 +8019,7 @@
         {
           "path": "specifications/Prisoners/Prisoners.tla",
           "role": "configured root",
-          "reason": "The sole published TLC configuration selects Spec, TypeOK, CountInvariant, Safety, and Liveness, with default deadlock checking. The typed direct-TLA port preserves four initial switch settings, a separate weak-fairness obligation for CounterStep and each NonCounterStep(i), and the recursive CountInvariant; hosted parity remains pending.",
+          "reason": "The sole published TLC configuration selects Spec, TypeOK, CountInvariant, Safety, and Liveness, with default deadlock checking. The typed direct-TLA port preserves four initial switch settings, a separate weak-fairness obligation for CounterStep and each NonCounterStep(i), and the recursive CountInvariant. Both independent hosted comparisons matched on 3c8b1d7d.",
           "implementations": ["Sources/UpstreamParity/Examples/Prisoners.swift"],
           "dispositionComplete": true
         }
@@ -8028,7 +8029,8 @@
           "module": "specifications/Prisoners/Prisoners.tla",
           "configuration": "specifications/Prisoners/Prisoners.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "3c8b1d7d579c57335d68422167186968636c73a1",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -8038,7 +8040,20 @@
               "caseID": "prisoners-0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "3c8b1d7d579c57335d68422167186968636c73a1",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36589913617",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36589913617/artifacts/11045546846",
+              "artifactSHA256": "80cdc1cc003bcaabc462c17ff258f3a8b15e34f8114be4957c96f0d26f85cc38",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36589913617/artifacts/11045641416",
+              "nativeArtifactSHA256": "3eaba8cd17e5dacea9e8f7b44a3048e4fb240139416029d090bacb2b5269ba18",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Attempt 1 retained exact complete generated-TLA-versus-pinned-upstream and native-versus-generated-TLA comparison artifacts for Prisoners.cfg. Both paths checked all four initial states, 214 states, 856 labeled edges, TypeOK, CountInvariant, Safety, Liveness, and default deadlock as satisfied. Ordinary CI passed on this SHA. The first validation attempt failed only because another case's artifact upload lost its network connection; failed-jobs attempt 2 passed the full admission gate on the same SHA. This evidence credits only the sole published Prisoners configuration, not Prisoners_Single_Switch or the complete DSL/corpus goal."
+            }
+          ]
         }
       ],
       "partialCases": []
