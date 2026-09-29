@@ -55,7 +55,8 @@ import UpstreamParity
       3: .init(first: .first(.yellow), second: 0), 4: .init(first: .first(.blue), second: 0)
     ], meetingPlace: .second(.empty), numMeetings: 0), configuration: configuration)
     #expect(try native.violatedInvariants().isEmpty)
-    #expect(try native.enabledActions().count == 4)
+    #expect(try native.enabledActions().count == 1)
+    #expect(try native.successors().count == 4)
   }
 
   @Test("Chameneos native checking exhausts its configured state space")

@@ -27,7 +27,7 @@ package struct ChameneosModel: Sendable {
     package typealias Color = OneOf<Hue, FadedToken>
     package typealias CreatureState = Pair<Color, Int>
     package typealias WaitingPlace = OneOf<Int, EmptyMeetingPlace>
-    package enum Step: String, CaseIterable { case Meet }
+    package enum Step: String, CaseIterable { case Next }
 
     package static var spec: TLASpec {
         #spec("Chameneos") { scope in
@@ -53,30 +53,32 @@ package struct ChameneosModel: Sendable {
             let meetingPlace: SharedVariable<WaitingPlace> = scope.sharedVar(initial: empty)
             let numMeetings = scope.sharedVar(initial: 0)
 
-            Do(Step.Meet, over: creatureIDs) { cid in
-                When(chameneoses[cid].first() != fadedColor)
-                If(meetingPlace == empty) {
-                    If(numMeetings < N) {
-                        Assign(meetingPlace, to: WaitingPlace.first(cid))
-                    } else: {
-                        Assign(chameneoses[cid], to: Pair.literal(
-                            fadedColor, chameneoses[cid].second()))
-                    }
-                } else: {
-                    When(meetingPlace != WaitingPlace.first(cid))
-                    Let(meetingPlace.assuming(Int.self)) { waiting in
-                        let myColor = chameneoses[cid].first().assuming(Hue.self)
-                        let otherColor = chameneoses[waiting].first().assuming(Hue.self)
-                        Let(If(myColor == otherColor, then: myColor, else:
-                            Select(from: initialColors) { color in
-                                color.expr != myColor && color.expr != otherColor
-                            })) { newColor in
-                            Assign(meetingPlace, to: empty)
+            Do(Step.Next) {
+                With(creatureIDs) { cid in
+                    When(chameneoses[cid].first() != fadedColor)
+                    If(meetingPlace == empty) {
+                        If(numMeetings < N) {
+                            Assign(meetingPlace, to: WaitingPlace.first(cid))
+                        } else: {
                             Assign(chameneoses[cid], to: Pair.literal(
-                                Color.first(newColor.expr), chameneoses[cid].second() + 1))
-                            Assign(chameneoses[waiting], to: Pair.literal(
-                                Color.first(newColor.expr), chameneoses[waiting].second() + 1))
-                            Assign(numMeetings, to: numMeetings + 1)
+                                fadedColor, chameneoses[cid].second()))
+                        }
+                    } else: {
+                        When(meetingPlace != WaitingPlace.first(cid))
+                        Let(meetingPlace.assuming(Int.self)) { waiting in
+                            let myColor = chameneoses[cid].first().assuming(Hue.self)
+                            let otherColor = chameneoses[waiting].first().assuming(Hue.self)
+                            Let(If(myColor == otherColor, then: myColor, else:
+                                Select(from: initialColors) { color in
+                                    color.expr != myColor && color.expr != otherColor
+                                })) { newColor in
+                                Assign(meetingPlace, to: empty)
+                                Assign(chameneoses[cid], to: Pair.literal(
+                                    Color.first(newColor.expr), chameneoses[cid].second() + 1))
+                                Assign(chameneoses[waiting], to: Pair.literal(
+                                    Color.first(newColor.expr), chameneoses[waiting].second() + 1))
+                                Assign(numMeetings, to: numMeetings + 1)
+                            }
                         }
                     }
                 }
