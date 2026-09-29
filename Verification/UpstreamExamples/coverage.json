@@ -10370,7 +10370,7 @@
         {
           "path": "specifications/TwoPhase/MCTwoPhase.tla",
           "role": "configured root",
-          "reason": "The sole published TLC configuration binds XInit(v) to v = 0 and XAct(i, xInit, xNext) to xNext = xInit, selects Spec and Inv, and leaves deadlock checking enabled. The model-owned MCTwoPhase scenario preserves p, c, x and both labeled steps.",
+          "reason": "The MCTwoPhase wrapper defines XInit(v) as v = 0 and XAct(i, xInit, xNext) as xNext = xInit; the sole published TLC configuration selects Spec and Inv and leaves deadlock checking enabled. The model-owned MCTwoPhase scenario preserves p, c, x and both labeled steps.",
           "implementations": ["Sources/UpstreamParity/Examples/TwoPhase.swift"],
           "dispositionComplete": true
         },

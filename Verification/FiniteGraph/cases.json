@@ -1004,7 +1004,8 @@
       "configuration": "two-phase/MCTwoPhase.cfg",
       "imports": [
         "two-phase/TwoPhase.tla",
-        "two-phase/Alternate.tla"
+        "two-phase/Alternate.tla",
+        "boulanger/TLAPS.tla"
       ],
       "dependencies": [
         {
@@ -1014,6 +1015,10 @@
         {
           "importingModule": "TwoPhase",
           "importedModule": "Alternate"
+        },
+        {
+          "importingModule": "TwoPhase",
+          "importedModule": "TLAPS"
         }
       ],
       "sourceInput": {
