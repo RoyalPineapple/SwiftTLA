@@ -1188,12 +1188,15 @@ final class ParserSession {
                       let second = decodeTypedFacadeValue(
                         call.arguments[call.arguments.index(after: call.arguments.startIndex)].expression,
                         scope: scope
-                      ),
-                      let typeName = literalType.renderedSourceName,
-                      let shape = try? sourceTypeResolver.formalShape(for: typeName),
-                      shape.isSupported
+                      )
                 else { return nil }
-                return .assertView(.tupleLiteral([first, second]), shape)
+                let pair = StateExpr.tupleLiteral([first, second])
+                if let typeName = literalType.renderedSourceName,
+                   let shape = try? sourceTypeResolver.formalShape(for: typeName),
+                   shape.isSupported {
+                    return .assertView(pair, shape)
+                }
+                return pair
             case "Function", "PartialFunction":
                 return decodeTypedFunctionLiteral(
                     call,
