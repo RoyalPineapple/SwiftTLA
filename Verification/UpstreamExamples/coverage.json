@@ -5987,14 +5987,23 @@
     {
       "path": "specifications/GameOfLife",
       "name": "Conway's Game of Life",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned source, configuration, and existing Swift implementation audited; implementation pending",
+      "gap": "The existing Swift model fixes N=4 and initializes one blinker, while the sole pinned configuration binds N=4 and admits every total Boolean function over the 4-by-4 position domain (65,536 initial states). Replace the manual tuple/TLAValue projection and legacy Action with typed #spec authoring, preserve the complete initial function space and synchronous eight-neighbor Next relation, then establish hosted generated/upstream TLC and native/generated-TLA graph and TypeOK parity. No existing Swift case or evidence is credited.",
+      "sourceAudit": {
+        "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
+        "moduleBlob": "2664cf344f9b48f3a7d8ca6499f42ce77c16481c",
+        "configurationBlob": "521c6e6a11a821db0a86477a0501807fabf1087a",
+        "manifestBlob": "40182828f06c9337b5468ace1bd2e32679b10e29",
+        "expectedDistinctStates": 65536,
+        "expectedTotalStates": 131072,
+        "expectedStateDepth": 1
+      },
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/GameOfLife/GameOfLife.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The sole published TLC configuration checks N=4, TypeOK, and Spec; the module's Init permits all total Boolean grids and Next updates every cell synchronously. The current fixed-blinker Swift implementation does not represent that configured initial set.",
           "implementations": [],
           "dispositionComplete": false
         }
