@@ -16,6 +16,7 @@ struct NativeSwiftEmitter {
     private let variableNames: [VariableID: String]
     private var expressionValues: [CompiledExpression: String] = [:]
     private var successorBindings: [BinderID: (value: CompiledExpression, substitutions: [BinderID: String])] = [:]
+    private var nativeBinderTypes: [BinderID: CompiledValueType] = [:]
     private var expressionOrdinals: [CompiledExpression: Int] = [:]
     private var hasDepthScope = false
     private var nextMembershipPredicate = 0
@@ -729,11 +730,15 @@ struct NativeSwiftEmitter {
                 return try self.expression(binding.value, state: state, substitutions: binding.substitutions,
                     activeFunctions: activeFunctions)
             }
-            if let substitution = substitutions[id] { return substitution }
-            if let parameter = program.layout.parameters.first(where: { $0.binder == id }) {
-                return "configuration.`\(parameter.reference.name)`"
+            let sourceType = nativeBinderTypes[id] ?? program.bindingTypes[id]
+            if let substitution = substitutions[id] {
+                return try projected(substitution, from: sourceType ?? node.resultType, to: node.resultType)
             }
-            return binder(id)
+            if let parameter = program.layout.parameters.first(where: { $0.binder == id }) {
+                return try projected("configuration.`\(parameter.reference.name)`",
+                    from: sourceType ?? node.resultType, to: node.resultType)
+            }
+            return try projected(binder(id), from: sourceType ?? node.resultType, to: node.resultType)
         case .controlLocation(let id): return "_ControlLocation.location\(id.ordinal)"
         case .enabledAction(let id):
             guard !state.isEmpty else { throw unsupported("enabledness without a state") }
@@ -780,6 +785,8 @@ struct NativeSwiftEmitter {
         func quantifier(_ binding: BinderID, all: Bool) throws -> String {
             guard case .set(let element) = childType(0) else { throw unsupported("quantifier domain") }
             let method = all ? "allSatisfy" : "contains"
+            let previousType = nativeBinderTypes.updateValue(element, forKey: binding)
+            defer { nativeBinderTypes[binding] = previousType }
             if case .integerRange = node.children[0].operation {
                 let range = node.children[0]
                 let lower = try self.expression(range.children[0], state: state,

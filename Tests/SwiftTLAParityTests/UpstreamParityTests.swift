@@ -240,20 +240,6 @@ struct UpstreamParityTests {
         }
     }
 
-    @Test("TeachingConcurrency Simple models use typed phase state")
-    func teachingSimpleTypedPhaseParity() throws {
-        let n2 = try explore(TeachingSimpleN2Model.spec, maximumStateLimit: 50_000)
-        let n3 = try explore(TeachingSimpleN3Model.spec, maximumStateLimit: 50_000)
-        #expect(n2.graph.states.count == Example.teachingSimpleN2.expectedDistinct)
-        #expect(n3.graph.states.count == Example.teachingSimpleN3.expectedDistinct)
-    }
-
-    @Test("TeachingConcurrency SimpleRegular uses bounded regular-register state")
-    func teachingSimpleRegularParity() throws {
-        let exploration = try explore(TeachingSimpleRegularN8Model.spec, maximumStateLimit: Example.teachingSimpleRegularN8.maximumStateLimit)
-        #expect(exploration.graph.states.count == Example.teachingSimpleRegularN8.expectedDistinct)
-    }
-
     @Test("Dijkstra mutex preserves its bounded PlusCal model")
     func dijkstraMutexParity() throws {
         let exploration = try explore(DijkstraMutexModel.spec, maximumStateLimit: Example.dijkstraMutex.maximumStateLimit)

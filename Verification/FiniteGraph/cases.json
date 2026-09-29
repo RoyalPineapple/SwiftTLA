@@ -1034,6 +1034,44 @@
       "timeoutSeconds": 300
     },
     {
+      "id": "teaching-simple-5",
+      "sourceModel": "teaching-simple",
+      "scenario": "Simple",
+      "module": "teaching-concurrency/Simple.tla",
+      "configuration": "teaching-concurrency/Simple.cfg",
+      "imports": ["boulanger/TLAPS.tla"],
+      "dependencies": [
+        {"importingModule": "Simple", "importedModule": "TLAPS"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/TeachingConcurrency/Simple.tla",
+        "sha256": "dd859866e8be0ee36b0005b0393becd788fe51aae7ebcd7deaa14c259a3c0bab"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "dd859866e8be0ee36b0005b0393becd788fe51aae7ebcd7deaa14c259a3c0bab",
+      "cfgSHA256": "95943595ab1f09d64d8ca3b99222cdc1b8c9ddb626da96a06d68ae5f89bdf751",
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "teaching-simple-regular-8",
+      "sourceModel": "teaching-simple-regular",
+      "scenario": "SimpleRegular",
+      "module": "teaching-concurrency/SimpleRegular.tla",
+      "configuration": "teaching-concurrency/SimpleRegular.cfg",
+      "imports": ["boulanger/TLAPS.tla"],
+      "dependencies": [
+        {"importingModule": "SimpleRegular", "importedModule": "TLAPS"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/TeachingConcurrency/SimpleRegular.tla",
+        "sha256": "bf3872f04d71f7b80fcb55cecd07bf1b38fac3861fbb3452eb179c593c1bcdb5"
+      },
+      "exploration": {"maximumStateLimit": 300000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "bf3872f04d71f7b80fcb55cecd07bf1b38fac3861fbb3452eb179c593c1bcdb5",
+      "cfgSHA256": "8520b95eddae24778e6f099010d8da0b25ab6667c32a0284b2e16e9528924960",
+      "timeoutSeconds": 1800
+    },
+    {
       "id": "chameneos-0",
       "sourceModel": "chameneos",
       "scenario": "Chameneos",

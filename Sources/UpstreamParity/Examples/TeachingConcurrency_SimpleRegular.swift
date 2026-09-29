@@ -1,11 +1,7 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// The published eight-process bounded model of PlusCal `SimpleRegular`.
-///
-/// Unlike `Simple`, each shared register holds the set of values a concurrent
-/// read may observe. The three labels preserve the upstream regular-register
-/// write/write/read steps.
+// Upstream: specifications/TeachingConcurrency/SimpleRegular.tla, SimpleRegular.cfg (N = 8).
 @TLAModel
 package struct TeachingSimpleRegularN8Model: Sendable {
     package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
@@ -55,22 +51,29 @@ package struct TeachingSimpleRegularN8Model: Sendable {
                     }
                 }
 
+                let typeOK = ForAll(Process.all) { process in
+                    !x[process].isEmpty
+                        && x[process].isSubset(of: SetExpr<Int>.literal(0, 1))
+                        && SetExpr<Int>.literal(0, 1).contains(y[process])
+                        && (At(Step.a1, process) || At(Step.a2, process)
+                            || At(Step.b, process) || Finished(process))
+                }
                 Invariant("PCorrect") {
                     !ForAll(Process.all) { process in Finished(process) }
-                        || !ForAll(Process.all) { process in y[process] != 1 }
+                        || Exists(in: Process.all) { process in y[process] == 1 }
                 }
-                Invariant("TypeOK") {
-                    ForAll(Process.all) { process in y[process] == 0 || y[process] == 1 }
+                Invariant("TypeOK") { typeOK }
+                Invariant("Inv") {
+                    typeOK
+                    ForAll(Process.all) { process in
+                        !(At(Step.b, process) || Finished(process))
+                            || x[process] == SetExpr<Int>.literal(1)
+                    }
+                    !ForAll(Process.all) { process in Finished(process) }
+                        || Exists(in: Process.all) { process in y[process] == 1 }
                 }
             })
+            Validation("SimpleRegular") {}
         }
     }
-}
-
-extension Example {
-    package static let teachingSimpleRegularN8 = FiniteModelFixture(
-        expectedDistinct: 277_726,
-        maximumStateLimit: 300_000,
-        spec: TeachingSimpleRegularN8Model.spec,
-    )
 }
