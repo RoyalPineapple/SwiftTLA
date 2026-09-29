@@ -31,13 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "Chameneos is a complete hosted match on 8ee66710; GameOfLife is the next candidate",
+      "status": "GameOfLife has exact hosted parity on b706a044; its ordinary CI parser regression is fixed locally but not yet hosted",
       "candidates": [
         "specifications/GameOfLife",
         "specifications/CarTalkPuzzle",
         "specifications/KnuthYao"
       ],
-      "scope": "The 8ee66710 full independent matrix and ordinary CI passed. Both chameneos-0 comparisons retained exact complete graphs and TypeOK/SumMet outcomes; the sole published configuration, both module dispositions, and legacy cleanup are complete. GameOfLife has one published exhaustive configuration (65,536 initial grids) and a legacy fixed-blinker Swift model to replace; typed function-space and set-mapping operations exist, though their integration for this case remains unproved. CarTalkPuzzle has three configurations, including an unknown Model_3 result, so partial work would not finish the family. KnuthYao's published configuration uses generation mode and external/statistical side effects; it remains required but is not a ready finite-graph port. Audit and finish GameOfLife before adding another family."
+      "scope": "The b706a044 full independent matrix passed with exact complete GameOfLife graph, TypeOK, and deadlock parity. Ordinary CI failed one Pair-literal parser regression; the focused fix is locally checked at bedef5e7 and awaits hosted proof. Do not start another family before ordinary CI and the full matrix pass on one new frozen revision. CarTalkPuzzle has three configurations, including an unknown Model_3 result; KnuthYao uses generation mode and external/statistical side effects."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -6017,8 +6017,8 @@
     {
       "path": "specifications/GameOfLife",
       "name": "Conway's Game of Life",
-      "audit": "pinned source and configuration audited; typed implementation and reference case locally checked; hosted parity pending",
-      "gap": "The typed #spec port and model-owned N=4 scenario replace the fixed-blinker legacy implementation. Local diagnostics enumerate all 65,536 initial grids, exercise a synchronous generated-machine transition, and render the registered case. Neither complete graph nor TypeOK/deadlock parity is credited until both hosted generated/upstream-TLC and native/generated-TLA comparisons pass on one source SHA.",
+      "audit": "pinned source, typed implementation, and complete hosted parity audited; ordinary CI repair awaits hosted proof",
+      "gap": "The sole configuration has exact complete generated/upstream-TLC and native/generated-TLA graph, TypeOK, and deadlock parity on b706a044. Ordinary CI on that revision failed a Pair-literal parser regression. The focused repair passes locally at bedef5e7 but requires ordinary CI and full-matrix admission on the next frozen SHA before moving to another family.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "moduleBlob": "2664cf344f9b48f3a7d8ca6499f42ce77c16481c",
@@ -6033,11 +6033,11 @@
         {
           "path": "specifications/GameOfLife/GameOfLife.tla",
           "role": "configured root",
-          "reason": "The sole published TLC configuration checks N=4, TypeOK, and Spec with deadlock checking enabled. The typed model admits every total Boolean grid over the 4-by-4 position domain and defines a synchronous eight-neighbor Next relation. Complete hosted graph and property parity remain unverified.",
+      "reason": "The sole published TLC configuration checks N=4, TypeOK, and Spec with deadlock checking enabled. The typed model admits every total Boolean grid over the 4-by-4 position domain and defines a synchronous eight-neighbor Next relation. Both hosted comparisons match the complete graph and selected checks on b706a044.",
           "implementations": [
             "Sources/UpstreamParity/Examples/GameOfLife.swift"
           ],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -6045,7 +6045,8 @@
           "module": "specifications/GameOfLife/GameOfLife.tla",
           "configuration": "specifications/GameOfLife/GameOfLife.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "b706a044291ccb1fc2fbdf3bde2c65a6fa7188eb",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -6055,7 +6056,20 @@
               "caseID": "game-of-life-0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "b706a044291ccb1fc2fbdf3bde2c65a6fa7188eb",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36528197352",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36528197352/artifacts/11016462849",
+              "artifactSHA256": "47cfdb696646d0dd5a30159440d1229b5d5558f1624ac5a142eb05b4c0cca89a",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36528197352/artifacts/11016578889",
+              "nativeArtifactSHA256": "2531abf048eca03e2351759e275a867dc02a0f65dbc89cef915d6df719542d6e",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Both independent comparisons report exact complete graph parity: 65536 initial states, 65536 distinct states, and 65536 labeled edges. Native, generated-TLA TLC, and pinned upstream TLC satisfy TypeOK and default deadlock checking. The reference TLA input SHA-256 dcd6d626946faab35ac22ad38a031b0d9bd9bc274d8750340506acc407dccbc6 matches the ceeaa904 case pin. Downloaded artifacts retain the exact source SHA, origin run, complete native report, TLC/Java/bridge pins, and exact comparison records. All 122 non-skipped independent-validation jobs passed; one optional job was skipped. Ordinary CI on this SHA failed a generated-machine parser regression introduced by the Pair-literal handling for this port, repaired locally at bedef5e7 but not yet hosted. This historical parity match does not replace final-revision admission."
+            }
+          ]
         }
       ],
       "partialCases": []
