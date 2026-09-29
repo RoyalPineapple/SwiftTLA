@@ -6449,28 +6449,34 @@
     {
       "path": "specifications/KnuthYao",
       "name": "The Knuth-Yao Method",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned source and published configuration inspected; implementation and module dispositions pending",
+      "gap": "The sole published configuration is TLC generation mode with an unknown expected result, not a finite exhaustive graph: SimKnuthYao requires random choice, TLC configuration/stats/register access, a Stats constraint with CSV writes and periodic external Rscript execution, and a statistical PostCondition. No Swift implementation or comparable hosted evidence exists. Preserve this required configuration; define and implement a faithful generation-mode checking/evidence contract before claiming parity. The unconfigured Prob module is a separate probabilistic variant whose corpus disposition remains open.",
+      "sourceAudit": {
+        "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
+        "moduleBlob": "23207add2743f1e3a98e1cffe95396d4ca55cbbe",
+        "configurationBlob": "2b2dec8e2ebb2a741cc9dd5db1fab2e75f414394",
+        "manifestBlob": "ae89e92d3e479e5f363cf2cfc6c571b213477293"
+      },
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/KnuthYao/KnuthYao.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "imported behavior module",
+          "reason": "SimKnuthYao EXTENDS this module and overrides its Init and Next through the published configuration. It also has an unconfigured fair Spec; that variant's disposition remains open.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/KnuthYao/Prob.tla",
           "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "reason": "This is a separate unconfigured Markov/probability model, not an import of SimKnuthYao. Its variant disposition remains open.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/KnuthYao/SimKnuthYao.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The published cfg binds Init to SimInit, Next to SimNext, applies Stats as a constraint and PostCondition, and disables deadlock checking. Its source assumes TLC generation mode and uses external side effects.",
           "implementations": [],
           "dispositionComplete": false
         }
