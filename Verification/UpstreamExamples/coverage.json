@@ -31,13 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "Stones verified on green hosted SHA cc1e191e; Chameneos staged next",
+      "status": "Chameneos candidate frozen at 89c78da; GameOfLife is the provisional next family after hosted resolution",
       "candidates": [
-        "specifications/sums_even",
-        "specifications/Stones",
-        "specifications/FiniteMonotonic"
+        "specifications/GameOfLife",
+        "specifications/CarTalkPuzzle",
+        "specifications/KnuthYao"
       ],
-      "scope": "The sole sums_even configuration matched native, generated TLC, and pinned upstream TLC on hosted SHA 0edfbd0. Stones' sole configuration matched native, generated TLC, and pinned upstream TLC on cc1e191e, including zero-state assumption checking and the exact PrintT output; full validation and ordinary CI passed on that SHA. Chameneos is staged as the next one-configuration family because its complete local native exploration matches upstream state counts; hosted graph/property parity is still required. CarTalkPuzzle's three configurations, including one with an unknown expected result, require a source audit before implementation. FiniteMonotonic has five configurations, including symbolic models, action composition, and a liveness failure. No unverified candidate receives hosted credit."
+      "scope": "Chameneos has a complete local native diagnostic but still needs hosted graph/property parity and ordinary CI on frozen SHA 89c78da. GameOfLife has one published exhaustive configuration (65,536 initial grids) and a legacy fixed-blinker Swift model to replace; typed function-space and set-mapping operations already exist, though their integration for this case remains unproved. CarTalkPuzzle has three configurations, including an unknown Model_3 result, so partial work would not finish the family. KnuthYao's published configuration uses generation mode and external/statistical side effects; it remains required but is not a ready finite-graph port. Do not start another implementation family or credit an unverified configuration before Chameneos is resolved."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
