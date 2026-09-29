@@ -10607,10 +10607,20 @@
     },
     {
       "id": "AC-16",
-      "status": "missing",
+      "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Sources/SwiftTLA/CompiledLowerer.swift derives all property checks unless a scenario explicitly selects a subset. Expected outcomes do not alter this selection. Tests/SwiftTLATests/ValidationScenarioTests.swift checks complete default coverage. Tests/SwiftTLAParityTests/CheckSelectionTests.swift retains other checks with expected failures and reports omitted claims for explicit subsets. Tests/SwiftTLAParityTests/ScenarioValidationTests.swift rejects missing, duplicate, and unavailable comparison results. Full acceptance evidence, including independent hosted results, remains unaudited.",
-      "evidence": []
+      "reason": "CompiledLowerer selects every registered property by identity unless a scenario explicitly selects a subset; expectations do not alter that set. The generated scenario carries the same typed selection into native checking and TLA export. On hosted cc1e191e, selected-checks-0 independently evaluated all four selected properties in native Swift and TLC, including two expected violations, and compared their verdicts exactly. A decisive invariant counterexample left the selected deadlock check without a verdict and the graph incomplete on both sides; neither is credited as checked. Default selection, explicit omissions, expectation validation, and complete-scenario evidence still need a source-aligned acceptance audit before this criterion is verified.",
+      "evidence": [
+        {
+          "sourceSHA": "cc1e191e23da17489b13430b3721af07af1a5430",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36503423647",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36503423647/artifacts/11007049515",
+          "artifactSHA256": "cef2f0dbe601530e6f06a57e1e8a717a826f15687294473c19c5f8bd955c5268",
+          "acceptanceComplete": false,
+          "scope": "The full hosted selected-checks-0 job matched native and generated-TLC verdicts for InitiallyZero=violated, Reached=reached, Safe=satisfied, and StaysZero=violated. Both reports selected deadlock checking but recorded no deadlock verdict after a decisive invariant counterexample; graph comparison was not claimed. All five ordinary CI jobs and the independent-validation run passed on the same SHA. This verifies multi-property expected-failure selection, not complete AC-16 acceptance or a deadlock outcome."
+        }
+      ]
     },
     {
       "id": "AC-17",
