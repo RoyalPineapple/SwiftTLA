@@ -997,6 +997,38 @@
       "timeoutSeconds": 1800
     },
     {
+      "id": "two-phase-0",
+      "sourceModel": "two-phase",
+      "scenario": "MCTwoPhase",
+      "module": "two-phase/MCTwoPhase.tla",
+      "configuration": "two-phase/MCTwoPhase.cfg",
+      "imports": [
+        "two-phase/TwoPhase.tla",
+        "two-phase/Alternate.tla"
+      ],
+      "dependencies": [
+        {
+          "importingModule": "MCTwoPhase",
+          "importedModule": "TwoPhase"
+        },
+        {
+          "importingModule": "TwoPhase",
+          "importedModule": "Alternate"
+        }
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/TwoPhase/MCTwoPhase.tla",
+        "sha256": "c2e0ab8004043d22833818fe2c4426bb393bbfde26bfddd9f904ee76a605a061"
+      },
+      "exploration": {
+        "maximumStateLimit": 1000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c2e0ab8004043d22833818fe2c4426bb393bbfde26bfddd9f904ee76a605a061",
+      "cfgSHA256": "da58c39c65d7226a2b3ea24c9bbcc93a55842a22443612e970d9e56b1b2a3930",
+      "timeoutSeconds": 300
+    },
+    {
       "id": "chameneos-0",
       "sourceModel": "chameneos",
       "scenario": "Chameneos",
