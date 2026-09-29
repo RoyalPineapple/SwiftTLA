@@ -31,13 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "Prisoners has complete hosted parity on green SHA 3c8b1d7d; the next family audit has not selected an implementation",
+      "status": "Prisoners has complete hosted parity on green SHA 3c8b1d7d; Prisoners_Single_Switch is the selected next family after current PR-head admission",
       "candidates": [
         "specifications/Prisoners_Single_Switch",
         "specifications/SingleLaneBridge",
         "specifications/ReadersWriters"
       ],
-      "scope": "Audit these candidates against their pinned modules and every published configuration before choosing the next family. Prisoners_Single_Switch is distinct from the completed Prisoners family. Do not expand the corpus while the current PR-head admission run is unresolved."
+      "scope": "The pinned-source audit favors Prisoners_Single_Switch: four small exhaustive configurations share one model and the same per-prisoner weak-fairness shape as the completed Prisoners family. SingleLaneBridge has a legacy direct model but no hosted scenario, property wiring, or graph parity; ReadersWriters includes a separate symbolic configuration. Do not expand the corpus while the current PR-head admission run is unresolved."
     },
     "implementationFamiliesInProgress": 0,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -8061,21 +8061,32 @@
     {
       "path": "specifications/Prisoners_Single_Switch",
       "name": "The Prisoners & Switch Puzzle",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned module, four published TLC configurations, unconfigured module role, and absent Swift implementation audited; no parity evidence yet",
+      "gap": "Implement one typed model with the known/unknown-light and one/three-prisoner bindings, preserve WardenAction(p) weak fairness and Terminating, TypeOK, VictoryOK, and default deadlock checks, then verify all four complete graphs and verdicts on both hosted comparison paths. No legacy Swift port or registered scenario exists.",
+      "sourceAudit": {
+        "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
+        "moduleBlob": "09ac8c2ca33655a040eb944023bbda8f62bcd375",
+        "manifestBlob": "cac6e888cc8ba5109fbd171cf762c12489af6932",
+        "configurationBlobs": {
+          "Prisoner.cfg": "9f349d0d08298f4d8e221f9de2f15416174e5615",
+          "PrisonerLightUnknown.cfg": "86e4b9bf28dc39d658646071c020865138e54e5b",
+          "PrisonerSolo.cfg": "28ad3318dec76ee35310a29a89dabe3ef2b06b73",
+          "PrisonerSoloLightUnknown.cfg": "369c2ed48163fbdb9804b00e92bffc7a5f599d88"
+        }
+      },
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/Prisoners_Single_Switch/APPrisoner.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured Apalache type-annotation wrapper",
+          "reason": "This module instantiates Prisoner with Apalache-specific type annotations and declares three-prisoner values for a cfg file absent from the pinned inventory. It has no published TLC configuration or distinct transition definition. This disposition does not claim Apalache validation.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/Prisoners_Single_Switch/Prisoner.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Four published TLC configurations select Spec with Terminating, TypeOK, VictoryOK, and default deadlock checking. They vary prisoner cardinality and the initial light's known/unknown status; each WardenAction(p) has a separate weak-fairness obligation.",
           "implementations": [],
           "dispositionComplete": false
         }
