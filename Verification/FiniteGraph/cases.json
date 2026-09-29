@@ -1132,6 +1132,74 @@
       "moduleSHA256": "b6c5c267a76320897c0fc7ebe57aa4267bf2ee836c89967eb53298d08817e140",
       "cfgSHA256": "465601262352075359e4f7dbe818a1eaa9e09907827528a093ddd156436549a2",
       "timeoutSeconds": 300
+    },
+    {
+      "id": "prisoners-single-switch-0",
+      "sourceModel": "prisoners-single-switch",
+      "scenario": "Prisoner",
+      "module": "prisoners-single-switch/Prisoner.tla",
+      "configuration": "prisoners-single-switch/Prisoner.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Prisoners_Single_Switch/Prisoner.tla",
+        "sha256": "00f8885e6cc56862b7dbf349809ae4415d1eac77d7dfaa6e480316be7f0cbeea"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "00f8885e6cc56862b7dbf349809ae4415d1eac77d7dfaa6e480316be7f0cbeea",
+      "cfgSHA256": "57014b119f91c9a0ede76987c0d2f4ee9408bf618a38d00e1b26e9064b111562",
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "prisoners-single-switch-1",
+      "sourceModel": "prisoners-single-switch",
+      "scenario": "PrisonerLightUnknown",
+      "module": "prisoners-single-switch/Prisoner.tla",
+      "configuration": "prisoners-single-switch/PrisonerLightUnknown.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Prisoners_Single_Switch/Prisoner.tla",
+        "sha256": "00f8885e6cc56862b7dbf349809ae4415d1eac77d7dfaa6e480316be7f0cbeea"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "00f8885e6cc56862b7dbf349809ae4415d1eac77d7dfaa6e480316be7f0cbeea",
+      "cfgSHA256": "20c82670f5a7742e81471d7cdaa8dfbfad112902a82e16bb6fadbcfea315fff9",
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "prisoners-single-switch-2",
+      "sourceModel": "prisoners-single-switch",
+      "scenario": "PrisonerSolo",
+      "module": "prisoners-single-switch/Prisoner.tla",
+      "configuration": "prisoners-single-switch/PrisonerSolo.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Prisoners_Single_Switch/Prisoner.tla",
+        "sha256": "00f8885e6cc56862b7dbf349809ae4415d1eac77d7dfaa6e480316be7f0cbeea"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "00f8885e6cc56862b7dbf349809ae4415d1eac77d7dfaa6e480316be7f0cbeea",
+      "cfgSHA256": "6c7f8163586d8d5c6a53201200c9f35d73555976c2284f3d8fc16686eb3fd140",
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "prisoners-single-switch-3",
+      "sourceModel": "prisoners-single-switch",
+      "scenario": "PrisonerSoloLightUnknown",
+      "module": "prisoners-single-switch/Prisoner.tla",
+      "configuration": "prisoners-single-switch/PrisonerSoloLightUnknown.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Prisoners_Single_Switch/Prisoner.tla",
+        "sha256": "00f8885e6cc56862b7dbf349809ae4415d1eac77d7dfaa6e480316be7f0cbeea"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "00f8885e6cc56862b7dbf349809ae4415d1eac77d7dfaa6e480316be7f0cbeea",
+      "cfgSHA256": "59bd2acfe196814933997b4c910ce57b7e88d4324ce0eff3bb5721c94486a28b",
+      "timeoutSeconds": 300
     }
   ]
 }

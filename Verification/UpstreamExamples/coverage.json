@@ -31,15 +31,15 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "Prisoners has complete hosted parity on green SHA 3c8b1d7d; Prisoners_Single_Switch is the selected next family after current PR-head admission",
+      "status": "Prisoners has complete hosted parity; Prisoners_Single_Switch is the one family now under implementation after green PR-head admission",
       "candidates": [
         "specifications/Prisoners_Single_Switch",
         "specifications/SingleLaneBridge",
         "specifications/ReadersWriters"
       ],
-      "scope": "The pinned-source audit favors Prisoners_Single_Switch: four small exhaustive configurations share one model and the same per-prisoner weak-fairness shape as the completed Prisoners family. SingleLaneBridge has a legacy direct model but no hosted scenario, property wiring, or graph parity; ReadersWriters includes a separate symbolic configuration. Do not expand the corpus while the current PR-head admission run is unresolved."
+      "scope": "The pinned-source audit selected Prisoners_Single_Switch: four small exhaustive configurations share one model and the same per-prisoner weak-fairness shape as the completed Prisoners family. Its four local graph/check diagnostics pass; both hosted comparison paths remain pending. SingleLaneBridge has a legacy direct model but no hosted scenario, property wiring, or graph parity; ReadersWriters includes a separate symbolic configuration. Do not start either until this family has complete hosted evidence."
     },
-    "implementationFamiliesInProgress": 0,
+    "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
     "regressionAnchors": ["DiningPhilosophers", "LeastCircularSubstring", "N-Queens"],
     "inspectionWaves": {
@@ -61,13 +61,13 @@
   },
   "ci": {
     "prHeadFullMatrix": {
-      "sourceSHA": "bcde58919466b453beaf60c58a9c4d340dc01502",
-      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36576790253",
-      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36576790201",
+      "sourceSHA": "bd27c6a108d238b01bb75c012901be368cf2dd9b",
+      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36613673250",
+      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36613673255",
       "observedStatus": "completed",
       "conclusion": "success",
-      "jobs": "All 128 non-skipped independent-validation jobs passed, including both TeachingConcurrency configurations on both comparison paths and the admission gate. The optional comparison replay diagnostic was skipped. All five ordinary CI jobs passed.",
-      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. TeachingConcurrency Simple and SimpleRegular retained complete exact graphs with one initial state and respectively 723 states/1,841 edges and 277,726 states/1,454,775 edges; PCorrect, TypeOK, Inv, and default deadlock checks matched and were satisfied. Input-keyed TLC cache reuse was verified by the hosted jobs. This verified PR head does not mean all 78 families or 19 DSL criteria are complete."
+      "jobs": "All 130 required independent-validation jobs passed and the optional comparison replay diagnostic was skipped. All five ordinary CI jobs passed.",
+      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. Prisoners retained exact complete graphs with four initial states, 214 states, and 856 labeled edges on both paths; TypeOK, CountInvariant, Safety, Liveness, and default deadlock checks matched and were satisfied. Selected-checks-0 also retained valid decisive-stop verdict/witness parity without claiming partial-graph equality. This verified PR head does not mean all 78 families or 19 DSL criteria are complete."
     },
     "bakeryBoulangerieFamilyCandidate": {
       "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
@@ -8061,8 +8061,8 @@
     {
       "path": "specifications/Prisoners_Single_Switch",
       "name": "The Prisoners & Switch Puzzle",
-      "audit": "pinned module, four published TLC configurations, unconfigured module role, and absent Swift implementation audited; no parity evidence yet",
-      "gap": "Implement one typed model with the known/unknown-light and one/three-prisoner bindings, preserve WardenAction(p) weak fairness and Terminating, TypeOK, VictoryOK, and default deadlock checks, then verify all four complete graphs and verdicts on both hosted comparison paths. Exercise the solo configurations first: NormalPrisoner is empty, so signalled is an empty function, while DesignatedCounter comes from CHOOSE. Generic empty-function and generated CHOOSE support exists, but this exact native/TLC parity is unverified. No legacy Swift port or registered scenario exists.",
+      "audit": "pinned module and all four published TLC configurations implemented as model-owned scenarios; local complete-graph and selected-check diagnostics pass; hosted parity pending",
+      "gap": "Verify all four complete initial-state sets, states, labeled edges, Terminating, TypeOK, VictoryOK, and default deadlock on both hosted comparison paths. Local diagnostics cover the solo empty signalled function, CHOOSE-derived counter, and all four complete native graphs but do not establish native/generated/upstream parity.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "moduleBlob": "09ac8c2ca33655a040eb944023bbda8f62bcd375",
@@ -8074,7 +8074,7 @@
           "PrisonerSoloLightUnknown.cfg": "369c2ed48163fbdb9804b00e92bffc7a5f599d88"
         }
       },
-      "legacyCleanupComplete": false,
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/Prisoners_Single_Switch/APPrisoner.tla",
@@ -8087,8 +8087,8 @@
           "path": "specifications/Prisoners_Single_Switch/Prisoner.tla",
           "role": "configured root",
           "reason": "Four published TLC configurations select Spec with Terminating, TypeOK, VictoryOK, and default deadlock checking. They vary prisoner cardinality and the initial light's known/unknown status; each WardenAction(p) has a separate weak-fairness obligation.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": ["Sources/UpstreamParity/Examples/PrisonerSingleSwitch.swift"],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -8096,40 +8096,40 @@
           "module": "specifications/Prisoners_Single_Switch/Prisoner.tla",
           "configuration": "specifications/Prisoners_Single_Switch/Prisoner.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/PrisonerSingleSwitch.swift", "scenario": "Prisoner", "caseID": "prisoners-single-switch-0"}],
           "evidence": []
         },
         {
           "module": "specifications/Prisoners_Single_Switch/Prisoner.tla",
           "configuration": "specifications/Prisoners_Single_Switch/PrisonerLightUnknown.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/PrisonerSingleSwitch.swift", "scenario": "PrisonerLightUnknown", "caseID": "prisoners-single-switch-1"}],
           "evidence": []
         },
         {
           "module": "specifications/Prisoners_Single_Switch/Prisoner.tla",
           "configuration": "specifications/Prisoners_Single_Switch/PrisonerSolo.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/PrisonerSingleSwitch.swift", "scenario": "PrisonerSolo", "caseID": "prisoners-single-switch-2"}],
           "evidence": []
         },
         {
           "module": "specifications/Prisoners_Single_Switch/Prisoner.tla",
           "configuration": "specifications/Prisoners_Single_Switch/PrisonerSoloLightUnknown.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/PrisonerSingleSwitch.swift", "scenario": "PrisonerSoloLightUnknown", "caseID": "prisoners-single-switch-3"}],
           "evidence": []
         }
       ],

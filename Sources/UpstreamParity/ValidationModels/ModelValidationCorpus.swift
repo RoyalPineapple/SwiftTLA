@@ -40,6 +40,7 @@ private let modelRegistrations: [ModelRegistration] = [
     .init(id: "coffee-can", scenarios: { try CoffeeCanModel.validationScenarios() }),
     .init(id: "chameneos", scenarios: { try ChameneosModel.validationScenarios() }),
     .init(id: "prisoners", scenarios: { try PrisonersModel.validationScenarios() }),
+    .init(id: "prisoners-single-switch", scenarios: { try PrisonerSingleSwitchModel.validationScenarios() }),
     .init(id: "game-of-life", scenarios: { try GameOfLifeModel.validationScenarios() }),
     .init(id: "two-phase", scenarios: { try TwoPhaseModel.validationScenarios() }),
     .init(id: "teaching-simple", scenarios: { try TeachingSimpleN5Model.validationScenarios() }),

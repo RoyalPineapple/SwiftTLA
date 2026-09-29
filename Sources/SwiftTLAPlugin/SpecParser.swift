@@ -1746,6 +1746,13 @@ final class ParserSession {
         }
         if compilerGrammarName(in: call.calledExpression) == "PrintT" { return .bool }
         if compilerGrammarName(in: call.calledExpression) == "IntRange" { return .set(.int) }
+        if compilerGrammarName(in: call.calledExpression) == "If",
+           let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
+           let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,
+           let thenType = typedFacadeValueType(thenSyntax, scope: scope),
+           thenType == typedFacadeValueType(elseSyntax, scope: scope) {
+            return thenType
+        }
         if compilerGrammarName(in: call.calledExpression) == "Select",
            let candidates = call.arguments.first(where: { $0.label?.text == "from" })?.expression {
             return typedFacadeValueType(candidates, scope: scope)?.selectedElement
