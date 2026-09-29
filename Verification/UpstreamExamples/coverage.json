@@ -31,13 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "Chameneos 89c78da failed upstream action-label comparison; corrected local candidate is not yet hosted",
+      "status": "Chameneos is a complete hosted match on 8ee66710; GameOfLife is the next candidate",
       "candidates": [
         "specifications/GameOfLife",
         "specifications/CarTalkPuzzle",
         "specifications/KnuthYao"
       ],
-      "scope": "The frozen 89c78da run passed ordinary CI and Chameneos native/generated parity, but upstream comparison rejected Next versus Meet(cid) action labels. The two-file local correction uses one Next action with typed With and preserves the full native graph; it still needs a new frozen hosted revision, including generated/upstream and native/generated parity plus ordinary CI. GameOfLife has one published exhaustive configuration (65,536 initial grids) and a legacy fixed-blinker Swift model to replace; typed function-space and set-mapping operations already exist, though their integration for this case remains unproved. CarTalkPuzzle has three configurations, including an unknown Model_3 result, so partial work would not finish the family. KnuthYao's published configuration uses generation mode and external/statistical side effects; it remains required but is not a ready finite-graph port. Do not start another implementation family or credit an unverified configuration before Chameneos is resolved."
+      "scope": "The 8ee66710 full independent matrix and ordinary CI passed. Both chameneos-0 comparisons retained exact complete graphs and TypeOK/SumMet outcomes; the sole published configuration, both module dispositions, and legacy cleanup are complete. GameOfLife has one published exhaustive configuration (65,536 initial grids) and a legacy fixed-blinker Swift model to replace; typed function-space and set-mapping operations exist, though their integration for this case remains unproved. CarTalkPuzzle has three configurations, including an unknown Model_3 result, so partial work would not finish the family. KnuthYao's published configuration uses generation mode and external/statistical side effects; it remains required but is not a ready finite-graph port. Audit and finish GameOfLife before adding another family."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -61,13 +61,13 @@
   },
   "ci": {
     "prHeadFullMatrix": {
-      "sourceSHA": "cc1e191e23da17489b13430b3721af07af1a5430",
-      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36503423649",
-      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36503423647",
+      "sourceSHA": "8ee6671073ff8e58e5385931e056031ff8dc3a06",
+      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36515324261",
+      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36515324706",
       "observedStatus": "completed",
       "conclusion": "success",
-      "jobs": "All 118 non-skipped independent-validation jobs passed, including both stones-0 comparisons and admission. The optional comparison replay diagnostic was skipped. All five ordinary CI jobs passed.",
-      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. Stones is an assumption-only zero-state case: the two comparison artifacts retain exact verdicts and output values without inventing a graph. Other exhaustive comparisons retained complete initial states, states, labeled edges, and selected check outcomes. Decisive early stops retained verdict and witness evidence. This verified PR head does not mean all 78 families are complete."
+      "jobs": "All 120 non-skipped independent-validation jobs passed, including both chameneos-0 comparisons and admission. The optional comparison replay diagnostic was skipped. All five ordinary CI jobs passed.",
+      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. Chameneos retained complete 81-initial/34534-state/104616-edge exact graphs and satisfied TypeOK and SumMet with deadlock disabled. Assumption-only cases retained exact verdicts without fabricated graphs; decisive early stops retained verdict and witness evidence. This verified PR head does not mean all 78 families are complete."
     },
     "bakeryBoulangerieFamilyCandidate": {
       "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
@@ -2799,7 +2799,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": "specifications/Chameneos",
+  "nextFamily": "specifications/GameOfLife",
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -3876,8 +3876,8 @@
     {
       "path": "specifications/Chameneos",
       "name": "Chameneos, a Concurrency Game",
-      "audit": "source and implementation audited; hosted parity pending",
-      "gap": "The sole published configuration has a typed model-owned implementation and a complete local native diagnostic. On hosted SHA 89c78da, native/generated-TLA parity passed but generated/upstream-TLA comparison stopped on Next versus Meet(cid) action granularity. The local source now uses one Next action with a typed With choice; exact generated/upstream and native/generated graph/property parity still require a new green hosted SHA.",
+      "audit": "source, implementation, and hosted parity audited",
+      "gap": "None for this family at 8ee66710. The sole published configuration has exact complete generated/upstream-TLC and native/generated-TLC graph and property comparisons; both module dispositions and legacy cleanup are complete. Full-matrix independent validation and ordinary CI passed on the same revision. This historical match does not replace final-revision admission after later changes.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "annotationBlob": "613d2c886850a803636ae856a608be178eec2d40",
@@ -3900,7 +3900,7 @@
         {
           "path": "specifications/Chameneos/Chameneos.tla",
           "role": "configured root",
-          "reason": "The model-owned scenario preserves N=4, M=4, Faded and MeetingPlaceEmpty model values, the complete initial function domain, one Next action over a typed nondeterministic creature choice, TypeOK, SumMet, and disabled deadlock checking. Hosted semantic parity for the revised source remains pending.",
+          "reason": "The model-owned scenario preserves N=4, M=4, Faded and MeetingPlaceEmpty model values, the complete initial function domain, one Next action over a typed nondeterministic creature choice, TypeOK, SumMet, and disabled deadlock checking. Hosted semantic parity matches on 8ee66710.",
           "implementations": ["Sources/UpstreamParity/Examples/Chameneos.swift"],
           "dispositionComplete": true
         }
@@ -3910,7 +3910,8 @@
           "module": "specifications/Chameneos/Chameneos.tla",
           "configuration": "specifications/Chameneos/Chameneos.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "8ee6671073ff8e58e5385931e056031ff8dc3a06",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -3920,7 +3921,20 @@
               "caseID": "chameneos-0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "8ee6671073ff8e58e5385931e056031ff8dc3a06",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36515324706",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36515324706/artifacts/11012220244",
+              "artifactSHA256": "0dbf008765afdbbb12a2de1df985b2a6b12042949d9a8fda04a6ea622e3dad87",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36515324706/artifacts/11011464027",
+              "nativeArtifactSHA256": "978c0246e21cc4278c0e3b4f6f2375661d36fb353680f843dd3fdf56b7a3f77a",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Both independent comparisons report exact complete graph parity: 81 initial states, 34534 distinct states, and 104616 labeled edges. Native, generated-TLA TLC, and pinned upstream TLC satisfy TypeOK and SumMet; all retain disabled deadlock checking. The reference TLA input SHA-256 0e709f85c9fd764e8410fd57201b5c0900eb5bcb881168709c2376e921b29b32 matches the ceeaa904 case pin. Downloaded artifacts retain the exact source SHA, origin run, TLC/Java/bridge pins, complete native report, and exact comparison records. All 120 non-skipped independent jobs and all five ordinary CI jobs passed on this SHA. This historical match does not replace final-revision admission."
+            }
+          ]
         }
       ],
       "partialCases": []
