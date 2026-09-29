@@ -125,8 +125,7 @@ package enum ValidationEvidenceComparison {
                   swiftGraph.edgeCount == swift.edges else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("native report counts")
             }
-            try verifyTLCProcess(oracle.appendingPathComponent("tlc-graph/tlc-process.json"),
-                expectedComplete: tlc.graphComplete)
+            try verifyTLCProcess(oracle.appendingPathComponent("tlc-graph/tlc-process.json"), report: tlc)
             if compareGraph {
                 let tlcRoot = directory.appendingPathComponent("tlc")
                 try FileManager.default.createDirectory(at: tlcRoot, withIntermediateDirectories: false)
@@ -729,12 +728,17 @@ package enum ValidationEvidenceComparison {
         }
     }
 
-    private static func verifyTLCProcess(_ url: URL, expectedComplete: Bool) throws {
+    private static func verifyTLCProcess(_ url: URL, report: GeneratedTLCOracleReport) throws {
         let data = try Data(contentsOf: url)
         guard let process = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let invocation = process["invocation"] as? [String: Any],
-              let status = invocation["exitStatus"] as? Int,
-              (expectedComplete ? status == 0 : status != 0) else {
+              let status = invocation["exitStatus"] as? Int else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("TLC process outcome")
+        }
+        let decisiveSafety = report.properties.values.contains { $0 == .violated || $0 == .reached }
+        guard (report.graphComplete && status == 0)
+            || (!report.graphComplete && status == 11 && report.deadlock == .violated)
+            || (!report.graphComplete && status == 12 && decisiveSafety) else {
             throw ValidationEvidenceComparisonError.invalidEvidence("TLC process outcome")
         }
     }

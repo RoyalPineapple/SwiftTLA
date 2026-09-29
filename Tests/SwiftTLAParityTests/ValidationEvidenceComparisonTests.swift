@@ -84,6 +84,29 @@ struct ValidationEvidenceComparisonTests {
         #expect(throws: BinaryGraphEvidenceError.self) { _ = try compare(root) }
     }
 
+    @Test("a failed TLC process cannot certify a partial counterexample")
+    func failedPartialProcessFails() throws {
+        let root = try fixture(graphComplete: false, tlcExitStatus: 124)
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
+    }
+
+    @Test("a deadlock exit cannot certify a safety counterexample")
+    func mismatchedPartialProcessFails() throws {
+        let root = try fixture(graphComplete: false, tlcExitStatus: 11)
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
+    }
+
+    @Test("a decisive safety exit can certify verdict parity without claiming graph parity")
+    func decisivePartialProcessComparesVerdicts() throws {
+        let root = try fixture(graphComplete: false, tlcExitStatus: 12)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let result = try compare(root)
+        #expect(result.result == "exact")
+        #expect(!result.graphCompared)
+    }
+
     @Test("binary spools retain all edges across buffered reads")
     func binarySpoolsAcrossBatches() throws {
         let root = try fixture(edgeCount: 60_000)
@@ -122,7 +145,7 @@ struct ValidationEvidenceComparisonTests {
 
     private func fixture(nativeTarget: Int = 1, nativeEdgeTarget: UInt64 = 1,
         nativeInitial: UInt64 = 0,
-        edgeCount: Int = 1) throws -> URL {
+        edgeCount: Int = 1, graphComplete: Bool = true, tlcExitStatus: Int = 0) throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let native = root.appendingPathComponent("native")
         let tlc = root.appendingPathComponent("oracle/tlc-graph")
@@ -130,19 +153,20 @@ struct ValidationEvidenceComparisonTests {
         try FileManager.default.createDirectory(at: tlc, withIntermediateDirectories: true)
         let nativeReport: [String: Any] = [
             "schema": "swifttla.native-validation-report", "scenario": "fixture",
-            "graphComplete": true, "initialStates": 1, "states": 2,
-            "edges": edgeCount, "properties": [:], "deadlockSelected": false
+            "graphComplete": graphComplete, "initialStates": 1, "states": 2,
+            "edges": edgeCount, "properties": graphComplete ? [:] : ["Broken": "violated"],
+            "deadlockSelected": false
         ]
         let oracleReport: [String: Any] = [
             "schema": "swifttla.generated-tlc-oracle", "caseID": "fixture",
-            "scenario": "fixture", "graphComplete": true,
+            "scenario": "fixture", "graphComplete": graphComplete,
             "graphInputSHA256": String(repeating: "0", count: 64),
-            "properties": [:], "deadlockSelected": false
+            "properties": graphComplete ? [:] : ["Broken": "violated"], "deadlockSelected": false
         ]
         try JSONSerialization.data(withJSONObject: nativeReport).write(to: native.appendingPathComponent("report.json"))
         try JSONSerialization.data(withJSONObject: oracleReport).write(
             to: root.appendingPathComponent("oracle/oracle.json"))
-        try JSONSerialization.data(withJSONObject: ["invocation": ["exitStatus": 0]])
+        try JSONSerialization.data(withJSONObject: ["invocation": ["exitStatus": tlcExitStatus]])
             .write(to: tlc.appendingPathComponent("tlc-process.json"))
         var writer = try BinaryGraphEvidenceWriter(to: native.appendingPathComponent("machine.bin"),
             caseID: "fixture")
@@ -152,7 +176,10 @@ struct ValidationEvidenceComparisonTests {
         for _ in 0..<edgeCount {
             try writer.edge(source: 0, action: 0, target: nativeEdgeTarget)
         }
-        try writer.finish(completion: 0)
+        if !graphComplete {
+            try writer.invariantFailure(property: "Broken", key: key(2), predecessor: 1, action: 0)
+        }
+        try writer.finish(completion: graphComplete ? 0 : 1)
         try tlcGraph(edgeCount: edgeCount).write(to: tlc.appendingPathComponent("graph-events.bin"))
         return root
     }
