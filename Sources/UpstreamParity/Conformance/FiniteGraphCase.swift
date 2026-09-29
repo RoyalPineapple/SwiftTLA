@@ -284,63 +284,9 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         package func resolveScenario() throws -> (any ModelValidationScenario)? {
-            let scenarios: [any ModelValidationScenario]
-            switch sourceModel {
-            case .bakery:
-                scenarios = try BakeryModel.validationScenarios()
-            case .boulanger:
-                scenarios = try BoulangerModel.validationScenarios()
-            case .diningPhilosophers:
-                scenarios = try DiningPhilosophersModel.validationScenarios()
-            case .hourClock:
-                scenarios = try HourClockModel.validationScenarios()
-            case .hourClock2:
-                scenarios = try HourClock2Model.validationScenarios()
-            case .leastCircularSubstring:
-                scenarios = try LeastCircularSubstringModel.validationScenarios()
-            case .findHighest:
-                scenarios = try FindHighestModel.validationScenarios()
-            case .binarySearch:
-                scenarios = try BinarySearchModel.validationScenarios()
-            case .quicksort:
-                scenarios = try QuicksortModel.validationScenarios()
-            case .dieHard:
-                scenarios = try DieHardModel.validationScenarios()
-            case .dieHarder:
-                scenarios = try DieHarderModel.validationScenarios()
-            case .dieHardest:
-                scenarios = try DieHardestModel.validationScenarios()
-            case .dieHardestGlobalFreeze:
-                scenarios = try DieHardestGlobalFreezeModel.validationScenarios()
-            case .dieHardestParallel:
-                scenarios = try DieHardestParallelModel.validationScenarios()
-            case .channel:
-                scenarios = try ChannelModel.validationScenarios()
-            case .asynchInterface:
-                scenarios = try AsynchInterfaceModel.validationScenarios()
-            case .majority:
-                scenarios = try MajorityModel.validationScenarios()
-            case .nQueensFour:
-                scenarios = try NQueensModel.validationScenarios()
-            case .queensFour:
-                scenarios = try QueensModel.validationScenarios()
-            case .coffeeCan:
-                scenarios = try CoffeeCanModel.validationScenarios()
-            case .chameneos:
-                scenarios = try ChameneosModel.validationScenarios()
-            case .gameOfLife:
-                scenarios = try GameOfLifeModel.validationScenarios()
-            case .twoPhase:
-                scenarios = try TwoPhaseModel.validationScenarios()
-            case .teachingSimple:
-                scenarios = try TeachingSimpleN5Model.validationScenarios()
-            case .teachingSimpleRegular:
-                scenarios = try TeachingSimpleRegularN8Model.validationScenarios()
-            default:
-                guard scenario == nil || sourceModel == .sumsEven || sourceModel == .stones else {
-                    throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
-                }
-                return nil
+            guard sourceModel != .sumsEven, sourceModel != .stones, let scenario else { return nil }
+            guard let scenarios = try modelValidationScenarios(for: sourceModel.nativeModelID) else {
+                throw EvidenceFormatError.invalidField(record: id, field: "native validation registration")
             }
             let matches = scenarios.filter { $0.name == scenario }
             guard matches.count == 1 else {
@@ -420,6 +366,14 @@ package struct FiniteGraphManifest: Decodable, Sendable {
                     id: finiteGraphCase.id
                 )
             }
+            if finiteGraphCase.scenario != nil,
+               finiteGraphCase.sourceModel != .sumsEven,
+               finiteGraphCase.sourceModel != .stones,
+               !hasModelValidationRegistration(finiteGraphCase.sourceModel.nativeModelID) {
+                throw EvidenceFormatError.invalidField(
+                    record: finiteGraphCase.id, field: "native validation registration"
+                )
+            }
         }
     }
 
@@ -459,6 +413,14 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case actionReferences = "action-references"
     case sumsEven = "sums-even"
     case stones
+
+    fileprivate var nativeModelID: String {
+        switch self {
+        case .nQueensFour: "n-queens"
+        case .queensFour: "queens"
+        default: rawValue
+        }
+    }
 
     package func nativeRun(rendered: RenderedSpecification, checkingDeadlock: Bool,
         scenario: (any ModelValidationScenario)? = nil, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {

@@ -37,7 +37,7 @@
         "specifications/Prisoners",
         "specifications/SingleLaneBridge"
       ],
-      "scope": "The two published TeachingConcurrency configurations use already modeled PlusCal algorithms. Simple requires the published N=5 binding rather than the old local-only N=2/N=3 fixtures; SimpleRegular already models N=8. Both select PCorrect, TypeOK, and Inv, and use TLAPS only for proof text. Focused native diagnostics complete at 723 and 277726 states with all selected checks satisfied, but no hosted comparison has run for this candidate. Finish both exact configurations on one green hosted SHA before starting another family. Prisoners remains the smallest audited shared-capability case for the second pass."
+      "scope": "The two published TeachingConcurrency configurations use already modeled PlusCal algorithms. Simple uses the published N=5 binding; SimpleRegular uses N=8. Both select PCorrect, TypeOK, Inv, and default deadlock checking; TLAPS is only a proof-text dependency. Generated TLA matched pinned upstream TLC for both complete graphs and selected checks on green SHA 50e611d3, but that matrix omitted both native cases. Require exact native-versus-generated-TLA comparisons for both configurations on one green hosted SHA before starting another family. Prisoners remains the smallest audited shared-capability case for the second pass."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -9934,8 +9934,8 @@
     {
       "path": "specifications/TeachingConcurrency",
       "name": "Teaching Concurrency",
-      "audit": "pinned modules, both published configurations, model-owned scenarios, and focused native checks inspected; hosted comparisons pending",
-      "gap": "The configured Simple N=5 and SimpleRegular N=8 models each produce the published distinct-state count and locally satisfy PCorrect, TypeOK, Inv, and default deadlock checking. Their byte-identical pinned TLA/CFG inputs and model-owned scenarios are registered, but complete generated-TLA-vs-upstream and native-vs-generated-TLA hosted graph/property comparisons remain unproven. The proof-only wrappers are not separate TLC configurations or TLAPS proof-verification claims.",
+      "audit": "pinned modules, both published configurations, focused native checks, and exact hosted generated-TLA/upstream comparisons inspected; hosted native comparisons pending",
+      "gap": "Simple N=5 and SimpleRegular N=8 have exact complete generated-TLA-versus-upstream-TLC graph and selected-check comparisons on green hosted SHA 50e611d3. That matrix did not schedule either native scenario, so native-versus-generated-TLA parity remains unproven and neither configuration receives hosted-match credit. The proof-only wrappers are not separate TLC configurations or TLAPS proof-verification claims.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "manifestSHA256": "bd6c42be599abd6dbdd51535f24e50049af55c8fd2b4f624e9c7cd97ea2f66fe",
@@ -10001,7 +10001,36 @@
           "evidence": []
         }
       ],
-      "partialCases": []
+      "partialCases": [
+        {
+          "caseID": "teaching-simple-5",
+          "implementation": "Sources/UpstreamParity/Examples/TeachingConcurrency_Simple.swift",
+          "reason": "Generated TLA matched pinned upstream TLC, but the native validation matrix omitted this model. No complete-configuration credit.",
+          "evidence": [{
+            "sourceSHA": "50e611d3a2ed0855413c63c9c43e1e82557c75c5",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36561602278",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36561602278/artifacts/11031347343",
+            "artifactSHA256": "da467c7922c39e000c50a33926efb99624cf93fc4ed6ff50b11b6023baa5bc0f",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Generated-TLA and pinned-upstream TLC complete graph comparison was exact: 723 distinct states; PCorrect, TypeOK, Inv, and default deadlock checking were selected and satisfied. Native-versus-generated-TLA comparison was not scheduled."
+          }]
+        },
+        {
+          "caseID": "teaching-simple-regular-8",
+          "implementation": "Sources/UpstreamParity/Examples/TeachingConcurrency_SimpleRegular.swift",
+          "reason": "Generated TLA matched pinned upstream TLC, but the native validation matrix omitted this model. No complete-configuration credit.",
+          "evidence": [{
+            "sourceSHA": "50e611d3a2ed0855413c63c9c43e1e82557c75c5",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36561602278",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36561602278/artifacts/11031142686",
+            "artifactSHA256": "85ba9091c76371623c63ad632988662633ccb195b6d234a8732de15606f5f547",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Generated-TLA and pinned-upstream TLC complete graph comparison was exact: 277726 distinct states; PCorrect, TypeOK, Inv, and default deadlock checking were selected and satisfied. Native-versus-generated-TLA comparison was not scheduled."
+          }]
+        }
+      ]
     },
     {
       "path": "specifications/TLC",

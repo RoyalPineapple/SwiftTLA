@@ -1,55 +1,73 @@
 import SwiftTLA
 
+private struct ModelRegistration: Sendable {
+    let id: String
+    let scenarios: @Sendable () throws -> [any ModelValidationScenario]
+}
+
+private let modelRegistrations: [ModelRegistration] = [
+    .init(id: "counter", scenarios: { try ConfiguredCounter.validationScenarios() }),
+    .init(id: "configured-processes", scenarios: { try ConfiguredProcessMachine.validationScenarios() }),
+    .init(id: "weakly-fair-processes", scenarios: { try WeaklyFairConfiguredProcessMachine.validationScenarios() }),
+    .init(id: "strongly-fair-processes", scenarios: { try StronglyFairConfiguredProcessMachine.validationScenarios() }),
+    .init(id: "recurring-population", scenarios: { try RecurringPopulation.validationScenarios() }),
+    .init(id: "scoped-temporal-claims", scenarios: { try ScopedTemporalClaims.validationScenarios() }),
+    .init(id: "conditional-temporal-claims", scenarios: { try ConditionalTemporalClaims.validationScenarios() }),
+    .init(id: "transition-property-claims", scenarios: { try TransitionPropertyClaims.validationScenarios() }),
+    .init(id: "independent-atomic-steps", scenarios: { try IndependentAtomicSteps.validationScenarios() }),
+    .init(id: "parameterized-atomic-steps", scenarios: { try ParameterizedAtomicSteps.validationScenarios() }),
+    .init(id: "configured-dictionary-values", scenarios: { try ConfiguredDictionaryValues.validationScenarios() }),
+    .init(id: "record-union-ordering", scenarios: { try RecordUnionOrderingModel.validationScenarios() }),
+    .init(id: "record-union-field-domains", scenarios: { try RecordUnionFieldDomainModel.validationScenarios() }),
+    .init(id: "record-union-sentinel", scenarios: { try RecordUnionSentinelModel.validationScenarios() }),
+    .init(id: "scoped-reachability-claims", scenarios: { try ScopedReachabilityClaims.validationScenarios() }),
+    .init(id: "constant-state-claims", scenarios: { try ConstantStateClaims.validationScenarios() }),
+    .init(id: "labelled-property-claims", scenarios: { try LabelledPropertyClaims.validationScenarios() }),
+    .init(id: "refinement-counter", scenarios: { try RefinementScenarioCounter.validationScenarios() }),
+    .init(id: "dining-philosophers", scenarios: { try DiningPhilosophersModel.validationScenarios() }),
+    .init(id: "bakery", scenarios: { try BakeryModel.validationScenarios() }),
+    .init(id: "boulanger", scenarios: { try BoulangerModel.validationScenarios() }),
+    .init(id: "die-hard", scenarios: { try DieHardModel.validationScenarios() }),
+    .init(id: "die-harder", scenarios: { try DieHarderModel.validationScenarios() }),
+    .init(id: "die-hardest", scenarios: { try DieHardestModel.validationScenarios() }),
+    .init(id: "die-hardest-global-freeze", scenarios: { try DieHardestGlobalFreezeModel.validationScenarios() }),
+    .init(id: "die-hardest-parallel", scenarios: { try DieHardestParallelModel.validationScenarios() }),
+    .init(id: "channel", scenarios: { try ChannelModel.validationScenarios() }),
+    .init(id: "asynch-interface", scenarios: { try AsynchInterfaceModel.validationScenarios() }),
+    .init(id: "majority", scenarios: { try MajorityModel.validationScenarios() }),
+    .init(id: "n-queens", scenarios: { try NQueensModel.validationScenarios() }),
+    .init(id: "queens", scenarios: { try QueensModel.validationScenarios() }),
+    .init(id: "coffee-can", scenarios: { try CoffeeCanModel.validationScenarios() }),
+    .init(id: "chameneos", scenarios: { try ChameneosModel.validationScenarios() }),
+    .init(id: "game-of-life", scenarios: { try GameOfLifeModel.validationScenarios() }),
+    .init(id: "two-phase", scenarios: { try TwoPhaseModel.validationScenarios() }),
+    .init(id: "teaching-simple", scenarios: { try TeachingSimpleN5Model.validationScenarios() }),
+    .init(id: "teaching-simple-regular", scenarios: { try TeachingSimpleRegularN8Model.validationScenarios() }),
+    .init(id: "hour-clock", scenarios: { try HourClockModel.validationScenarios() }),
+    .init(id: "hour-clock-2", scenarios: { try HourClock2Model.validationScenarios() }),
+    .init(id: "least-circular-substring", scenarios: { try LeastCircularSubstringModel.validationScenarios() }),
+    .init(id: "find-highest", scenarios: { try FindHighestModel.validationScenarios() }),
+    .init(id: "binary-search", scenarios: { try BinarySearchModel.validationScenarios() }),
+    .init(id: "quicksort", scenarios: { try QuicksortModel.validationScenarios() }),
+    .init(id: "selected-checks", scenarios: { try SelectedChecksModel.validationScenarios() }),
+    .init(id: "unselected-predicates", scenarios: { try UnselectedPredicateModel.validationScenarios() })
+]
+
+package func hasModelValidationRegistration(_ id: String) -> Bool {
+    modelRegistrations.contains { $0.id == id }
+}
+
+package func modelValidationScenarios(for id: String) throws -> [any ModelValidationScenario]? {
+    guard let registration = modelRegistrations.first(where: { $0.id == id }) else { return nil }
+    return try registration.scenarios()
+}
+
 package func modelValidationScenarios() throws -> [(id: String, scenario: any ModelValidationScenario)] {
-    let models: [(id: String, scenarios: [any ModelValidationScenario])] = [
-        ("counter", try ConfiguredCounter.validationScenarios()),
-        ("configured-processes", try ConfiguredProcessMachine.validationScenarios()),
-        ("weakly-fair-processes", try WeaklyFairConfiguredProcessMachine.validationScenarios()),
-        ("strongly-fair-processes", try StronglyFairConfiguredProcessMachine.validationScenarios()),
-        ("recurring-population", try RecurringPopulation.validationScenarios()),
-        ("scoped-temporal-claims", try ScopedTemporalClaims.validationScenarios()),
-        ("conditional-temporal-claims", try ConditionalTemporalClaims.validationScenarios()),
-        ("transition-property-claims", try TransitionPropertyClaims.validationScenarios()),
-        ("independent-atomic-steps", try IndependentAtomicSteps.validationScenarios()),
-        ("parameterized-atomic-steps", try ParameterizedAtomicSteps.validationScenarios()),
-        ("configured-dictionary-values", try ConfiguredDictionaryValues.validationScenarios()),
-        ("record-union-ordering", try RecordUnionOrderingModel.validationScenarios()),
-        ("record-union-field-domains", try RecordUnionFieldDomainModel.validationScenarios()),
-        ("record-union-sentinel", try RecordUnionSentinelModel.validationScenarios()),
-        ("scoped-reachability-claims", try ScopedReachabilityClaims.validationScenarios()),
-        ("constant-state-claims", try ConstantStateClaims.validationScenarios()),
-        ("labelled-property-claims", try LabelledPropertyClaims.validationScenarios()),
-        ("refinement-counter", try RefinementScenarioCounter.validationScenarios()),
-        ("dining-philosophers", try DiningPhilosophersModel.validationScenarios()),
-        ("bakery", try BakeryModel.validationScenarios()),
-        ("boulanger", try BoulangerModel.validationScenarios()),
-        ("die-hard", try DieHardModel.validationScenarios()),
-        ("die-harder", try DieHarderModel.validationScenarios()),
-        ("die-hardest", try DieHardestModel.validationScenarios()),
-        ("die-hardest-global-freeze", try DieHardestGlobalFreezeModel.validationScenarios()),
-        ("die-hardest-parallel", try DieHardestParallelModel.validationScenarios()),
-        ("channel", try ChannelModel.validationScenarios()),
-        ("asynch-interface", try AsynchInterfaceModel.validationScenarios()),
-        ("majority", try MajorityModel.validationScenarios()),
-        ("n-queens", try NQueensModel.validationScenarios()),
-        ("queens", try QueensModel.validationScenarios()),
-        ("coffee-can", try CoffeeCanModel.validationScenarios()),
-        ("chameneos", try ChameneosModel.validationScenarios()),
-        ("game-of-life", try GameOfLifeModel.validationScenarios()),
-        ("two-phase", try TwoPhaseModel.validationScenarios()),
-        ("hour-clock", try HourClockModel.validationScenarios()),
-        ("hour-clock-2", try HourClock2Model.validationScenarios()),
-        ("least-circular-substring", try LeastCircularSubstringModel.validationScenarios()),
-        ("find-highest", try FindHighestModel.validationScenarios()),
-        ("binary-search", try BinarySearchModel.validationScenarios()),
-        ("quicksort", try QuicksortModel.validationScenarios()),
-        ("selected-checks", try SelectedChecksModel.validationScenarios()),
-        ("unselected-predicates", try UnselectedPredicateModel.validationScenarios())
-    ]
-    return try models.flatMap { model in
-        guard !model.scenarios.isEmpty else {
+    try modelRegistrations.flatMap { model in
+        let scenarios = try model.scenarios()
+        guard !scenarios.isEmpty else {
             throw EvidenceFormatError.invalidField(record: model.id, field: "no scenarios")
         }
-        return model.scenarios.enumerated().map { ("\(model.id)-\($0.offset)", $0.element) }
+        return scenarios.enumerated().map { ("\(model.id)-\($0.offset)", $0.element) }
     }
 }
