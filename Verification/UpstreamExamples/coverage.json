@@ -3733,56 +3733,63 @@
     {
       "path": "specifications/CarTalkPuzzle",
       "name": "The Car Talk Puzzle",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned modules and all three published configurations inspected; implementation and hosted parity pending",
+      "gap": "No Swift implementation exists. All three Toolbox MC roots are zero-state constant-expression evaluations with PrintT, not transition graphs: Model_1 binds N=40/P=4 and prints a simple arithmetic tuple; Model_2 binds N=15/P=4 and evaluates AllSolutions; Model_3 binds N=121/P=5 and evaluates AllSolutions, with unknown upstream runtime/result. Preserve each exact expression and output. Models 1 and 2 have published successful zero-state results, but the family cannot be complete until Model_3 has a resolved faithful checking/evidence outcome and all module variants are disposed.",
+      "sourceAudit": {
+        "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
+        "manifestBlob": "fe1b3437d23b51f20ba1b34453aa310e0e410b3f",
+        "model1DistinctStates": 0,
+        "model2DistinctStates": 0,
+        "model3ExpectedResult": "unknown"
+      },
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured source variant",
+          "reason": "The root teaching module has no published TLC configuration and is not the file imported by the three Toolbox MC roots. Its definitions include AllSolutions and ExpandSolutions; disposition remains open.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_1/CarTalkPuzzle.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "imported Toolbox module",
+          "reason": "Model_1/MC.tla EXTENDS this local copy, which ends before AllSolutions; the configured constant expression is arithmetic only.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_1/MC.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The published cfg binds N=40/P=4; an ASSUME PrintT evaluates <<3^5 - 1, 40 + 3^4>> with zero states.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_2/CarTalkPuzzle.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "imported Toolbox module",
+          "reason": "Model_2/MC.tla EXTENDS this local copy, which defines AllSolutions over the function-valued Break set.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_2/MC.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The published cfg binds N=15/P=4 and evaluates AllSolutions through ASSUME PrintT with zero states.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_3/CarTalkPuzzle.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "imported Toolbox module",
+          "reason": "Model_3/MC.tla EXTENDS this local copy, which ends after AllSolutions and before the explanatory ExpandSolutions section.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/CarTalkPuzzle/CarTalkPuzzle.toolbox/Model_3/MC.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The published cfg binds N=121/P=5 and evaluates AllSolutions through ASSUME PrintT; the pinned manifest has no runtime or result.",
           "implementations": [],
           "dispositionComplete": false
         }
