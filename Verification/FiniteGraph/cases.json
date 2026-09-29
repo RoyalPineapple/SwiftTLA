@@ -977,6 +977,26 @@
       "timeoutSeconds": 1800
     },
     {
+      "id": "chameneos-0",
+      "sourceModel": "chameneos",
+      "scenario": "Chameneos",
+      "module": "chameneos/Chameneos.tla",
+      "configuration": "chameneos/Chameneos.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Chameneos/Chameneos.tla",
+        "sha256": "0e709f85c9fd764e8410fd57201b5c0900eb5bcb881168709c2376e921b29b32"
+      },
+      "exploration": {
+        "maximumStateLimit": 50000,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "0e709f85c9fd764e8410fd57201b5c0900eb5bcb881168709c2376e921b29b32",
+      "cfgSHA256": "fbfb1dc9697f4161719cd924c6049fe48cded01cca00d58f8b6fe928c466118c",
+      "timeoutSeconds": 1200
+    },
+    {
       "id": "stones-0",
       "sourceModel": "stones",
       "scenario": "Stones",

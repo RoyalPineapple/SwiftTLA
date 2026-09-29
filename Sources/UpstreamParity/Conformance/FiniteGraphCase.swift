@@ -326,6 +326,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
                 scenarios = try QueensModel.validationScenarios()
             case .coffeeCan:
                 scenarios = try CoffeeCanModel.validationScenarios()
+            case .chameneos:
+                scenarios = try ChameneosModel.validationScenarios()
             default:
                 guard scenario == nil || sourceModel == .sumsEven || sourceModel == .stones else {
                     throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
@@ -439,6 +441,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case nQueensFour = "n-queens-four"
     case queensFour = "queens-four"
     case coffeeCan = "coffee-can"
+    case chameneos
     case diningPhilosophers = "dining-philosophers"
     case stringLiterals = "string-literals"
     case actionReferences = "action-references"
@@ -462,7 +465,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .kvsnap: return try explore(KVsnapModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
-        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan, .sumsEven, .stones:
+        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan, .chameneos, .sumsEven, .stones:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
@@ -487,7 +490,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
                 throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned assumption scenario")
             }
             return try scenario.render()
-        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan:
+        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan, .chameneos:
             throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned scenario")
         }
     }

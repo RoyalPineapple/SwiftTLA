@@ -35,18 +35,41 @@ import UpstreamParity
     #expect({ if case .ok = checkOutcome { true } else { false } }())
   }
 
-  @Test("Chameneos has every typed initial creature-color assignment")
-  func chameneosInitialStates() throws {
-    let compilation = try Example.chameneosM4N4.spec.compile()
-    let states = try CompiledRuntime(compilation: compilation).initialStates()
-    #expect(states.count == 81)
-    #expect(throws: GeneratedMachineError.ambiguousInitialState) { try ChameneosModel.makeMachine() }
+  @Test("Chameneos configured machine retains initial choices and upstream checks")
+  func chameneosConfiguredInitialStatesAndChecks() throws {
+    let scenario = try #require(ChameneosModel.validationScenarios().first)
+    let configuration = scenario.configuration
+    let rendered = try scenario.render()
+    #expect(rendered.checkNames == ["TypeOK", "SumMet"])
+    #expect(!rendered.checksDeadlock)
+    #expect(rendered.tlaBundle.cfg.contains("N = 4"))
+    #expect(rendered.tlaBundle.cfg.contains("M = 4"))
+    #expect(rendered.tlaBundle.cfg.contains("Faded = Faded"))
+    #expect(rendered.tlaBundle.cfg.contains("MeetingPlaceEmpty = MeetingPlaceEmpty"))
+    #expect(try scenario.initialMachines().count == 81)
+    #expect(throws: GeneratedMachineError.ambiguousInitialState) {
+      try ChameneosModel.makeMachine(configuration: configuration)
+    }
     let native = try ChameneosModel.makeMachine(.init(chameneoses: [
-      .one: .init(first: .blue, second: 0), .two: .init(first: .red, second: 0),
-      .three: .init(first: .yellow, second: 0), .four: .init(first: .blue, second: 0)
-    ], meetingPlace: 0, numMeetings: 0))
+      1: .init(first: .first(.blue), second: 0), 2: .init(first: .first(.red), second: 0),
+      3: .init(first: .first(.yellow), second: 0), 4: .init(first: .first(.blue), second: 0)
+    ], meetingPlace: .second(.empty), numMeetings: 0), configuration: configuration)
     #expect(try native.violatedInvariants().isEmpty)
     #expect(try native.enabledActions().count == 4)
+  }
+
+  @Test("Chameneos native checking exhausts its configured state space")
+  func chameneosNativeChecking() throws {
+    let scenario = try #require(ChameneosModel.validationScenarios().first)
+    let summary = try MachineValidator.run(
+      initialMachines: scenario.initialMachines(), maximumStates: 50_000,
+      checking: scenario.checking, stopOnViolation: false
+    ) { _ in }
+    if case .exhausted = summary.completion {} else { Issue.record("Exploration did not finish") }
+    #expect(summary.initialStates == 81)
+    #expect(summary.states == 34_534)
+    #expect(summary.initialStates + summary.edges == 104_697)
+    #expect(summary.violatedInvariants.isEmpty)
   }
 
   @Test("Moving cat CatEvenBoxes = 48 states (parity catalog)")
