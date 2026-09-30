@@ -31,13 +31,15 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "SingleLaneBridge is the next family: its sole published configuration now has a scoped typed model and passing focused native graph/check diagnostics; hosted parity remains pending",
+      "status": "SingleLaneBridge completed hosted parity on 198bcaea; audit the next three candidates before selecting one implementation family",
       "candidates": [
-        "specifications/SingleLaneBridge"
+        "specifications/ReadersWriters",
+        "specifications/CigaretteSmokers",
+        "specifications/barriers"
       ],
-      "scope": "The pinned SingleLaneBridge manifest publishes MC.cfg only (3,605 distinct states, 20,181 total states, depth 29). MC.tla binds the four finite constants; MC.cfg selects Spec, Invariants, CarsInBridgeExitBridge, CarsEnterBridge, and default deadlock. SingleLaneBridge.tla owns the direct-TLA transition relation and weak fairness. APSingleLaneBridge.tla is an unconfigured Apalache annotation wrapper, not a second TLC configuration. The scoped direct-TLA model passes a focused native 3,605-state check; exact complete graph and selected outcomes on both hosted paths are still required before credit. Do not start ReadersWriters concurrently."
+      "scope": "The sole published SingleLaneBridge configuration has exact complete graph and selected-check parity on both hosted paths. The next three wave-B families are audit candidates, not selected or credited; inspect their pinned configurations, existing implementations, and concrete blockers before choosing one."
     },
-    "implementationFamiliesInProgress": 1,
+    "implementationFamiliesInProgress": 0,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
     "regressionAnchors": ["DiningPhilosophers", "LeastCircularSubstring", "N-Queens"],
     "inspectionWaves": {
@@ -59,13 +61,13 @@
   },
   "ci": {
     "prHeadFullMatrix": {
-      "sourceSHA": "6e1cd676062674e83985bab679e5e642c3b82f96",
-      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873220",
-      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023",
+      "sourceSHA": "198bcaeacf4e458551626c4362f2f6e603334a58",
+      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36715713325",
+      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36715713363",
       "observedStatus": "completed",
       "conclusion": "success",
-      "jobs": "All 138 required independent-validation jobs passed and the optional comparison replay diagnostic was skipped. The independent admission gate and all five ordinary CI jobs passed.",
-      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. The four Prisoners_Single_Switch configurations retained exact complete graph comparisons with respectively 1/16/48, 2/62/186, 1/2/2, and 2/4/4 initial-state/state/edge counts; Terminating, TypeOK, VictoryOK, and default deadlock matched and were satisfied. This verified PR head does not mean all 78 families or 19 DSL criteria are complete."
+      "jobs": "All 140 required independent-validation jobs passed and the optional focused diagnostic was skipped. The independent admission gate and all five ordinary CI jobs passed.",
+      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. SingleLaneBridge's sole published configuration retained exact complete comparisons of one initial state, 3,605 states, 13,128 labeled edges, Invariants, CarsInBridgeExitBridge, CarsEnterBridge, and default deadlock. This verified PR head does not mean all 78 families or 19 DSL criteria are complete."
     },
     "bakeryBoulangerieFamilyCandidate": {
       "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
@@ -2797,7 +2799,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": "specifications/SingleLaneBridge",
+  "nextFamily": null,
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -8350,8 +8352,8 @@
     {
       "path": "specifications/SingleLaneBridge",
       "name": "Single-Lane Bridge Problem",
-      "audit": "pinned source and sole published TLC configuration audited; scoped typed model and focused native complete-graph/property diagnostic pass; hosted parity pending",
-      "gap": "The scoped direct-TLA model replaces the legacy direct model and defines its one MC scenario, three transition families, weak fairness, selected invariant and two liveness properties. Its focused native run exhausts 3,605 states with selected checks and default deadlock satisfied. Compare complete initial states, states, labeled edges, Invariants, CarsInBridgeExitBridge, CarsEnterBridge, and default deadlock on both hosted paths before counting the family. The pinned manifest's 20,181 total states and depth 29 are diagnostics, not equality proof.",
+      "audit": "pinned source, sole published TLC configuration, typed implementation, complete module dispositions, legacy cleanup, and hosted parity audited on 198bcaea",
+      "gap": "No published TLC-configuration gap remains. Generated TLA matched pinned upstream TLC, and the native Swift machine matched generated-TLA TLC, each with complete initial states, states, labeled edges, Invariants, CarsInBridgeExitBridge, CarsEnterBridge, and default deadlock. The unconfigured Apalache wrapper has an explicit disposition without an invented TLC configuration. This does not complete the separate DSL and 78-family goal.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -8381,11 +8383,25 @@
           "module": "specifications/SingleLaneBridge/MC.tla",
           "configuration": "specifications/SingleLaneBridge/MC.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "198bcaeacf4e458551626c4362f2f6e603334a58",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{"file": "Sources/UpstreamParity/Examples/SingleLaneBridge.swift", "scenario": "MC", "caseID": "single-lane-bridge-0"}],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "198bcaeacf4e458551626c4362f2f6e603334a58",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36715713363",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36715713363/artifacts/11100490981",
+              "artifactSHA256": "bb72d32d6e42939700ac7ddca65e272601fce0cfcca64130e2c60659feb70093",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36715713363/artifacts/11101900324",
+              "nativeArtifactSHA256": "b7bf62f9e07edb1287e3cb530d312602977b32f5d45c9158cc730b973435723e",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Both retained comparisons are exact and complete: one initial state, 3,605 states, 13,128 labeled edges; Invariants, CarsInBridgeExitBridge, CarsEnterBridge, and default deadlock matched and were satisfied. Ordinary CI and full independent admission passed on this SHA."
+            }
+          ]
         }
       ],
       "partialCases": []
