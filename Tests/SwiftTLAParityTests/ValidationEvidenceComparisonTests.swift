@@ -5,7 +5,10 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct ValidationEvidenceComparisonTests {
-    private let actions = [RenderedAction(sourceName: "Next", arguments: [], renderedName: "Next")]
+    private let actions = [
+        RenderedAction(sourceName: "Next", arguments: [], renderedName: "Next"),
+        RenderedAction(sourceName: "Other", arguments: [], renderedName: "Other")
+    ]
 
     @Test("binary producers compare the complete labeled graph")
     func completeGraphMatches() throws {
@@ -99,11 +102,13 @@ struct ValidationEvidenceComparisonTests {
         #expect(try compare(root).difference == "complete state set")
     }
 
-    @Test("a changed edge fails despite matching counts")
-    func differentEdgeFails() throws {
-        let root = try fixture(nativeEdgeTarget: 0)
-        defer { try? FileManager.default.removeItem(at: root) }
-        #expect(try compare(root).difference == "complete labeled edge set")
+    @Test("a changed endpoint or action label fails despite matching counts")
+    func differentLabeledEdgeFails() throws {
+        for (target, action) in [(UInt64(0), "Next"), (UInt64(1), "Other")] {
+            let root = try fixture(nativeEdgeTarget: target, nativeAction: action)
+            defer { try? FileManager.default.removeItem(at: root) }
+            #expect(try compare(root).difference == "complete labeled edge set")
+        }
     }
 
     @Test("repeated transitions count as one labeled graph edge")
@@ -280,6 +285,7 @@ struct ValidationEvidenceComparisonTests {
     }
 
     private func fixture(nativeTarget: Int = 1, nativeEdgeTarget: UInt64 = 1,
+        nativeAction: String = "Next",
         nativeInitial: UInt64 = 0,
         edgeCount: Int = 1, graphComplete: Bool = true, tlcExitStatus: Int = 0,
         scenarioName: String? = nil, omitSelectedVerdicts: Bool = false) throws -> URL {
@@ -325,7 +331,7 @@ struct ValidationEvidenceComparisonTests {
         }
         var writer = try BinaryGraphEvidenceWriter(to: native.appendingPathComponent("machine.bin"),
             caseID: "fixture")
-        try writer.action(id: 0, name: "Next")
+        try writer.action(id: 0, name: nativeAction)
         try writer.state(id: 0, key: key(0), initial: nativeInitial == 0)
         try writer.state(id: 1, key: key(nativeTarget), initial: nativeInitial == 1)
         for _ in 0..<edgeCount {
