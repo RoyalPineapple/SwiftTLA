@@ -43,6 +43,15 @@ package enum ScenarioEvidenceComparison {
         guard checkedMatches || checkFreeMatches else {
             throw ValidationEvidenceComparisonError.invalidEvidence("generated TLC graph input")
         }
+        if checkedMatches, tlc.graphComplete {
+            let graphVerdictsMatch = graphChecks.allSatisfy { name in
+                tlc.properties[name] == (rendered.reachabilityNames.contains(name) ? .unreachable : .satisfied)
+            }
+            guard graphVerdictsMatch,
+                  !rendered.checksDeadlock || tlc.deadlock == .satisfied else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("completed TLC graph verdict")
+            }
+        }
         if checkFreeMatches && !checkedMatches &&
             !FileManager.default.fileExists(atPath: oracle.appendingPathComponent("tlc-check/tlc-process.json").path) {
             throw ValidationEvidenceComparisonError.invalidEvidence("missing checked TLC pass")

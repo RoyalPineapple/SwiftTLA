@@ -31,6 +31,15 @@ struct ValidationEvidenceComparisonTests {
         #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
     }
 
+    @Test("a completed checked TLC graph cannot claim an early safety or deadlock violation")
+    func completedCheckedGraphCannotClaimViolation() throws {
+        let root = try fixture(scenarioName: "All", skipCheckedPass: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("completed TLC graph verdict")) {
+            _ = try compare(root)
+        }
+    }
+
     @Test("a complete graph can match an explicit subset without claiming full scenario coverage")
     func selectedVerdictsMatch() throws {
         let root = try fixture(scenarioName: "Selected")
@@ -90,27 +99,13 @@ struct ValidationEvidenceComparisonTests {
     func completeCheckFreeGraphRequiresCheckedPass() throws {
         let root = try fixture(scenarioName: "Selected")
         defer { try? FileManager.default.removeItem(at: root) }
-        let scenario = try #require(SelectedChecksModel.validationScenarios().first { $0.name == "Selected" })
-        let bundle = try scenario.render().tlaBundle(checking: [], checkDeadlock: false)
-        let url = root.appendingPathComponent("oracle/tlc-graph/tlc-process.json")
-        var process = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
-        var checkedProcess = process
-        checkedProcess["invocation"] = ["exitStatus": 12]
-        process["inputs"] = inputHashes(for: bundle)
-        process["configuration"] = bundle.cfg
-        try JSONSerialization.data(withJSONObject: process).write(to: url)
+        let checked = root.appendingPathComponent("oracle/tlc-check")
+        let saved = root.appendingPathComponent("checked-pass-backup")
+        try FileManager.default.moveItem(at: checked, to: saved)
         #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("missing checked TLC pass")) {
             _ = try compare(root)
         }
-        let checked = root.appendingPathComponent("oracle/tlc-check")
-        try FileManager.default.createDirectory(at: checked.appendingPathComponent("logs"),
-            withIntermediateDirectories: true)
-        try JSONSerialization.data(withJSONObject: checkedProcess)
-            .write(to: checked.appendingPathComponent("tlc-process.json"))
-        try Data("Error: Invariant Reached is violated.\n".utf8)
-            .write(to: checked.appendingPathComponent("logs/tlc.stdout.log"))
-        try Data(#"{"vars":["value","pc"],"counterexample":{"state":[[1,{"value":0,"pc":"advance"}],[2,{"value":1,"pc":"advance"}]],"action":[[[1,{"value":0,"pc":"advance"}],{"name":"advance"},[2,{"value":1,"pc":"advance"}]]]}}"#.utf8)
-            .write(to: checked.appendingPathComponent("counterexample.json"))
+        try FileManager.default.moveItem(at: saved, to: checked)
         #expect(try compare(root).graphCompared)
     }
 
@@ -268,14 +263,6 @@ struct ValidationEvidenceComparisonTests {
         let root = try fixture(scenarioName: "All")
         defer { try? FileManager.default.removeItem(at: root) }
         let checked = root.appendingPathComponent("oracle/tlc-check")
-        try FileManager.default.createDirectory(at: checked.appendingPathComponent("logs"),
-            withIntermediateDirectories: true)
-        let graphProcess = root.appendingPathComponent("oracle/tlc-graph/tlc-process.json")
-        var process = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: graphProcess)) as? [String: Any])
-        process["invocation"] = ["exitStatus": 12]
-        try JSONSerialization.data(withJSONObject: process).write(to: checked.appendingPathComponent("tlc-process.json"))
-        try Data("Error: Invariant InitiallyZero is violated.\n".utf8)
-            .write(to: checked.appendingPathComponent("logs/tlc.stdout.log"))
         try Data(#"{"vars":["value","pc"],"counterexample":{"state":[[1,{"value":0,"pc":"advance"}],[2,{"value":2,"pc":"advance"}]],"action":[[[1,{"value":0,"pc":"advance"}],{"name":"advance"},[2,{"value":2,"pc":"advance"}]]]}}"#.utf8)
             .write(to: checked.appendingPathComponent("counterexample.json"))
         #expect(throws: TLCTraceError.self) { _ = try compare(root) }
@@ -355,7 +342,8 @@ struct ValidationEvidenceComparisonTests {
         nativeAction: String = "Next",
         nativeInitial: UInt64 = 0,
         edgeCount: Int = 1, graphComplete: Bool = true, tlcExitStatus: Int = 0,
-        scenarioName: String? = nil, omitSelectedVerdicts: Bool = false) throws -> URL {
+        scenarioName: String? = nil, omitSelectedVerdicts: Bool = false,
+        skipCheckedPass: Bool = false) throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let native = root.appendingPathComponent("native")
         let tlc = root.appendingPathComponent("oracle/tlc-graph")
@@ -368,6 +356,10 @@ struct ValidationEvidenceComparisonTests {
             rendered.invariantNames.union(rendered.reachabilityNames))
         let graphBundle = try rendered.tlaBundle(checking: graphChecks,
             checkDeadlock: rendered.checksDeadlock)
+        let retainedCheck = graphComplete && name != "Graph only" && !skipCheckedPass
+        let graphInput = retainedCheck
+            ? try rendered.tlaBundle(checking: [], checkDeadlock: false)
+            : graphBundle
         let selected = Set(try ScenarioCheckCoverage(scenario).selectedProperties)
         let allVerdicts = ["InitiallyZero": "violated", "Reached": "reached",
             "Safe": "satisfied", "StaysZero": "violated"]
@@ -394,9 +386,23 @@ struct ValidationEvidenceComparisonTests {
         try JSONSerialization.data(withJSONObject: [
             "caseID": "fixture",
             "invocation": ["exitStatus": tlcExitStatus],
-            "inputs": inputHashes(for: graphBundle), "configuration": graphBundle.cfg
+            "inputs": inputHashes(for: graphInput), "configuration": graphInput.cfg
         ])
             .write(to: tlc.appendingPathComponent("tlc-process.json"))
+        if retainedCheck {
+            let checked = root.appendingPathComponent("oracle/tlc-check")
+            try FileManager.default.createDirectory(at: checked.appendingPathComponent("logs"),
+                withIntermediateDirectories: true)
+            try JSONSerialization.data(withJSONObject: [
+                "caseID": "fixture", "invocation": ["exitStatus": 12],
+                "inputs": inputHashes(for: graphBundle), "configuration": graphBundle.cfg
+            ]).write(to: checked.appendingPathComponent("tlc-process.json"))
+            let violated = name == "All" ? "InitiallyZero" : "Reached"
+            try Data("Error: Invariant \(violated) is violated.\n".utf8)
+                .write(to: checked.appendingPathComponent("logs/tlc.stdout.log"))
+            try Data(#"{"vars":["value","pc"],"counterexample":{"state":[[1,{"value":0,"pc":"advance"}],[2,{"value":1,"pc":"advance"}]],"action":[[[1,{"value":0,"pc":"advance"}],{"name":"advance"},[2,{"value":1,"pc":"advance"}]]]}}"#.utf8)
+                .write(to: checked.appendingPathComponent("counterexample.json"))
+        }
         if !graphComplete {
             try FileManager.default.createDirectory(at: tlc.appendingPathComponent("logs"),
                 withIntermediateDirectories: false)
