@@ -31,15 +31,14 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "Prisoners has complete hosted parity; Prisoners_Single_Switch is the one family now under implementation after green PR-head admission",
+      "status": "Prisoners_Single_Switch has complete hosted parity for all four published configurations on green PR-head SHA 6e1cd676; select the next family after reviewing the audited candidates",
       "candidates": [
-        "specifications/Prisoners_Single_Switch",
         "specifications/SingleLaneBridge",
         "specifications/ReadersWriters"
       ],
-      "scope": "The pinned-source audit selected Prisoners_Single_Switch: four small exhaustive configurations share one model and the same per-prisoner weak-fairness shape as the completed Prisoners family. Its four local graph/check diagnostics pass; both hosted comparison paths remain pending. SingleLaneBridge has a legacy direct model but no hosted scenario, property wiring, or graph parity; ReadersWriters includes a separate symbolic configuration. Do not start either until this family has complete hosted evidence."
+      "scope": "All four Prisoners_Single_Switch configurations now have retained exact hosted comparisons on both paths, complete graphs, all selected properties, and default deadlock. Ordinary CI and independent admission passed on the same SHA. SingleLaneBridge has a legacy direct model but no hosted scenario, property wiring, or graph parity; ReadersWriters includes a separate symbolic configuration. Review these candidates before choosing one next family."
     },
-    "implementationFamiliesInProgress": 1,
+    "implementationFamiliesInProgress": 0,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
     "regressionAnchors": ["DiningPhilosophers", "LeastCircularSubstring", "N-Queens"],
     "inspectionWaves": {
@@ -61,13 +60,13 @@
   },
   "ci": {
     "prHeadFullMatrix": {
-      "sourceSHA": "bd27c6a108d238b01bb75c012901be368cf2dd9b",
-      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36613673250",
-      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36613673255",
+      "sourceSHA": "6e1cd676062674e83985bab679e5e642c3b82f96",
+      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873220",
+      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023",
       "observedStatus": "completed",
       "conclusion": "success",
-      "jobs": "All 130 required independent-validation jobs passed and the optional comparison replay diagnostic was skipped. All five ordinary CI jobs passed.",
-      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. Prisoners retained exact complete graphs with four initial states, 214 states, and 856 labeled edges on both paths; TypeOK, CountInvariant, Safety, Liveness, and default deadlock checks matched and were satisfied. Selected-checks-0 also retained valid decisive-stop verdict/witness parity without claiming partial-graph equality. This verified PR head does not mean all 78 families or 19 DSL criteria are complete."
+      "jobs": "All 138 required independent-validation jobs passed and the optional comparison replay diagnostic was skipped. The independent admission gate and all five ordinary CI jobs passed.",
+      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. The four Prisoners_Single_Switch configurations retained exact complete graph comparisons with respectively 1/16/48, 2/62/186, 1/2/2, and 2/4/4 initial-state/state/edge counts; Terminating, TypeOK, VictoryOK, and default deadlock matched and were satisfied. This verified PR head does not mean all 78 families or 19 DSL criteria are complete."
     },
     "bakeryBoulangerieFamilyCandidate": {
       "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
@@ -2799,7 +2798,7 @@
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
     }
   ],
-  "nextFamily": "specifications/Prisoners_Single_Switch",
+  "nextFamily": null,
   "families": [
     {
       "path": "specifications/aba-asyn-byz",
@@ -8061,8 +8060,8 @@
     {
       "path": "specifications/Prisoners_Single_Switch",
       "name": "The Prisoners & Switch Puzzle",
-      "audit": "pinned module and all four published TLC configurations implemented as model-owned scenarios; local complete-graph and selected-check diagnostics pass; hosted parity pending",
-      "gap": "Verify all four complete initial-state sets, states, labeled edges, Terminating, TypeOK, VictoryOK, and default deadlock on both hosted comparison paths. Local diagnostics cover the solo empty signalled function, CHOOSE-derived counter, and all four complete native graphs but do not establish native/generated/upstream parity.",
+      "audit": "pinned module, unconfigured wrapper disposition, all four published configurations, typed implementation, and complete hosted parity audited on 6e1cd676",
+      "gap": "No published TLC-configuration gap remains. All four configurations matched on both hosted comparison paths with complete initial states and labeled graphs; Terminating, TypeOK, VictoryOK, and default deadlock matched and were satisfied. The unconfigured APPrisoner wrapper has an explicit disposition without an invented TLC configuration. This does not complete the separate DSL and 78-family goal.",
       "sourceAudit": {
         "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
         "moduleBlob": "09ac8c2ca33655a040eb944023bbda8f62bcd375",
@@ -8096,41 +8095,89 @@
           "module": "specifications/Prisoners_Single_Switch/Prisoner.tla",
           "configuration": "specifications/Prisoners_Single_Switch/Prisoner.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "6e1cd676062674e83985bab679e5e642c3b82f96",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{"file": "Sources/UpstreamParity/Examples/PrisonerSingleSwitch.swift", "scenario": "Prisoner", "caseID": "prisoners-single-switch-0"}],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "6e1cd676062674e83985bab679e5e642c3b82f96",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023/artifacts/11062769110",
+            "artifactSHA256": "6f6c6870d4ac1a2cac007f3dc50a0ef277249ad53325be72b56ac539cd5f04b3",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023/artifacts/11063549587",
+            "nativeArtifactSHA256": "ca0f62ea0eced421881b2712cd85839e2bc4aeb9f2899d3b87bc6f18e6c44039",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Both retained comparisons are exact and complete: one initial state, 16 states, 48 labeled edges; Terminating, TypeOK, VictoryOK, and default deadlock satisfied. Ordinary CI and full independent admission passed on this SHA."
+          }]
         },
         {
           "module": "specifications/Prisoners_Single_Switch/Prisoner.tla",
           "configuration": "specifications/Prisoners_Single_Switch/PrisonerLightUnknown.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "6e1cd676062674e83985bab679e5e642c3b82f96",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{"file": "Sources/UpstreamParity/Examples/PrisonerSingleSwitch.swift", "scenario": "PrisonerLightUnknown", "caseID": "prisoners-single-switch-1"}],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "6e1cd676062674e83985bab679e5e642c3b82f96",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023/artifacts/11063393668",
+            "artifactSHA256": "0bd4e821296b1371a081543fd0f09ef7910be1a1b55fa378eb76b1c344d8f99a",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023/artifacts/11063619007",
+            "nativeArtifactSHA256": "3d12c2039569fa44232fd4928cbffea51ce1a6d7241807efbd383af04d9bd08d",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Both retained comparisons are exact and complete: two initial states, 62 states, 186 labeled edges; Terminating, TypeOK, VictoryOK, and default deadlock satisfied. Ordinary CI and full independent admission passed on this SHA."
+          }]
         },
         {
           "module": "specifications/Prisoners_Single_Switch/Prisoner.tla",
           "configuration": "specifications/Prisoners_Single_Switch/PrisonerSolo.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "6e1cd676062674e83985bab679e5e642c3b82f96",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{"file": "Sources/UpstreamParity/Examples/PrisonerSingleSwitch.swift", "scenario": "PrisonerSolo", "caseID": "prisoners-single-switch-2"}],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "6e1cd676062674e83985bab679e5e642c3b82f96",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023/artifacts/11064087502",
+            "artifactSHA256": "4c30a5c54a28c9b12c7c996854089904511ddb54ed6ae93eb870737fb370e392",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023/artifacts/11062989995",
+            "nativeArtifactSHA256": "444d19269c2cfabdf18f00065ea66f8ed4962243415c4df8ead3e4b11315a728",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Both retained comparisons are exact and complete: one initial state, two states, two labeled edges; Terminating, TypeOK, VictoryOK, and default deadlock satisfied. The empty signalled function is covered. Ordinary CI and full independent admission passed on this SHA."
+          }]
         },
         {
           "module": "specifications/Prisoners_Single_Switch/Prisoner.tla",
           "configuration": "specifications/Prisoners_Single_Switch/PrisonerSoloLightUnknown.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "6e1cd676062674e83985bab679e5e642c3b82f96",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{"file": "Sources/UpstreamParity/Examples/PrisonerSingleSwitch.swift", "scenario": "PrisonerSoloLightUnknown", "caseID": "prisoners-single-switch-3"}],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "6e1cd676062674e83985bab679e5e642c3b82f96",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023/artifacts/11063768249",
+            "artifactSHA256": "03ecc97f87db53e36c5823f89de81c10597c7527af8e8fe8a3b527ebdc8157ec",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36629873023/artifacts/11062999832",
+            "nativeArtifactSHA256": "054981b8d21e06d93ee07a5115c6c19646f46d99b5afa74b692a2cce3fc9b3f4",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Both retained comparisons are exact and complete: two initial states, four states, four labeled edges; Terminating, TypeOK, VictoryOK, and default deadlock satisfied. The empty signalled function is covered. Ordinary CI and full independent admission passed on this SHA."
+          }]
         }
       ],
       "partialCases": []
