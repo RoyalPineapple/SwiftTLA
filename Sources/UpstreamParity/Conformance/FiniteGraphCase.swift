@@ -412,6 +412,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case chameneos
     case prisoners
     case prisonersSingleSwitch = "prisoners-single-switch"
+    case singleLaneBridge = "single-lane-bridge"
     case gameOfLife = "game-of-life"
     case twoPhase = "two-phase"
     case teachingSimple = "teaching-simple"
@@ -447,7 +448,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         case .kvsnap: return try explore(KVsnapModel.initialMachines())
         case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
         case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
-        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan, .chameneos, .prisoners, .prisonersSingleSwitch, .gameOfLife, .twoPhase, .teachingSimple, .teachingSimpleRegular, .sumsEven, .stones:
+        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan, .chameneos, .prisoners, .prisonersSingleSwitch, .singleLaneBridge, .gameOfLife, .twoPhase, .teachingSimple, .teachingSimpleRegular, .sumsEven, .stones:
             throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
         case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
         case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
@@ -472,7 +473,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
                 throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned assumption scenario")
             }
             return try scenario.render()
-        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan, .chameneos, .prisoners, .prisonersSingleSwitch, .gameOfLife, .twoPhase, .teachingSimple, .teachingSimpleRegular:
+        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan, .chameneos, .prisoners, .prisonersSingleSwitch, .singleLaneBridge, .gameOfLife, .twoPhase, .teachingSimple, .teachingSimpleRegular:
             throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned scenario")
         }
     }

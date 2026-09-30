@@ -10,3 +10,4 @@ Verification/FiniteGraph/fixtures/sums-even/* whitespace=-blank-at-eol,-blank-at
 Verification/FiniteGraph/fixtures/game-of-life/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/two-phase/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/teaching-concurrency/* whitespace=-blank-at-eol,-blank-at-eof
+Verification/FiniteGraph/fixtures/single-lane-bridge/* whitespace=-blank-at-eol,-blank-at-eof

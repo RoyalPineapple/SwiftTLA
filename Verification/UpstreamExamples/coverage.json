@@ -31,11 +31,11 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "SingleLaneBridge is the next family: its one published exhaustive TLC configuration has a partial legacy direct model but no scenario or parity evidence",
+      "status": "SingleLaneBridge is the next family: its sole published configuration now has a scoped typed model and passing focused native graph/check diagnostics; hosted parity remains pending",
       "candidates": [
         "specifications/SingleLaneBridge"
       ],
-      "scope": "The pinned SingleLaneBridge manifest publishes MC.cfg only (3,605 distinct states, 20,181 total states, depth 29). MC.tla binds the four finite constants; MC.cfg selects Spec, Invariants, CarsInBridgeExitBridge, CarsEnterBridge, and default deadlock. SingleLaneBridge.tla owns the direct-TLA transition relation and weak fairness. APSingleLaneBridge.tla is an unconfigured Apalache annotation wrapper, not a second TLC configuration. Replace the existing legacy model with a typed scoped direct-TLA model, then prove the complete graph and selected outcomes on both hosted paths before counting the family. Do not start ReadersWriters concurrently."
+      "scope": "The pinned SingleLaneBridge manifest publishes MC.cfg only (3,605 distinct states, 20,181 total states, depth 29). MC.tla binds the four finite constants; MC.cfg selects Spec, Invariants, CarsInBridgeExitBridge, CarsEnterBridge, and default deadlock. SingleLaneBridge.tla owns the direct-TLA transition relation and weak fairness. APSingleLaneBridge.tla is an unconfigured Apalache annotation wrapper, not a second TLC configuration. The scoped direct-TLA model passes a focused native 3,605-state check; exact complete graph and selected outcomes on both hosted paths are still required before credit. Do not start ReadersWriters concurrently."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -8350,9 +8350,9 @@
     {
       "path": "specifications/SingleLaneBridge",
       "name": "Single-Lane Bridge Problem",
-      "audit": "pinned source and sole published TLC configuration audited; legacy direct model exists but has no validation scenario, selected liveness checks, or hosted graph evidence",
-      "gap": "Port the direct-TLA actions, variables, fairness, invariant, and both liveness properties to the scoped typed #spec vocabulary; bind the one published MC configuration. The existing legacy model proves only finite constants and compilation, not graph or property parity. Compare complete initial states, states, labeled edges, Invariants, CarsInBridgeExitBridge, CarsEnterBridge, and default deadlock on both hosted paths. Remove the legacy model and obsolete shape-only tests in the same change. The pinned manifest reports 3,605 distinct states, 20,181 total states, and depth 29; these counts are diagnostics, not equality proof.",
-      "legacyCleanupComplete": false,
+      "audit": "pinned source and sole published TLC configuration audited; scoped typed model and focused native complete-graph/property diagnostic pass; hosted parity pending",
+      "gap": "The scoped direct-TLA model replaces the legacy direct model and defines its one MC scenario, three transition families, weak fairness, selected invariant and two liveness properties. Its focused native run exhausts 3,605 states with selected checks and default deadlock satisfied. Compare complete initial states, states, labeled edges, Invariants, CarsInBridgeExitBridge, CarsEnterBridge, and default deadlock on both hosted paths before counting the family. The pinned manifest's 20,181 total states and depth 29 are diagnostics, not equality proof.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/SingleLaneBridge/APSingleLaneBridge.tla",
@@ -8365,14 +8365,14 @@
           "path": "specifications/SingleLaneBridge/MC.tla",
           "role": "configured root",
           "reason": "MC.tla extends SingleLaneBridge and binds CarsRight={r1,r2}, CarsLeft={l1,l2}, Bridge={4,5}, and Positions=1..8. MC.cfg selects Spec, Invariants, CarsInBridgeExitBridge, and CarsEnterBridge with default deadlock checking.",
-          "implementations": [],
+          "implementations": ["Sources/UpstreamParity/Examples/SingleLaneBridge.swift"],
           "dispositionComplete": true
         },
         {
           "path": "specifications/SingleLaneBridge/SingleLaneBridge.tla",
           "role": "configured dependency and behavioral source",
           "reason": "The configured MC module extends this direct-TLA specification. It defines Location and WaitingBeforeBridge, three transition families, per-car weak fairness, the selected invariant and two leads-to properties. There is no separate published TLC configuration for this source module.",
-          "implementations": [],
+          "implementations": ["Sources/UpstreamParity/Examples/SingleLaneBridge.swift"],
           "dispositionComplete": true
         }
       ],
@@ -8381,10 +8381,10 @@
           "module": "specifications/SingleLaneBridge/MC.tla",
           "configuration": "specifications/SingleLaneBridge/MC.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/SingleLaneBridge.swift", "scenario": "MC", "caseID": "single-lane-bridge-0"}],
           "evidence": []
         }
       ],

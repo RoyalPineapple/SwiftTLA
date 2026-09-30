@@ -1200,6 +1200,26 @@
       "moduleSHA256": "00f8885e6cc56862b7dbf349809ae4415d1eac77d7dfaa6e480316be7f0cbeea",
       "cfgSHA256": "59bd2acfe196814933997b4c910ce57b7e88d4324ce0eff3bb5721c94486a28b",
       "timeoutSeconds": 300
+    },
+    {
+      "id": "single-lane-bridge-0",
+      "sourceModel": "single-lane-bridge",
+      "scenario": "MC",
+      "module": "single-lane-bridge/MC.tla",
+      "configuration": "single-lane-bridge/MC.cfg",
+      "imports": ["single-lane-bridge/SingleLaneBridge.tla"],
+      "dependencies": [{
+        "importingModule": "MC",
+        "importedModule": "SingleLaneBridge"
+      }],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/SingleLaneBridge/MC.tla",
+        "sha256": "ffde8f33fd0c4fdf75e6e719637837397f3607550981e40516b5a56e2b70c75e"
+      },
+      "exploration": {"maximumStateLimit": 5000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "ffde8f33fd0c4fdf75e6e719637837397f3607550981e40516b5a56e2b70c75e",
+      "cfgSHA256": "903e5e0e79daa9e074b619acf1ffabe167bc2c5b01232da2380d279726504045",
+      "timeoutSeconds": 600
     }
   ]
 }
