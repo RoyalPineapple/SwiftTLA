@@ -44,19 +44,12 @@ package enum GeneratedTLCOracle {
               scenario.behavior == rendered.behavior else {
             throw Error.checkingMismatch
         }
-        let decisiveName = scenario.expectations.compactMap { property, expectation -> String? in
-            guard expectation == .violated, let name = names[property],
-                  rendered.invariantNames.contains(name) else { return nil }
-            return name
-        }.sorted().first
-        let graphChecks = decisiveName.map { Set([$0]) }
-            ?? selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
-        let graphInvocation: TLCInvocationKind = decisiveName == nil ? .finiteGraph : .propertyCheck
+        let graphChecks = selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
         let graph = try inputIdentity(
             bundle: rendered.tlaBundle(checking: graphChecks, checkDeadlock: rendered.checksDeadlock),
-            pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: graphInvocation)
+            pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .finiteGraph)
         var checks: [[String: Any]] = []
-        for name in selected.sorted() where name != decisiveName {
+        for name in selected.sorted() {
             let bundles = try rendered.temporalObligationBundles(checking: name)
                 ?? [rendered.tlaBundle(checking: [name], checkDeadlock: false)]
             checks.append(["name": name, "inputs": try bundles.map {
@@ -76,10 +69,6 @@ package enum GeneratedTLCOracle {
             "graph": graph,
             "checks": checks,
             "deadlockInput": deadlockInput ?? NSNull(),
-            "expectations": scenario.expectations.map { property, expectation in
-                ["property": names[property] ?? "", "verdict": String(describing: expectation)]
-            }.sorted { $0["property"]! < $1["property"]! },
-            "deadlockExpectation": scenario.deadlockExpectation.map { String(describing: $0) } ?? "none",
             "actions": rendered.actions.sorted {
                 ($0.sourceInvocationName, $0.renderedName) < ($1.sourceInvocationName, $1.renderedName)
             }.map {
@@ -111,39 +100,43 @@ package enum GeneratedTLCOracle {
               scenario.behavior == rendered.behavior else { throw Error.checkingMismatch }
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        let decisiveName = scenario.expectations.compactMap { property, expectation -> String? in
-            guard expectation == .violated, let name = names[property],
-                  rendered.invariantNames.contains(name) else { return nil }
-            return name
-        }.sorted().first
-        let graphChecks = decisiveName.map { Set([$0]) }
-            ?? selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
-        let graphInvocation: TLCInvocationKind = decisiveName == nil ? .finiteGraph : .propertyCheck
+        let graphChecks = selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
         let graphBundle = try rendered.tlaBundle(checking: graphChecks,
                                                  checkDeadlock: rendered.checksDeadlock)
         try retainGeneratedInputs(graphBundle, in: directory.appendingPathComponent("generated"))
         let graphIdentity = try inputIdentity(bundle: graphBundle, pin: pin,
                                               arguments: ["-workers", "1", "-fp", "1"],
-                                              invocation: graphInvocation)
+                                              invocation: .finiteGraph)
         let work = directory.appendingPathComponent("work")
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: false)
         let graphOutcome = try run(bundle: graphBundle, id: id, maximumStates: maximumStates,
                                    timeout: timeout, tools: tools, pin: pin,
                                    workRoot: work, retained: directory.appendingPathComponent("tlc-graph"),
-                                   invocation: graphInvocation, renderedActions: rendered.actions, process: process)
+                                   invocation: .finiteGraph, renderedActions: rendered.actions, process: process)
         let graphComplete = graphOutcome == .completed
-        if decisiveName != nil && graphOutcome != .safetyViolation {
-            throw Error.invalidOutcome("declared decisive invariant: \(graphOutcome)")
-        }
         guard graphComplete || graphOutcome == .safetyViolation || graphOutcome == .deadlock else {
             throw Error.invalidOutcome("graph pass: \(graphOutcome)")
+        }
+        let observedViolation: String?
+        if graphOutcome == .safetyViolation {
+            let stdout = try String(contentsOf: directory.appendingPathComponent("tlc-graph/logs/tlc.stdout.log"),
+                encoding: .utf8)
+            let errors = Set(stdout.split(whereSeparator: \.isNewline).map(String.init))
+            let matches = graphChecks.filter { name in
+                errors.contains("Error: Invariant \(name) is violated.")
+                    || errors.contains("Error: Invariant \(name) is violated by the initial state:")
+            }
+            guard matches.count == 1 else { throw Error.invalidOutcome("unidentified graph violation") }
+            observedViolation = matches.first
+        } else {
+            observedViolation = nil
         }
 
         var properties: [String: ValidationVerdict] = [:]
         for property in scenario.checking.properties.sorted(by: { names[$0]! < names[$1]! }) {
             let name = names[property]!
             let verdict: ValidationVerdict
-            if name == decisiveName {
+            if name == observedViolation {
                 verdict = try Self.verdict(for: name, outcome: graphOutcome,
                     rendered: rendered, retained: directory.appendingPathComponent("tlc-graph"))
             } else if graphComplete && rendered.invariantNames.contains(name) {
@@ -171,7 +164,7 @@ package enum GeneratedTLCOracle {
                     outcomes.contains(.violated) ? .violated : .satisfied
                 }
             }
-            guard scenario.expectations[property].map({ accepts($0, verdict) }) == true else {
+            guard scenario.expectations[property].map({ verdict.satisfies($0) }) == true else {
                 throw Error.expectationMismatch(name)
             }
             properties[name] = verdict
@@ -181,7 +174,7 @@ package enum GeneratedTLCOracle {
         if rendered.checksDeadlock {
             if graphComplete { deadlock = .satisfied }
             else if graphOutcome == .deadlock { deadlock = .violated }
-            else if decisiveName != nil { deadlock = nil }
+            else if let observedViolation, rendered.invariantNames.contains(observedViolation) { deadlock = nil }
             else {
                 let bundle = try rendered.tlaBundle(checking: [], checkDeadlock: true)
                 let retained = directory.appendingPathComponent("check-deadlock")
@@ -195,7 +188,7 @@ package enum GeneratedTLCOracle {
                 deadlock = try verdict(for: "deadlock", outcome: outcome, rendered: rendered,
                                        retained: retained.appendingPathComponent("tlc"))
             }
-            guard deadlock == nil || scenario.deadlockExpectation.map({ accepts($0, deadlock!) }) == true else {
+            guard deadlock == nil || scenario.deadlockExpectation.map({ deadlock!.satisfies($0) }) == true else {
                 throw Error.expectationMismatch("deadlock")
             }
         } else {
@@ -257,14 +250,6 @@ package enum GeneratedTLCOracle {
             throw Error.invalidOutcome("\(name): missing counterexample")
         }
         return rendered.reachabilityNames.contains(name) ? .reached : .violated
-    }
-
-    private static func accepts(_ expected: ValidationExpectation, _ actual: ValidationVerdict) -> Bool {
-        switch (expected, actual) {
-        case (.satisfied, .satisfied), (.satisfied, .reached),
-             (.violated, .violated), (.violated, .unreachable): true
-        default: false
-        }
     }
 
     package static func retainGeneratedInputs(_ bundle: TLAModuleBundle, in directory: URL) throws {

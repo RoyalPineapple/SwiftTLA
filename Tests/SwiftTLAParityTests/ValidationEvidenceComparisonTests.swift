@@ -41,6 +41,23 @@ struct ValidationEvidenceComparisonTests {
         #expect(!coverage.coversCompleteScenario)
     }
 
+    @Test("cached matching verdicts cannot override the scenario's expected outcome")
+    func staleExpectedOutcomeFails() throws {
+        let root = try fixture(scenarioName: "Selected")
+        defer { try? FileManager.default.removeItem(at: root) }
+        for path in ["native/report.json", "oracle/oracle.json"] {
+            let url = root.appendingPathComponent(path)
+            var report = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+            var properties = try #require(report["properties"] as? [String: String])
+            properties["Safe"] = "violated"
+            report["properties"] = properties
+            try JSONSerialization.data(withJSONObject: report).write(to: url)
+        }
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("scenario expected outcome")) {
+            _ = try compare(root)
+        }
+    }
+
     @Test("a verdict for a disabled deadlock check cannot establish parity")
     func unselectedDeadlockVerdictFails() throws {
         let root = try fixture()

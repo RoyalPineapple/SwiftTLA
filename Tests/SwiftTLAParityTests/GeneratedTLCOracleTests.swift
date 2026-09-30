@@ -4,6 +4,23 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct GeneratedTLCOracleTests {
+    @Test("expecting an invariant failure does not change TLC inputs or cache identity")
+    func expectationsDoNotSelectOracleChecks() throws {
+        let original = try #require(ConstantStateClaims.validationScenarios().first)
+        var expectations = original.expectations
+        expectations[.falseInvariant] = .satisfied
+        let changed = ConstantStateClaims.ValidationScenario(
+            name: original.name, configuration: original.configuration,
+            checking: original.checking, behavior: original.behavior,
+            expectations: expectations, deadlockExpectation: original.deadlockExpectation)
+        let pin = try testReferencePin()
+        let originalKey = try GeneratedTLCOracle.cacheKey(
+            scenario: original, id: "constant-state-claims-0", maximumStates: 10, pin: pin)
+        let changedKey = try GeneratedTLCOracle.cacheKey(
+            scenario: changed, id: "constant-state-claims-0", maximumStates: 10, pin: pin)
+        #expect(originalKey == changedKey)
+    }
+
     @Test("cached TLC evidence is bound to its scenario, exploration limit, and bridge producer")
     func cacheKeyRejectsDifferentScenarioLimitOrProducer() throws {
         let selected = try #require(modelValidationScenarios().first)

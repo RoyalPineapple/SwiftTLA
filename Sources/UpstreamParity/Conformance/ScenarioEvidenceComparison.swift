@@ -19,6 +19,21 @@ package enum ScenarioEvidenceComparison {
               Set(tlc.properties.keys) == Set(coverage.selectedProperties) else {
             throw ValidationEvidenceComparisonError.invalidEvidence("scenario check coverage")
         }
+        for (property, expected) in scenario.expectations {
+            guard let name = scenario.formalPropertyNames[property],
+                  let nativeVerdict = swift.properties[name], nativeVerdict.satisfies(expected),
+                  let oracleVerdict = tlc.properties[name], oracleVerdict.satisfies(expected) else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("scenario expected outcome")
+            }
+        }
+        if let expected = scenario.deadlockExpectation {
+            if let verdict = swift.deadlock, !verdict.satisfies(expected) {
+                throw ValidationEvidenceComparisonError.invalidEvidence("scenario expected deadlock")
+            }
+            if let verdict = tlc.deadlock, !verdict.satisfies(expected) {
+                throw ValidationEvidenceComparisonError.invalidEvidence("scenario expected deadlock")
+            }
+        }
         if !coverage.checksDeadlock && (swift.deadlock != nil || tlc.deadlock != nil) {
             throw ValidationEvidenceComparisonError.invalidEvidence("unselected deadlock verdict")
         }

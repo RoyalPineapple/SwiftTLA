@@ -6,6 +6,14 @@ package enum ValidationVerdict: String, Codable, Sendable {
     case violated
     case reached
     case unreachable
+
+    package func satisfies(_ expected: ValidationExpectation) -> Bool {
+        switch (expected, self) {
+        case (.satisfied, .satisfied), (.satisfied, .reached),
+             (.violated, .violated), (.violated, .unreachable): true
+        default: false
+        }
+    }
 }
 
 package struct NativeValidationReport: Codable, Sendable {
@@ -50,9 +58,6 @@ package enum NativeValidationRunner {
         let reachability = Set(Scenario.Machine.reachabilityProperties)
         let temporal = Set(try first.temporalProperties(checking: scenario.checking.properties).keys)
         let refinement = Set(Scenario.Machine.refinementProperties)
-        let expectedInvariantViolation = scenario.expectations.contains {
-            invariant.contains($0.key) && $0.value == .violated
-        }
         let supported = invariant.union(reachability).union(temporal).union(refinement)
         if let property = scenario.checking.properties.subtracting(supported).first {
             throw ExplorationError.unsupportedValidationProperty(names[property]!)
@@ -114,7 +119,7 @@ package enum NativeValidationRunner {
             } else {
                 throw ExplorationError.unsupportedValidationProperty(name)
             }
-            guard scenario.expectations[property].map({ accepts($0, verdict) }) == true else {
+            guard scenario.expectations[property].map({ verdict.satisfies($0) }) == true else {
                 throw NativeValidationRunnerError.expectationMismatch(name)
             }
             properties[name] = verdict
@@ -123,7 +128,7 @@ package enum NativeValidationRunner {
         if scenario.checking.checkDeadlock {
             if batch.deadlockFound { deadlock = .violated }
             else if complete { deadlock = .satisfied }
-            else if expectedInvariantViolation && !batch.violatedInvariants.isEmpty {
+            else if !batch.violatedInvariants.isEmpty {
                 deadlock = nil
             }
             else {
@@ -133,7 +138,7 @@ package enum NativeValidationRunner {
                     to: directory.appendingPathComponent("check-deadlock.bin"))
                 deadlock = isolated.deadlockFound ? .violated : .satisfied
             }
-            guard deadlock == nil || scenario.deadlockExpectation.map({ accepts($0, deadlock!) }) == true else {
+            guard deadlock == nil || scenario.deadlockExpectation.map({ deadlock!.satisfies($0) }) == true else {
                 throw NativeValidationRunnerError.expectationMismatch("deadlock")
             }
         } else {
@@ -152,11 +157,4 @@ package enum NativeValidationRunner {
         return report
     }
 
-    private static func accepts(_ expected: ValidationExpectation, _ actual: ValidationVerdict) -> Bool {
-        switch (expected, actual) {
-        case (.satisfied, .satisfied), (.satisfied, .reached),
-             (.violated, .violated), (.violated, .unreachable): true
-        default: false
-        }
-    }
 }
