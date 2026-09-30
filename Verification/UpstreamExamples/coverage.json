@@ -31,13 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "SingleLaneBridge completed hosted parity on 198bcaea; audit the next three candidates before selecting one implementation family",
+      "status": "Three pinned candidate families inspected; CigaretteSmokers selected for the next implementation slice after current PR-head admission",
       "candidates": [
         "specifications/ReadersWriters",
         "specifications/CigaretteSmokers",
         "specifications/barriers"
       ],
-      "scope": "The sole published SingleLaneBridge configuration has exact complete graph and selected-check parity on both hosted paths. The next three wave-B families are audit candidates, not selected or credited; inspect their pinned configurations, existing implementations, and concrete blockers before choosing one."
+      "scope": "CigaretteSmokers has two published configurations over one small finite transition system; its proof module has no standalone model. ReadersWriters additionally selects weak-fairness liveness over a queue, while barriers includes a 13-location PlusCal algorithm and refinement property. This selection confers no implementation or parity credit; the current frozen PR candidate must finish admission before corpus expansion."
     },
     "implementationFamiliesInProgress": 0,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
@@ -3226,8 +3226,8 @@
     {
       "path": "specifications/barriers",
       "name": "Barrier Synchronization",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned source, manifest, and three published configurations inspected; implementation and hosted parity pending",
+      "gap": "APBarrier and Barrier select N = 6 and abstract TypeOK; Barrier also checks BarrierProperty. Barriers selects N = 6, four invariants, and BSpec refinement over its 13-location reusable-barrier algorithm. All three configured roots need model-owned scenarios, complete comparison, and hosted evidence. No existing Swift implementation or evidence is credited.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -4041,8 +4041,8 @@
     {
       "path": "specifications/CigaretteSmokers",
       "name": "The Cigarette Smokers Problem",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned source, manifest, both published configurations, and proof-module role inspected; implementation and hosted parity pending",
+      "gap": "The exhaustive configuration binds three ingredients and three two-element offers, selects Spec, TypeOK, and AtMostOne; the manifest reports six distinct states. The annotation-wrapper configuration binds IngredientsVal and OffersVal and selects the same checks. Implement one typed model with both exact scenario bindings, function-valued smoker records, the unique CHOOSE result, and default deadlock behavior; then prove both comparison paths on a green hosted SHA. No implementation or equivalence is credited yet.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -4054,10 +4054,10 @@
         },
         {
           "path": "specifications/CigaretteSmokers/CigaretteSmokers_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "The module extends CigaretteSmokers and TLAPS to prove TypeOK and AtMostOne. Its manifest has proof work but no model configuration, and it defines no separate transition system. Preserve it as a pinned reference; no TLC graph or TLAPS proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/CigaretteSmokers/CigaretteSmokers.tla",
@@ -8186,8 +8186,8 @@
     {
       "path": "specifications/ReadersWriters",
       "name": "The Readers-Writers Problem",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned source, manifest, and both published configurations inspected; implementation and hosted parity pending",
+      "gap": "APReadersWriters selects NumActors = 3, INIT/NEXT, and Safety only. MC binds NumActors through n = 3 and selects fair Spec, TypeOK, Safety, and Liveness; the manifest reports 21,527 distinct states. Queue ordering, per-actor weak fairness, and universal recurring-progress checks need exact native and TLC parity. No implementation or evidence is credited.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -8206,17 +8206,17 @@
         },
         {
           "path": "specifications/ReadersWriters/ReadersWriters_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "The manifest assigns this module TLAPS proof work and no model configuration. It extends ReadersWriters and adds proofs, not another configured transition system. Preserve it as a pinned reference; no TLAPS proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ReadersWriters/ReadersWriters.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "shared model dependency",
+          "reason": "MC extends this base module and APReadersWriters instantiates it. The manifest gives it no standalone configuration; its Init, Next, fairness, invariants, and liveness are covered by the two configured roots, not an invented third model.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
