@@ -61,13 +61,13 @@
   },
   "ci": {
     "prHeadFullMatrix": {
-      "sourceSHA": "198bcaeacf4e458551626c4362f2f6e603334a58",
-      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36715713325",
-      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36715713363",
+      "sourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
+      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669789",
+      "independentValidation": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736",
       "observedStatus": "completed",
       "conclusion": "success",
-      "jobs": "All 140 required independent-validation jobs passed and the optional focused diagnostic was skipped. The independent admission gate and all five ordinary CI jobs passed.",
-      "scope": "The full hosted matrix checked generated TLA against pinned upstream TLC and generated Swift machines against generated-TLA TLC. SingleLaneBridge's sole published configuration retained exact complete comparisons of one initial state, 3,605 states, 13,128 labeled edges, Invariants, CarsInBridgeExitBridge, CarsEnterBridge, and default deadlock. This verified PR head does not mean all 78 families or 19 DSL criteria are complete."
+      "jobs": "All 150 required independent-validation jobs passed and the optional comparison replay diagnostic was skipped. The independent admission gate and all five ordinary CI jobs passed.",
+      "scope": "Both CigaretteSmokers configurations retained exact complete generated-TLA versus pinned-upstream and native-Swift versus generated-TLA comparisons, including initial states, labeled graphs, TypeOK, AtMostOne, and default deadlock. This verified revision does not establish completion of all 78 families or 19 DSL criteria."
     },
     "bakeryBoulangerieFamilyCandidate": {
       "sourceSHA": "fb1439bb9f519d6df0a82cfebedb3d1f46d102f8",
@@ -4041,8 +4041,8 @@
     {
       "path": "specifications/CigaretteSmokers",
       "name": "The Cigarette Smokers Problem",
-      "audit": "Both pinned configurations have a model-owned DSL implementation and exact source pins; hosted parity pending",
-      "gap": "The model preserves the two ingredient encodings, function-valued smoker records, unique CHOOSE result, TypeOK, AtMostOne, and default deadlock selection. A focused local native check observed three initial states, six total states, and twelve edges in each configuration. That diagnostic does not establish generated-TLA-versus-upstream or native-versus-generated-TLA parity; both require complete hosted evidence on the same pushed SHA.",
+      "audit": "complete at verified revision",
+      "gap": "None for the two pinned configurations at e9891d0b. Both complete comparison paths and all selected verdicts passed in the full hosted matrix with ordinary CI green. All module dispositions and legacy cleanup are complete. CigaretteSmokers_proof is a proof companion without a TLC configuration; no TLAPS proof-validation claim is made. Later source changes still require final-head admission.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -4072,7 +4072,7 @@
           "module": "specifications/CigaretteSmokers/APCigaretteSmokers.tla",
           "configuration": "specifications/CigaretteSmokers/APCigaretteSmokers.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [{
@@ -4080,13 +4080,32 @@
             "scenario": "APCigaretteSmokers",
             "caseID": "ap-cigarette-smokers"
           }],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736/artifacts/11124139533",
+              "artifactDigest": "sha256:3fdfcd492222c60aed8e11de7658d102a9bd9f649c2b24fdef3d328092be7725",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Full-matrix generated TLA versus pinned APCigaretteSmokers TLC is exact for complete initial states and labeled graph. TypeOK, AtMostOne, and default deadlock are satisfied on both sides; no model property is omitted. The reference module and imported CigaretteSmokers hashes match source pins."
+            },
+            {
+              "sourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736/artifacts/11125633542",
+              "artifactDigest": "sha256:118999cadaf0cedfcd6bd7f7cd79bcf3a8b46a53cb9975e9886c4c606e53047d",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Full-matrix generated Swift versus generated-TLA TLC is exact: three initial states, six states, twelve labeled edges, TypeOK, AtMostOne, and default deadlock satisfied. The scenario selects every declared property."
+            }
+          ]
         },
         {
           "module": "specifications/CigaretteSmokers/CigaretteSmokers.tla",
           "configuration": "specifications/CigaretteSmokers/CigaretteSmokers.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{
@@ -4094,7 +4113,26 @@
             "scenario": "CigaretteSmokers",
             "caseID": "cigarette-smokers"
           }],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736/artifacts/11123389880",
+              "artifactDigest": "sha256:21fe72285faa0cad87798f23b280c93b82c220fe6c8e2b57182a9b790afc295a",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Full-matrix generated TLA versus pinned CigaretteSmokers TLC is exact for complete initial states and labeled graph. TypeOK, AtMostOne, and default deadlock are satisfied on both sides; no model property is omitted. The reference module hash matches its source pin."
+            },
+            {
+              "sourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736/artifacts/11125333783",
+              "artifactDigest": "sha256:613149eaa77aa36a13a249a4576e7624792c2b2e3c0d5a55cf3c30d45e1546a0",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Full-matrix generated Swift versus generated-TLA TLC is exact: three initial states, six states, twelve labeled edges, TypeOK, AtMostOne, and default deadlock satisfied. The scenario selects every declared property."
+            }
+          ]
         }
       ],
       "partialCases": []
