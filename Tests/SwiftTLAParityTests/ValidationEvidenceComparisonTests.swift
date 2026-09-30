@@ -86,17 +86,31 @@ struct ValidationEvidenceComparisonTests {
         }
     }
 
-    @Test("a complete graph may use the separate check-free TLC input")
-    func completeCheckFreeGraphInputMatches() throws {
+    @Test("a check-free graph requires the retained checked pass")
+    func completeCheckFreeGraphRequiresCheckedPass() throws {
         let root = try fixture(scenarioName: "Selected")
         defer { try? FileManager.default.removeItem(at: root) }
         let scenario = try #require(SelectedChecksModel.validationScenarios().first { $0.name == "Selected" })
         let bundle = try scenario.render().tlaBundle(checking: [], checkDeadlock: false)
         let url = root.appendingPathComponent("oracle/tlc-graph/tlc-process.json")
         var process = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        var checkedProcess = process
+        checkedProcess["invocation"] = ["exitStatus": 12]
         process["inputs"] = inputHashes(for: bundle)
         process["configuration"] = bundle.cfg
         try JSONSerialization.data(withJSONObject: process).write(to: url)
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("missing checked TLC pass")) {
+            _ = try compare(root)
+        }
+        let checked = root.appendingPathComponent("oracle/tlc-check")
+        try FileManager.default.createDirectory(at: checked.appendingPathComponent("logs"),
+            withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: checkedProcess)
+            .write(to: checked.appendingPathComponent("tlc-process.json"))
+        try Data("Error: Invariant Reached is violated.\n".utf8)
+            .write(to: checked.appendingPathComponent("logs/tlc.stdout.log"))
+        try Data(#"{"vars":["value","pc"],"counterexample":{"state":[[1,{"value":0,"pc":"advance"}],[2,{"value":1,"pc":"advance"}]],"action":[[[1,{"value":0,"pc":"advance"}],{"name":"advance"},[2,{"value":1,"pc":"advance"}]]]}}"#.utf8)
+            .write(to: checked.appendingPathComponent("counterexample.json"))
         #expect(try compare(root).graphCompared)
     }
 
@@ -249,6 +263,24 @@ struct ValidationEvidenceComparisonTests {
         #expect(throws: TLCTraceError.self) { _ = try compare(root) }
     }
 
+    @Test("a complete graph does not excuse an impossible retained TLC counterexample")
+    func impossibleCheckedWitnessFails() throws {
+        let root = try fixture(scenarioName: "All")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let checked = root.appendingPathComponent("oracle/tlc-check")
+        try FileManager.default.createDirectory(at: checked.appendingPathComponent("logs"),
+            withIntermediateDirectories: true)
+        let graphProcess = root.appendingPathComponent("oracle/tlc-graph/tlc-process.json")
+        var process = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: graphProcess)) as? [String: Any])
+        process["invocation"] = ["exitStatus": 12]
+        try JSONSerialization.data(withJSONObject: process).write(to: checked.appendingPathComponent("tlc-process.json"))
+        try Data("Error: Invariant InitiallyZero is violated.\n".utf8)
+            .write(to: checked.appendingPathComponent("logs/tlc.stdout.log"))
+        try Data(#"{"vars":["value","pc"],"counterexample":{"state":[[1,{"value":0,"pc":"advance"}],[2,{"value":2,"pc":"advance"}]],"action":[[[1,{"value":0,"pc":"advance"}],{"name":"advance"},[2,{"value":2,"pc":"advance"}]]]}}"#.utf8)
+            .write(to: checked.appendingPathComponent("counterexample.json"))
+        #expect(throws: TLCTraceError.self) { _ = try compare(root) }
+    }
+
     @Test("early reachability and deadlock witnesses replay against generated transitions")
     func otherPartialWitnessesReplay() throws {
         let root = try fixture(graphComplete: false, tlcExitStatus: 12)
@@ -261,14 +293,14 @@ struct ValidationEvidenceComparisonTests {
         try Data("Error: Invariant Reached is violated.\n".utf8).write(to: stdout)
         let reachability = try JSONDecoder().decode(GeneratedTLCOracleReport.self,
             from: Data(contentsOf: reportURL))
-        try PartialWitnessVerification.verify(scenario: scenario, report: reachability,
+        try TLCWitnessVerification.verifyPartial(scenario: scenario, report: reachability,
             exitStatus: 12, oracle: oracle, rendered: rendered)
 
         var deadlockJSON = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: reportURL)) as? [String: Any])
         deadlockJSON["deadlock"] = "violated"
         let deadlock = try JSONDecoder().decode(GeneratedTLCOracleReport.self,
             from: JSONSerialization.data(withJSONObject: deadlockJSON))
-        try PartialWitnessVerification.verify(scenario: scenario, report: deadlock,
+        try TLCWitnessVerification.verifyPartial(scenario: scenario, report: deadlock,
             exitStatus: 11, oracle: oracle, rendered: rendered)
     }
 

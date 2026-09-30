@@ -129,6 +129,10 @@ package enum ValidationEvidenceComparison {
             let tlcExitStatus = try verifyTLCProcess(
                 oracle.appendingPathComponent("tlc-graph/tlc-process.json"), report: tlc)
             if compareGraph {
+                if FileManager.default.fileExists(atPath: oracle.appendingPathComponent("tlc-check").path) {
+                    try TLCWitnessVerification.verifyChecked(scenario: scenario, report: tlc,
+                        caseID: caseID, oracle: oracle, rendered: scenario.render())
+                }
                 let tlcRoot = directory.appendingPathComponent("tlc")
                 try FileManager.default.createDirectory(at: tlcRoot, withIntermediateDirectories: false)
                 spoolDirectories.append(tlcRoot)
@@ -143,7 +147,7 @@ package enum ValidationEvidenceComparison {
                         swiftRoot: swiftRoot, tlcRoot: tlcRoot)
                 }
             } else {
-                try PartialWitnessVerification.verify(scenario: scenario, report: tlc,
+                try TLCWitnessVerification.verifyPartial(scenario: scenario, report: tlc,
                     exitStatus: tlcExitStatus, oracle: oracle, rendered: scenario.render())
             }
         }

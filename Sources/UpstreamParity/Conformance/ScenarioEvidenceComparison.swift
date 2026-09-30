@@ -17,9 +17,7 @@ package enum ScenarioEvidenceComparison {
             rendered.invariantNames.union(rendered.reachabilityNames))
         let checkedBundle = try rendered.tlaBundle(checking: graphChecks,
             checkDeadlock: rendered.checksDeadlock)
-        let graphBundles = tlc.graphComplete
-            ? [checkedBundle, try rendered.tlaBundle(checking: [], checkDeadlock: false)]
-            : [checkedBundle]
+        let checkFreeBundle = try rendered.tlaBundle(checking: [], checkDeadlock: false)
         let processURL = oracle.appendingPathComponent("tlc-graph/tlc-process.json")
         let process = try JSONSerialization.jsonObject(with: Data(contentsOf: processURL)) as? [String: Any]
         let inputs = process?["inputs"] as? [[String: String]]
@@ -32,15 +30,22 @@ package enum ScenarioEvidenceComparison {
         guard process?["caseID"] as? String == caseID,
               let inputs, let inputPairs, inputPairs.count == inputs.count,
               Set(inputPairs.map(\.0)).count == inputPairs.count,
-              let configuration = process?["configuration"] as? String,
-              graphBundles.contains(where: { bundle in
-                  configuration == bundle.cfg &&
-                    Dictionary(uniqueKeysWithValues: inputPairs) ==
-                      Dictionary(uniqueKeysWithValues: bundleInputJSON(bundle).map {
-                          ($0["file"]!, $0["sha256"]!)
-                      })
-              }) else {
+              let configuration = process?["configuration"] as? String else {
             throw ValidationEvidenceComparisonError.invalidEvidence("generated TLC graph input")
+        }
+        let inputMap = Dictionary(uniqueKeysWithValues: inputPairs)
+        func matches(_ bundle: TLAModuleBundle) -> Bool {
+            configuration == bundle.cfg && inputMap == Dictionary(uniqueKeysWithValues:
+                bundleInputJSON(bundle).map { ($0["file"]!, $0["sha256"]!) })
+        }
+        let checkedMatches = matches(checkedBundle)
+        let checkFreeMatches = tlc.graphComplete && matches(checkFreeBundle)
+        guard checkedMatches || checkFreeMatches else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("generated TLC graph input")
+        }
+        if checkFreeMatches && !checkedMatches &&
+            !FileManager.default.fileExists(atPath: oracle.appendingPathComponent("tlc-check/tlc-process.json").path) {
+            throw ValidationEvidenceComparisonError.invalidEvidence("missing checked TLC pass")
         }
         guard swift.scenario == scenario.name,
               swift.deadlockSelected == coverage.checksDeadlock,
