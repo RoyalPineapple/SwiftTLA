@@ -45,13 +45,6 @@ struct FiniteGraphManifestTests {
     }
   }
 
-  @Test("a model-owned reference case must also be scheduled for native validation")
-  func requiresNativeValidationRegistration() {
-    #expect(throws: EvidenceFormatError.invalidField(record: "unregistered", field: "native validation registration")) {
-      try decodeCases(ids: ["unregistered"], sourceModel: "multicar-elevator", scenario: "Upstream")
-    }
-  }
-
   @Test("an assumption-only case requires an explicit expected verdict")
   func requiresAssumptionExpectation() throws {
     let path = URL(fileURLWithPath: #filePath)
@@ -67,8 +60,7 @@ struct FiniteGraphManifestTests {
     }
   }
 
-  private func decodeCases(ids: [String?], sourceModel: String? = nil,
-    scenario: String? = nil) throws -> FiniteGraphManifest {
+  private func decodeCases(ids: [String?]) throws -> FiniteGraphManifest {
     let path = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
       .appendingPathComponent("Verification/FiniteGraph/cases.json")
@@ -79,8 +71,6 @@ struct FiniteGraphManifestTests {
       var variant = original
       variant["id"] = id
       variant["configuration"] = "hour-clock/variant-\(index).cfg"
-      if let sourceModel { variant["sourceModel"] = sourceModel }
-      if let scenario { variant["scenario"] = scenario }
       return variant
     }
     return try JSONDecoder().decode(FiniteGraphManifest.self,

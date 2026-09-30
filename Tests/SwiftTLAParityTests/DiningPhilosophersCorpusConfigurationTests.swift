@@ -57,10 +57,10 @@ struct DiningPhilosophersCorpusConfigurationTests {
         let cases = try #require(source["cases"] as? [[String: Any]])
         var declaration = try #require(cases.first { $0["id"] as? String == "ap-dining-philosophers" })
         declaration["scenario"] = name
-        let decoded = try JSONDecoder().decode(FiniteGraphManifest.Case.self,
-            from: JSONSerialization.data(withJSONObject: declaration))
         #expect(throws: EvidenceFormatError.invalidField(record: "ap-dining-philosophers", field: "model-owned scenario")) {
-            try decoded.resolveScenario()
+            let decoded = try JSONDecoder().decode(FiniteGraphManifest.Case.self,
+                from: JSONSerialization.data(withJSONObject: declaration))
+            _ = try decoded.resolveScenario()
         }
     }
 }
