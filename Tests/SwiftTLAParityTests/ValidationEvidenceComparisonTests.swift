@@ -56,6 +56,10 @@ struct ValidationEvidenceComparisonTests {
         #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("scenario expected outcome")) {
             _ = try compare(root)
         }
+        let report = try #require(JSONSerialization.jsonObject(with: Data(contentsOf:
+            root.appendingPathComponent("comparison/comparison.json"))) as? [String: Any])
+        #expect(report["result"] as? String == "exact")
+        #expect(report["graphCompared"] as? Bool == true)
     }
 
     @Test("a verdict for a disabled deadlock check cannot establish parity")

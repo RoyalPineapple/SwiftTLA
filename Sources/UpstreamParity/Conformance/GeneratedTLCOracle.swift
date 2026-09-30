@@ -18,7 +18,6 @@ package enum GeneratedTLCOracle {
     package enum Error: Swift.Error, Equatable {
         case checkingMismatch
         case invalidOutcome(String)
-        case expectationMismatch(String)
         case unsafeModuleName(String)
     }
 
@@ -164,9 +163,6 @@ package enum GeneratedTLCOracle {
                     outcomes.contains(.violated) ? .violated : .satisfied
                 }
             }
-            guard scenario.expectations[property].map({ verdict.satisfies($0) }) == true else {
-                throw Error.expectationMismatch(name)
-            }
             properties[name] = verdict
         }
 
@@ -187,9 +183,6 @@ package enum GeneratedTLCOracle {
                                       process: process)
                 deadlock = try verdict(for: "deadlock", outcome: outcome, rendered: rendered,
                                        retained: retained.appendingPathComponent("tlc"))
-            }
-            guard deadlock == nil || scenario.deadlockExpectation.map({ deadlock!.satisfies($0) }) == true else {
-                throw Error.expectationMismatch("deadlock")
             }
         } else {
             deadlock = nil

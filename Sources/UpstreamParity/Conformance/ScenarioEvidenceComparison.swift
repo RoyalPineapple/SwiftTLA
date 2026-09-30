@@ -19,6 +19,18 @@ package enum ScenarioEvidenceComparison {
               Set(tlc.properties.keys) == Set(coverage.selectedProperties) else {
             throw ValidationEvidenceComparisonError.invalidEvidence("scenario check coverage")
         }
+        if !coverage.checksDeadlock && (swift.deadlock != nil || tlc.deadlock != nil) {
+            throw ValidationEvidenceComparisonError.invalidEvidence("unselected deadlock verdict")
+        }
+        if coverage.checksDeadlock &&
+            ((swift.graphComplete && swift.deadlock == nil) || (tlc.graphComplete && tlc.deadlock == nil)) {
+            throw ValidationEvidenceComparisonError.invalidEvidence("missing deadlock verdict")
+        }
+        let result = try ValidationEvidenceComparison.compare(
+            scenario: scenario, caseID: caseID, native: native, oracle: oracle,
+            actions: actions, to: directory, spoolExecutable: spoolExecutable)
+        try coverage.attach(to: directory.appendingPathComponent("comparison.json"))
+        guard result.result == "exact" else { return result }
         for (property, expected) in scenario.expectations {
             guard let name = scenario.formalPropertyNames[property],
                   let nativeVerdict = swift.properties[name], nativeVerdict.satisfies(expected),
@@ -34,17 +46,6 @@ package enum ScenarioEvidenceComparison {
                 throw ValidationEvidenceComparisonError.invalidEvidence("scenario expected deadlock")
             }
         }
-        if !coverage.checksDeadlock && (swift.deadlock != nil || tlc.deadlock != nil) {
-            throw ValidationEvidenceComparisonError.invalidEvidence("unselected deadlock verdict")
-        }
-        if coverage.checksDeadlock &&
-            ((swift.graphComplete && swift.deadlock == nil) || (tlc.graphComplete && tlc.deadlock == nil)) {
-            throw ValidationEvidenceComparisonError.invalidEvidence("missing deadlock verdict")
-        }
-        let result = try ValidationEvidenceComparison.compare(
-            scenario: scenario, caseID: caseID, native: native, oracle: oracle,
-            actions: actions, to: directory, spoolExecutable: spoolExecutable)
-        try coverage.attach(to: directory.appendingPathComponent("comparison.json"))
         return result
     }
 }

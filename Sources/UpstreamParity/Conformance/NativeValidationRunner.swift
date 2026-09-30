@@ -31,7 +31,6 @@ package struct NativeValidationReport: Codable, Sendable {
 
 package enum NativeValidationRunnerError: Error, Equatable {
     case invalidCoverage(String)
-    case expectationMismatch(String)
     case unavailable(String)
 }
 
@@ -119,9 +118,6 @@ package enum NativeValidationRunner {
             } else {
                 throw ExplorationError.unsupportedValidationProperty(name)
             }
-            guard scenario.expectations[property].map({ verdict.satisfies($0) }) == true else {
-                throw NativeValidationRunnerError.expectationMismatch(name)
-            }
             properties[name] = verdict
         }
         let deadlock: ValidationVerdict?
@@ -137,9 +133,6 @@ package enum NativeValidationRunner {
                     checking: .init(properties: [], checkDeadlock: true),
                     to: directory.appendingPathComponent("check-deadlock.bin"))
                 deadlock = isolated.deadlockFound ? .violated : .satisfied
-            }
-            guard deadlock == nil || scenario.deadlockExpectation.map({ deadlock!.satisfies($0) }) == true else {
-                throw NativeValidationRunnerError.expectationMismatch("deadlock")
             }
         } else {
             deadlock = nil

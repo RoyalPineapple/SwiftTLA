@@ -150,7 +150,11 @@ struct MachineValidationTests {
     func resolvesChecksAfterEarlyViolation() throws {
         let scenario = try ConstantStateClaims.validationScenarios()[0]
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
+        let changedDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+            try? FileManager.default.removeItem(at: changedDirectory)
+        }
         let report = try NativeValidationRunner.run(scenario: scenario, caseID: "constant-state-claims-0",
             maximumStates: 10, to: directory)
         #expect(!report.graphComplete)
@@ -162,6 +166,19 @@ struct MachineValidationTests {
         #expect(report.deadlock == nil)
         #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("check-absentWitness.bin").path))
         #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("report.json").path))
+
+        var expectations = scenario.expectations
+        expectations[.falseInvariant] = .satisfied
+        let changed = ConstantStateClaims.ValidationScenario(
+            name: scenario.name, configuration: scenario.configuration,
+            checking: scenario.checking, behavior: scenario.behavior,
+            expectations: expectations, deadlockExpectation: scenario.deadlockExpectation)
+        let changedReport = try NativeValidationRunner.run(
+            scenario: changed, caseID: "constant-state-claims-0", maximumStates: 10,
+            to: changedDirectory)
+        #expect(changedReport.properties == report.properties)
+        #expect(changedReport.graphComplete == report.graphComplete)
+        #expect(FileManager.default.fileExists(atPath: changedDirectory.appendingPathComponent("report.json").path))
     }
 
     @Test("selected temporal and refinement checks use the generated-machine graph")
