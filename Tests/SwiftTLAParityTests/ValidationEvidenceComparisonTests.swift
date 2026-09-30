@@ -75,11 +75,21 @@ struct ValidationEvidenceComparisonTests {
         #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
     }
 
-    @Test("a complete selected deadlock check requires a verdict")
+    @Test("a selected deadlock check requires a verdict even after an early counterexample")
     func missingSelectedDeadlockVerdictFails() throws {
-        let root = try fixture(scenarioName: "All")
-        defer { try? FileManager.default.removeItem(at: root) }
-        #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
+        for graphComplete in [true, false] {
+            let root = try fixture(graphComplete: graphComplete,
+                tlcExitStatus: graphComplete ? 0 : 12,
+                scenarioName: "All")
+            defer { try? FileManager.default.removeItem(at: root) }
+            for path in ["native/report.json", "oracle/oracle.json"] {
+                let url = root.appendingPathComponent(path)
+                var report = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+                report.removeValue(forKey: "deadlock")
+                try JSONSerialization.data(withJSONObject: report).write(to: url)
+            }
+            #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
+        }
     }
 
     @Test("a changed state fails despite matching counts")
@@ -156,11 +166,19 @@ struct ValidationEvidenceComparisonTests {
         #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
     }
 
-    @Test("a deadlock exit cannot certify a safety counterexample")
+    @Test("a deadlock exit must agree with the reported deadlock verdict")
     func mismatchedPartialProcessFails() throws {
         let root = try fixture(graphComplete: false, tlcExitStatus: 11)
         defer { try? FileManager.default.removeItem(at: root) }
-        #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
+        for path in ["native/report.json", "oracle/oracle.json"] {
+            let url = root.appendingPathComponent(path)
+            var report = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+            report["deadlock"] = "satisfied"
+            try JSONSerialization.data(withJSONObject: report).write(to: url)
+        }
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("TLC process outcome")) {
+            _ = try compare(root)
+        }
     }
 
     @Test("a decisive safety exit can certify verdict parity without claiming graph parity")
@@ -276,18 +294,22 @@ struct ValidationEvidenceComparisonTests {
         let allVerdicts = ["InitiallyZero": "violated", "Reached": "reached",
             "Safe": "satisfied", "StaysZero": "violated"]
         let verdicts = omitSelectedVerdicts ? [:] : allVerdicts.filter { selected.contains($0.key) }
-        let nativeReport: [String: Any] = [
+        var nativeReport: [String: Any] = [
             "schema": "swifttla.native-validation-report", "scenario": name, "maximumStates": 100,
             "graphComplete": graphComplete, "initialStates": 1, "states": 2,
             "edges": edgeCount, "properties": verdicts,
             "deadlockSelected": scenario.checking.checkDeadlock
         ]
-        let oracleReport: [String: Any] = [
+        var oracleReport: [String: Any] = [
             "schema": "swifttla.generated-tlc-oracle", "caseID": "fixture",
             "scenario": name, "maximumStates": 100, "graphComplete": graphComplete,
             "graphInputSHA256": String(repeating: "0", count: 64),
             "properties": verdicts, "deadlockSelected": scenario.checking.checkDeadlock
         ]
+        if scenario.checking.checkDeadlock {
+            nativeReport["deadlock"] = "violated"
+            oracleReport["deadlock"] = "violated"
+        }
         try JSONSerialization.data(withJSONObject: nativeReport).write(to: native.appendingPathComponent("report.json"))
         try JSONSerialization.data(withJSONObject: oracleReport).write(
             to: root.appendingPathComponent("oracle/oracle.json"))

@@ -47,6 +47,9 @@ package enum GeneratedTLCOracle {
         let graph = try inputIdentity(
             bundle: rendered.tlaBundle(checking: graphChecks, checkDeadlock: rendered.checksDeadlock),
             pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .finiteGraph)
+        let fullGraph = try inputIdentity(
+            bundle: rendered.tlaBundle(checking: [], checkDeadlock: false),
+            pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .finiteGraph)
         var checks: [[String: Any]] = []
         for name in selected.sorted() {
             let bundles = try rendered.temporalObligationBundles(checking: name)
@@ -61,11 +64,12 @@ package enum GeneratedTLCOracle {
                 pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck)
             : nil
         let identity: [String: Any] = [
-            "schema": "swifttla.oracle-cache-key-v1",
+            "schema": "swifttla.oracle-cache-key-v2",
             "caseID": id,
             "scenario": scenario.name,
             "maximumStates": maximumStates,
             "graph": graph,
+            "fullGraph": fullGraph,
             "checks": checks,
             "deadlockInput": deadlockInput ?? NSNull(),
             "actions": rendered.actions.sorted {
@@ -103,22 +107,20 @@ package enum GeneratedTLCOracle {
         let graphBundle = try rendered.tlaBundle(checking: graphChecks,
                                                  checkDeadlock: rendered.checksDeadlock)
         try retainGeneratedInputs(graphBundle, in: directory.appendingPathComponent("generated"))
-        let graphIdentity = try inputIdentity(bundle: graphBundle, pin: pin,
-                                              arguments: ["-workers", "1", "-fp", "1"],
-                                              invocation: .finiteGraph)
         let work = directory.appendingPathComponent("work")
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: false)
-        let graphOutcome = try run(bundle: graphBundle, id: id, maximumStates: maximumStates,
+        let checkedRetained = directory.appendingPathComponent("tlc-check")
+        let checkedOutcome = try run(bundle: graphBundle, id: id, maximumStates: maximumStates,
                                    timeout: timeout, tools: tools, pin: pin,
-                                   workRoot: work, retained: directory.appendingPathComponent("tlc-graph"),
+                                   workRoot: work, retained: checkedRetained,
                                    invocation: .finiteGraph, renderedActions: rendered.actions, process: process)
-        let graphComplete = graphOutcome == .completed
-        guard graphComplete || graphOutcome == .safetyViolation || graphOutcome == .deadlock else {
-            throw Error.invalidOutcome("graph pass: \(graphOutcome)")
+        guard checkedOutcome == .completed || checkedOutcome == .safetyViolation
+            || checkedOutcome == .deadlock else {
+            throw Error.invalidOutcome("checked graph pass: \(checkedOutcome)")
         }
         let observedViolation: String?
-        if graphOutcome == .safetyViolation {
-            let stdout = try String(contentsOf: directory.appendingPathComponent("tlc-graph/logs/tlc.stdout.log"),
+        if checkedOutcome == .safetyViolation {
+            let stdout = try String(contentsOf: checkedRetained.appendingPathComponent("logs/tlc.stdout.log"),
                 encoding: .utf8)
             let errors = Set(stdout.split(whereSeparator: \.isNewline).map(String.init))
             let matches = graphChecks.filter { name in
@@ -131,15 +133,39 @@ package enum GeneratedTLCOracle {
             observedViolation = nil
         }
 
+        let graphRetained = directory.appendingPathComponent("tlc-graph")
+        let graphIdentity: String
+        if checkedOutcome == .completed {
+            try FileManager.default.moveItem(at: checkedRetained, to: graphRetained)
+            graphIdentity = try inputIdentity(bundle: graphBundle, pin: pin,
+                arguments: ["-workers", "1", "-fp", "1"], invocation: .finiteGraph)
+        } else {
+            let fullBundle = try rendered.tlaBundle(checking: [], checkDeadlock: false)
+            try FileManager.default.moveItem(
+                at: directory.appendingPathComponent("generated"),
+                to: directory.appendingPathComponent("checked-graph-generated"))
+            try retainGeneratedInputs(fullBundle, in: directory.appendingPathComponent("generated"))
+            graphIdentity = try inputIdentity(bundle: fullBundle, pin: pin,
+                arguments: ["-workers", "1", "-fp", "1"], invocation: .finiteGraph)
+            let fullOutcome = try run(bundle: fullBundle, id: id, maximumStates: maximumStates,
+                timeout: timeout, tools: tools, pin: pin, workRoot: work, retained: graphRetained,
+                invocation: .finiteGraph, renderedActions: rendered.actions, process: process)
+            guard fullOutcome == .completed else {
+                throw Error.invalidOutcome("full graph pass: \(fullOutcome)")
+            }
+        }
+
         var properties: [String: ValidationVerdict] = [:]
         for property in scenario.checking.properties.sorted(by: { names[$0]! < names[$1]! }) {
             let name = names[property]!
             let verdict: ValidationVerdict
             if name == observedViolation {
-                verdict = try Self.verdict(for: name, outcome: graphOutcome,
-                    rendered: rendered, retained: directory.appendingPathComponent("tlc-graph"))
-            } else if graphComplete && rendered.invariantNames.contains(name) {
+                verdict = try Self.verdict(for: name, outcome: checkedOutcome,
+                    rendered: rendered, retained: checkedRetained)
+            } else if checkedOutcome == .completed && rendered.invariantNames.contains(name) {
                 verdict = .satisfied
+            } else if checkedOutcome == .completed && rendered.reachabilityNames.contains(name) {
+                verdict = .unreachable
             } else {
                 let selectedBundles = try rendered.temporalObligationBundles(checking: name)
                     ?? [rendered.tlaBundle(checking: [name], checkDeadlock: false)]
@@ -168,10 +194,11 @@ package enum GeneratedTLCOracle {
 
         let deadlock: ValidationVerdict?
         if rendered.checksDeadlock {
-            if graphComplete { deadlock = .satisfied }
-            else if graphOutcome == .deadlock { deadlock = .violated }
-            else if let observedViolation, rendered.invariantNames.contains(observedViolation) { deadlock = nil }
-            else {
+            if checkedOutcome == .completed { deadlock = .satisfied }
+            else if checkedOutcome == .deadlock {
+                deadlock = try verdict(for: "deadlock", outcome: checkedOutcome,
+                    rendered: rendered, retained: checkedRetained)
+            } else {
                 let bundle = try rendered.tlaBundle(checking: [], checkDeadlock: true)
                 let retained = directory.appendingPathComponent("check-deadlock")
                 try FileManager.default.createDirectory(at: retained, withIntermediateDirectories: false)
@@ -191,7 +218,7 @@ package enum GeneratedTLCOracle {
         let report = GeneratedTLCOracleReport(
             schema: "swifttla.generated-tlc-oracle", caseID: id, scenario: scenario.name,
             maximumStates: maximumStates,
-            graphComplete: graphComplete, graphInputSHA256: graphIdentity,
+            graphComplete: true, graphInputSHA256: graphIdentity,
             properties: properties, deadlock: deadlock,
             deadlockSelected: rendered.checksDeadlock)
         let encoder = JSONEncoder()

@@ -34,8 +34,7 @@ package enum NativeValidationRunnerError: Error, Equatable {
     case unavailable(String)
 }
 
-/// One generated-machine validation pass, with isolated follow-up runs only
-/// when a decisive early result leaves another selected check unresolved.
+/// One exhaustive generated-machine pass records the graph and safety outcomes.
 package enum NativeValidationRunner {
     package static func run<Scenario: ModelValidationScenario>(
         scenario: Scenario, caseID: String, maximumStates: Int, to directory: URL
@@ -64,14 +63,11 @@ package enum NativeValidationRunner {
         let safety = scenario.checking.properties.intersection(invariant.union(reachability))
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let batch = try MachineValidationEvidence.write(
-            scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: true,
-            stopOnReachability: !safety.intersection(reachability).isEmpty,
+            scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: false,
             checking: .init(properties: safety, checkDeadlock: scenario.checking.checkDeadlock),
             to: directory.appendingPathComponent("machine.bin"))
-        let complete: Bool
-        switch batch.completion {
-        case .exhausted: complete = true
-        case .decisiveViolation, .decisiveReachability: complete = false
+        guard case .exhausted = batch.completion else {
+            throw NativeValidationRunnerError.unavailable("complete graph")
         }
         var temporalResults: [Scenario.Property: TemporalAnalysis<Scenario.Machine.Snapshot, Scenario.Machine.Action?>] = [:]
         var refinementFailures: [Scenario.Property: RefinementFailure<Scenario.Machine.Snapshot, Scenario.Machine.Action>] = [:]
@@ -87,26 +83,9 @@ package enum NativeValidationRunner {
             let name = names[property]!
             let verdict: ValidationVerdict
             if invariant.contains(property) {
-                if batch.violatedInvariants.contains(property) { verdict = .violated }
-                else if complete { verdict = .satisfied }
-                else {
-                    let isolated = try MachineValidationEvidence.write(
-                        scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: true,
-                        checking: .init(properties: [property], checkDeadlock: false),
-                        to: directory.appendingPathComponent("check-\(name).bin"))
-                    verdict = isolated.violatedInvariants.contains(property) ? .violated : .satisfied
-                }
+                verdict = batch.violatedInvariants.contains(property) ? .violated : .satisfied
             } else if reachability.contains(property) {
-                if batch.reachedProperties.contains(property) { verdict = .reached }
-                else if complete { verdict = .unreachable }
-                else {
-                    let isolated = try MachineValidationEvidence.write(
-                        scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: true,
-                        stopOnReachability: true,
-                        checking: .init(properties: [property], checkDeadlock: false),
-                        to: directory.appendingPathComponent("check-\(name).bin"))
-                    verdict = isolated.reachedProperties.contains(property) ? .reached : .unreachable
-                }
+                verdict = batch.reachedProperties.contains(property) ? .reached : .unreachable
             } else if let analysis = temporalResults[property] {
                 switch analysis.status {
                 case .satisfied: verdict = .satisfied
@@ -122,25 +101,14 @@ package enum NativeValidationRunner {
         }
         let deadlock: ValidationVerdict?
         if scenario.checking.checkDeadlock {
-            if batch.deadlockFound { deadlock = .violated }
-            else if complete { deadlock = .satisfied }
-            else if !batch.violatedInvariants.isEmpty {
-                deadlock = nil
-            }
-            else {
-                let isolated = try MachineValidationEvidence.write(
-                    scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: true,
-                    checking: .init(properties: [], checkDeadlock: true),
-                    to: directory.appendingPathComponent("check-deadlock.bin"))
-                deadlock = isolated.deadlockFound ? .violated : .satisfied
-            }
+            deadlock = batch.deadlockFound ? .violated : .satisfied
         } else {
             deadlock = nil
         }
         let report = NativeValidationReport(
             schema: "swifttla.native-validation-report", scenario: scenario.name,
             maximumStates: maximumStates,
-            graphComplete: complete, initialStates: batch.initialStates,
+            graphComplete: true, initialStates: batch.initialStates,
             states: batch.states, edges: batch.edges,
             properties: properties, deadlock: deadlock,
             deadlockSelected: scenario.checking.checkDeadlock)

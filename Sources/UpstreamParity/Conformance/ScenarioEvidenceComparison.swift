@@ -22,8 +22,7 @@ package enum ScenarioEvidenceComparison {
         if !coverage.checksDeadlock && (swift.deadlock != nil || tlc.deadlock != nil) {
             throw ValidationEvidenceComparisonError.invalidEvidence("unselected deadlock verdict")
         }
-        if coverage.checksDeadlock &&
-            ((swift.graphComplete && swift.deadlock == nil) || (tlc.graphComplete && tlc.deadlock == nil)) {
+        if coverage.checksDeadlock && (swift.deadlock == nil || tlc.deadlock == nil) {
             throw ValidationEvidenceComparisonError.invalidEvidence("missing deadlock verdict")
         }
         let result = try ValidationEvidenceComparison.compare(
@@ -39,10 +38,10 @@ package enum ScenarioEvidenceComparison {
             }
         }
         if let expected = scenario.deadlockExpectation {
-            if let verdict = swift.deadlock, !verdict.satisfies(expected) {
+            guard let nativeVerdict = swift.deadlock, nativeVerdict.satisfies(expected) else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("scenario expected deadlock")
             }
-            if let verdict = tlc.deadlock, !verdict.satisfies(expected) {
+            guard let oracleVerdict = tlc.deadlock, oracleVerdict.satisfies(expected) else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("scenario expected deadlock")
             }
         }

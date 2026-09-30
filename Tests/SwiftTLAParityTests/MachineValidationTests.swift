@@ -130,7 +130,7 @@ struct MachineValidationTests {
         #expect(report.properties["__pcal_assert_0"] == .satisfied)
         #expect(report.properties["AtLimit"] == .reached)
         #expect(report.deadlock == .satisfied)
-        #expect(!report.graphComplete)
+        #expect(report.graphComplete)
     }
 
     @Test("a state limit cannot satisfy an expected invariant violation")
@@ -146,8 +146,8 @@ struct MachineValidationTests {
         #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("report.json").path))
     }
 
-    @Test("early violations are isolated before every selected check receives a verdict")
-    func resolvesChecksAfterEarlyViolation() throws {
+    @Test("an invariant violation retains the complete graph and every selected verdict")
+    func retainsCompleteEvidenceAfterInvariantViolation() throws {
         let scenario = try ConstantStateClaims.validationScenarios()[0]
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let changedDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -157,14 +157,16 @@ struct MachineValidationTests {
         }
         let report = try NativeValidationRunner.run(scenario: scenario, caseID: "constant-state-claims-0",
             maximumStates: 10, to: directory)
-        #expect(!report.graphComplete)
+        #expect(report.graphComplete)
+        #expect(report.initialStates == 1)
+        #expect(report.states == 1)
+        #expect(report.edges == 1)
         #expect(report.properties["falseInvariant"] == .violated)
         #expect(report.properties["trueInvariant"] == .satisfied)
         #expect(report.properties["initialWitness"] == .reached)
         #expect(report.properties["absentWitness"] == .unreachable)
         #expect(report.deadlockSelected)
-        #expect(report.deadlock == nil)
-        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("check-absentWitness.bin").path))
+        #expect(report.deadlock == .satisfied)
         #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("report.json").path))
 
         var expectations = scenario.expectations
