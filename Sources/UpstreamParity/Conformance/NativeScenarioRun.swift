@@ -31,29 +31,16 @@ package enum NativeScenarioResult: Sendable {
 }
 
 package struct NativeScenarioRun: Sendable {
-    package struct CheckCoverage: Encodable, Sendable {
-        package let selectedProperties: [String]
-        package let omittedProperties: [String]
-        package let checksDeadlock: Bool
-        package let behavior: ModelBehavior
-        package let coversCompleteScenario: Bool
-        package let propertyDisplayNames: [String: String]
-    }
     package let name: String
     package let native: NativeScenarioResult
     package let expectations: [String: ValidationExpectation]
     package let deadlockExpectation: ValidationExpectation?
-    package let coverage: CheckCoverage
+    package let coverage: ScenarioCheckCoverage
 
     package init<Scenario: ModelValidationScenario>(_ scenario: Scenario, maximumStates: Int) throws {
         let rendered = try scenario.render()
+        let checkCoverage = try ScenarioCheckCoverage(scenario)
         let names = scenario.formalPropertyNames
-        guard names == Scenario.Machine.formalPropertyNames,
-              Set(Scenario.Machine.propertyDisplayNames.keys) == Set(names.keys),
-              scenario.checking.properties.isSubset(of: Set(names.keys)),
-              scenario.checking.properties == Set(scenario.expectations.keys) else {
-            throw EvidenceFormatError.invalidField(record: scenario.name, field: "scenario check coverage")
-        }
         let bindings = scenario.expectations.map { (names[$0.key]!, $0.value) }
         guard !scenario.name.isEmpty, Set(bindings.map(\.0)).count == bindings.count,
               Set(bindings.map(\.0)) == rendered.checkNames,
@@ -63,6 +50,7 @@ package struct NativeScenarioRun: Sendable {
         name = scenario.name
         expectations = Dictionary(uniqueKeysWithValues: bindings)
         deadlockExpectation = scenario.deadlockExpectation
+        coverage = checkCoverage
         let initial = try scenario.initialMachines()
         switch try ReachabilityGraph.check(initialMachines: initial, maximumStates: maximumStates,
             checking: scenario.checking, behavior: scenario.behavior) {
@@ -71,15 +59,6 @@ package struct NativeScenarioRun: Sendable {
             native = .counterexample(try NativeCounterexampleRun(result, initialMachines: initial,
                 rendered: rendered, maximumStates: maximumStates))
         }
-        let omitted = Set(names.keys).subtracting(scenario.checking.properties)
-        coverage = .init(selectedProperties: rendered.checkNames.sorted(),
-            omittedProperties: omitted.map { names[$0]! }.sorted(), checksDeadlock: rendered.checksDeadlock,
-            behavior: rendered.behavior,
-            coversCompleteScenario: omitted.isEmpty && (rendered.checksDeadlock || !Scenario.Machine.checksDeadlock)
-                && rendered.behavior == .specification,
-            propertyDisplayNames: Dictionary(uniqueKeysWithValues: names.map {
-                ($0.value, Scenario.Machine.propertyDisplayNames[$0.key]!)
-            }))
     }
 
     package func validateExpectations() throws {

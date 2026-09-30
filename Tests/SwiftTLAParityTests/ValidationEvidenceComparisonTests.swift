@@ -15,6 +15,50 @@ struct ValidationEvidenceComparisonTests {
         #expect(result.result == "exact")
         #expect(result.graphCompared)
         #expect(result.difference == nil)
+        let coverage = try coverage(root)
+        #expect(coverage.selectedProperties.isEmpty)
+        #expect(coverage.omittedProperties == ["InitiallyZero", "Reached", "Safe", "StaysZero"])
+        #expect(!coverage.coversCompleteScenario)
+    }
+
+    @Test("matching reports cannot omit a selected property and claim parity")
+    func missingSelectedVerdictsFail() throws {
+        let root = try fixture(scenarioName: "Selected", omitSelectedVerdicts: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
+    }
+
+    @Test("a complete graph can match an explicit subset without claiming full scenario coverage")
+    func selectedVerdictsMatch() throws {
+        let root = try fixture(scenarioName: "Selected")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let result = try compare(root)
+        #expect(result.result == "exact")
+        #expect(result.graphCompared)
+        let coverage = try coverage(root)
+        #expect(coverage.selectedProperties == ["Reached", "Safe"])
+        #expect(coverage.omittedProperties == ["InitiallyZero", "StaysZero"])
+        #expect(!coverage.coversCompleteScenario)
+    }
+
+    @Test("a verdict for a disabled deadlock check cannot establish parity")
+    func unselectedDeadlockVerdictFails() throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for path in ["native/report.json", "oracle/oracle.json"] {
+            let url = root.appendingPathComponent(path)
+            var report = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+            report["deadlock"] = "satisfied"
+            try JSONSerialization.data(withJSONObject: report).write(to: url)
+        }
+        #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
+    }
+
+    @Test("a complete selected deadlock check requires a verdict")
+    func missingSelectedDeadlockVerdictFails() throws {
+        let root = try fixture(scenarioName: "All")
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
     }
 
     @Test("a changed state fails despite matching counts")
@@ -179,35 +223,49 @@ struct ValidationEvidenceComparisonTests {
     }
 
     private func compare(_ root: URL) throws -> ValidationEvidenceComparisonReport {
-        let scenario = try #require(SelectedChecksModel.validationScenarios().first)
-        return try ValidationEvidenceComparison.compare(scenario: scenario, caseID: "fixture",
+        let report = try JSONDecoder().decode(NativeValidationReport.self,
+            from: Data(contentsOf: root.appendingPathComponent("native/report.json")))
+        let scenario = try #require(SelectedChecksModel.validationScenarios().first { $0.name == report.scenario })
+        return try ScenarioEvidenceComparison.compare(scenario: scenario, caseID: "fixture",
             native: root.appendingPathComponent("native"),
             oracle: root.appendingPathComponent("oracle"), actions: actions,
             to: root.appendingPathComponent("comparison"))
     }
 
+    private func coverage(_ root: URL) throws -> ScenarioCheckCoverage {
+        let report = try #require(JSONSerialization.jsonObject(with: Data(contentsOf:
+            root.appendingPathComponent("comparison/comparison.json"))) as? [String: Any])
+        let value = try #require(report["coverage"])
+        return try JSONDecoder().decode(ScenarioCheckCoverage.self,
+            from: JSONSerialization.data(withJSONObject: value))
+    }
+
     private func fixture(nativeTarget: Int = 1, nativeEdgeTarget: UInt64 = 1,
         nativeInitial: UInt64 = 0,
-        edgeCount: Int = 1, graphComplete: Bool = true, tlcExitStatus: Int = 0) throws -> URL {
+        edgeCount: Int = 1, graphComplete: Bool = true, tlcExitStatus: Int = 0,
+        scenarioName: String? = nil, omitSelectedVerdicts: Bool = false) throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let native = root.appendingPathComponent("native")
         let tlc = root.appendingPathComponent("oracle/tlc-graph")
         try FileManager.default.createDirectory(at: native, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: tlc, withIntermediateDirectories: true)
+        let name = scenarioName ?? (graphComplete ? "Graph only" : "All")
+        let scenario = try #require(SelectedChecksModel.validationScenarios().first { $0.name == name })
+        let selected = Set(try ScenarioCheckCoverage(scenario).selectedProperties)
+        let allVerdicts = ["InitiallyZero": "violated", "Reached": "reached",
+            "Safe": "satisfied", "StaysZero": "violated"]
+        let verdicts = omitSelectedVerdicts ? [:] : allVerdicts.filter { selected.contains($0.key) }
         let nativeReport: [String: Any] = [
-            "schema": "swifttla.native-validation-report", "scenario": "All", "maximumStates": 100,
+            "schema": "swifttla.native-validation-report", "scenario": name, "maximumStates": 100,
             "graphComplete": graphComplete, "initialStates": 1, "states": 2,
-            "edges": edgeCount, "properties": graphComplete ? [:] : [
-                "InitiallyZero": "violated", "Reached": "reached", "Safe": "satisfied", "StaysZero": "violated"
-            ], "deadlockSelected": true
+            "edges": edgeCount, "properties": verdicts,
+            "deadlockSelected": scenario.checking.checkDeadlock
         ]
         let oracleReport: [String: Any] = [
             "schema": "swifttla.generated-tlc-oracle", "caseID": "fixture",
-            "scenario": "All", "maximumStates": 100, "graphComplete": graphComplete,
+            "scenario": name, "maximumStates": 100, "graphComplete": graphComplete,
             "graphInputSHA256": String(repeating: "0", count: 64),
-            "properties": graphComplete ? [:] : [
-                "InitiallyZero": "violated", "Reached": "reached", "Safe": "satisfied", "StaysZero": "violated"
-            ], "deadlockSelected": true
+            "properties": verdicts, "deadlockSelected": scenario.checking.checkDeadlock
         ]
         try JSONSerialization.data(withJSONObject: nativeReport).write(to: native.appendingPathComponent("report.json"))
         try JSONSerialization.data(withJSONObject: oracleReport).write(

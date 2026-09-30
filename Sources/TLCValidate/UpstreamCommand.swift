@@ -11,7 +11,7 @@ private enum UpstreamCommandError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            "Usage: tlc-validate upstream list | upstream run --case <id-or-all> --output <directory> | upstream cache-key --case <id>"
+            "Usage: tlc-validate upstream list | upstream run --case <id-or-all> --output <directory> | upstream cache-key --case <id> | upstream annotate --case <id> --evidence <directory>"
         case .unknownCase(let id): "unknown upstream case: \(id)"
         case .invalidToolchain: "invalid pinned TLC toolchain"
         case .outputExists(let path): "output already exists: \(path)"
@@ -26,6 +26,18 @@ func runUpstream(arguments: [String]) -> Never {
             at: root.appendingPathComponent("Verification/FiniteGraph/cases.json"))
         if arguments == ["list"] {
             print(String(decoding: try JSONEncoder().encode(manifest.cases.map(\.id)), as: UTF8.self))
+            exit(0)
+        }
+        if arguments.count == 5, arguments[0] == "annotate", arguments[1] == "--case",
+           arguments[3] == "--evidence" {
+            guard let declaration = manifest.cases.first(where: { $0.id == arguments[2] }) else {
+                throw UpstreamCommandError.unknownCase(arguments[2])
+            }
+            if let scenario = try declaration.resolveScenario() {
+                let report = URL(fileURLWithPath: arguments[4]).standardizedFileURL
+                    .appendingPathComponent(declaration.id).appendingPathComponent("comparison.json")
+                try ScenarioCheckCoverage.annotateUpstream(scenario, caseID: declaration.id, reportURL: report)
+            }
             exit(0)
         }
         if arguments.count == 3, arguments[0] == "cache-key", arguments[1] == "--case" {

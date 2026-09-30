@@ -293,11 +293,14 @@ jobs:
           jq -n --arg key '${{ steps.upstream-key.outputs.key }}' --arg sha "$SWIFT_TLA_SHA" \
             --arg run "$GITHUB_RUN_ID" '{cacheKey:$key,sourceSHA:$sha,originRunID:$run}' \
             > ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"
+      - name: Attach model-owned check coverage
+        run: .build/validation-bin/tlc-validate upstream annotate --case "$CASE_ID" --evidence .build/validation-evidence/upstream
       - name: Require exact upstream evidence
         env:
           UPSTREAM_INPUT_KEY: ${{ steps.upstream-key.outputs.key }}
         run: |
           jq -e '(.schema == "swifttla.upstream-tlc-parity" or .schema == "swifttla.assumption-upstream-comparison") and .caseID == env.CASE_ID and .result == "exact"' ".build/validation-evidence/upstream/$CASE_ID/comparison.json"
+          jq -e 'if .schema == "swifttla.upstream-tlc-parity" then (.coverage.selectedProperties | type == "array") and (.coverage.omittedProperties | type == "array") and .coverage.checksDeadlock == .deadlockSelected else true end' ".build/validation-evidence/upstream/$CASE_ID/comparison.json"
           jq -e --arg key "$UPSTREAM_INPUT_KEY" '.cacheKey == $key and .sourceSHA != "" and .originRunID != ""' ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"
       - uses: actions/upload-artifact@v6
         if: always()
