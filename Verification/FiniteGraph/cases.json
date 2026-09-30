@@ -595,6 +595,46 @@
       "timeoutSeconds": 1800
     },
     {
+      "id": "cigarette-smokers",
+      "sourceModel": "cigarette-smokers",
+      "scenario": "CigaretteSmokers",
+      "module": "cigarette-smokers/CigaretteSmokers.tla",
+      "configuration": "cigarette-smokers/CigaretteSmokers.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CigaretteSmokers/CigaretteSmokers.tla",
+        "sha256": "c0dc0ebf3fef3e95be8f7173197f6798f4c2ada5e99aa34fcadc9f71bececa51"
+      },
+      "exploration": {
+        "maximumStateLimit": 100,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "c0dc0ebf3fef3e95be8f7173197f6798f4c2ada5e99aa34fcadc9f71bececa51",
+      "cfgSHA256": "1d3b7af9618a5ed95a4a27562827259196706c3ec5e2976f3a171938757ac3f8",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "ap-cigarette-smokers",
+      "sourceModel": "cigarette-smokers",
+      "scenario": "APCigaretteSmokers",
+      "module": "cigarette-smokers/APCigaretteSmokers.tla",
+      "configuration": "cigarette-smokers/APCigaretteSmokers.cfg",
+      "imports": ["cigarette-smokers/CigaretteSmokers.tla"],
+      "dependencies": [{"importingModule": "APCigaretteSmokers", "importedModule": "CigaretteSmokers"}],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/CigaretteSmokers/APCigaretteSmokers.tla",
+        "sha256": "80d8f65ff08a20a3e6aae6c2bf1c44f9aa5ee3d3fe6f52af0f501ea139dda9c0"
+      },
+      "exploration": {
+        "maximumStateLimit": 100,
+        "symmetryReduction": "disabled"
+      },
+      "moduleSHA256": "80d8f65ff08a20a3e6aae6c2bf1c44f9aa5ee3d3fe6f52af0f501ea139dda9c0",
+      "cfgSHA256": "e2c79167e24cbfd383f4f499a7f104c31e5f18ae10b0727b51e5ae11320a9c83",
+      "timeoutSeconds": 60
+    },
+    {
       "id": "coffee-can-1000",
       "sourceModel": "coffee-can",
       "scenario": "CoffeeCan1000Beans",

@@ -406,6 +406,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
     case nQueensFour = "n-queens-four"
     case queensFour = "queens-four"
     case coffeeCan = "coffee-can"
+    case cigaretteSmokers = "cigarette-smokers"
     case chameneos
     case prisoners
     case prisonersSingleSwitch = "prisoners-single-switch"
@@ -444,7 +445,7 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
              .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2,
              .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder,
              .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface,
-             .majority, .nQueensFour, .queensFour, .coffeeCan, .chameneos, .prisoners,
+             .majority, .nQueensFour, .queensFour, .coffeeCan, .cigaretteSmokers, .chameneos, .prisoners,
              .prisonersSingleSwitch, .singleLaneBridge, .gameOfLife, .twoPhase,
              .teachingSimple, .teachingSimpleRegular:
             throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned scenario")

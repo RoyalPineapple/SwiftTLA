@@ -31,15 +31,15 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "Three pinned candidate families inspected; CigaretteSmokers selected for the next implementation slice after current PR-head admission",
+      "status": "Three pinned candidate families inspected; CigaretteSmokers implementation in progress after the prior PR-head admission",
       "candidates": [
         "specifications/ReadersWriters",
         "specifications/CigaretteSmokers",
         "specifications/barriers"
       ],
-      "scope": "CigaretteSmokers has two published configurations over one small finite transition system; its proof module has no standalone model. ReadersWriters additionally selects weak-fairness liveness over a queue, while barriers includes a 13-location PlusCal algorithm and refinement property. This selection confers no implementation or parity credit; the current frozen PR candidate must finish admission before corpus expansion."
+      "scope": "CigaretteSmokers has two published configurations over one small finite transition system; its proof module has no standalone model. ReadersWriters additionally selects weak-fairness liveness over a queue, while barriers includes a 13-location PlusCal algorithm and refinement property. This selection confers no hosted-parity credit; the two CigaretteSmokers configurations need their own green hosted SHA."
     },
-    "implementationFamiliesInProgress": 0,
+    "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
     "regressionAnchors": ["DiningPhilosophers", "LeastCircularSubstring", "N-Queens"],
     "inspectionWaves": {
@@ -4041,16 +4041,16 @@
     {
       "path": "specifications/CigaretteSmokers",
       "name": "The Cigarette Smokers Problem",
-      "audit": "pinned source, manifest, both published configurations, and proof-module role inspected; implementation and hosted parity pending",
-      "gap": "The exhaustive configuration binds three ingredients and three two-element offers, selects Spec, TypeOK, and AtMostOne; the manifest reports six distinct states. The annotation-wrapper configuration binds IngredientsVal and OffersVal and selects the same checks. Existing DSL primitives include set-valued parameters, dictionary mapping over a parameter set, typed records, and Select; use the case to verify their exact semantics before adding an API. Implement one typed model with both exact scenario bindings, function-valued smoker records, the unique CHOOSE result, and default deadlock behavior; then prove both comparison paths on a green hosted SHA. No implementation or equivalence is credited yet.",
-      "legacyCleanupComplete": false,
+      "audit": "Both pinned configurations have a model-owned DSL implementation and exact source pins; hosted parity pending",
+      "gap": "The model preserves the two ingredient encodings, function-valued smoker records, unique CHOOSE result, TypeOK, AtMostOne, and default deadlock selection. A focused local native check observed three initial states, six total states, and twelve edges in each configuration. That diagnostic does not establish generated-TLA-versus-upstream or native-versus-generated-TLA parity; both require complete hosted evidence on the same pushed SHA.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/CigaretteSmokers/APCigaretteSmokers.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": ["Sources/UpstreamParity/Examples/CigaretteSmokers.swift"],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/CigaretteSmokers/CigaretteSmokers_proof.tla",
@@ -4063,8 +4063,8 @@
           "path": "specifications/CigaretteSmokers/CigaretteSmokers.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": ["Sources/UpstreamParity/Examples/CigaretteSmokers.swift"],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -4072,20 +4072,28 @@
           "module": "specifications/CigaretteSmokers/APCigaretteSmokers.tla",
           "configuration": "specifications/CigaretteSmokers/APCigaretteSmokers.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{
+            "file": "Sources/UpstreamParity/Examples/CigaretteSmokers.swift",
+            "scenario": "APCigaretteSmokers",
+            "caseID": "ap-cigarette-smokers"
+          }],
           "evidence": []
         },
         {
           "module": "specifications/CigaretteSmokers/CigaretteSmokers.tla",
           "configuration": "specifications/CigaretteSmokers/CigaretteSmokers.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{
+            "file": "Sources/UpstreamParity/Examples/CigaretteSmokers.swift",
+            "scenario": "CigaretteSmokers",
+            "caseID": "cigarette-smokers"
+          }],
           "evidence": []
         }
       ],
