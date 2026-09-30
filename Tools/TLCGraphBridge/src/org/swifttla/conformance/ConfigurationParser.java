@@ -39,7 +39,8 @@ public final class ConfigurationParser {
         Path input = Path.of(arguments[1]);
         String source = Files.readString(input, StandardCharsets.UTF_8);
         // ModelConfig catches lexer errors as EOF. Validate with its own lexer first.
-        var lexer = new TLAplusParserTokenManager(new SimpleCharStream(new StringReader(source), 1, 1), 2);
+        // End a final line comment for lexical validation; ModelConfig still reads the pinned file unchanged.
+        var lexer = new TLAplusParserTokenManager(new SimpleCharStream(new StringReader(source + "\n"), 1, 1), 2);
         while (lexer.getNextToken().kind != TLAplusParserConstants.EOF) {}
         var configuration = new ModelConfig(input.toString(), null);
         configuration.parse();

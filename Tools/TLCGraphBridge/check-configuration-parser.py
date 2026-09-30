@@ -77,6 +77,11 @@ CHECK_DEADLOCK FALSE
     assert result.returncode != 0, "Malformed configuration was accepted"
     assert not output.exists(), "Malformed configuration produced a usable result"
 
+    result, output = parse("SPECIFICATION Spec\nINVARIANT Safe\n\\* final comment", "eof-comment")
+    assert result.returncode == 0, result.stderr + result.stdout
+    eof_comment = json.loads(output.read_text(encoding="utf-8"))
+    assert eof_comment["invariants"] == ["Safe"], eof_comment
+
     result, output = parse("SPECIFICATION Spec\nINVARIANT NestedSafe\nPROPERTY WrappedLive\n", "aliases")
     assert result.returncode == 0, result.stderr + result.stdout
     aliases = json.loads(output.read_text(encoding="utf-8"))

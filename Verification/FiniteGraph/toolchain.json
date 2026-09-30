@@ -36,7 +36,7 @@
     "class": "org.swifttla.conformance.LosslessStateWriter",
     "sources": {
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/CanonicalBinaryState.java": "55e8eeac044488c4b7b910e06b130796512c82ac4cc5d06ea579307344250af4",
-      "Tools/TLCGraphBridge/src/org/swifttla/conformance/ConfigurationParser.java": "7afa755bb4bb512519ff4bdb518619f3390683b7f2da9ff5033cfe8b660061be",
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/ConfigurationParser.java": "f5c776ba9d07f3bd4b760b81900a1212e991d86ba43d6e474cfeca4a72f9d388",
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/InstanceActions.java": "1197df262b61e26cdd062bab4f549f66c78dc26df23210a84f95ad18957e9dbc",
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java": "71c07f5c7b768c94c9a6305402815fb53e1b2fa4907283cd2470197423c63e8e",
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/TLCEvaluationOutput.java": "42ca0b8833868f35de4b29841906cbea41ef976b3559bcace84bb2e4ed98cbd8"
