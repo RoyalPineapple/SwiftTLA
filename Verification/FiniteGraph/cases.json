@@ -541,6 +541,7 @@
     {
       "id": "multicar-elevator",
       "sourceModel": "multicar-elevator",
+      "scenario": "MultiCarElevator",
       "module": "multicar-elevator/MultiCarElevator.tla",
       "configuration": "multicar-elevator/MultiCarElevator.cfg",
       "imports": [],
@@ -556,6 +557,7 @@
     {
       "id": "tlcmc-graph-1",
       "sourceModel": "tlcmc-graph-1",
+      "scenario": "TLCMC",
       "module": "tlcmc-graph-1/TLCMC.tla",
       "configuration": "tlcmc-graph-1/TLCMC.cfg",
       "imports": [],
@@ -812,6 +814,7 @@
     {
       "id": "voteproof",
       "sourceModel": "voteproof",
+      "scenario": "VoteProof",
       "module": "voteproof/VoteProof.tla",
       "configuration": "voteproof/VoteProof.cfg",
       "imports": [
@@ -865,6 +868,7 @@
     {
       "id": "kvsnap",
       "sourceModel": "kvsnap",
+      "scenario": "MCKVsnap",
       "module": "kvsnap/MCKVsnap.tla",
       "configuration": "kvsnap/MCKVsnap.cfg",
       "imports": [
@@ -915,6 +919,7 @@
     {
       "id": "string-literals",
       "sourceModel": "string-literals",
+      "scenario": "StringLiterals",
       "module": "string-literals/StringLiterals.tla",
       "configuration": "string-literals/StringLiterals.cfg",
       "imports": [],
@@ -930,6 +935,7 @@
     {
       "id": "action-references",
       "sourceModel": "action-references",
+      "scenario": "ActionReferences",
       "module": "action-references/ActionReferences.tla",
       "configuration": "action-references/ActionReferences.cfg",
       "imports": [],

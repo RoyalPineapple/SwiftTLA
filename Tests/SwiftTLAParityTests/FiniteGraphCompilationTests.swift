@@ -10,13 +10,17 @@ struct FiniteGraphCompilationTests {
       from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
     for declaration in manifest.cases {
       let scenario = try declaration.resolveScenario()
-      let rendered = try scenario?.render() ?? declaration.sourceModel.render()
-      try rendered.tlaBundle.validateDeclaredClosure()
-      #expect(!rendered.tlaBundle.tla.isEmpty)
-      if scenario != nil {
+      let rendered: RenderedSpecification
+      if declaration.comparisonMode == .assumptionsOnly {
+        #expect(scenario == nil)
+        rendered = try declaration.sourceModel.render()
+      } else {
+        rendered = try #require(scenario).render()
         #expect(throws: EvidenceFormatError.invalidField(record: declaration.sourceModel.rawValue,
           field: "model-owned scenario")) { try declaration.sourceModel.render() }
       }
+      try rendered.tlaBundle.validateDeclaredClosure()
+      #expect(!rendered.tlaBundle.tla.isEmpty)
     }
   }
 

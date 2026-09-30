@@ -242,6 +242,7 @@ package struct VoteProofModel: Sendable {
                 }
             })
             algorithm
+            Validation("VoteProof") {}.checkingDeadlock(false)
 
         }
     }

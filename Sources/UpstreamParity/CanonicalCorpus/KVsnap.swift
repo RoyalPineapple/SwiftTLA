@@ -190,6 +190,7 @@ package struct KVsnapModel: Sendable {
                 }
                 Eventually("Termination", ForAll(Transaction.all) { Finished($0) })
             })
+            Validation("MCKVsnap") {}
         }
     }
 }

@@ -141,6 +141,7 @@ package struct TLCMCModel: Sendable {
                 }
                 Invariant("BFSLevel") { initialIndex >= 1 }
             })
+            Validation("TLCMC") {}.checking(only: [])
         }
     }
 }

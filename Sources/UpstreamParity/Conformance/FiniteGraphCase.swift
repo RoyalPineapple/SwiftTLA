@@ -286,10 +286,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package func resolveScenario() throws -> (any ModelValidationScenario)? {
             guard sourceModel != .sumsEven, sourceModel != .stones else { return nil }
             guard let scenario else {
-                guard !hasModelValidationRegistration(sourceModel.nativeModelID) else {
-                    throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
-                }
-                return nil
+                throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
             }
             guard let scenarios = try modelValidationScenarios(for: sourceModel.nativeModelID) else {
                 throw EvidenceFormatError.invalidField(record: id, field: "native validation registration")
@@ -316,8 +313,8 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         private func validate() throws {
-            guard comparisonMode == .exhaustive || scenario != nil else {
-                throw EvidenceFormatError.invalidField(record: id, field: "non-exhaustive comparison requires a model-owned scenario")
+            guard scenario != nil else {
+                throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
             }
             guard (comparisonMode == .assumptionsOnly) == (sourceModel == .sumsEven || sourceModel == .stones) else {
                 throw EvidenceFormatError.invalidField(record: id, field: "assumption comparison mode")
@@ -431,38 +428,8 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
         }
     }
 
-    package func nativeRun(rendered: RenderedSpecification, checkingDeadlock: Bool,
-        scenario: (any ModelValidationScenario)? = nil, for finiteGraphCase: FiniteGraphCase) throws -> NativeModelRun {
-        func exploreScenario<Scenario: ModelValidationScenario>(_ scenario: Scenario) throws -> NativeModelRun {
-            try NativeModelRun(scenario.explore(maximumStates: finiteGraphCase.exploration.maximumStateLimit),
-                rendered: rendered, checkingDeadlock: checkingDeadlock, for: finiteGraphCase)
-        }
-        if let scenario { return try exploreScenario(scenario) }
-        func explore<Machine: StateMachine>(_ initial: [Machine]) throws -> NativeModelRun {
-            try NativeModelRun(ReachabilityGraph(initialMachines: initial,
-                maximumStates: finiteGraphCase.exploration.maximumStateLimit),
-                rendered: rendered, checkingDeadlock: checkingDeadlock, for: finiteGraphCase)
-        }
-        switch self {
-        case .voteProof: return try explore(VoteProofModel.initialMachines())
-        case .kvsnap: return try explore(KVsnapModel.initialMachines())
-        case .multiCarElevator: return try explore(MultiCarElevator.initialMachines())
-        case .tlcmcGraph1: return try explore(TLCMCModel.initialMachines())
-        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan, .chameneos, .prisoners, .prisonersSingleSwitch, .singleLaneBridge, .gameOfLife, .twoPhase, .teachingSimple, .teachingSimpleRegular, .sumsEven, .stones:
-            throw EvidenceFormatError.invalidField(record: finiteGraphCase.id, field: "model-owned scenario")
-        case .stringLiterals: return try explore(StringLiteralModel.initialMachines())
-        case .actionReferences: return try explore(ActionReferencesModel.initialMachines())
-        }
-    }
-
     package func render() throws -> RenderedSpecification {
         switch self {
-        case .voteProof: return try VoteProofModel.render()
-        case .kvsnap: return try KVsnapModel.render()
-        case .multiCarElevator: return try MultiCarElevator.render()
-        case .tlcmcGraph1: return try TLCMCModel.render()
-        case .stringLiterals: return try StringLiteralModel.render()
-        case .actionReferences: return try ActionReferencesModel.render()
         case .sumsEven:
             guard let scenario = try SumsEvenModel.validationScenarios().first else {
                 throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned assumption scenario")
@@ -473,7 +440,13 @@ package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, 
                 throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned assumption scenario")
             }
             return try scenario.render()
-        case .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2, .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder, .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface, .majority, .nQueensFour, .queensFour, .coffeeCan, .chameneos, .prisoners, .prisonersSingleSwitch, .singleLaneBridge, .gameOfLife, .twoPhase, .teachingSimple, .teachingSimpleRegular:
+        case .voteProof, .kvsnap, .multiCarElevator, .tlcmcGraph1, .stringLiterals, .actionReferences,
+             .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2,
+             .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder,
+             .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface,
+             .majority, .nQueensFour, .queensFour, .coffeeCan, .chameneos, .prisoners,
+             .prisonersSingleSwitch, .singleLaneBridge, .gameOfLife, .twoPhase,
+             .teachingSimple, .teachingSimpleRegular:
             throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned scenario")
         }
     }

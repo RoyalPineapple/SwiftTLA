@@ -18,6 +18,7 @@ package struct ActionReferencesModel {
             Invariant("InRange") { count >= 0 && count <= 2 }
             Eventually("EventuallyAdvanced", count > 0)
             WeakFairness(advance)
+            Validation("ActionReferences") {}
         }
     }
 }
