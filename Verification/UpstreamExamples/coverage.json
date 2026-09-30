@@ -4073,6 +4073,7 @@
           "configuration": "specifications/CigaretteSmokers/APCigaretteSmokers.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [{
@@ -4083,6 +4084,7 @@
           "evidence": [
             {
               "sourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
+              "developerToolsVersion": "16.4",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736",
               "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736/artifacts/11124139533",
               "artifactDigest": "sha256:3fdfcd492222c60aed8e11de7658d102a9bd9f649c2b24fdef3d328092be7725",
@@ -4092,6 +4094,7 @@
             },
             {
               "sourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
+              "developerToolsVersion": "16.4",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736",
               "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736/artifacts/11125633542",
               "artifactDigest": "sha256:118999cadaf0cedfcd6bd7f7cd79bcf3a8b46a53cb9975e9886c4c606e53047d",
@@ -4106,6 +4109,7 @@
           "configuration": "specifications/CigaretteSmokers/CigaretteSmokers.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{
@@ -4116,6 +4120,7 @@
           "evidence": [
             {
               "sourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
+              "developerToolsVersion": "16.4",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736",
               "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736/artifacts/11123389880",
               "artifactDigest": "sha256:21fe72285faa0cad87798f23b280c93b82c220fe6c8e2b57182a9b790afc295a",
@@ -4125,6 +4130,7 @@
             },
             {
               "sourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
+              "developerToolsVersion": "16.4",
               "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736",
               "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669736/artifacts/11125333783",
               "artifactDigest": "sha256:613149eaa77aa36a13a249a4576e7624792c2b2e3c0d5a55cf3c30d45e1546a0",
