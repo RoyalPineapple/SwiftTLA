@@ -4042,7 +4042,7 @@
       "path": "specifications/CigaretteSmokers",
       "name": "The Cigarette Smokers Problem",
       "audit": "pinned source, manifest, both published configurations, and proof-module role inspected; implementation and hosted parity pending",
-      "gap": "The exhaustive configuration binds three ingredients and three two-element offers, selects Spec, TypeOK, and AtMostOne; the manifest reports six distinct states. The annotation-wrapper configuration binds IngredientsVal and OffersVal and selects the same checks. Implement one typed model with both exact scenario bindings, function-valued smoker records, the unique CHOOSE result, and default deadlock behavior; then prove both comparison paths on a green hosted SHA. No implementation or equivalence is credited yet.",
+      "gap": "The exhaustive configuration binds three ingredients and three two-element offers, selects Spec, TypeOK, and AtMostOne; the manifest reports six distinct states. The annotation-wrapper configuration binds IngredientsVal and OffersVal and selects the same checks. Existing DSL primitives include set-valued parameters, dictionary mapping over a parameter set, typed records, and Select; use the case to verify their exact semantics before adding an API. Implement one typed model with both exact scenario bindings, function-valued smoker records, the unique CHOOSE result, and default deadlock behavior; then prove both comparison paths on a green hosted SHA. No implementation or equivalence is credited yet.",
       "legacyCleanupComplete": false,
       "modules": [
         {
