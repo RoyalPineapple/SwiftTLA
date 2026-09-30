@@ -65,6 +65,41 @@ struct ValidationEvidenceComparisonTests {
         #expect(report["graphCompared"] as? Bool == true)
     }
 
+    @Test("cached TLC graph evidence must name the current generated input and configuration")
+    func staleGeneratedGraphInputFails() throws {
+        for mismatch in ["source", "configuration"] {
+            let root = try fixture()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let url = root.appendingPathComponent("oracle/tlc-graph/tlc-process.json")
+            var process = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+            if mismatch == "source" {
+                var inputs = try #require(process["inputs"] as? [[String: String]])
+                inputs[0]["sha256"] = String(repeating: "0", count: 64)
+                process["inputs"] = inputs
+            } else {
+                process["configuration"] = "CHECK_DEADLOCK FALSE"
+            }
+            try JSONSerialization.data(withJSONObject: process).write(to: url)
+            #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("generated TLC graph input")) {
+                _ = try compare(root)
+            }
+        }
+    }
+
+    @Test("a complete graph may use the separate check-free TLC input")
+    func completeCheckFreeGraphInputMatches() throws {
+        let root = try fixture(scenarioName: "Selected")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let scenario = try #require(SelectedChecksModel.validationScenarios().first { $0.name == "Selected" })
+        let bundle = try scenario.render().tlaBundle(checking: [], checkDeadlock: false)
+        let url = root.appendingPathComponent("oracle/tlc-graph/tlc-process.json")
+        var process = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        process["inputs"] = inputHashes(for: bundle)
+        process["configuration"] = bundle.cfg
+        try JSONSerialization.data(withJSONObject: process).write(to: url)
+        #expect(try compare(root).graphCompared)
+    }
+
     @Test("a verdict for a disabled deadlock check cannot establish parity")
     func unselectedDeadlockVerdictFails() throws {
         let root = try fixture()
@@ -296,6 +331,11 @@ struct ValidationEvidenceComparisonTests {
         try FileManager.default.createDirectory(at: tlc, withIntermediateDirectories: true)
         let name = scenarioName ?? (graphComplete ? "Graph only" : "All")
         let scenario = try #require(SelectedChecksModel.validationScenarios().first { $0.name == name })
+        let rendered = try scenario.render()
+        let graphChecks = rendered.checkNames.intersection(
+            rendered.invariantNames.union(rendered.reachabilityNames))
+        let graphBundle = try rendered.tlaBundle(checking: graphChecks,
+            checkDeadlock: rendered.checksDeadlock)
         let selected = Set(try ScenarioCheckCoverage(scenario).selectedProperties)
         let allVerdicts = ["InitiallyZero": "violated", "Reached": "reached",
             "Safe": "satisfied", "StaysZero": "violated"]
@@ -319,7 +359,11 @@ struct ValidationEvidenceComparisonTests {
         try JSONSerialization.data(withJSONObject: nativeReport).write(to: native.appendingPathComponent("report.json"))
         try JSONSerialization.data(withJSONObject: oracleReport).write(
             to: root.appendingPathComponent("oracle/oracle.json"))
-        try JSONSerialization.data(withJSONObject: ["invocation": ["exitStatus": tlcExitStatus]])
+        try JSONSerialization.data(withJSONObject: [
+            "caseID": "fixture",
+            "invocation": ["exitStatus": tlcExitStatus],
+            "inputs": inputHashes(for: graphBundle), "configuration": graphBundle.cfg
+        ])
             .write(to: tlc.appendingPathComponent("tlc-process.json"))
         if !graphComplete {
             try FileManager.default.createDirectory(at: tlc.appendingPathComponent("logs"),
@@ -343,6 +387,13 @@ struct ValidationEvidenceComparisonTests {
         try writer.finish(completion: graphComplete ? 0 : 1)
         try tlcGraph(edgeCount: edgeCount).write(to: tlc.appendingPathComponent("graph-events.bin"))
         return root
+    }
+
+    private func inputHashes(for bundle: TLAModuleBundle) -> [[String: String]] {
+        bundle.files.map { file in
+            ["file": "\(file.name).tla", "sha256": SHA256.hex(Data(file.tla.utf8))]
+        } + [["file": "\(bundle.root.name).cfg",
+              "sha256": SHA256.hex(Data(bundle.cfg.utf8))]]
     }
 
     private func key(_ value: Int) throws -> Data {

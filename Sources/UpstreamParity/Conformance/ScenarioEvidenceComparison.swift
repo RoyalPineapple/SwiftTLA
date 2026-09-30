@@ -12,6 +12,36 @@ package enum ScenarioEvidenceComparison {
         let tlc = try decoder.decode(GeneratedTLCOracleReport.self,
             from: Data(contentsOf: oracle.appendingPathComponent("oracle.json")))
         let coverage = try ScenarioCheckCoverage(scenario)
+        let rendered = try scenario.render()
+        let graphChecks = rendered.checkNames.intersection(
+            rendered.invariantNames.union(rendered.reachabilityNames))
+        let checkedBundle = try rendered.tlaBundle(checking: graphChecks,
+            checkDeadlock: rendered.checksDeadlock)
+        let graphBundles = tlc.graphComplete
+            ? [checkedBundle, try rendered.tlaBundle(checking: [], checkDeadlock: false)]
+            : [checkedBundle]
+        let processURL = oracle.appendingPathComponent("tlc-graph/tlc-process.json")
+        let process = try JSONSerialization.jsonObject(with: Data(contentsOf: processURL)) as? [String: Any]
+        let inputs = process?["inputs"] as? [[String: String]]
+        let inputPairs = inputs?.compactMap { input -> (String, String)? in
+            guard input.count == 2, let file = input["file"], let hash = input["sha256"] else {
+                return nil
+            }
+            return (file, hash)
+        }
+        guard process?["caseID"] as? String == caseID,
+              let inputs, let inputPairs, inputPairs.count == inputs.count,
+              Set(inputPairs.map(\.0)).count == inputPairs.count,
+              let configuration = process?["configuration"] as? String,
+              graphBundles.contains(where: { bundle in
+                  configuration == bundle.cfg &&
+                    Dictionary(uniqueKeysWithValues: inputPairs) ==
+                      Dictionary(uniqueKeysWithValues: bundleInputJSON(bundle).map {
+                          ($0["file"]!, $0["sha256"]!)
+                      })
+              }) else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("generated TLC graph input")
+        }
         guard swift.scenario == scenario.name,
               swift.deadlockSelected == coverage.checksDeadlock,
               tlc.deadlockSelected == coverage.checksDeadlock,

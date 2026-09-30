@@ -507,7 +507,7 @@ private func invocationJSON(
   return record
 }
 
-private func bundleInputJSON(_ bundle: TLAModuleBundle) -> [[String: String]] {
+package func bundleInputJSON(_ bundle: TLAModuleBundle) -> [[String: String]] {
   var inputs = bundle.files.map {
     ["file": "\($0.name).tla", "sha256": SHA256.hex(Data($0.tla.utf8))]
   }
