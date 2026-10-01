@@ -3,6 +3,19 @@ import Testing
 @testable import SwiftTLAPlugin
 
 struct SymbolicRecordConstructionTests {
+    @Test("Action arguments construct and update ordinary Swift record fields")
+    func executesRecordActionArguments() throws {
+        for input in [1, 2] {
+            var constructed = try RecordActionParameterModel.makeMachine()
+            #expect(try constructed.send(.construct(input: input)).after.packet ==
+                .init(count: input, ready: false))
+
+            var updated = try RecordActionParameterModel.makeMachine()
+            #expect(try updated.send(.update(input: input)).after.packet ==
+                .init(count: input, ready: false))
+        }
+    }
+
     @Test("Symbolic record constructors preserve nested Swift values and parameter bindings")
     func executesTypedRecords() throws {
         let scenario = try #require(try SymbolicRecordConstructionModel.validationScenarios().first)

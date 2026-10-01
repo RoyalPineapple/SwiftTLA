@@ -32,21 +32,6 @@ private struct DecodedLiteral: TLAValueType {
     }
 }
 
-private enum DecodedRecordSchema: TLARecordSchema {
-    struct Fields {
-        let member: DecodedLiteral
-    }
-
-    static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String? {
-        field == \Fields.member ? "member" : nil
-    }
-
-    static let member = field(\Fields.member)
-    static let fields = [
-        TLARecordFieldDeclaration(member, default: DecodedLiteral(1, invalid: true))
-    ]
-}
-
 private enum InvalidLiteralDomain: String, CaseIterable, FiniteTLAValueDomain {
     case first
     case second
@@ -75,31 +60,6 @@ private enum PartialFiniteDomain: String, FiniteTLAValueDomain {
 
     static var defaultValue: Self { .first }
     static let finiteValues: [Self] = [.first]
-}
-
-private struct InvalidLiteralFields {
-    let count: Int
-    let enabled: Bool
-    let unlisted: Int
-}
-
-private enum InvalidLiteralSchema: TLARecordSchema {
-    typealias Fields = InvalidLiteralFields
-
-    static func fieldName<Value>(for field: KeyPath<InvalidLiteralFields, Value>) -> String? {
-        let key = field as AnyKeyPath
-        if key == \InvalidLiteralFields.count { return "count" }
-        if key == \InvalidLiteralFields.enabled { return "enabled" }
-        return nil
-    }
-
-    static let count = field(\InvalidLiteralFields.count)
-    static let enabled = field(\InvalidLiteralFields.enabled)
-    static let unlisted = field(\InvalidLiteralFields.unlisted)
-    static let fields = [
-        TLARecordFieldDeclaration(count, default: 0),
-        TLARecordFieldDeclaration(enabled, default: false)
-    ]
 }
 
 @TLAModel
@@ -245,36 +205,6 @@ private struct FoldGeneratedModel {
 }
 
 @Suite(.serialized) struct TypedCollectionOperatorTests {
-    @Test("record construction and updates accept typed action parameters")
-    func recordActionParameters() throws {
-        let record = Var<Record<InvalidLiteralSchema>>("record")
-        let input = ActionParameter("input", values: [1, 2])
-        let specification = TLASpec("RecordActionParameters") {
-            Variable(record, Record<InvalidLiteralSchema>())
-            Action("construct", parameters: [input]) {
-                record.becomes(Record<InvalidLiteralSchema>.literal(
-                    .init(InvalidLiteralSchema.count, input), .init(InvalidLiteralSchema.enabled, false)))
-            }
-            Action("update", parameters: [input]) {
-                record.becomes(record.updating(InvalidLiteralSchema.count, to: input))
-            }
-        }
-        let compilation = try specification.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let initial = try #require(try runtime.initialStates().first)
-        let token = try #require(TLAStateProjection.Token(validating: "record"))
-        for action in compilation.layout.actions {
-            let successors = try runtime.successors(for: action.id, from: initial)
-            let records = try successors.map { successor in
-                let projection = try successor.state.projection(using: compilation.layout)
-                return try #require(projection.value(for: token).flatMap(Record<InvalidLiteralSchema>.init(formalValue:)))
-            }
-            #expect(records.count == 2)
-            #expect(try Set(records.map { try #require($0.value(for: InvalidLiteralSchema.count)) }) == [1, 2])
-            #expect(records.allSatisfy { $0.value(for: InvalidLiteralSchema.enabled) == false })
-        }
-    }
-
     @Test("Collection values retain typed elements without decoding them again")
     func collectionElementsDecodeOnce() throws {
         let tuple = try #require(TupleExpr<DecodedLiteral>(formalValue: .tuple([.int(1), .int(2)])))
@@ -373,40 +303,6 @@ private struct FoldGeneratedModel {
         #expect(ZeroBasedSequence<DecodedLiteral>(formalValue: .function([:])) != nil)
     }
 
-    @Test("Record field reads retain the validated Swift value")
-    func recordFieldsDecodeOnce() throws {
-        let raw: TLAValue = .record(["member": .int(1)])
-        let record = try #require(Record<DecodedRecordSchema>(formalValue: raw))
-        let value = try #require(record.value(for: DecodedRecordSchema.member))
-        #expect(record.value(for: DecodedRecordSchema.member)?.decodingID == value.decodingID)
-        #expect(record.sourceIssue == nil)
-        #expect(record.tlaValue == raw)
-        let another = try #require(Record<DecodedRecordSchema>(formalValue: raw))
-        #expect(Set([record, another]).count == 1)
-    }
-
-    @Test("Records reject invalid decoded fields and preserve invalid defaults")
-    func recordsRejectInvalidData() throws {
-        let invalidRecords: [TLAValue] = [
-            .record(["member": .int(-1)]),
-            .record(["member": .bool(true)]),
-            .record([:]),
-            .record(["member": .int(1), "extra": .int(2)]),
-            .record(TLARecord([.init("member", .int(1)), .init("member", .int(2))]))
-        ]
-        for raw in invalidRecords {
-            #expect(Record<DecodedRecordSchema>(formalValue: raw) == nil)
-        }
-        let defaultRecord = Record<DecodedRecordSchema>()
-        let defaultMember = try #require(defaultRecord.value(for: DecodedRecordSchema.member))
-        #expect(defaultRecord.sourceIssue == defaultMember.sourceIssue)
-        #expect(defaultRecord.sourceIssue != nil)
-        let specification = TLASpec(name: "InvalidRecordDefault", variables: [
-            .init(name: "value", initialization: .expression(defaultRecord.stateExpr), origin: .source)
-        ], actions: [], invariants: [])
-        #expect(throws: CompilationDiagnostic.self) { try specification.compile() }
-    }
-
     @Test("Swift set deduplication cannot erase a modeled value's validation failure")
     func deduplicationPreservesValidationFailures() throws {
         func check<Value: TLAValueType & Hashable>(_ valid: Value, _ invalid: Value) throws {
@@ -427,12 +323,6 @@ private struct FoldGeneratedModel {
         try check(SetExpr(DecodedLiteral(1)), SetExpr(DecodedLiteral(1, invalid: true)))
         try check(Pair(first: DecodedLiteral(1), second: 2),
                   Pair(first: DecodedLiteral(1, invalid: true), second: 2))
-        let rawRecord: TLAValue = .record(["member": .int(1)])
-        let record = try #require(Record<DecodedRecordSchema>(formalValue: rawRecord))
-        try check(record, Record<DecodedRecordSchema>())
-        let function = try #require(Function<PartialFiniteDomain, Record<DecodedRecordSchema>>(
-            formalValue: .function([.string("first"): rawRecord])))
-        try check(function, Function<PartialFiniteDomain, Record<DecodedRecordSchema>>())
     }
 
     @Test("Native collection access uses contextual enum keys and values")
@@ -500,17 +390,6 @@ private struct FoldGeneratedModel {
     @Test("invalid typed literals and bounded sequences fail during compilation")
     func invalidTypedValuesFailDuringCompilation() throws {
         let invalidExpressions: [(StateExpr, CompilationDiagnostic.Code)] = [
-            (
-                Expr<Record<InvalidLiteralSchema>>(.variable("record"))[InvalidLiteralSchema.unlisted].raw,
-                .invalidTypedRecordField
-            ),
-            (
-                Record<InvalidLiteralSchema>.literal(
-                    .init(InvalidLiteralSchema.count, 0),
-                    .init(InvalidLiteralSchema.count, 1)
-                ).raw,
-                .invalidTypedRecordLiteral
-            ),
             (
                 Function<InvalidLiteralDomain, Int>.literal((.first, 0), (.first, 1)).raw,
                 .invalidTypedFunctionLiteral
