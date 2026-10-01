@@ -90,6 +90,19 @@ struct MachineValidationTests {
         #expect(result.states < 3)
     }
 
+    @Test("a decisive generated scenario reports its witness without exhausting an unbounded graph")
+    func retainsDecisiveDieHardestResult() throws {
+        let scenario = try #require(DieHardestModel.validationScenarios().first)
+        #expect(scenario.checkingMode == .decisiveCounterexample)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let report = try NativeValidationRunner.run(
+            scenario: scenario, caseID: "die-hardest-0", maximumStates: 100_000, to: directory)
+        #expect(!report.graphComplete)
+        #expect(report.properties["NotSolved"] == .violated)
+        #expect(report.deadlock?.rawValue == "unavailable")
+    }
+
     @Test("native evidence records a complete generated machine without TLC")
     func writesIndependentEvidence() throws {
         let scenario = RenderlessScenario(base: try ConfiguredCounter.validationScenarios()[0])
@@ -173,7 +186,7 @@ struct MachineValidationTests {
         expectations[.falseInvariant] = .satisfied
         let changed = ConstantStateClaims.ValidationScenario(
             name: scenario.name, configuration: scenario.configuration,
-            checking: scenario.checking, behavior: scenario.behavior,
+            checking: scenario.checking, checkingMode: scenario.checkingMode, behavior: scenario.behavior,
             expectations: expectations, deadlockExpectation: scenario.deadlockExpectation)
         let changedReport = try NativeValidationRunner.run(
             scenario: changed, caseID: "constant-state-claims-0", maximumStates: 10,

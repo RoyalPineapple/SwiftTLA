@@ -86,7 +86,7 @@ package struct DieHardestGlobalFreezeModel: Sendable {
             Validation("NextParallelGlobalFreeze") {
                 Bind(Capacities, to: [["j1": 9, "j2": 10], ["j1": 1, "j2": 3]])
                 Bind(Goal, to: 2)
-            }.expect(NotSolved, .violated)
+            }.checkingMode(.decisiveCounterexample).expect(NotSolved, .violated)
         }
     }
 }

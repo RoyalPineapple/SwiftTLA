@@ -6,7 +6,7 @@ extension ParserSession {
         var root = call
         var overrides: [FunctionCallExprSyntax] = []
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
-              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "behavior"].contains(member.declName.baseName.sourceIdentifierName),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "behavior"].contains(member.declName.baseName.sourceIdentifierName),
               let base = member.base?.as(FunctionCallExprSyntax.self) {
             overrides.append(root)
             root = base
@@ -40,6 +40,15 @@ extension ParserSession {
                             throw SourceParseDiagnostic(message: "Behavior selection requires .specification or .initialAndNext.", source: override)
                         }
                         scenario.behaviorSelections.append(behavior)
+                        continue
+                    }
+                    if member.declName.baseName.sourceIdentifierName == "checkingMode" {
+                        guard override.arguments.count == 1,
+                              let value = override.arguments.first?.expression.as(MemberAccessExprSyntax.self),
+                              let mode = ValidationCheckingMode(rawValue: value.declName.baseName.sourceIdentifierName) else {
+                            throw SourceParseDiagnostic(message: "Checking mode requires .exhaustive or .decisiveCounterexample.", source: override)
+                        }
+                        scenario.checkingModeSelections.append(mode)
                         continue
                     }
                     if member.declName.baseName.sourceIdentifierName == "checking" {

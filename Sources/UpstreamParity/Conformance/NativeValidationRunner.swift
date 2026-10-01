@@ -6,6 +6,7 @@ package enum ValidationVerdict: String, Codable, Sendable {
     case violated
     case reached
     case unreachable
+    case unavailable
 
     package func satisfies(_ expected: ValidationExpectation) -> Bool {
         switch (expected, self) {
@@ -34,7 +35,7 @@ package enum NativeValidationRunnerError: Error, Equatable {
     case unavailable(String)
 }
 
-/// One exhaustive generated-machine pass records the graph and safety outcomes.
+/// One generated-machine pass records either a complete graph or a decisive witness.
 package enum NativeValidationRunner {
     package static func run<Scenario: ModelValidationScenario>(
         scenario: Scenario, caseID: String, maximumStates: Int, to directory: URL
@@ -61,13 +62,24 @@ package enum NativeValidationRunner {
             throw ExplorationError.unsupportedValidationProperty(names[property]!)
         }
         let safety = scenario.checking.properties.intersection(invariant.union(reachability))
+        let decisive = scenario.checkingMode == .decisiveCounterexample
+        guard !decisive || (safety.count == 1 && scenario.checking.properties == safety) else {
+            throw NativeValidationRunnerError.unavailable("decisive mode requires one selected safety check")
+        }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let batch = try MachineValidationEvidence.write(
-            scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: false,
+            scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: decisive,
+            stopOnReachability: decisive,
             checking: .init(properties: safety, checkDeadlock: scenario.checking.checkDeadlock),
             to: directory.appendingPathComponent("machine.bin"))
-        guard case .exhausted = batch.completion else {
-            throw NativeValidationRunnerError.unavailable("complete graph")
+        switch (scenario.checkingMode, batch.completion) {
+        case (.exhaustive, .exhausted),
+             (.decisiveCounterexample, .decisiveViolation),
+             (.decisiveCounterexample, .decisiveReachability): break
+        default: throw NativeValidationRunnerError.unavailable("declared checking outcome")
+        }
+        if decisive, batch.violatedInvariants.isEmpty && batch.reachedProperties.isEmpty {
+            throw NativeValidationRunnerError.unavailable("selected decisive safety witness")
         }
         var temporalResults: [Scenario.Property: TemporalAnalysis<Scenario.Machine.Snapshot, Scenario.Machine.Action?>] = [:]
         var refinementFailures: [Scenario.Property: RefinementFailure<Scenario.Machine.Snapshot, Scenario.Machine.Action>] = [:]
@@ -101,14 +113,14 @@ package enum NativeValidationRunner {
         }
         let deadlock: ValidationVerdict?
         if scenario.checking.checkDeadlock {
-            deadlock = batch.deadlockFound ? .violated : .satisfied
+            deadlock = batch.deadlockFound ? .violated : decisive ? .unavailable : .satisfied
         } else {
             deadlock = nil
         }
         let report = NativeValidationReport(
             schema: "swifttla.native-validation-report", scenario: scenario.name,
             maximumStates: maximumStates,
-            graphComplete: true, initialStates: batch.initialStates,
+            graphComplete: !decisive, initialStates: batch.initialStates,
             states: batch.states, edges: batch.edges,
             properties: properties, deadlock: deadlock,
             deadlockSelected: scenario.checking.checkDeadlock)

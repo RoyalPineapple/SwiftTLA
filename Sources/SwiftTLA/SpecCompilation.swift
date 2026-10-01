@@ -1265,7 +1265,8 @@ private struct CanonicalSpecificationEncoder {
                         })
                     }),
                     canonicalList(scenario.deadlockSelections.map { String($0) }),
-                    canonicalList(scenario.behaviorSelections.map(\.rawValue))])
+                    canonicalList(scenario.behaviorSelections.map(\.rawValue)),
+                    canonicalList(scenario.checkingModeSelections.map(\.rawValue))])
             }
             list("validation", scenarios) { $0 }
         }

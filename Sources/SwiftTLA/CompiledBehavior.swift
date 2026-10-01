@@ -28,7 +28,8 @@ package struct CompiledBehavior: Sendable {
             validationScenarios: validationScenarios.map {
                 try .init(name: $0.name, bindings: $0.bindings.mapValues(transform),
                     expectations: $0.expectations, deadlockExpectation: $0.deadlockExpectation,
-                    checks: $0.checks, checkDeadlock: $0.checkDeadlock, behavior: $0.behavior)
+                    checks: $0.checks, checkDeadlock: $0.checkDeadlock, behavior: $0.behavior,
+                    checkingMode: $0.checkingMode)
             },
             initializations: initializations.map {
                 (variable: $0.variable, initialization: try $0.initialization.map(transform))
@@ -59,4 +60,5 @@ package struct CompiledValidationScenario: Sendable {
     package let checks: Set<PropertyID>
     package let checkDeadlock: Bool
     package let behavior: ModelBehavior
+    package let checkingMode: ValidationCheckingMode
 }

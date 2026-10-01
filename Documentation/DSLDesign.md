@@ -1043,6 +1043,12 @@ Each scenario provides `initialMachines()`, `check(maximumStates:)`, `explore(ma
 These methods use the same generated machine and symbolic transition module.
 
 Generated scenarios conform to `ModelValidationScenario`.
+Validation scenarios default to `.checkingMode(.exhaustive)`, which retains a
+complete graph even if a selected safety check fails. A configuration whose
+upstream check stops at its first safety counterexample declares
+`.checkingMode(.decisiveCounterexample)`. This changes the checking run, not
+the generated machine or TLA+ model. A decisive result requires a selected
+witness and never claims complete graph or unresolved deadlock parity.
 The native validator runs against the generated machine and records its states,
 transitions, and selected check outcomes without invoking TLC or rendering TLA+.
 Separately, TLC checks the generated TLA+ bundle. The two reports must agree on

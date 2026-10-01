@@ -4,14 +4,15 @@ import SwiftTLA
 /// Replays a TLC counterexample against the generated machine only at the
 /// comparison boundary; neither evidence producer reads the other engine.
 package enum TLCWitnessVerification {
+    @discardableResult
     package static func verifyPartial<Scenario: ModelValidationScenario>(
         scenario: Scenario, report: GeneratedTLCOracleReport, exitStatus: Int,
         oracle: URL, rendered: RenderedSpecification
-    ) throws {
+    ) throws -> Int {
         guard !report.graphComplete else {
             throw ValidationEvidenceComparisonError.invalidEvidence("partial witness selection")
         }
-        try verify(scenario: scenario, report: report, exitStatus: exitStatus,
+        return try verify(scenario: scenario, report: report, exitStatus: exitStatus,
             root: oracle.appendingPathComponent("tlc-graph"), rendered: rendered)
     }
 
@@ -49,14 +50,14 @@ package enum TLCWitnessVerification {
               status == 11 || status == 12 else {
             throw ValidationEvidenceComparisonError.invalidEvidence("checked TLC process input or outcome")
         }
-        try verify(scenario: scenario, report: report, exitStatus: status,
+        _ = try verify(scenario: scenario, report: report, exitStatus: status,
             root: root, rendered: rendered)
     }
 
     private static func verify<Scenario: ModelValidationScenario>(
         scenario: Scenario, report: GeneratedTLCOracleReport, exitStatus: Int,
         root: URL, rendered: RenderedSpecification
-    ) throws {
+    ) throws -> Int {
         let names = scenario.formalPropertyNames
         guard report.scenario == scenario.name,
               report.deadlockSelected == scenario.checking.checkDeadlock,
@@ -76,7 +77,7 @@ package enum TLCWitnessVerification {
             guard report.deadlock == .violated, replay.finalIsDeadlocked == true else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("false TLC deadlock witness")
             }
-            return
+            return replay.trace.steps.count
         }
         guard exitStatus == 12 else {
             throw ValidationEvidenceComparisonError.invalidEvidence("partial TLC process outcome")
@@ -104,5 +105,6 @@ package enum TLCWitnessVerification {
                 throw ValidationEvidenceComparisonError.invalidEvidence("false TLC invariant witness")
             }
         }
+        return replay.trace.steps.count
     }
 }

@@ -81,7 +81,7 @@ struct ScenarioExpectationTests {
             .first { $0.configuration.nodes == [1] && $0.behavior == .specification })
         let changed = WeaklyFairConfiguredProcessMachine.ValidationScenario(
             name: original.name, configuration: original.configuration,
-            checking: original.checking, behavior: original.behavior,
+            checking: original.checking, checkingMode: original.checkingMode, behavior: original.behavior,
             expectations: [.AllVisited: .violated], deadlockExpectation: original.deadlockExpectation)
         #expect(try Set(original.initialMachines().map(\.snapshot)) == Set(changed.initialMachines().map(\.snapshot)))
         let originalRun = try NativeScenarioRun(original, maximumStates: 10)

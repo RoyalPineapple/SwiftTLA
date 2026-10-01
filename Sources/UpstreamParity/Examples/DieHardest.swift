@@ -77,7 +77,7 @@ package struct DieHardestModel: Sendable {
             Validation("MCDieHardest") {
                 Bind(Capacities, to: [["j1": 5, "j2": 3], ["j1": 5, "j2": 3, "j3": 3]])
                 Bind(Goal, to: 4)
-            }.expect(NotSolved, .violated)
+            }.checkingMode(.decisiveCounterexample).expect(NotSolved, .violated)
         }
     }
 }

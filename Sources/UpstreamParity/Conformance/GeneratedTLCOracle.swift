@@ -44,6 +44,10 @@ package enum GeneratedTLCOracle {
             throw Error.checkingMismatch
         }
         let graphChecks = selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
+        if scenario.checkingMode == .decisiveCounterexample,
+           graphChecks.count != 1 || selected != graphChecks {
+            throw Error.checkingMismatch
+        }
         let graph = try inputIdentity(
             bundle: rendered.tlaBundle(checking: graphChecks, checkDeadlock: rendered.checksDeadlock),
             pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .finiteGraph)
@@ -64,9 +68,10 @@ package enum GeneratedTLCOracle {
                 pin: pin, arguments: ["-workers", "1", "-fp", "1"], invocation: .propertyCheck)
             : nil
         let identity: [String: Any] = [
-            "schema": "swifttla.oracle-cache-key-v2",
+            "schema": "swifttla.oracle-cache-key-v3",
             "caseID": id,
             "scenario": scenario.name,
+            "checkingMode": scenario.checkingMode.rawValue,
             "maximumStates": maximumStates,
             "graph": graph,
             "fullGraph": fullGraph,
@@ -104,6 +109,10 @@ package enum GeneratedTLCOracle {
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let graphChecks = selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
+        let decisive = scenario.checkingMode == .decisiveCounterexample
+        guard !decisive || (graphChecks.count == 1 && selected == graphChecks) else {
+            throw Error.checkingMismatch
+        }
         let graphBundle = try rendered.tlaBundle(checking: graphChecks,
                                                  checkDeadlock: rendered.checksDeadlock)
         try retainGeneratedInputs(graphBundle, in: directory.appendingPathComponent("generated"))
@@ -132,10 +141,13 @@ package enum GeneratedTLCOracle {
         } else {
             observedViolation = nil
         }
+        if decisive, observedViolation == nil {
+            throw Error.invalidOutcome("declared decisive safety witness absent")
+        }
 
         let graphRetained = directory.appendingPathComponent("tlc-graph")
         let graphIdentity: String
-        if checkedOutcome == .completed {
+        if decisive || checkedOutcome == .completed {
             try FileManager.default.moveItem(at: checkedRetained, to: graphRetained)
             graphIdentity = try inputIdentity(bundle: graphBundle, pin: pin,
                 arguments: ["-workers", "1", "-fp", "1"], invocation: .finiteGraph)
@@ -161,7 +173,7 @@ package enum GeneratedTLCOracle {
             let verdict: ValidationVerdict
             if name == observedViolation {
                 verdict = try Self.verdict(for: name, outcome: checkedOutcome,
-                    rendered: rendered, retained: checkedRetained)
+                    rendered: rendered, retained: decisive ? graphRetained : checkedRetained)
             } else if checkedOutcome == .completed && rendered.invariantNames.contains(name) {
                 verdict = .satisfied
             } else if checkedOutcome == .completed && rendered.reachabilityNames.contains(name) {
@@ -194,7 +206,8 @@ package enum GeneratedTLCOracle {
 
         let deadlock: ValidationVerdict?
         if rendered.checksDeadlock {
-            if checkedOutcome == .completed { deadlock = .satisfied }
+            if decisive { deadlock = .unavailable }
+            else if checkedOutcome == .completed { deadlock = .satisfied }
             else if checkedOutcome == .deadlock {
                 deadlock = try verdict(for: "deadlock", outcome: checkedOutcome,
                     rendered: rendered, retained: checkedRetained)
@@ -218,7 +231,7 @@ package enum GeneratedTLCOracle {
         let report = GeneratedTLCOracleReport(
             schema: "swifttla.generated-tlc-oracle", caseID: id, scenario: scenario.name,
             maximumStates: maximumStates,
-            graphComplete: true, graphInputSHA256: graphIdentity,
+            graphComplete: !decisive, graphInputSHA256: graphIdentity,
             properties: properties, deadlock: deadlock,
             deadlockSelected: rendered.checksDeadlock)
         let encoder = JSONEncoder()

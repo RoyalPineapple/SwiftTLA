@@ -48,6 +48,11 @@ public enum ValidationExpectation: String, Sendable, Codable {
     case violated
 }
 
+public enum ValidationCheckingMode: String, Sendable, Codable {
+    case exhaustive
+    case decisiveCounterexample
+}
+
 public struct ModelChecks<Property: Hashable & Sendable>: Equatable, Sendable {
     public let properties: Set<Property>
     public let checkDeadlock: Bool
@@ -63,6 +68,7 @@ public protocol ModelValidationScenario: Sendable {
     associatedtype Property: Hashable, Sendable where Property == Machine.Property
     var name: String { get }
     var checking: ModelChecks<Property> { get }
+    var checkingMode: ValidationCheckingMode { get }
     var behavior: ModelBehavior { get }
     var expectations: [Property: ValidationExpectation] { get }
     var deadlockExpectation: ValidationExpectation? { get }
@@ -90,6 +96,8 @@ public protocol AssumptionValidationScenario: Sendable {
 }
 
 extension ModelValidationScenario {
+    public var checkingMode: ValidationCheckingMode { .exhaustive }
+
     public func check(maximumStates: Int) throws -> NativeCheckResult<Machine> {
         try ReachabilityGraph.check(initialMachines: initialMachines(), maximumStates: maximumStates,
                                     checking: checking, behavior: behavior)
@@ -126,6 +134,7 @@ public struct ValidationDeclaration: SpecComponent {
     package var propertySelections: [[PropertyReference]] = []
     package var deadlockSelections: [Bool] = []
     package var behaviorSelections: [ModelBehavior] = []
+    package var checkingModeSelections: [ValidationCheckingMode] = []
 
     package init(name: String, bindings: [ValidationBinding]) {
         self.name = name
@@ -159,6 +168,12 @@ public struct ValidationDeclaration: SpecComponent {
     public func behavior(_ behavior: ModelBehavior) -> Self {
         var copy = self
         copy.behaviorSelections.append(behavior)
+        return copy
+    }
+
+    public func checkingMode(_ mode: ValidationCheckingMode) -> Self {
+        var copy = self
+        copy.checkingModeSelections.append(mode)
         return copy
     }
 }

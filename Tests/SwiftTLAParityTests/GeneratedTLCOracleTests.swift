@@ -11,7 +11,7 @@ struct GeneratedTLCOracleTests {
         expectations[.falseInvariant] = .satisfied
         let changed = ConstantStateClaims.ValidationScenario(
             name: original.name, configuration: original.configuration,
-            checking: original.checking, behavior: original.behavior,
+            checking: original.checking, checkingMode: original.checkingMode, behavior: original.behavior,
             expectations: expectations, deadlockExpectation: original.deadlockExpectation)
         let pin = try testReferencePin()
         let originalKey = try GeneratedTLCOracle.cacheKey(
@@ -19,6 +19,24 @@ struct GeneratedTLCOracleTests {
         let changedKey = try GeneratedTLCOracle.cacheKey(
             scenario: changed, id: "constant-state-claims-0", maximumStates: 10, pin: pin)
         #expect(originalKey == changedKey)
+    }
+
+    @Test("decisive stopping changes oracle cache identity without changing model semantics")
+    func decisiveModeChangesCacheIdentity() throws {
+        let decisive = try #require(DieHardestModel.validationScenarios().first)
+        let exhaustive = DieHardestModel.ValidationScenario(
+            name: decisive.name, configuration: decisive.configuration,
+            checking: decisive.checking, checkingMode: .exhaustive, behavior: decisive.behavior,
+            expectations: decisive.expectations, deadlockExpectation: decisive.deadlockExpectation)
+        let pin = try testReferencePin()
+        let decisiveBundle = try decisive.render().tlaBundle
+        let exhaustiveBundle = try exhaustive.render().tlaBundle
+        #expect(decisiveBundle.tla == exhaustiveBundle.tla)
+        #expect(decisiveBundle.cfg == exhaustiveBundle.cfg)
+        #expect(try GeneratedTLCOracle.cacheKey(
+            scenario: decisive, id: "die-hardest-0", maximumStates: 100_000, pin: pin) !=
+            GeneratedTLCOracle.cacheKey(
+                scenario: exhaustive, id: "die-hardest-0", maximumStates: 100_000, pin: pin))
     }
 
     @Test("cached TLC evidence is bound to its scenario, exploration limit, and bridge producer")

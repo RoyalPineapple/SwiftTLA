@@ -147,8 +147,20 @@ package enum ValidationEvidenceComparison {
                         swiftRoot: swiftRoot, tlcRoot: tlcRoot)
                 }
             } else {
-                try TLCWitnessVerification.verifyPartial(scenario: scenario, report: tlc,
+                guard let witness = swiftGraph.witness else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("native decisive witness")
+                }
+                let nativeVerdict = witness.kind == "violation" ? ValidationVerdict.violated
+                    : witness.kind == "reachability" ? .reached : .violated
+                let reported = witness.kind == "deadlock" ? swift.deadlock : swift.properties[witness.property]
+                guard reported == nativeVerdict else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("native decisive witness")
+                }
+                let tlcWitnessStates = try TLCWitnessVerification.verifyPartial(scenario: scenario, report: tlc,
                     exitStatus: tlcExitStatus, oracle: oracle, rendered: scenario.render())
+                if scenario.checkingMode == .decisiveCounterexample && witness.states != tlcWitnessStates {
+                    difference = "shortest decisive witness length"
+                }
             }
         }
         let report = ValidationEvidenceComparisonReport(
@@ -271,9 +283,11 @@ package enum ValidationEvidenceComparison {
         let initialCount: Int
         let edgeCount: Int
         let binaryEdges: Bool
+        let witness: NativeDecisiveWitness?
 
         init(states: URL, initial: URL, edges: URL, stateCount: Int,
-            initialCount: Int = 0, edgeCount: Int = 0, binaryEdges: Bool = false) {
+            initialCount: Int = 0, edgeCount: Int = 0, binaryEdges: Bool = false,
+            witness: NativeDecisiveWitness? = nil) {
             self.states = states
             self.initial = initial
             self.edges = edges
@@ -281,7 +295,14 @@ package enum ValidationEvidenceComparison {
             self.initialCount = initialCount
             self.edgeCount = edgeCount
             self.binaryEdges = binaryEdges
+            self.witness = witness
         }
+    }
+
+    private struct NativeDecisiveWitness: Codable {
+        let kind: String
+        let property: String
+        let states: Int
     }
 
     private struct SpoolManifest: Codable {
@@ -290,6 +311,7 @@ package enum ValidationEvidenceComparison {
         let initialCount: Int
         let edgeCount: Int
         let binaryEdges: Bool
+        let witness: NativeDecisiveWitness?
     }
 
     package static func writeTLCSpool(_ input: URL, caseID: String,
@@ -306,9 +328,9 @@ package enum ValidationEvidenceComparison {
     }
 
     private static func writeManifest(_ spool: Spool, in directory: URL) throws {
-        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v3",
+        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v4",
             stateCount: spool.stateCount, initialCount: spool.initialCount,
-            edgeCount: spool.edgeCount, binaryEdges: spool.binaryEdges)
+            edgeCount: spool.edgeCount, binaryEdges: spool.binaryEdges, witness: spool.witness)
         try JSONEncoder().encode(manifest).write(
             to: directory.appendingPathComponent("spool.json"), options: .atomic)
     }
@@ -316,7 +338,7 @@ package enum ValidationEvidenceComparison {
     private static func readManifest(in directory: URL) throws -> Spool {
         let manifest = try JSONDecoder().decode(SpoolManifest.self,
             from: Data(contentsOf: directory.appendingPathComponent("spool.json")))
-        guard manifest.schema == "swifttla.validation-spool-v3", manifest.binaryEdges,
+        guard manifest.schema == "swifttla.validation-spool-v4", manifest.binaryEdges,
               manifest.stateCount >= 0, manifest.initialCount >= 0,
               manifest.edgeCount >= 0 else {
             throw ValidationEvidenceComparisonError.invalidEvidence("spool manifest")
@@ -330,7 +352,8 @@ package enum ValidationEvidenceComparison {
         }
         return Spool(states: files[0], initial: files[1], edges: files[2],
             stateCount: manifest.stateCount, initialCount: manifest.initialCount,
-            edgeCount: manifest.edgeCount, binaryEdges: manifest.binaryEdges)
+            edgeCount: manifest.edgeCount, binaryEdges: manifest.binaryEdges,
+            witness: manifest.witness)
     }
 
     private static func readBinary(_ url: URL, caseID: String, actions: [RenderedAction],
@@ -375,6 +398,8 @@ package enum ValidationEvidenceComparison {
         var violationCount = 0
         var deadlockCount = 0
         var reachabilityCount = 0
+        var depths: [Int?] = []
+        var witness: NativeDecisiveWitness?
         while true {
             let footerOffset = reader.offset
             let tag = try reader.byte()
@@ -419,6 +444,7 @@ package enum ValidationEvidenceComparison {
                 catch { throw ValidationEvidenceComparisonError.invalidEvidence("binary state key") }
                 try stateOut.append(key: key, id: identity)
                 stateCount += 1
+                if producer == 2 && !expectedComplete { depths.append(initialFlag == 1 ? 0 : nil) }
                 if initialFlag == 1 {
                     initialCount += 1
                     try initialOut.append(String(identity))
@@ -434,6 +460,12 @@ package enum ValidationEvidenceComparison {
                     throw ValidationEvidenceComparisonError.invalidEvidence("binary edge identity")
                 }
                 try edgeOut.append(source: source, action: actionIDs[Int(action)], target: target)
+                if producer == 2 && !expectedComplete && depths[Int(target)] == nil {
+                    guard let sourceDepth = depths[Int(source)] else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("native witness path")
+                    }
+                    depths[Int(target)] = sourceDepth + 1
+                }
                 edgeCount += 1
             case 4:
                 let source = try reader.uint64()
@@ -470,12 +502,34 @@ package enum ValidationEvidenceComparison {
                 }
                 if tag == 6 { violationCount += 1 }
                 else { reachabilityCount += 1 }
+                if !expectedComplete {
+                    guard witness == nil,
+                          (predecessor == UInt64.max) == (action == UInt32.max) else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("native decisive witness")
+                    }
+                    let length: Int
+                    if predecessor == UInt64.max { length = 1 }
+                    else {
+                        guard let predecessorDepth = depths[Int(predecessor)] else {
+                            throw ValidationEvidenceComparisonError.invalidEvidence("native witness path")
+                        }
+                        length = predecessorDepth + 2
+                    }
+                    witness = NativeDecisiveWitness(kind: tag == 6 ? "violation" : "reachability",
+                        property: property, states: length)
+                }
             case 7:
                 let state = try reader.uint64()
                 guard producer == 2, state < UInt64(stateCount) else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("native deadlock event")
                 }
                 deadlockCount += 1
+                if !expectedComplete {
+                    guard witness == nil, let depth = depths[Int(state)] else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("native decisive witness")
+                    }
+                    witness = NativeDecisiveWitness(kind: "deadlock", property: "", states: depth + 1)
+                }
             case 255:
                 let counts = try (0..<8).map { _ in try reader.uint64() }
                 let completion = try reader.byte()
@@ -488,12 +542,19 @@ package enum ValidationEvidenceComparison {
                     checksum == (try reader.sha256Prefix(endingAt: footerOffset)) else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("binary graph footer")
                 }
+                if producer == 2 && !expectedComplete {
+                    guard let witness,
+                          (completion == 1 && witness.kind != "reachability")
+                            || (completion == 2 && witness.kind == "reachability") else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("native decisive witness")
+                    }
+                }
                 try stateOut.close()
                 try initialOut.close()
                 try edgeOut.close()
                 return Spool(states: states, initial: initial, edges: edges,
                     stateCount: stateCount, initialCount: initialCount,
-                    edgeCount: edgeCount, binaryEdges: true)
+                    edgeCount: edgeCount, binaryEdges: true, witness: witness)
             default:
                 throw ValidationEvidenceComparisonError.invalidEvidence("binary graph event")
             }
@@ -747,7 +808,8 @@ package enum ValidationEvidenceComparison {
         let decisiveSafety = report.properties.values.contains { $0 == .violated || $0 == .reached }
         guard (report.graphComplete && status == 0)
             || (!report.graphComplete && status == 11 && report.deadlock == .violated)
-            || (!report.graphComplete && status == 12 && decisiveSafety) else {
+            || (!report.graphComplete && status == 12 && decisiveSafety
+                && (!report.deadlockSelected || report.deadlock == .unavailable)) else {
             throw ValidationEvidenceComparisonError.invalidEvidence("TLC process outcome")
         }
         return status

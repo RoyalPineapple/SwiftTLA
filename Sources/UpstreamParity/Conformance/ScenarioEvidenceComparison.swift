@@ -82,10 +82,14 @@ package enum ScenarioEvidenceComparison {
             }
         }
         if let expected = scenario.deadlockExpectation {
-            guard let nativeVerdict = swift.deadlock, nativeVerdict.satisfies(expected) else {
+            guard let nativeVerdict = swift.deadlock,
+                  (nativeVerdict == .unavailable && !swift.graphComplete && expected == .satisfied
+                    || nativeVerdict.satisfies(expected)) else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("scenario expected deadlock")
             }
-            guard let oracleVerdict = tlc.deadlock, oracleVerdict.satisfies(expected) else {
+            guard let oracleVerdict = tlc.deadlock,
+                  (oracleVerdict == .unavailable && !tlc.graphComplete && expected == .satisfied
+                    || oracleVerdict.satisfies(expected)) else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("scenario expected deadlock")
             }
         }

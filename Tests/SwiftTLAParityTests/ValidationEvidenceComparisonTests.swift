@@ -234,9 +234,31 @@ struct ValidationEvidenceComparisonTests {
     func decisivePartialProcessComparesVerdicts() throws {
         let root = try fixture(graphComplete: false, tlcExitStatus: 12)
         defer { try? FileManager.default.removeItem(at: root) }
-        let result = try compare(root)
+        let scenario = try #require(SelectedChecksModel.validationScenarios().first { $0.name == "All" })
+        let result = try ValidationEvidenceComparison.compare(
+            scenario: scenario, caseID: "fixture", native: root.appendingPathComponent("native"),
+            oracle: root.appendingPathComponent("oracle"), actions: actions,
+            to: root.appendingPathComponent("raw-comparison"))
         #expect(result.result == "exact")
         #expect(!result.graphCompared)
+        #expect(result.deadlock == .unavailable)
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("scenario expected deadlock")) {
+            _ = try compare(root)
+        }
+    }
+
+    @Test("a native decisive event must name the reported failed property")
+    func nativeDecisiveEventMatchesReport() throws {
+        let root = try fixture(graphComplete: false, tlcExitStatus: 12,
+            nativeFailureProperty: "Unselected")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let scenario = try #require(SelectedChecksModel.validationScenarios().first { $0.name == "All" })
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("native decisive witness")) {
+            _ = try ValidationEvidenceComparison.compare(
+                scenario: scenario, caseID: "fixture", native: root.appendingPathComponent("native"),
+                oracle: root.appendingPathComponent("oracle"), actions: actions,
+                to: root.appendingPathComponent("raw-comparison"))
+        }
     }
 
     @Test("a partial result without a TLC trace cannot be exact")
@@ -343,7 +365,7 @@ struct ValidationEvidenceComparisonTests {
         nativeInitial: UInt64 = 0,
         edgeCount: Int = 1, graphComplete: Bool = true, tlcExitStatus: Int = 0,
         scenarioName: String? = nil, omitSelectedVerdicts: Bool = false,
-        skipCheckedPass: Bool = false) throws -> URL {
+        skipCheckedPass: Bool = false, nativeFailureProperty: String = "InitiallyZero") throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let native = root.appendingPathComponent("native")
         let tlc = root.appendingPathComponent("oracle/tlc-graph")
@@ -377,8 +399,8 @@ struct ValidationEvidenceComparisonTests {
             "properties": verdicts, "deadlockSelected": scenario.checking.checkDeadlock
         ]
         if scenario.checking.checkDeadlock {
-            nativeReport["deadlock"] = "violated"
-            oracleReport["deadlock"] = "violated"
+            nativeReport["deadlock"] = graphComplete ? "violated" : "unavailable"
+            oracleReport["deadlock"] = graphComplete ? "violated" : "unavailable"
         }
         try JSONSerialization.data(withJSONObject: nativeReport).write(to: native.appendingPathComponent("report.json"))
         try JSONSerialization.data(withJSONObject: oracleReport).write(
@@ -420,7 +442,7 @@ struct ValidationEvidenceComparisonTests {
             try writer.edge(source: 0, action: 0, target: nativeEdgeTarget)
         }
         if !graphComplete {
-            try writer.invariantFailure(property: "InitiallyZero", key: key(1), predecessor: 0, action: 0)
+            try writer.invariantFailure(property: nativeFailureProperty, key: key(1), predecessor: 0, action: 0)
         }
         try writer.finish(completion: graphComplete ? 0 : 1)
         try tlcGraph(edgeCount: edgeCount).write(to: tlc.appendingPathComponent("graph-events.bin"))

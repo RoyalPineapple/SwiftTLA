@@ -53,6 +53,7 @@ extension NativeSwiftEmitter {
             ValidationScenario(name: \(String(reflecting: scenario.name)),
                 \(hasConfiguration ? "configuration: try Configuration(\(bindings))," : "")
                 checking: ModelChecks(properties: [\(selected.map { ".\($0.1)" }.joined(separator: ", "))], checkDeadlock: \(scenario.checkDeadlock)),
+                checkingMode: .\(scenario.checkingMode.rawValue),
                 behavior: .\(scenario.behavior.rawValue),
                 expectations: [\(selected.isEmpty ? ":" : expectations)],
                 deadlockExpectation: \(deadlock))
@@ -66,6 +67,7 @@ extension NativeSwiftEmitter {
             public let name: String
             \(hasConfiguration ? "public let configuration: Configuration" : "")
             public let checking: ModelChecks<Property>
+            public let checkingMode: ValidationCheckingMode
             public let behavior: ModelBehavior
             public let expectations: [Property: ValidationExpectation]
             public let deadlockExpectation: ValidationExpectation?
