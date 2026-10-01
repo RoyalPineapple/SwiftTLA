@@ -25,6 +25,7 @@ package enum ValidationEvidenceComparisonError: Error, Equatable {
 package enum ValidationEvidenceComparison {
     private static func measured<Result>(_ phase: String, _ body: () throws -> Result) rethrows -> Result {
         let started = DispatchTime.now().uptimeNanoseconds
+        fputs("comparison phase \(phase): started\n", stderr)
         defer {
             let elapsed = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
             fputs("comparison phase \(phase): \(elapsed) s\n", stderr)
@@ -47,10 +48,14 @@ package enum ValidationEvidenceComparison {
                 try? FileManager.default.removeItem(at: referenceRoot)
             }
         }
-        let generatedGraph = try spoolTLC(generated, caseID: caseID, actions: actions,
-            in: generatedRoot, executable: spoolExecutable, kind: "upstream")
-        let referenceGraph = try spoolTLC(reference, caseID: caseID, actions: actions,
-            in: referenceRoot, executable: spoolExecutable, kind: "upstream")
+        let generatedGraph = try measured("generated TLC spool") {
+            try spoolTLC(generated, caseID: caseID, actions: actions,
+                in: generatedRoot, executable: spoolExecutable, kind: "upstream")
+        }
+        let referenceGraph = try measured("reference TLC spool") {
+            try spoolTLC(reference, caseID: caseID, actions: actions,
+                in: referenceRoot, executable: spoolExecutable, kind: "upstream")
+        }
         var generatedRanks: [UInt64: Int] = [:]
         var referenceRanks: [UInt64: Int] = [:]
         generatedRanks.reserveCapacity(generatedGraph.stateCount)
