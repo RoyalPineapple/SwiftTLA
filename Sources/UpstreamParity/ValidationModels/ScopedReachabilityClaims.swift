@@ -6,7 +6,7 @@ package struct ScopedReachabilityClaims {
     package enum Step: String, CaseIterable { case visit }
 
     package static var spec: TLASpec {
-        #spec("ScopedReachabilityClaims") { scope in
+        #spec { scope in
             let members = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([0, 1])]))
             let AllOwn = Reachable()

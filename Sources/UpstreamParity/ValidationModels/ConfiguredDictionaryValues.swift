@@ -6,7 +6,7 @@ package struct ConfiguredDictionaryValues: Sendable {
     package enum Step: String, CaseIterable { case fill }
 
     package static var spec: TLASpec {
-        #spec("ConfiguredDictionaryValues") { scope in
+        #spec { scope in
             let jugs = scope.parameter(as: Set<String>.self,
                 in: Set<Set<String>>([Set<String>([]), Set<String>(["small"]), Set<String>(["small", "big"])]))
             let capacity = scope.parameter(as: [String: Int].self,

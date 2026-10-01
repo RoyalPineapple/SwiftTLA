@@ -6,7 +6,7 @@ package struct ParameterizedAtomicSteps: Sendable {
     package enum Step: String, CaseIterable { case select, transfer }
 
     package static var spec: TLASpec {
-        #spec("ParameterizedAtomicSteps") { scope in
+        #spec { scope in
             let members = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([0]), Set<Int>([0, 1])]))
             let value = scope.sharedVar(initial: 0)

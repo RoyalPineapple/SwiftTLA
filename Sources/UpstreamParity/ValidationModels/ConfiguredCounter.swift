@@ -7,7 +7,7 @@ package struct ConfiguredCounter {
     package enum Step: String, CaseIterable { case advance }
 
     package static var spec: TLASpec {
-        #spec("ConfiguredCounter") { scope in
+        #spec { scope in
             let limit = scope.parameter(as: Int.self, in: 1...100)
             let stopAtLimit = scope.parameter(as: Bool.self)
             let value = scope.sharedVar(initial: 0)

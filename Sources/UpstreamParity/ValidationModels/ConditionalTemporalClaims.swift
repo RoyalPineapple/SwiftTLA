@@ -6,7 +6,7 @@ package struct ConditionalTemporalClaims {
     package enum Step: String, CaseIterable { case converge }
 
     package static var spec: TLASpec {
-        #spec("ConditionalTemporalClaims") { scope in
+        #spec { scope in
             let startsHere = Temporal()
             let missesOtherInitial = Temporal()
             Algorithm("Converge", fairness: .weak, scoped: { algorithm in

@@ -7,7 +7,7 @@ package struct TransitionPropertyClaims {
     package enum Step: String, CaseIterable { case advance, stay }
 
     package static var spec: TLASpec {
-        #spec("TransitionPropertyClaims") { scope in
+        #spec { scope in
             let limit = scope.parameter(as: Int.self, in: 2...3)
             let value = scope.sharedVar(in: IntRange(0, through: 1).mapping { count in
                 Value.expression(count: count, marker: 7)

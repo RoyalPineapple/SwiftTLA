@@ -6,7 +6,7 @@ package struct ScopedTemporalClaims {
     package enum Step: String, CaseIterable { case toggle }
 
     package static var spec: TLASpec {
-        #spec("ScopedTemporalClaims") { scope in
+        #spec { scope in
             let members = scope.parameter(as: Set<Int>.self, in: Set<Set<Int>>([Set<Int>([0, 1])]))
             let value = scope.sharedVar(initial: 0)
             let Bounded = Always()

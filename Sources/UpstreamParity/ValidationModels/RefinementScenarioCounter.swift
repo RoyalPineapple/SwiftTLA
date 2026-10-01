@@ -6,7 +6,7 @@ package struct RefinementScenarioCounter {
     package enum Step: String, CaseIterable { case advance }
 
     package static var spec: TLASpec {
-        #spec("RefinementScenarioCounter") { scope in
+        #spec { scope in
             let stride = scope.parameter(as: Int.self, in: 1...2)
             let bounded = Invariant()
             let abstract = TLASpec("UnitCounter") {

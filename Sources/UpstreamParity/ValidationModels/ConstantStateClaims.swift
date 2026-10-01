@@ -6,7 +6,7 @@ package struct ConstantStateClaims {
     package enum Step: String, CaseIterable { case stay }
 
     package static var spec: TLASpec {
-        #spec("ConstantStateClaims") { scope in
+        #spec { scope in
             let enabled = scope.parameter(as: Bool.self)
             let trueInvariant = Invariant()
             let falseInvariant = Invariant()

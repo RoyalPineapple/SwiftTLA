@@ -6,7 +6,7 @@ package struct ConfiguredProcessMachine {
     package enum Step: String, CaseIterable { case visit }
 
     package static var spec: TLASpec {
-        #spec("ConfiguredProcessMachine") { scope in
+        #spec { scope in
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1]), Set<Int>([1, 2, 3])]))
             let selected = scope.sharedVar(initial: Set<Int>([]))
@@ -35,7 +35,7 @@ package struct WeaklyFairConfiguredProcessMachine {
     package enum Step: String, CaseIterable { case visit }
 
     package static var spec: TLASpec {
-        #spec("WeaklyFairConfiguredProcessMachine") { scope in
+        #spec { scope in
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1]), Set<Int>([1, 2, 3])]))
             let selected = scope.sharedVar(initial: Set<Int>([]))
@@ -62,7 +62,7 @@ package struct StronglyFairConfiguredProcessMachine {
     package enum Step: String, CaseIterable { case visit }
 
     package static var spec: TLASpec {
-        #spec("StronglyFairConfiguredProcessMachine") { scope in
+        #spec { scope in
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1]), Set<Int>([1, 2, 3])]))
             let selected = scope.sharedVar(initial: Set<Int>([]))

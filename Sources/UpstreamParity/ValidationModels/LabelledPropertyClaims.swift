@@ -6,7 +6,7 @@ package struct LabelledPropertyClaims {
     package enum Step: String, CaseIterable { case stay }
 
     package static var spec: TLASpec {
-        #spec("LabelledPropertyClaims") {
+        #spec {
             let safe = SwiftTLA.Invariant(label: "Safety / progress")
             let reachable = Reachable(label: "Safety / progress")
             let always = Always(label: "Safety / progress")

@@ -6,7 +6,7 @@ package struct IndependentAtomicSteps {
     package enum Step: String, CaseIterable { case advance, reset, choose, blocked, rollback }
 
     package static var spec: TLASpec {
-        #spec("IndependentAtomicSteps") { scope in
+        #spec { scope in
             let value = scope.sharedVar(initial: 0)
             let copied = scope.sharedVar(initial: 0)
             let ordered = Invariant()
