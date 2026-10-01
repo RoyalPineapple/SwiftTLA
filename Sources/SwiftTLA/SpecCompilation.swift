@@ -120,18 +120,24 @@ package struct RenderedModule: Sendable, Equatable {
 
 public struct RenderedAction: Sendable, Equatable {
     public let sourceName: String
+    public let emittedBaseName: String
     public let arguments: [TLAValue]
     public let renderedName: String
 
-    public init(sourceName: String, arguments: [TLAValue], renderedName: String) {
+    public init(sourceName: String, emittedBaseName: String? = nil,
+        arguments: [TLAValue], renderedName: String) {
         self.sourceName = sourceName
+        self.emittedBaseName = emittedBaseName ?? sourceName
         self.arguments = arguments
         self.renderedName = renderedName
     }
 
     public var sourceInvocationName: String {
-        guard !arguments.isEmpty else { return sourceName }
-        return "\(sourceName)(\(arguments.map(\.description).joined(separator: ", ")))"
+        FormalActionCall(name: sourceName, arguments: arguments).description
+    }
+
+    public var emittedInvocationName: String {
+        FormalActionCall(name: emittedBaseName, arguments: arguments).description
     }
 }
 
@@ -1757,6 +1763,7 @@ private extension CompiledModuleMetadata {
                 calls: try callsByAction[compiled.id, default: []].map { emitted in
                     RenderedAction(
                         sourceName: declaration.declaration.name,
+                        emittedBaseName: declaration.renderedName,
                         arguments: try emitted.call.arguments.map { try $0.rendered(using: layout) },
                         renderedName: emitted.renderedName
                     )

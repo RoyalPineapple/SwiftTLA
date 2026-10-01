@@ -24,6 +24,15 @@ struct ValidationEvidenceComparisonTests {
         #expect(!coverage.coversCompleteScenario)
     }
 
+    @Test("procedure source names map to emitted native and TLC action names")
+    func procedureActionAliasMatches() throws {
+        let root = try fixture(nativeAction: "enter", tlcAction: "enter")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let alias = RenderedAction(sourceName: "procedure.copy.enter", emittedBaseName: "enter",
+            arguments: [], renderedName: "enter")
+        #expect(try compare(root, actions: [alias]).result == "exact")
+    }
+
     @Test("matching reports cannot omit a selected property and claim parity")
     func missingSelectedVerdictsFail() throws {
         let root = try fixture(scenarioName: "Selected", omitSelectedVerdicts: true)
@@ -342,13 +351,13 @@ struct ValidationEvidenceComparisonTests {
             generated: generated, reference: reference, actions: actions, in: root) == nil)
     }
 
-    private func compare(_ root: URL) throws -> ValidationEvidenceComparisonReport {
+    private func compare(_ root: URL, actions selectedActions: [RenderedAction]? = nil) throws -> ValidationEvidenceComparisonReport {
         let report = try JSONDecoder().decode(NativeValidationReport.self,
             from: Data(contentsOf: root.appendingPathComponent("native/report.json")))
         let scenario = try #require(SelectedChecksModel.validationScenarios().first { $0.name == report.scenario })
         return try ScenarioEvidenceComparison.compare(scenario: scenario, caseID: "fixture",
             native: root.appendingPathComponent("native"),
-            oracle: root.appendingPathComponent("oracle"), actions: actions,
+            oracle: root.appendingPathComponent("oracle"), actions: selectedActions ?? actions,
             to: root.appendingPathComponent("comparison"))
     }
 
@@ -361,7 +370,7 @@ struct ValidationEvidenceComparisonTests {
     }
 
     private func fixture(nativeTarget: Int = 1, nativeEdgeTarget: UInt64 = 1,
-        nativeAction: String = "Next",
+        nativeAction: String = "Next", tlcAction: String = "Next",
         nativeInitial: UInt64 = 0,
         edgeCount: Int = 1, graphComplete: Bool = true, tlcExitStatus: Int = 0,
         scenarioName: String? = nil, omitSelectedVerdicts: Bool = false,
@@ -445,7 +454,8 @@ struct ValidationEvidenceComparisonTests {
             try writer.invariantFailure(property: nativeFailureProperty, key: key(1), predecessor: 0, action: 0)
         }
         try writer.finish(completion: graphComplete ? 0 : 1)
-        try tlcGraph(edgeCount: edgeCount).write(to: tlc.appendingPathComponent("graph-events.bin"))
+        try tlcGraph(edgeCount: edgeCount, actionName: tlcAction)
+            .write(to: tlc.appendingPathComponent("graph-events.bin"))
         return root
     }
 
@@ -463,7 +473,8 @@ struct ValidationEvidenceComparisonTests {
         ]))
     }
 
-    private func tlcGraph(edgeCount: Int, source: UInt64 = 101, target: UInt64 = 202) -> Data {
+    private func tlcGraph(edgeCount: Int, source: UInt64 = 101, target: UInt64 = 202,
+        actionName: String = "Next") -> Data {
         var body = Data("STLAGRF2".utf8)
         body.append(1)
         append("fixture", to: &body)
@@ -478,7 +489,7 @@ struct ValidationEvidenceComparisonTests {
         }
         body.append(1)
         append(UInt32(0), to: &body)
-        append("Next", to: &body)
+        append(actionName, to: &body)
         append("", to: &body)
         for _ in 0..<edgeCount {
             body.append(3)

@@ -378,10 +378,10 @@ package enum ValidationEvidenceComparison {
             throw ValidationEvidenceComparisonError.invalidEvidence("binary graph run ID")
         }
         let declaredNative = Dictionary(uniqueKeysWithValues: actions.map {
-            ($0.sourceInvocationName, $0.renderedName)
+            ($0.emittedInvocationName, $0.renderedName)
         })
         let declaredTLC = Dictionary(uniqueKeysWithValues: actions.map {
-            (tlaInvocationLocationIdentity(action: $0.sourceName,
+            (tlaInvocationLocationIdentity(action: $0.emittedBaseName,
                 arguments: $0.arguments.map(\.description)), $0.renderedName)
         })
         let labels = Array(Set(actions.map(\.renderedName))).sorted()

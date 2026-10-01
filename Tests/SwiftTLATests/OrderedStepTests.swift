@@ -58,7 +58,15 @@ import Testing
         #expect(graph.transitions.keys.allSatisfy { $0.state.output == 0 || $0.state.output == 7 })
         let run = try NativeScenarioRun(scenario, maximumStates: 8)
         try run.validateExpectations()
-        _ = try scenario.render().plusCalBundle()
+        let rendered = try scenario.render()
+        #expect(rendered.actions.contains { $0.sourceName == "procedure.copy.enter" && $0.emittedBaseName == "enter" })
+        let emitted = Set(rendered.actions.map(\.emittedInvocationName))
+        for transitions in graph.transitions.values {
+            for transition in transitions {
+                #expect(emitted.contains(try graph.formalCall(for: transition.action).description))
+            }
+        }
+        _ = try rendered.plusCalBundle()
     }
 
     @Test("Ordinary let captures at its declaration and preserves shadowed values")

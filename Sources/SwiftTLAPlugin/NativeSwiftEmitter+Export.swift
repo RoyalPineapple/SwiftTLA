@@ -34,7 +34,7 @@ extension NativeSwiftEmitter {
                 "(importingModule: \(String(reflecting: $0.importingModule)), importedModule: \(String(reflecting: $0.importedModule)), structuralPath: \(String(reflecting: $0.structuralPath)))"
             }.joined(separator: ",\n")
             let actions = module.renderedActions.map { action in
-                "RenderedAction(sourceName: \(String(reflecting: action.sourceName)), arguments: [\(action.arguments.map(renderedLiteral).joined(separator: ", "))], renderedName: \(String(reflecting: action.renderedName)))"
+                "RenderedAction(sourceName: \(String(reflecting: action.sourceName)), emittedBaseName: \(String(reflecting: action.emittedBaseName)), arguments: [\(action.arguments.map(renderedLiteral).joined(separator: ", "))], renderedName: \(String(reflecting: action.renderedName)))"
             }
             var actionMetadata = "\(module.symbolicActions.isEmpty ? "let" : "var") _actions: [RenderedAction] = [\(actions.joined(separator: ", "))]"
             for id in module.symbolicActions {
