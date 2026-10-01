@@ -144,8 +144,7 @@ enum TLASpecVerifier {
             let name = type.name.sourceIdentifierName
             switch (module.name.sourceIdentifierName, name) {
             case ("Swift", "Int"), ("Swift", "String"), ("Swift", "CaseIterable"),
-                 ("SwiftTLA", "TLAValueType"), ("SwiftTLA", "FiniteTLAValueDomain"),
-                 ("SwiftTLA", "TLARecordSchema"):
+                 ("SwiftTLA", "TLAValueType"), ("SwiftTLA", "FiniteTLAValueDomain"):
                 return name
             default: return nil
             }
@@ -383,7 +382,6 @@ enum ModelMacroError: Error, CustomStringConvertible, Equatable {
     case duplicateEnumCase(typeName: String, caseName: String)
     case duplicateEnumRawValue(typeName: String, caseName: String)
     case unsupportedEnumEncoding(typeName: String)
-    case unsupportedRecordSchema(typeName: String)
     case emptyFiniteEnum
     case emptyValueEnum
 
@@ -395,7 +393,6 @@ enum ModelMacroError: Error, CustomStringConvertible, Equatable {
         case .dynamicFiniteDomain(let typeName): "Enum \(typeName).finiteValues must be an array of its declared cases or synthesized allCases; dynamic or computed domains are not supported"
         case .nonLiteralSpecification: "The static spec getter must contain only a direct #spec or TLASpec declaration, optionally preceded by return, with a literal module name and an inline builder closure"
         case .dynamicModuleName(let source): "\(source.rawValue) requires a literal module name"
-        case .unsupportedRecordSchema(let typeName): "Native type \(typeName) requires a literal alias or a record schema whose fieldName directly maps every declared key path to a unique string literal"
         case .unsupportedEnumEncoding(let typeName): "Enum \(typeName).tlaValue must encode rawValue as .string, .constant, or .int matching its raw type, directly or through an exhaustive switch self; dynamic encodings are not supported"
         case .duplicateTypeDeclaration(let typeName): "Type '\(typeName)' is declared more than once in the model"
         case .duplicateEnumCase(let typeName, let caseName): "Enum \(typeName) declares case '\(caseName)' more than once"

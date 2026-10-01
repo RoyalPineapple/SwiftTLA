@@ -16,27 +16,9 @@ struct Counter {
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    struct CarFields {
+    struct Car: Hashable, Sendable {
         let floor: Int
         let doorsOpen: Bool
-    }
-
-    enum CarSchema: TLARecordSchema {
-        typealias Fields = CarFields
-
-        static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \CarFields.floor { return "floor" }
-            if key == \CarFields.doorsOpen { return "doorsOpen" }
-            return nil
-        }
-
-        static let floor = field(\CarFields.floor)
-        static let doorsOpen = field(\CarFields.doorsOpen)
-        static let fields = [
-            TLARecordFieldDeclaration(floor, default: 0),
-            TLARecordFieldDeclaration(doorsOpen, default: false)
-        ]
     }
 
     enum CarID: String, FiniteTLAValueDomain {
@@ -51,17 +33,15 @@ struct Counter {
         #spec("Counter") {
             Algorithm("Counter", scoped: { scope in
                 let value = scope.sharedVar(_name: "value", initial: 0)
-                let cars = scope.sharedVar(_name: "cars", initial: Function<CarID, Record<CarSchema>>.literal(
-                    (.one, Record<CarSchema>.literal(.init(CarSchema.floor, 1), .init(CarSchema.doorsOpen, false))),
-                    (.two, Record<CarSchema>.literal(.init(CarSchema.floor, 2), .init(CarSchema.doorsOpen, false)))
+                let cars = scope.sharedVar(_name: "cars", initial: Function<CarID, Car>.literal(
+                    (.one, Car(floor: 1, doorsOpen: false)),
+                    (.two, Car(floor: 2, doorsOpen: false))
                 ))
                 Each(Node.all, scoped: { _, scope in
                     let visits = scope.localVar(_name: "visits", initial: 0)
                     Do(Step.advance, when: value < 1) {
                         Assign(value, to: value + 1)
-                        Assign(cars, to: cars.updating(.one) { car in
-                            car.updating(CarSchema.floor, to: 2)
-                        })
+                        Assign(cars[.one].floor, to: 2)
                         Assign(visits, to: visits + 1)
                         Stop()
                     }

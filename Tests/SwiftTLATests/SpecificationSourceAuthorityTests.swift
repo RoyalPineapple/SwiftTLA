@@ -512,53 +512,6 @@ struct SpecificationSourceAuthorityTests {
         }
     }
 
-    @Test("Native source metadata preserves aliases and formal record field names")
-    func sourceMetadataPreservesAliasesAndRecordNames() throws {
-        let declaration = try declaration(#"""
-        typealias Value = OneOf<Transaction, NoValue>
-        struct OperationFields {
-            let operation: OperationKind
-            let value: Value
-        }
-        enum OperationSchema: SwiftTLA.TLARecordSchema {
-            typealias Fields = OperationFields
-            static func fieldName<Value>(for field: KeyPath<OperationFields, Value>) -> String? {
-                let key = field as AnyKeyPath
-                if key == \OperationFields.operation { return "op" }
-                if key == \OperationFields.value { return "value" }
-                return nil
-            }
-            static let operation = field(\OperationFields.operation)
-            static let value = field(\OperationFields.value)
-            static let fields = [
-                TLARecordFieldDeclaration(operation, default: OperationKind.read),
-                TLARecordFieldDeclaration(value, default: Value.second(.noVal))
-            ]
-        }
-        """#)
-        let metadata = try TLASpecVerifier.sourceTypes(in: declaration.memberBlock.members, enums: [])
-        #expect(metadata.aliases["Value"]?.trimmedDescription == "OneOf<Transaction, NoValue>")
-        #expect(metadata.records["OperationSchema"]?.map(\.name) == ["op", "value"])
-        #expect(metadata.records["OperationSchema"]?.map(\.sourceName) == ["operation", "value"])
-        #expect(metadata.records["OperationSchema"]?.map { $0.swiftType.trimmedDescription } == ["OperationKind", "Value"])
-    }
-
-    @Test("Dynamic schema field-name mappings are rejected")
-    func sourceMetadataRejectsDynamicRecordNames() throws {
-        let declaration = try declaration(#"""
-        struct DynamicFields { let value: Int }
-        enum Schema: TLARecordSchema {
-            typealias Fields = DynamicFields
-            static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String? {
-                return runtimeName(field)
-            }
-        }
-        """#)
-        #expect(throws: ModelMacroError.unsupportedRecordSchema(typeName: "Schema")) {
-            _ = try TLASpecVerifier.sourceTypes(in: declaration.memberBlock.members, enums: [])
-        }
-    }
-
     private func expectRejection(_ members: String) throws {
         let declaration = try declaration(members)
         #expect(throws: ModelMacroError.nonLiteralSpecification) {
