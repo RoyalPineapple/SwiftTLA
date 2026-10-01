@@ -247,23 +247,6 @@ struct GeneratedIntegerChoiceAlgorithm {
 }
 
 @TLAModel
-struct GeneratedAlgorithmStateConstraint {
-    enum Step: String, CaseIterable { case advance }
-
-    static var spec: TLASpec {
-        #spec("GeneratedAlgorithmStateConstraint") {
-            Algorithm("GeneratedAlgorithmStateConstraint", scoped: { scope in
-                let count = scope.sharedVar(_name: "count", initial: 0)
-                Do(Step.advance) {
-                    Assign(count, to: count + 1)
-                }
-                StateConstraint(count < 2)
-            })
-        }
-    }
-}
-
-@TLAModel
 struct GeneratedProcessLocalInvariant {
     enum Node: String, CaseIterable, FiniteTLAValueDomain {
         case left
