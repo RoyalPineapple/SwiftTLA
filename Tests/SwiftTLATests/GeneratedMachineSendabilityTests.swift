@@ -30,14 +30,20 @@ public struct ExplicitlyTransferableCounter: Sendable {
 }
 
 @Suite struct GeneratedMachineSendabilityTests {
-    @Test("public generated machines satisfy Sendable with generated or explicit conformance")
-    func publicMachineConformance() throws {
+    @Test("generated machine and scenario values have compiler-checked Sendable conformance")
+    func generatedValueConformance() throws {
         func requireSendable<Value: Sendable>(_: Value.Type) {}
         requireSendable(TransferableCounter.self)
         requireSendable(TransferableCounter.State.self)
         requireSendable(TransferableCounter.Action.self)
         requireSendable(TransferableCounter.Transition.self)
+        requireSendable(TransferableCounter.Snapshot.self)
+        requireSendable(TransferableCounter.CheckingRegisters.self)
+        requireSendable(TransferableCounter.Property.self)
+        requireSendable(TransferableCounter.Actor.self)
         requireSendable(ExplicitlyTransferableCounter.self)
+        requireSendable(ScenarioExpectations.Configuration.self)
+        requireSendable(ScenarioExpectations.ValidationScenario.self)
         var machine = try TransferableCounter.makeMachine()
         #expect(try machine.send(.advance).after.count == 1)
     }
