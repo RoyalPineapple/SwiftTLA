@@ -900,7 +900,7 @@ extension ParserSession {
             .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? sourceName
         let displayLabel: String?
         do {
-            displayLabel = try stateDisplayLabel(initializer)
+            displayLabel = try declarationDisplayLabel(initializer, kind: "state")
         } catch {
             algorithmSourceDiagnostic = error
             return nil

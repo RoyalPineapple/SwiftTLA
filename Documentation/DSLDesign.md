@@ -121,6 +121,7 @@ let count = scope.sharedVar(initial: 0)
 let hour = scope.sharedVar(in: 1...12)
 let visited = process.localVar(initial: false)
 let readable = scope.sharedVar(label: "Current value", initial: 0)
+let limit = scope.parameter(as: Int.self, in: 1...12, label: "Visit limit")
 ```
 
 The same rule applies to specification, algorithm, process, and procedure scopes.
@@ -136,7 +137,13 @@ for every variable, and generated `State.displayNames` exposes labels for public
 state fields keyed by typed Swift key paths, falling back to the Swift binding
 name. Labels do not change the formal identifier, state
 value, transitions, or compilation identity; duplicate labels are permitted.
-Anonymous non-state declarations still require the remaining B-02 decisions.
+Other anonymous non-state declarations still require the remaining B-02 decisions.
+
+Parameter handles also derive their names from immutable Swift bindings and
+accept an optional nonempty literal `label:`. The label is available through
+`CompilationDescription.parameters` and generated `Configuration.displayNames`;
+it does not change the parameter identity, binding, legal domain, or TLA+ export.
+Unlabelled parameters display their Swift binding names.
 
 Swift backticks escape keywords but are not part of declaration identity.
 For example, a state binding spelled `` `repeat` `` has the formal name `repeat`.

@@ -459,27 +459,29 @@ public final class SpecificationScope {
     }
 
     public func parameter<Value: TLAValueType, Domain: FormalSetValue>(
-        as: Value.Type, in domain: some TypedExpression<Domain>, _name: String = "",
+        as: Value.Type, in domain: some TypedExpression<Domain>, label: String? = nil, _name: String = "",
         _sourceOffset: Int? = nil, _sourceLength: Int = 0
     ) -> ModelParameter<Value> where Domain.Element == Value {
-        declareParameter(_name, domain: domain.stateExpr, sourceOffset: _sourceOffset, sourceLength: _sourceLength)
+        declareParameter(_name, label: label, domain: domain.stateExpr,
+            sourceOffset: _sourceOffset, sourceLength: _sourceLength)
     }
 
-    public func parameter(as: Int.Type, in domain: ClosedRange<Int>, _name: String = "",
+    public func parameter(as: Int.Type, in domain: ClosedRange<Int>, label: String? = nil, _name: String = "",
         _sourceOffset: Int? = nil, _sourceLength: Int = 0) -> ModelParameter<Int> {
-        declareParameter(_name, domain: .integerRange(.int(domain.lowerBound), .int(domain.upperBound)),
+        declareParameter(_name, label: label, domain: .integerRange(.int(domain.lowerBound), .int(domain.upperBound)),
             sourceOffset: _sourceOffset, sourceLength: _sourceLength)
     }
 
-    public func parameter(as: Bool.Type, _name: String = "",
+    public func parameter(as: Bool.Type, label: String? = nil, _name: String = "",
         _sourceOffset: Int? = nil, _sourceLength: Int = 0) -> ModelParameter<Bool> {
-        declareParameter(_name, domain: .setLiteral([.value(.bool(false)), .value(.bool(true))]),
+        declareParameter(_name, label: label, domain: .setLiteral([.value(.bool(false)), .value(.bool(true))]),
             sourceOffset: _sourceOffset, sourceLength: _sourceLength)
     }
 
-    private func declareParameter<Value: TLAValueType>(_ name: String, domain: StateExpr,
+    private func declareParameter<Value: TLAValueType>(_ name: String, label: String?, domain: StateExpr,
         sourceOffset: Int?, sourceLength: Int) -> ModelParameter<Value> {
-        let reference = ParameterReference(name: name, sourceOffset: sourceOffset, sourceLength: sourceLength)
+        let reference = ParameterReference(name: name, displayLabel: label,
+            sourceOffset: sourceOffset, sourceLength: sourceLength)
         parameters.append(.init(reference: reference, swiftType: swiftSurfaceTypeName(for: Value.self), domain: domain))
         return ModelParameter(reference: reference)
     }

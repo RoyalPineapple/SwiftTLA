@@ -29,6 +29,9 @@ extension NativeSwiftEmitter {
         let arguments = try parameters.map {
             "`\($0.reference.name)` \(inputs[$0.binder]!): \(try swiftType(program.bindingTypes[$0.binder]!))"
         }.joined(separator: ", ")
+        let displayNames = parameters.map {
+            "\\Configuration.`\($0.reference.name)`: \(String(reflecting: $0.reference.displayLabel ?? $0.reference.name))"
+        }.joined(separator: ",\n")
         var body: [String] = []
         for parameter in parameters {
             guard let domain = program.behavior.parameterDomains[parameter.binder] else {
@@ -52,6 +55,9 @@ extension NativeSwiftEmitter {
         return try nativeDeclarations("""
         public struct Configuration: Hashable, Sendable {
             \(fields)
+            public static var displayNames: [PartialKeyPath<Configuration>: String] {
+                [\(displayNames)]
+            }
             public init(\(arguments)) throws {
                 \(body.joined(separator: "\n"))
             }

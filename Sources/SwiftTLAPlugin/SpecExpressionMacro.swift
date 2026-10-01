@@ -173,6 +173,14 @@ private final class DSLRewriter: SyntaxRewriter {
             guard let member = call.calledExpression.as(MemberAccessExprSyntax.self),
                   ["parameter", "checkingRegister"].contains(member.declName.baseName.sourceIdentifierName),
                   member.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == parameterScope else { return binding }
+            if member.declName.baseName.sourceIdentifierName == "parameter" {
+                let labels = call.arguments.filter { $0.label?.text == "label" }
+                guard labels.isEmpty || (labels.count == 1
+                    && labels.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue?.isEmpty == false) else {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: ParameterLabelDiagnostic()))
+                    return binding
+                }
+            }
             guard node.bindingSpecifier.text == "let" else {
                 if member.declName.baseName.sourceIdentifierName == "checkingRegister" {
                     context.diagnose(Diagnostic(node: Syntax(source), message: CheckingRegisterBindingDiagnostic()))
@@ -354,6 +362,12 @@ private struct StateLabelDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-state-label")
     let severity: DiagnosticSeverity = .error
     let message = "A state label requires one nonempty string literal without interpolation."
+}
+
+private struct ParameterLabelDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-parameter-label")
+    let severity: DiagnosticSeverity = .error
+    let message = "A parameter label requires one nonempty string literal without interpolation."
 }
 
 private struct PropertyBindingDiagnostic: DiagnosticMessage {

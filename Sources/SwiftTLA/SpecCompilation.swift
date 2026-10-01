@@ -50,6 +50,7 @@ public struct CompilationIdentity: Sendable, Hashable, CustomStringConvertible {
 public struct CompilationDescription: Sendable, Equatable {
     public let name: String
     public let identity: CompilationIdentity
+    public let parameters: [ParameterDescription]
     public let variables: [VariableDescription]
     public let actions: [ActionDescription]
     public let invariants: [String]
@@ -60,6 +61,11 @@ public struct CompilationDescription: Sendable, Equatable {
     public let procedures: [ProcedureDescription]
     public let controlLocations: [ControlLocationDescription]
     public let imports: [ModuleDescription]
+}
+
+public struct ParameterDescription: Sendable, Equatable {
+    public let name: String
+    public let displayName: String
 }
 
 public struct VariableDescription: Sendable, Equatable {
@@ -782,6 +788,9 @@ public extension TLASpec {
         let description = CompilationDescription(
             name: name,
             identity: identity,
+            parameters: layout.parameters.map {
+                .init(name: $0.reference.name, displayName: $0.reference.displayLabel ?? $0.reference.name)
+            },
             variables: layout.variables.map {
                 .init(name: $0.declaration.name, displayName: $0.displayLabel ?? $0.declaration.name,
                     sourceOffset: $0.declaration.sourceOffset)

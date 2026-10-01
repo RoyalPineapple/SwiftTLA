@@ -10925,7 +10925,7 @@
       "id": "AC-18",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLATests/StateDeclarationNamesTests.swift derives state names from Swift bindings, including escaped identifiers, and keeps two state declarations distinct when they share a display label. Tests/SwiftTLATests/PropertyDeclarationNamesTests.swift preserves distinct property and refinement identities despite equal labels. Label changes preserve compilation identity, graph semantics, and formal references. The suite also checks source-located errors for invalid labels. Complete declaration-category coverage and hosted acceptance evidence remain unaudited.",
+      "reason": "StateDeclarationNamesTests derives state names from Swift bindings, including escaped identifiers, and keeps two state declarations distinct when they share a display label. ParameterDeclarationNamesTests now derives parameter names from Swift bindings, exposes optional labels through compiled descriptions and generated typed Configuration key paths, preserves distinct parameters with equal labels, proves label changes leave compilation identity unchanged, and checks source-located invalid-label diagnostics in both parsing and an external Swift consumer. PropertyDeclarationNamesTests preserves distinct property and refinement identities despite equal labels. Complete remaining declaration-category coverage and hosted acceptance evidence remain unaudited.",
       "evidence": []
     },
     {

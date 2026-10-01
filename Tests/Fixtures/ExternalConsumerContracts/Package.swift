@@ -70,6 +70,10 @@ let package = Package(
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
+      name: "InvalidParameterDisplayLabel",
+      dependencies: generatedMachineDependencies
+    ),
+    .executableTarget(
       name: "ReadmeModelCollectionMacro",
       dependencies: generatedMachineDependencies
     ),

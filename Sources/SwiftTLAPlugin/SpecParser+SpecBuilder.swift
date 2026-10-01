@@ -154,12 +154,15 @@ extension ParserSession {
                     continue
                 }
                 do {
+                    let displayLabel = try declarationDisplayLabel(call, kind: "parameter")
                     let shape = try sourceTypeResolver.resolve(typeName)
-                    let reference = ParameterReference(name: sourceName,
+                    let reference = ParameterReference(name: sourceName, displayLabel: displayLabel,
                         sourceOffset: binding.positionAfterSkippingLeadingTrivia.utf8Offset,
                         sourceLength: binding.trimmedDescription.utf8.count)
                     components.parameters.append(.init(reference: reference, swiftType: typeName, domain: domain))
                     sourceScope = sourceScope.extending(binding: sourceName, to: .parameter(reference), shape: shape)
+                } catch let diagnostic as SourceParseDiagnostic {
+                    components.diagnostics.append(diagnostic)
                 } catch {
                     components.diagnostics.append(.init(message: "Invalid parameter type: \(error)", source: binding))
                 }
@@ -361,15 +364,15 @@ extension ParserSession {
         }
     }
 
-    func stateDisplayLabel(_ call: FunctionCallExprSyntax) throws(SourceParseDiagnostic) -> String? {
+    func declarationDisplayLabel(_ call: FunctionCallExprSyntax, kind: String) throws(SourceParseDiagnostic) -> String? {
         let labels = call.arguments.filter { $0.label?.text == "label" }
         guard labels.count <= 1 else {
-            throw .init(message: "A state label requires one nonempty string literal without interpolation.", source: call)
+            throw .init(message: "A \(kind) label requires one nonempty string literal without interpolation.", source: call)
         }
         guard let label = labels.first else { return nil }
         guard let value = label.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
               !value.isEmpty else {
-            throw .init(message: "A state label requires one nonempty string literal without interpolation.", source: label)
+            throw .init(message: "A \(kind) label requires one nonempty string literal without interpolation.", source: label)
         }
         return value
     }
@@ -428,7 +431,7 @@ extension ParserSession {
         if callName == "SharedVar" {
             let displayLabel: String?
             do {
-                displayLabel = try stateDisplayLabel(fc)
+                displayLabel = try declarationDisplayLabel(fc, kind: "state")
             } catch {
                 components.diagnostics.append(error)
                 return
