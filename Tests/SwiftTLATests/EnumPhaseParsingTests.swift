@@ -166,126 +166,6 @@ import SwiftTLAMacros
         ])
     }
 
-    @Test func normalizesTypedFacadeAndEnumDomainsToBuilderAST() throws {
-        let source = """
-        {
-            let floor = Var<Int>("floor")
-            let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
-            let calls = Var<SetExpr<Record<CarSchema>>>("calls")
-            Variable(floor, 0)
-            Variable(cars, Function<CarID, Record<CarSchema>>.literal(
-                (CarID.carA, Record<CarSchema>.literal(
-                    .init(CarSchema.floor, 0),
-                    .init(CarSchema.doorsOpen, false)
-                )),
-                (CarID.carB, Record<CarSchema>.literal(
-                    .init(CarSchema.floor, 1),
-                    .init(CarSchema.doorsOpen, true)
-                ))
-            ))
-            Variable(calls, SetExpr<Record<CarSchema>>())
-            Action("move", parameters: [
-                ActionParameter("person", values: PersonID.finiteValues),
-                ActionParameter("car", values: CarID.finiteValues),
-                ActionParameter("direction", values: Direction.finiteValues)
-            ]) {
-                cars.becomes(cars.updating(.carA) { car in
-                    car.updating(CarSchema.floor, to: 2)
-                })
-            }
-            Action("readCar") {
-                floor.becomes(cars[CarID.carA][CarSchema.floor])
-            }
-            Action("initialize") {
-                cars.becomes(Function<CarID, Record<CarSchema>>.literal(
-                    (CarID.carA, Record<CarSchema>.literal(
-                        .init(CarSchema.floor, 0),
-                        .init(CarSchema.doorsOpen, false)
-                    )),
-                    (CarID.carB, Record<CarSchema>.literal(
-                        .init(CarSchema.floor, 1),
-                        .init(CarSchema.doorsOpen, true)
-                    ))
-                ))
-            }
-            Action("insertCall") {
-                calls.inserting(Record<CarSchema>.literal(
-                    .init(CarSchema.floor, 0),
-                    .init(CarSchema.doorsOpen, false)
-                ))
-            }
-            Action("removeCall") {
-                calls.removing(Record<CarSchema>.literal(
-                    .init(CarSchema.floor, 0),
-                    .init(CarSchema.doorsOpen, false)
-                ))
-            }
-            Action("containsCall") {
-                calls.contains(Record<CarSchema>.literal(
-                    .init(CarSchema.floor, 0),
-                    .init(CarSchema.doorsOpen, false)
-                )) && floor.becomes(1)
-            }
-        }
-        """
-        let enums = [
-            parserTestEnum("PersonID", cases: ["alice": .string("alice"), "bob": .string("bob")]),
-            parserTestEnum("CarID", cases: ["carA": .string("carA"), "carB": .string("carB")]),
-            parserTestEnum(
-                "Direction",
-                cases: ["up": .string("up"), "down": .string("down")],
-                finiteValues: [.string("up"), .string("down")]
-            )
-        ]
-        let closure = try parseSpecTestClosure(source)
-        let parsed = SpecParser.parseSpecClosure(named: "Parsed",
-            closure,
-            sourceTypes: .init(records: ["CarSchema": [
-                .init(sourceName: "floor", name: "floor", swiftType: "Int"),
-                .init(sourceName: "doorsOpen", name: "doorsOpen", swiftType: "Bool")
-            ]], enums: enums)
-        )
-
-        let floor = Var<Int>("floor")
-        let cars = Var<Function<TestCarID, Record<TestCarSchema>>>("cars")
-        let calls = Var<SetExpr<Record<TestCarSchema>>>("calls")
-        let closed = Record<TestCarSchema>.literal(
-            .init(TestCarSchema.floor, 0),
-            .init(TestCarSchema.doorsOpen, false)
-        )
-        let open = Record<TestCarSchema>.literal(
-            .init(TestCarSchema.floor, 1),
-            .init(TestCarSchema.doorsOpen, true)
-        )
-        let bindings = [
-            ActionParameter("person", values: TestPersonID.finiteValues).actionBinding,
-            ActionParameter("car", values: TestCarID.finiteValues).actionBinding,
-            ActionParameter("direction", values: TestDirection.finiteValues).actionBinding
-        ]
-        let builderActions: [(String, ActionExpr, [ActionBinding])] = [
-            ("move", cars.becomes(cars.updating(.carA) { car in
-                car.updating(TestCarSchema.floor, to: 2)
-            }), bindings),
-            ("readCar", floor.becomes(cars[.carA][TestCarSchema.floor]), []),
-            ("initialize", cars.becomes(
-                Function<TestCarID, Record<TestCarSchema>>.literal((.carA, closed), (.carB, open))), []),
-            ("insertCall", calls.inserting(closed), []),
-            ("removeCall", calls.removing(closed), []),
-            ("containsCall", calls.contains(closed) && floor.becomes(1), [])
-        ]
-
-        #expect(parsed.diagnostics.isEmpty)
-        #expect(Set(parsed.variables.map(\.name)) == ["floor", "cars", "calls"])
-        #expect(parsed.actions.count == builderActions.count)
-        #expect(parsed.actions[0].bindings.map(\.generatedSwiftType) == ["PersonID", "CarID", "Direction"])
-        for (parsedAction, builtAction) in zip(parsed.actions, builderActions) {
-            #expect(parsedAction.name == builtAction.0)
-            #expect(parsedAction.body == builtAction.1)
-            #expect(parsedAction.bindings.map(\.name) == builtAction.2.map(\.name))
-            #expect(parsedAction.bindings.map(\.domain) == builtAction.2.map(\.domain))
-        }
-    }
-
     @Test func diagnosesUnsupportedTypedUpdateAtItsSource() throws {
         let source = """
         {
@@ -301,7 +181,7 @@ import SwiftTLAMacros
 
         #expect(parsed.actions.isEmpty)
         #expect(parsed.diagnostics.map(\.message) == [
-            "Parameterized action 'update' contains an unsupported typed update; use a directly written finite enum case or schema field token."
+            "Parameterized action 'update' contains an unsupported typed update; use a statically named field or finite enum case."
         ])
         #expect(parsed.diagnostics.first?.source.contains("dynamicKeyPath") == true)
     }

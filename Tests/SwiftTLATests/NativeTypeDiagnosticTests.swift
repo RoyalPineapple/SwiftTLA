@@ -410,10 +410,10 @@ import Testing
         #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("[Int: Bool: String]") }
     }
 
-    @Test("Known type constructors reject missing and excess generic arguments", arguments: [
+    @Test("Generic type syntax requires a supported constructor and the declared arity", arguments: [
         "Set", "SetExpr<Int, Bool>", "Array<Int, Bool>", "Swift.Dictionary<Int>",
         "Function<Int>", "PartialFunction<Int>", "Pair<Int>", "Record<Int, Bool>",
-        "OneOf<Int>", "ZeroBasedSequence<Int, Bool>", "Int<Bool>"
+        "Other.Record<Int>", "OneOf<Int>", "ZeroBasedSequence<Int, Bool>", "Int<Bool>"
     ])
     func typeConstructorRequiresItsDeclaredArity(_ source: String) throws {
         let resolver = SourceTypeResolver()

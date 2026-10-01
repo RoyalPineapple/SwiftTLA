@@ -43,12 +43,6 @@ let cameraModeDefinition = parserTestEnum(
     ]
 )
 
-enum TestPersonID: String, FiniteTLAValueDomain {
-    case alice, bob
-    static var defaultValue: Self { .alice }
-    static let finiteValues = [Self.alice, .bob]
-}
-
 @TLAModel
 struct DefinePhaseGeneratedModel {
     enum Step: String, CaseIterable { case stay }
@@ -116,38 +110,4 @@ struct TypedFacadeEnumDomainMacro {
             }
         }
     }
-}
-
-enum TestCarID: String, FiniteTLAValueDomain {
-    case carA, carB
-    static var defaultValue: Self { .carA }
-    static let finiteValues = [Self.carA, .carB]
-}
-
-enum TestDirection: String, FiniteTLAValueDomain {
-    case up, down
-    static var defaultValue: Self { .up }
-    static let finiteValues = [Self.up, .down]
-}
-
-struct TestCarFields {
-    let floor: Int
-    let doorsOpen: Bool
-}
-
-enum TestCarSchema: TLARecordSchema {
-    typealias Fields = TestCarFields
-    static func fieldName<Value>(for field: KeyPath<TestCarFields, Value>) -> String? {
-        let key = field as AnyKeyPath
-        if key == \TestCarFields.floor { return "floor" }
-        if key == \TestCarFields.doorsOpen { return "doorsOpen" }
-        return nil
-    }
-
-    static let floor = field(\TestCarFields.floor)
-    static let doorsOpen = field(\TestCarFields.doorsOpen)
-    static let fields = [
-        TLARecordFieldDeclaration(floor, default: 0),
-        TLARecordFieldDeclaration(doorsOpen, default: false)
-    ]
 }

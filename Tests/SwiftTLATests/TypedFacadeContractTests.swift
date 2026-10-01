@@ -232,9 +232,7 @@ struct TypedFacadeContractTests {
       "InvalidTypedDSL.swift:44:",
       "parameter 'car' requires a non-empty finite values array",
       "InvalidTypedDSL.swift:61:",
-      "parameter 'direction' has duplicate finite-domain values",
-      "InvalidTypedDSL.swift:98:",
-      "Parameterized action 'unsupportedUpdate' contains an unsupported typed update; use a directly written finite enum case or schema field token."
+      "parameter 'direction' has duplicate finite-domain values"
     ] {
       #expect(build.output.contains(expected))
     }
@@ -242,7 +240,8 @@ struct TypedFacadeContractTests {
     let unknownField = try buildExternalConsumer("InvalidTypedDSLUnknownField")
     #expect(unknownField.status != 0)
     #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:26:"))
-    #expect(unknownField.output.contains("type 'CarSchema' has no member 'person'"))
+    #expect(unknownField.output.contains("Statement 1 could not be decoded"))
+    #expect(unknownField.output.contains("Assign(cars[.one].person, to: 2)"))
   }
 
   @Test("formal AST construction is explicit")

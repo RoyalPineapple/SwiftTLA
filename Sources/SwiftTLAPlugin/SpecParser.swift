@@ -126,7 +126,6 @@ final class ParserSession {
     var constants: [ConstantDecl] = []
     let sourceTypes: SourceTypeMetadata
     let sourceTypeResolver: SourceTypeResolver
-    var recordSchemas: [String: [SourceRecordField]] { sourceTypes.records }
 
     func nominalRecordType(_ expression: ExprSyntax) -> CompiledValueType? {
         var expression = expression
@@ -1163,8 +1162,6 @@ final class ParserSession {
         if access.declName.baseName.sourceIdentifierName == "literal",
            let literalType = typedFacadeType(access.base) {
             switch literalType.name {
-            case "Record":
-                return decodeTypedRecordLiteral(call, scope: scope)
             case "SetExpr":
                 return decodeTypedSetLiteral(
                     call,
@@ -1267,14 +1264,6 @@ final class ParserSession {
                 expectedEnumType: expectedEnumType
            ) {
             return .ifThenElse(condition, thenValue, elseValue)
-        }
-
-        // Swift infers `Record<Schema>` from a surrounding `SetExpr` or
-        // `Function` literal, so the source spelling may be `Record.literal`.
-        // Its field entries retain enough syntax to decode independently.
-        if access.declName.baseName.sourceIdentifierName == "literal",
-           access.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Record" {
-            return decodeTypedRecordLiteral(call, scope: scope)
         }
 
         guard let baseSyntax = access.base,
@@ -1610,15 +1599,6 @@ final class ParserSession {
         at expression: ExprSyntax,
         scope: TypedFacadeScope
     ) -> (selector: StateExpr, value: StateExpr, type: CompiledValueType?)? {
-        if let fieldName = typedFieldName(expression) {
-            let fieldType: CompiledValueType?
-            if case .record(let fields) = type {
-                fieldType = fields.first { $0.name == fieldName }?.type
-            } else {
-                fieldType = nil
-            }
-            return (.value(.string(fieldName)), .recordAccess(base, fieldName), fieldType)
-        }
         let keyType: CompiledValueType?
         if case .dictionary(let key, _) = type { keyType = key } else { keyType = nil }
         guard let index = decodeTypedFacadeValue(
@@ -1628,13 +1608,6 @@ final class ParserSession {
         if case .array = type { value = .tupleDynamicAccess(base, index) }
         else { value = .functionApply(base, index) }
         return (index, value, type?.selectedElement)
-    }
-
-    func typedFieldName(_ expression: ExprSyntax) -> String? {
-        guard let member = expression.as(MemberAccessExprSyntax.self),
-              let schema = terminalTypeName(in: member.base),
-              let fields = recordSchemas[schema] else { return nil }
-        return fields.first { $0.sourceName == member.declName.baseName.sourceIdentifierName }?.name
     }
 
     /// A record field may be qualified by its enclosing model type, while an
@@ -1981,27 +1954,6 @@ final class ParserSession {
             return member.name.text
         }
         return nil
-    }
-
-    func decodeTypedRecordLiteral(
-        _ call: FunctionCallExprSyntax,
-        scope: TypedFacadeScope
-    ) -> StateExpr? {
-        var fields: [String: StateExpr] = [:]
-        for argument in call.arguments {
-            guard let entry = argument.expression.as(FunctionCallExprSyntax.self),
-                  let entryName = entry.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName,
-                  entryName == "init",
-                  entry.arguments.count == 2,
-                  let field = entry.arguments.first.flatMap({ typedFieldName($0.expression) }),
-                  fields[field] == nil,
-                  let value = entry.arguments.dropFirst().first.flatMap({
-                      decodeTypedFacadeValue($0.expression, scope: scope)
-                  })
-            else { return nil }
-            fields[field] = value
-        }
-        return StateExpr.record(fields)
     }
 
     func decodeTypedSetLiteral(
@@ -2716,7 +2668,7 @@ extension ParserSession {
             if let expression = source.as(ExprSyntax.self),
                let update = typedUpdateExpression(in: expression) {
                 return .init(message: "\(context) contains an unsupported typed update; "
-                    + "use a directly written finite enum case or schema field token.", source: update)
+                    + "use a statically named field or finite enum case.", source: update)
             }
             return .init(message: "\(context) contains an unsupported action expression.", source: source)
         }

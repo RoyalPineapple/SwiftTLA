@@ -37,26 +37,13 @@ package struct SourceEnum: Sendable {
     }
 }
 
-/// Swift declarations that retain source types alongside formal values.
-/// This is consumed by the shared compiler inference pass, never at runtime.
-package struct SourceRecordField: Sendable {
-    package let sourceName: String
-    package let name: String
-    package let swiftType: TypeSyntax
-    package init(sourceName: String, name: String, swiftType: TypeSyntax) {
-        self.sourceName = sourceName; self.name = name; self.swiftType = swiftType
-    }
-}
-
 package struct SourceTypeMetadata: Sendable {
     package let aliases: [String: TypeSyntax]
-    package let records: [String: [SourceRecordField]]
     package let structs: [String: StructDeclSyntax]
     package let enums: [SourceEnum]
-    package init(aliases: [String: TypeSyntax] = [:], records: [String: [SourceRecordField]] = [:],
+    package init(aliases: [String: TypeSyntax] = [:],
                  structs: [String: StructDeclSyntax] = [:], enums: [SourceEnum] = []) {
         self.aliases = aliases
-        self.records = records
         self.structs = structs
         self.enums = enums
     }
@@ -82,7 +69,7 @@ final class SourceTypeResolver {
             (declaration.typeName, declaration.cases.map { (name: $0.name, value: CompiledValue(formal: $0.value)) })
         }))
         self.metadata = metadata
-        let names = Set(metadata.enums.map(\.typeName)).union(metadata.records.keys).union(metadata.structs.keys)
+        let names = Set(metadata.enums.map(\.typeName)).union(metadata.structs.keys)
         var nominalNames = Dictionary(grouping: names) { TokenSyntax.identifier($0).sourceIdentifierName }
         for (name, declaration) in metadata.structs {
             let qualified = Self.qualifiedName(of: declaration)
@@ -170,7 +157,11 @@ final class SourceTypeResolver {
                   ["Swift", "SwiftTLA"].contains(member.baseType.trimmedDescription) {
             name = member.name.sourceIdentifierName
             arguments = member.genericArgumentClause
-        } else if type.is(MemberTypeSyntax.self) {
+        } else if let member = type.as(MemberTypeSyntax.self) {
+            guard member.genericArgumentClause == nil else {
+                throw CompiledValueType.diagnostic("types.\(member.name.sourceIdentifierName)",
+                    "generic arguments require a supported type constructor")
+            }
             return try named(source, resolving: resolving)
         } else {
             throw CompiledValueType.diagnostic("type", "unsupported Swift type syntax: \(source)")
@@ -216,26 +207,15 @@ final class SourceTypeResolver {
         case "Pair":
             let parts = try resolveArguments(expecting: 2)
             return .init(type: .tuple(parts.map(\.type)), view: .tuple(parts.map(\.view)))
-        case "Record", "TLARecord":
-            let argument = try resolveArguments(expecting: 1)[0]
-            guard case .named(let schema) = argument.type,
-                  let fields = metadata.records[schema] else {
-                return .init(type: .unknown, view: .unsupported(source))
-            }
-            let identity = "record-schema:\(schema)"
-            guard !resolving.contains(identity) else {
-                throw CompiledValueType.diagnostic("schemas.\(schema)", "recursive record schema requires a finite nonrecursive native field shape")
-            }
-            let resolvedFields = try fields.sorted { $0.name < $1.name }.map { field in
-                (name: field.name, value: try resolveType(field.swiftType, resolving: resolving.union([identity])))
-            }
-            return .init(type: .record(resolvedFields.map { .init(name: $0.name, type: $0.value.type) }),
-                view: .record(resolvedFields.map { .init(name: $0.name, shape: $0.value.view) }))
         case "OneOf":
             let parts = try resolveArguments(expecting: 2)
             return .init(type: try CompiledValueType.preservingUnion(parts[0].type, parts[1].type, namedDomains: namedDomains),
                 view: .union(parts[0].view, parts[1].view))
         default:
+            guard arguments == nil else {
+                throw CompiledValueType.diagnostic("types.\(name)",
+                    "generic arguments require a supported type constructor")
+            }
             return try named(source, resolving: resolving)
         }
     }
