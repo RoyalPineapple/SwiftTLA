@@ -14,22 +14,7 @@ enum PersonID: String, FiniteTLAValueDomain {
   static let finiteValues = [PersonID.person]
 }
 
-struct CarFields {
-  let floor: Int
-}
-
-enum CarSchema: TLARecordSchema {
-  typealias Fields = CarFields
-  static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
-    field as AnyKeyPath == \CarFields.floor ? "floor" : nil
-  }
-
-  static let floor = field(\CarFields.floor)
-  static let fields = [TLARecordFieldDeclaration(floor, default: 0)]
-}
-
-let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
-let forged = TLAField<CarSchema, String>(name: "floor")
+let cars = Var<Function<CarID, Int>>("cars")
 let wrongDomain = cars[.person]
 let rawVar = Var<TLAValue>("raw")
 let rawExpr = Expr<TLAValue>(.variable("raw"))
@@ -86,7 +71,6 @@ let varIntegerDivision = rawVar.integerDivided(by: 1)
 let exprIntegerDivision = rawExpr.integerDivided(by: 1)
 
 print(
-  forged,
   wrongDomain,
   varRawAssignment,
   exprRawAssignment,

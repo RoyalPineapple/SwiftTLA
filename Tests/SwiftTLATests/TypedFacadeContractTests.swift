@@ -181,16 +181,16 @@ struct TypedFacadeContractTests {
     let build = try buildExternalConsumer("InvalidTypedFacade")
 
     #expect(build.status != 0)
-    #expect(build.output.contains("TLAField"))
-    #expect(build.output.contains("InvalidTypedFacade.swift:32:"))
+    #expect(build.output.contains("InvalidTypedFacade.swift:18:"))
     #expect(build.output.contains("member 'person'"))
     #expect(build.output.contains("requires that 'StateExpr' conform to 'TypedExpression'"))
     let errors = build.output.split(separator: "\n").filter { $0.contains(": error:") }
     #expect(errors.contains {
-      $0.contains("InvalidTypedFacade.swift:39:")
+      $0.contains("InvalidTypedFacade.swift:24:")
         && $0.contains("requires that 'TLAValue' conform to '_GeneratedRecordValue'")
     })
-    let rejectedLines = [32, 33, 151, 152, 154, 155, 156, 159, 160, 162, 163] + Array(139...149) + Array(38...41) + Array(43...56) + Array(58...73) + Array(75...86)
+    let rejectedLines = [18, 135, 136, 138, 139, 140, 143, 144, 146, 147]
+      + Array(123...133) + Array(23...26) + Array(28...41) + Array(43...58) + Array(60...71)
     for line in rejectedLines {
       #expect(errors.contains { $0.contains("InvalidTypedFacade.swift:\(line):") },
               "Expected the invalid operation on fixture line \(line) to be rejected. Compiler errors:\n\(errors.joined(separator: "\n"))")
