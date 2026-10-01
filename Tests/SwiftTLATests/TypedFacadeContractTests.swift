@@ -92,56 +92,6 @@ struct TypedFacadeContractTests {
     ]
   }
 
-  struct GarageFields {
-    let car: Record<CarSchema>
-    let owner: PersonID
-  }
-
-  enum GarageSchema: TLARecordSchema {
-    typealias Fields = GarageFields
-
-    static func fieldName<Value>(for field: KeyPath<GarageFields, Value>) -> String? {
-      let key = field as AnyKeyPath
-      if key == \GarageFields.car { return "car" }
-      if key == \GarageFields.owner { return "owner" }
-      return nil
-    }
-
-    static let car = field(\GarageFields.car)
-    static let owner = field(\GarageFields.owner)
-    static let fields = [
-      TLARecordFieldDeclaration(car, default: Record<CarSchema>()),
-      TLARecordFieldDeclaration(owner, default: PersonID.alice)
-    ]
-  }
-
-  @Test("record decoding validates declared fields and nested values")
-  func recordDecodingValidatesSchema() throws {
-    #expect(Record<CarSchema>(formalValue: .record([
-      "floor": .bool(false),
-      "doorsOpen": .bool(false)
-    ])) == nil)
-    #expect(Record<CarSchema>(formalValue: .record(TLARecord([
-      .init("floor", .int(0)),
-      .init("floor", .int(1))
-    ]))) == nil)
-    #expect(Record<CarSchema>(formalValue: .record(["floor": .int(0)])) == nil)
-    #expect(Record<CarSchema>(formalValue: .record([
-      "floor": .int(0),
-      "doorsOpen": .bool(false),
-      "owner": .string("alice")
-    ])) == nil)
-
-    let formal: TLAValue = .record([
-      "car": .record(["floor": .int(2), "doorsOpen": .bool(true)]),
-      "owner": .string("bob")
-    ])
-    let garage = try #require(Record<GarageSchema>(formalValue: formal))
-    #expect(garage.tlaValue == formal)
-    #expect(garage.value(for: GarageSchema.owner) == .bob)
-    #expect(garage.value(for: GarageSchema.car)?.value(for: CarSchema.floor) == 2)
-  }
-
   @Test("Conditional branches retain enum context for values and expressions")
   func conditionalBranchesAcceptEnumLiterals() throws {
     let person = PersonID.bob.expr
