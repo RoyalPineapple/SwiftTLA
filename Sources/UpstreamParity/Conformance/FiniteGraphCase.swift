@@ -288,7 +288,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             guard let scenario else {
                 throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
             }
-            guard let scenarios = try modelValidationScenarios(for: sourceModel.nativeModelID) else {
+            guard let scenarios = try modelValidationScenarios(for: sourceModel.rawValue) else {
                 throw EvidenceFormatError.invalidField(record: id, field: "native validation registration")
             }
             let matches = scenarios.filter { $0.name == scenario }
@@ -380,9 +380,8 @@ package struct FiniteGraphSourceModel: Decodable, Hashable, Sendable {
     package init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)
-        let nativeID = Self.nativeModelID(for: value)
         guard value == "sums-even" || value == "stones"
-                || hasUpstreamModelValidationRegistration(nativeID) else {
+                || hasUpstreamModelValidationRegistration(value) else {
             throw DecodingError.dataCorruptedError(
                 in: container, debugDescription: "Unknown upstream source model: \(value)"
             )
@@ -391,16 +390,6 @@ package struct FiniteGraphSourceModel: Decodable, Hashable, Sendable {
     }
 
     fileprivate var isAssumptionOnly: Bool { rawValue == "sums-even" || rawValue == "stones" }
-
-    fileprivate var nativeModelID: String { Self.nativeModelID(for: rawValue) }
-
-    private static func nativeModelID(for value: String) -> String {
-        switch value {
-        case "n-queens-four": "n-queens"
-        case "queens-four": "queens"
-        default: value
-        }
-    }
 
     package func render() throws -> RenderedSpecification {
         switch rawValue {

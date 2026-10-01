@@ -703,7 +703,7 @@
     },
     {
       "id": "queens-four",
-      "sourceModel": "queens-four",
+      "sourceModel": "queens",
       "scenario": "FourQueens",
       "module": "queens-four/MC.tla",
       "configuration": "queens-four/MC.cfg",
@@ -720,7 +720,7 @@
     },
     {
       "id": "n-queens-four",
-      "sourceModel": "n-queens-four",
+      "sourceModel": "n-queens",
       "scenario": "FourQueens",
       "module": "n-queens-four/MC.tla",
       "configuration": "n-queens-four/MC.cfg",

@@ -24,7 +24,7 @@ struct FiniteGraphManifestTests {
   }
 
   @Test("reference cases reject unregistered and fixture-only models",
-    arguments: ["not-registered", "counter", "selected-checks"])
+    arguments: ["not-registered", "counter", "selected-checks", "queens-four", "n-queens-four"])
   func rejectsNonUpstreamSourceModel(sourceModel: String) throws {
     let path = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
