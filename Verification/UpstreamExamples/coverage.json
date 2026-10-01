@@ -10828,7 +10828,9 @@
       "reason": "The parser rejects an unsupported Algorithm construct before publishing any compiled model, including through imports and instances (CompilerBoundaryDiagnosticTests). MachineValidationTests rejects unsupported selected checks and a state limit even for an expected invariant violation; ScenarioExpectationTests rejects a state limit even for an expected deadlock. GraphComparisonTests rejects matching timeouts, execution errors, and incomplete graphs. TLCGraphReaderTests exercises process timeouts, malformed events, closure, counts, and digests; TLCPropertyCheckTests leaves unsupported results unavailable rather than treating them as matches. ValidationEvidenceComparisonTests rejects failed TLC exits, impossible partial witnesses, malformed values, and corrupt or truncated binary streams. These are distinct failure boundaries, not repeated assertions of one helper. The ordinary CI suites and full independent validation passed at f13ec76e, but final-head admission is still required.",
       "evidence": [{
         "sourceSHA": "f13ec76ef1ad7d11394f6653d6dfa6312c388217",
+        "developerToolsVersion": "16.4",
         "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36853183324",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36853183324/artifacts/11160510060",
         "validationRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36853183189",
         "acceptanceComplete": true,
         "scope": "Both ordinary Swift test jobs and the full independent matrix passed on this exact SHA. Source audit connects unsupported compilation and selected checks, native state limits, TLC timeout and unavailable results, and malformed or incomplete evidence to the required non-success paths. This is AC-10 evidence only, not final-head qualification or additional upstream-family credit."
