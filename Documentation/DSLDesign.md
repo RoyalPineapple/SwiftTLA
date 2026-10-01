@@ -1058,8 +1058,11 @@ A `let` binding alone does not register a refinement. Its handle must also appea
 `.expect(refinement, .violated)` changes the expected outcome without disabling the refinement or other checks.
 A distinct handle with the same name does not resolve to the registered refinement.
 Generated native checking and TLA+ export use the same resolved refinement identity and mappings.
+An abstract formal parameter mapped directly from concrete model parameters, including
+arithmetic over them, retains those typed inputs in the specialized abstract machine for native checking.
 
-General composition, unresolved abstract configurations, and additional refinement targets remain open under B-06.
+General composition, abstract configurations not resolved by the concrete configuration,
+and additional refinement targets remain open under B-06.
 
 `.expectDeadlock(.violated)` declares an expected deadlock without disabling its
 check. Duplicate overrides and expectations for disabled checks are errors.
