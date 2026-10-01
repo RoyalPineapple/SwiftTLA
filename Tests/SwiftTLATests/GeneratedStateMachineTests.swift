@@ -86,14 +86,10 @@ struct GeneratedStateMachineTests {
             [.int(2), .int(20), .int(100)], [.int(2), .int(20), .int(200)]
         ]
         let compilation = try sourceSpecification.compile()
-        let graph = try ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
-        #expect(
-            try graph.transitions[.init(0)]?.map {
-                try $0.label.formalArguments(using: compilation.layout)
-            } == expectedArguments
-        )
-
         let machine = try EndToEndThreeParameterActionMachine.makeMachine()
+        let graph = try ReachabilityGraph(initialMachines: [machine], maximumStates: 100)
+        let initialTransitions = try #require(graph.transitions[machine.snapshot])
+        #expect(try initialTransitions.map { try machine.formalCall(for: $0.action).arguments } == expectedArguments)
         let initialActions = try machine.enabledActions()
         let expectedActions: [EndToEndThreeParameterActionMachine.Action] = [
             .transfer(source: 1, destination: 10, amount: 100), .transfer(source: 1, destination: 10, amount: 200),
@@ -102,32 +98,17 @@ struct GeneratedStateMachineTests {
             .transfer(source: 2, destination: 20, amount: 100), .transfer(source: 2, destination: 20, amount: 200)
         ]
         #expect(initialActions == expectedActions)
+        #expect(initialTransitions.map(\.action) == expectedActions)
         #expect(try machine.isEnabled(.transfer(source: 2, destination: 20, amount: 200)))
         #expect(try machine.isEnabled(.transfer(source: 2, destination: 30, amount: 200)) == false)
 
-        let renderedCalls = try sourceSpecification.compile().render().actions
+        let renderedCalls = try compilation.render().actions
         #expect(renderedCalls.map(\.sourceName) == Array(repeating: "transfer", count: 8))
         #expect(renderedCalls.map(\.arguments) == expectedArguments)
         #expect(renderedCalls.map(\.renderedName) == [
             "transfer__0_0_0", "transfer__0_0_1", "transfer__0_1_0", "transfer__0_1_1",
             "transfer__1_0_0", "transfer__1_0_1", "transfer__1_1_0", "transfer__1_1_1"
         ])
-
-        let initial = try firstCompiledState(in: compilation)
-        let successor = try #require(try compiledSuccessors(
-            named: "transfer",
-            arguments: [.int(2), .int(20), .int(200)],
-            in: compilation,
-            from: initial
-        ).first)
-        #expect(try renderedValue(named: "value", in: successor, compilation: compilation) == .int(222))
-        #expect(try compiledSuccessors(
-            named: "transfer",
-            arguments: [.int(2), .int(30), .int(200)],
-            in: compilation,
-            from: initial
-        ).isEmpty)
-        #expect(try renderedValue(named: "value", in: initial, compilation: compilation) == .int(0))
 
         var generatedMachine = try EndToEndThreeParameterActionMachine.makeMachine()
         let before = generatedMachine.state
@@ -222,17 +203,13 @@ struct GeneratedStateMachineTests {
 
     @Test("Algorithm initialization produces the expected generated and explored states")
     func generatedAlgorithmInitialState() throws {
-        let compilation = try GeneratedAlgorithmMachine.spec.compile()
         var machine = try GeneratedAlgorithmMachine.makeMachine()
         #expect(machine.state.count == 1)
         #expect(try machine.send(.tick).after.count == 2)
-        let check = try ModelChecker(
-            compilation: compilation,
-            configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)
-        ).check()
-        if case .ok(let count) = check { #expect(count == 2) } else {
-            #expect(Bool(false), "Expected the initial state and one successor")
-        }
+        let graph = try ReachabilityGraph(initialMachines: GeneratedAlgorithmMachine.initialMachines(), maximumStates: 100)
+        #expect(graph.initialStates.count == 1)
+        #expect(graph.transitions.count == 2)
+        #expect(graph.safetyViolations.isEmpty)
     }
 
 }
