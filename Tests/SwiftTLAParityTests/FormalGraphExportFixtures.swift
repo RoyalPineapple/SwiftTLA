@@ -1,15 +1,16 @@
 import SwiftTLA
+import UpstreamParity
 
-package enum FormalGraphExportError: Error, Equatable, Sendable {
+enum FormalGraphExportError: Error, Equatable, Sendable {
   case initialStateMissing(Int)
   case transitionStateMissing(Int)
   case traceStateMissing
 }
 
-package struct FormalGraphExporter: Sendable {
-  package init() {}
+struct FormalGraphExporter: Sendable {
+  init() {}
 
-  package func export(
+  func export(
     _ exploration: FiniteExploration,
     for finiteGraphCase: FiniteGraphCase
   ) throws -> GraphRun {
@@ -22,7 +23,7 @@ package struct FormalGraphExporter: Sendable {
     )
   }
 
-  package func export(
+  func export(
     _ exploration: FiniteExploration
   ) throws -> GraphRun {
     try export(exploration, renderedActionNames: [:])
@@ -72,7 +73,7 @@ package struct FormalGraphExporter: Sendable {
     )
   }
 
-  package func canonicalStates(
+  func canonicalStates(
     _ exploration: FiniteExploration
   ) throws -> [StateGraph.StateID: CanonicalState] {
     var states: [StateGraph.StateID: CanonicalState] = [:]
