@@ -409,6 +409,29 @@ enum ModelMacroError: Error, CustomStringConvertible, Equatable {
 
 // MARK: - Macros
 
+private final class AssumedRecordTypeUse: SyntaxVisitor {
+    let name: String
+    var found = false
+
+    init(name: String) {
+        self.name = name
+        super.init(viewMode: .sourceAccurate)
+    }
+
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        guard !found,
+              let member = node.calledExpression.as(MemberAccessExprSyntax.self),
+              member.declName.baseName.sourceIdentifierName == "assuming",
+              node.arguments.count == 1,
+              let metatype = node.arguments.first?.expression.as(MemberAccessExprSyntax.self),
+              metatype.declName.baseName.sourceIdentifierName == "self",
+              let source = metatype.base else { return .visitChildren }
+        found = source.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == name
+            || source.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName == name
+        return .visitChildren
+    }
+}
+
 public struct ModelMacro: MemberMacro, MemberAttributeMacro {
     public static func expansion(
         of node: AttributeSyntax,
@@ -420,11 +443,17 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
             guard !TLASpecVerifier.inheritedTypeNames(in: record.inheritanceClause).contains("TLAValueType"),
                   let source = declaration.memberBlock.members.compactMap({ $0.decl.as(StructDeclSyntax.self) })
                     .first(where: { $0.name.sourceIdentifierName == record.name.sourceIdentifierName }),
-                  let model = try? TLASpecVerifier.parseAndVerify(declaration),
-                  NativeTypeDeclarations(program: model.program).nominalRecords.contains(where: {
-                      if case .nominalRecord(let name, _) = $0 { return name == SourceTypeResolver.qualifiedName(of: source) }
-                      return false
-                  }) else { return [] }
+                  let model = try? TLASpecVerifier.parseAndVerify(declaration) else { return [] }
+            let usedAsState = NativeTypeDeclarations(program: model.program).nominalRecords.contains(where: {
+                if case .nominalRecord(let name, _) = $0 { return name == SourceTypeResolver.qualifiedName(of: source) }
+                return false
+            })
+            if !usedAsState {
+                guard let specification = try? TLASpecVerifier.findSpec(in: declaration.memberBlock.members) else { return [] }
+                let use = AssumedRecordTypeUse(name: source.name.sourceIdentifierName)
+                use.walk(Syntax(specification.closure))
+                guard use.found else { return [] }
+            }
             return ["@_TLARecordValue"]
         }
         guard let enumDeclaration = member.as(EnumDeclSyntax.self),

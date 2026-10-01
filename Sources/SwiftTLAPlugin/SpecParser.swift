@@ -1730,6 +1730,16 @@ final class ParserSession {
             }
         }
         guard let call = expression.as(FunctionCallExprSyntax.self) else { return nil }
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.sourceIdentifierName == "assuming",
+           member.base != nil,
+           call.arguments.count == 1,
+           let metatype = call.arguments.first?.expression.as(MemberAccessExprSyntax.self),
+           metatype.declName.baseName.sourceIdentifierName == "self",
+           let source = metatype.base,
+           let name = Self.sourceTypePath(source)?.joined(separator: ".") {
+            return try? sourceTypeResolver.resolve(name)
+        }
         if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
            scope.recursiveOperator(for: reference) != nil {
             return scope.shape(for: reference)

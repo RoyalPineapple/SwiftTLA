@@ -215,43 +215,22 @@ private struct CheckedRecordConversion {
         static let finiteValues = allCases
         var tlaValue: TLAValue { .int(rawValue) }
     }
-    struct IntegerFields { let count: Int }
-    enum IntegerRecord: TLARecordSchema {
-        typealias Fields = IntegerFields
-        static func fieldName<Value>(for field: KeyPath<IntegerFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \IntegerFields.count { return "count" }
-            return nil
-        }
-        static let count = field(\IntegerFields.count)
-        static let fields = [TLARecordFieldDeclaration(count, default: 0)]
-    }
-    struct FiniteFields { let count: Level }
-    enum FiniteRecord: TLARecordSchema {
-        typealias Fields = FiniteFields
-        static func fieldName<Value>(for field: KeyPath<FiniteFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \FiniteFields.count { return "count" }
-            return nil
-        }
-        static let count = field(\FiniteFields.count)
-        static let fields = [TLARecordFieldDeclaration(count, default: Level.zero)]
-    }
+    struct IntegerRecord: Hashable, Sendable { let count: Int }
+    struct FiniteRecord: Hashable, Sendable { let count: Level }
     static var spec: TLASpec {
         #spec("CheckedRecordConversion") {
             Algorithm("CheckedRecordConversion", scoped: { scope in
-                let record = scope.sharedVar(_name: "record", initial: Record<IntegerRecord>.literal(
-                    .init(IntegerRecord.count, 0)))
+                let record = scope.sharedVar(_name: "record", initial: IntegerRecord(count: 0))
                 Do(
                     Step.valid,
-                    when: record.expr.assuming(Record<FiniteRecord>.self)[FiniteRecord.count] == Level.zero
+                    when: record.expr.assuming(FiniteRecord.self).count == Level.zero
                 ) {}
                 Do(Step.change) {
-                    Assign(record, to: record.updating(IntegerRecord.count, to: 1))
+                    Assign(record.count, to: 1)
                 }
                 Do(
                     Step.invalid,
-                    when: record.expr.assuming(Record<FiniteRecord>.self)[FiniteRecord.count] == Level.zero
+                    when: record.expr.assuming(FiniteRecord.self).count == Level.zero
                 ) {}
             })
         }
