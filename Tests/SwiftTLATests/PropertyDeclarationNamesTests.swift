@@ -4,6 +4,21 @@ import UpstreamParity
 @testable import SwiftTLAPlugin
 
 struct PropertyDeclarationNamesTests {
+    @Test("unbound property handles explain binding and registration")
+    func rejectsAnonymousPropertyHandle() throws {
+        for source in [
+            "{ Invariant() }",
+            "{ Reachable() }",
+            "{ Algorithm(\"Counter\") { Eventually() } }"
+        ] {
+            let spec = SpecParser.parseSpecClosure(named: "AnonymousProperty", try parseSpecTestClosure(source))
+            let diagnostic = try #require(spec.diagnostics.first)
+            #expect(diagnostic.message.contains("Bind the property handle to an immutable let"))
+            #expect(diagnostic.sourceSpan.location != .unavailable)
+            #expect(throws: SourceParseDiagnostic.self) { try spec.compile() }
+        }
+    }
+
     @Test("refinement binding names supply distinct identities despite equal labels")
     func derivesRefinementNames() throws {
         let first = try labelledRefinements("label: \"Shared label\"").compile()

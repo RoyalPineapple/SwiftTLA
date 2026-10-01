@@ -389,6 +389,9 @@ A bare forward handle is not a builder component. A scenario reference without a
 Two predicate registrations for the same handle also fail compilation, even when their bodies agree.
 For example, `safe { true }` followed by `safe { false }` is invalid.
 An unused handle registers no claim, like an unused bound predicate declaration.
+An unbound forward constructor such as `Invariant()` is rejected at its source
+location; authors bind the handle with `let` and call it to register the claim.
+
 ### Property display labels
 
 Each forward constructor accepts `label: String? = nil` before its macro-supplied name.

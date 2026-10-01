@@ -461,6 +461,10 @@ extension ParserSession {
         macros: [String: AlgorithmMacroDefinition],
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
+        if isUnboundPropertyHandle(call) {
+            algorithmParseFailure = "Bind the property handle to an immutable let, then register its predicate using that binding."
+            return nil
+        }
         switch construct {
         case .scopedState:
             algorithmParseFailure = "A state handle must be an immutable named let binding. Use Assign to update its value."
@@ -1005,6 +1009,10 @@ extension ParserSession {
         macros: [String: AlgorithmMacroDefinition],
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
+        if isUnboundPropertyHandle(call) {
+            algorithmParseFailure = "Bind the property handle to an immutable let, then register its predicate using that binding."
+            return nil
+        }
         switch construct {
         case .scopedState:
             algorithmParseFailure = "A state handle must be an immutable named let binding. Use Assign to update its value."

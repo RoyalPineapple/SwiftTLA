@@ -777,6 +777,13 @@ extension ParserSession {
         collectionTypes: [String: ModelCollectionSourceTypes] = [:]
     ) {
         if parseValidation(call, into: &components) { return }
+        if isUnboundPropertyHandle(call) {
+            components.diagnostics.append(.init(
+                message: "Bind the property handle to an immutable let, then register its predicate using that binding.",
+                source: call
+            ))
+            return
+        }
         if let temporal = parseBoundTemporal(call, scope: sourceScope) {
             registerProperty(temporal, into: &components)
             return
@@ -979,6 +986,14 @@ extension ParserSession {
                 source: call
             ))
         }
+    }
+
+    func isUnboundPropertyHandle(_ call: FunctionCallExprSyntax) -> Bool {
+        guard call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+              let name = compilerGrammarName(in: call.calledExpression),
+              ["Invariant", "Reachable", "Always", "Eventually", "AlwaysEventually", "EventuallyAlways", "LeadsTo", "Temporal"].contains(name)
+        else { return false }
+        return call.arguments.allSatisfy { $0.label?.text == "label" }
     }
 
     /// Recognizes specification builders by their SwiftSyntax shape. The
