@@ -464,37 +464,40 @@ import Testing
 
     @Test("Source aliases preserve nested record field types")
     func declaredAliasesPreserveFieldTypes() throws {
-        let metadata = SourceTypeMetadata(
-            aliases: ["Count": "Int", "Counts": "[Count]", "Schema": "Counters"],
-            records: ["Counters": [.init(sourceName: "values", name: "values", swiftType: "Counts")]]
-        )
+        let metadata = try swiftRecordMetadata("""
+            typealias Count = Int
+            typealias Counts = [Count]
+            struct Counters { let values: Counts }
+            typealias Schema = Counters
+            """)
         let resolver = SourceTypeResolver(metadata: metadata)
         #expect(try resolver.resolve("Counts") == .array(.int))
         #expect(try resolver.resolve("/* selected count */ Count") == .int)
         #expect(try resolver.resolve("`Count`") == .int)
         #expect(try resolver.resolve("Array<`Count`>") == .array(.int))
-        #expect(try resolver.resolve("Record<Counters>") == .record([
+        #expect(try resolver.resolve("Counters") == .nominalRecord("Model.Counters", [
             .init(name: "values", type: .array(.int))
         ]))
-        #expect(try resolver.resolve("Record<Schema>") == resolver.resolve("Record<Counters>"))
+        #expect(try resolver.resolve("Schema") == resolver.resolve("Counters"))
         #expect(try resolver.resolve(" [Count] ") == .array(.int))
         let nested = CompiledValueType.dictionary(.string, .set(.array(.int)))
         #expect(try resolver.resolve("[String: Set<Counts>]") == nested)
         #expect(try resolver.resolve("Dictionary<Swift.String, Set<Array<Count>>>") == nested)
-        #expect(try resolver.formalShape(for: "Record<Schema>") == .record([
+        #expect(try resolver.formalShape(for: "Schema") == .record([
             .init(name: "values", shape: .sequence(.integer))
         ]))
     }
 
     @Test("Escaped nominal references retain their declared type identity")
     func escapedNominalReferences() throws {
+        let record = try swiftRecordMetadata("struct Fields { let value: Int }")
         let resolver = SourceTypeResolver(metadata: .init(
-            records: ["Fields": [.init(sourceName: "value", name: "value", swiftType: "Int")]],
+            structs: record.structs,
             enums: [.init(typeName: "Node", cases: [(name: "one", value: .int(1))], isFiniteDomain: true)]
         ))
         #expect(try resolver.resolve("`Node`") == resolver.resolve("Node"))
         #expect(try resolver.formalShape(for: "`Node`") == resolver.formalShape(for: "Node"))
-        #expect(try resolver.resolve("Record<`Fields`>") == resolver.resolve("Record<Fields>"))
+        #expect(try resolver.resolve("`Fields`") == resolver.resolve("Fields"))
         #expect(try resolver.resolve("OneOf<`Node`, Set<Int>>") == resolver.resolve("OneOf<Node, Set<Int>>"))
         let ambiguous = SourceTypeResolver(metadata: .init(enums: [.init(typeName: "Node"), .init(typeName: "`Node`")]))
         #expect(throws: CompilationDiagnostic.self) { try ambiguous.resolve("Node") }
@@ -519,13 +522,15 @@ import Testing
 
     @Test("Alias and record cycles are rejected without poisoning resolved types")
     func recursiveDeclarationsAreRejected() throws {
-        let resolver = SourceTypeResolver(metadata: .init(
-            aliases: ["Count": "Int", "First": "`Second`", "Second": "/* cycle */ First"],
-            records: ["Node": [.init(sourceName: "next", name: "next", swiftType: "Record<Node>")]]
-        ))
+        let resolver = SourceTypeResolver(metadata: try swiftRecordMetadata("""
+            typealias Count = Int
+            typealias First = `Second`
+            typealias Second = /* cycle */ First
+            struct Node { let next: Node }
+            """))
         #expect(try resolver.resolve("Count") == .int)
         #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("First") }
-        #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("Record<Node>") }
+        #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("Node") }
         #expect(try resolver.resolve("Count") == .int)
     }
 
