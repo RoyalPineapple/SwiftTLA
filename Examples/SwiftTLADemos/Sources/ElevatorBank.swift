@@ -47,7 +47,7 @@ public struct ElevatorBank {
     }
 
     public static var spec: TLASpec {
-        #spec("ElevatorBank") { scope in
+        #spec { scope in
             let cars: SharedVariable<[CarID: Car]> = scope.sharedVar(initial: [
                 .carA: Car(floor: .one, door: .closed, rider: .none),
                 .carB: Car(floor: .three, door: .closed, rider: .none)

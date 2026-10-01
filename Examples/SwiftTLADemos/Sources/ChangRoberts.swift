@@ -24,7 +24,7 @@ public struct ChangRoberts {
     }
 
     public static var spec: TLASpec {
-        #spec("ChangRoberts") { scope in
+        #spec { scope in
             let identifiers: SharedVariable<[Node: Int]> = scope.sharedVar(initial:
                 [.one: 8, .two: 2, .three: 11, .four: 9,
                  .five: 12, .six: 3, .seven: 1, .eight: 5,

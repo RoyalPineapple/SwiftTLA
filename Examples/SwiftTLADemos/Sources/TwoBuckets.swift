@@ -10,7 +10,7 @@ public struct TwoBuckets: Sendable {
     }
 
     public static var spec: TLASpec {
-        #spec("TwoBuckets") { scope in
+        #spec { scope in
             let three = scope.sharedVar(initial: 0)
             let five = scope.sharedVar(initial: 0)
             let Capacity = Invariant()
