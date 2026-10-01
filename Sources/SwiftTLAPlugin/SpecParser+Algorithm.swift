@@ -462,6 +462,9 @@ extension ParserSession {
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
         switch construct {
+        case .scopedState:
+            algorithmParseFailure = "A state handle must be an immutable named let binding. Use Assign to update its value."
+            return nil
         case .procedure:
             return parseProcedure(call, macros: macros, scope: scope)
         case .each:
@@ -576,7 +579,9 @@ extension ParserSession {
                   ),
                   case .step = component
             else {
-                algorithmParseFailure = "Procedure '\(name)' accepts LocalVar declarations and Do or While blocks."
+                if algorithmParseFailure == nil {
+                    algorithmParseFailure = "Procedure '\(name)' accepts LocalVar declarations and Do or While blocks."
+                }
                 return nil
             }
             components.append(component)
@@ -1001,6 +1006,9 @@ extension ParserSession {
         scope: TypedFacadeScope
     ) -> AlgorithmComponentModel? {
         switch construct {
+        case .scopedState:
+            algorithmParseFailure = "A state handle must be an immutable named let binding. Use Assign to update its value."
+            return nil
         case .doStep, .whileStep:
             if call.arguments.contains(where: { $0.label?.text == "over" }) {
                 algorithmParseFailure = "Parameterized Do belongs directly in #spec. Use Each for processes or With for local choices."

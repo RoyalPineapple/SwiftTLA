@@ -798,6 +798,14 @@ extension ParserSession {
             } catch { components.diagnostics.append(error) }
             return
         }
+        if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+           ["sharedVar", "localVar"].contains(member.declName.baseName.sourceIdentifierName) {
+            components.diagnostics.append(.init(
+                message: "A state handle must be an immutable named let binding. Use Assign to update its value.",
+                source: call
+            ))
+            return
+        }
         guard let name = builderCallName(call.calledExpression) else {
             components.diagnostics.append(.init(
                 message: "Specification body contains an unsupported call.",

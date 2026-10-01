@@ -34,6 +34,20 @@ struct StateDeclarationNamesTests {
         #expect(throws: (any Error).self) { try spec.compile() }
     }
 
+    @Test("anonymous state declarations require a named Swift binding")
+    func rejectsAnonymousStateDeclaration() throws {
+        for source in [
+            "{ scope in scope.sharedVar(initial: 0) }",
+            "{ Algorithm(\"Counter\", scoped: { scope in scope.sharedVar(initial: 0) }) }"
+        ] {
+            let spec = SpecParser.parseSpecClosure(named: "AnonymousState", try parseSpecTestClosure(source))
+            let diagnostic = try #require(spec.diagnostics.first)
+            #expect(diagnostic.message.contains("A state handle must be an immutable named let binding."))
+            #expect(diagnostic.sourceSpan.location != .unavailable)
+            #expect(throws: SourceParseDiagnostic.self) { try spec.compile() }
+        }
+    }
+
     @Test("scoped state names derive from Swift bindings across builder scopes")
     func derivesStateNames() throws {
         let compiled = try BoundStateNamesModel.spec.compile()

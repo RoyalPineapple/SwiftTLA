@@ -48,6 +48,22 @@ import SwiftTLAMacros
         return try specification.loweredSourceModel()
     }
 
+    @Test("process and procedure state declarations require named bindings")
+    func rejectsAnonymousLocalStateDeclaration() throws {
+        for body in [
+            "Each(ParserNode.all, scoped: { _, scope in scope.localVar(initial: false) })",
+            "Procedure(ProcedureName.work, scoped: { scope in scope.localVar(initial: false) })"
+        ] {
+            let parsed = parseAlgorithm(
+                try parseSpecTestClosure("{ Algorithm(\"Counter\") { \(body) } }"),
+                enums: [parserTestEnum("ParserNode", finiteValues: [.string("left"), .string("right")]), procedureNames]
+            )
+            let diagnostic = try #require(parsed.diagnostics.first)
+            #expect(diagnostic.message.contains("A state handle must be an immutable named let binding."))
+            #expect(diagnostic.sourceSpan.location != .unavailable)
+        }
+    }
+
     @Test("conditional parsing rejects an undecodable supplied else branch", arguments: [
         "If(count == 0) { Skip() } else: { unsupportedStatement() }",
         "If(count == 0, else: externalBranch) { Skip() }"

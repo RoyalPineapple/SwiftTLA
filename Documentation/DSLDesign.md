@@ -108,9 +108,9 @@ Generate valid, unambiguous TLA+ identifiers from declaration identities and
 source names. A display label containing spaces or punctuation must not become
 an unchecked formal identifier.
 
-The exact builder syntax for named bindings, optional labels, and declarations
-without a Swift binding remains to be settled. The named string forms elsewhere
-in this draft are provisional examples, not a requirement to repeat Swift names.
+The exact builder syntax for optional labels and non-state declarations without
+a Swift binding remains to be settled. The named string forms elsewhere in this
+draft are provisional examples, not a requirement to repeat Swift names.
 Anonymous declarations must have useful source locations in diagnostics; do not
 invent another mandatory naming system merely to support them.
 
@@ -127,7 +127,9 @@ The same rule applies to specification, algorithm, process, and procedure scopes
 An initial string value is data and does not supply a declaration name.
 The macro supplies the internal `_name` argument for the formal builder boundary.
 The former positional-name signatures are not supported.
-State display labels and anonymous declarations still require the remaining B-02 decisions.
+Unbound state declarations are rejected at their source location with guidance
+to use an immutable `let` binding. State display labels and anonymous
+non-state declarations still require the remaining B-02 decisions.
 
 Swift backticks escape keywords but are not part of declaration identity.
 For example, a state binding spelled `` `repeat` `` has the formal name `repeat`.
