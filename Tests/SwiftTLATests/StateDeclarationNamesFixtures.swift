@@ -9,7 +9,7 @@ struct BoundStateNamesModel {
         #spec("BoundStateNames") { specification in
             let text = specification.sharedVar(label: "Current text", initial: "payload")
             Algorithm("Workers", scoped: { algorithm in
-                let count = algorithm.sharedVar(label: "Visit count", in: 0...1)
+                let count = algorithm.sharedVar(label: "Current text", in: 0...1)
                 Each(Set<Int>([1]), scoped: { member, process in
                     let seen = process.localVar(label: "Visited?", initial: false)
                     Do(Step.visit) {

@@ -81,17 +81,19 @@ struct StateDeclarationNamesTests {
         #expect(!names.contains("payload"))
         let displayNames = Dictionary(uniqueKeysWithValues: compiled.description.variables.map { ($0.name, $0.displayName) })
         #expect(displayNames["text"] == "Current text")
-        #expect(displayNames["count"] == "Visit count")
+        #expect(displayNames["count"] == "Current text")
         #expect(displayNames["seen"] == "Visited?")
         #expect(BoundStateNamesModel.State.displayNames[\BoundStateNamesModel.State.text] == "Current text")
-        #expect(BoundStateNamesModel.State.displayNames[\BoundStateNamesModel.State.count] == "Visit count")
+        #expect(BoundStateNamesModel.State.displayNames[\BoundStateNamesModel.State.count] == "Current text")
         let machines = try BoundStateNamesModel.initialMachines()
         #expect(machines.count == 2)
+        #expect(Set(machines.map(\.state.count)) == [0, 1])
         for machine in machines {
             #expect(machine.state.text == "payload")
             let successors = try machine.successors()
             #expect(successors.count == 1)
             #expect(successors.first?.machine.state.text == "visited")
+            #expect(successors.first?.machine.state.count == machine.state.count + 1)
         }
     }
 
