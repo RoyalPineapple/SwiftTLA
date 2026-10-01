@@ -62,7 +62,7 @@ struct DieHardCorpusStateGraphTests {
         let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
             from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
         let declaration = try #require(manifest.cases.first { $0.id == "die-hard" })
-        #expect(declaration.sourceModel == .dieHard)
+        #expect(declaration.sourceModel.rawValue == "die-hard")
         #expect(try declaration.resolveScenario()?.name == "Upstream")
         let reference = try Data(contentsOf: projectURL("Verification/FiniteGraph/fixtures/die-hard/DieHard.cfg"))
         #expect(SHA256.hex(reference) == declaration.cfgSHA256)

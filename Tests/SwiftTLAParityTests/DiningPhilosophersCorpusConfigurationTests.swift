@@ -33,7 +33,7 @@ struct DiningPhilosophersCorpusConfigurationTests {
     func resolvesPinnedVariants() throws {
         let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
             from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
-        let cases = manifest.cases.filter { $0.sourceModel == .diningPhilosophers }
+        let cases = manifest.cases.filter { $0.sourceModel.rawValue == "dining-philosophers" }
         #expect(cases.map(\.id) == ["dining-philosophers", "ap-dining-philosophers"])
         for declaration in cases {
             let scenario = try #require(try declaration.resolveScenario())

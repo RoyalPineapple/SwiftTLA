@@ -19,8 +19,24 @@ struct FiniteGraphManifestTests {
   func acceptsMultipleConfigurations() throws {
     let manifest = try decodeCases(ids: ["hour-clock-default", "hour-clock-no-deadlock"])
     #expect(manifest.cases.map(\.id) == ["hour-clock-default", "hour-clock-no-deadlock"])
-    #expect(manifest.cases.map(\.sourceModel) == [.hourClock, .hourClock])
+    #expect(manifest.cases.map(\.sourceModel.rawValue) == ["hour-clock", "hour-clock"])
     #expect(Set(manifest.cases.map(\.configuration)).count == 2)
+  }
+
+  @Test("reference cases reject unregistered and fixture-only models",
+    arguments: ["not-registered", "counter", "selected-checks"])
+  func rejectsNonUpstreamSourceModel(sourceModel: String) throws {
+    let path = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent("Verification/FiniteGraph/cases.json")
+    let source = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any])
+    let cases = try #require(source["cases"] as? [[String: Any]])
+    var declaration = try #require(cases.first { $0["sourceModel"] as? String == "hour-clock" })
+    declaration["sourceModel"] = sourceModel
+    #expect(throws: DecodingError.self) {
+      try JSONDecoder().decode(FiniteGraphManifest.Case.self,
+        from: JSONSerialization.data(withJSONObject: declaration))
+    }
   }
 
   @Test("case identifiers remain unique across configurations")

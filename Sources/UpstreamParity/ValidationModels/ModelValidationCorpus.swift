@@ -5,7 +5,7 @@ private struct ModelRegistration: Sendable {
     let scenarios: @Sendable () throws -> [any ModelValidationScenario]
 }
 
-private let modelRegistrations: [ModelRegistration] = [
+private let fixtureModelRegistrations: [ModelRegistration] = [
     .init(id: "counter", scenarios: { try ConfiguredCounter.validationScenarios() }),
     .init(id: "configured-processes", scenarios: { try ConfiguredProcessMachine.validationScenarios() }),
     .init(id: "weakly-fair-processes", scenarios: { try WeaklyFairConfiguredProcessMachine.validationScenarios() }),
@@ -27,6 +27,11 @@ private let modelRegistrations: [ModelRegistration] = [
     .init(id: "constant-state-claims", scenarios: { try ConstantStateClaims.validationScenarios() }),
     .init(id: "labelled-property-claims", scenarios: { try LabelledPropertyClaims.validationScenarios() }),
     .init(id: "refinement-counter", scenarios: { try RefinementScenarioCounter.validationScenarios() }),
+    .init(id: "selected-checks", scenarios: { try SelectedChecksModel.validationScenarios() }),
+    .init(id: "unselected-predicates", scenarios: { try UnselectedPredicateModel.validationScenarios() })
+]
+
+private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "dining-philosophers", scenarios: { try DiningPhilosophersModel.validationScenarios() }),
     .init(id: "bakery", scenarios: { try BakeryModel.validationScenarios() }),
     .init(id: "boulanger", scenarios: { try BoulangerModel.validationScenarios() }),
@@ -61,13 +66,13 @@ private let modelRegistrations: [ModelRegistration] = [
     .init(id: "least-circular-substring", scenarios: { try LeastCircularSubstringModel.validationScenarios() }),
     .init(id: "find-highest", scenarios: { try FindHighestModel.validationScenarios() }),
     .init(id: "binary-search", scenarios: { try BinarySearchModel.validationScenarios() }),
-    .init(id: "quicksort", scenarios: { try QuicksortModel.validationScenarios() }),
-    .init(id: "selected-checks", scenarios: { try SelectedChecksModel.validationScenarios() }),
-    .init(id: "unselected-predicates", scenarios: { try UnselectedPredicateModel.validationScenarios() })
+    .init(id: "quicksort", scenarios: { try QuicksortModel.validationScenarios() })
 ]
 
-package func hasModelValidationRegistration(_ id: String) -> Bool {
-    modelRegistrations.contains { $0.id == id }
+private let modelRegistrations = fixtureModelRegistrations + upstreamModelRegistrations
+
+func hasUpstreamModelValidationRegistration(_ id: String) -> Bool {
+    upstreamModelRegistrations.contains { $0.id == id }
 }
 
 package func modelValidationScenarios(for id: String) throws -> [any ModelValidationScenario]? {

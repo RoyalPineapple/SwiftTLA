@@ -62,7 +62,7 @@ struct MajorityCorpusStateGraphTests {
     func pinsIndependentReference() throws {
         let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
             from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
-        let declaration = try #require(manifest.cases.first { $0.sourceModel == .majority })
+        let declaration = try #require(manifest.cases.first { $0.sourceModel.rawValue == "majority" })
         #expect(try declaration.resolveScenario()?.name == "MCMajority")
         let module = try Data(contentsOf: projectURL("Verification/FiniteGraph/fixtures/" + declaration.module))
         let configuration = try Data(contentsOf: projectURL("Verification/FiniteGraph/fixtures/" + declaration.configuration))

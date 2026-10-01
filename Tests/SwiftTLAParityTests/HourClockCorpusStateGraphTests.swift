@@ -10,7 +10,7 @@ struct HourClockCorpusStateGraphTests {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
             from: Data(contentsOf: root.appendingPathComponent("Verification/FiniteGraph/cases.json")))
-        let declarations = manifest.cases.filter { $0.sourceModel == .hourClock }
+        let declarations = manifest.cases.filter { $0.sourceModel.rawValue == "hour-clock" }
         #expect(Set(declarations.map(\.id)) == ["hour-clock", "ap-hour-clock"])
         for declaration in declarations {
             let pin = try #require(declaration.sourceInput)

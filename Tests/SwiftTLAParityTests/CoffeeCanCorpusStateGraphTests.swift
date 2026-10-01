@@ -51,7 +51,7 @@ struct CoffeeCanCorpusStateGraphTests {
         #expect(scenarios.map { $0.configuration.MaxBeanCount } == [100, 1000, 3000, 5])
         let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
             from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
-        let cases = manifest.cases.filter { $0.sourceModel == .coffeeCan }
+        let cases = manifest.cases.filter { $0.sourceModel.rawValue == "coffee-can" }
         #expect(cases.count == 4)
         var modules: Set<String> = []
         for scenario in scenarios {

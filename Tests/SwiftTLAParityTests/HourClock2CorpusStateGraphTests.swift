@@ -42,7 +42,7 @@ struct HourClock2CorpusStateGraphTests {
         let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
             from: Data(contentsOf: root.appendingPathComponent("Verification/FiniteGraph/cases.json")))
         let declaration = try #require(manifest.cases.first { $0.id == "ap-hour-clock-2" })
-        #expect(declaration.sourceModel == .hourClock2)
+        #expect(declaration.sourceModel.rawValue == "hour-clock-2")
         #expect(try declaration.resolveScenario()?.name == "AP Upstream")
         #expect(declaration.imports == ["hour-clock/HourClock2.tla", "hour-clock/HourClock.tla"])
         #expect(declaration.dependencies.map(\.importingModule) == ["APHourClock2", "HourClock2"])

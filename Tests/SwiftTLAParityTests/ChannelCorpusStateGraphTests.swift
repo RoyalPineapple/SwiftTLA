@@ -8,7 +8,7 @@ struct ChannelCorpusStateGraphTests {
     func pinsIndependentReferences() throws {
         let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
             from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
-        let declarations = manifest.cases.filter { $0.sourceModel == .channel }
+        let declarations = manifest.cases.filter { $0.sourceModel.rawValue == "channel" }
         #expect(Set(declarations.map(\.id)) == ["channel", "ap-channel", "ap-channel-composing", "ap-channel-fifo"])
         for declaration in declarations {
             #expect(try declaration.resolveScenario()?.name == declaration.scenario)

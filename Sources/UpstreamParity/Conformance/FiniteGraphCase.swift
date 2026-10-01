@@ -284,7 +284,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         package func resolveScenario() throws -> (any ModelValidationScenario)? {
-            guard sourceModel != .sumsEven, sourceModel != .stones else { return nil }
+            guard !sourceModel.isAssumptionOnly else { return nil }
             guard let scenario else {
                 throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
             }
@@ -300,9 +300,9 @@ package struct FiniteGraphManifest: Decodable, Sendable {
 
         package func resolveAssumptionScenario() throws -> (any AssumptionValidationScenario)? {
             let scenarios: [any AssumptionValidationScenario]
-            switch sourceModel {
-            case .sumsEven: scenarios = try SumsEvenModel.validationScenarios()
-            case .stones: scenarios = try StonesModel.validationScenarios()
+            switch sourceModel.rawValue {
+            case "sums-even": scenarios = try SumsEvenModel.validationScenarios()
+            case "stones": scenarios = try StonesModel.validationScenarios()
             default: return nil
             }
             let matches = scenarios.filter { $0.name == scenario }
@@ -316,7 +316,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
             guard scenario != nil else {
                 throw EvidenceFormatError.invalidField(record: id, field: "model-owned scenario")
             }
-            guard (comparisonMode == .assumptionsOnly) == (sourceModel == .sumsEven || sourceModel == .stones) else {
+            guard (comparisonMode == .assumptionsOnly) == sourceModel.isAssumptionOnly else {
                 throw EvidenceFormatError.invalidField(record: id, field: "assumption comparison mode")
             }
             guard (comparisonMode == .assumptionsOnly) == (assumptionExpectation != nil) else {
@@ -369,85 +369,52 @@ package struct FiniteGraphManifest: Decodable, Sendable {
                     id: finiteGraphCase.id
                 )
             }
-            if finiteGraphCase.scenario != nil,
-               finiteGraphCase.sourceModel != .sumsEven,
-               finiteGraphCase.sourceModel != .stones,
-               !hasModelValidationRegistration(finiteGraphCase.sourceModel.nativeModelID) {
-                throw EvidenceFormatError.invalidField(
-                    record: finiteGraphCase.id, field: "native validation registration"
-                )
-            }
         }
     }
 
 }
 
-package enum FiniteGraphSourceModel: String, CaseIterable, Decodable, Hashable, Sendable {
-    case channel
-    case majority
-    case bakery
-    case boulanger
-    case voteProof = "voteproof"
-    case kvsnap
-    case asynchInterface = "asynch-interface"
-    case hourClock = "hour-clock"
-    case hourClock2 = "hour-clock-2"
-    case leastCircularSubstring = "least-circular-substring"
-    case findHighest = "find-highest"
-    case binarySearch = "binary-search"
-    case quicksort
-    case dieHard = "die-hard"
-    case dieHarder = "die-harder"
-    case dieHardest = "die-hardest"
-    case dieHardestGlobalFreeze = "die-hardest-global-freeze"
-    case dieHardestParallel = "die-hardest-parallel"
-    case multiCarElevator = "multicar-elevator"
-    case tlcmcGraph1 = "tlcmc-graph-1"
-    case nQueensFour = "n-queens-four"
-    case queensFour = "queens-four"
-    case coffeeCan = "coffee-can"
-    case cigaretteSmokers = "cigarette-smokers"
-    case chameneos
-    case prisoners
-    case prisonersSingleSwitch = "prisoners-single-switch"
-    case singleLaneBridge = "single-lane-bridge"
-    case gameOfLife = "game-of-life"
-    case twoPhase = "two-phase"
-    case teachingSimple = "teaching-simple"
-    case teachingSimpleRegular = "teaching-simple-regular"
-    case diningPhilosophers = "dining-philosophers"
-    case stringLiterals = "string-literals"
-    case actionReferences = "action-references"
-    case sumsEven = "sums-even"
-    case stones
+package struct FiniteGraphSourceModel: Decodable, Hashable, Sendable {
+    package let rawValue: String
 
-    fileprivate var nativeModelID: String {
-        switch self {
-        case .nQueensFour: "n-queens"
-        case .queensFour: "queens"
-        default: rawValue
+    package init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        let nativeID = Self.nativeModelID(for: value)
+        guard value == "sums-even" || value == "stones"
+                || hasUpstreamModelValidationRegistration(nativeID) else {
+            throw DecodingError.dataCorruptedError(
+                in: container, debugDescription: "Unknown upstream source model: \(value)"
+            )
+        }
+        rawValue = value
+    }
+
+    fileprivate var isAssumptionOnly: Bool { rawValue == "sums-even" || rawValue == "stones" }
+
+    fileprivate var nativeModelID: String { Self.nativeModelID(for: rawValue) }
+
+    private static func nativeModelID(for value: String) -> String {
+        switch value {
+        case "n-queens-four": "n-queens"
+        case "queens-four": "queens"
+        default: value
         }
     }
 
     package func render() throws -> RenderedSpecification {
-        switch self {
-        case .sumsEven:
+        switch rawValue {
+        case "sums-even":
             guard let scenario = try SumsEvenModel.validationScenarios().first else {
                 throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned assumption scenario")
             }
             return try scenario.render()
-        case .stones:
+        case "stones":
             guard let scenario = try StonesModel.validationScenarios().first else {
                 throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned assumption scenario")
             }
             return try scenario.render()
-        case .voteProof, .kvsnap, .multiCarElevator, .tlcmcGraph1, .stringLiterals, .actionReferences,
-             .bakery, .boulanger, .diningPhilosophers, .hourClock, .hourClock2,
-             .leastCircularSubstring, .findHighest, .binarySearch, .quicksort, .dieHard, .dieHarder,
-             .dieHardest, .dieHardestGlobalFreeze, .dieHardestParallel, .channel, .asynchInterface,
-             .majority, .nQueensFour, .queensFour, .coffeeCan, .cigaretteSmokers, .chameneos, .prisoners,
-             .prisonersSingleSwitch, .singleLaneBridge, .gameOfLife, .twoPhase,
-             .teachingSimple, .teachingSimpleRegular:
+        default:
             throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned scenario")
         }
     }

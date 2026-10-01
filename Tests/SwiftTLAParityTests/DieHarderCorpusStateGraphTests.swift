@@ -8,7 +8,7 @@ struct DieHarderCorpusStateGraphTests {
     func pinsIndependentReferences() throws {
         let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
             from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
-        let declarations = manifest.cases.filter { $0.sourceModel == .dieHarder }
+        let declarations = manifest.cases.filter { $0.sourceModel.rawValue == "die-harder" }
         #expect(Set(declarations.map(\.scenario)) == ["MCDieHarder", "APDieHarder"])
         for declaration in declarations {
             #expect(try declaration.resolveScenario()?.name == declaration.scenario)

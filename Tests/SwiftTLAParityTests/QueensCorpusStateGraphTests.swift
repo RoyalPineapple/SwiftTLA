@@ -86,7 +86,7 @@ struct QueensCorpusStateGraphTests {
     func pinsIndependentReference() throws {
         let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
             from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
-        let declaration = try #require(manifest.cases.first { $0.sourceModel == .queensFour })
+        let declaration = try #require(manifest.cases.first { $0.sourceModel.rawValue == "queens-four" })
         #expect(try declaration.resolveScenario()?.name == "FourQueens")
         let module = try Data(contentsOf: projectURL("Verification/FiniteGraph/fixtures/" + declaration.module))
         let configuration = try Data(contentsOf: projectURL("Verification/FiniteGraph/fixtures/" + declaration.configuration))

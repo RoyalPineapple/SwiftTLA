@@ -8,7 +8,7 @@ struct AsynchInterfaceCorpusStateGraphTests {
     func pinsIndependentReferences() throws {
         let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
             from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
-        let declarations = manifest.cases.filter { $0.sourceModel == .asynchInterface }
+        let declarations = manifest.cases.filter { $0.sourceModel.rawValue == "asynch-interface" }
         #expect(Set(declarations.map(\.id)) == ["asynch-interface", "ap-asynch-interface"])
         for declaration in declarations {
             #expect(try declaration.resolveScenario()?.name == declaration.scenario)
