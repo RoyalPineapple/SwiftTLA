@@ -17,6 +17,7 @@ private let modelRegistrations: [ModelRegistration] = [
     .init(id: "independent-atomic-steps", scenarios: { try IndependentAtomicSteps.validationScenarios() }),
     .init(id: "mixed-step-composition", scenarios: { try MixedStepComposition.validationScenarios() }),
     .init(id: "ordered-procedure-call", scenarios: { try OrderedCallModel.validationScenarios() }),
+    .init(id: "recursive-step", scenarios: { try RecursiveStep.validationScenarios() }),
     .init(id: "parameterized-atomic-steps", scenarios: { try ParameterizedAtomicSteps.validationScenarios() }),
     .init(id: "configured-dictionary-values", scenarios: { try ConfiguredDictionaryValues.validationScenarios() }),
     .init(id: "record-union-ordering", scenarios: { try RecordUnionOrderingModel.validationScenarios() }),
