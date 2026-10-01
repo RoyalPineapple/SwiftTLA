@@ -4,6 +4,38 @@ import Testing
 import UpstreamParity
 
 struct TemporalSymmetryCheckTests {
+  @Test("Declared symmetry preserves the complete generated-machine graph")
+  func declaredSymmetryPreservesGeneratedGraph() throws {
+    for symmetryCase in try registeredManifest().symmetryCases {
+      let scope = symmetryCase.scope
+      let generated = try generatedSymmetryConformance(
+        scope: scope, maximumStates: symmetryCase.rawExploration.maximumStateLimit)
+      let native = generated.native
+      let rendered = native.rendered
+      #expect(native.graph.isComplete)
+      #expect(native.graph.graph.states.count == 1 << scope)
+      #expect(native.graph.graph.initialStateKeys.count == 1)
+      #expect(native.graph.graph.edges.count == scope * (1 << (scope - 1)))
+      let checked = try TemporalSymmetryCheck().checkedSymmetryGraph(native)
+      #expect(checked.graph == native.graph.graph)
+      guard case .deadlock(let deadlocked) = checked.outcome else {
+        Issue.record("The generated machine must retain a deadlock verdict")
+        continue
+      }
+      #expect(!checked.graph.hasOutgoingEdges(from: deadlocked))
+      #expect(checked.trace?.steps.last?.state == deadlocked)
+      #expect(rendered.tlaBundle(symmetryReduction: .disabled).cfg.contains("SYMMETRY") == false)
+      #expect(rendered.tlaBundle(symmetryReduction: symmetryCase.reducedExploration.symmetryReduction)
+        .cfg.contains("SYMMETRY"))
+      let initialKey = try #require(native.graph.graph.initialStateKeys.first)
+      let initial = try #require(native.graph.graph.states[initialKey])
+      let allZero = try CanonicalValue.function(generated.members.map {
+        try CanonicalFunctionEntry(key: CanonicalValue($0), value: .integer(0))
+      })
+      #expect(initial.bindings["chosen"] == allZero)
+    }
+  }
+
   @Test("expected violations require a counterexample result, never an unavailable check")
   func expectedVerdictsRejectMissingAndOppositeResults() throws {
     let model = try temporalConformanceRun(fairness: .none, maximumStates: 10)
@@ -70,65 +102,6 @@ struct TemporalSymmetryCheckTests {
         ),
         expectedProperties: temporalCase.expectedProperties
       )
-    }
-  }
-
-  @Test("Symmetry cases use the compiled runtime for raw and reduced exploration")
-  func symmetryCasesUseCompiledReduction() throws {
-    for symmetryCase in try registeredManifest().symmetryCases {
-      let scope = symmetryCase.scope
-      let compilation = try symmetryConformanceSpec(scope: scope).compile()
-      let raw = try ModelChecker(
-        compilation: compilation,
-        configuration: symmetryCase.rawExploration
-      ).explore()
-      let reduced = try ModelChecker(
-        compilation: compilation,
-        configuration: symmetryCase.reducedExploration
-      ).explore().graph
-
-      #expect(raw.graph.states.count == 1 << scope)
-      #expect(reduced.states.count == scope + 1)
-      let rawBundle = try compilation.render().tlaBundle(
-        symmetryReduction: symmetryCase.rawExploration.symmetryReduction)
-      #expect(rawBundle.cfg.contains("SYMMETRY") == false)
-      #expect(raw.initialStateIDs.count == 1)
-      let initialID = try #require(raw.initialStateIDs.first)
-      let initial = try #require(raw.compiledStates[initialID])
-      let chosen = try #require(compilation.layout.variables.first { $0.declaration.name == "chosen" })
-      let members = try #require(chosen.collection?.members)
-      let allZero = CompiledValue.function(Dictionary(uniqueKeysWithValues: members.map { ($0, .integer(0)) }))
-      #expect(try initial.value(for: chosen.id) == allZero)
-      #expect(try compilation.render().tlaBundle(
-        symmetryReduction: symmetryCase.reducedExploration.symmetryReduction
-      ).cfg.contains("SYMMETRY"))
-      let rendered = try compilation.render()
-      let graphBundle = try rendered.tlaBundle(checking: [], checkDeadlock: false,
-        symmetryReduction: symmetryCase.reducedExploration.symmetryReduction)
-      #expect(graphBundle.cfg.contains("SYMMETRY"))
-      #expect(graphBundle.cfg.contains("CHECK_DEADLOCK FALSE"))
-      #expect(rendered.tlaBundle.cfg.contains("CHECK_DEADLOCK TRUE"))
-      let names: [String] = try members.map { member in
-        guard case .constant(let name) = try member.rendered(using: compilation.layout) else {
-          throw EvidenceFormatError.invalidField(record: symmetryCase.id, field: "constant member")
-        }
-        return name
-      }
-      let generator = try SymmetryPermutation(constantMapping: Dictionary(uniqueKeysWithValues:
-        names.enumerated().map { ($0.element, names[($0.offset + 1) % names.count]) }))
-      let finite = try FiniteGraphCase(id: symmetryCase.id, exploration: symmetryCase.reducedExploration,
-        moduleSHA256: SHA256.hex(Data(graphBundle.tla.utf8)), cfgSHA256: SHA256.hex(Data(graphBundle.cfg.utf8)),
-        arguments: ["-workers", "1"], environment: [:], pin: testReferencePin(),
-        renderedActions: rendered.actions, symmetryGenerators: [generator])
-      let root = FileManager.default.temporaryDirectory
-      let request = TLCProcessRequest(javaExecutable: root.appendingPathComponent("java"),
-        jar: root.appendingPathComponent("tlc.jar"), bridgeJar: root.appendingPathComponent("bridge"),
-        bundle: graphBundle, graphEvents: root.appendingPathComponent("events.jsonl"),
-        traceOutput: root.appendingPathComponent("trace.json"), workingDirectory: root,
-        finiteGraphCase: finite, runID: UUID(), invocation: .finiteGraph)
-      let selected = try request.selecting(bundle: graphBundle, work: root,
-        runID: UUID(), invocation: .propertyCheck)
-      #expect(selected.finiteGraphCase == finite)
     }
   }
 

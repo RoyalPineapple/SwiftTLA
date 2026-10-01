@@ -14,11 +14,6 @@ package enum TemporalSymmetryOutcome: String, Codable, Sendable {
 }
 
 
-package enum SymmetryGraphSource: String, Codable, Sendable {
-  case swift
-  case tlc
-}
-
 package struct TemporalCase: Equatable, Codable, Sendable {
   package let id: String
   package let fairness: TemporalFairnessMode

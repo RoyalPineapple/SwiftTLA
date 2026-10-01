@@ -6,9 +6,9 @@ package enum SymmetryOrbitError: Error, Equatable, Sendable {
   case permutationDoesNotPreserveStateSpace
   case permutationLimitExceeded(required: Int, limit: Int)
   case incompleteOrbit(String)
-  case reducedStateOutsideOrbit(source: SymmetryGraphSource, stateID: String)
-  case multipleReducedRepresentatives(source: SymmetryGraphSource, representative: String)
-  case missingReducedRepresentative(source: SymmetryGraphSource, representative: String)
+  case reducedStateOutsideOrbit(stateID: String)
+  case multipleReducedRepresentatives(representative: String)
+  case missingReducedRepresentative(representative: String)
   case duplicateActionCall
   case duplicateRenderedAction(String)
   case undeclaredAction(String)

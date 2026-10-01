@@ -103,9 +103,10 @@ package struct TemporalSymmetryCheck: Sendable {
     let symmetryOutcomes = try input.manifest.symmetryCases.map { symmetryCase in
       let observed: (outcome: TemporalSymmetryOutcome, diagnostic: String)
       do {
-        let compilation = try symmetryConformanceSpec(scope: symmetryCase.scope).compile()
+        let generated = try generatedSymmetryConformance(
+          scope: symmetryCase.scope, maximumStates: symmetryCase.rawExploration.maximumStateLimit)
         let outcome = try captureSymmetry(
-          compilation: compilation, symmetryCase: symmetryCase,
+          generated: generated, symmetryCase: symmetryCase,
           toolRoot: input.toolRoot, referencePin: input.referencePin,
           projectRoot: root, evidenceRoot: output,
           outputDirectory: output.appendingPathComponent(symmetryCase.id, isDirectory: true))
@@ -113,7 +114,7 @@ package struct TemporalSymmetryCheck: Sendable {
       } catch {
         observed = (
           .unavailable,
-          "pinned-tlc-symmetry-unavailable: \(String(describing: error))"
+          "symmetry-validation-unavailable: \(String(describing: error))"
         )
       }
       return try retainOutcome(
@@ -182,7 +183,7 @@ package struct TemporalSymmetryCheck: Sendable {
   }
 
   private func captureSymmetry(
-    compilation: CompiledSpecification,
+    generated: GeneratedSymmetryConformance,
     symmetryCase: SymmetryCase,
     toolRoot: URL,
     referencePin: TLCReferencePin,
@@ -191,19 +192,17 @@ package struct TemporalSymmetryCheck: Sendable {
     outputDirectory: URL
   ) throws -> TemporalSymmetryOutcome {
     let scope = symmetryCase.scope
-    let collections = compilation.layout.variables.filter { $0.declaration.origin == .source }.compactMap(\.collection)
-    guard collections.count == 1,
-          let collection = collections.first,
-          collection.members.count == scope else {
+    guard generated.members.count == scope else {
       throw EvidenceFormatError.invalidField(
         record: symmetryCase.id, field: "symmetric collection")
     }
-    let generators = try symmetryGenerators(members: try collection.members.map { try $0.rendered(using: compilation.layout) })
+    let generators = try symmetryGenerators(members: generated.members)
+    let swiftRaw = try checkedSymmetryGraph(generated.native)
     let toolchain = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: projectRoot, pin: referencePin)
     try RetainedFiles.createDirectory(outputDirectory, beneath: projectRoot)
     let rawRunID = UUID()
     let reducedRunID = UUID()
-    let rendered = try compilation.render()
+    let rendered = generated.native.rendered
     guard rendered.checkNames.isEmpty, rendered.checksDeadlock else {
       throw EvidenceFormatError.invalidField(record: symmetryCase.id, field: "symmetry check coverage")
     }
@@ -236,30 +235,19 @@ package struct TemporalSymmetryCheck: Sendable {
     let reducedTLC = try captureSymmetryGraph(reducedRequest,
       checking: rendered.tlaBundle(symmetryReduction: symmetryCase.reducedExploration.symmetryReduction),
       in: outputDirectory.appendingPathComponent("tlc-reduced", isDirectory: true))
-    let swiftRaw = try FormalGraphExporter().export(ModelChecker(
-      compilation: compilation,
-      configuration: symmetryCase.rawExploration
-    ).explore(), for: rawCase)
-    let swiftReduced = try FormalGraphExporter().export(ModelChecker(
-      compilation: compilation,
-      configuration: symmetryCase.reducedExploration
-    ).explore(), for: reducedCase)
     guard case .enabled(let maximumPermutationCount) = symmetryCase.reducedExploration.symmetryReduction else {
       throw EvidenceFormatError.invalidField(
         record: symmetryCase.id, field: "reduced symmetry policy")
     }
     let rawSwiftURL = outputDirectory.appendingPathComponent("swift-raw-graph.jsonl")
-    let reducedSwiftURL = outputDirectory.appendingPathComponent("swift-reduced-graph.jsonl")
     let rawTLCURL = outputDirectory.appendingPathComponent("tlc-raw-graph.jsonl")
     let reducedTLCURL = outputDirectory.appendingPathComponent("tlc-reduced-graph.jsonl")
     try GraphRunRecords.write(swiftRaw, to: rawSwiftURL)
-    try GraphRunRecords.write(swiftReduced, to: reducedSwiftURL)
     try GraphRunRecords.write(rawTLC, to: rawTLCURL)
     try GraphRunRecords.write(reducedTLC, to: reducedTLCURL)
     let input = try SymmetryOrbitComparisonInput(
       caseID: symmetryCase.id,
       swiftRaw: swiftRaw,
-      swiftReduced: swiftReduced,
       tlcRaw: rawTLC,
       tlcReduced: reducedTLC,
       renderedActions: renderedActions,
@@ -276,6 +264,28 @@ package struct TemporalSymmetryCheck: Sendable {
         differences, to: outputDirectory.appendingPathComponent("symmetry-differences.json"))
       return .difference
     }
+  }
+
+  package func checkedSymmetryGraph(_ native: NativeModelRun) throws -> GraphRun {
+    guard native.graph.isComplete, native.checks.properties.isEmpty,
+          let deadlock = native.checks.deadlock else {
+      throw EvidenceFormatError.invalidField(record: "symmetry", field: "native graph or deadlock check")
+    }
+    let outcome: GraphRunOutcome
+    let trace: GraphTrace?
+    switch deadlock {
+    case .satisfied:
+      outcome = .noViolation
+      trace = nil
+    case .violated(let witness):
+      guard let final = witness.steps.last else { throw GraphRunError.emptyTrace }
+      outcome = .deadlock(final.state)
+      trace = witness
+    case .unavailable, .reached, .unreachable:
+      throw EvidenceFormatError.invalidField(record: "symmetry", field: "native deadlock verdict")
+    }
+    return try GraphRun(isComplete: true, graph: native.graph.graph,
+      observableActions: native.graph.observableActions, outcome: outcome, trace: trace)
   }
 
   package func captureSymmetryGraph(
@@ -312,6 +322,39 @@ package struct TemporalSymmetryCheck: Sendable {
       observableActions: capture.graph.observableActions, outcome: graphOutcome, trace: trace)
   }
 
+}
+
+package struct GeneratedSymmetryConformance: Sendable {
+  package let native: NativeModelRun
+  package let members: [TLAValue]
+}
+
+package func generatedSymmetryConformance(scope: Int, maximumStates: Int) throws -> GeneratedSymmetryConformance {
+  func run<Machine: StateMachine>(
+    _ initial: [Machine], rendered: RenderedSpecification, members: [TLAValue]
+  ) throws -> GeneratedSymmetryConformance {
+    let graph = try ReachabilityGraph(initialMachines: initial, maximumStates: maximumStates)
+    return GeneratedSymmetryConformance(
+      native: try NativeModelRun(graph, rendered: rendered, checkingDeadlock: true),
+      members: members)
+  }
+
+  switch scope {
+  case 2:
+    return try run(SymmetryConformanceScope2.initialMachines(), rendered: SymmetryConformanceScope2.render(),
+      members: SymmetryConformanceScope2.Member.all.map(\.tlaValue))
+  case 3:
+    return try run(SymmetryConformanceScope3.initialMachines(), rendered: SymmetryConformanceScope3.render(),
+      members: SymmetryConformanceScope3.Member.all.map(\.tlaValue))
+  case 4:
+    return try run(SymmetryConformanceScope4.initialMachines(), rendered: SymmetryConformanceScope4.render(),
+      members: SymmetryConformanceScope4.Member.all.map(\.tlaValue))
+  case 5:
+    return try run(SymmetryConformanceScope5.initialMachines(), rendered: SymmetryConformanceScope5.render(),
+      members: SymmetryConformanceScope5.Member.all.map(\.tlaValue))
+  default:
+    throw EvidenceFormatError.invalidField(record: "symmetry", field: "unsupported scope \(scope)")
+  }
 }
 
 extension TemporalSymmetryCheck {
@@ -377,19 +420,4 @@ extension TemporalSymmetryCheck {
   }
 
 
-}
-
-private struct ConformanceMember: Identifiable, Sendable {
-  let id: Int
-}
-
-package func symmetryConformanceSpec(scope: Int) -> TLASpec {
-  let chosen = CollectionVar<ConformanceMember, Int>("chosen")
-  return TLASpec("ModelCollection\(scope)") {
-    ModelCollection(chosen, verificationScope: scope, initial: 0)
-    Symmetry(chosen)
-    CollectionAction("Choose", on: chosen) { member in
-      chosen[member] == 0 && chosen.update(member, to: 1)
-    }
-  }
 }
