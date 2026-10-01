@@ -454,6 +454,18 @@ extension ParserSession {
 
         if callName == "Var", args.count == 1,
            let name = args.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
+            if components.formalParameters.contains(where: { $0.name == name }) {
+                do {
+                    let valueType = try varTypeName.map { try sourceTypeResolver.resolve($0) }
+                    sourceScope = sourceScope.extending(binding: patternName, to: .variable(name), shape: valueType)
+                } catch {
+                    components.diagnostics.append(.init(
+                        message: "Formal parameter '\(name)' has an invalid value type: \(error)",
+                        source: fc
+                    ))
+                }
+                return
+            }
             components.variables.append(.init(
                 name: name,
                 initialization: .expression(.sourceIssue(.missingVariableInitializer(

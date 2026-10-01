@@ -4,8 +4,13 @@ import SwiftTLA
 extension NativeSwiftEmitter {
     func supportsNativeRefinement(_ refinement: CompiledRefinementProgram) -> Bool {
         let abstract = refinement.abstract
-        return abstract.layout.parameters.isEmpty
-            && abstract.layout.variables.allSatisfy { $0.declaration.origin == .source && $0.collection == nil }
+        return abstract.layout.variables.allSatisfy { $0.declaration.origin == .source && $0.collection == nil }
+            && abstract.layout.parameters.allSatisfy { parameter in
+                program.layout.parameters.contains { concrete in
+                    concrete.reference.name == parameter.reference.name
+                        && program.bindingTypes[concrete.binder] == abstract.bindingTypes[parameter.binder]
+                }
+            }
     }
 
     mutating func refinementDeclarations(nested: Bool) throws -> [DeclSyntax] {
@@ -20,12 +25,17 @@ extension NativeSwiftEmitter {
                 let abstractModel = try MacroCompilation(typeName: name, program: refinement.abstract)
                 var abstractEmitter = NativeSwiftEmitter(model: abstractModel, sharedTypes: typeDeclarations)
                 let members = try abstractEmitter.machineMembers(nested: true).map(\.description).joined(separator: "\n")
+                let configurationArguments = refinement.abstract.layout.parameters.map { parameter in
+                    "\(parameter.reference.name): configuration.`\(parameter.reference.name)`"
+                }.joined(separator: ", ")
+                let configuration = "try \(name).Configuration(\(configurationArguments))"
+                let hasConfiguration = !refinement.abstract.layout.parameters.isEmpty
                 declarations += try nativeDeclarations("""
                 @_documentation(visibility: internal)
                 public struct \(name): StateMachine {
                     \(members)
-                    fileprivate static func _mapped(_ state: State) -> Self {
-                        Self(execution: Snapshot(state: state))
+                    fileprivate static func _mapped(_ state: State\(hasConfiguration ? ", configuration: Configuration" : "")) -> Self {
+                        Self(execution: Snapshot(state: state)\(hasConfiguration ? ", configuration: configuration" : ""))
                     }
                 }
                 """)
@@ -41,11 +51,11 @@ extension NativeSwiftEmitter {
                 declarations += try nativeDeclarations("""
                 private func _mapRefinement\(index)(_ state: Snapshot) throws -> \(name) {
                     \(values.joined(separator: "\n"))
-                    return \(name)._mapped(.init(\(arguments)))
+                    return \(name)._mapped(.init(\(arguments))\(hasConfiguration ? ", configuration: \(configuration)" : ""))
                 }
                 """)
                 checks.append("""
-                if checking.contains(.\(propertyCases[refinement.id]!)), let failure = try graph.refinementFailure(initialMachines: \(name).initialMachines(), mapping: _mapRefinement\(index)) {
+                if checking.contains(.\(propertyCases[refinement.id]!)), let failure = try graph.refinementFailure(initialMachines: \(name).initialMachines(\(hasConfiguration ? "configuration: \(configuration)" : "")), mapping: _mapRefinement\(index)) {
                     failures[.\(propertyCases[refinement.id]!)] = failure
                 }
                 """)

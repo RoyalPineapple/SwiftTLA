@@ -1108,6 +1108,10 @@ public extension TLASpec {
             }
             let abstractModule = try instance.module.loweredSourceModel()
             let mappings = Dictionary(uniqueKeysWithValues: refinement.mappings.map { ($0.target, $0.source) })
+            let modelParametersByBinder = Dictionary(uniqueKeysWithValues: layout.parameters.map {
+                ($0.binder, $0.reference)
+            })
+            var modelParameterDependencies: Set<ParameterReference> = []
             let parameters = Dictionary(uniqueKeysWithValues: try abstractModule.formalParameters.map { parameter in
                 guard let source = mappings[parameter.name] else {
                     throw CompilationDiagnostic(
@@ -1123,6 +1127,14 @@ public extension TLASpec {
                     source,
                     at: "refinements.\(refinement.name).mappings.\(parameter.name)"
                 )
+                var pending = [compiled]
+                while let expression = pending.popLast() {
+                    if case .boundValue(let binder) = expression.operation,
+                       let reference = modelParametersByBinder[binder] {
+                        modelParameterDependencies.insert(reference)
+                    }
+                    pending.append(contentsOf: expression.children)
+                }
                 let dependencies = compiled.stateRequirements(operators: lowerer.operators)
                 guard dependencies.variables.isEmpty && dependencies.requiresCompleteState == false else {
                     throw CompilationDiagnostic(
@@ -1144,6 +1156,7 @@ public extension TLASpec {
                 parameterDependencies.contains($0.name)
                     && !specialized.formalParameters.contains($0)
             }
+            specialized.parameters += self.parameters.filter { modelParameterDependencies.contains($0.reference) }
             // A TLC exploration constraint is configuration, not part of C!Spec.
             specialized.constraint = nil
             return .init(
