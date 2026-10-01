@@ -24,6 +24,7 @@ struct MixedStepCompositionTests {
         #expect(graph.transitions.values.reduce(0) { $0 + $1.count } == 4)
         #expect(graph.deadlockedStates == [completed.snapshot])
         let rendered = try scenario.render()
+        #expect(rendered.tlaBundle.root.name == "MixedStepComposition")
         #expect(Set(rendered.actions.map(\.sourceName)).isSuperset(of: ["advance", "reset"]))
         let run = try NativeScenarioRun(scenario, maximumStates: 10)
         try run.validateExpectations()

@@ -29,7 +29,7 @@ enum TLASpecVerifier {
         let typeName = declaration.name.text
         let memberList = declaration.memberBlock.members
 
-        guard let source = try Self.findSpec(in: memberList) else {
+        guard let source = try Self.findSpec(in: memberList, defaultName: typeName) else {
             throw ModelMacroError.missingSpecification(typeName: typeName)
         }
 
@@ -50,7 +50,7 @@ enum TLASpecVerifier {
 
     // MARK: - Helpers
 
-    static func findSpec(in members: MemberBlockItemListSyntax) throws -> (name: String, closure: ClosureExprSyntax)? {
+    static func findSpec(in members: MemberBlockItemListSyntax, defaultName: String? = nil) throws -> (name: String, closure: ClosureExprSyntax)? {
         let declarations = members.compactMap { $0.decl.as(VariableDeclSyntax.self) }.filter {
             $0.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == "spec" }
         }
@@ -85,13 +85,13 @@ enum TLASpecVerifier {
         } else {
             expression = statement.item.as(ReturnStmtSyntax.self)?.expression
         }
-        guard let source = try specMacroSource(from: expression) else {
+        guard let source = try specMacroSource(from: expression, defaultName: defaultName) else {
             throw ModelMacroError.nonLiteralSpecification
         }
         return source
     }
 
-    private static func specMacroSource(from expression: ExprSyntax?) throws -> (name: String, closure: ClosureExprSyntax)? {
+    private static func specMacroSource(from expression: ExprSyntax?, defaultName: String?) throws -> (name: String, closure: ClosureExprSyntax)? {
         guard let macro = expression?.as(MacroExpansionExprSyntax.self),
               macro.macroName.text == "spec" else { return nil }
         guard macro.additionalTrailingClosures.isEmpty else {
@@ -99,6 +99,9 @@ enum TLASpecVerifier {
         }
         let arguments = macro.arguments
         let trailingClosure = macro.trailingClosure
+        if arguments.isEmpty, let trailingClosure, let defaultName {
+            return (defaultName, trailingClosure)
+        }
         guard let first = arguments.first,
               first.label == nil,
               let name = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
@@ -370,7 +373,7 @@ enum ModelMacroError: Error, CustomStringConvertible, Equatable {
         case .missingSpecification(let typeName): "\(typeName) must declare a static spec"
         case .emptyState: "The specification must declare at least one state variable"
         case .dynamicFiniteDomain(let typeName): "Enum \(typeName).finiteValues must be an array of its declared cases or synthesized allCases; dynamic or computed domains are not supported"
-        case .nonLiteralSpecification: "The static spec getter must contain only a direct #spec declaration, optionally preceded by return, with a literal module name and an inline builder closure"
+        case .nonLiteralSpecification: "The static spec getter must contain only a direct #spec declaration, optionally preceded by return, with an inline builder closure and an optional literal module name"
         case .dynamicModuleName: "#spec requires a literal module name"
         case .unsupportedEnumEncoding(let typeName): "Enum \(typeName).tlaValue must encode rawValue as .string, .constant, or .int matching its raw type, directly or through an exhaustive switch self; dynamic encodings are not supported"
         case .duplicateTypeDeclaration(let typeName): "Type '\(typeName)' is declared more than once in the model"
@@ -425,7 +428,8 @@ public struct ModelMacro: MemberMacro, MemberAttributeMacro {
                 return false
             })
             if !usedAsState {
-                guard let specification = try? TLASpecVerifier.findSpec(in: declaration.memberBlock.members) else { return [] }
+                guard let specification = try? TLASpecVerifier.findSpec(in: declaration.memberBlock.members,
+                    defaultName: declaration.as(StructDeclSyntax.self)?.name.sourceIdentifierName) else { return [] }
                 let use = AssumedRecordTypeUse(name: source.name.sourceIdentifierName)
                 use.walk(Syntax(specification.closure))
                 guard use.found else { return [] }

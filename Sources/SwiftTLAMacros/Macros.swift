@@ -23,8 +23,15 @@ public macro _TLARecordValue() = #externalMacro(module: "SwiftTLAPlugin", type: 
 /// Declares a source model for `@TLAModel`.
 ///
 /// `#spec` is the compile-time boundary for the PlusCal-shaped authoring DSL.
-/// The macro validates its literal name and body shape, then produces the
+/// The enclosing model's Swift name is used unless a different TLA+ module
+/// name is supplied. The macro validates the name and body shape, then produces the
 /// `TLASpec` source model consumed by `@TLAModel`.
+@freestanding(expression)
+public macro spec(@SpecBuilder _ body: () -> [SpecComponent]) -> TLASpec = #externalMacro(module: "SwiftTLAPlugin", type: "SpecExpressionMacro")
+
+@freestanding(expression)
+public macro spec(@SpecBuilder scoped body: (SpecificationScope) -> [SpecComponent]) -> TLASpec = #externalMacro(module: "SwiftTLAPlugin", type: "SpecExpressionMacro")
+
 @freestanding(expression)
 public macro spec(_ name: StaticString, @SpecBuilder _ body: () -> [SpecComponent]) -> TLASpec = #externalMacro(module: "SwiftTLAPlugin", type: "SpecExpressionMacro")
 

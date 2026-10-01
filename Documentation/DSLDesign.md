@@ -94,6 +94,11 @@ Use a declaration's Swift name as its default name in reports and diagnostics.
 Authors must not repeat that name as a required string. For example, a property
 bound as `mutualExclusion` must not also require `"MutualExclusion"`.
 
+For a generated model, `#spec { ... }` uses the enclosing Swift struct name as
+the TLA+ module name. `#spec("UpstreamModule") { ... }` remains available when
+the formal module must retain a different name; it is an export identity, not
+a second authoring style.
+
 Allow an optional display label for a more readable report. A label changes
 presentation, not declaration identity, type, references, or machine semantics.
 References must continue to use typed declarations, not display-label strings.

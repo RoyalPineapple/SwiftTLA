@@ -9,8 +9,7 @@ public struct SpecExpressionMacro: ExpressionMacro {
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
-        guard let name = node.arguments.first?.expression.as(StringLiteralExprSyntax.self),
-              let closure = node.trailingClosure
+        guard let closure = node.trailingClosure
         else {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
@@ -22,6 +21,25 @@ public struct SpecExpressionMacro: ExpressionMacro {
                 named: StringLiteralExprSyntax(content: "InvalidSpec"),
                 body: ClosureExprSyntax(statements: [])
             )
+        }
+
+        let name: StringLiteralExprSyntax
+        if let argument = node.arguments.first {
+            guard node.arguments.count == 1, argument.label == nil,
+                  let literal = argument.expression.as(StringLiteralExprSyntax.self) else {
+                context.diagnose(Diagnostic(node: Syntax(node), message: SpecExpressionDiagnostic(
+                    actual: node.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                )))
+                return specCall(named: StringLiteralExprSyntax(content: "InvalidSpec"), body: closure)
+            }
+            name = literal
+        } else if let model = context.lexicalContext.compactMap({ $0.as(StructDeclSyntax.self) }).first {
+            name = StringLiteralExprSyntax(content: model.name.sourceIdentifierName)
+        } else {
+            context.diagnose(Diagnostic(node: Syntax(node), message: SpecExpressionDiagnostic(
+                actual: "an unnamed #spec outside a model"
+            )))
+            return specCall(named: StringLiteralExprSyntax(content: "InvalidSpec"), body: closure)
         }
 
         let parameterScope: String?
@@ -296,9 +314,9 @@ private struct SpecExpressionDiagnostic: DiagnosticMessage {
 
     var message: String {
         "What failed: #spec invocation could not be parsed. Where: this #spec expression. "
-            + "Expected: a string literal specification name followed by a builder closure. "
+            + "Expected: a builder closure in a model, with an optional string literal module name. "
             + "Actual: \(actual). "
-            + "Next safe action: write #spec(\"Name\") { ... } and compile again."
+            + "Next safe action: write #spec { ... } in a model, or #spec(\"Name\") { ... }, and compile again."
     }
 }
 

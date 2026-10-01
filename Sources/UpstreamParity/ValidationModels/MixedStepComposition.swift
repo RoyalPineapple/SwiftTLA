@@ -7,7 +7,7 @@ package struct MixedStepComposition {
     package enum Step: String, CaseIterable { case advance, reset }
 
     package static var spec: TLASpec {
-        #spec("MixedStepComposition") { scope in
+        #spec { scope in
             let value = scope.sharedVar(initial: 0)
             Algorithm("Advance") {
                 Each(Process.all, scoped: { _, process in
