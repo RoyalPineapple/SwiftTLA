@@ -5,7 +5,7 @@ import SwiftTLAMacros
 @TLAModel
 struct ParameterizedActorModel {
     static var spec: TLASpec {
-        TLASpec("ParameterizedActorModel") {
+        #spec("ParameterizedActorModel") {
             let leader = Var<Int>("leader")
             let turn = Var<Int>("turn")
             Variable(leader, 1)

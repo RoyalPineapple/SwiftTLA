@@ -9,7 +9,7 @@ struct Device: Identifiable {
 @TLAModel
 struct DeviceContract {
     static var spec: TLASpec {
-        TLASpec("DeviceContract") {
+        #spec("DeviceContract") {
             let phases = CollectionVar<Device, Int>("phases")
             ModelCollection(phases, verificationScope: 4, initial: 0)
 

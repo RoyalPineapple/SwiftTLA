@@ -8,7 +8,7 @@ struct FixtureDevice: Identifiable {
 @TLAModel
 struct InvalidCollectionPredicateModel {
   static var spec: TLASpec {
-    TLASpec("InvalidCollectionPredicateModel") {
+    #spec("InvalidCollectionPredicateModel") {
       let devices = CollectionVar<FixtureDevice, Int>("devices")
       ModelCollection(devices, verificationScope: 1, initial: 0)
       Invariant("unsupported") {

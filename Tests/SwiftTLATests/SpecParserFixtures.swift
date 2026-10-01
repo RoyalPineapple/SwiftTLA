@@ -68,7 +68,7 @@ struct DefinePhaseGeneratedModel {
 @TLAModel
 struct FormalDefinitionFidelityMacro {
     static var spec: TLASpec {
-        TLASpec("FormalDefinitionFidelityMacro") {
+        #spec("FormalDefinitionFidelityMacro") {
             let value = Var<Int>("value")
             Variable(value, 0)
             FormalDefinition("Refines", parameters: [], body: true)
@@ -98,7 +98,7 @@ struct TypedFacadeEnumDomainMacro {
     }
 
     static var spec: TLASpec {
-        TLASpec("TypedFacadeEnumDomainMacro") {
+        #spec("TypedFacadeEnumDomainMacro") {
             let floor = Var<Int>("floor")
             Variable(floor, 0)
             SwiftTLA.Action("move", parameters: [

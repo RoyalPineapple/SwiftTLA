@@ -6,7 +6,7 @@ let dynamicName = "DynamicModelName"
 @TLAModel
 struct InvalidDynamicModelName {
   static var spec: TLASpec {
-    TLASpec(dynamicName) {
+    #spec(dynamicName) {
       let count = Var<Int>("count")
       Variable(count, 0)
     }

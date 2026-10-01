@@ -60,7 +60,7 @@ struct FunctionSpaceMembershipModel {
     enum Key: String, CaseIterable, FiniteTLAValueDomain { case first, second, third }
 
     static var spec: TLASpec {
-        TLASpec("FunctionSpaceMembershipModel") {
+        #spec("FunctionSpaceMembershipModel") {
             let result = Var<Bool>("result")
             let zero = Var<Int>("zero")
             Variable(result, false)

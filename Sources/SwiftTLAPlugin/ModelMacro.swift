@@ -85,40 +85,24 @@ enum TLASpecVerifier {
         } else {
             expression = statement.item.as(ReturnStmtSyntax.self)?.expression
         }
-        guard let source = try specBuilderSource(from: expression) else {
+        guard let source = try specMacroSource(from: expression) else {
             throw ModelMacroError.nonLiteralSpecification
         }
         return source
     }
 
-    private static func specBuilderSource(from expression: ExprSyntax?) throws -> (name: String, closure: ClosureExprSyntax)? {
-        guard let expression else { return nil }
-        let arguments: LabeledExprListSyntax
-        let trailingClosure: ClosureExprSyntax?
-        let source: ModelMacroError.Source
-        if let call = expression.as(FunctionCallExprSyntax.self),
-           call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == "TLASpec" {
-            guard call.additionalTrailingClosures.isEmpty else {
-                throw ModelMacroError.nonLiteralSpecification
-            }
-            arguments = call.arguments
-            trailingClosure = call.trailingClosure
-            source = .builder
-        } else if let macro = expression.as(MacroExpansionExprSyntax.self),
-                  macro.macroName.text == "spec" {
-            guard macro.additionalTrailingClosures.isEmpty else {
-                throw ModelMacroError.nonLiteralSpecification
-            }
-            arguments = macro.arguments
-            trailingClosure = macro.trailingClosure
-            source = .specMacro
-        } else {
-            return nil
+    private static func specMacroSource(from expression: ExprSyntax?) throws -> (name: String, closure: ClosureExprSyntax)? {
+        guard let macro = expression?.as(MacroExpansionExprSyntax.self),
+              macro.macroName.text == "spec" else { return nil }
+        guard macro.additionalTrailingClosures.isEmpty else {
+            throw ModelMacroError.nonLiteralSpecification
         }
+        let arguments = macro.arguments
+        let trailingClosure = macro.trailingClosure
         guard let first = arguments.first,
               first.label == nil,
               let name = first.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
-            throw ModelMacroError.dynamicModuleName(source)
+            throw ModelMacroError.dynamicModuleName
         }
         if arguments.count == 1, let trailingClosure {
             return (name, trailingClosure)
@@ -366,15 +350,10 @@ enum TLASpecVerifier {
 }
 
 enum ModelMacroError: Error, CustomStringConvertible, Equatable {
-    enum Source: String, Equatable {
-        case builder = "TLASpec"
-        case specMacro = "#spec"
-    }
-
     case invalidHost
     case missingSpecification(typeName: String)
     case emptyState
-    case dynamicModuleName(Source)
+    case dynamicModuleName
     case nonLiteralSpecification
     case dynamicFiniteDomain(typeName: String)
     case invalidEnumRawValue(caseName: String)
@@ -391,8 +370,8 @@ enum ModelMacroError: Error, CustomStringConvertible, Equatable {
         case .missingSpecification(let typeName): "\(typeName) must declare a static spec"
         case .emptyState: "The specification must declare at least one state variable"
         case .dynamicFiniteDomain(let typeName): "Enum \(typeName).finiteValues must be an array of its declared cases or synthesized allCases; dynamic or computed domains are not supported"
-        case .nonLiteralSpecification: "The static spec getter must contain only a direct #spec or TLASpec declaration, optionally preceded by return, with a literal module name and an inline builder closure"
-        case .dynamicModuleName(let source): "\(source.rawValue) requires a literal module name"
+        case .nonLiteralSpecification: "The static spec getter must contain only a direct #spec declaration, optionally preceded by return, with a literal module name and an inline builder closure"
+        case .dynamicModuleName: "#spec requires a literal module name"
         case .unsupportedEnumEncoding(let typeName): "Enum \(typeName).tlaValue must encode rawValue as .string, .constant, or .int matching its raw type, directly or through an exhaustive switch self; dynamic encodings are not supported"
         case .duplicateTypeDeclaration(let typeName): "Type '\(typeName)' is declared more than once in the model"
         case .duplicateEnumCase(let typeName, let caseName): "Enum \(typeName) declares case '\(caseName)' more than once"

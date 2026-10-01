@@ -7,7 +7,7 @@ import SwiftTLAMacros
 @TLAModel
 private struct RecursiveCallbackCapture {
     static var spec: TLASpec {
-        TLASpec("RecursiveCallbackCapture") {
+        #spec("RecursiveCallbackCapture") {
             let result = Var<Int>("result")
             Variable(result, 0)
             FormalDefinition("Walk", parameters: [.operator("operation", arity: 1), .value("remaining")],
@@ -29,7 +29,7 @@ private struct RecursiveCallbackCapture {
 @TLAModel
 private struct BoundedOperatorExecution {
     static var spec: TLASpec {
-        TLASpec("BoundedOperatorExecution") {
+        #spec("BoundedOperatorExecution") {
             let result = Var<Int>("result")
             Variable(result, 0)
             SwiftTLA.Action("accepted") {
@@ -73,7 +73,7 @@ private struct BoundedOperatorExecution {
 @TLAModel
 private struct UnusedOperatorArguments {
     static var spec: TLASpec {
-        TLASpec("UnusedOperatorArguments") {
+        #spec("UnusedOperatorArguments") {
             let result = Var<Int>("result")
             Variable(result, 0)
             FormalDefinition("Ignore", parameters: [.value("unused")], body: 7)
@@ -119,7 +119,7 @@ private struct UnusedOperatorArguments {
 @TLAModel
 private struct ExhaustedOperatorDepth {
     static var spec: TLASpec {
-        TLASpec("ExhaustedOperatorDepth") {
+        #spec("ExhaustedOperatorDepth") {
             let result = Var<Int>("result")
             Variable(result, 0)
             FormalDefinition("Loop", parameters: [], body: StateExpr.operatorApplication(.reference("Loop", arity: 0), []))
@@ -133,7 +133,7 @@ private struct ExhaustedOperatorDepth {
 @TLAModel
 private struct NestedLambdaCallDepth {
     static var spec: TLASpec {
-        TLASpec("NestedLambdaCallDepth") {
+        #spec("NestedLambdaCallDepth") {
             let result = Var<Int>("result")
             Variable(result, 9)
             FormalDefinition("CountDown", parameters: [.value("remaining")], body: StateExpr.if(
@@ -159,7 +159,7 @@ private struct NestedLambdaCallDepth {
 @TLAModel
 private struct TailArgumentFailureOrder {
     static var spec: TLASpec {
-        TLASpec("TailArgumentFailureOrder") {
+        #spec("TailArgumentFailureOrder") {
             let result = Var<Int>("result")
             Variable(result, 9)
             FormalDefinition("CountDown", parameters: [.value("remaining")], body: StateExpr.if(
@@ -205,7 +205,7 @@ private struct TailArgumentFailureOrder {
 @TLAModel
 private struct EvaluatedArgumentReuse {
     static var spec: TLASpec {
-        TLASpec("EvaluatedArgumentReuse") {
+        #spec("EvaluatedArgumentReuse") {
             let result = Var<Int>("result")
             Variable(result, 9)
             FormalDefinition("Start", parameters: [.value("remaining")], body: StateExpr.if(
@@ -266,7 +266,7 @@ private struct EvaluatedArgumentReuse {
 @TLAModel
 private struct DivisionArgumentOrder {
     static var spec: TLASpec {
-        TLASpec("DivisionArgumentOrder") {
+        #spec("DivisionArgumentOrder") {
             let result = Var<Int>("result")
             Variable(result, 0)
             FormalDefinition("Divide", parameters: [.value("left"), .value("right")],
@@ -281,7 +281,7 @@ private struct DivisionArgumentOrder {
 @TLAModel
 private struct FunctionArgumentOrder {
     static var spec: TLASpec {
-        TLASpec("FunctionArgumentOrder") {
+        #spec("FunctionArgumentOrder") {
             let result = Var<Int>("result")
             Variable(result, 0)
             FormalDefinition("Read", parameters: [.value("function"), .value("key")],

@@ -5,7 +5,7 @@ import SwiftTLAMacros
 @TLAModel
 private struct BoundedRecursiveCall {
     static var spec: TLASpec {
-        TLASpec("BoundedRecursiveCall") {
+        #spec("BoundedRecursiveCall") {
             let result = Var<Int>("result")
             Variable(result, 7)
             SwiftTLA.Action("advance") {

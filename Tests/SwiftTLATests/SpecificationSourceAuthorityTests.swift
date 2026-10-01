@@ -298,9 +298,7 @@ struct SpecificationSourceAuthorityTests {
             "#spec(\"Authority\") {}",
             "return #spec(\"Authority\") {}",
             "get { #spec(\"Authority\") {} }",
-            "get { return TLASpec(\"Authority\") {} }",
-            "TLASpec(\"Authority\", {})",
-            "TLASpec(\"Authority\", scoped: { scope in })",
+            "get { return #spec(\"Authority\") {} }",
             "#spec(\"Authority\", scoped: { scope in })"
         ]
         for getter in getters {
@@ -316,28 +314,32 @@ struct SpecificationSourceAuthorityTests {
             "recordAccess(); return #spec(\"Authority\") {}",
             "if dynamicFlag { return otherSpec }; return #spec(\"Authority\") {}",
             "return #spec(\"Authority\") {}; recordAccess()",
-            "defer { recordAccess() }; return TLASpec(\"Authority\") {}",
-            "let ignored = makeValue(); TLASpec(\"Authority\") {}",
-            "get { recordAccess(); return TLASpec(\"Authority\") {} }",
-            "get { TLASpec(\"Authority\") {} } set { recordAccess() }",
-            "get async { TLASpec(\"Authority\") {} }",
-            "dynamicFlag ? otherSpec : TLASpec(\"Authority\") {}",
-            "TLASpec(\"Authority\", makeBuilder())",
-            "TLASpec(\"Authority\", ignored: makeValue()) {}",
+            "defer { recordAccess() }; return #spec(\"Authority\") {}",
+            "let ignored = makeValue(); #spec(\"Authority\") {}",
+            "get { recordAccess(); return #spec(\"Authority\") {} }",
+            "get { #spec(\"Authority\") {} } set { recordAccess() }",
+            "get async { #spec(\"Authority\") {} }",
+            "dynamicFlag ? otherSpec : #spec(\"Authority\") {}",
+            "#spec(\"Authority\", makeBuilder())",
             "#spec(\"Authority\", ignored: makeValue()) {}",
-            "TLASpec(\"Authority\") {} ignored: {}"
+            "#spec(\"Authority\") {} ignored: {}"
         ]
         for getter in getters {
             try expectRejection("static var spec: TLASpec { \(getter) }")
         }
     }
 
+    @Test("A model getter rejects the superseded TLASpec builder form")
+    func builderGetterIsRejected() throws {
+        try expectRejection("static var spec: TLASpec { TLASpec(\"Authority\") {} }")
+    }
+
     @Test("Specification identity requires one static getter declaration")
     func alternateStorageIsRejected() throws {
         for members in [
-            "var spec: TLASpec { TLASpec(\"Authority\") {} }",
-            "static let spec = TLASpec(\"Authority\") {}",
-            "static var spec: TLASpec { TLASpec(\"Authority\") {} }; static var spec: TLASpec { TLASpec(\"Other\") {} }"
+            "var spec: TLASpec { #spec(\"Authority\") {} }",
+            "static let spec = #spec(\"Authority\") {}",
+            "static var spec: TLASpec { #spec(\"Authority\") {} }; static var spec: TLASpec { #spec(\"Other\") {} }"
         ] {
             try expectRejection(members)
         }

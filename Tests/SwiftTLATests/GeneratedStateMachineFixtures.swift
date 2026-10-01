@@ -343,7 +343,7 @@ struct GeneratedAlgorithmMachine {
 @TLAModel
 struct SingleParameterActionMachine {
     static var spec: TLASpec {
-        TLASpec("SingleParameterActionMachine") {
+        #spec("SingleParameterActionMachine") {
             let value = Var<Int>("value")
             Variable(value, 0)
             SwiftTLA.Action("select", parameters: [ActionParameter("choice", values: [1, 2])]) {
@@ -357,7 +357,7 @@ struct SingleParameterActionMachine {
 @TLAModel
 struct ThreeParameterActionMachine {
     static var spec: TLASpec {
-        TLASpec("ThreeParameterActionMachine") {
+        #spec("ThreeParameterActionMachine") {
             let value = Var<Int>("value")
             Variable(value, 0)
             SwiftTLA.Action("transfer", parameters: [
@@ -375,7 +375,7 @@ struct ThreeParameterActionMachine {
 @TLAModel
 struct EndToEndThreeParameterActionMachine {
     static var spec: TLASpec {
-        TLASpec("EndToEndThreeParameterActionMachine") {
+        #spec("EndToEndThreeParameterActionMachine") {
             let value = Var<Int>("value")
             let source = Expr<Int>(.variable("source"))
             let destination = Expr<Int>(.variable("destination"))
@@ -395,7 +395,7 @@ struct EndToEndThreeParameterActionMachine {
 @TLAModel
 struct NestedComposedCounter {
     static var spec: TLASpec {
-        TLASpec("NestedComposedCounter") {
+        #spec("NestedComposedCounter") {
             let count = Var<Int>("count")
             Variable(count, 0)
             SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 2) }

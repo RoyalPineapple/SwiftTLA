@@ -20,7 +20,7 @@ struct InvalidTypedFirstParameter {
   static let dynamicPeople = PersonID.finiteValues
 
   static var spec: TLASpec {
-    TLASpec("InvalidTypedFirstParameter") {
+    #spec("InvalidTypedFirstParameter") {
       let floor = Var<Int>("floor")
       Variable(floor, 0)
       Action("firstDynamic", parameters: [
@@ -36,7 +36,7 @@ struct InvalidTypedFirstParameter {
 @TLAModel
 struct InvalidTypedSecondParameter {
   static var spec: TLASpec {
-    TLASpec("InvalidTypedSecondParameter") {
+    #spec("InvalidTypedSecondParameter") {
       let floor = Var<Int>("floor")
       Variable(floor, 0)
       Action("secondEmpty", parameters: [
@@ -52,7 +52,7 @@ struct InvalidTypedSecondParameter {
 @TLAModel
 struct InvalidTypedThirdParameter {
   static var spec: TLASpec {
-    TLASpec("InvalidTypedThirdParameter") {
+    #spec("InvalidTypedThirdParameter") {
       let floor = Var<Int>("floor")
       Variable(floor, 0)
       Action("thirdDuplicate", parameters: [

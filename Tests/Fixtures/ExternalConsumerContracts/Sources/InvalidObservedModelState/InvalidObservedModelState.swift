@@ -8,7 +8,7 @@ struct InvalidObservedModelState {
   }
 
   static var spec: TLASpec {
-    TLASpec("InvalidObservedModelState") {
+    #spec("InvalidObservedModelState") {
       let state = Var<Int>("state")
       Variable(state, 0)
     }

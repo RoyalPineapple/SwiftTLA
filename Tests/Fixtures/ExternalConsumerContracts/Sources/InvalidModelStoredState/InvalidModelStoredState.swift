@@ -8,7 +8,7 @@ struct InvalidModelStoredState {
   let reference = MutableReferenceState()
 
   static var spec: TLASpec {
-    TLASpec("InvalidModelStoredState") {
+    #spec("InvalidModelStoredState") {
       let count = Var<Int>("count")
       Variable(count, 0)
     }

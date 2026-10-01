@@ -20,7 +20,7 @@ public struct StringDevice: Identifiable, Sendable {
 @TLAModel
 public struct GeneratedSymmetricMachine: Sendable {
   public static var spec: TLASpec {
-    TLASpec("GeneratedSymmetricMachine") {
+    #spec("GeneratedSymmetricMachine") {
       let devices = CollectionVar<IntegerDevice, Int>("devices")
       ModelCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("begin", on: devices) { member in
@@ -33,7 +33,7 @@ public struct GeneratedSymmetricMachine: Sendable {
 @TLAModel
 public struct GeneratedExpressionSymmetricMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedExpressionSymmetricMachine") {
+    #spec("GeneratedExpressionSymmetricMachine") {
       let devices = CollectionVar<IntegerDevice, Int>("devices")
       ModelCollection(devices, verificationScope: 1, initial: 0)
       CollectionAction("advance", on: devices) { member in
@@ -46,7 +46,7 @@ public struct GeneratedExpressionSymmetricMachine {
 @TLAModel
 public struct GeneratedScopedSymmetricMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedScopedSymmetricMachine") {
+    #spec("GeneratedScopedSymmetricMachine") {
       let devices = CollectionVar<StringDevice, Int>("devices")
       ModelCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("begin", on: devices) { member in
@@ -59,7 +59,7 @@ public struct GeneratedScopedSymmetricMachine {
 @TLAModel
 public struct GeneratedSharedGuardSymmetricMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedSharedGuardSymmetricMachine") {
+    #spec("GeneratedSharedGuardSymmetricMachine") {
       let phase = Var<Int>("phase")
       let devices = CollectionVar<StringDevice, Int>("devices")
       Variable(phase, 4)
@@ -74,7 +74,7 @@ public struct GeneratedSharedGuardSymmetricMachine {
 @TLAModel
 public struct GeneratedMultiStatementSymmetricMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedMultiStatementSymmetricMachine") {
+    #spec("GeneratedMultiStatementSymmetricMachine") {
       let devices = CollectionVar<StringDevice, Int>("devices")
       ModelCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("advance", on: devices) { member in
@@ -89,7 +89,7 @@ public struct GeneratedMultiStatementSymmetricMachine {
 @TLAModel
 public struct GeneratedDisjunctiveSymmetricMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedDisjunctiveSymmetricMachine") {
+    #spec("GeneratedDisjunctiveSymmetricMachine") {
       let devices = CollectionVar<StringDevice, Int>("devices")
       ModelCollection(devices, verificationScope: 2, initial: 0)
       CollectionAction("advance", on: devices) { member in
@@ -103,7 +103,7 @@ public struct GeneratedDisjunctiveSymmetricMachine {
 @TLAModel
 public struct GeneratedAllSatisfyPredicateMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedAllSatisfyPredicateMachine") {
+    #spec("GeneratedAllSatisfyPredicateMachine") {
       let phase = Var<Int>("phase")
       let devices = CollectionVar<StringDevice, Int>("devices")
       Variable(phase, 0)
@@ -118,7 +118,7 @@ public struct GeneratedAllSatisfyPredicateMachine {
 @TLAModel
 public struct GeneratedContainsPredicateMachine {
   public static var spec: TLASpec {
-    TLASpec("GeneratedContainsPredicateMachine") {
+    #spec("GeneratedContainsPredicateMachine") {
       let phase = Var<Int>("phase")
       let devices = CollectionVar<StringDevice, Int>("devices")
       Variable(phase, 0)
