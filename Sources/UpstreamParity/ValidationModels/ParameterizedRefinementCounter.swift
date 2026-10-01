@@ -3,7 +3,9 @@ import SwiftTLAMacros
 
 @TLAModel
 package struct ParameterizedRefinementCounter {
-    package enum Step: String, CaseIterable { case advance }
+    package enum Step: String, CaseIterable {
+        case advance
+    }
 
     package static var spec: TLASpec {
         #spec("ParameterizedRefinementCounter") { scope in

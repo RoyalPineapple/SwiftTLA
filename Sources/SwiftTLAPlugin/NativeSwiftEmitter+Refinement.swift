@@ -7,7 +7,7 @@ extension NativeSwiftEmitter {
         return abstract.layout.variables.allSatisfy { $0.declaration.origin == .source && $0.collection == nil }
             && abstract.layout.parameters.allSatisfy { parameter in
                 program.layout.parameters.contains { concrete in
-                    concrete.reference.name == parameter.reference.name
+                    concrete.reference == parameter.reference
                         && program.bindingTypes[concrete.binder] == abstract.bindingTypes[parameter.binder]
                 }
             }
