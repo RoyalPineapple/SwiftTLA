@@ -11,6 +11,7 @@ public struct RecordValueMacro: ExtensionMacro, MemberMacro {
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
         guard let record = declaration.as(StructDeclSyntax.self) else { return [] }
+        let access = accessPrefix(for: record, in: context)
         let declarations = try recordFields(record)
         let parameters = declarations.enumerated().map { index, field in
             "`\(field.name)` _field\(index): some SwiftTLA.TypedExpression<\(field.type)>"
@@ -19,7 +20,7 @@ public struct RecordValueMacro: ExtensionMacro, MemberMacro {
             ".init(name: \(String(reflecting: field.name)), value: _field\(index).stateExpr)"
         }.joined(separator: ", ")
         return [DeclSyntax("""
-        public static func expression(\(raw: parameters)) -> SwiftTLA.Expr<Self> {
+        \(raw: access)static func expression(\(raw: parameters)) -> SwiftTLA.Expr<Self> {
             SwiftTLA.Expr(.recordLiteral(.init(orderedFields: [\(raw: fields)])))
         }
         """)]
@@ -39,6 +40,32 @@ public struct RecordValueMacro: ExtensionMacro, MemberMacro {
             }
     }
 
+    private static func accessPrefix(for record: StructDeclSyntax, in context: some MacroExpansionContext) -> String {
+        func level(_ modifiers: DeclModifierListSyntax) -> Int {
+            for modifier in modifiers {
+                switch modifier.name.text {
+                case "private": return 0
+                case "fileprivate": return 1
+                case "package": return 3
+                case "public", "open": return 4
+                default: break
+                }
+            }
+            return 2
+        }
+        var visibility = level(record.modifiers)
+        for node in context.lexicalContext {
+            if let owner = node.as(StructDeclSyntax.self) { visibility = min(visibility, level(owner.modifiers)) }
+            if let owner = node.as(EnumDeclSyntax.self) { visibility = min(visibility, level(owner.modifiers)) }
+        }
+        switch visibility {
+        case 4: return "public "
+        case 3: return "package "
+        case 0, 1: return "fileprivate "
+        default: return ""
+        }
+    }
+
     public static func expansion(
         of node: AttributeSyntax,
         attachedTo declaration: some DeclGroupSyntax,
@@ -47,6 +74,7 @@ public struct RecordValueMacro: ExtensionMacro, MemberMacro {
         in context: some MacroExpansionContext
     ) throws -> [ExtensionDeclSyntax] {
         guard let record = declaration.as(StructDeclSyntax.self) else { return [] }
+        let access = accessPrefix(for: record, in: context)
         let fields = try recordFields(record).map(\.name)
         let defaults = fields.map { "\($0): Self._formalRecordDefault(for: \\Self.`\($0)`)" }.joined(separator: ", ")
         let shapes = fields.map { ".init(name: \(String(reflecting: $0)), shape: Self._formalRecordShape(for: \\Self.`\($0)`))" }.joined(separator: ", ")
@@ -62,14 +90,14 @@ public struct RecordValueMacro: ExtensionMacro, MemberMacro {
         }.joined(separator: "\n")
         return [try ExtensionDeclSyntax("""
         extension \(type): SwiftTLA._GeneratedRecordValue {
-            public static func _formalRecordFieldName(_ keyPath: PartialKeyPath<Self>) -> String? {
+            \(raw: access)static func _formalRecordFieldName(_ keyPath: PartialKeyPath<Self>) -> String? {
                 \(raw: fieldNames)
                 return nil
             }
-            public static var defaultValue: Self { Self(\(raw: defaults)) }
-            public static var formalValueShape: SwiftTLA.FormalValueShape { .record([\(raw: shapes)]) }
-            public var tlaValue: SwiftTLA.TLAValue { .record(SwiftTLA.TLARecord([\(raw: values)])) }
-            public init?(formalValue: SwiftTLA.TLAValue) {
+            \(raw: access)static var defaultValue: Self { Self(\(raw: defaults)) }
+            \(raw: access)static var formalValueShape: SwiftTLA.FormalValueShape { .record([\(raw: shapes)]) }
+            \(raw: access)var tlaValue: SwiftTLA.TLAValue { .record(SwiftTLA.TLARecord([\(raw: values)])) }
+            \(raw: access)init?(formalValue: SwiftTLA.TLAValue) {
                 guard \(raw: guards) else { return nil }
                 self.init(\(raw: arguments))
             }

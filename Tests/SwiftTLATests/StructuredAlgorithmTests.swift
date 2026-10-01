@@ -28,42 +28,22 @@ private struct StructuredCarModel {
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    struct CarFields {
+    struct CarState: Hashable, Sendable {
         let floor: Int
         let door: Door
-    }
-
-    enum CarRecord: TLARecordSchema {
-        typealias Fields = CarFields
-
-        static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \CarFields.floor { return "floor" }
-            if key == \CarFields.door { return "door" }
-            return nil
-        }
-
-        static let floor = field(\CarFields.floor)
-        static let door = field(\CarFields.door)
-        static let fields = [
-            TLARecordFieldDeclaration(floor, default: 1),
-            TLARecordFieldDeclaration(door, default: Door.closed)
-        ]
     }
 
     static var spec: TLASpec {
         #spec("StructuredCar") {
             Algorithm("StructuredCar", scoped: { scope in
-                let cars = scope.sharedVar(_name: "cars", initial: Function<Car, Record<CarRecord>>.literal(
-                    (.north, Record.literal(.init(CarRecord.floor, 1), .init(CarRecord.door, Door.closed))),
-                    (.south, Record.literal(.init(CarRecord.floor, 2), .init(CarRecord.door, Door.closed)))
+                let cars = scope.sharedVar(_name: "cars", initial: Function<Car, CarState>.literal(
+                    (.north, CarState(floor: 1, door: .closed)),
+                    (.south, CarState(floor: 2, door: .closed))
                 ))
 
                 Each(Car.all) { car in
-                    Do(Step.open, when: cars[car][CarRecord.door] == Door.closed) {
-                        Assign(cars, to: cars.updating(car) { vehicle in
-                            vehicle.updating(CarRecord.door, to: Door.open)
-                        })
+                    Do(Step.open, when: cars[car].door == Door.closed) {
+                        Assign(cars[car].door, to: Door.open)
                     }
                 }
             })
@@ -90,11 +70,8 @@ struct StructuredAlgorithmTests {
     func loweredFunctionComprehensionRetainsRecords() throws {
         let algorithm = Algorithm("StructuredComprehension", scoped: { scope in
             let cars = scope.sharedVar(_name: "cars",
-                initial: Function<StructuredCarModel.Car, Record<StructuredCarModel.CarRecord>>.mapping { _ in
-                    Record.literal(
-                        .init(StructuredCarModel.CarRecord.floor, 4),
-                        .init(StructuredCarModel.CarRecord.door, .closed)
-                    )
+                initial: Function<StructuredCarModel.Car, StructuredCarModel.CarState>.mapping { _ in
+                    StructuredCarModel.CarState(floor: 4, door: .closed)
                 }
             )
             Do(TestControlLabel.hold) { Assign(cars, to: cars.expr) }
@@ -111,7 +88,7 @@ struct StructuredAlgorithmTests {
 
         for car in StructuredCarModel.Car.allCases {
             guard let value = values[car.tlaValue],
-                  let record = Record<StructuredCarModel.CarRecord>(formalValue: value) else {
+                  let record = StructuredCarModel.CarState(formalValue: value) else {
                 Issue.record("Expected a typed car record.")
                 return
             }
