@@ -194,9 +194,7 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
         case empty = "no finite values"
         case duplicate = "duplicate formal values"
     }
-    case recordField(schema: String)
-    case recordLiteral(schema: String, duplicateFields: [String], missingFields: [String])
-    case invalidRecordSchema(schema: String, problem: String)
+    case recordField(type: String)
     case functionLiteral(domain: String, duplicateValues: [String], missingValues: [String])
     case negativeSequenceLength(operation: String, lowerBound: Int)
     case finiteDomain(type: String, problem: FiniteDomainProblem)
@@ -208,21 +206,13 @@ public enum SourceModelIssue: Hashable, Sendable, CustomStringConvertible {
 
     private var diagnostic: (code: CompilationDiagnostic.Code, expected: String, actual: String, nextSafeAction: String) {
         switch self {
-        case .recordField(let schema):
+        case .recordField(let type):
             return (
                 .invalidTypedRecordField,
-                "a field declared by \(schema)",
+                "a field declared by \(type)",
                 "an undeclared record field",
-                "Use one of the fields declared by \(schema), then compile again."
+                "Use one of the fields declared by \(type), then compile again."
             )
-        case .recordLiteral(let schema, let duplicates, let missing):
-            let details = [
-                duplicates.isEmpty ? nil : "repeated fields: \(duplicates.joined(separator: ", "))",
-                missing.isEmpty ? nil : "missing fields: \(missing.joined(separator: ", "))"
-            ].compactMap { $0 }.joined(separator: "; ")
-            return (.invalidTypedRecordLiteral, "one value for every field declared by \(schema)", details, "Provide each declared record field exactly once, then compile again.")
-        case .invalidRecordSchema(let schema, let problem):
-            return (.invalidTypedRecordLiteral, "unique nonempty fields declared by \(schema)", problem, "Correct the field declarations in \(schema), then compile again.")
         case .functionLiteral(let domain, let duplicates, let missing):
             let details = [
                 duplicates.isEmpty ? nil : "repeated domain values: \(duplicates.joined(separator: ", "))",

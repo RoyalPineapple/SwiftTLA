@@ -23,165 +23,6 @@ extension FiniteTLAValueDomain {
   }
 }
 
-public protocol TLARecordSchema: Sendable {
-  associatedtype Fields
-  static var fields: [TLARecordFieldDeclaration<Self>] { get }
-  static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String?
-}
-
-public struct TLARecordFieldDeclaration<Schema: TLARecordSchema>: Sendable {
-  fileprivate let name: String
-  fileprivate let defaultValue: any TLAValueType
-  fileprivate let shape: FormalValueShape
-  fileprivate let decode: @Sendable (TLAValue) -> (any TLAValueType)?
-
-  public init<Value: TLAValueType>(
-    _ field: TLAField<Schema, Value>,
-    default defaultValue: Value
-  ) {
-    name = field.name
-    shape = Value.formalValueShape
-    self.defaultValue = defaultValue
-    decode = { rawValue in
-      guard let value = Value(formalValue: rawValue), value.sourceIssue == nil else { return nil }
-      return value
-    }
-  }
-}
-
-public struct TLAField<Schema: TLARecordSchema, Value: TLAValueType>: Hashable, Sendable {
-  public let name: String
-  fileprivate let sourceIssue: SourceModelIssue?
-
-  fileprivate init(name: String, sourceIssue: SourceModelIssue? = nil) {
-    self.name = name
-    self.sourceIssue = sourceIssue
-  }
-
-  private var issue: SourceModelIssue? {
-    sourceIssue ?? (Schema.fields.contains { $0.name == name }
-      ? nil
-      : .recordField(schema: String(reflecting: Schema.self)))
-  }
-
-  func recordAccess(_ record: StateExpr) -> StateExpr {
-    issue.map(StateExpr.sourceIssue) ?? .recordAccess(record, name)
-  }
-
-  fileprivate var recordSelector: StateExpr {
-    issue.map(StateExpr.sourceIssue) ?? .value(.string(name))
-  }
-
-  fileprivate func value(_ expression: StateExpr) -> StateExpr {
-    issue.map(StateExpr.sourceIssue) ?? expression
-  }
-}
-
-extension TLARecordSchema {
-  public static func field<Value: TLAValueType>(_ field: KeyPath<Fields, Value>) -> TLAField<
-    Self, Value
-  > {
-    guard let name = fieldName(for: field), !name.isEmpty else {
-      return TLAField(name: "", sourceIssue: .recordField(schema: String(reflecting: Self.self)))
-    }
-    return TLAField(name: name)
-  }
-}
-
-public struct TLARecordEntry<Schema: TLARecordSchema>: Sendable {
-  fileprivate let name: String
-  fileprivate let value: StateExpr
-
-  public init<Value>(_ field: TLAField<Schema, Value>, _ value: Value) {
-    self.name = field.name
-    self.value = field.value(value.stateExpr)
-  }
-
-  public init<Value>(_ field: TLAField<Schema, Value>, _ value: some TypedExpression<Value>) {
-    self.name = field.name
-    self.value = field.value(value.stateExpr)
-  }
-
-}
-
-public struct Record<Schema: TLARecordSchema>: TLAValueType, Hashable, Sendable {
-  public static var formalValueShape: FormalValueShape { .record(Schema.fields.sorted { $0.name < $1.name }.map { .init(name: $0.name, shape: $0.shape) }) }
-  private let values: [(name: String, value: any TLAValueType)]
-  public let sourceIssue: SourceModelIssue?
-
-  public init() {
-    let declarations = Schema.fields
-    values = declarations.map { ($0.name, $0.defaultValue) }
-    sourceIssue = Self.schemaProblem(declarations.map(\.name)).map {
-      .invalidRecordSchema(schema: String(reflecting: Schema.self), problem: $0)
-    } ?? declarations.lazy.compactMap { $0.defaultValue.sourceIssue }.first
-  }
-
-  public init?(formalValue: TLAValue) {
-    let declarations = Schema.fields
-    let declaredNames = declarations.map(\.name)
-    guard Self.schemaProblem(declaredNames) == nil,
-          case .record(let record) = formalValue,
-          record.fields.count == declarations.count,
-          Set(record.fields.map(\.name)) == Set(declaredNames)
-    else { return nil }
-    var values: [(name: String, value: any TLAValueType)] = []
-    for declaration in declarations {
-      guard let rawValue = record.value(named: declaration.name),
-            let value = declaration.decode(rawValue)
-      else { return nil }
-      values.append((declaration.name, value))
-    }
-    self.values = values
-    sourceIssue = nil
-  }
-
-  public var tlaValue: TLAValue {
-    .record(TLARecord(values.map { .init($0.name, $0.value.tlaValue) }))
-  }
-  public static var defaultValue: Self { Self() }
-  public static func == (lhs: Self, rhs: Self) -> Bool {
-    lhs.sourceIssue == rhs.sourceIssue && lhs.tlaValue == rhs.tlaValue
-  }
-  public func hash(into hasher: inout Hasher) {
-    hasher.combine(sourceIssue)
-    hasher.combine(tlaValue)
-  }
-
-  public func value<Value: TLAValueType>(for field: TLAField<Schema, Value>) -> Value? {
-    values.first { $0.name == field.name }?.value as? Value
-  }
-
-  public static func literal(_ fields: TLARecordEntry<Schema>...) -> Expr<Self> {
-    if let problem = schemaProblem(Schema.fields.map(\.name)) {
-      return Expr(.sourceIssue(.invalidRecordSchema(
-        schema: String(reflecting: Schema.self),
-        problem: problem
-      )))
-    }
-    let names = fields.map(\.name)
-    let duplicates = Dictionary(grouping: names, by: { $0 })
-      .compactMap { $0.value.count > 1 ? $0.key : nil }
-      .sorted()
-    let missing = Set(Schema.fields.map(\.name)).subtracting(names).sorted()
-    guard duplicates.isEmpty, missing.isEmpty else {
-      return Expr(.sourceIssue(.recordLiteral(
-        schema: String(reflecting: Schema.self),
-        duplicateFields: duplicates,
-        missingFields: missing
-      )))
-    }
-    return Expr(
-      StateExpr.record(Dictionary(uniqueKeysWithValues: fields.map { ($0.name, $0.value) })))
-  }
-
-  private static func schemaProblem(_ names: [String]) -> String? {
-    if names.contains(where: \.isEmpty) { return "a field has an empty name" }
-    if Set(names).count != names.count { return "field names are not unique" }
-    return nil
-  }
-}
-
 public struct Function<Domain: FiniteTLAValueDomain, Range: TLAValueType>: TLAValueType, Hashable, Sendable {
   public static var formalValueShape: FormalValueShape { .unsupported("total Function view") }
   private let values: [Domain: Range]
@@ -918,11 +759,6 @@ extension TypedExpression {
     Expr(.functionApply(stateExpr, index.stateExpr))
   }
 
-  public subscript<Schema: TLARecordSchema, FieldValue>(_ field: TLAField<Schema, FieldValue>) -> Expr<FieldValue>
-  where ExpressionValue == Record<Schema> {
-    Expr<FieldValue>(field.recordAccess(stateExpr))
-  }
-
   @_disfavoredOverload
   public subscript<Domain: FiniteTLAValueDomain, Range: TLAValueType>(_ index: Domain) -> Expr<
     Range
@@ -947,18 +783,6 @@ extension TypedExpression {
     Range
   > where ExpressionValue == PartialFunction<Domain, Range> {
     Expr<Range>(.functionApply(stateExpr, index.stateExpr))
-  }
-
-  public func updating<Schema: TLARecordSchema, FieldValue>(
-    _ field: TLAField<Schema, FieldValue>, to value: FieldValue
-  ) -> Expr<Record<Schema>> where ExpressionValue == Record<Schema> {
-    Expr<Record<Schema>>(.except(stateExpr, field.recordSelector, field.value(value.stateExpr)))
-  }
-
-  public func updating<Schema: TLARecordSchema, FieldValue>(
-    _ field: TLAField<Schema, FieldValue>, to value: some TypedExpression<FieldValue>
-  ) -> Expr<Record<Schema>> where ExpressionValue == Record<Schema> {
-    Expr<Record<Schema>>(.except(stateExpr, field.recordSelector, field.value(value.stateExpr)))
   }
 
   public func updating<Domain: FiniteTLAValueDomain, Range: TLAValueType>(

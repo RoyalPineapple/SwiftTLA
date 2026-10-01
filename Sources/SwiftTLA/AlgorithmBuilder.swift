@@ -1305,7 +1305,7 @@ extension AssignmentTarget where Value: _GeneratedRecordValue {
     public subscript<Field: TLAValueType>(dynamicMember keyPath: KeyPath<Value, Field>) -> AlgorithmLValue<Field> {
         let base = algorithmLValue
         guard let name = Value._formalRecordFieldName(keyPath) else {
-            return AlgorithmLValue(model: base.model, sourceIssue: .recordField(schema: String(reflecting: Value.self)))
+            return AlgorithmLValue(model: base.model, sourceIssue: .recordField(type: String(reflecting: Value.self)))
         }
         return AlgorithmLValue(model: .field(base.model, name), sourceIssue: base.sourceIssue)
     }

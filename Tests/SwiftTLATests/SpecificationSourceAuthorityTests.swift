@@ -75,8 +75,8 @@ struct SpecificationSourceAuthorityTests {
     }
 
     @Test("Initializers retain their declared type through parentheses", arguments: [
-        ("SetExpr<Record<Entry>>.literal()", "SetExpr<Record<Entry>>"),
-        ("Function<Key, Record<Entry>>.literal()", "Function<Key, Record<Entry>>"),
+        ("SetExpr<Entry>.literal()", "SetExpr<Entry>"),
+        ("Function<Key, Entry>.literal()", "Function<Key, Entry>"),
         ("Function<Key, Bool>.mapping { _ in true }", "Function<Key, Bool>"),
         ("Pair<Int, String>.literal(1, \"one\")", "Pair<Int, String>"),
         ("ZeroBasedSequence<Int>.filled(with: 0, count: 2)", "ZeroBasedSequence<Int>"),

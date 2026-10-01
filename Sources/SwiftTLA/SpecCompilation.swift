@@ -568,7 +568,6 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
 
     public enum Code: String, Sendable, Hashable {
         case invalidTypedRecordField
-        case invalidTypedRecordLiteral
         case invalidTypedFunctionLiteral
         case invalidSequenceLength
         case invalidFiniteDomain

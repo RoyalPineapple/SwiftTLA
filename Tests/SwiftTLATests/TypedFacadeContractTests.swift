@@ -91,7 +91,7 @@ struct TypedFacadeContractTests {
     #expect(try compiledValue(sequence.stateExpr) == .tuple([.string("alice")]))
   }
 
-  @Test("typed reads, set mutation, and nested updates lower to typed expressions")
+  @Test("typed record reads, set mutation, and function updates evaluate")
   func typedFacadeLowersAndEvaluates() throws {
     let cars = Var<Function<CarID, Packet>>("cars")
     let calls = Var<SetExpr<PersonID>>("calls")
