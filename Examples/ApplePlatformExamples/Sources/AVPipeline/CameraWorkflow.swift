@@ -54,7 +54,7 @@ public struct CameraWorkflow {
     private enum Step: String, CaseIterable { case ready, record, stopRecording, recordingSucceeded, recordingFailed, recordingCancelled, play, live }
 
     public static var spec: TLASpec {
-        #spec("CameraWorkflow") {
+        #spec {
             Algorithm("CameraWorkflow", scoped: { scope in
                 let phase = scope.sharedVar(initial: Phase.starting)
                 Each(ReadyProcess.all) { _ in

@@ -52,7 +52,7 @@ public struct BluetoothModel {
     private enum Step: String, CaseIterable { case poweredOn, poweredOff, resetting, unsupported, unauthorized, startScan, stopScan }
 
     public static var spec: TLASpec {
-        #spec("BluetoothModel") {
+        #spec {
             Algorithm("BluetoothModel", scoped: { scope in
                 let phase = scope.sharedVar(initial: Phase.unknown)
                 Each(PoweredOnProcess.all) { _ in

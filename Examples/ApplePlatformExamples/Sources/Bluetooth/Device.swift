@@ -39,7 +39,7 @@ public struct PeripheralModel {
     private enum Step: String, CaseIterable { case connected, beginDiscovery, finishDiscovery, discoveryFailed, disconnect }
 
     public static var spec: TLASpec {
-        #spec("PeripheralModel") {
+        #spec {
             Algorithm("PeripheralModel", scoped: { scope in
                 let phase = scope.sharedVar(initial: Phase.disconnected)
                 Each(ConnectProcess.all) { _ in
