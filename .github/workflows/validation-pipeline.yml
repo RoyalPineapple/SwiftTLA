@@ -18,6 +18,10 @@ on:
         description: One case or scenario ID for a focused candidate diagnostic (empty runs all)
         type: string
         default: ''
+      case_ids:
+        description: Comma-separated case IDs for a candidate family diagnostic; each must have both comparison paths
+        type: string
+        default: ''
       profile_native:
         description: Sample the native checker during one focused candidate diagnostic
         type: boolean
@@ -80,10 +84,26 @@ jobs:
         id: cases
         env:
           FOCUSED_CASE: ${{ inputs.case_id }}
+          BATCH_CASES: ${{ inputs.case_ids }}
+          PROFILE_NATIVE: ${{ inputs.profile_native && 'true' || 'false' }}
         run: |
           native=$(.build/release/tlc-validate native list)
           upstream=$(.build/release/tlc-validate upstream list)
-          if [ -n "$FOCUSED_CASE" ]; then
+          if [ -n "$BATCH_CASES" ]; then
+            test -z "$FOCUSED_CASE"
+            test "$PROFILE_NATIVE" != true
+            test "$ADMISSION_MODE" = candidate
+            requested=$(jq -cen --arg raw "$BATCH_CASES" '
+              ($raw | split(",") | map(gsub("^\\s+|\\s+$"; ""))) as $ids
+              | if ($ids | any(. == "")) or (($ids | unique | length) != ($ids | length))
+                then error("batch requires distinct, nonempty case IDs")
+                else $ids end
+            ')
+            jq -e --argjson ids "$requested" '. as $available | all($ids[]; . as $id | $available | index($id) != null)' <<< "$native"
+            jq -e --argjson ids "$requested" '. as $available | all($ids[]; . as $id | $available | index($id) != null)' <<< "$upstream"
+            native="$requested"
+            upstream="$requested"
+          elif [ -n "$FOCUSED_CASE" ]; then
             test "$ADMISSION_MODE" = candidate
             native=$(jq -ce --arg id "$FOCUSED_CASE" '[.[] | select(. == $id)]' <<< "$native")
             upstream=$(jq -ce --arg id "$FOCUSED_CASE" '[.[] | select(. == $id)]' <<< "$upstream")
@@ -313,7 +333,7 @@ jobs:
           if-no-files-found: error
 
   validation-pipeline:
-    name: ${{ github.event_name == 'workflow_dispatch' && inputs.case_id != '' && 'Independent validation diagnostic' || 'Independent validation admission' }}
+    name: ${{ github.event_name == 'workflow_dispatch' && (inputs.case_id != '' || inputs.case_ids != '') && 'Independent validation diagnostic' || 'Independent validation admission' }}
     needs: [prepare, dsl-native-parity, upstream-parity]
     if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.replay_run_id == '') }}
     runs-on: ubuntu-latest
@@ -324,9 +344,13 @@ jobs:
           NATIVE_RESULT: ${{ needs.dsl-native-parity.result }}
           UPSTREAM_RESULT: ${{ needs.upstream-parity.result }}
           FOCUSED_CASE: ${{ inputs.case_id }}
+          BATCH_CASES: ${{ inputs.case_ids }}
         run: |
           test "$PREPARE_RESULT" = success
-          if [ -n "$FOCUSED_CASE" ]; then
+          if [ -n "$BATCH_CASES" ]; then
+            test "$NATIVE_RESULT" = success
+            test "$UPSTREAM_RESULT" = success
+          elif [ -n "$FOCUSED_CASE" ]; then
             { test "$NATIVE_RESULT" = success || test "$NATIVE_RESULT" = skipped; }
             { test "$UPSTREAM_RESULT" = success || test "$UPSTREAM_RESULT" = skipped; }
             { test "$NATIVE_RESULT" = success || test "$UPSTREAM_RESULT" = success; }
@@ -342,6 +366,7 @@ jobs:
     timeout-minutes: 60
     env:
       CASE_ID: ${{ inputs.case_id }}
+      BATCH_CASES: ${{ inputs.case_ids }}
       REPLAY_RUN_ID: ${{ inputs.replay_run_id }}
       REPLAY_SHA: ${{ inputs.replay_sha }}
       REPLAY_ARTIFACT_NAME: ${{ inputs.replay_artifact_name }}
@@ -354,6 +379,7 @@ jobs:
       - name: Require immutable diagnostic and evidence revisions
         run: |
           test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          test -z "$BATCH_CASES"
           [[ "$REPLAY_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$REPLAY_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           test -n "$CASE_ID"

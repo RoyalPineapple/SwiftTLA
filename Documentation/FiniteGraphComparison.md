@@ -78,10 +78,17 @@ gh workflow run validation-pipeline.yml \
   -f case_id="<case-id>"
 ```
 
-Omit `case_id` to run the complete represented corpus. The final admission
-job requires both independent parity matrices to pass. A focused diagnostic
-is not complete corpus admission. Host-side evidence, not local test results,
-is the authority for a candidate.
+For one family, use `case_ids` with comma-separated IDs instead of `case_id`,
+for example `-f case_ids="prisoners-single-switch-0,prisoners-single-switch-1,prisoners-single-switch-2,prisoners-single-switch-3"`.
+The workflow rejects repeated or unknown IDs and requires each ID in both
+comparison matrices. It builds the validator once, then runs each configuration
+as independent native and upstream jobs, retaining separate artifacts. Do not
+launch a batch alongside a full run for the same candidate.
+
+Omit both selectors to run the complete represented corpus. Only that
+unfiltered matrix can pass the admission check; single-case and family-batch
+runs are diagnostics. Host-side evidence, not local test results, is the
+authority for a candidate.
 
 `Comparison replay diagnostic` can run a changed comparator against retained
 native/TLC evidence without rerunning either checker. It records both source
