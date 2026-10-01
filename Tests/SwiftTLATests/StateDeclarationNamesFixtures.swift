@@ -7,11 +7,11 @@ struct BoundStateNamesModel {
 
     static var spec: TLASpec {
         #spec("BoundStateNames") { specification in
-            let text = specification.sharedVar(initial: "payload")
+            let text = specification.sharedVar(label: "Current text", initial: "payload")
             Algorithm("Workers", scoped: { algorithm in
-                let count = algorithm.sharedVar(in: 0...1)
+                let count = algorithm.sharedVar(label: "Visit count", in: 0...1)
                 Each(Set<Int>([1]), scoped: { member, process in
-                    let seen = process.localVar(initial: false)
+                    let seen = process.localVar(label: "Visited?", initial: false)
                     Do(Step.visit) {
                         Assign(count, to: count + member)
                         Assign(text, to: "visited")

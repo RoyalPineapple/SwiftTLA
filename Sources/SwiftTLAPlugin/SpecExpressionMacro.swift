@@ -109,12 +109,18 @@ private final class DSLRewriter: SyntaxRewriter {
             guard let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
                   var call = binding.initializer?.value.as(FunctionCallExprSyntax.self) else { return binding }
             let member = call.calledExpression.as(MemberAccessExprSyntax.self)
-            if let member, ["sharedVar", "localVar"].contains(member.declName.baseName.sourceIdentifierName),
-               !call.arguments.contains(where: { $0.label?.text == "_name" }) {
+            if let member, ["sharedVar", "localVar"].contains(member.declName.baseName.sourceIdentifierName) {
+                let labels = call.arguments.filter { $0.label?.text == "label" }
+                guard labels.isEmpty || (labels.count == 1
+                    && labels.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue?.isEmpty == false) else {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: StateLabelDiagnostic()))
+                    return binding
+                }
                 guard node.bindingSpecifier.text == "let" else {
                     context.diagnose(Diagnostic(node: Syntax(source), message: StateBindingDiagnostic()))
                     return binding
                 }
+                if call.arguments.contains(where: { $0.label?.text == "_name" }) { return binding }
                 let argument = LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
                     expression: StringLiteralExprSyntax(content: name), trailingComma: .commaToken())
                 call.arguments = LabeledExprListSyntax([argument] + Array(call.arguments))
@@ -342,6 +348,12 @@ private struct StateBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-state-binding")
     let severity: DiagnosticSeverity = .error
     let message = "A state handle must be an immutable named let binding. Use Assign to update its value."
+}
+
+private struct StateLabelDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-state-label")
+    let severity: DiagnosticSeverity = .error
+    let message = "A state label requires one nonempty string literal without interpolation."
 }
 
 private struct PropertyBindingDiagnostic: DiagnosticMessage {

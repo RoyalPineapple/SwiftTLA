@@ -25,6 +25,7 @@ public enum VariableInitialization: Sendable, Equatable {
 
 public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   public let name: String
+  package let displayLabel: String?
   public let initialization: VariableInitialization
   public let collectionType: CollectionVarType
   package let generatedSwiftType: String?
@@ -46,11 +47,13 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   package init(
     name: String, initialization: VariableInitialization,
     collectionType: CollectionVarType = .scalar,
+    displayLabel: String? = nil,
     generatedSwiftType: String? = nil,
     resolvedValueType: CompiledValueType? = nil,
     origin: VariableOrigin
   ) {
     self.name = name
+    self.displayLabel = displayLabel
     self.initialization = initialization.normalized
     self.collectionType = collectionType
     self.generatedSwiftType = generatedSwiftType
@@ -373,6 +376,7 @@ public enum AuthoredPlusCalDeclarationPhase: Sendable, Hashable {
 
 public struct VarDecl: SpecComponent, Sendable {
   public let name: String
+  package let displayLabel: String?
   public let initialization: VariableInitialization
   public let collectionType: CollectionVarType
   package let generatedSwiftType: String?
@@ -380,9 +384,11 @@ public struct VarDecl: SpecComponent, Sendable {
     _ name: String,
     initialization: VariableInitialization,
     collectionType: CollectionVarType = .scalar,
+    displayLabel: String? = nil,
     generatedSwiftType: String? = nil
   ) {
     self.name = name
+    self.displayLabel = displayLabel
     self.initialization = initialization.normalized
     self.collectionType = collectionType
     self.generatedSwiftType = generatedSwiftType

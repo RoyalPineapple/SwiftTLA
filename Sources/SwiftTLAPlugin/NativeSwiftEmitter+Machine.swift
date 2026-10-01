@@ -69,9 +69,16 @@ extension NativeSwiftEmitter {
             "\(variable.swiftIdentifier) _value\(variable.id.ordinal): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: ", ")
         let stateAssignments = api.variables.map { "self.\($0.swiftIdentifier) = _value\($0.id.ordinal)" }.joined(separator: "\n")
+        let stateDisplayNames = api.variables.map { variable in
+            let declaration = program.layout.variables[variable.id.ordinal]
+            return "\\State.\(variable.swiftIdentifier): \(String(reflecting: declaration.displayLabel ?? declaration.declaration.name))"
+        }.joined(separator: ",\n")
         declarations += try nativeDeclarations("""
         public struct State: Hashable, Sendable {
             \(stateFields)
+            public static var displayNames: [PartialKeyPath<State>: String] {
+                [\(stateDisplayNames.isEmpty ? ":" : stateDisplayNames)]
+            }
             public init(\(stateParameters)) {
                 \(stateAssignments)
             }

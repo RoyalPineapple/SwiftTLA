@@ -361,6 +361,19 @@ extension ParserSession {
         }
     }
 
+    func stateDisplayLabel(_ call: FunctionCallExprSyntax) throws(SourceParseDiagnostic) -> String? {
+        let labels = call.arguments.filter { $0.label?.text == "label" }
+        guard labels.count <= 1 else {
+            throw .init(message: "A state label requires one nonempty string literal without interpolation.", source: call)
+        }
+        guard let label = labels.first else { return nil }
+        guard let value = label.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue,
+              !value.isEmpty else {
+            throw .init(message: "A state label requires one nonempty string literal without interpolation.", source: label)
+        }
+        return value
+    }
+
     /// Resolves and registers each variable before parsing the following binding.
     private func parseVariableBinding(
         _ binding: PatternBindingSyntax,
@@ -397,6 +410,7 @@ extension ParserSession {
                 components.variables[components.variables.count - 1] = .init(
                     name: variable.name, initialization: variable.initialization,
                     collectionType: variable.collectionType,
+                    displayLabel: variable.displayLabel,
                     generatedSwiftType: variable.generatedSwiftType,
                     resolvedValueType: variable.generatedSwiftType == nil ? valueType : nil,
                     origin: variable.origin)
@@ -412,16 +426,23 @@ extension ParserSession {
         let args = Array(fc.arguments)
 
         if callName == "SharedVar" {
+            let displayLabel: String?
+            do {
+                displayLabel = try stateDisplayLabel(fc)
+            } catch {
+                components.diagnostics.append(error)
+                return
+            }
             let name = args.first(where: { $0.label?.text == "_name" })?
                 .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? patternName
             if let range = args.first(where: { $0.label?.text == "in" })?.expression,
                let domain = finiteStateVariableDomain(range, declaredElementType: varTypeName, scope: sourceScope) {
                 components.variables.append(.init(name: name, initialization: .memberOf(domain.expression),
-                    generatedSwiftType: varTypeName ?? domain.elementType, origin: .source))
+                    displayLabel: displayLabel, generatedSwiftType: varTypeName ?? domain.elementType, origin: .source))
             } else if let value = args.first(where: { $0.label?.text == "initial" })?.expression,
                       let initial = decodeTypedFacadeValue(value, scope: sourceScope, expectedEnumType: varTypeName) {
                 components.variables.append(.init(name: name, initialization: .expression(initial),
-                    generatedSwiftType: varTypeName ?? initialValueTypeName(from: value), origin: .source))
+                    displayLabel: displayLabel, generatedSwiftType: varTypeName ?? initialValueTypeName(from: value), origin: .source))
             } else {
                 components.diagnostics.append(.init(message: "A shared variable requires a supported initial expression or finite domain.", source: fc))
             }

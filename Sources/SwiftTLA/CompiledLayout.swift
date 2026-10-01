@@ -79,6 +79,7 @@ package struct CompiledDeclaration: Hashable, Sendable {
 package struct CompiledVariableLayout: Hashable, Sendable {
     package let id: VariableID
     package let declaration: CompiledDeclaration
+    package let displayLabel: String?
     package let generatedSwiftType: String?
     package let resolvedValueType: CompiledValueType?
     package let collection: CompiledModelCollectionLayout?
@@ -218,6 +219,7 @@ package struct CompiledLayout: Hashable, Sendable {
                     sourceOffset: nil,
                     origin: variable.origin
                 ),
+                displayLabel: variable.displayLabel,
                 generatedSwiftType: variable.generatedSwiftType,
                 resolvedValueType: variable.resolvedValueType,
                 collection: collection.map {

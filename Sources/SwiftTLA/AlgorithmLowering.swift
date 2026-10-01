@@ -142,6 +142,7 @@ enum AlgorithmLowerer {
             NamedVar(
                 name: state.root,
                 initialization: state.initialization,
+                displayLabel: state.displayLabel,
                 generatedSwiftType: state.swiftTypeName,
                 resolvedValueType: state.resolvedValueType,
                 origin: .source
@@ -173,6 +174,7 @@ enum AlgorithmLowerer {
                     NamedVar(
                         name: state.root,
                         initialization: initialization,
+                        displayLabel: state.displayLabel,
                         generatedSwiftType: state.swiftTypeName.map { "[\(process.typeName): \($0)]" },
                         resolvedValueType: process.resolvedElementType.flatMap { key in
                             state.resolvedValueType.map { .dictionary(key, $0) }
@@ -246,6 +248,7 @@ enum AlgorithmLowerer {
                         value: slot.initial,
                         localRoots: []
                     )),
+                    displayLabel: slot.displayLabel,
                     generatedSwiftType: procedureProcessType.flatMap { processType in
                         slot.swiftTypeName.map { "[\(processType): \($0)]" }
                     },
@@ -535,6 +538,7 @@ enum AlgorithmLowerer {
             NamedVar(
                 name: state.root,
                 initialization: state.initialization,
+                displayLabel: state.displayLabel,
                 generatedSwiftType: state.swiftTypeName,
                 resolvedValueType: state.resolvedValueType,
                 origin: .source
@@ -557,6 +561,7 @@ enum AlgorithmLowerer {
                         local.initialization,
                         path: "procedures.\(procedure.name).locals.\(local.root)"
                     )),
+                    displayLabel: local.displayLabel,
                     generatedSwiftType: local.swiftTypeName,
                     resolvedValueType: local.resolvedValueType,
                     origin: .compiler
@@ -861,14 +866,14 @@ enum AlgorithmLowerer {
 
     private static func procedureSlots(
         _ procedures: [AlgorithmProcedureModel]
-    ) -> [(root: String, initial: StateExpr, swiftTypeName: String?, resolvedValueType: CompiledValueType?)] {
+    ) -> [(root: String, initial: StateExpr, displayLabel: String?, swiftTypeName: String?, resolvedValueType: CompiledValueType?)] {
         procedures.flatMap { procedure in
-            procedure.parameters.map { ($0.root, $0.initial, $0.swiftTypeName, nil as CompiledValueType?) }
+            procedure.parameters.map { ($0.root, $0.initial, nil as String?, $0.swiftTypeName, nil as CompiledValueType?) }
                 + procedure.locals.map {
                     ($0.root, deterministicInitialization(
                         $0.initialization,
                         path: "procedures.\(procedure.name).locals.\($0.root)"
-                    ), $0.swiftTypeName, $0.resolvedValueType)
+                    ), $0.displayLabel, $0.swiftTypeName, $0.resolvedValueType)
                 }
         }
     }

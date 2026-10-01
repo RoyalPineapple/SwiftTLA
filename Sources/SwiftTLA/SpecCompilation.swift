@@ -64,6 +64,7 @@ public struct CompilationDescription: Sendable, Equatable {
 
 public struct VariableDescription: Sendable, Equatable {
     public let name: String
+    public let displayName: String
     public let sourceOffset: Int?
 }
 
@@ -782,7 +783,8 @@ public extension TLASpec {
             name: name,
             identity: identity,
             variables: layout.variables.map {
-                .init(name: $0.declaration.name, sourceOffset: $0.declaration.sourceOffset)
+                .init(name: $0.declaration.name, displayName: $0.displayLabel ?? $0.declaration.name,
+                    sourceOffset: $0.declaration.sourceOffset)
             },
             actions: layout.actions.map {
                 .init(

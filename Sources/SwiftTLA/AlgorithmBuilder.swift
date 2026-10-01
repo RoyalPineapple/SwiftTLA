@@ -241,31 +241,36 @@ public func Macro(@DoBuilder _ body: () -> [StepStatement]) -> StatementMacro<Vo
 public struct SharedVariable<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     fileprivate let initialization: VariableInitialization
+    fileprivate let displayLabel: String?
 
-    fileprivate init(name: String, initialization: VariableInitialization) {
+    fileprivate init(name: String, initialization: VariableInitialization, displayLabel: String? = nil) {
         self.name = name
         self.initialization = initialization
+        self.displayLabel = displayLabel
     }
 
-    fileprivate init(name: String, initial: Value) {
+    fileprivate init(name: String, initial: Value, displayLabel: String? = nil) {
         self.init(
             name: name,
-            initialization: initial.sourceIssue.map { .expression(.sourceIssue($0)) } ?? .value(initial.tlaValue)
+            initialization: initial.sourceIssue.map { .expression(.sourceIssue($0)) } ?? .value(initial.tlaValue),
+            displayLabel: displayLabel
         )
     }
 
-    fileprivate init<Domain: FormalSetValue>(name: String, in values: some TypedExpression<Domain>)
+    fileprivate init<Domain: FormalSetValue>(name: String, in values: some TypedExpression<Domain>, displayLabel: String? = nil)
     where Domain.Element == Value {
         self.init(
             name: name,
-            initialization: .memberOf(values.stateExpr)
+            initialization: .memberOf(values.stateExpr),
+            displayLabel: displayLabel
         )
     }
 
-    fileprivate init(name: String, initial: some TypedExpression<Value>) {
+    fileprivate init(name: String, initial: some TypedExpression<Value>, displayLabel: String? = nil) {
         self.init(
             name: name,
-            initialization: .expression(initial.stateExpr)
+            initialization: .expression(initial.stateExpr),
+            displayLabel: displayLabel
         )
     }
 
@@ -298,29 +303,33 @@ public struct SharedVariable<Value: TLAValueType>: TypedExpression {
 public struct LocalVariable<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     fileprivate let initialization: VariableInitialization
+    fileprivate let displayLabel: String?
 
-    fileprivate init(name: String, initialization: VariableInitialization) {
+    fileprivate init(name: String, initialization: VariableInitialization, displayLabel: String? = nil) {
         self.name = name
         self.initialization = initialization
+        self.displayLabel = displayLabel
     }
 
-    fileprivate init(name: String, initial: Value) {
+    fileprivate init(name: String, initial: Value, displayLabel: String? = nil) {
         self.init(
             name: name,
-            initialization: initial.sourceIssue.map { .expression(.sourceIssue($0)) } ?? .value(initial.tlaValue)
+            initialization: initial.sourceIssue.map { .expression(.sourceIssue($0)) } ?? .value(initial.tlaValue),
+            displayLabel: displayLabel
         )
     }
 
-    fileprivate init(name: String, initial: some TypedExpression<Value>) {
+    fileprivate init(name: String, initial: some TypedExpression<Value>, displayLabel: String? = nil) {
         self.init(
             name: name,
-            initialization: .expression(initial.stateExpr)
+            initialization: .expression(initial.stateExpr),
+            displayLabel: displayLabel
         )
     }
 
-    fileprivate init<Domain: FormalSetValue>(name: String, in values: some TypedExpression<Domain>)
+    fileprivate init<Domain: FormalSetValue>(name: String, in values: some TypedExpression<Domain>, displayLabel: String? = nil)
     where Domain.Element == Value {
-        self.init(name: name, initialization: .memberOf(values.stateExpr))
+        self.init(name: name, initialization: .memberOf(values.stateExpr), displayLabel: displayLabel)
     }
 
     public var stateExpr: StateExpr { .variable(name) }
@@ -418,12 +427,14 @@ private extension SharedVariable {
         AlgorithmElement(model: .shared(.init(
             root: name,
             initialization: initialization,
+            displayLabel: displayLabel,
             swiftTypeName: swiftSurfaceTypeName(for: Value.self)
         )))
     }
 
     var specificationDeclaration: VarDecl {
-        VarDecl(name, initialization: initialization, generatedSwiftType: swiftSurfaceTypeName(for: Value.self))
+        VarDecl(name, initialization: initialization, displayLabel: displayLabel,
+            generatedSwiftType: swiftSurfaceTypeName(for: Value.self))
     }
 }
 
@@ -475,17 +486,19 @@ public final class SpecificationScope {
 
     public func sharedVar<Value: TLAValueType>(
         _name name: String = "",
+        label: String? = nil,
         initial: Value
     ) -> SharedVariable<Value> {
-        let variable = SharedVariable(name: name, initial: initial)
+        let variable = SharedVariable(name: name, initial: initial, displayLabel: label)
         declarations.append(variable.specificationDeclaration)
         return variable
     }
 
-    public func sharedVar(_name name: String = "", in range: ClosedRange<Int>) -> SharedVariable<Int> {
+    public func sharedVar(_name name: String = "", label: String? = nil, in range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVariable<Int>(
             name: name,
-            initialization: .memberOf(.setLiteral(range.map { .value(.int($0)) }))
+            initialization: .memberOf(.setLiteral(range.map { .value(.int($0)) })),
+            displayLabel: label
         )
         declarations.append(variable.specificationDeclaration)
         return variable
@@ -493,18 +506,20 @@ public final class SpecificationScope {
 
     public func sharedVar<Domain: FormalSetValue>(
         _name name: String = "",
+        label: String? = nil,
         in values: some TypedExpression<Domain>
     ) -> SharedVariable<Domain.Element> {
-        let variable = SharedVariable(name: name, in: values)
+        let variable = SharedVariable(name: name, in: values, displayLabel: label)
         declarations.append(variable.specificationDeclaration)
         return variable
     }
 
     public func sharedVar<Value: TLAValueType>(
         _name name: String = "",
+        label: String? = nil,
         initial: some TypedExpression<Value>
     ) -> SharedVariable<Value> {
-        let variable = SharedVariable(name: name, initial: initial)
+        let variable = SharedVariable(name: name, initial: initial, displayLabel: label)
         declarations.append(variable.specificationDeclaration)
         return variable
     }
@@ -517,17 +532,19 @@ public final class AlgorithmScope {
 
     public func sharedVar<Value: TLAValueType>(
         _name name: String = "",
+        label: String? = nil,
         initial: Value
     ) -> SharedVariable<Value> {
-        let variable = SharedVariable(name: name, initial: initial)
+        let variable = SharedVariable(name: name, initial: initial, displayLabel: label)
         declarations.append(variable.algorithmElement)
         return variable
     }
 
-    public func sharedVar(_name name: String = "", in range: ClosedRange<Int>) -> SharedVariable<Int> {
+    public func sharedVar(_name name: String = "", label: String? = nil, in range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVariable<Int>(
             name: name,
-            initialization: .memberOf(.setLiteral(range.map { .value(.int($0)) }))
+            initialization: .memberOf(.setLiteral(range.map { .value(.int($0)) })),
+            displayLabel: label
         )
         declarations.append(variable.algorithmElement)
         return variable
@@ -535,18 +552,20 @@ public final class AlgorithmScope {
 
     public func sharedVar<Domain: FormalSetValue>(
         _name name: String = "",
+        label: String? = nil,
         in values: some TypedExpression<Domain>
     ) -> SharedVariable<Domain.Element> {
-        let variable = SharedVariable(name: name, in: values)
+        let variable = SharedVariable(name: name, in: values, displayLabel: label)
         declarations.append(variable.algorithmElement)
         return variable
     }
 
     public func sharedVar<Value: TLAValueType>(
         _name name: String = "",
+        label: String? = nil,
         initial: some TypedExpression<Value>
     ) -> SharedVariable<Value> {
-        let variable = SharedVariable(name: name, initial: initial)
+        let variable = SharedVariable(name: name, initial: initial, displayLabel: label)
         declarations.append(variable.algorithmElement)
         return variable
     }
@@ -559,23 +578,24 @@ public final class ProcessScope {
 
     public func localVar<Value: TLAValueType>(
         _name name: String = "",
+        label: String? = nil,
         initial: Value
     ) -> LocalVariable<Value> {
-        let variable = LocalVariable(name: name, initial: initial)
+        let variable = LocalVariable(name: name, initial: initial, displayLabel: label)
         declarations.append(localDeclaration(variable))
         return variable
     }
 
-    public func localVar<Value: TLAValueType>(_name name: String = "", initial: some TypedExpression<Value>) -> LocalVariable<Value> {
-        let variable = LocalVariable(name: name, initial: initial)
+    public func localVar<Value: TLAValueType>(_name name: String = "", label: String? = nil, initial: some TypedExpression<Value>) -> LocalVariable<Value> {
+        let variable = LocalVariable(name: name, initial: initial, displayLabel: label)
         declarations.append(localDeclaration(variable))
         return variable
     }
 
     public func localVar<Domain: FormalSetValue>(
-        _name name: String = "", in values: some TypedExpression<Domain>
+        _name name: String = "", label: String? = nil, in values: some TypedExpression<Domain>
     ) -> LocalVariable<Domain.Element> {
-        let variable = LocalVariable(name: name, in: values)
+        let variable = LocalVariable(name: name, in: values, displayLabel: label)
         declarations.append(localDeclaration(variable))
         return variable
     }
@@ -588,15 +608,16 @@ public final class ProcedureScope {
 
     public func localVar<Value: TLAValueType>(
         _name name: String = "",
+        label: String? = nil,
         initial: Value
     ) -> LocalVariable<Value> {
-        let variable = LocalVariable(name: name, initial: initial)
+        let variable = LocalVariable(name: name, initial: initial, displayLabel: label)
         declarations.append(localDeclaration(variable))
         return variable
     }
 
-    public func localVar<Value: TLAValueType>(_name name: String = "", initial: some TypedExpression<Value>) -> LocalVariable<Value> {
-        let variable = LocalVariable(name: name, initial: initial)
+    public func localVar<Value: TLAValueType>(_name name: String = "", label: String? = nil, initial: some TypedExpression<Value>) -> LocalVariable<Value> {
+        let variable = LocalVariable(name: name, initial: initial, displayLabel: label)
         declarations.append(localDeclaration(variable))
         return variable
     }
@@ -606,6 +627,7 @@ private func localDeclaration<Value>(_ variable: LocalVariable<Value>) -> Algori
     AlgorithmElement(model: .local(.init(
         root: variable.name,
         initialization: variable.initialization,
+        displayLabel: variable.displayLabel,
         swiftTypeName: swiftSurfaceTypeName(for: Value.self)
     )))
 }

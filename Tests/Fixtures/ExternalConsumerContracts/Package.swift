@@ -66,6 +66,10 @@ let package = Package(
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
+      name: "InvalidStateDisplayLabel",
+      dependencies: generatedMachineDependencies
+    ),
+    .executableTarget(
       name: "ReadmeModelCollectionMacro",
       dependencies: generatedMachineDependencies
     ),

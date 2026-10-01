@@ -120,6 +120,7 @@ Inside `#spec`, scoped state declarations derive their names from immutable Swif
 let count = scope.sharedVar(initial: 0)
 let hour = scope.sharedVar(in: 1...12)
 let visited = process.localVar(initial: false)
+let readable = scope.sharedVar(label: "Current value", initial: 0)
 ```
 
 The same rule applies to specification, algorithm, process, and procedure scopes.
@@ -128,8 +129,14 @@ An initial string value is data and does not supply a declaration name.
 The macro supplies the internal `_name` argument for the formal builder boundary.
 The former positional-name signatures are not supported.
 Unbound state declarations are rejected at their source location with guidance
-to use an immutable `let` binding. State display labels and anonymous
-non-state declarations still require the remaining B-02 decisions.
+to use an immutable `let` binding. `sharedVar` and `localVar` accept an optional
+`label:` that must be one nonempty string literal without interpolation. A
+label is presentation metadata: the compiled variable description exposes it
+for every variable, and generated `State.displayNames` exposes labels for public
+state fields keyed by typed Swift key paths, falling back to the Swift binding
+name. Labels do not change the formal identifier, state
+value, transitions, or compilation identity; duplicate labels are permitted.
+Anonymous non-state declarations still require the remaining B-02 decisions.
 
 Swift backticks escape keywords but are not part of declaration identity.
 For example, a state binding spelled `` `repeat` `` has the formal name `repeat`.

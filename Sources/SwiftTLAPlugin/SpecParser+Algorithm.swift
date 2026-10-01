@@ -898,6 +898,13 @@ extension ParserSession {
         }
         let declaredName = initializer.arguments.first(where: { $0.label?.text == "_name" })?
             .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? sourceName
+        let displayLabel: String?
+        do {
+            displayLabel = try stateDisplayLabel(initializer)
+        } catch {
+            algorithmSourceDiagnostic = error
+            return nil
+        }
 
         let declaredType = binding.typeAnnotation?.type.as(IdentifierTypeSyntax.self)
         let expectedDeclarationType = kind == .shared ? "SharedVariable" : "LocalVariable"
@@ -915,6 +922,7 @@ extension ParserSession {
             state = AlgorithmStateModel(
                 root: declaredName,
                 initialization: .expression(initial),
+                displayLabel: displayLabel,
                 swiftTypeName: declaredValueType ?? initialValueTypeName(from: initialSyntax)
             )
             inferredType = state.swiftTypeName == nil ? typedFacadeValueType(initialSyntax, scope: scope) : nil
@@ -929,6 +937,7 @@ extension ParserSession {
             state = AlgorithmStateModel(
                 root: declaredName,
                 initialization: .memberOf(domain.expression),
+                displayLabel: displayLabel,
                 swiftTypeName: domain.elementType
             )
             inferredType = state.swiftTypeName == nil ? typedFacadeValueType(domainSyntax, scope: scope)?.selectedElement : nil
@@ -944,7 +953,7 @@ extension ParserSession {
             return nil
         }
         let resolvedState = AlgorithmStateModel(root: state.root, initialization: state.initialization,
-            swiftTypeName: state.swiftTypeName, resolvedValueType: inferredType)
+            displayLabel: state.displayLabel, swiftTypeName: state.swiftTypeName, resolvedValueType: inferredType)
         let component: AlgorithmComponentModel = kind == .shared ? .shared(resolvedState) : .local(resolvedState)
         return (sourceName, component, valueType)
     }

@@ -25,6 +25,7 @@ extension TLASpec {
         variables.append(
           NamedVar(
             name: v.name, initialization: v.initialization, collectionType: v.collectionType,
+            displayLabel: v.displayLabel,
             generatedSwiftType: v.generatedSwiftType, origin: .source))
       } else if let s = comp as? ModelCollectionDecl {
         variables.append(s.variable)
