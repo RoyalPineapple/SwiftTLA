@@ -25,7 +25,7 @@ import SwiftTLAMacros
     ) -> TLASpec {
         SpecParser.parseSpecClosure(named: name,
             closure,
-            sourceTypes: .init(aliases: sourceTypes.aliases, records: sourceTypes.records,
+            sourceTypes: .init(aliases: sourceTypes.aliases, structs: sourceTypes.structs,
                 enums: [controlLabels] + enums + sourceTypes.enums)
         )
     }
@@ -1250,11 +1250,8 @@ import SwiftTLAMacros
         let source = """
         {
             Algorithm("RecordFunction") { scope in
-                let cars = scope.sharedVar(_name: "cars", initial: Function<Car, Record<Model.CarRecord>>.mapping { _ in
-                    Record.literal(
-                        .init(Model.CarRecord.floor, 4),
-                        .init(Model.CarRecord.door, .closed)
-                    )
+                let cars = scope.sharedVar(_name: "cars", initial: Function<Car, CarState>.mapping { _ in
+                    CarState(floor: 4, door: Door.closed)
                 })
                 Do(TestControlLabel.hold) { Assign(cars, to: cars.expr) }
             }
@@ -1267,10 +1264,7 @@ import SwiftTLAMacros
                 parserTestEnum("Door", cases: ["closed": .string("closed")]),
                 parserTestEnum("Car", finiteValues: [.string("north"), .string("south")])
             ],
-            sourceTypes: .init(records: ["CarRecord": [
-                .init(sourceName: "floor", name: "floor", swiftType: "Int"),
-                .init(sourceName: "door", name: "door", swiftType: "Door")
-            ]])
+            sourceTypes: try swiftRecordMetadata("struct CarState { let floor: Int; let door: Door }")
         )
 
         #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
