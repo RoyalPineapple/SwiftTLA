@@ -4,6 +4,8 @@ import Testing
 
 @Suite("Typed facade contracts")
 struct TypedFacadeContractTests {
+  typealias Packet = GeneratedSwiftRecord.Packet
+
   @Test("indexed writable locations remain readable through their assignment-target contract")
   func indexedAssignmentTargets() {
     func read<Target: AssignmentTarget>(_ target: Target) -> Expr<Target.Value> {
@@ -70,28 +72,6 @@ struct TypedFacadeContractTests {
     static let finiteValues = allCases
   }
 
-  struct CarFields {
-    let floor: Int
-    let doorsOpen: Bool
-  }
-
-  enum CarSchema: TLARecordSchema {
-    typealias Fields = CarFields
-    static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
-      let key = field as AnyKeyPath
-      if key == \CarFields.floor { return "floor" }
-      if key == \CarFields.doorsOpen { return "doorsOpen" }
-      return nil
-    }
-
-    static let floor = field(\CarFields.floor)
-    static let doorsOpen = field(\CarFields.doorsOpen)
-    static let fields = [
-      TLARecordFieldDeclaration(floor, default: 0),
-      TLARecordFieldDeclaration(doorsOpen, default: false)
-    ]
-  }
-
   @Test("Conditional branches retain enum context for values and expressions")
   func conditionalBranchesAcceptEnumLiterals() throws {
     let person = PersonID.bob.expr
@@ -113,14 +93,14 @@ struct TypedFacadeContractTests {
 
   @Test("typed reads, set mutation, and nested updates lower to typed expressions")
   func typedFacadeLowersAndEvaluates() throws {
-    let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
+    let cars = Var<Function<CarID, Packet>>("cars")
     let calls = Var<SetExpr<PersonID>>("calls")
 
     #expect(
-      cars[.carA][CarSchema.floor].raw
+      cars[.carA].count.raw
         == .recordAccess(
           .functionApply(.variable("cars"), .value(.string("carA"))),
-          "floor"
+          "count"
         ))
     #expect(
       calls.inserting(.alice)
@@ -130,49 +110,45 @@ struct TypedFacadeContractTests {
         ))
 
     let update = cars.updating(.carA) { car in
-      car.updating(CarSchema.floor, to: 2)
+      Packet.expression(count: 2, ready: car.ready)
     }
     let expected = StateExpr.except(
       .variable("cars"),
       .value(.string("carA")),
-      .except(
-        .functionApply(.variable("cars"), .value(.string("carA"))),
-        .value(.string("floor")),
-        .value(.int(2))
-      )
+      .recordLiteral(.init(orderedFields: [
+        .init(name: "count", value: .int(2)),
+        .init(name: "ready", value: .recordAccess(
+          .functionApply(.variable("cars"), .value(.string("carA"))), "ready"))
+      ]))
     )
     #expect(update.raw == expected)
 
     let value = try compiledValue(update.raw, values: [
       ("cars", .function([
-        .string("carA"): .record(["floor": .int(0), "doorsOpen": .bool(false)]),
-        .string("carB"): .record(["floor": .int(1), "doorsOpen": .bool(true)])
+        .string("carA"): .record(["count": .int(0), "ready": .bool(false)]),
+        .string("carB"): .record(["count": .int(1), "ready": .bool(true)])
       ]))
     ])
     #expect(
       value
         == .function([
-          .string("carA"): .record(["floor": .int(2), "doorsOpen": .bool(false)]),
-          .string("carB"): .record(["floor": .int(1), "doorsOpen": .bool(true)])
+          .string("carA"): .record(["count": .int(2), "ready": .bool(false)]),
+          .string("carB"): .record(["count": .int(1), "ready": .bool(true)])
         ]))
   }
 
-  @Test("typed record expressions are usable as set elements")
+  @Test("ordinary Swift record expressions are usable as set elements")
   func recordExpressionSetOperationsLowerAndEvaluate() throws {
-    let closed = Record<CarSchema>.literal(
-      .init(CarSchema.floor, 0),
-      .init(CarSchema.doorsOpen, false)
-    )
-    let open = Record<CarSchema>.literal(
-      .init(CarSchema.floor, 1),
-      .init(CarSchema.doorsOpen, true)
-    )
-    let cars = Function<CarID, Record<CarSchema>>.literal((.carA, closed), (.carB, open))
-    let calls = Var<SetExpr<Record<CarSchema>>>("calls")
-    let literal = SetExpr<Record<CarSchema>>.literal(closed, open)
+    let closed = Packet.expression(count: 0, ready: false)
+    let open = Packet.expression(count: 1, ready: true)
+    let cars = Function<CarID, Packet>.literal((.carA, closed), (.carB, open))
+    let calls = Var<SetExpr<Packet>>("calls")
+    let literal = SetExpr<Packet>.literal(closed, open)
 
     #expect(
-      closed.raw == StateExpr.record(["floor": .value(.int(0)), "doorsOpen": .value(.bool(false))]))
+      closed.raw == .recordLiteral(.init(orderedFields: [
+        .init(name: "count", value: .int(0)), .init(name: "ready", value: .bool(false))
+      ])))
     #expect(literal.raw == .setLiteral([closed.raw, open.raw]))
     #expect(
       calls.inserting(closed)
@@ -188,8 +164,8 @@ struct TypedFacadeContractTests {
     #expect(
       try compiledValue(cars.raw)
         == .function([
-          .string("carA"): .record(["floor": .int(0), "doorsOpen": .bool(false)]),
-          .string("carB"): .record(["floor": .int(1), "doorsOpen": .bool(true)])
+          .string("carA"): .record(["count": .int(0), "ready": .bool(false)]),
+          .string("carB"): .record(["count": .int(1), "ready": .bool(true)])
         ]))
   }
 
