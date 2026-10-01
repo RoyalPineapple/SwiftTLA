@@ -168,11 +168,11 @@ extension ActionExpr {
   }
 }
 
-public protocol StateExprConvertible { var stateExpr: StateExpr { get } }
+public protocol StateExprConvertible: Sendable { var stateExpr: StateExpr { get } }
 extension StateExpr: StateExprConvertible { public var stateExpr: StateExpr { self } }
 extension Var: StateExprConvertible { public var stateExpr: StateExpr { .variable(name) } }
 
-public protocol TLAValueConvertible {
+public protocol TLAValueConvertible: Sendable {
   var tlaValue: TLAValue { get }
   var sourceIssue: SourceModelIssue? { get }
 }
