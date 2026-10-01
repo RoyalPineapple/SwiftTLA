@@ -15,6 +15,7 @@ private let modelRegistrations: [ModelRegistration] = [
     .init(id: "conditional-temporal-claims", scenarios: { try ConditionalTemporalClaims.validationScenarios() }),
     .init(id: "transition-property-claims", scenarios: { try TransitionPropertyClaims.validationScenarios() }),
     .init(id: "independent-atomic-steps", scenarios: { try IndependentAtomicSteps.validationScenarios() }),
+    .init(id: "mixed-step-composition", scenarios: { try MixedStepComposition.validationScenarios() }),
     .init(id: "parameterized-atomic-steps", scenarios: { try ParameterizedAtomicSteps.validationScenarios() }),
     .init(id: "configured-dictionary-values", scenarios: { try ConfiguredDictionaryValues.validationScenarios() }),
     .init(id: "record-union-ordering", scenarios: { try RecordUnionOrderingModel.validationScenarios() }),

@@ -108,12 +108,6 @@ extension TLASpec {
     var formalOperatorDefinitions = formalOperatorDefinitions
     var authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
 
-    guard sourceAtomicSteps.isEmpty || sourceAlgorithms.isEmpty else {
-      throw CompilationDiagnostic(code: .invalidAlgorithm, stage: .validation, path: "steps",
-        expected: "top-level Do steps or an Algorithm declaration",
-        actual: "top-level Do steps mixed with an Algorithm",
-        nextSafeAction: "Keep scheduled steps inside Algorithm or declare only independent top-level steps.")
-    }
     for step in sourceAtomicSteps {
       let lowered = try AlgorithmLowerer.lowerAtomicStep(step)
       actions.append(.init(name: step.model.label.name, body: lowered.action, bindings: step.bindings))

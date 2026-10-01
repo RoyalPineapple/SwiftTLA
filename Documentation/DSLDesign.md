@@ -182,8 +182,10 @@ An unchanged state variable retains its value.
 No enabled step means deadlock, not implicit completion.
 `Goto`, `Call`, `Return`, and `Stop` require an enclosing `Algorithm`, including inside nested branches.
 Duplicate step labels and non-Boolean guards fail compilation.
-Current implementation limitation: mixed independent steps and `Algorithm` declarations fail explicitly.
-This restriction does not satisfy B-06. Required composition remains unfinished.
+Independent steps may coexist with one `Algorithm` declaration. They interleave
+over shared state; an independent step leaves the algorithm's control location
+and process-local state unchanged. Algorithm steps retain their own scheduling
+and control-transfer semantics. Other B-06 composition work remains open.
 
 Acceptance requires generated execution, complete native graphs, TLA+ export without synthetic control state, and independent hosted TLC evidence.
 The direct model must not acquire an authored PlusCal algorithm.

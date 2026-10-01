@@ -181,11 +181,10 @@ struct IndependentAtomicStepTests {
         #expect(throws: (any Error).self) { try spec.compile() }
     }
 
-    @Test("independent steps reject malformed guards, duplicate labels, and mixed scheduling", arguments: [
+    @Test("independent steps reject malformed guards and duplicate labels", arguments: [
         "Do(Step.next, unless: true) { Skip() }",
         "Do(Step.next, when: 1) { Skip() }",
-        "Do(Step.next) { Skip() }\nDo(Step.next) { Skip() }",
-        "Do(Step.next) { Skip() }\nAlgorithm(\"Mixed\") { Do(Step.other) { Stop() } }"
+        "Do(Step.next) { Skip() }\nDo(Step.next) { Skip() }"
     ])
     func rejectsInvalidSteps(_ steps: String) throws {
         let spec = SpecParser.parseSpecClosure(named: "Invalid", try parseSpecTestClosure("""
