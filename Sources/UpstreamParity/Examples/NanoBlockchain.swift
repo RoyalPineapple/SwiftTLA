@@ -150,56 +150,18 @@ package struct NanoBlockchainModel: Sendable {
         }
     }
 
-    package struct SignatureFields {
+    @_TLARecordValue
+    package struct Signature: Hashable, Sendable {
         package let data: HashReference
         package let signedWith: SigningKey
     }
 
-    package enum SignatureSchema: TLARecordSchema {
-        package typealias Fields = SignatureFields
-
-        package static let fields: [TLARecordFieldDeclaration<Self>] = [
-            .init(data, default: HashReference.none),
-            .init(signedWith, default: SigningKey.none),
-        ]
-
-        package static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \Fields.data { return "data" }
-            if key == \Fields.signedWith { return "signedWith" }
-            return nil
-        }
-
-        package static let data = field(\Fields.data)
-        package static let signedWith = field(\Fields.signedWith)
-    }
-
-    package struct SignedBlockFields {
+    @_TLARecordValue
+    package struct SignedBlock: Hashable, Sendable {
         package let block: Block
-        package let signature: Record<SignatureSchema>
+        package let signature: Signature
     }
 
-    package enum SignedBlockSchema: TLARecordSchema {
-        package typealias Fields = SignedBlockFields
-
-        package static let fields: [TLARecordFieldDeclaration<Self>] = [
-            .init(block, default: Block.none),
-            .init(signature, default: Record<SignatureSchema>()),
-        ]
-
-        package static func fieldName<Value>(for field: KeyPath<Fields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \Fields.block { return "block" }
-            if key == \Fields.signature { return "signature" }
-            return nil
-        }
-
-        package static let block = field(\Fields.block)
-        package static let signature = field(\Fields.signature)
-    }
-
-    package typealias Signature = Record<SignatureSchema>
-    package typealias SignedBlock = Record<SignedBlockSchema>
     package typealias Ledger = Function<BlockHash, SignedBlock>
     package typealias DistributedLedger = Function<Node, Ledger>
     package typealias ReceivedBlocks = Function<Node, SetExpr<SignedBlock>>
@@ -299,13 +261,10 @@ package struct NanoBlockchainModel: Sendable {
         hash: Expr<BlockHash>,
         privateKey: PrivateKey
     ) -> Expr<SignedBlock> {
-        let signature = Signature.literal(
-            .init(SignatureSchema.data, Expr<HashReference>(hash.raw)),
-            .init(SignatureSchema.signedWith, SigningKey(privateKey))
+        let signature = Signature.expression(
+            data: Expr<HashReference>(hash.raw),
+            signedWith: SigningKey(privateKey)
         )
-        return SignedBlock.literal(
-            .init(SignedBlockSchema.block, block),
-            .init(SignedBlockSchema.signature, signature)
-        )
+        return SignedBlock.expression(block: block, signature: signature)
     }
 }
