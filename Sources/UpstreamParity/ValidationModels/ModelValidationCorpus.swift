@@ -27,6 +27,7 @@ private let fixtureModelRegistrations: [ModelRegistration] = [
     .init(id: "constant-state-claims", scenarios: { try ConstantStateClaims.validationScenarios() }),
     .init(id: "labelled-property-claims", scenarios: { try LabelledPropertyClaims.validationScenarios() }),
     .init(id: "refinement-counter", scenarios: { try RefinementScenarioCounter.validationScenarios() }),
+    .init(id: "parameterized-refinement-counter", scenarios: { try ParameterizedRefinementCounter.validationScenarios() }),
     .init(id: "selected-checks", scenarios: { try SelectedChecksModel.validationScenarios() }),
     .init(id: "unselected-predicates", scenarios: { try UnselectedPredicateModel.validationScenarios() })
 ]

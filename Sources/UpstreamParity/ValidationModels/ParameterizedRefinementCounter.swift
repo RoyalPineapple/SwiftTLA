@@ -2,11 +2,10 @@ import SwiftTLA
 import SwiftTLAMacros
 
 @TLAModel
-struct ParameterizedRefinementCounter {
-    enum Step: String, CaseIterable { case advance }
+package struct ParameterizedRefinementCounter {
+    package enum Step: String, CaseIterable { case advance }
 
-
-    static var spec: TLASpec {
+    package static var spec: TLASpec {
         #spec("ParameterizedRefinementCounter") { scope in
             let limit = scope.parameter(as: Int.self, in: 1...2)
             let abstract = TLASpec("ParameterizedAbstractCounter") {
@@ -29,6 +28,10 @@ struct ParameterizedRefinementCounter {
                 .init(Var<Int>("abstractValue"), from: count)
             ])
             Refines
+            Validation("Limit one") { Bind(limit, to: 1) }
+                .expectDeadlock(.violated)
+            Validation("Limit two") { Bind(limit, to: 2) }
+                .expectDeadlock(.violated)
         }
     }
 }

@@ -1,5 +1,6 @@
 import SwiftTLA
 import Testing
+import UpstreamParity
 
 struct ParameterizedRefinementCheckingTests {
     @Test("native refinement checks each configured abstract limit")
