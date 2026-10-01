@@ -81,32 +81,6 @@ struct OrderedAssertionModel {
 }
 
 @TLAModel
-struct OrderedCallModel {
-    enum Step: String, CaseIterable { case start, enter, finished }
-    enum ProcedureName: String, CaseIterable { case copy }
-
-    static var spec: TLASpec {
-        #spec("OrderedCall") {
-            Algorithm("OrderedCall", scoped: { scope in
-                let input = scope.sharedVar(_name: "input", initial: 0)
-                let output = scope.sharedVar(_name: "output", initial: 0)
-                Procedure(ProcedureName.copy, parameters: Int.self) { value in
-                    Do(Step.enter) {
-                        Assign(output, to: value.expr)
-                        Return()
-                    }
-                }
-                Do(Step.start) {
-                    Assign(input, to: 7)
-                    Call(ProcedureName.copy, with: input.expr)
-                }
-                Do(Step.finished) { Stop() }
-            })
-        }
-    }
-}
-
-@TLAModel
 struct SavedStepValueModel {
     enum Step: String, CaseIterable { case advance }
 

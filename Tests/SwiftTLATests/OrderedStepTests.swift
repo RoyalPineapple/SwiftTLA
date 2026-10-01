@@ -1,5 +1,6 @@
 import Testing
 @testable import SwiftTLA
+@testable import UpstreamParity
 
 @Suite struct OrderedStepTests {
     @Test("Later reads observe earlier writes in one atomic transition")
@@ -50,11 +51,14 @@ import Testing
 
     @Test("Procedure arguments capture earlier writes in the caller")
     func callReadsUpdatedValue() throws {
-        let graph = try ReachabilityGraph(
-            initialMachines: OrderedCallModel.initialMachines(), maximumStates: 8)
+        let scenario = try #require(OrderedCallModel.validationScenarios().first)
+        let graph = try scenario.explore(maximumStates: 8)
         #expect(graph.safetyViolations.isEmpty)
         #expect(graph.transitions.keys.contains { $0.state.output == 7 })
         #expect(graph.transitions.keys.allSatisfy { $0.state.output == 0 || $0.state.output == 7 })
+        let run = try NativeScenarioRun(scenario, maximumStates: 8)
+        try run.validateExpectations()
+        _ = try scenario.render().plusCalBundle()
     }
 
     @Test("Ordinary let captures at its declaration and preserves shadowed values")
