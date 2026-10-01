@@ -54,8 +54,7 @@ func runUpstream(arguments: [String]) -> Never {
                 throw UpstreamCommandError.invalidToolchain
             }
             let pin = try referencePin(from: lock, javaArchive: archive, toolRoot: toolRoot)
-            let scenario = try declaration.resolveScenario()
-            let rendered = try scenario?.render() ?? declaration.sourceModel.render()
+            let rendered = try declaration.renderModel()
             let reference = try TLCProcessRequest.declaredBundle(
                 root: inputPath(declaration.module, within: inputRoot),
                 configuration: inputPath(declaration.configuration, within: inputRoot),
@@ -107,8 +106,7 @@ func runUpstream(arguments: [String]) -> Never {
         var failures = 0
         for declaration in selected {
             do {
-                let scenario = try declaration.resolveScenario()
-                let rendered = try scenario?.render() ?? declaration.sourceModel.render()
+                let rendered = try declaration.renderModel()
                 let reference = try TLCProcessRequest.declaredBundle(
                     root: inputPath(declaration.module, within: inputRoot),
                     configuration: inputPath(declaration.configuration, within: inputRoot),

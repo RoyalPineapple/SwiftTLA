@@ -299,17 +299,20 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         }
 
         package func resolveAssumptionScenario() throws -> (any AssumptionValidationScenario)? {
-            let scenarios: [any AssumptionValidationScenario]
-            switch sourceModel.rawValue {
-            case "sums-even": scenarios = try SumsEvenModel.validationScenarios()
-            case "stones": scenarios = try StonesModel.validationScenarios()
-            default: return nil
-            }
+            guard let scenarios = try assumptionValidationScenarios(for: sourceModel.rawValue) else { return nil }
             let matches = scenarios.filter { $0.name == scenario }
             guard matches.count == 1 else {
                 throw EvidenceFormatError.invalidField(record: id, field: "model-owned assumption scenario")
             }
             return matches[0]
+        }
+
+        package func renderModel() throws -> RenderedSpecification {
+            if let scenario = try resolveScenario() { return try scenario.render() }
+            guard let assumption = try resolveAssumptionScenario() else {
+                throw EvidenceFormatError.invalidField(record: id, field: "model-owned assumption scenario")
+            }
+            return try assumption.render()
         }
 
         private func validate() throws {
@@ -380,7 +383,7 @@ package struct FiniteGraphSourceModel: Decodable, Hashable, Sendable {
     package init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)
-        guard value == "sums-even" || value == "stones"
+        guard hasAssumptionValidationRegistration(value)
                 || hasUpstreamModelValidationRegistration(value) else {
             throw DecodingError.dataCorruptedError(
                 in: container, debugDescription: "Unknown upstream source model: \(value)"
@@ -389,24 +392,7 @@ package struct FiniteGraphSourceModel: Decodable, Hashable, Sendable {
         rawValue = value
     }
 
-    fileprivate var isAssumptionOnly: Bool { rawValue == "sums-even" || rawValue == "stones" }
-
-    package func render() throws -> RenderedSpecification {
-        switch rawValue {
-        case "sums-even":
-            guard let scenario = try SumsEvenModel.validationScenarios().first else {
-                throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned assumption scenario")
-            }
-            return try scenario.render()
-        case "stones":
-            guard let scenario = try StonesModel.validationScenarios().first else {
-                throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned assumption scenario")
-            }
-            return try scenario.render()
-        default:
-            throw EvidenceFormatError.invalidField(record: rawValue, field: "model-owned scenario")
-        }
-    }
+    fileprivate var isAssumptionOnly: Bool { hasAssumptionValidationRegistration(rawValue) }
 }
 
 package struct TLCReferenceArtifacts: Equatable, Sendable {

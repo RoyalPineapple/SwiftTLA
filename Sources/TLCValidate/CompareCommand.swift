@@ -115,6 +115,5 @@ private func spoolActions(caseID: String, kind: String) throws -> [RenderedActio
     guard let declaration = manifest.cases.first(where: { $0.id == caseID }) else {
         throw CompareCommandError.unknownScenario(caseID)
     }
-    let scenario = try declaration.resolveScenario()
-    return try (scenario?.render() ?? declaration.sourceModel.render()).actions
+    return try declaration.renderModel().actions
 }

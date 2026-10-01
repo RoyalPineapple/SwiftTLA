@@ -63,17 +63,33 @@ struct FiniteGraphManifestTests {
 
   @Test("an assumption-only case requires an explicit expected verdict")
   func requiresAssumptionExpectation() throws {
-    let path = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-      .appendingPathComponent("Verification/FiniteGraph/cases.json")
-    let source = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any])
-    let cases = try #require(source["cases"] as? [[String: Any]])
-    var declaration = try #require(cases.first { $0["id"] as? String == "sums-even-0" })
+    var declaration = try caseDictionary(id: "sums-even-0")
     declaration.removeValue(forKey: "assumptionExpectation")
     #expect(throws: EvidenceFormatError.invalidField(record: "sums-even-0", field: "assumption expectation")) {
       try JSONDecoder().decode(FiniteGraphManifest.Case.self,
         from: JSONSerialization.data(withJSONObject: declaration))
     }
+  }
+
+  @Test("assumption rendering rejects a scenario absent from its model")
+  func rejectsUnknownAssumptionScenarioAtRender() throws {
+    var declaration = try caseDictionary(id: "sums-even-0")
+    declaration["scenario"] = "not-declared"
+    let decoded = try JSONDecoder().decode(FiniteGraphManifest.Case.self,
+      from: JSONSerialization.data(withJSONObject: declaration))
+    #expect(throws: EvidenceFormatError.invalidField(record: "sums-even-0",
+      field: "model-owned assumption scenario")) {
+      try decoded.renderModel()
+    }
+  }
+
+  private func caseDictionary(id: String) throws -> [String: Any] {
+    let path = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent("Verification/FiniteGraph/cases.json")
+    let source = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any])
+    let cases = try #require(source["cases"] as? [[String: Any]])
+    return try #require(cases.first { $0["id"] as? String == id })
   }
 
   private func decodeCases(ids: [String?]) throws -> FiniteGraphManifest {
