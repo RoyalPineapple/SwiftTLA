@@ -10961,8 +10961,16 @@
       "id": "AC-18",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "StateDeclarationNamesTests derives state names from Swift bindings, including escaped identifiers, and keeps two state declarations distinct when they share a display label. ParameterDeclarationNamesTests now derives parameter names from Swift bindings, exposes optional labels through compiled descriptions and generated typed Configuration key paths, preserves distinct parameters with equal labels, proves label changes leave compilation identity unchanged, and checks source-located invalid-label diagnostics in both parsing and an external Swift consumer. PropertyDeclarationNamesTests preserves distinct property and refinement identities despite equal labels. Complete remaining declaration-category coverage and hosted acceptance evidence remain unaudited.",
-      "evidence": []
+      "reason": "StateDeclarationNamesTests derives state names from Swift bindings, including escaped identifiers, and keeps distinct declarations with equal display labels. ParameterDeclarationNamesTests derives parameter names from Swift bindings, exposes optional labels through compiled descriptions and typed Configuration key paths, preserves identity under label changes, and checks source-located invalid-label diagnostics. PropertyDeclarationNamesTests preserves property and refinement identities, selections, and outcomes despite equal labels. All three suites passed hosted ordinary CI at 89eeff36. AC-18 remains missing because B-02 has not settled names and optional labels for declaration categories without Swift bindings: Validation still requires a positional string and Algorithm still accepts one. A readable anonymous scenario title may be legitimate SwiftUI-style presentation, but its stable identity, duplicate-label behavior, and diagnostics must be explicitly decided and tested; the passing bound-declaration suites do not establish that contract.",
+      "evidence": [{
+        "sourceSHA": "89eeff361e881f4bb1d5dbbc3e7a71c464fdad44",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36939871120/job/110628620469",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36939871120/artifacts/11201318436",
+        "artifactSHA256": "33692a686d120bb77a6643063269dd1df047229fdba5114dd561e30b20606703",
+        "acceptanceComplete": false,
+        "scope": "Hosted ordinary job passed StateDeclarationNamesTests, ParameterDeclarationNamesTests, and PropertyDeclarationNamesTests. Source assertions cover bound names, escaped identifiers, equal display labels, identity stability, typed selection, and invalid-label diagnostics. Anonymous scenario/algorithm declaration semantics and B-02 resolution are outside these tests, so AC-18 is not accepted."
+      }]
     },
     {
       "id": "AC-19",
