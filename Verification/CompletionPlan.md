@@ -164,13 +164,14 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       entire local package compiling through the guarded wrapper, and all 148
       related parser/builder tests passed again. This is local diagnostic
       evidence, not hosted acceptance.
-      A binding named `algorithm` still collides with a PlusCal reserved word;
-      source identity must remain the Swift binding while only the formal
-      rendering name is escaped.
+      An isolated local change now preserves the Swift identity of a binding
+      named `algorithm` while rendering a collision-free PlusCal name, including
+      when `_algorithm` is an authored state variable. The exact regression and
+      161 related parser, builder, and renderer tests passed locally; hosted
+      acceptance for this change is pending.
       Audit remaining package-local positional formal-core fixtures and
       scenario references; do not expose them as application authoring.
-      Settle reserved-name rendering and the remaining declaration/anonymous
-      rules. Recheck
+      Settle the remaining declaration/anonymous rules. Recheck
       generated TLA and native scenario identity on the migrated matrix.
 - [ ] Audit AC-01 through AC-19 against each criterion's full acceptance text.
       Existing `implemented` labels are not acceptance evidence by themselves.
