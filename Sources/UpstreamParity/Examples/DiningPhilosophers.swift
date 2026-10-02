@@ -35,6 +35,7 @@ package struct DiningPhilosophersModel: Sendable {
             Extends(.integers)
             let TypeOK = Invariant()
             let ExclusiveAccess = Invariant()
+            let NobodyStarves = AlwaysEventually()
 
             let DiningPhilosophers = Algorithm(scoped: { scope in
                 let forks = scope.sharedVar(initial: Function<Philosopher, Fork>.literal(
@@ -116,7 +117,7 @@ package struct DiningPhilosophersModel: Sendable {
                         Goto(Step.loop)
                     }
 
-                    AlwaysEventually("NobodyStarves", !hungry)
+                    NobodyStarves(!hungry)
 
                     TypeOK {
                         (forks[philosopher].holder == .one
