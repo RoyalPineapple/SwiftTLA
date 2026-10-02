@@ -309,7 +309,7 @@ struct BinaryStateWriter {
         buffer.reserveCapacity(1_048_576)
     }
 
-    mutating func append(key: Data, id: UInt64) throws {
+    mutating func append(key: Data, id: UInt64, sortKey: UInt64) throws {
         guard let length = UInt32(exactly: key.count) else {
             throw BinaryGraphEvidenceError.invalid("state key length")
         }
@@ -318,6 +318,8 @@ struct BinaryStateWriter {
         buffer.append(key)
         var bigEndianID = id.bigEndian
         withUnsafeBytes(of: &bigEndianID) { buffer.append(contentsOf: $0) }
+        var bigEndianSortKey = sortKey.bigEndian
+        withUnsafeBytes(of: &bigEndianSortKey) { buffer.append(contentsOf: $0) }
         if buffer.count >= 1_048_576 { try flush() }
     }
 

@@ -23,6 +23,8 @@ package enum ValidationEvidenceComparisonError: Error, Equatable {
 /// Exact, bounded-memory comparison. State keys are sorted once and assigned
 /// common ranks; full edges are then compared as sorted rank/action/rank records.
 package enum ValidationEvidenceComparison {
+    private static let stateBucketCount = 64
+
     private static func measured<Result>(_ phase: String, _ body: () throws -> Result) rethrows -> Result {
         let started = DispatchTime.now().uptimeNanoseconds
         fputs("comparison phase \(phase): started\n", stderr)
@@ -62,7 +64,6 @@ package enum ValidationEvidenceComparison {
         referenceRanks.reserveCapacity(referenceGraph.stateCount)
         let equalStates = try matchStates(
             generatedGraph.states, referenceGraph.states,
-            leftRoot: generatedRoot, rightRoot: referenceRoot,
             expectedCount: generatedGraph.stateCount
         ) { generatedID, referenceID, rank in
             guard generatedRanks.updateValue(rank, forKey: generatedID) == nil,
@@ -187,7 +188,6 @@ package enum ValidationEvidenceComparison {
         tlcRanks.reserveCapacity(tlcGraph.stateCount)
         let equalStates = try matchStates(
             swiftGraph.states, tlcGraph.states,
-            leftRoot: swiftRoot, rightRoot: tlcRoot,
             expectedCount: swiftGraph.stateCount
         ) { nativeID, fingerprint, rank in
             guard nativeID < UInt64(swiftRanks.count), swiftRanks[Int(nativeID)] == -1,
@@ -218,11 +218,12 @@ package enum ValidationEvidenceComparison {
     }
 
     private static func matchStates(
-        _ left: URL, _ right: URL, leftRoot: URL, rightRoot: URL,
+        _ leftBuckets: [URL], _ rightBuckets: [URL],
         expectedCount: Int, assign: (UInt64, UInt64, Int) throws -> Void
     ) throws -> Bool {
-        let leftBuckets = try measured("left state partition") { try partitionStates(left, in: leftRoot) }
-        let rightBuckets = try measured("right state partition") { try partitionStates(right, in: rightRoot) }
+        guard leftBuckets.count == rightBuckets.count else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("state bucket count")
+        }
         return try measured("state sort and match") {
             var rank = 0
             for index in leftBuckets.indices {
@@ -242,24 +243,10 @@ package enum ValidationEvidenceComparison {
         }
     }
 
-    private static func partitionStates(_ input: URL, in directory: URL) throws -> [URL] {
-        let bucketCount = 64
-        let urls = (0..<bucketCount).map {
+    private static func stateBucketURLs(in directory: URL) -> [URL] {
+        (0..<stateBucketCount).map {
             directory.appendingPathComponent("state-bucket-\($0).bin")
         }
-        var writers = try urls.map(BinaryStateWriter.init)
-        defer { for index in writers.indices { try? writers[index].close() } }
-        var reader = try BinaryGraphEvidenceReader(input)
-        defer { reader.close() }
-        while !reader.atEnd {
-            let key = try reader.bytes(Int(reader.uint32()))
-            let id = try reader.uint64()
-            let digest = CryptoKit.SHA256.hash(data: key)
-            let bucket = digest.withUnsafeBytes { Int($0[0]) & (bucketCount - 1) }
-            try writers[bucket].append(key: key, id: id)
-        }
-        for index in writers.indices { try writers[index].close() }
-        return urls
     }
 
     private static func stateRecords(_ input: URL) throws -> [StateRecord] {
@@ -269,8 +256,7 @@ package enum ValidationEvidenceComparison {
         while !reader.atEnd {
             let key = try reader.bytes(Int(reader.uint32()))
             let id = try reader.uint64()
-            let digest = CryptoKit.SHA256.hash(data: key)
-            let sortKey = digest.prefix(8).reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+            let sortKey = try reader.uint64()
             records.append(StateRecord(key: key, id: id, sortKey: sortKey))
         }
         records.sort {
@@ -281,7 +267,7 @@ package enum ValidationEvidenceComparison {
     }
 
     private struct Spool {
-        let states: URL
+        let states: [URL]
         let initial: URL
         let edges: URL
         let stateCount: Int
@@ -290,7 +276,7 @@ package enum ValidationEvidenceComparison {
         let binaryEdges: Bool
         let witness: NativeDecisiveWitness?
 
-        init(states: URL, initial: URL, edges: URL, stateCount: Int,
+        init(states: [URL], initial: URL, edges: URL, stateCount: Int,
             initialCount: Int = 0, edgeCount: Int = 0, binaryEdges: Bool = false,
             witness: NativeDecisiveWitness? = nil) {
             self.states = states
@@ -333,7 +319,7 @@ package enum ValidationEvidenceComparison {
     }
 
     private static func writeManifest(_ spool: Spool, in directory: URL) throws {
-        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v4",
+        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v5",
             stateCount: spool.stateCount, initialCount: spool.initialCount,
             edgeCount: spool.edgeCount, binaryEdges: spool.binaryEdges, witness: spool.witness)
         try JSONEncoder().encode(manifest).write(
@@ -343,19 +329,22 @@ package enum ValidationEvidenceComparison {
     private static func readManifest(in directory: URL) throws -> Spool {
         let manifest = try JSONDecoder().decode(SpoolManifest.self,
             from: Data(contentsOf: directory.appendingPathComponent("spool.json")))
-        guard manifest.schema == "swifttla.validation-spool-v4", manifest.binaryEdges,
+        guard manifest.schema == "swifttla.validation-spool-v5", manifest.binaryEdges,
               manifest.stateCount >= 0, manifest.initialCount >= 0,
               manifest.edgeCount >= 0 else {
             throw ValidationEvidenceComparisonError.invalidEvidence("spool manifest")
         }
-        let files = ["states.raw", "initial.raw", "edges.raw"].map(directory.appendingPathComponent)
+        let states = stateBucketURLs(in: directory)
+        let initial = directory.appendingPathComponent("initial.raw")
+        let edges = directory.appendingPathComponent("edges.raw")
+        let files = states + [initial, edges]
         for file in files {
             let values = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
             guard values.isRegularFile == true, values.isSymbolicLink != true else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("spool file")
             }
         }
-        return Spool(states: files[0], initial: files[1], edges: files[2],
+        return Spool(states: states, initial: initial, edges: edges,
             stateCount: manifest.stateCount, initialCount: manifest.initialCount,
             edgeCount: manifest.edgeCount, binaryEdges: manifest.binaryEdges,
             witness: manifest.witness)
@@ -363,13 +352,17 @@ package enum ValidationEvidenceComparison {
 
     private static func readBinary(_ url: URL, caseID: String, actions: [RenderedAction],
         producer: UInt8, expectedComplete: Bool, in directory: URL) throws -> Spool {
-        let states = directory.appendingPathComponent("states.raw")
+        let states = stateBucketURLs(in: directory)
         let initial = directory.appendingPathComponent("initial.raw")
         let edges = directory.appendingPathComponent("edges.raw")
-        var stateOut = try BinaryStateWriter(states)
+        var stateOut = try states.map(BinaryStateWriter.init)
         var initialOut = try ValidationLineWriter(initial)
         var edgeOut = try BinaryEdgeWriter(edges)
-        defer { try? stateOut.close(); try? initialOut.close(); try? edgeOut.close() }
+        defer {
+            for index in stateOut.indices { try? stateOut[index].close() }
+            try? initialOut.close()
+            try? edgeOut.close()
+        }
         let footerLength: UInt64 = 1 + 8 * 8 + 1 + 32
         var reader = try BinaryGraphEvidenceReader(url, checksumFooterLength: footerLength)
         defer { reader.close() }
@@ -447,7 +440,10 @@ package enum ValidationEvidenceComparison {
                 let key = try reader.bytes(Int(reader.uint32()))
                 do { try CanonicalBinaryState.validate(key) }
                 catch { throw ValidationEvidenceComparisonError.invalidEvidence("binary state key") }
-                try stateOut.append(key: key, id: identity)
+                let digest = CryptoKit.SHA256.hash(data: key)
+                let bucket = digest.withUnsafeBytes { Int($0[0]) & (stateBucketCount - 1) }
+                let sortKey = digest.prefix(8).reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+                try stateOut[bucket].append(key: key, id: identity, sortKey: sortKey)
                 stateCount += 1
                 if producer == 2 && !expectedComplete { depths.append(initialFlag == 1 ? 0 : nil) }
                 if initialFlag == 1 {
@@ -554,7 +550,7 @@ package enum ValidationEvidenceComparison {
                         throw ValidationEvidenceComparisonError.invalidEvidence("native decisive witness")
                     }
                 }
-                try stateOut.close()
+                for index in stateOut.indices { try stateOut[index].close() }
                 try initialOut.close()
                 try edgeOut.close()
                 return Spool(states: states, initial: initial, edges: edges,
