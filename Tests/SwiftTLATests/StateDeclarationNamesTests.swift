@@ -24,10 +24,11 @@ struct StateDeclarationNamesTests {
     func rejectsMutableStateHandle() throws {
         let source = try parseSpecTestClosure("""
         {
-            Algorithm("Counter", scoped: { scope in
+            let counter = Algorithm(label: "Counter", scoped: { scope in
                 var count = scope.sharedVar(initial: 0)
                 Do("advance") { Assign(count, to: count + 1) }
             })
+            counter
         }
         """)
         let spec = SpecParser.parseSpecClosure(named: "MutableHandle", source)
@@ -39,7 +40,7 @@ struct StateDeclarationNamesTests {
     func rejectsAnonymousStateDeclaration() throws {
         for source in [
             "{ scope in scope.sharedVar(initial: 0) }",
-            "{ Algorithm(\"Counter\", scoped: { scope in scope.sharedVar(initial: 0) }) }"
+            "{ let counter = Algorithm(label: \"Counter\", scoped: { scope in scope.sharedVar(initial: 0) }); counter }"
         ] {
             let spec = SpecParser.parseSpecClosure(named: "AnonymousState", try parseSpecTestClosure(source))
             let diagnostic = try #require(spec.diagnostics.first)

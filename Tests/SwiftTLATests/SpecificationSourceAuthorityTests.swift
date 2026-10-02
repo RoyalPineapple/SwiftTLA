@@ -60,12 +60,13 @@ struct SpecificationSourceAuthorityTests {
         static var spec: TLASpec {
             #spec("ConditionalUnion") { scope in
                 let value: SharedVariable<Value> = scope.sharedVar(initial: Value.second(false))
-                Algorithm("ConditionalUnion") {
+                let conditionalUnion = Algorithm(label: "ConditionalUnion") {
                     Do(Step.update) {
                         let selected = If(true, \(branches))
                         Assign(value, to: selected)
                     }
                 }
+                conditionalUnion
             }
         }
         """)

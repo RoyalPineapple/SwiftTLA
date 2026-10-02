@@ -84,7 +84,7 @@ struct CompilerBoundaryDiagnosticTests {
         let closure = try #require(
             Parser.parse(source: """
             {
-                Algorithm("Rejected") {
+                let rejected = Algorithm(label: "Rejected") {
                     UnsupportedAlgorithmConstruct()
                 }
             }
@@ -139,13 +139,14 @@ struct CompilerBoundaryDiagnosticTests {
     func parserAndResultBuilderShareCompilationIdentity() throws {
         let source = """
         {
-            Algorithm("IdentityAlgorithm", scoped: { scope in
+            let IdentityAlgorithm = Algorithm(scoped: { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.increment) {
                     Assign(count, to: count + 1)
                     Stop()
                 }
             })
+            IdentityAlgorithm
         }
         """
         let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))

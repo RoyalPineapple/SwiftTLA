@@ -121,7 +121,8 @@ struct TransitionPropertyTests {
             let value = scope.sharedVar(initial: 0)
             let claim = Temporal()
             claim(\(condition))
-            Validation("Check") {}
+            let check = Validation(label: "Check") {}
+            check
         }
         """))
         #expect(throws: (any Error).self) {

@@ -52,7 +52,8 @@ struct DictionaryConfigurationTests {
             let capacity = scope.parameter(as: [String: Int].self,
                 in: Functions(from: Set<String>(["small"]), to: Set<Int>([3, 5])))
             let count = scope.sharedVar(initial: 0)
-            Validation("Invalid") { Bind(capacity, to: \(value)) }
+            let invalid = Validation(label: "Invalid") { Bind(capacity, to: \(value)) }
+            invalid
         }
         """))
         #expect(throws: (any Error).self) {

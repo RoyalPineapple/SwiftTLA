@@ -84,11 +84,14 @@ struct ProcessFairnessExemptionTests {
         for policy in [".none(excluding: [Step.ncs])", ".weak(excluding: [\"ncs\"])",
                        ".weak([Step.ncs])", ".weak(excluding: [Step.ncs], extra: true)"] {
             let source = """
-            { Algorithm("InvalidFairness") {
-                Each(Set<Int>([0]), fairness: \(policy)) { member in
-                    Do(Step.ncs) { Goto(Step.ncs) }
+            {
+                let invalidFairness = Algorithm(label: "InvalidFairness") {
+                    Each(Set<Int>([0]), fairness: \(policy)) { member in
+                        Do(Step.ncs) { Goto(Step.ncs) }
+                    }
                 }
-            } }
+                invalidFairness
+            }
             """
             let parsed = SpecParser.parseSpecClosure(named: "InvalidFairness", try parseSpecTestClosure(source),
                 sourceTypes: .init(enums: [parserTestEnum("Step", cases: ["ncs": .string("ncs")])]))

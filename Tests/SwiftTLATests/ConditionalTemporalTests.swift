@@ -89,7 +89,8 @@ struct ConditionalTemporalTests {
         {
             let claim = Temporal()
             claim(\(expression))
-            Validation("Check") {}
+            let check = Validation(label: "Check") {}
+            check
         }
         """))
         #expect(throws: (any Error).self) {
@@ -101,8 +102,8 @@ struct ConditionalTemporalTests {
     @Test("composed temporal handles require exactly one registered definition", arguments: [
         "claim",
         "claim(.always(true))\nclaim(.always(true))",
-        "Validation(\"Selected\") {}.checking(only: [claim])",
-        "Validation(\"Expected\") {}.expect(claim, .satisfied)"
+        "let selected = Validation(label: \"Selected\") {}.checking(only: [claim])\nselected",
+        "let expected = Validation(label: \"Expected\") {}.expect(claim, .satisfied)\nexpected"
     ])
     func rejectsInvalidRegistration(_ registration: String) throws {
         let spec = SpecParser.parseSpecClosure(named: "Invalid", try parseSpecTestClosure("""

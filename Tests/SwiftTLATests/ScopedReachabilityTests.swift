@@ -51,7 +51,8 @@ struct ScopedReachabilityTests {
         {
             let goal = Reachable()
             \(definition)
-            Validation("Check") {}.expect(goal, .satisfied)
+            let check = Validation(label: "Check") {}.expect(goal, .satisfied)
+            check
         }
         """))
         #expect(throws: (any Error).self) {

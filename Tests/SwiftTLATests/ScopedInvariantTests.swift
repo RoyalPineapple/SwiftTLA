@@ -34,7 +34,8 @@ struct ScopedInvariantTests {
         {
             let safe = Invariant()
             \(registration)
-            Validation("Check") {}.checking(only: [safe])
+            let check = Validation(label: "Check") {}.checking(only: [safe])
+            check
         }
         """))
         #expect(throws: (any Error).self) { try parsed.compile() }

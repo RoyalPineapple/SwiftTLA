@@ -136,9 +136,10 @@ import Testing
         ]))
         let source = """
         {
-            Algorithm("WrongInitialType", scoped: { scope in
+            let wrongInitialType = Algorithm(label: "WrongInitialType", scoped: { scope in
                 let key: SharedVariable<Key> = scope.sharedVar(_name: "key", initial: .second)
             })
+            wrongInitialType
         }
         """
         let closure = try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))

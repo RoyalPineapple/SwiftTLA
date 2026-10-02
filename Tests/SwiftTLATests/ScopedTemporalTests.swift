@@ -41,7 +41,8 @@ struct ScopedTemporalTests {
         {
             let claim = Eventually()
             \(definition)
-            Validation("Check") {}.expect(claim, .satisfied)
+            let check = Validation(label: "Check") {}.expect(claim, .satisfied)
+            check
         }
         """))
         #expect(throws: (any Error).self) {
