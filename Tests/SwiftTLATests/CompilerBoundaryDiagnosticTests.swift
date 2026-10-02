@@ -227,6 +227,7 @@ struct CompilerBoundaryDiagnosticTests {
 
             #expect(parsed.diagnostics.count == 1)
             #expect(parsed.diagnostics[0].message.contains("immutable let binding"))
+            #expect(parsed.diagnostics[0].sourceSpan.location != .unavailable)
             #expect(parsed.sourceAlgorithms.isEmpty)
             #expect(parsed.validationScenarios.isEmpty)
         }

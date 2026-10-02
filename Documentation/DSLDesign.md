@@ -117,10 +117,15 @@ The nonempty literal `label:` is optional and only for presentation;
 interpolation is rejected.
 Duplicate labels are allowed; generated scenario `name` remains the identity
 and `displayName` uses the label or falls back to that name. Compiled algorithm
-descriptions expose the same `name`/`displayName` distinction. The registration
-rules for other non-state declarations remain to be settled.
-Anonymous declarations must have useful source locations in diagnostics; do not
-invent another mandatory naming system merely to support them.
+descriptions expose the same `name`/`displayName` distinction. Named state,
+parameter, property, and refinement declarations follow their binding and
+registration rules below. Inline control constructs such as `Each`, `Do`,
+`While`, `If`, and `With` are structural statements, not declarations that
+need an additional Swift binding or compiler-invented identity. `Do` and
+`While` use their typed control labels; `Procedure` uses its typed enum case
+as its formal name. Those names affect behavior and are not display labels.
+An anonymous declaration that requires a binding fails at its source location;
+an inline structural statement remains valid without one.
 
 Inside `#spec`, scoped state declarations derive their names from immutable Swift bindings:
 
@@ -145,7 +150,6 @@ for every variable, and generated `State.displayNames` exposes labels for public
 state fields keyed by typed Swift key paths, falling back to the Swift binding
 name. Labels do not change the formal identifier, state
 value, transitions, or compilation identity; duplicate labels are permitted.
-Other anonymous non-state declarations still require the remaining B-02 decisions.
 
 Parameter handles also derive their names from immutable Swift bindings and
 accept an optional nonempty literal `label:`. The label is available through
@@ -438,7 +442,7 @@ Scenario evidence retains both mappings without using labels as result keys.
 
 Two properties with the label `"Safety / progress"` must retain distinct generated cases, formal names, selections, and outcomes.
 A numeric label, an interpolated label, or a duplicate label argument must fail compilation.
-Anonymous declaration names and labels for other declaration kinds remain part of B-02.
+Inline control labels remain semantic names rather than property display labels.
 
 ### Reachability handles across scopes
 
@@ -1360,17 +1364,40 @@ agreement separately. Do not redefine membership from the implementation registr
 
 Close each open item with exact signatures, semantics, and one positive and one
 negative acceptance example. Implementers must not resolve these silently by
-inventing a second API or preserving an accidental existing behavior. B-03 is
-settled below; the other decisions remain open.
+inventing a second API or preserving an accidental existing behavior. B-02 and
+B-03 are settled below; the other decisions remain open.
 
 | ID | Decision |
 | --- | --- |
 | B-01 | Parameter and domain syntax: distinguish value types, legal model domains, finite scenario bindings, and runner resource limits. Define parameter-dependent structure without changing generated API types |
-| B-02 | Algorithm and Validation require an immutable `let` binding, explicit registration by reference, and optional presentation-only `label:`. Complete caller migration and the remaining declaration/anonymous rules without duplicate names or hidden side effects |
+| B-02 | Settled: name-bearing declarations use their specified immutable Swift binding or typed enum identity; `Algorithm` and `Validation` require explicit registration by bound reference. Inline control statements need no extra identity. Optional `label:` is presentation-only |
 | B-03 | Settled: typed `.expect(property, .violated)` and `.expectDeadlock(.violated)` change scenario admission only; checking retains its default selections and typed result shapes |
 | B-04 | Temporal and symmetry syntax: settle explicit fairness and interchangeability declarations, scope references, validation rules, and permitted reductions; neither fairness nor symmetry is automatic |
 | B-05 | Swift value/helper contracts: define supported operations, helper functions, exact inference rules and required annotations under the no-guessing rule, checked arithmetic, collection indexing, and failure behavior |
 | B-06 | Corpus fit and migration: preserve existing models when moving to ordered assignments; demonstrate procedures, recursion, and required composition without a second execution backend |
+
+For B-02, the authoring forms inside `#spec` are:
+
+```swift
+Algorithm.init(label: String? = nil, fairness: SequentialAlgorithmFairness = .none,
+    @AlgorithmBuilder _ body: () -> [AlgorithmElement])
+Algorithm.init(label: String? = nil, fairness: SequentialAlgorithmFairness = .none,
+    @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement])
+Validation(label: String? = nil,
+    @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration
+```
+
+The macro supplies their internal `_name` from an immutable `let` binding. The
+author registers each by referencing that binding.
+`let algorithm = Algorithm { Do(Step.start) { Stop() } }; algorithm`
+and `let exhaustive = Validation {}; exhaustive` are positive examples.
+`Algorithm { Do(Step.start) { Stop() } }` without a binding, and
+`var exhaustive = Validation {}` with a mutable binding, fail at their source
+locations. A named property handle likewise needs its declared binding and
+predicate registration. `Each`, `Do`, and `While` remain inline statements;
+`Procedure(ProcedureName.scan) { ... }` uses a typed enum case, not another
+required Swift `let`. Existing formal-core constructors with explicit names
+are not a parallel application-authoring style.
 
 For B-03, the public modifiers `expect(_ property: some ModelProperty, _ expected: ValidationExpectation)`
 and `expectDeadlock(_ expected: ValidationExpectation)` accept `.satisfied` or

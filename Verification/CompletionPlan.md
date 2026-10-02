@@ -76,9 +76,9 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
 
 ### 2. Finish the DSL and native-checking migration
 
-- [ ] Resolve B-01, B-02, B-04, B-05, and B-06 in the DSL spec with exact
+- [ ] Resolve B-01, B-04, B-05, and B-06 in the DSL spec with exact
       signatures, semantics, a positive fixture, and a negative diagnostic.
-      Keep the settled B-03 expectation syntax and semantics.
+      Keep the settled B-02 declaration-identity and B-03 expectation contracts.
 - [x] Settle B-02 identity for `Algorithm` and `Validation`: each requires an
       immutable `let` binding, registered by reference; a display label never
       supplies identity. The parser and `#spec` rewrite support this form.
@@ -179,7 +179,9 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       acceptance for this change is pending.
       Audit remaining package-local positional formal-core fixtures and
       scenario references; do not expose them as application authoring.
-      Settle the remaining declaration/anonymous rules. Recheck
+      B-02 now explicitly leaves inline control statements anonymous while
+      requiring stable bindings for named declarations; the exact rejection
+      and nine related compiler-boundary diagnostics passed locally. Recheck
       generated TLA and native scenario identity on the migrated matrix.
 - [ ] Audit AC-01 through AC-19 against each criterion's full acceptance text.
       Existing `implemented` labels are not acceptance evidence by themselves.
