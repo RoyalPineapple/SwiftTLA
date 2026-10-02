@@ -128,8 +128,11 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       records, process fairness, breadth-first exploration, sequence index
       conversion and configuration, symbolic records, scenario expectations,
       parser fixtures, local recursion, and enabledness. Their 73 focused
-      guarded tests passed locally. One shared fixture file still has
-      positional Algorithm declarations.
+      guarded tests passed locally. The final shared generated-machine
+      fixture has also been migrated; all 26 related guarded tests passed,
+      including external-consumer compilation. No positional Algorithm or
+      Validation calls remain in the shared fixture files; test bodies and
+      direct formal-core cases remain to classify and migrate as applicable.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck
