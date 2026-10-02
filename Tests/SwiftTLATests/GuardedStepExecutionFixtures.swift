@@ -7,7 +7,7 @@ struct GuardedAlgorithm {
 
     static var spec: TLASpec {
         #spec("GuardedAlgorithm") {
-            Algorithm("GuardedAlgorithm", scoped: { scope in
+            let guardedAlgorithm = Algorithm(label: "GuardedAlgorithm", scoped: { scope in
                 let ready = scope.sharedVar(in: 0...1)
                 let value = scope.sharedVar(initial: 0)
                 Do(Step.choose, when: ready == 1) {
@@ -17,6 +17,7 @@ struct GuardedAlgorithm {
                 }
                 Do(Step.finish) { Stop() }
             })
+            guardedAlgorithm
         }
     }
 }
@@ -29,7 +30,7 @@ struct GuardedProcesses {
 
     static var spec: TLASpec {
         #spec("GuardedProcesses") {
-            Algorithm("GuardedProcesses", scoped: { scope in
+            let guardedProcesses = Algorithm(label: "GuardedProcesses", scoped: { scope in
                 let entryReady = scope.sharedVar(in: 0...1)
                 let bodyReady = scope.sharedVar(in: 0...1)
                 let value = scope.sharedVar(initial: 0)
@@ -55,6 +56,7 @@ struct GuardedProcesses {
                     Do(Step.finish) { Stop() }
                 }
             })
+            guardedProcesses
         }
     }
 }

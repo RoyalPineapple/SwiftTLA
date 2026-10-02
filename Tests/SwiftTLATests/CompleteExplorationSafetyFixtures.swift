@@ -15,7 +15,8 @@ struct CompleteExplorationSafetyModel {
             belowEleven { value < 11 }
             let belowThirteen = Invariant()
             belowThirteen { value < 13 }
-            Validation("Complete safety") {}
+            let completeSafety = Validation(label: "Complete safety") {}
+            completeSafety
         }
     }
 }

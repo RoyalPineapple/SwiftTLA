@@ -13,13 +13,14 @@ struct DictionaryKeyIdentityModel {
             let values: SharedVariable<[Key: Int]> = scope.sharedVar(initial: [.first: 1, .second: 2])
             let links: SharedVariable<Links> = scope.sharedVar(initial: [.first: .second, .second: .first])
             let labels: SharedVariable<[Label: Key]> = scope.sharedVar(initial: [.first: .first, .second: .second])
-            Algorithm("DictionaryKeyIdentity") {
+            let dictionaryKeyIdentity = Algorithm(label: "DictionaryKeyIdentity") {
                 Do(Step.update) {
                     Assign(values[.first], to: values[links.expr[.first]])
                     Assign(labels[.first], to: links[.first])
                     Stop()
                 }
             }
+            dictionaryKeyIdentity
         }
     }
 }

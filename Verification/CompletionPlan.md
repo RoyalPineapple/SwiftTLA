@@ -111,6 +111,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       bound declarations. Their guarded local checks passed: 42 focused model
       tests, three external-consumer checks, and five Xcode documentation
       fixture tests. These are local diagnostics, not hosted acceptance.
+      Seven more native-checking fixture files now use bound declarations;
+      decisive-scenario selectors use binding identities and preserve their
+      previous text as display labels. All 19 related guarded tests passed
+      locally.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck

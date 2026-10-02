@@ -19,7 +19,8 @@ struct EncodedEnumDomain {
         #spec("EncodedEnumDomain") { scope in
             let value = scope.sharedVar(in: Datum.all)
             Do(Step.select, over: Datum.all) { next in Assign(value, to: next) }
-            Validation("All") {}
+            let all = Validation(label: "All") {}
+            all
         }
     }
 }

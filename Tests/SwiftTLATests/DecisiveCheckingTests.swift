@@ -4,7 +4,7 @@ import SwiftTLA
 struct DecisiveCheckingTests {
     @Test("an infinite native graph yields a complete shortest invariant counterexample")
     func stopsAtInvariant() throws {
-        let scenario = try #require(DecisiveCounter.validationScenarios().first { $0.name == "Infinite" })
+        let scenario = try #require(DecisiveCounter.validationScenarios().first { $0.name == "infinite" })
         guard case .counterexample(let result) = try scenario.check(maximumStates: 3) else {
             Issue.record("Expected a decisive invariant result, not graph exhaustion")
             return
@@ -20,7 +20,7 @@ struct DecisiveCheckingTests {
 
     @Test("an initial violation requires no successor exploration")
     func stopsAtInitialState() throws {
-        let scenario = try #require(DecisiveCounter.validationScenarios().first { $0.name == "Initial violation" })
+        let scenario = try #require(DecisiveCounter.validationScenarios().first { $0.name == "initialViolation" })
         guard case .counterexample(let result) = try scenario.check(maximumStates: 1) else {
             Issue.record("Expected an initial-state counterexample")
             return
@@ -34,7 +34,7 @@ struct DecisiveCheckingTests {
     @Test("deadlock selection distinguishes a decisive failure from graph exhaustion")
     func preservesDeadlockSelection() throws {
         let scenarios = try DecisiveCounter.validationScenarios()
-        let deadlock = try #require(scenarios.first { $0.name == "Deadlock" })
+        let deadlock = try #require(scenarios.first { $0.name == "deadlock" })
         guard case .counterexample(let result) = try deadlock.check(maximumStates: 3) else {
             Issue.record("Expected a deadlock counterexample")
             return
@@ -42,7 +42,7 @@ struct DecisiveCheckingTests {
         #expect(result.violations == [.deadlock])
         #expect(result.trace.map { $0.state.state.value } == [0, 2])
         #expect(result.unevaluatedProperties == deadlock.checking.properties)
-        let exhaustive = try #require(scenarios.first { $0.name == "Exhaustive" })
+        let exhaustive = try #require(scenarios.first { $0.name == "exhaustive" })
         guard case .exhausted(let graph) = try exhaustive.check(maximumStates: 3) else {
             Issue.record("Disabled deadlock checking must permit exhaustion")
             return
@@ -54,7 +54,7 @@ struct DecisiveCheckingTests {
 
     @Test("disabled invariants and resource cutoffs cannot produce counterexample success")
     func preservesIncompleteResults() throws {
-        let scenario = try #require(DecisiveCounter.validationScenarios().first { $0.name == "Infinite" })
+        let scenario = try #require(DecisiveCounter.validationScenarios().first { $0.name == "infinite" })
         #expect(throws: ExplorationError.stateLimitExceeded(3)) {
             _ = try ReachabilityGraph.check(initialMachines: scenario.initialMachines(), maximumStates: 3,
                                             checking: .init(properties: [], checkDeadlock: false))

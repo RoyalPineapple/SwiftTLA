@@ -16,14 +16,18 @@ struct DecisiveCounter {
             belowThree { value < 3 }
             let nonnegative = Temporal()
             nonnegative(.always(value >= 0))
-            Validation("Infinite") { Bind(start, to: 0); Bind(unbounded, to: true) }
+            let infinite = Validation(label: "Infinite") { Bind(start, to: 0); Bind(unbounded, to: true) }
                 .expect(belowThree, .violated)
-            Validation("Initial violation") { Bind(start, to: 3); Bind(unbounded, to: true) }
+            infinite
+            let initialViolation = Validation(label: "Initial violation") { Bind(start, to: 3); Bind(unbounded, to: true) }
                 .expect(belowThree, .violated)
-            Validation("Deadlock") { Bind(start, to: 0); Bind(unbounded, to: false) }
+            initialViolation
+            let deadlock = Validation(label: "Deadlock") { Bind(start, to: 0); Bind(unbounded, to: false) }
                 .expectDeadlock(.violated)
-            Validation("Exhaustive") { Bind(start, to: 0); Bind(unbounded, to: false) }
+            deadlock
+            let exhaustive = Validation(label: "Exhaustive") { Bind(start, to: 0); Bind(unbounded, to: false) }
                 .checkingDeadlock(false)
+            exhaustive
         }
     }
 }
@@ -35,16 +39,18 @@ struct DecisiveConstraintCounter {
     static var spec: TLASpec {
         #spec("DecisiveConstraintCounter") { scope in
             let value = scope.sharedVar(initial: 0)
-            Algorithm("Counter") {
+            let counter = Algorithm(label: "Counter") {
                 Do(Step.advance) {
                     Assign(value, to: value + 1)
                     Goto(Step.advance)
                 }
                 StateConstraint(value < 2)
             }
+            counter
             let belowTwo = Invariant()
             belowTwo { value < 2 }
-            Validation("Boundary") {}.expect(belowTwo, .violated)
+            let boundary = Validation(label: "Boundary") {}.expect(belowTwo, .violated)
+            boundary
         }
     }
 }

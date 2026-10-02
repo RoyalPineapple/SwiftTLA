@@ -10,7 +10,7 @@ struct SavedValuesMachine {
             let value = scope.sharedVar(_name: "value", initial: 1)
             let result = scope.sharedVar(_name: "result", initial: 0)
             let valid = scope.sharedVar(_name: "valid", initial: false)
-            Algorithm("Save") {
+            let save = Algorithm(label: "Save") {
                 Do(Step.save) {
                     let first = value
                     let second = first + 1
@@ -23,6 +23,7 @@ struct SavedValuesMachine {
                     }
                 }
             }
+            save
         }
     }
 }
