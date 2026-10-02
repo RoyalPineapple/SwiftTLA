@@ -1,10 +1,3 @@
-# Typed collections in `#spec`
-
-Use a typed model parameter to choose a finite population for each validation
-scenario. The population changes configuration data, not the generated Swift
-`State` or `Action` types.
-
-```swift
 import SwiftTLA
 import SwiftTLAMacros
 
@@ -38,24 +31,25 @@ struct DeviceContract {
         }
     }
 }
-```
 
-The algorithm defines one typed action family over the configured `devices`
-set. Its shared `phase` value is a function keyed by those process IDs. The
-scenario binds `count` once; native execution and TLA+ export use the same
-binding and transition program. A different valid count changes the process
-instances, not the generated type of `phase` or the action family.
-
-Application code uses the generated machine and typed actions:
-
-```swift
 let configuration = try DeviceContract.Configuration(count: 2)
 var machine = try DeviceContract.makeMachine(configuration: configuration)
-_ = try machine.send(.advance(process: 1))
-let firstPhase: Int? = machine.state.phase[1]
-```
+guard machine.state.phase == [1: 0, 2: 0] else {
+    throw FixtureError.invalidInitialState
+}
+let transition = try machine.send(.advance(process: 1))
+guard transition.after.phase == [1: 1, 2: 0], machine.state.phase == transition.after.phase else {
+    throw FixtureError.invalidTransition
+}
+let scenarios = try DeviceContract.validationScenarios()
+guard scenarios.count == 1,
+      scenarios[0].checking.properties == [.NonnegativePhase],
+      try scenarios[0].render().tlaBundle.cfg.contains("CONSTANT count = 2") else {
+    throw FixtureError.invalidScenario
+}
 
-The checker treats members as distinct unless the model explicitly declares
-and justifies symmetry. A collection or process population alone never enables
-symmetry reduction. See [DSLDesign.md](DSLDesign.md) for the configuration and
-symmetry contracts.
+private enum FixtureError: Error {
+    case invalidInitialState
+    case invalidTransition
+    case invalidScenario
+}

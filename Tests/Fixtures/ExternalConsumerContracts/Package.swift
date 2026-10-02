@@ -74,7 +74,7 @@ let package = Package(
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
-      name: "ReadmeModelCollectionMacro",
+      name: "ConfiguredPopulationConsumer",
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
