@@ -68,7 +68,7 @@ private struct TypedCollectionGeneratedModel {
 
     static var spec: TLASpec {
         #spec("TypedCollectionGeneratedModel") { scope in
-            Algorithm("TypedCollectionGeneratedModel", scoped: { algorithm in
+            let typedCollectionGeneratedModel = Algorithm(label: "TypedCollectionGeneratedModel", scoped: { algorithm in
                 let values = algorithm.sharedVar(_name: "values", initial: IntRange(1, through: 4))
                 Do(Step.keepEvenSquares) {
                     Assign(values, to:
@@ -78,6 +78,7 @@ private struct TypedCollectionGeneratedModel {
                     )
                 }
             })
+            typedCollectionGeneratedModel
         }
     }
 }
@@ -88,7 +89,7 @@ private struct TypedQuantifierGeneratedModel {
 
     static var spec: TLASpec {
         #spec("TypedQuantifierGeneratedModel") { scope in
-            Algorithm("TypedQuantifierGeneratedModel", scoped: { algorithm in
+            let typedQuantifierGeneratedModel = Algorithm(label: "TypedQuantifierGeneratedModel", scoped: { algorithm in
                 let result = algorithm.sharedVar(_name: "result", initial: false)
                 Do(Step.findEven) {
                     Assign(result, to: Exists(in: IntRange(1, through: 4)) { value in
@@ -107,6 +108,7 @@ private struct TypedQuantifierGeneratedModel {
                     Assign(result, to: Exists(in: IntRange(2, through: 1)) { value in value.expr >= 0 })
                 }
             })
+            typedQuantifierGeneratedModel
         }
     }
 }
@@ -117,12 +119,13 @@ private struct NonEmptySubsetGeneratedModel {
 
     static var spec: TLASpec {
         #spec("NonEmptySubsetGeneratedModel") {
-            Algorithm("NonEmptySubsetGeneratedModel", scoped: { scope in
+            let nonEmptySubsetGeneratedModel = Algorithm(label: "NonEmptySubsetGeneratedModel", scoped: { scope in
                 let selectedKeys = scope.sharedVar(_name: "selectedKeys", in: NonEmptySubsets(
                     of: SetExpr<Int>.literal(1, 2)
                 ))
                 Do(Step.keep) { Assign(selectedKeys, to: selectedKeys.expr) }
             })
+            nonEmptySubsetGeneratedModel
         }
     }
 }
@@ -133,7 +136,7 @@ private struct ZeroBasedSequenceGeneratedModel {
 
     static var spec: TLASpec {
         #spec("ZeroBasedSequenceGeneratedModel") {
-            Algorithm("ZeroBasedSequenceGeneratedModel", scoped: { scope in
+            let zeroBasedSequenceGeneratedModel = Algorithm(label: "ZeroBasedSequenceGeneratedModel", scoped: { scope in
                 let input = scope.sharedVar(_name: "input", in: ZeroBasedSequences(
                     of: SetExpr<Int>.literal(0, 1),
                     lengths: 1...2
@@ -147,6 +150,7 @@ private struct ZeroBasedSequenceGeneratedModel {
                     Assign(table, to: table.updating(0, to: input[0]))
                 }
             })
+            zeroBasedSequenceGeneratedModel
         }
     }
 }
@@ -167,7 +171,7 @@ private struct ContextualCollectionModel {
 
     static var spec: TLASpec {
         #spec("ContextualCollectionModel") {
-            Algorithm("ContextualCollectionModel", scoped: { scope in
+            let contextualCollectionModel = Algorithm(label: "ContextualCollectionModel", scoped: { scope in
                 let table = scope.sharedVar(_name: "table", initial: Function<Key, Entry>.literal(
                     (Key.first, Entry.first), (Key.second, Entry.first)))
                 let selected: SharedVariable<Entry> = scope.sharedVar(_name: "selected", initial: .first)
@@ -180,6 +184,7 @@ private struct ContextualCollectionModel {
                     Assign(selected, to: table.updating(.second, to: .second)[.first])
                 }
             })
+            contextualCollectionModel
         }
     }
 }
@@ -191,7 +196,7 @@ private struct FoldGeneratedModel {
     static var spec: TLASpec {
         #spec("FoldGeneratedModel") {
             Import(FunctionsModule.module)
-            Algorithm("FoldGeneratedModel", scoped: { scope in
+            let foldGeneratedModel = Algorithm(label: "FoldGeneratedModel", scoped: { scope in
                 let values = scope.sharedVar(_name: "values", initial: TupleExpr<Int>.literal(1, 2, 3))
                 let total = scope.sharedVar(_name: "total", initial: 0)
                 Do(Step.sum) {
@@ -200,6 +205,7 @@ private struct FoldGeneratedModel {
                     })
                 }
             })
+            foldGeneratedModel
         }
     }
 }

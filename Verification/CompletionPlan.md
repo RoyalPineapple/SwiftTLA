@@ -137,6 +137,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       algorithm identities; 16 focused guarded actor, generated-machine,
       execution-boundary, and temporal tests passed locally. Parser source
       samples and direct formal-core builder tests remain separately classified.
+      Generated formal-union, formal-operator, local-operator, typed-collection,
+      imported-module, and compiler-pipeline test models now use bound
+      algorithm identities. Their 164 focused guarded tests passed locally;
+      direct formal-core builder cases in those files remain unchanged.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck

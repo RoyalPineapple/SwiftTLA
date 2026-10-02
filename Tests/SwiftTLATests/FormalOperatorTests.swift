@@ -19,12 +19,13 @@ private struct GeneratedHigherOrderFormalModel {
           ))]
         )
       )
-      Algorithm("GeneratedHigherOrderFormalModel", scoped: { scope in
+      let generatedHigherOrderFormalModel = Algorithm(label: "GeneratedHigherOrderFormalModel", scoped: { scope in
         let counter = scope.sharedVar(_name: "counter", initial: 0)
         Do(Step.advance) {
           Assign(counter, to: counter.expr + 1)
         }
       })
+      generatedHigherOrderFormalModel
     }
   }
 }

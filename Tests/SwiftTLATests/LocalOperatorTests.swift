@@ -56,12 +56,13 @@ private struct GeneratedTypedLocalRecursionModel {
           If(number == 0, then: 0, else: recursion(number.expr - 1))
         }, in: { recursion in recursion(4) })
       )
-      Algorithm("GeneratedTypedLocalRecursionModel", scoped: { scope in
+      let generatedTypedLocalRecursionModel = Algorithm(label: "GeneratedTypedLocalRecursionModel", scoped: { scope in
         let counter = scope.sharedVar(_name: "counter", initial: 0)
         Do(Step.advance) {
           Assign(counter, to: counter.expr + 1)
         }
       })
+      generatedTypedLocalRecursionModel
     }
   }
 }
@@ -77,12 +78,13 @@ private struct GeneratedTypedFormalDefinitionAlgorithm {
           If(current == 0, then: true, else: recursion(current.expr - 1))
         }, in: { recursion in recursion(ballot) })
       }
-      Algorithm("GeneratedTypedFormalDefinitionAlgorithm", scoped: { scope in
+      let generatedTypedFormalDefinitionAlgorithm = Algorithm(label: "GeneratedTypedFormalDefinitionAlgorithm", scoped: { scope in
         let counter = scope.sharedVar(_name: "counter", initial: 0)
         Do(Step.advance) {
           Assign(counter, to: counter.expr + 1)
         }
       })
+      generatedTypedFormalDefinitionAlgorithm
     }
   }
 }
@@ -100,11 +102,12 @@ private struct GeneratedTopLevelTypedFormalDefinitionModel {
           If(current == 0, then: true, else: recursion(current.expr - 1))
         }, in: { recursion in recursion(ballot) })
       }
-      Algorithm("GeneratedTopLevelTypedFormalDefinitionModel") {
+      let generatedTopLevelTypedFormalDefinitionModel = Algorithm(label: "GeneratedTopLevelTypedFormalDefinitionModel") {
         Do(Step.advance) {
           Assign(counter, to: counter.expr + 1)
         }
       }
+      generatedTopLevelTypedFormalDefinitionModel
     }
   }
 }

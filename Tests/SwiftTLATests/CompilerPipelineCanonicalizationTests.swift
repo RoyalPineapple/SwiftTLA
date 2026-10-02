@@ -42,12 +42,13 @@ private struct CompilerPipelineGeneratedModel {
 
     static var spec: TLASpec {
         #spec("CompilerPipelineGeneratedModel") {
-            Algorithm("CompilerPipelineGeneratedModel", scoped: { scope in
+            let compilerPipelineGeneratedModel = Algorithm(label: "CompilerPipelineGeneratedModel", scoped: { scope in
                 let counter = scope.sharedVar(_name: "counter", initial: 0)
                 Do(Step.increment) {
                     Assign(counter, to: counter + 1)
                 }
             })
+            compilerPipelineGeneratedModel
         }
     }
 }
@@ -58,12 +59,13 @@ private struct CompilerPipelineExplicitFormalNameModel {
 
     static var spec: TLASpec {
         #spec("CompilerPipelineExplicitFormalName") {
-            Algorithm("CompilerPipelineExplicitFormalName", scoped: { scope in
+            let compilerPipelineExplicitFormalName = Algorithm(label: "CompilerPipelineExplicitFormalName", scoped: { scope in
                 let counter = scope.sharedVar(_name: "counter", initial: 0)
                 Do(Step.increment) {
                     Assign(counter, to: counter + 1)
                 }
             })
+            compilerPipelineExplicitFormalName
         }
     }
 }
@@ -74,12 +76,13 @@ private struct CompilerPipelineAlgorithmModel {
 
     static var spec: TLASpec {
         #spec("CompilerPipelineAlgorithmModel") {
-            Algorithm("CompilerPipelineAlgorithmModel", scoped: { scope in
+            let compilerPipelineAlgorithmModel = Algorithm(label: "CompilerPipelineAlgorithmModel", scoped: { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(Step.increment) {
                     Assign(count, to: count + 1)
                 }
             })
+            compilerPipelineAlgorithmModel
         }
     }
 }
@@ -90,7 +93,7 @@ private struct CompilerPipelineInitializationModel {
 
     static var spec: TLASpec {
         #spec("CompilerPipelineInitializationModel") {
-            Algorithm("CompilerPipelineInitializationModel", scoped: { scope in
+            let compilerPipelineInitializationModel = Algorithm(label: "CompilerPipelineInitializationModel", scoped: { scope in
                 let seed = scope.sharedVar(_name: "seed", initial: 0)
                 let computed: SharedVariable<Int> = scope.sharedVar(_name: "computed", initial: seed + 1)
                 let choice = scope.sharedVar(_name: "choice", in: SetExpr<Int>.literal(1, 2))
@@ -99,6 +102,7 @@ private struct CompilerPipelineInitializationModel {
                     Assign(choice, to: choice)
                 }
             })
+            compilerPipelineInitializationModel
         }
     }
 }
