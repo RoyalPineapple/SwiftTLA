@@ -133,6 +133,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       including external-consumer compilation. No positional Algorithm or
       Validation calls remain in the shared fixture files; test bodies and
       direct formal-core cases remain to classify and migrate as applicable.
+      Five test-body files containing actual `@TLAModel` models now use bound
+      algorithm identities; 16 focused guarded actor, generated-machine,
+      execution-boundary, and temporal tests passed locally. Parser source
+      samples and direct formal-core builder tests remain separately classified.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck

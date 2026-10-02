@@ -35,13 +35,14 @@ private struct UnreachableCounter {
 
     static var spec: TLASpec {
         #spec("UnreachableCounter") {
-            Algorithm("Counter", fairness: .weak, scoped: { scope in
+            let counter = Algorithm(label: "Counter", fairness: .weak, scoped: { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 While(Step.advance, true) {
                     Assign(count, to: 1 - count)
                 }
                 Eventually("ReachesTwo", count == 2)
             })
+            counter
         }
     }
 }

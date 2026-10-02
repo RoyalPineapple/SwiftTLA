@@ -8,10 +8,11 @@ public struct TransferableCounter {
     enum Step: String, CaseIterable { case advance }
     static var spec: TLASpec {
         #spec("TransferableCounter") {
-            Algorithm("TransferableCounter", scoped: { scope in
+            let transferableCounter = Algorithm(label: "TransferableCounter", scoped: { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(Step.advance) { Assign(count, to: count + 1) }
             })
+            transferableCounter
         }
     }
 }
@@ -21,10 +22,11 @@ public struct ExplicitlyTransferableCounter: Sendable {
     enum Step: String, CaseIterable { case advance }
     static var spec: TLASpec {
         #spec("ExplicitlyTransferableCounter") {
-            Algorithm("ExplicitlyTransferableCounter", scoped: { scope in
+            let explicitlyTransferableCounter = Algorithm(label: "ExplicitlyTransferableCounter", scoped: { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(Step.advance) { Assign(count, to: count + 1) }
             })
+            explicitlyTransferableCounter
         }
     }
 }
