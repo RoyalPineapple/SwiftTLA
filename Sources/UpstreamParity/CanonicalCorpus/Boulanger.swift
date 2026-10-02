@@ -22,7 +22,7 @@ package struct BoulangerModel: Sendable {
             let TypeOK = Invariant()
             let Inv = Invariant()
             let MutualExclusion = Invariant()
-            Algorithm("Boulanger", scoped: { scope in
+            let Boulanger = Algorithm(scoped: { scope in
                 let num: SharedVariable<[Int: Int]> = scope.sharedVar(initial: Dictionary<Int, Int>.mapping(over: Procs) { _ in 0 })
                 let flag: SharedVariable<[Int: Bool]> = scope.sharedVar(initial: Dictionary<Int, Bool>.mapping(over: Procs) { _ in false })
 
@@ -180,10 +180,12 @@ package struct BoulangerModel: Sendable {
                     }
                 }
             })
-            Validation("MCBoulanger") {
+            Boulanger
+            let MCBoulanger = Validation {
                 Bind(N, to: 3)
                 Bind(MaxNat, to: 3)
             }
+            MCBoulanger
         }
     }
 }

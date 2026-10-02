@@ -92,7 +92,7 @@ package struct KVsnapModel: Sendable {
                 parameters: [],
                 body: Function<Key, Value>.mapping { _ in Value.second(Expr<NoValue>(.noVal)) }.raw
             )
-            Algorithm("KVsnap", scoped: { scope in
+            let KVsnap = Algorithm(scoped: { scope in
                 let store: SharedVariable<Function<Key, Value>> = scope.sharedVar(initial: FormalCall("InitialState"))
                 let tx = scope.sharedVar(initial: SetExpr<Transaction>())
                 let missed = scope.sharedVar(initial: Function<Transaction, SetExpr<Key>>.mapping { _ in SetExpr<Key>() })
@@ -190,7 +190,9 @@ package struct KVsnapModel: Sendable {
                 }
                 Eventually("Termination", ForAll(Transaction.all) { Finished($0) })
             })
-            Validation("MCKVsnap") {}
+            KVsnap
+            let MCKVsnap = Validation {}
+            MCKVsnap
         }
     }
 }

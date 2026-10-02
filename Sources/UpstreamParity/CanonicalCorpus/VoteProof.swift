@@ -62,7 +62,7 @@ package struct VoteProofModel: Sendable {
             )
             Refines
 
-            let algorithm: Algorithm = Algorithm("Voting", scoped: { scope in
+            let Voting: Algorithm = Algorithm(scoped: { scope in
                 let votes = scope.sharedVar(initial: Function<Acceptor, SetExpr<Pair<Int, Value>>>.mapping { _ in SetExpr() })
                 let maxBal = scope.sharedVar(initial: Function<Acceptor, Int>.mapping { _ in -1 })
                 let values = SetExpr<Value>.literal(.v1, .v2)
@@ -241,8 +241,9 @@ package struct VoteProofModel: Sendable {
                     }
                 }
             })
-            algorithm
-            Validation("VoteProof") {}.checkingDeadlock(false)
+            Voting
+            let VoteProof = Validation {}.checkingDeadlock(false)
+            VoteProof
 
         }
     }
