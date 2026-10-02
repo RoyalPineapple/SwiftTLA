@@ -4,6 +4,7 @@ package enum FiniteExplorationConfigurationError: Error, Sendable, Equatable {
     case symmetryReductionWithoutDeclarations
     case permutationLimitExceeded(required: Int, limit: Int)
     case symmetryReductionRequiresSafetyOnly
+    case symmetryReductionNotSupportedByFormalExplorer
 }
 
 /// Whether a rendered TLA+ bundle enables its declared symmetry reduction.
@@ -128,6 +129,9 @@ package struct ModelChecker {
             compilation: compilation,
             reduction: configuration.symmetryReduction
         )
+        if case .enabled = configuration.symmetryReduction {
+            throw FiniteExplorationConfigurationError.symmetryReductionNotSupportedByFormalExplorer
+        }
         let runtime = CompiledRuntime(compilation: compilation)
         let initialStates = try runtime.initialStates()
         guard !initialStates.isEmpty else {

@@ -4,65 +4,6 @@ import Testing
 import UpstreamParity
 
 struct SymmetryReductionTests {
-  @Test("Direct symmetry produces the exact orbit graph")
-  func directValueSymmetry() throws {
-    let spec = TLASpec("SymTest") {
-      let owner = Var<LeftNode>("owner")
-      Variable(owner, in: Set(LeftNode.allCases))
-      Action("stay") { owner.stays }
-      Symmetry("owner", Set(LeftNode.allCases))
-    }
-    let compilation = try spec.compile()
-    let raw = try ModelChecker(
-      compilation: compilation,
-      configuration: FiniteExplorationConfiguration(
-        maximumStateLimit: 100,
-        symmetryReduction: .disabled)
-    ).explore().graph
-    let reduced = try ModelChecker(
-      compilation: compilation,
-      configuration: FiniteExplorationConfiguration(
-      maximumStateLimit: 100,
-      symmetryReduction: .enabled(maximumPermutationCount: 2))
-    ).explore().graph
-
-    #expect(raw.states.count == 2)
-    #expect(raw.transitions.values.flatMap { $0 }.count == 2)
-    #expect(reduced.states.count == 1)
-    #expect(reduced.transitions.values.flatMap { $0 }.count == 1)
-  }
-
-  @Test("Independent direct symmetry domains produce the exact product orbit")
-  func multipleSymmetrySets() throws {
-    let spec = TLASpec("MultiSym") {
-      let left = Var<LeftNode>("left")
-      let right = Var<RightNode>("right")
-      Variable(left, in: Set(LeftNode.allCases))
-      Variable(right, in: Set(RightNode.allCases))
-      Action("stay") { left.stays && right.stays }
-      Symmetry("left", Set(LeftNode.allCases))
-      Symmetry("right", Set(RightNode.allCases))
-    }
-    let compilation = try spec.compile()
-    let raw = try ModelChecker(
-      compilation: compilation,
-      configuration: FiniteExplorationConfiguration(
-        maximumStateLimit: 100,
-        symmetryReduction: .disabled)
-    ).explore().graph
-    let reduced = try ModelChecker(
-      compilation: compilation,
-      configuration: FiniteExplorationConfiguration(
-        maximumStateLimit: 100,
-        symmetryReduction: .enabled(maximumPermutationCount: 4))
-    ).explore().graph
-
-    #expect(raw.states.count == 4)
-    #expect(raw.transitions.values.flatMap { $0 }.count == 4)
-    #expect(reduced.states.count == 1)
-    #expect(reduced.transitions.values.flatMap { $0 }.count == 1)
-  }
-
   @Test("Empty symmetry sets are no-op")
   func emptySymmetryNoOp() throws {
     let spec = TLASpec("NoSym") {

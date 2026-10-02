@@ -203,10 +203,7 @@ struct ModelCollectionValidationTests {
       required: 36,
       limit: 35
     )) {
-      try ModelChecker(
-        compilation: compilation,
-        configuration: reducedConfiguration
-      ).check()
+      _ = try SymmetryPlan(compilation: compilation, reduction: reducedConfiguration.symmetryReduction)
     }
   }
 

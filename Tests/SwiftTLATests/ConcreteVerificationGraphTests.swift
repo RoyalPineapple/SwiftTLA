@@ -44,9 +44,11 @@ struct ConcreteVerificationGraphTests {
             name: specification.name, variables: specification.variables,
             actions: specification.actions, invariants: [], symmetrySets: specification.symmetrySets
         )
-        #expect(try ModelChecker(compilation: safetyOnly.compile(), configuration: .init(
-            maximumStateLimit: 10, symmetryReduction: .enabled(maximumPermutationCount: 2)
-        )).explore().graph.states.count == 1)
+        #expect(throws: FiniteExplorationConfigurationError.symmetryReductionNotSupportedByFormalExplorer) {
+            _ = try ModelChecker(compilation: safetyOnly.compile(), configuration: .init(
+                maximumStateLimit: 10, symmetryReduction: .enabled(maximumPermutationCount: 2)
+            )).explore()
+        }
     }
 
     @Test("refinement rejects reduction that could hide an unmapped concrete step")

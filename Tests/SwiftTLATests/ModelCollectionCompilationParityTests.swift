@@ -10,21 +10,11 @@ struct ModelCollectionCompilationParityTests {
     let id: Int
   }
 
-  @Test("Symmetric scopes two through four retain model-value orbit counts")
-  func scopesRetainModelValueOrbitCounts() throws {
+  @Test("Symmetric scopes two through four retain complete states and model-value export")
+  func scopesRetainCompleteStatesAndModelValues() throws {
     for scope in 2...4 {
       let spec = symmetricSpec(scope: scope)
       let compilation = try spec.compile()
-      let reducedConfiguration = try FiniteExplorationConfiguration(
-        maximumStateLimit: 100_000,
-        symmetryReduction: .enabled(maximumPermutationCount: 100_000))
-      let reduced = try ModelChecker(
-        compilation: compilation,
-        configuration: reducedConfiguration
-      ).explore()
-
-      #expect(reduced.graph.states.count == scope + 1)
-      #expect(reduced.isComplete)
       let bundle = try compilation.render().tlaBundle
       #expect(bundle.tla.contains("DevicesKeys == {DevicesMember0"))
       #expect(bundle.cfg.contains("CONSTANT DevicesMember\(scope - 1) = DevicesMember\(scope - 1)"))
@@ -70,7 +60,7 @@ struct ModelCollectionCompilationParityTests {
     #expect(parsedInitialStates == builtInitialStates)
     let configuration = try FiniteExplorationConfiguration(
       maximumStateLimit: 100_000,
-      symmetryReduction: .enabled(maximumPermutationCount: 100_000))
+      symmetryReduction: .disabled)
     #expect(try ModelChecker(compilation: parsedCompilation, configuration: configuration).check().description
       == ModelChecker(compilation: builtCompilation, configuration: configuration).check().description)
   }

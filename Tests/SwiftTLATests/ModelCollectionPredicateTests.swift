@@ -190,8 +190,8 @@ struct ModelCollectionPredicateTests {
       == direct.collections.map(\.metadata))
     #expect(parsedCompilation.identity == directCompilation.identity)
     #expect(try renderedInitialStates(in: parsedCompilation) == renderedInitialStates(in: directCompilation))
-    #expect(try ModelChecker(compilation: parsedCompilation, configuration: symmetricExplorationConfiguration()).check().description
-      == ModelChecker(compilation: directCompilation, configuration: symmetricExplorationConfiguration()).check().description)
+    #expect(try ModelChecker(compilation: parsedCompilation, configuration: explorationConfiguration()).check().description
+      == ModelChecker(compilation: directCompilation, configuration: explorationConfiguration()).check().description)
   }
 
   @Test("Parser lowers shorthand collection predicates in ordinary action guards")
@@ -244,7 +244,7 @@ struct ModelCollectionPredicateTests {
     #expect(parsed.invariants.count == 2)
     #expect(try ModelChecker(
       compilation: compilation,
-      configuration: symmetricExplorationConfiguration()
+      configuration: explorationConfiguration()
     ).check().description.contains("OK"))
   }
 
@@ -267,11 +267,11 @@ struct ModelCollectionPredicateTests {
     #expect(parsed.diagnostics.isEmpty)
     let parsedOutcome = try ModelChecker(
       compilation: parsedCompilation,
-      configuration: symmetricExplorationConfiguration()
+      configuration: explorationConfiguration()
     ).check()
     let directOutcome = try ModelChecker(
       compilation: try direct.compile(),
-      configuration: symmetricExplorationConfiguration()
+      configuration: explorationConfiguration()
     ).check()
     #expect(parsedOutcome.description == directOutcome.description)
     guard case .invariantViolated(let name, _, _) = parsedOutcome else {
@@ -377,10 +377,10 @@ struct ModelCollectionPredicateTests {
     try #require(Parser.parse(source: source).statements.first?.item.as(ClosureExprSyntax.self))
   }
 
-  private func symmetricExplorationConfiguration() throws -> FiniteExplorationConfiguration {
+  private func explorationConfiguration() throws -> FiniteExplorationConfiguration {
     try FiniteExplorationConfiguration(
       maximumStateLimit: 100_000,
-      symmetryReduction: .enabled(maximumPermutationCount: 100_000))
+      symmetryReduction: .disabled)
   }
 
   private func directPredicateSpec() -> TLASpec {
