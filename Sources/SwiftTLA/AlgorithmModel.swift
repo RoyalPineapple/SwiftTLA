@@ -239,6 +239,7 @@ package struct AlgorithmModel: Sendable {
 
 internal struct AuthoredPlusCalAlgorithmPlan: Sendable {
     let name: String
+    let renderedName: String
     let sequentialFairness: SequentialAlgorithmFairness
     let shared: [AlgorithmStateModel]
     let procedures: [AlgorithmProcedureModel]
@@ -248,6 +249,12 @@ internal struct AuthoredPlusCalAlgorithmPlan: Sendable {
     init(_ source: AlgorithmModel) {
         let algorithm = source.plusCalProjection()
         var used = algorithm.authoredIdentifiers
+        var renderedName = algorithm.name
+        while isPlusCalDeclarationName(renderedName) == false {
+            renderedName = "_\(renderedName)"
+        }
+        renderedName = StateExpr.freshBoundName(renderedName, avoiding: used)
+        used.insert(renderedName)
         let processNames = algorithm.processes.indices.map { index in
             let stem = "pcalProcess\(index + 1)"
             var candidate = stem
@@ -261,6 +268,7 @@ internal struct AuthoredPlusCalAlgorithmPlan: Sendable {
         }
 
         name = algorithm.name
+        self.renderedName = renderedName
         sequentialFairness = algorithm.sequentialFairness
         shared = algorithm.components.compactMap {
             guard case .shared(let declaration) = $0 else { return nil }

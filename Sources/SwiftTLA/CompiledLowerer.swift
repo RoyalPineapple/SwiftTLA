@@ -509,7 +509,7 @@ struct CompiledLowerer {
         }
         let propertyPlan = try authoredPlusCalProperties(in: authoredAlgorithm)
         return .init(
-            name: plan.name,
+            name: plan.renderedName,
             sequentialFairness: plan.sequentialFairness,
             shared: try plan.shared.enumerated().map {
                 try authoredPlusCalState(

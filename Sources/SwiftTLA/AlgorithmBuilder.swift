@@ -1522,7 +1522,11 @@ public func Skip() -> StepStatement {
 package enum AlgorithmValidator {
     package static func validate(_ model: AlgorithmModel) -> [AlgorithmDiagnostic] {
         var diagnostics: [AlgorithmDiagnostic] = []
-        validateName(model.name, at: .algorithm, diagnostics: &diagnostics)
+        if model.name.hasPrefix("__pcal_") {
+            diagnostics.append(AlgorithmDiagnostic(.reservedName, at: .algorithm))
+        } else if isFormalIdentifier(model.name) == false {
+            diagnostics.append(AlgorithmDiagnostic(.invalidName, at: .algorithm))
+        }
         let procedureNames = model.procedures.map(\.name)
         let procedures = Set(procedureNames)
         let procedureArities = model.procedures.reduce(into: [String: Int]()) {

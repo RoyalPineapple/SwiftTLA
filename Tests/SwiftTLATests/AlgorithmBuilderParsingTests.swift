@@ -437,28 +437,30 @@ import SwiftTLAMacros
         #expect(module.contains("frontier \\in {<<1, 2>>, <<2, 1>>}"))
     }
 
-    @Test("Specification parser binds a typed local algorithm component")
+    @Test("Specification parser preserves a bound algorithm identity when PlusCal reserves its spelling")
     func bindsTypedLocalAlgorithmComponent() throws {
         let source = """
         {
-            let counter: Algorithm = Algorithm(scoped: { scope in
-                let count = scope.sharedVar(_name: "count", initial: 0)
+            let algorithm: Algorithm = Algorithm(scoped: { scope in
+                let _algorithm = scope.sharedVar(_name: "_algorithm", initial: 0)
                 Do(TestControlLabel.increment) {
-                    Assign(count, to: count + 1)
+                    Assign(_algorithm, to: _algorithm + 1)
                     Stop()
                 }
             })
-            counter
+            algorithm
         }
         """
         let parsed = parseAlgorithm(try parseSpecTestClosure(source))
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.sourceAlgorithms.count == 1)
-        #expect(parsed.sourceAlgorithms.map(\.model.name) == ["counter"])
+        #expect(parsed.sourceAlgorithms.map(\.model.name) == ["algorithm"])
         let compilation = try compile(parsed, named: "Counter")
-        #expect(compilation.description.variables.map(\.name) == ["pc", "count"])
+        #expect(compilation.description.algorithms.map(\.name) == ["algorithm"])
+        #expect(compilation.description.variables.map(\.name) == ["pc", "_algorithm"])
         #expect(compilation.description.actions.map(\.name) == ["increment", "Terminating"])
+        #expect(try compilation.render().plusCalBundle().root.tla.contains("(*--algorithm _algorithm_1 {"))
     }
 
     @Test("ModelCollection rejects unused arguments and closures")
