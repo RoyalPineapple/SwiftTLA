@@ -24,15 +24,15 @@ struct NativeGraphExportTests {
         }
     }
 
-    @Test("native projection matches the independent formal exporter")
-    func matchesIndependentExporter() throws {
+    @Test("native projection preserves the complete two-state labeled cycle")
+    func preservesCompleteLabeledCycle() throws {
         let native = try ReachabilityGraph(initialMachines: CyclicExportModel.initialMachines(), maximumStates: 2)
-        let formal = try ModelChecker(
-            compilation: CyclicExportModel.spec.compile(),
-            configuration: .init(maximumStateLimit: 2, symmetryReduction: .disabled)
-        ).explore()
-        try #require(formal.isComplete)
-        let expected = try FormalGraphExporter().export(formal).graph
+        let zero = CanonicalState(bindings: ["value": .integer(0)])
+        let one = CanonicalState(bindings: ["value": .integer(1)])
+        let expected = try CanonicalGraph(initialStates: [zero], states: [zero, one], edges: [
+            .init(source: zero.key, action: "advance", target: one.key),
+            .init(source: one.key, action: "advance", target: zero.key)
+        ])
         #expect(try CanonicalGraph(native) == expected)
     }
 
