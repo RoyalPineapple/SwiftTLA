@@ -34,8 +34,10 @@ package struct TransitionPropertyClaims {
                     .eventually(value.count == limit)
                 ]),
                 else: .eventually(value.count == 1)))
-            Validation("Two") { Bind(limit, to: 2) }.expect(preservesParity, .violated)
-            Validation("Three") { Bind(limit, to: 3) }.expect(preservesParity, .violated)
+            let Two = Validation { Bind(limit, to: 2) }.expect(preservesParity, .violated)
+            Two
+            let Three = Validation { Bind(limit, to: 3) }.expect(preservesParity, .violated)
+            Three
         }
     }
 }

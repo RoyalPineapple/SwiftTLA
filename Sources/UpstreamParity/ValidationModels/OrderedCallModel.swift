@@ -10,7 +10,7 @@ package struct OrderedCallModel {
         #spec("OrderedCall") { scope in
             let input = scope.sharedVar(initial: 0)
             let output = scope.sharedVar(initial: 0)
-            Algorithm("OrderedCall") {
+            let OrderedCall = Algorithm {
                 Procedure(ProcedureName.copy, parameters: Int.self) { value in
                     Do(Step.enter) {
                         Assign(output, to: value.expr)
@@ -23,7 +23,9 @@ package struct OrderedCallModel {
                 }
                 Do(Step.finished) { Stop() }
             }
-            Validation("Complete") {}
+            OrderedCall
+            let Complete = Validation {}
+            Complete
         }
     }
 }

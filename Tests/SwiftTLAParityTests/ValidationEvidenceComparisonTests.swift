@@ -380,14 +380,14 @@ struct ValidationEvidenceComparisonTests {
         let tlc = root.appendingPathComponent("oracle/tlc-graph")
         try FileManager.default.createDirectory(at: native, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: tlc, withIntermediateDirectories: true)
-        let name = scenarioName ?? (graphComplete ? "Graph only" : "All")
+        let name = scenarioName ?? (graphComplete ? "graphOnly" : "All")
         let scenario = try #require(SelectedChecksModel.validationScenarios().first { $0.name == name })
         let rendered = try scenario.render()
         let graphChecks = rendered.checkNames.intersection(
             rendered.invariantNames.union(rendered.reachabilityNames))
         let graphBundle = try rendered.tlaBundle(checking: graphChecks,
             checkDeadlock: rendered.checksDeadlock)
-        let retainedCheck = graphComplete && name != "Graph only" && !skipCheckedPass
+        let retainedCheck = graphComplete && name != "graphOnly" && !skipCheckedPass
         let graphInput = retainedCheck
             ? try rendered.tlaBundle(checking: [], checkDeadlock: false)
             : graphBundle

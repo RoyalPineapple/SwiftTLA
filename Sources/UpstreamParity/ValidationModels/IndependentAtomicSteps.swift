@@ -34,7 +34,8 @@ package struct IndependentAtomicSteps {
                 Assign(copied, to: value)
             }
             ordered { value == copied && value >= 0 && value <= 2 }
-            Validation("Complete") {}
+            let Complete = Validation {}
+            Complete
         }
     }
 }

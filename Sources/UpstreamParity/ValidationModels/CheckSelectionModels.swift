@@ -8,12 +8,13 @@ struct SelectedChecksModel {
     static var spec: TLASpec {
         #spec("SelectedChecks") { scope in
             let value = scope.sharedVar(initial: 0)
-            Algorithm("Advance") {
+            let Advance = Algorithm {
                 Do(Step.advance, when: value == 0) {
                     Assign(value, to: 1)
                     Goto(Step.advance)
                 }
             }
+            Advance
             let safe = Invariant("Safe") { value >= 0 }
             let initiallyZero = Invariant("InitiallyZero") { value == 0 }
             let reached = Reachable("Reached") { value == 1 }
@@ -22,10 +23,13 @@ struct SelectedChecksModel {
             initiallyZero
             reached
             staysZero
-            Validation("All") {}
+            let All = Validation {}
                 .expect(initiallyZero, .violated).expect(staysZero, .violated).expectDeadlock(.violated)
-            Validation("Selected") {}.checking(only: [safe, reached]).checkingDeadlock(false)
-            Validation("Graph only") {}.checking(only: []).checkingDeadlock(false)
+            All
+            let Selected = Validation {}.checking(only: [safe, reached]).checkingDeadlock(false)
+            Selected
+            let graphOnly = Validation(label: "Graph only") {}.checking(only: []).checkingDeadlock(false)
+            graphOnly
         }
     }
 }
@@ -37,16 +41,18 @@ struct UnselectedPredicateModel {
     static var spec: TLASpec {
         #spec("UnselectedPredicate") { scope in
             let divisor = scope.sharedVar(initial: 0)
-            Algorithm("Blocked") {
+            let Blocked = Algorithm {
                 Do(Step.wait, when: divisor < 0) { Goto(Step.wait) }
             }
+            Blocked
             let invariant = Invariant("UndefinedInvariant") { 1 / divisor == 0 }
             let goal = Reachable("UndefinedGoal") { 1 / divisor == 0 }
             let temporal = Always("UndefinedTemporal", 1 / divisor == 0)
             invariant
             goal
             temporal
-            Validation("Graph only") {}.checking(only: []).checkingDeadlock(false)
+            let graphOnly = Validation(label: "Graph only") {}.checking(only: []).checkingDeadlock(false)
+            graphOnly
         }
     }
 }

@@ -16,7 +16,8 @@ package struct RecursiveStep {
                     }, in: { sum in sum(4) }))
             }
             computed { total == 10 }
-            Validation("Complete") {}.expectDeadlock(.violated)
+            let Complete = Validation {}.expectDeadlock(.violated)
+            Complete
         }
     }
 }

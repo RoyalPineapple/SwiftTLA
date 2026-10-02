@@ -20,7 +20,8 @@ struct RefinementScenarioTests {
             #expect(rendered.refinementNames == ["UnitSteps"])
             #expect(rendered.invariantNames == ["bounded"])
             #expect(run.checks.properties["bounded"] == .satisfied)
-            if scenario.name == "Unit steps" {
+            if scenario.name == "unitSteps" {
+                #expect(scenario.displayName == "Unit steps")
                 #expect(scenario.expectations[.UnitSteps] == .satisfied)
                 #expect(graph.refinementFailures.isEmpty)
                 #expect(run.checks.properties["UnitSteps"] == .satisfied)

@@ -14,7 +14,7 @@ package struct LabelledPropertyClaims {
             let recurring = AlwaysEventually(label: "Safety / progress")
             let stable = EventuallyAlways(label: "Safety / progress")
             let response = LeadsTo(label: "Safety / progress")
-            Algorithm("Loop", scoped: { scope in
+            let Loop = Algorithm(scoped: { scope in
                 let value = scope.sharedVar(initial: 0)
                 Do(Step.stay) {
                     Assign(value, to: value)
@@ -28,10 +28,13 @@ package struct LabelledPropertyClaims {
                 stable(value == 0)
                 response(value == 0, value == 0)
             })
-            Validation("All") {}
+            Loop
+            let All = Validation {}
                 .expect(safe, .violated)
                 .expect(eventually, .violated)
-            Validation("Selected") {}.checking(only: [reachable, always])
+            All
+            let Selected = Validation {}.checking(only: [reachable, always])
+            Selected
         }
     }
 }

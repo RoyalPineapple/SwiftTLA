@@ -13,25 +13,28 @@ package struct ConstantStateClaims {
             let initialWitness = Reachable()
             let absentWitness = Reachable()
             let configuredWitness = Reachable()
-            Algorithm("Loop", scoped: { algorithm in
+            let Loop = Algorithm(scoped: { algorithm in
                 let value = algorithm.sharedVar(initial: 0)
                 Do(Step.stay) {
                     Assign(value, to: value)
                     Goto(Step.stay)
                 }
             })
+            Loop
             trueInvariant { true }
             falseInvariant { false }
             initialWitness { true }
             absentWitness { false }
             configuredWitness { enabled }
-            Validation("Enabled") { Bind(enabled, to: true) }
+            let Enabled = Validation { Bind(enabled, to: true) }
                 .expect(falseInvariant, .violated)
                 .expect(absentWitness, .violated)
-            Validation("Disabled") { Bind(enabled, to: false) }
+            Enabled
+            let Disabled = Validation { Bind(enabled, to: false) }
                 .expect(falseInvariant, .violated)
                 .expect(absentWitness, .violated)
                 .expect(configuredWitness, .violated)
+            Disabled
         }
     }
 }

@@ -18,7 +18,7 @@ package struct RefinementScenarioCounter {
                     }
                 })
             }
-            Algorithm("Loop", scoped: { scope in
+            let Loop = Algorithm(scoped: { scope in
                 let count = scope.sharedVar(initial: 0)
                 While(Step.advance, true) {
                     When(count < 2)
@@ -26,17 +26,20 @@ package struct RefinementScenarioCounter {
                 }
                 bounded { count <= 3 }
             })
+            Loop
             let target = Instance("Target", of: abstract)
             target
             let UnitSteps = Refinement(instance: target,
                 mappings: [.init(Var<Int>("value"), from: StateExpr.variable("count"))],
                 label: "Unit-step behavior")
             UnitSteps
-            Validation("Unit steps") { Bind(stride, to: 1) }
+            let unitSteps = Validation(label: "Unit steps") { Bind(stride, to: 1) }
                 .expectDeadlock(.violated)
-            Validation("Skipped step") { Bind(stride, to: 2) }
+            unitSteps
+            let skippedStep = Validation(label: "Skipped step") { Bind(stride, to: 2) }
                 .expect(UnitSteps, .violated)
                 .expectDeadlock(.violated)
+            skippedStep
         }
     }
 }

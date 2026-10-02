@@ -27,22 +27,26 @@ package struct ConfiguredDictionaryValues: Sendable {
             hasCapacity {
                 Exists(in: jugs, and: Set<Int>([3, 5])) { jug, amount in contents[jug] == amount } == !jugs.isEmpty
             }
-            Validation("Empty") {
+            let Empty = Validation {
                 Bind(jugs, to: Set<String>([]))
                 Bind(capacity, to: [:])
             }.expectDeadlock(.violated)
-            Validation("Typed empty") {
+            Empty
+            let typedEmpty = Validation(label: "Typed empty") {
                 Bind(jugs, to: Set<String>([]))
                 Bind(capacity, to: Dictionary<String, Int>())
             }.expectDeadlock(.violated)
-            Validation("One jug") {
+            typedEmpty
+            let oneJug = Validation(label: "One jug") {
                 Bind(jugs, to: Set<String>(["small"]))
                 Bind(capacity, to: ["small": 3])
             }
-            Validation("Two jugs") {
+            oneJug
+            let twoJugs = Validation(label: "Two jugs") {
                 Bind(jugs, to: Set<String>(["small", "big"]))
                 Bind(capacity, to: ["small": 3, "big": 5])
             }
+            twoJugs
         }
     }
 }

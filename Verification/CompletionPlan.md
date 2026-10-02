@@ -98,6 +98,14 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       affected teaching, Dining, HourClock2, Prisoner, Chang-Roberts, and
       inventory contracts passed locally; hosted parity for these edits is
       still pending.
+      The remaining 66 direct `#spec` Algorithm and Validation declarations in
+      validation models and conformance fixtures now use bound identities;
+      presentation-only labels retain readable scenario titles. A guarded
+      52-test batch covering selected checks, configured processes, records,
+      dictionaries, temporal checks, refinement, and binary evidence passed
+      locally. The nested formal-core `TLASpec("UnitCounter")` algorithm still
+      uses its explicit formal name; public positional authoring and parser
+      rejection are not complete.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck

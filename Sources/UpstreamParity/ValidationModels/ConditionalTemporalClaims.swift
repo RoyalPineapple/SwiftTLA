@@ -9,7 +9,7 @@ package struct ConditionalTemporalClaims {
         #spec { scope in
             let startsHere = Temporal()
             let missesOtherInitial = Temporal()
-            Algorithm("Converge", fairness: .weak, scoped: { algorithm in
+            let Converge = Algorithm(fairness: .weak, scoped: { algorithm in
                 let value = algorithm.sharedVar(in: 0...1)
                 Do(Step.converge) {
                     Assign(value, to: 2)
@@ -23,7 +23,9 @@ package struct ConditionalTemporalClaims {
                 missesOtherInitial(.conditional(value == 0,
                     then: .eventually(value == 1), else: .eventually(value == 2)))
             })
-            Validation("Merged paths") {}.expect(missesOtherInitial, .violated)
+            Converge
+            let mergedPaths = Validation(label: "Merged paths") {}.expect(missesOtherInitial, .violated)
+            mergedPaths
         }
     }
 }

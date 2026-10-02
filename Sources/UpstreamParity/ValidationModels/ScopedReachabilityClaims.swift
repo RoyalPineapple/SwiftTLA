@@ -13,7 +13,7 @@ package struct ScopedReachabilityClaims {
             let AllVisited = Reachable()
             let EitherOwns = Reachable()
             let Initial = Reachable()
-            Algorithm("Ownership", scoped: { algorithm in
+            let Ownership = Algorithm(scoped: { algorithm in
                 let owner = algorithm.sharedVar(initial: 0)
                 Each(members, scoped: { member, process in
                     let visited = process.localVar(initial: false)
@@ -27,12 +27,16 @@ package struct ScopedReachabilityClaims {
                 })
                 EitherOwns { owner == 0 || owner == 1 }
             })
+            Ownership
             Initial { true }
-            Validation("Exclusive") { Bind(members, to: Set<Int>([0, 1])) }
+            let Exclusive = Validation { Bind(members, to: Set<Int>([0, 1])) }
                 .expect(AllOwn, .violated)
-            Validation("Empty") { Bind(members, to: Set<Int>([])) }
-            Validation("Selected") { Bind(members, to: Set<Int>([0, 1])) }
+            Exclusive
+            let Empty = Validation { Bind(members, to: Set<Int>([])) }
+            Empty
+            let Selected = Validation { Bind(members, to: Set<Int>([0, 1])) }
                 .checking(only: [AllVisited])
+            Selected
         }
     }
 }

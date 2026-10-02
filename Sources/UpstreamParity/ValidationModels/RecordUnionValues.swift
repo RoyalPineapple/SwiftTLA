@@ -36,7 +36,8 @@ package struct RecordUnionSentinelModel {
             Do(Step.clear, when: value != Value.second(Sentinel.noBlock)) {
                 Assign(value, to: Value.second(Sentinel.noBlock))
             }
-            Validation("Records and model-value sentinel") {}
+            let recordsAndModelValueSentinel = Validation(label: "Records and model-value sentinel") {}
+            recordsAndModelValueSentinel
         }
     }
 }
@@ -60,10 +61,12 @@ package struct RecordUnionOrderingModel {
                 Value.second(Tail.first(Second(a: 1, b: 9))),
                 Value.second(Tail.second(Third(a: [], c: false)))
             ]))
-            Algorithm("SelectRecord") {
+            let SelectRecord = Algorithm {
                 Do(Step.finish) { Assign(value, to: value); Stop() }
             }
-            Validation("All record alternatives") {}
+            SelectRecord
+            let allRecordAlternatives = Validation(label: "All record alternatives") {}
+            allRecordAlternatives
         }
     }
 }
@@ -81,10 +84,12 @@ package struct RecordUnionFieldDomainModel {
                 Value.second(Flag(value: true)), Value.first(Count(value: 0)),
                 Value.second(Flag(value: false)), Value.first(Count(value: -1))
             ]))
-            Algorithm("SelectRecord") {
+            let SelectRecord = Algorithm {
                 Do(Step.finish) { Assign(value, to: value); Stop() }
             }
-            Validation("All field domains") {}
+            SelectRecord
+            let allFieldDomains = Validation(label: "All field domains") {}
+            allFieldDomains
         }
     }
 }

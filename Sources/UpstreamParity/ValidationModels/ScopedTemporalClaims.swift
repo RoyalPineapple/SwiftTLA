@@ -14,7 +14,7 @@ package struct ScopedTemporalClaims {
             let Recurs = AlwaysEventually()
             let Settles = EventuallyAlways()
             let Responds = LeadsTo()
-            Algorithm("Toggle") {
+            let Toggle = Algorithm {
                 Each(members, fairness: .weak, scoped: { member, process in
                     let visited = process.localVar(initial: false)
                     While(Step.toggle, true) {
@@ -27,8 +27,10 @@ package struct ScopedTemporalClaims {
                 Bounded(value >= 0 && value <= 1)
                 Responds(value == 0, value == 1)
             }
+            Toggle
             Started(value == 1)
-            Validation("All") { Bind(members, to: Set<Int>([0, 1])) }
+            let All = Validation { Bind(members, to: Set<Int>([0, 1])) }
+            All
         }
     }
 }

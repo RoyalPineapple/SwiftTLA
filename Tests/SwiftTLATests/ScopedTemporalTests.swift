@@ -20,7 +20,8 @@ struct ScopedTemporalTests {
 
     @Test("outer expectations retain an inner member's actionable counterexample")
     func checksExpectedFailure() throws {
-        let scenario = try #require(try RecurringPopulation.validationScenarios().first { $0.name == "Outside cycle" })
+        let scenario = try #require(try RecurringPopulation.validationScenarios().first { $0.name == "outsideCycle" })
+        #expect(scenario.displayName == "Outside cycle")
         let run = try NativeScenarioRun(scenario, maximumStates: 20)
         try run.validateExpectations()
         #expect(scenario.expectations[.EachRecurs] == .violated)

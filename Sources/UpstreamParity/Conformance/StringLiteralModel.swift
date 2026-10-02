@@ -17,7 +17,8 @@ package struct StringLiteralModel {
             Invariant("KnownText") {
                 text == "plain" || text == "quote\" slash\\ newline\n return\r tab\t form\u{c} e\u{301}"
             }
-            Validation("StringLiterals") {}
+            let StringLiterals = Validation {}
+            StringLiterals
         }
     }
 }

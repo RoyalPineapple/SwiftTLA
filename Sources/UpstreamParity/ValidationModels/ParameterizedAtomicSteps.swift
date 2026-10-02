@@ -24,9 +24,12 @@ package struct ParameterizedAtomicSteps: Sendable {
                 Assert(copied == destination)
             }
             ordered { value == copied && value >= 0 && value <= 1 }
-            Validation("Empty") { Bind(members, to: Set<Int>([])) }.expectDeadlock(.violated)
-            Validation("One") { Bind(members, to: Set<Int>([0])) }
-            Validation("Two") { Bind(members, to: Set<Int>([0, 1])) }
+            let Empty = Validation { Bind(members, to: Set<Int>([])) }.expectDeadlock(.violated)
+            Empty
+            let One = Validation { Bind(members, to: Set<Int>([0])) }
+            One
+            let Two = Validation { Bind(members, to: Set<Int>([0, 1])) }
+            Two
         }
     }
 }

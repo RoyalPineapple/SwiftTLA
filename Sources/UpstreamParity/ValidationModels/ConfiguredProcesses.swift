@@ -10,7 +10,7 @@ package struct ConfiguredProcessMachine {
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1]), Set<Int>([1, 2, 3])]))
             let selected = scope.sharedVar(initial: Set<Int>([]))
-            Algorithm("Visits") {
+            let Visits = Algorithm {
                 Each(nodes, scoped: { member, process in
                     let visited = process.localVar(initial: false)
                     Do(Step.visit) {
@@ -19,13 +19,17 @@ package struct ConfiguredProcessMachine {
                     }
                 })
             }
+            Visits
             Invariant("Members") { selected.isSubset(of: nodes) }
             Reachable("Complete") { selected == nodes }
             let allVisited = Eventually("AllVisited", selected == nodes)
             allVisited
-            Validation("Empty") { Bind(nodes, to: Set<Int>([])) }
-            Validation("One") { Bind(nodes, to: Set<Int>([1])) }.expect(allVisited, .violated)
-            Validation("Three") { Bind(nodes, to: Set<Int>([1, 2, 3])) }.expect(allVisited, .violated)
+            let Empty = Validation { Bind(nodes, to: Set<Int>([])) }
+            Empty
+            let One = Validation { Bind(nodes, to: Set<Int>([1])) }.expect(allVisited, .violated)
+            One
+            let Three = Validation { Bind(nodes, to: Set<Int>([1, 2, 3])) }.expect(allVisited, .violated)
+            Three
         }
     }
 }
@@ -39,20 +43,25 @@ package struct WeaklyFairConfiguredProcessMachine {
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1]), Set<Int>([1, 2, 3])]))
             let selected = scope.sharedVar(initial: Set<Int>([]))
-            Algorithm("Visits") {
+            let Visits = Algorithm {
                 Each(nodes, fairness: .weak) { member in
                     While(Step.visit, true) {
                         Assign(selected, to: selected.inserting(member))
                     }
                 }
             }
+            Visits
             let allVisited = Eventually("AllVisited", selected == nodes)
             allVisited
-            Validation("Empty") { Bind(nodes, to: Set<Int>([])) }
-            Validation("One") { Bind(nodes, to: Set<Int>([1])) }
-            Validation("Three") { Bind(nodes, to: Set<Int>([1, 2, 3])) }
-            Validation("One without specification fairness") { Bind(nodes, to: Set<Int>([1])) }
+            let Empty = Validation { Bind(nodes, to: Set<Int>([])) }
+            Empty
+            let One = Validation { Bind(nodes, to: Set<Int>([1])) }
+            One
+            let Three = Validation { Bind(nodes, to: Set<Int>([1, 2, 3])) }
+            Three
+            let oneWithoutSpecificationFairness = Validation(label: "One without specification fairness") { Bind(nodes, to: Set<Int>([1])) }
                 .behavior(.initialAndNext).expect(allVisited, .violated)
+            oneWithoutSpecificationFairness
         }
     }
 }
@@ -66,20 +75,25 @@ package struct StronglyFairConfiguredProcessMachine {
             let nodes = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1]), Set<Int>([1, 2, 3])]))
             let selected = scope.sharedVar(initial: Set<Int>([]))
-            Algorithm("Visits") {
+            let Visits = Algorithm {
                 Each(nodes, fairness: .strong) { member in
                     While(Step.visit, true) {
                         Assign(selected, to: selected.inserting(member))
                     }
                 }
             }
+            Visits
             let allVisited = Eventually("AllVisited", selected == nodes)
             allVisited
-            Validation("Empty") { Bind(nodes, to: Set<Int>([])) }
-            Validation("One") { Bind(nodes, to: Set<Int>([1])) }
-            Validation("Three") { Bind(nodes, to: Set<Int>([1, 2, 3])) }
-            Validation("One without specification fairness") { Bind(nodes, to: Set<Int>([1])) }
+            let Empty = Validation { Bind(nodes, to: Set<Int>([])) }
+            Empty
+            let One = Validation { Bind(nodes, to: Set<Int>([1])) }
+            One
+            let Three = Validation { Bind(nodes, to: Set<Int>([1, 2, 3])) }
+            Three
+            let oneWithoutSpecificationFairness = Validation(label: "One without specification fairness") { Bind(nodes, to: Set<Int>([1])) }
                 .behavior(.initialAndNext).expect(allVisited, .violated)
+            oneWithoutSpecificationFairness
         }
     }
 }

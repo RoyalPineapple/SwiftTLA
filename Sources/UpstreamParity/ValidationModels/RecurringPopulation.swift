@@ -13,7 +13,7 @@ package struct RecurringPopulation {
             let EachRecurs = AlwaysEventually()
             let EachVisits = Eventually()
             let EachProgress = Temporal()
-            Algorithm("Toggle") {
+            let Toggle = Algorithm {
                 Each(members, fairness: .weak, scoped: { member, process in
                     let visited = process.localVar(initial: false)
                     While(Step.toggle, true) {
@@ -29,12 +29,17 @@ package struct RecurringPopulation {
                         else: .eventually(value == member)))
                 })
             }
-            Validation("Empty") { Bind(members, to: Set<Int>([])) }
-            Validation("One") { Bind(members, to: Set<Int>([0])) }
-            Validation("Two") { Bind(members, to: Set<Int>([0, 1])) }
-            Validation("Outside cycle") { Bind(members, to: Set<Int>([2])) }
+            Toggle
+            let Empty = Validation { Bind(members, to: Set<Int>([])) }
+            Empty
+            let One = Validation { Bind(members, to: Set<Int>([0])) }
+            One
+            let Two = Validation { Bind(members, to: Set<Int>([0, 1])) }
+            Two
+            let outsideCycle = Validation(label: "Outside cycle") { Bind(members, to: Set<Int>([2])) }
                 .expect(EachRecurs, .violated)
                 .expect(EachProgress, .violated)
+            outsideCycle
         }
     }
 }

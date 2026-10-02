@@ -30,10 +30,12 @@ package struct ParameterizedRefinementCounter {
                 .init(Var<Int>("abstractValue"), from: count)
             ])
             Refines
-            Validation("Limit one") { Bind(limit, to: 1) }
+            let limitOne = Validation(label: "Limit one") { Bind(limit, to: 1) }
                 .expectDeadlock(.violated)
-            Validation("Limit two") { Bind(limit, to: 2) }
+            limitOne
+            let limitTwo = Validation(label: "Limit two") { Bind(limit, to: 2) }
                 .expectDeadlock(.violated)
+            limitTwo
         }
     }
 }

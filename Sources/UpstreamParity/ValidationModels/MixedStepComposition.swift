@@ -9,7 +9,7 @@ package struct MixedStepComposition {
     package static var spec: TLASpec {
         #spec { scope in
             let value = scope.sharedVar(initial: 0)
-            Algorithm("Advance") {
+            let Advance = Algorithm {
                 Each(Process.all, scoped: { _, process in
                     let advanced = process.localVar(initial: false)
                     Do(Step.advance, when: value < 2) {
@@ -23,10 +23,12 @@ package struct MixedStepComposition {
                     }
                 })
             }
+            Advance
             Do(Step.reset, when: value == 1) {
                 Assign(value, to: 0)
             }
-            Validation("Complete") {}.expectDeadlock(.violated)
+            let Complete = Validation {}.expectDeadlock(.violated)
+            Complete
         }
     }
 }
