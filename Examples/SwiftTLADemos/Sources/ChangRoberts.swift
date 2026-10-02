@@ -48,7 +48,7 @@ public struct ChangRoberts {
                 Message(candidate: 4, from: .eleven, to: .twelve)
             ]))
             let leader = scope.sharedVar(initial: 0)
-            Algorithm("ChangRoberts") {
+            let changRoberts = Algorithm {
                 Each(Node.all, fairness: .weak) { node in
                     Do(Step.deliver) {
                         With(messages) { message in
@@ -77,6 +77,7 @@ public struct ChangRoberts {
                     }
                 }
             }
+            changRoberts
             let LeaderDomain = Invariant()
             LeaderDomain { leader >= 0 && leader <= 12 }
         }

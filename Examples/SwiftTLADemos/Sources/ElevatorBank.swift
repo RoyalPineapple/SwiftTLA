@@ -59,7 +59,7 @@ public struct ElevatorBank {
             ])
             let CarFloorDomain = Invariant()
 
-            Algorithm("ElevatorBank") {
+            let elevatorBank = Algorithm {
                 Each(CarID.all, fairness: .weak) { car in
                     Do(Step.operate) {
                         Either {
@@ -129,6 +129,7 @@ public struct ElevatorBank {
                     }
                 }
             }
+            elevatorBank
 
             CarFloorDomain {
                 cars[.carA].floor == .one || cars[.carA].floor == .two || cars[.carA].floor == .three

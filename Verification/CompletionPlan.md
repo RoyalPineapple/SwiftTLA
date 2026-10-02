@@ -85,6 +85,8 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       its focused checking and scenario-admission regressions passed locally.
       DSL spec examples and the generated-machine guide now show bound
       declarations; the matching guide fixture passed guarded Xcode tests.
+      The Apple-platform and SwiftTLADemos algorithm examples now use bound
+      identities; their focused generated-machine tests passed locally.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck
