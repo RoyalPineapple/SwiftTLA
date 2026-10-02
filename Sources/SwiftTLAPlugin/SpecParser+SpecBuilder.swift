@@ -50,6 +50,10 @@ extension ParserSession {
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let algorithm = specBindings.algorithms[reference.baseName.sourceIdentifierName] {
                 components.sourceAlgorithms.append(algorithm)
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
+                      let validation = specBindings.validations[reference.baseName.sourceIdentifierName] {
+                components.validationScenarios.append(validation)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &components)
             } else if case .decl(let decl) = statement.item,
@@ -99,7 +103,19 @@ extension ParserSession {
                 }
                 continue
             }
-            if compilerGrammarName(in: call.calledExpression) == "Macro" {
+            if let root = validationRoot(call) {
+                guard declaration.bindingSpecifier.text == "let", specBindings.validations[sourceName] == nil else {
+                    components.diagnostics.append(.init(message: "A validation requires a unique immutable let binding.", source: binding))
+                    continue
+                }
+                var parsed = TLASpec(name: components.name, variables: [], actions: [], invariants: [])
+                let boundName = root.arguments.first.map { $0.label == nil } == true ? nil : sourceName
+                _ = parseValidation(call, into: &parsed, boundName: boundName)
+                components.diagnostics.append(contentsOf: parsed.diagnostics)
+                if let validation = parsed.validationScenarios.first {
+                    specBindings.validations[sourceName] = validation
+                }
+            } else if compilerGrammarName(in: call.calledExpression) == "Macro" {
                 guard declaration.bindingSpecifier.text == "let",
                       specBindings.statementMacros[sourceName] == nil,
                       let macro = parseAlgorithmMacroDeclaration(declaration, scope: sourceScope) else {
@@ -263,16 +279,16 @@ extension ParserSession {
                 if let action = parseAction(call, into: &components, loopVar: nil, loopValue: nil) {
                     specBindings.actions[sourceName] = action
                 }
-            } else if algorithmBindingType(in: binding),
-                      call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm" {
-                guard specBindings.algorithms[sourceName] == nil else {
+            } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm" {
+                guard declaration.bindingSpecifier.text == "let", specBindings.algorithms[sourceName] == nil else {
                     components.diagnostics.append(.init(
-                        message: "Specification algorithm binding '\(sourceName)' is declared more than once.",
+                        message: "Specification algorithm requires a unique immutable let binding.",
                         source: binding
                     ))
                     continue
                 }
-                if let algorithm = parseAlgorithm(call, into: &components) {
+                let boundName = call.arguments.first.map { $0.label == nil } == true ? nil : sourceName
+                if let algorithm = parseAlgorithm(call, into: &components, boundName: boundName) {
                     specBindings.algorithms[sourceName] = algorithm
                 }
             } else if typedFacadeType(call.calledExpression)?.name == "CollectionVar" {
@@ -329,10 +345,6 @@ extension ParserSession {
         } else {
             specBindings.modules[sourceName] = parsed
         }
-    }
-
-    private func algorithmBindingType(in binding: PatternBindingSyntax) -> Bool {
-        binding.typeAnnotation?.type.as(IdentifierTypeSyntax.self)?.name.text == "Algorithm"
     }
 
     func parseForLoop(_ forStmt: ForStmtSyntax, into components: inout TLASpec) {

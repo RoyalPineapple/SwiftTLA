@@ -181,3 +181,12 @@ public struct ValidationDeclaration: SpecComponent {
 public func Validation(_ name: String, @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration {
     .init(name: name, bindings: bindings())
 }
+
+/// Used by `#spec` after it supplies the enclosing immutable binding name.
+public func Validation(_name name: String, @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration {
+    .init(name: name, bindings: bindings())
+}
+
+public func Validation(@ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration {
+    preconditionFailure("An unnamed Validation must be bound to let inside #spec.")
+}

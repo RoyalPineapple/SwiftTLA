@@ -271,15 +271,16 @@ extension ParserSession {
     /// Parses the bounded PlusCal-shaped authoring layer into an `AlgorithmModel`.
     func parseAlgorithm(
         _ call: FunctionCallExprSyntax,
-        into components: inout TLASpec
+        into components: inout TLASpec,
+        boundName: String? = nil
     ) -> Algorithm? {
         algorithmParseFailure = nil
         algorithmSourceDiagnostic = nil
-        guard let name = extractStringArg(call, index: 0),
+        guard let name = boundName ?? extractStringArg(call, index: 0),
               let closure = algorithmBuilderClosure(in: call)
         else {
             components.diagnostics.append(.init(
-                message: "Algorithm requires a string literal name and a builder body.",
+                message: "Algorithm requires an immutable let binding and a builder body.",
                 source: call
             ))
             return nil

@@ -2,7 +2,18 @@ import SwiftSyntax
 import SwiftTLA
 
 extension ParserSession {
-    func parseValidation(_ call: FunctionCallExprSyntax, into components: inout TLASpec) -> Bool {
+    func validationRoot(_ call: FunctionCallExprSyntax) -> FunctionCallExprSyntax? {
+        var root = call
+        while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "behavior"].contains(member.declName.baseName.sourceIdentifierName),
+              let base = member.base?.as(FunctionCallExprSyntax.self) {
+            root = base
+        }
+        return compilerGrammarName(in: root.calledExpression) == "Validation" ? root : nil
+    }
+
+    func parseValidation(_ call: FunctionCallExprSyntax, into components: inout TLASpec,
+                         boundName: String? = nil) -> Bool {
         var root = call
         var overrides: [FunctionCallExprSyntax] = []
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
@@ -13,8 +24,8 @@ extension ParserSession {
         }
         guard compilerGrammarName(in: root.calledExpression) == "Validation" else { return false }
         func declaration() throws(SourceParseDiagnostic) -> ValidationDeclaration {
-            guard let name = extractStringArg(root, index: 0), let body = root.trailingClosure else {
-                throw SourceParseDiagnostic(message: "Validation requires a name and typed parameter bindings.", source: root)
+            guard let name = boundName ?? extractStringArg(root, index: 0), let body = root.trailingClosure else {
+                throw SourceParseDiagnostic(message: "Validation requires an immutable let binding and typed parameter bindings.", source: root)
             }
             var bindings: [ValidationBinding] = []
             for statement in body.statements {

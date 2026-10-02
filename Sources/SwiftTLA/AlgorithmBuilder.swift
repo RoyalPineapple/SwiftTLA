@@ -755,6 +755,38 @@ public struct Algorithm: Sendable, SpecComponent {
     package let model: AlgorithmModel
 
     public init(
+        fairness: SequentialAlgorithmFairness = .none,
+        @AlgorithmBuilder _ body: () -> [AlgorithmElement]
+    ) {
+        preconditionFailure("An unnamed Algorithm must be bound to let inside #spec.")
+    }
+
+    public init(
+        fairness: SequentialAlgorithmFairness = .none,
+        @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement]
+    ) {
+        preconditionFailure("An unnamed Algorithm must be bound to let inside #spec.")
+    }
+
+    /// Used by `#spec` after it supplies the enclosing immutable binding name.
+    public init(
+        _name name: String,
+        fairness: SequentialAlgorithmFairness = .none,
+        @AlgorithmBuilder _ body: () -> [AlgorithmElement]
+    ) {
+        self.init(name, fairness: fairness, body)
+    }
+
+    /// Used by `#spec` after it supplies the enclosing immutable binding name.
+    public init(
+        _name name: String,
+        fairness: SequentialAlgorithmFairness = .none,
+        @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement]
+    ) {
+        self.init(name, fairness: fairness, scoped: body)
+    }
+
+    public init(
         _ name: String,
         fairness: SequentialAlgorithmFairness = .none,
         @AlgorithmBuilder _ body: () -> [AlgorithmElement]

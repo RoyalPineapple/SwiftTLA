@@ -169,4 +169,48 @@ struct CompilerBoundaryDiagnosticTests {
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsedCompilation.identity == resultBuilderCompilation.identity)
     }
+
+    @Test("Bound algorithm and validation use their Swift binding identities")
+    func boundBuildersUseSwiftBindingIdentities() throws {
+        let closure = try #require(Parser.parse(source: """
+        {
+            let counter = Algorithm(scoped: { scope in
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Do(TestControlLabel.increment) {
+                    Assign(count, to: count + 1)
+                    Stop()
+                }
+            })
+            counter
+            let complete = Validation {}
+            complete
+        }
+        """).statements.first?.item.as(ClosureExprSyntax.self))
+        let parsed = SpecParser.parseSpecClosure(named: "BoundBuilders", closure,
+            sourceTypes: .init(enums: [SourceEnum(typeName: "TestControlLabel",
+                cases: [("increment", .string("increment"))])]))
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.sourceAlgorithms.map(\.model.name) == ["counter"])
+        #expect(parsed.validationScenarios.map(\.name) == ["complete"])
+        _ = try parsed.compile()
+    }
+
+    @Test("Unnamed builders reject inline and mutable declarations")
+    func unnamedBuildersRequireImmutableBindings() throws {
+        for body in [
+            "Algorithm {}",
+            "Validation {}",
+            "var algorithm = Algorithm {}",
+            "var validation = Validation {}"
+        ] {
+            let closure = try #require(Parser.parse(source: "{ \(body) }")
+                .statements.first?.item.as(ClosureExprSyntax.self))
+            let parsed = SpecParser.parseSpecClosure(named: "InvalidBinding", closure)
+
+            #expect(parsed.diagnostics.count == 1)
+            #expect(parsed.sourceAlgorithms.isEmpty)
+            #expect(parsed.validationScenarios.isEmpty)
+        }
+    }
 }

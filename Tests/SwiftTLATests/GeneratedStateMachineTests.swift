@@ -7,9 +7,9 @@ import SwiftParser
 import SwiftSyntax
 
 struct GeneratedStateMachineTests {
-    @Test("#spec compiles in an external consumer")
+    @Test("#spec bound builders execute in an external consumer")
     func specExpressionMacroCompilesExternally() throws {
-        let build = try buildExternalConsumer("SpecExpressionMacro")
+        let build = try runExternalConsumer("SpecExpressionMacro")
 
         #expect(build.status == 0, Comment(rawValue: build.output))
     }

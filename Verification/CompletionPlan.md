@@ -68,6 +68,15 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
 - [ ] Resolve B-01, B-02, B-04, B-05, and B-06 in the DSL spec with exact
       signatures, semantics, a positive fixture, and a negative diagnostic.
       Keep the settled B-03 expectation syntax and semantics.
+- [x] Settle B-02 identity for `Algorithm` and `Validation`: each requires an
+      immutable `let` binding, registered by reference; a display label never
+      supplies identity. The parser and `#spec` rewrite support this form.
+      Focused parser rejection tests and an executing external consumer passed
+      locally; these are diagnostic evidence, not hosted acceptance.
+- [ ] Finish B-02: define and expose optional labels, migrate every existing
+      positional-name caller and scenario reference, remove those old public
+      forms, and settle the remaining declaration/anonymous rules. Recheck
+      generated TLA and native scenario identity on the migrated matrix.
 - [ ] Audit AC-01 through AC-19 against each criterion's full acceptance text.
       Existing `implemented` labels are not acceptance evidence by themselves.
 - [ ] Close AC-09 with separate native/TLC invariant, deadlock, termination,

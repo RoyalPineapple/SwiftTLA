@@ -31,7 +31,7 @@ struct Counter {
 
     static var spec: TLASpec {
         #spec("Counter") {
-            Algorithm("Counter", scoped: { scope in
+            let counterAlgorithm = Algorithm(scoped: { scope in
                 let value = scope.sharedVar(_name: "value", initial: 0)
                 let cars = scope.sharedVar(_name: "cars", initial: Function<CarID, Car>.literal(
                     (.one, Car(floor: 1, doorsOpen: false)),
@@ -47,10 +47,14 @@ struct Counter {
                     }
                 })
             })
+            counterAlgorithm
+            let complete = Validation {}.checkingDeadlock(false)
+            complete
         }
     }
 }
 
+_ = try Counter.spec.compile()
 var counter = try Counter.makeMachine()
 let transition = try counter.send(.advance)
 guard transition.after.value == 1,

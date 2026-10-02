@@ -130,6 +130,14 @@ private final class DSLRewriter: SyntaxRewriter {
             let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
                 ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SwiftTLA"
                     ? member?.declName.baseName.sourceIdentifierName : nil)
+            if let boundCall = addingBuilderBindingName(to: call, name: name) {
+                guard node.bindingSpecifier.text == "let" else {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: BuilderBindingDiagnostic()))
+                    return binding
+                }
+                binding.initializer?.value = ExprSyntax(boundCall)
+                return binding
+            }
             if constructor == "Refinement" {
                 guard node.bindingSpecifier.text == "let" else {
                     context.diagnose(Diagnostic(node: Syntax(source), message: PropertyBindingDiagnostic()))
@@ -312,6 +320,27 @@ private final class DSLRewriter: SyntaxRewriter {
             ?? expression.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName
     }
 
+    private func addingBuilderBindingName(to call: FunctionCallExprSyntax, name: String) -> FunctionCallExprSyntax? {
+        if let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
+           constructor == "Algorithm" || constructor == "Validation" {
+            guard call.arguments.first?.label != nil || call.arguments.isEmpty else { return nil }
+            var result = call
+            let identity = LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
+                expression: StringLiteralExprSyntax(content: name), trailingComma: .commaToken())
+            result.arguments = LabeledExprListSyntax([identity] + Array(call.arguments))
+            result.leftParen = result.leftParen ?? .leftParenToken()
+            result.rightParen = result.rightParen ?? .rightParenToken()
+            return result
+        }
+        guard var member = call.calledExpression.as(MemberAccessExprSyntax.self),
+              let base = member.base?.as(FunctionCallExprSyntax.self),
+              let updatedBase = addingBuilderBindingName(to: base, name: name) else { return nil }
+        member.base = ExprSyntax(updatedBase)
+        var result = call
+        result.calledExpression = ExprSyntax(member)
+        return result
+    }
+
     private func argument(_ label: String, _ expression: ExprSyntax) -> LabeledExprSyntax {
         LabeledExprSyntax(
             label: .identifier(label),
@@ -374,6 +403,12 @@ private struct PropertyBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-property-binding")
     let severity: DiagnosticSeverity = .error
     let message = "A property handle must be an immutable named let binding."
+}
+
+private struct BuilderBindingDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-builder-binding")
+    let severity: DiagnosticSeverity = .error
+    let message = "Algorithm and Validation require an immutable named let binding inside #spec."
 }
 
 private struct PropertyLabelDiagnostic: DiagnosticMessage {

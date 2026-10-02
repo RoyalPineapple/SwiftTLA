@@ -181,6 +181,7 @@ final class ParserSession {
         var atomicSteps: [String: AtomicStep] = [:]
         var instances: [String: FormalModuleInstance] = [:]
         var algorithms: [String: Algorithm] = [:]
+        var validations: [String: ValidationDeclaration] = [:]
         var modules: [String: TLASpec] = [:]
     }
     var specBindings = SpecBindings()
