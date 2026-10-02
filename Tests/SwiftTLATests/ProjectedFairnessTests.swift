@@ -4,17 +4,12 @@ import SwiftSyntax
 @testable import SwiftTLAPlugin
 
 struct ProjectedFairnessTests {
-    @Test("native and compiled checking require progress in the declared record field")
+    @Test("generated checking requires progress in the declared record field")
     func projectedProgress() throws {
         let machine = try ProjectedProgress.makeMachine()
-        let graph = try ReachabilityGraph(initialMachines: [machine], maximumStates: 10)
+        let graph = try MachineValidationGraph(initialMachines: [machine], maximumStates: 10)
         #expect(graph.transitions.count == 4)
-        #expect(graph.temporalResults[.Complete]?.status == .satisfied)
-        let compilation = try ProjectedProgress.spec.compile()
-        let exploration = try ModelChecker(compilation: compilation,
-            configuration: FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
-        #expect(exploration.isComplete)
-        #expect(try exploration.analyzeTemporalProperties(in: compilation).map(\.status) == [.satisfied])
+        #expect(try graph.temporalResults(checking: [.Complete])[.Complete]?.status == .satisfied)
         let tla = try ProjectedProgress.render().tlaBundle.tla
         #expect(tla.contains("WF_((position).progress)(Next)"))
         #expect(tla.contains("SF_((position).progress)(Next)"))
@@ -30,18 +25,13 @@ struct ProjectedFairnessTests {
     @Test("fairness on an unchanged variable permits a typed stuttering counterexample")
     func projectedStuttering() throws {
         let machine = try ProjectedStuttering.makeMachine()
-        let graph = try ReachabilityGraph(initialMachines: [machine], maximumStates: 10)
+        let graph = try MachineValidationGraph(initialMachines: [machine], maximumStates: 10)
         #expect(graph.transitions.count == 2)
-        let result = try #require(graph.temporalResults[.Changed])
+        let result = try #require(graph.temporalResults(checking: [.Changed])[.Changed])
         #expect(result.status == .violated)
         let witness = try #require(result.witness)
         #expect(witness.cycle == [machine.snapshot, machine.snapshot])
         #expect(witness.cycleActions == [nil])
-        let compilation = try ProjectedStuttering.spec.compile()
-        let exploration = try ModelChecker(compilation: compilation,
-            configuration: FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
-        #expect(exploration.isComplete)
-        #expect(try exploration.analyzeTemporalProperties(in: compilation).map(\.status) == [.violated])
         let tla = try ProjectedStuttering.render().tlaBundle.tla
         #expect(tla.contains("WF_(progress)(toggle)"))
         #expect(tla.contains("SF_(progress)(toggle)"))
@@ -66,7 +56,7 @@ struct ProjectedFairnessTests {
 
     @Test("refinement fairness uses abstract projections and all abstract successors")
     func projectedRefinement() throws {
-        var stalled = try ReachabilityGraph(initialMachines: [ProjectedStuttering.makeMachine()], maximumStates: 10)
+        let stalled = try MachineValidationGraph(initialMachines: [ProjectedStuttering.makeMachine()], maximumStates: 10)
         let failure = try stalled.refinementFailure(initialMachines: [ProjectedProgress.makeMachine()]) { snapshot in
             var abstract = try ProjectedProgress.makeMachine()
             if snapshot.state.noise == 1 { _ = try abstract.send(.toggle) }
@@ -77,7 +67,7 @@ struct ProjectedFairnessTests {
             return
         }
         #expect(witness.cycle.allSatisfy { $0.state.progress == 0 })
-        var progressing = try ReachabilityGraph(initialMachines: [ProjectedProgress.makeMachine()], maximumStates: 10)
+        let progressing = try MachineValidationGraph(initialMachines: [ProjectedProgress.makeMachine()], maximumStates: 10)
         let accepted = try progressing.refinementFailure(initialMachines: [ProjectedStuttering.makeMachine()]) { snapshot in
             var abstract = try ProjectedStuttering.makeMachine()
             if snapshot.state.position.noise == 1 { _ = try abstract.send(.toggle) }

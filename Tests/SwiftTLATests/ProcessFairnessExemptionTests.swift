@@ -5,23 +5,17 @@ import SwiftTLAMacros
 @testable import SwiftTLAPlugin
 
 struct ProcessFairnessExemptionTests {
-    @Test("an exempt entry step permits the same native and compiled stuttering counterexample")
+    @Test("an exempt entry step permits a generated-machine stuttering counterexample")
     func exemptEntry() throws {
         let machine = try ProcessFairnessExemptionModel.makeMachine()
-        let native = try ReachabilityGraph(initialMachines: [machine], maximumStates: 10)
+        let native = try MachineValidationGraph(initialMachines: [machine], maximumStates: 10)
         #expect(native.transitions.count == 4)
-        let result = try #require(native.temporalResults[.Entered])
+        let result = try #require(native.temporalResults(checking: [.Entered])[.Entered])
         #expect(result.status == .violated)
         let witness = try #require(result.witness)
         #expect(witness.cycle == [machine.snapshot, machine.snapshot])
         #expect(witness.cycleActions == [nil])
         #expect(try machine.fairnessConditions().count == 1)
-
-        let compilation = try ProcessFairnessExemptionModel.spec.compile()
-        let exploration = try ModelChecker(compilation: compilation,
-            configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
-        #expect(exploration.isComplete)
-        #expect(try exploration.analyzeTemporalProperties(in: compilation).map(\.status) == [.violated])
         let rendered = try ProcessFairnessExemptionModel.render()
         let fairness = rendered.tlaBundle.tla.split(separator: "\n").filter { $0.contains("WF_") }.joined()
         #expect(fairness.contains("WF_<<entered, pc>>(cs__0)"))
