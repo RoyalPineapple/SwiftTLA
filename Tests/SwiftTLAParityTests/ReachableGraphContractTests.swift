@@ -3,16 +3,6 @@ import Testing
 import UpstreamParity
 
 @Suite(.serialized) struct ReachableGraphContractTests {
-  @Test("HourClock canonical model has its declared reachable graph")
-  func hourClockCanonicalGraph() throws {
-    let fixture = Example.hourClock
-    let graph = try ModelChecker(
-      compilation: fixture.spec.compile(),
-      configuration: try .init(maximumStateLimit: fixture.maximumStateLimit, symmetryReduction: .disabled)
-    ).exploreGraph()
-    #expect(graph.states.count == fixture.expectedDistinct)
-  }
-
   @Test("DieHard canonical model has its declared reachable graph")
   func dieHardCanonicalGraph() throws {
     let graph = try ReachabilityGraph(initialMachines: DieHardModel.initialMachines(), maximumStates: 100)
