@@ -302,7 +302,7 @@ jobs:
         id: upstream-cache
         with:
           path: .build/validation-evidence/upstream/${{ matrix.case }}
-          key: upstream-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/UpstreamTLCParity.swift', 'Sources/UpstreamParity/Conformance/AssumptionValidationEvidence.swift', 'Sources/UpstreamParity/Conformance/ValidationEvidenceComparison.swift', 'Sources/UpstreamParity/Conformance/CompactTLCGraphEvent.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift', 'Sources/SwiftTLA/SpecCompilation.swift') }}
+          key: upstream-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/UpstreamTLCParity.swift', 'Sources/UpstreamParity/Conformance/AssumptionValidationEvidence.swift', 'Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Sources/UpstreamParity/Conformance/BinaryGraphEvidence.swift', 'Sources/UpstreamParity/Conformance/CanonicalBinaryState.swift', 'Sources/UpstreamParity/Conformance/CompactTLCGraphEvent.swift', 'Sources/UpstreamParity/Conformance/TLCGraphReader.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift', 'Sources/UpstreamParity/Conformance/TLCTraceParser.swift', 'Sources/SwiftTLA/SpecCompilation.swift', 'Tools/TLCGraphBridge/**/*.java') }}
       - name: Compare generated and upstream TLA through TLC
         if: steps.upstream-cache.outputs.cache-hit != 'true'
         timeout-minutes: 120
@@ -313,6 +313,9 @@ jobs:
           jq -n --arg key '${{ steps.upstream-key.outputs.key }}' --arg sha "$SWIFT_TLA_SHA" \
             --arg run "$GITHUB_RUN_ID" '{cacheKey:$key,sourceSHA:$sha,originRunID:$run}' \
             > ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"
+      - name: Recompare retained complete TLC evidence
+        if: steps.upstream-cache.outputs.cache-hit == 'true'
+        run: .build/validation-bin/tlc-validate upstream recompare --case "$CASE_ID" --evidence .build/validation-evidence/upstream
       - name: Attach model-owned check coverage
         run: .build/validation-bin/tlc-validate upstream annotate --case "$CASE_ID" --evidence .build/validation-evidence/upstream
       - name: Require exact upstream evidence

@@ -267,6 +267,56 @@ package enum UpstreamTLCParity {
         return report
     }
 
+    /// A cache hit retains TLC's output, not the comparator's previous verdict.
+    package static func recompareCached(
+        id: String, decisive: Bool, actions: [RenderedAction], in directory: URL,
+        spoolExecutable: URL? = nil
+    ) throws -> UpstreamTLCParityReport {
+        let previous = try JSONDecoder().decode(UpstreamTLCParityReport.self,
+            from: Data(contentsOf: directory.appendingPathComponent("comparison.json")))
+        let decisiveResult = previous.generatedProperties.values.contains(.violated)
+            || previous.generatedProperties.values.contains(.reached)
+            || previous.generatedDeadlock == .violated
+        guard previous.schema == "swifttla.upstream-tlc-parity", previous.caseID == id,
+              previous.result == "exact", previous.difference == nil,
+              previous.graphCompared != decisive,
+              previous.generatedProperties == previous.referenceProperties,
+              previous.generatedDeadlock == previous.referenceDeadlock,
+              (previous.deadlockSelected || previous.generatedDeadlock == nil),
+              (!previous.deadlockSelected || decisive || previous.generatedDeadlock != nil),
+              (!decisive || decisiveResult) else {
+            throw UpstreamTLCParityError.invalidOutcome("cached upstream evidence: \(id)")
+        }
+        if decisive { return previous }
+
+        func report(_ difference: String?) -> UpstreamTLCParityReport {
+            UpstreamTLCParityReport(
+                schema: previous.schema, caseID: id,
+                result: difference == nil ? "exact" : "different",
+                graphCompared: true, difference: difference,
+                generatedProperties: previous.generatedProperties,
+                referenceProperties: previous.referenceProperties,
+                generatedDeadlock: previous.generatedDeadlock,
+                referenceDeadlock: previous.referenceDeadlock,
+                deadlockSelected: previous.deadlockSelected)
+        }
+
+        // A failed replay must not leave a previously exact verdict behind.
+        try write(report("cached graph comparison incomplete"), to: directory)
+        func graph(_ side: String) -> URL {
+            let full = directory.appendingPathComponent("\(side)-full-graph")
+            let retained = FileManager.default.fileExists(atPath: full.path)
+                ? full : directory.appendingPathComponent("\(side)-graph")
+            return retained.appendingPathComponent("graph-events.bin")
+        }
+        let difference = try ValidationEvidenceComparison.compareTLCGraphs(
+            caseID: id, generated: graph("generated"), reference: graph("reference"),
+            actions: actions, in: directory, spoolExecutable: spoolExecutable)
+        let refreshed = report(difference)
+        try write(refreshed, to: directory)
+        return refreshed
+    }
+
     private static func write(_ report: UpstreamTLCParityReport, to directory: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]

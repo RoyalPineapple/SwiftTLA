@@ -351,6 +351,36 @@ struct ValidationEvidenceComparisonTests {
             generated: generated, reference: reference, actions: actions, in: root) == nil)
     }
 
+    @Test("a cached exact verdict is replaced when retained TLC edges no longer match")
+    func cachedUpstreamGraphIsRecompared() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let generated = root.appendingPathComponent("generated-graph/graph-events.bin")
+        let reference = root.appendingPathComponent("reference-graph/graph-events.bin")
+        try FileManager.default.createDirectory(at: generated.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: reference.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
+        try tlcGraph(edgeCount: 1).write(to: generated)
+        try tlcGraph(edgeCount: 1, source: 303, target: 404).write(to: reference)
+        let prior = UpstreamTLCParityReport(
+            schema: "swifttla.upstream-tlc-parity", caseID: "fixture", result: "exact",
+            graphCompared: true, difference: nil,
+            generatedProperties: ["Safe": .satisfied], referenceProperties: ["Safe": .satisfied],
+            generatedDeadlock: nil, referenceDeadlock: nil, deadlockSelected: false)
+        let report = root.appendingPathComponent("comparison.json")
+        try JSONEncoder().encode(prior).write(to: report)
+        #expect(try UpstreamTLCParity.recompareCached(
+            id: "fixture", decisive: false, actions: actions, in: root).result == "exact")
+
+        try tlcGraph(edgeCount: 1, source: 303, target: 404, actionName: "Other").write(to: reference)
+        #expect(try UpstreamTLCParity.recompareCached(
+            id: "fixture", decisive: false, actions: actions, in: root).difference
+            == "complete labeled edge set")
+        let retained = try JSONDecoder().decode(UpstreamTLCParityReport.self, from: Data(contentsOf: report))
+        #expect(retained.result == "different")
+    }
+
     private func compare(_ root: URL, actions selectedActions: [RenderedAction]? = nil) throws -> ValidationEvidenceComparisonReport {
         let report = try JSONDecoder().decode(NativeValidationReport.self,
             from: Data(contentsOf: root.appendingPathComponent("native/report.json")))
