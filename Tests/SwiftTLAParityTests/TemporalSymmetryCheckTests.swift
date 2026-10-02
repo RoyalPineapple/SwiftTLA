@@ -24,8 +24,8 @@ struct TemporalSymmetryCheckTests {
       }
       #expect(!checked.graph.hasOutgoingEdges(from: deadlocked))
       #expect(checked.trace?.steps.last?.state == deadlocked)
-      #expect(rendered.tlaBundle(symmetryReduction: .disabled).cfg.contains("SYMMETRY") == false)
-      #expect(rendered.tlaBundle(symmetryReduction: symmetryCase.reducedExploration.symmetryReduction)
+      #expect(try rendered.tlaBundle(symmetryReduction: .disabled).cfg.contains("SYMMETRY") == false)
+      #expect(try rendered.tlaBundle(symmetryReduction: symmetryCase.reducedExploration.symmetryReduction)
         .cfg.contains("SYMMETRY"))
       let initialKey = try #require(native.graph.graph.initialStateKeys.first)
       let initial = try #require(native.graph.graph.states[initialKey])

@@ -452,21 +452,19 @@ public struct RenderedSpecification: Sendable {
 
     public func tlaBundle(
         symmetryReduction: SymmetryReduction
-    ) -> TLAModuleBundle {
-        switch symmetryReduction {
-        case .enabled:
+    ) throws -> TLAModuleBundle {
+        if try configuration.usesSupportedSymmetryReduction(symmetryReduction) {
             return tlaBundle
-        case .disabled:
-            return TLAModuleBundle(
-                root: .init(
-                    name: tlaBundle.root.name,
-                    tla: tlaBundle.root.tla,
-                    cfg: configuration.render(usesSymmetryReduction: false)
-                ),
-                imports: tlaBundle.imports,
-                provenance: tlaBundle.provenance
-            )
         }
+        return TLAModuleBundle(
+            root: .init(
+                name: tlaBundle.root.name,
+                tla: tlaBundle.root.tla,
+                cfg: configuration.render(usesSymmetryReduction: false)
+            ),
+            imports: tlaBundle.imports,
+            provenance: tlaBundle.provenance
+        )
     }
 
     public var invariantNames: Set<String> { Set(configuration.invariants) }
@@ -537,7 +535,7 @@ public struct RenderedSpecification: Sendable {
     public func tlaBundle(checking checks: Set<String>, checkDeadlock: Bool,
         symmetryReduction: SymmetryReduction = .disabled, behavior: ModelBehavior? = nil) throws -> TLAModuleBundle {
         let selected = try configuration.selecting(checks, checkDeadlock: checkDeadlock, behavior: behavior)
-        let usesSymmetryReduction = if case .enabled = symmetryReduction { true } else { false }
+        let usesSymmetryReduction = try selected.usesSupportedSymmetryReduction(symmetryReduction)
         return TLAModuleBundle(
             root: .init(name: tlaBundle.root.name, tla: tlaBundle.root.tla,
                 cfg: selected.render(usesSymmetryReduction: usesSymmetryReduction)),
@@ -606,6 +604,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidAuthoredPlusCalPlan
         case invalidModelCollection
         case invalidSymmetryDeclaration
+        case unsupportedSymmetryReduction
         case duplicateRecordField
         case compilationIdentityMismatch
         case unsupportedGeneratedValueShape

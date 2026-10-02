@@ -51,6 +51,51 @@ struct TLCConfigurationSelectionTests {
         }
     }
 
+    @Test("explicit TLC symmetry selection never silently becomes an unreduced check")
+    func rejectsUnsupportedSymmetrySelection() throws {
+        let x = Var<Int>("x")
+        let noSymmetry = try TLASpec("NoSymmetry") {
+            Variable(x, 0)
+            Action("Stay") { x.stays }
+        }.compile().render()
+        #expect(throws: CompilationDiagnostic.self) {
+            _ = try noSymmetry.tlaBundle(
+                checking: [], checkDeadlock: true,
+                symmetryReduction: .enabled(maximumPermutationCount: 2)
+            )
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            _ = try noSymmetry.tlaBundle(symmetryReduction: .enabled(maximumPermutationCount: 2))
+        }
+
+        let declared = try TLASpec("DeclaredSymmetry") {
+            Variable(x, 0)
+            Action("Stay") { x.stays }
+            Invariant("Nonnegative") { x >= 0 }
+            Eventually("Progress", x > 0)
+            Symmetry("Members", Set([0, 1]))
+        }.compile().render()
+        #expect(try declared.tlaBundle(
+            checking: ["Nonnegative"], checkDeadlock: true,
+            symmetryReduction: .enabled(maximumPermutationCount: 2)
+        ).cfg.contains("SYMMETRY SymmMembers\n"))
+        #expect(throws: CompilationDiagnostic.self) {
+            _ = try declared.tlaBundle(
+                checking: ["Progress"], checkDeadlock: false,
+                symmetryReduction: .enabled(maximumPermutationCount: 2)
+            )
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            _ = try declared.tlaBundle(symmetryReduction: .enabled(maximumPermutationCount: 2))
+        }
+        #expect(throws: CompilationDiagnostic.self) {
+            _ = try declared.tlaBundle(
+                checking: ["Nonnegative"], checkDeadlock: true,
+                symmetryReduction: .enabled(maximumPermutationCount: 0)
+            )
+        }
+    }
+
     @Test("independent property passes retain their selected behavior and configuration declarations")
     func retainsBehaviorAcrossPasses() throws {
         let configuration = TLCConfiguration(behavior: .initialAndNext,

@@ -73,6 +73,27 @@ package struct TLCConfiguration: Equatable, Sendable {
             symmetry: symmetry)
     }
 
+    func usesSupportedSymmetryReduction(_ reduction: SymmetryReduction) throws -> Bool {
+        guard case .enabled(let maximumPermutationCount) = reduction else { return false }
+        guard maximumPermutationCount > 0 else {
+            throw CompilationDiagnostic(code: .unsupportedSymmetryReduction, stage: .rendering,
+                path: "symmetryReduction", expected: "a positive permutation limit",
+                actual: "\(maximumPermutationCount)", nextSafeAction: "Use a positive permutation limit.")
+        }
+        guard !symmetry.isEmpty else {
+            throw CompilationDiagnostic(code: .unsupportedSymmetryReduction, stage: .rendering,
+                path: "symmetryReduction", expected: "an explicit symmetry declaration",
+                actual: "none", nextSafeAction: "Declare interchangeable members or disable symmetry reduction.")
+        }
+        guard properties.isEmpty && refinements.isEmpty else {
+            throw CompilationDiagnostic(code: .unsupportedSymmetryReduction, stage: .rendering,
+                path: "symmetryReduction", expected: "safety-only selected checks",
+                actual: "temporal or refinement properties selected",
+                nextSafeAction: "Run those checks on the complete, unreduced graph.")
+        }
+        return true
+    }
+
     func render(usesSymmetryReduction: Bool) -> String {
         if assumptionsOnly { return declarations.joined(separator: "\n") + (declarations.isEmpty ? "" : "\n") }
         let header = behavior.directives + [checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
