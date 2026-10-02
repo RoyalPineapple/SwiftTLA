@@ -159,7 +159,7 @@ struct SpecificationSourceAuthorityTests {
             let selected: SharedVariable<Int> = scope.sharedVar(_name: "stored", in: options)
         """#
         let body = inAlgorithm
-            ? "Algorithm(\"ScopedDomain\", scoped: { scope in \(declarations)\n Do(Label.stay) { Skip() } })"
+            ? "let scopedDomain = Algorithm(label: \"ScopedDomain\", scoped: { scope in \(declarations)\n Do(Label.stay) { Skip() } }); scopedDomain"
             : declarations + "\n SwiftTLA.Action(\"stay\") { selected.stays }"
         let model = try declaration("""
         enum Label: String, CaseIterable { case stay }

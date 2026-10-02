@@ -9,7 +9,7 @@ struct PropertyDeclarationNamesTests {
         for source in [
             "{ Invariant() }",
             "{ Reachable() }",
-            "{ Algorithm(\"Counter\") { Eventually() } }"
+            "{ let counter = Algorithm { Eventually() }; counter }"
         ] {
             let spec = SpecParser.parseSpecClosure(named: "AnonymousProperty", try parseSpecTestClosure(source))
             let diagnostic = try #require(spec.diagnostics.first)
