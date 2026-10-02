@@ -121,8 +121,8 @@ struct NativeMachineExecutionTests {
         #expect(try successor.state.value(for: rank) == .integer(machine.state.rank.rawValue))
     }
 
-    @Test("Bounded counter preserves initial states, enabledness, and every reachable step")
-    func counterMatchesFormalExploration() throws {
+    @Test("Bounded counter preserves formal steps and complete native checking")
+    func counterMatchesFormalExecutionAndNativeChecking() throws {
         let compilation = try BoundedExecutionCounter.spec.compile()
         let runtime = CompiledRuntime(compilation: compilation)
         var formal = try #require(try runtime.initialStates().only)
@@ -152,11 +152,20 @@ struct NativeMachineExecutionTests {
             Issue.record("A disabled action must fail")
         } catch GeneratedMachineError.noMatchingSuccessor {}
         #expect(machine.state == before)
-        let exploration = try ModelChecker(compilation: compilation, configuration: .init(
-            maximumStateLimit: 16, symmetryReduction: .disabled
-        )).explore()
-        let checked = try Set(exploration.compiledStates.values.map { try $0.value(for: count) })
-        #expect(checked == Set(observed.map(CompiledValue.integer)))
+        var checked: Set<Int> = []
+        let result = try MachineValidator.run(
+            initialMachines: BoundedExecutionCounter.initialMachines(), maximumStates: 16,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false
+        ) { event in
+            if case .state(_, let snapshot, _, _, _) = event {
+                checked.insert(snapshot.state.count)
+            }
+        }
+        if case .exhausted = result.completion {} else { Issue.record("Native checking stopped early") }
+        #expect(result.initialStates == 1)
+        #expect(result.states == 4)
+        #expect(result.edges == 3)
+        #expect(checked == observed)
     }
 
     @Test("Saved values preserve a swap across a complete cycle")
