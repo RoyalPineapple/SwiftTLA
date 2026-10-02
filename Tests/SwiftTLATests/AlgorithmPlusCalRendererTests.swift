@@ -93,7 +93,7 @@ struct AlgorithmPlusCalRendererTests {
         #expect(rendered.contains("when (count >= 0);"))
         #expect(rendered.contains("assert (count < 3);"))
         #expect(rendered.contains("\\in {1, 2})"))
-        #expect(rendered.contains("\\in {3, 4})"))
+        #expect(rendered.contains("\\in 3..4)"))
         #expect(rendered.contains("[flags EXCEPT ![self] = TRUE]"))
         #expect(rendered.contains("flags :="))
         #expect(rendered.contains("either {"))
