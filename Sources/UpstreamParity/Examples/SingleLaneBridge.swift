@@ -44,11 +44,11 @@ package struct SingleLaneBridgeModel: Sendable {
                 ForAll(in: Bridge) { position in candidate >= position }
             }
 
-            let Location = scope.sharedVar(_name: "Location", initial:
+            let Location = scope.sharedVar(initial:
                 Dictionary<Car, Int>.mapping(over: Cars) { car in
                     If(CarsRight.contains(car), then: EndPos, else: StartPos)
                 })
-            let WaitingBeforeBridge = scope.sharedVar(_name: "WaitingBeforeBridge", initial: Array<Car>([]))
+            let WaitingBeforeBridge = scope.sharedVar(initial: Array<Car>([]))
             let CarsInBridge = Cars.filtering { car in Bridge.contains(Location[car]) }
             let Invariants = Invariant()
             let TypeOK = Invariant()
