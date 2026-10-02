@@ -1,5 +1,5 @@
 import Testing
-@testable import SwiftTLA
+import SwiftTLA
 import UpstreamParity
 
 struct VoteProofCorpusExecutionTests {
