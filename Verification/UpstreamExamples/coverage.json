@@ -10895,7 +10895,7 @@
       "id": "AC-14",
       "status": "missing",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Tests/SwiftTLATests/ConcreteVerificationGraphTests.swift rejects reduced temporal and refinement analysis, including reused reduction evidence. Tests/SwiftTLATests/SymmetryDomainAdmissionTests.swift rejects composite domains that can collapse distinct function keys. These tests exercise the formal checking path. Generated DSL coverage for default member identity, sound reduction, and checking-mode restrictions remains unaudited. Independent hosted acceptance evidence remains unverified.",
+      "reason": "ConcreteVerificationGraphTests rejects reduced temporal and refinement analysis, including reused reduction evidence. SymmetryDomainAdmissionTests rejects composite domains that can collapse distinct function keys. A new focused baseline regression in SymmetryCounterexampleTests confirms a remaining soundness defect: with an explicit a/b symmetry declaration, an identity-dependent a-to-b transition violates staysA in unreduced checking, but the legacy ModelChecker reduction collapses b into a and reports success. The focused SymmetryCounterexampleTests run failed only this new case as intended. The production generated-machine validation path already retains an unreduced graph and compares TLC symmetry orbits separately; AC-14 cannot be credited while the unchecked legacy reduced-checking path remains. Delete or replace that path without weakening the raw graph and independent TLC orbit contracts, then prove generated DSL default identity and mode restrictions with hosted evidence.",
       "evidence": []
     },
     {
