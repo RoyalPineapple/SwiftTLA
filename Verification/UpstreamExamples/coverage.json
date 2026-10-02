@@ -10786,8 +10786,16 @@
       "id": "AC-07",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "ScenarioExpectationTests checks paired temporal and deadlock expectations. The weakly fair process retains identical initial snapshots, complete graphs, actual property and deadlock results, and TLA/CFG after only its expectation changes. Missing checks, incomplete exploration, and disagreeing comparisons remain failures. Local diagnostic 16790 passes all six contracts after moving their unchanged bodies out of ScenarioValidationTests. Ordinary CI now selects them independently of the long-running corpus suite. Hosted evidence for this placement remains pending; this is not a verified DSL criterion.",
-      "evidence": []
+      "reason": "ScenarioExpectationTests checks paired temporal and deadlock expectations. The weakly fair process retains identical initial snapshots, complete graphs, actual property and deadlock results, and TLA/CFG after only its expectation changes. Missing checks, incomplete exploration, and disagreeing comparisons remain failures. All six cases passed in hosted ordinary CI at 89eeff36; the criterion still needs final-head admission and does not credit an upstream configuration.",
+      "evidence": [{
+        "sourceSHA": "89eeff361e881f4bb1d5dbbc3e7a71c464fdad44",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36939871120/job/110628620469",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36939871120/artifacts/11201318436",
+        "artifactSHA256": "33692a686d120bb77a6643063269dd1df047229fdba5114dd561e30b20606703",
+        "acceptanceComplete": true,
+        "scope": "Hosted ordinary job passed all 1677 tests, including six ScenarioExpectationTests. Source assertions check unchanged initial snapshots, complete graphs, checked outcomes, generated TLA/CFG, and fairness when only an expected temporal outcome changes; they separately reject missing checks, incomplete exploration, and unavailable or differing comparisons. This historical acceptance evidence is not final-head admission or upstream configuration parity."
+      }]
     },
     {
       "id": "AC-08",
@@ -10838,10 +10846,18 @@
     },
     {
       "id": "AC-11",
-      "status": "missing",
+      "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "GeneratedMachineSendabilityTests requires compiler-checked Sendable for public generated machines, State, Action, Transition, Snapshot, CheckingRegisters, Property, and Actor, plus generated Configuration and ValidationScenario values. PublicConversionSendabilityTests requires Sendable for both public formal conversion protocol existentials; the focused test failed on the previous protocol declarations and passed after those protocols inherited Sendable. GeneratedSwiftRecordTests rejects missing, duplicate, extra, and incorrectly typed formal fields. StateProjectionCapabilityTests rejects invalid projection keys and nested duplicate record fields, while ModelCollectionGeneratedMachineTests rejects formal projections and action arguments from a foreign collection binding. NativeSwiftEmitter+Projection emits typed-to-formal conversion at the serialization boundary and TLAStateProjection validates nested values. These cover distinct public, generated, and boundary contracts; a complete audit of every public value/projection shape and hosted acceptance evidence remains outstanding, so no complete-criterion credit is claimed.",
-      "evidence": []
+      "reason": "GeneratedMachineSendabilityTests requires compiler-checked Sendable for public generated machine, State, Action, Transition, Snapshot, CheckingRegisters, Property, Actor, Configuration, and ValidationScenario values. PublicConversionSendabilityTests requires Sendable for formal conversion protocol existentials. NativeSwiftEmitter emits explicit Sendable conformance for its generated value shapes; StateMachine and the conversion protocols inherit Sendable, and repository-owned Sources, Tests, and Examples contain no @unchecked Sendable. GeneratedRecordProjectionTests rejects missing, duplicate, extra, and incorrectly typed nested fields. StateProjectionCapabilityTests rejects invalid keys and nested duplicate fields; ModelCollectionGeneratedMachineTests rejects projections and action arguments from foreign collection bindings. NativeSwiftEmitter+Projection performs typed-to-formal conversion at serialization, and TLAStateProjection validates every recursive value case before exposure. Hosted ordinary CI passed these suites at 89eeff36; final-head admission remains required.",
+      "evidence": [{
+        "sourceSHA": "89eeff361e881f4bb1d5dbbc3e7a71c464fdad44",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36939871120/job/110628620469",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36939871120/artifacts/11201318436",
+        "artifactSHA256": "33692a686d120bb77a6643063269dd1df047229fdba5114dd561e30b20606703",
+        "acceptanceComplete": true,
+        "scope": "Hosted ordinary job passed all 1677 tests, including GeneratedMachineSendabilityTests, PublicConversionSendabilityTests, GeneratedRecordProjectionTests, StateProjectionCapabilityTests, and ModelCollectionGeneratedMachineTests. Source audit confirms generated public value conformances and recursive projection validation; no @unchecked Sendable appears in repository-owned Sources, Tests, or Examples. This historical criterion evidence is not final-head admission or upstream configuration parity."
+      }]
     },
     {
       "id": "AC-12",
