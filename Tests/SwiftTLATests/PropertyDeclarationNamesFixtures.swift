@@ -14,7 +14,7 @@ struct QualifiedPropertyClaims {
             let recurring = SwiftTLA.AlwaysEventually()
             let stable = SwiftTLA.EventuallyAlways()
             let response = SwiftTLA.LeadsTo()
-            Algorithm("Loop", scoped: { scope in
+            let loop = Algorithm(label: "Loop", scoped: { scope in
                 let value = scope.sharedVar(_name: "value", initial: 0)
                 Do(Step.stay) {
                     Assign(value, to: value)
@@ -28,7 +28,9 @@ struct QualifiedPropertyClaims {
                 stable(value == 0)
                 response(value == 0, value == 0)
             })
-            Validation("All") {}
+            loop
+            let all = Validation(label: "All") {}
+            all
         }
     }
 }

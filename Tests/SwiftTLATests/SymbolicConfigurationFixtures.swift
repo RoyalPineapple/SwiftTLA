@@ -11,7 +11,7 @@ struct SymbolicConfigurationModel: Sendable {
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([1, 2])]))
             let input = model.parameter(as: [Int].self, in: Sequences(of: members))
             let limit = model.parameter(as: Int.self, in: 0...1_000_000_000)
-            Algorithm("SymbolicConfiguration", scoped: { scope in
+            let symbolicConfiguration = Algorithm(label: "SymbolicConfiguration", scoped: { scope in
                 let sequence: SharedVariable<[Int]> = scope.sharedVar(initial: input)
                 Invariant("Elements") { Sequences(of: members).contains(sequence) }
                 Do(Step.append) {
@@ -19,11 +19,13 @@ struct SymbolicConfigurationModel: Sendable {
                     Assign(sequence, to: sequence.appending(1))
                 }
             })
-            Validation("Example") {
+            symbolicConfiguration
+            let example = Validation(label: "Example") {
                 Bind(members, to: Set<Int>([1, 2]))
                 Bind(input, to: Array<Int>([1, 2]))
                 Bind(limit, to: 1_000_000_000)
             }
+            example
         }
     }
 }

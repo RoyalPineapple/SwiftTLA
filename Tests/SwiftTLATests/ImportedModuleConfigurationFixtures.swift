@@ -9,12 +9,15 @@ struct ConfiguredModuleMachine {
         #spec("ConfiguredModuleMachine") { scope in
             let maximum = scope.parameter(as: Int.self, in: 0...3)
             Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: maximum))
-            Algorithm("Worker", scoped: { algorithm in
+            let worker = Algorithm(label: "Worker", scoped: { algorithm in
                 let value = algorithm.sharedVar(initial: maximum)
                 Do(Step.keep) { Assign(value, to: value) }
             })
-            Validation("Zero") { Bind(maximum, to: 0) }
-            Validation("Three") { Bind(maximum, to: 3) }
+            worker
+            let zero = Validation(label: "Zero") { Bind(maximum, to: 0) }
+            zero
+            let three = Validation(label: "Three") { Bind(maximum, to: 3) }
+            three
         }
     }
 }
@@ -29,7 +32,7 @@ struct ConfiguredSequenceMachine {
             let lengthPreserved = Invariant()
             let rotationsPreserveLength = Invariant()
             Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: maximum))
-            Algorithm("Worker", scoped: { algorithm in
+            let worker = Algorithm(label: "Worker", scoped: { algorithm in
                 let sequence = algorithm.sharedVar(in: ZSequences.sequences(over: Set<Int>([0, 1])))
                 let length = algorithm.sharedVar(initial: ZSequences.length(of: sequence))
                 Do(Step.rotate) {
@@ -42,8 +45,11 @@ struct ConfiguredSequenceMachine {
                     }
                 }
             })
-            Validation("Empty") { Bind(maximum, to: 0) }
-            Validation("Pairs") { Bind(maximum, to: 2) }
+            worker
+            let empty = Validation(label: "Empty") { Bind(maximum, to: 0) }
+            empty
+            let pairs = Validation(label: "Pairs") { Bind(maximum, to: 2) }
+            pairs
         }
     }
 }

@@ -115,6 +115,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       decisive-scenario selectors use binding identities and preserve their
       previous text as display labels. All 19 related guarded tests passed
       locally.
+      Eight additional fixture files now use bound identities for mathematical
+      integer and sequence domains, initial-state selection, property naming,
+      native property keys, function spaces, imported module configurations,
+      and symbolic configuration. Their 38 focused guarded tests passed locally.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck
