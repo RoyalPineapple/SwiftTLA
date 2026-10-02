@@ -87,6 +87,9 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       declarations; the matching guide fixture passed guarded Xcode tests.
       The Apple-platform and SwiftTLADemos algorithm examples now use bound
       identities; their focused generated-machine tests passed locally.
+      The seven DieHard-family validation declarations now use bound identities
+      while retaining their published configuration names; all 11 selected
+      DieHard-family checking tests passed through the guarded local wrapper.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck

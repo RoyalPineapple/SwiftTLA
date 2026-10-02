@@ -34,16 +34,18 @@ package struct DieHarderModel: Sendable {
             }
             TypeOK { contents.keys == Jug && ForAll(in: Jug) { j in contents[j] >= 0 } }
             NotSolved { ForAll(in: Jug) { j in contents[j] != Goal } }
-            Validation("MCDieHarder") {
+            let MCDieHarder = Validation {
                 Bind(Jug, to: Set<String>(["j1", "j2"]))
                 Bind(Capacity, to: ["j1": 3, "j2": 5])
                 Bind(Goal, to: 4)
             }.expect(NotSolved, .violated)
-            Validation("APDieHarder") {
+            MCDieHarder
+            let APDieHarder = Validation {
                 Bind(Jug, to: Set<String>(["small_OF_JUG", "big_OF_JUG"]))
                 Bind(Capacity, to: ["small_OF_JUG": 3, "big_OF_JUG": 5])
                 Bind(Goal, to: 4)
             }.checking(only: [TypeOK])
+            APDieHarder
         }
     }
 }

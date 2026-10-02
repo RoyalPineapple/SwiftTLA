@@ -38,7 +38,8 @@ package struct DieHardModel: Sendable {
             }
             TypeOK { big >= 0 && big <= 5 && small >= 0 && small <= 3 }
             NotSolved { big != 4 }
-            Validation("Upstream") {}.expect(NotSolved, .violated)
+            let Upstream = Validation {}.expect(NotSolved, .violated)
+            Upstream
         }
     }
 }
