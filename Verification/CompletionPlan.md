@@ -10,11 +10,11 @@ module/configuration pairs are a baseline, not a cap on source-defined variants.
 
 ## Baseline and admission rule
 
-At Swift SHA `ff35ad760b7f6f09adf0a04f2404ae572e840d86`, the ledger records
+At Swift SHA `767fe50bf6108ec39f7b19c35e4badd44735c364`, the ledger records
 19/78 complete families and 44/234 hosted-matched published configurations.
 Twelve DSL criteria are marked implemented, not finally accepted; seven are
-marked missing. Ordinary CI run `36983701527` and the full Independent Validation
-Pipeline run `36983701474` passed on this exact SHA. The latter passed 100 native
+marked missing. Ordinary CI run `37004522387` and the full Independent Validation
+Pipeline run `37004522298` passed on this exact SHA. The latter passed 100 native
 and 53 upstream parity jobs, retained 154 nonempty artifacts, and admitted the
 unfiltered matrix. This qualifies the current matrix, not the unfinished DSL
 contract or the full pinned corpus.
@@ -39,14 +39,17 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
 
 ### 1. Close the current candidate and performance gap
 
-- [x] Reconcile the `ff35ad76` hosted runs, required jobs and retained
+- [x] Reconcile the `767fe50b` hosted runs, required jobs and retained
       artifacts against the exact draft PR head. Both independent paths and
       ordinary CI passed; no result was inferred from an earlier SHA.
 - [ ] Bring Boulanger's complete warm-oracle native-plus-comparison path to an
       acceptable measured runtime without truncating states or edges. On the
-      green `ff35ad76` SHA, native exploration took 1,027 seconds (1,035
-      including its command); warm-oracle comparison took 212 seconds, for about
-      1,247 seconds together—above the accepted 919-second reference. The
+      green `767fe50b` SHA, native exploration took 1,044 seconds (1,051
+      including its command); warm-oracle comparison took about 246 seconds,
+      for about 1,297 seconds together—above the accepted 919-second reference.
+      Generated-TLA TLC evidence was restored from cache for that native job;
+      the separate upstream parity job spent about 21.5 minutes generating
+      cold TLC evidence before comparison. The
       measured hot paths are seen-state lookup, evidence projection/encoding,
       and event handling. The retained binary evidence has 8,915,871 exact
       self-loop edges out of 52,701,220 (16.9%); a self-loop lookup shortcut
