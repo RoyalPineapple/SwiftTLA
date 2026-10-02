@@ -71,10 +71,23 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       The later retained `ff35ad76` native profile attributes 300 seconds to
       seen-state lookup, 266 seconds to evidence events (including an estimated
       89 seconds of typed projection and 126 seconds of canonical encoding),
-      and 233 seconds to successor generation. The next diagnostic splits
-      lookup hashing from table probing. Optimize whichever phase the split
-      identifies, then measure the full warm-oracle path again before claiming
-      an improvement.
+      and 233 seconds to successor generation. A later diagnostic split
+      lookup hashing from table probing. Full validation run `37056344757` on
+      frozen PR SHA `1b4b5580` passed its unfiltered admission gate: 100 native
+      and 53 upstream jobs, 154 nonempty artifacts, and exact Boulanger graph,
+      Inv, MutualExclusion, TypeOK, and deadlock evidence. Its native pass took
+      1,383 seconds and warm-oracle comparison 242 seconds, about 1,625 together.
+      The retained native profile attributes 61 seconds to state hashing, 438
+      to dictionary probing/equality, 97 to insertion, 300 to evidence events,
+      and 268 to successor generation. The Boulanger job overlapped the large
+      CoffeeCan native job, so contention is possible but not established as
+      the cause of the regression. Focused profiling run `37064944453` uses
+      the same SHA without another native matrix case; compare its phases
+      before changing the lookup representation or claiming a speedup. Ordinary
+      CI run `37056344561` failed only at the Apple evidence gate's obsolete
+      six-test assertion; all seven GeneratedAppleModel and six CameraAdoption
+      tests passed. Local commit `eae684ea` fixes that gate, but this SHA is
+      not an ordinary-CI-green admission candidate.
 - [ ] Preserve complete initial states, full state values, labeled edges,
       selected property/deadlock outcomes, and integrity-checked artifacts.
 - [ ] Run the exact case first, related regressions second, then ordinary CI and
