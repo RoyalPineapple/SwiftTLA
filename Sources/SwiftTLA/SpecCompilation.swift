@@ -1556,11 +1556,6 @@ extension CompiledProgram {
     }
 
     private func renderModule(named name: String, owningRoot: String, structuralPath: [String]) throws -> RenderedModule {
-        guard structuralPath.isEmpty || layout.parameters.isEmpty else {
-            throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
-                path: "export.\(name).parameters", expected: "resolved abstract parameter bindings",
-                actual: "unbound abstract model parameters", nextSafeAction: "Resolve abstract configuration before exporting the refinement.")
-        }
         guard moduleMetadata.formalParameters.isEmpty else {
             throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
                 path: "export.\(moduleMetadata.name)", expected: "a resolved standalone module",
@@ -1616,6 +1611,17 @@ extension CompiledProgram {
             }
             var mappings = try zip(refinement.abstract.layout.variables, refinement.variableMappings).map {
                 "\($0.declaration.name) <- \(try renderer.state($1.expression))"
+            }
+            for parameter in refinement.abstract.layout.parameters {
+                guard let concrete = layout.parameters.first(where: { $0.reference == parameter.reference }),
+                      let abstractName = refinement.abstract.binderNames[parameter.binder] else {
+                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .rendering,
+                        path: "export.\(name).refinements.\(refinement.name).parameters",
+                        expected: "a concrete parameter with the same resolved identity",
+                        actual: "unbound abstract parameter \(parameter.reference.name)",
+                        nextSafeAction: "Map the abstract configuration to a concrete model parameter.")
+                }
+                mappings.append("\(abstractName) <- \(try renderer.binderName(concrete.binder))")
             }
             let constants = refinement.abstract.moduleMetadata.constants
             mappings += constants.map { "\($0.name) <- \($0.value)" }
