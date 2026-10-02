@@ -129,26 +129,6 @@ package indirect enum CompiledValue: Hashable, Sendable, Comparable {
         }
     }
 
-    func applying(_ mapping: [CompiledValue: CompiledValue]) -> CompiledValue {
-        if let replacement = mapping[self] { return replacement }
-        switch self {
-        case .integer, .boolean, .string, .constant, .controlLocation:
-            return self
-        case .set(let values):
-            return .set(Set(values.map { $0.applying(mapping) }))
-        case .tuple(let values):
-            return .tuple(values.map { $0.applying(mapping) })
-        case .record(let values):
-            return .record(CompiledRecord(values.fields.map {
-                .init(key: $0.key, value: $0.value.applying(mapping))
-            }))
-        case .function(let values):
-            return .function(Dictionary(uniqueKeysWithValues: values.map {
-                ($0.key.applying(mapping), $0.value.applying(mapping))
-            }))
-        }
-    }
-
     private static func formalValue(_ value: TLAValue) -> CompiledValue {
         switch value {
         case .int(let value): return .integer(value)

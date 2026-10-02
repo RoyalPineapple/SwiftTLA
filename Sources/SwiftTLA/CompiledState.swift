@@ -36,13 +36,6 @@ struct CompiledState: Hashable, Sendable, Comparable {
         return updated
     }
 
-    func applying(_ mapping: [CompiledValue: CompiledValue]) -> CompiledState {
-        CompiledState(
-            validatedValues: values.map { $0.applying(mapping) },
-            compilationIdentity: compilationIdentity
-        )
-    }
-
     func projection(using layout: CompiledLayout) throws -> TLAStateProjection {
         guard values.count == layout.variables.count else {
             throw CompiledEvaluationError.invalidStateLayout(

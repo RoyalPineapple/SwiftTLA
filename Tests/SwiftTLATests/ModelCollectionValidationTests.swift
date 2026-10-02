@@ -175,8 +175,8 @@ struct ModelCollectionValidationTests {
     assertMemberReferenceRejected(spec, path: "invariants.Biased.body.left")
   }
 
-  @Test("Reduced exploration requires a sufficient permutation limit")
-  func reducedExplorationRequiresSufficientPermutationLimit() throws {
+  @Test("Declared symmetry does not change the unreduced deadlock result")
+  func declaredSymmetryKeepsUnreducedDeadlock() throws {
     let left = CollectionVar<Device, Int>("left")
     let right = CollectionVar<Device, Int>("right")
     let spec = TLASpec("Budget") {
@@ -195,16 +195,6 @@ struct ModelCollectionValidationTests {
     #expect(unreduced.isComplete)
     #expect(unreduced.graph.states.count == 1)
     #expect(unreduced.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
-
-    let reducedConfiguration = try FiniteExplorationConfiguration(
-      maximumStateLimit: 100_000,
-      symmetryReduction: .enabled(maximumPermutationCount: 35))
-    #expect(throws: FiniteExplorationConfigurationError.permutationLimitExceeded(
-      required: 36,
-      limit: 35
-    )) {
-      _ = try SymmetryPlan(compilation: compilation, reduction: reducedConfiguration.symmetryReduction)
-    }
   }
 
   private func assertInvalidCollection(

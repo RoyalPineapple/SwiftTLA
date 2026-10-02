@@ -1,8 +1,6 @@
 package enum FiniteExplorationConfigurationError: Error, Sendable, Equatable {
     case nonPositiveStateLimit(Int)
     case nonPositivePermutationLimit(Int)
-    case symmetryReductionWithoutDeclarations
-    case permutationLimitExceeded(required: Int, limit: Int)
     case symmetryReductionRequiresSafetyOnly
     case symmetryReductionNotSupportedByFormalExplorer
 }
@@ -125,10 +123,6 @@ package struct ModelChecker {
                 nextSafeAction: "Explore the generated machine with ReachabilityGraph.")
         }
         try configuration.validatePropertySupport(in: compilation)
-        let symmetry = try SymmetryPlan(
-            compilation: compilation,
-            reduction: configuration.symmetryReduction
-        )
         if case .enabled = configuration.symmetryReduction {
             throw FiniteExplorationConfigurationError.symmetryReductionNotSupportedByFormalExplorer
         }
@@ -152,8 +146,7 @@ package struct ModelChecker {
             layout: compilation.layout,
             checkDeadlock: compilation.semantics.behavior.checkDeadlock,
             specificationName: compilation.description.name,
-            configuration: configuration,
-            symmetry: symmetry
+            configuration: configuration
         )
         return FiniteExploration(
             graph: exploration.graph,
@@ -193,8 +186,7 @@ private func compiledBFS(
     layout: CompiledLayout,
     checkDeadlock: Bool,
     specificationName: String,
-    configuration: FiniteExplorationConfiguration,
-    symmetry: SymmetryPlan
+    configuration: FiniteExplorationConfiguration
 ) throws -> FiniteExploration {
     var queue: [CompiledState] = []
     var stateToID: [CompiledState: StateGraph.StateID] = [:]
@@ -242,7 +234,7 @@ private func compiledBFS(
             code: .compilationIdentityMismatch, stage: .checking, path: "counterexample.replay",
             expected: "a concrete initial state and enabled transitions witnessing the invariant failure",
             actual: actual,
-            nextSafeAction: "Disable symmetry reduction and check that the declared symmetries preserve the model and invariant."
+            nextSafeAction: "Inspect the compiled transitions and retained counterexample trace."
         )
     }
 
@@ -253,18 +245,15 @@ private func compiledBFS(
             path.append((current, predecessor.1))
             current = predecessor.0
         }
-        guard var concrete = try seeds.first(where: { try symmetry.canonicalState($0) == current }) else {
+        guard var concrete = seeds.first(where: { $0 == current }) else {
             throw replayFailure("the recorded root has no concrete initial state")
         }
         var steps = [try TraceStep(state: concrete.projection(using: layout), action: "init")]
-        // Canonical nodes can rename members. Replay only when producing a
-        // counterexample, retaining the actual action arguments and target.
         for (target, action) in path.reversed() {
-            let candidates = try runtime.successors(from: concrete).filter {
-                try symmetry.canonicalState($0.state) == target
-            }
-            guard let successor = candidates.first(where: { $0.action == action }) ?? candidates.first else {
-                throw replayFailure("no enabled concrete transition reaches the recorded successor orbit")
+            guard let successor = try runtime.successors(from: concrete).first(where: {
+                $0.state == target && $0.action == action
+            }) else {
+                throw replayFailure("no enabled concrete transition reaches the recorded successor")
             }
             concrete = successor.state
             let arguments = try successor.arguments.map { try $0.rendered(using: layout) }
@@ -274,10 +263,6 @@ private func compiledBFS(
             ))
         }
         return (concrete, steps)
-    }
-
-    func representative(_ state: CompiledState) throws -> CompiledState {
-        try symmetry.canonicalState(state)
     }
 
     func checkInvariants(in state: CompiledState, witness: () throws -> (state: CompiledState, steps: [TraceStep])) throws {
@@ -303,15 +288,14 @@ private func compiledBFS(
             try checkInvariants(in: seed) { (seed, [try TraceStep(state: seed.projection(using: layout), action: "init")]) }
             continue
         }
-        let key = try representative(seed)
-        guard stateToID[key] == nil else { continue }
+        guard stateToID[seed] == nil else { continue }
         guard stateToID.count < configuration.maximumStateLimit else {
             return try boundedExploration()
         }
         let id = StateGraph.StateID(nextID)
-        stateToID[key] = id
-        idToState[id] = key
-        queue.append(key)
+        stateToID[seed] = id
+        idToState[id] = seed
+        queue.append(seed)
         initialStateIDs.append(id)
         nextID += 1
     }
@@ -320,8 +304,7 @@ private func compiledBFS(
     while head < queue.count {
         let current = queue[head]
         head += 1
-        let key = try representative(current)
-        guard let currentID = stateToID[key] else { continue }
+        guard let currentID = stateToID[current] else { continue }
 
         try checkInvariants(in: current) { try trace(to: current) }
 
@@ -336,10 +319,9 @@ private func compiledBFS(
             guard try runtime.constraintHolds(in: successor.state) else {
                 try checkInvariants(in: successor.state) {
                     let source = try trace(to: current)
-                    let target = try representative(successor.state)
                     guard let concrete = try runtime.successors(from: source.state).first(where: {
-                        try $0.action == successor.action && representative($0.state) == target
-                    }) else { throw replayFailure("no concrete transition reaches the excluded successor orbit") }
+                        $0.action == successor.action && $0.state == successor.state
+                    }) else { throw replayFailure("no concrete transition reaches the excluded successor") }
                     let arguments = try concrete.arguments.map { try $0.rendered(using: layout) }
                     let step = try TraceStep(state: concrete.state.projection(using: layout),
                         action: formalActionCall(named: layout.actions[concrete.action.ordinal].declaration.name, arguments: arguments))
@@ -347,7 +329,7 @@ private func compiledBFS(
                 }
                 continue
             }
-            let successorKey = try symmetry.canonicalState(successor.state)
+            let successorKey = successor.state
             let formalArguments = try successor.arguments.map { try $0.rendered(using: layout) }
             let targetID: StateGraph.StateID
             if let existing = stateToID[successorKey] {

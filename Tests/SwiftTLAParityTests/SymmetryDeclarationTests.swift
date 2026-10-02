@@ -1,40 +1,7 @@
-import Foundation
 @testable import SwiftTLA
 import Testing
-import UpstreamParity
 
-struct SymmetryReductionTests {
-  @Test("Empty symmetry sets are no-op")
-  func emptySymmetryNoOp() throws {
-    let spec = TLASpec("NoSym") {
-      let x = Var<Int>("x")
-      Variable(x, in: IntRange(1, through: 3))
-      Action("inc") { x < 3 && x.becomes(x + 1) }
-      Invariant("TypeOK") { x >= 1 && x <= 3 }
-    }
-    let mc = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled))
-    let exploration = try mc.explore()
-    #expect(exploration.isComplete)
-    #expect(exploration.graph.states.count == 3)
-    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
-  }
-
-  @Test("Symmetry reduction requires a declared symmetry domain")
-  func reductionRequiresSymmetry() throws {
-    let x = Var<Int>("x")
-    let spec = TLASpec("NoSymmetry") {
-      Variable(x, 0)
-      Action("stay") { x.stays }
-    }
-    let configuration = try FiniteExplorationConfiguration(
-      maximumStateLimit: 10,
-      symmetryReduction: .enabled(maximumPermutationCount: 1))
-
-    #expect(throws: FiniteExplorationConfigurationError.symmetryReductionWithoutDeclarations) {
-      try ModelChecker(compilation: try spec.compile(), configuration: configuration).explore()
-    }
-  }
-
+struct SymmetryDeclarationTests {
   @Test("TLA+ symmetry operator and config directive are emitted")
   func symmetryTLAOutput() throws {
     let spec = TLASpec("SymOut") {
@@ -107,11 +74,6 @@ struct SymmetryReductionTests {
     ).compile()
     let rendered = try compilation.render().tlaBundle.tla
     #expect(rendered.contains("Symmvalue == Permutations({1, 2})"))
-    let plan = try SymmetryPlan(compilation: compilation, reduction: .enabled(maximumPermutationCount: 2))
-    let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-    let canonical = try plan.canonicalState(initial)
-    #expect(try canonical.value(for: compilation.layout.variables[0].id)
-      == .tuple([.init(formal: tupleOne), .init(formal: tupleTwo)]))
   }
 
   private func assertInvalidSymmetry(_ spec: TLASpec, path: String) {

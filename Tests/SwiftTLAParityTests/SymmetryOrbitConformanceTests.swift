@@ -3,6 +3,13 @@ import SwiftTLA
 import UpstreamParity
 
 struct SymmetryOrbitConformanceTests {
+  @Test("Orbit permutation preserves record field names while renaming member values")
+  func recordFieldNamesRemainFixed() throws {
+    let permutation = try SymmetryPermutation(constantMapping: ["A": "B", "B": "A"])
+    let state = CanonicalState(bindings: ["payload": .record(["A": .constant("B")])])
+    #expect(try permutation.apply(state).bindings["payload"] == .record(["A": .constant("A")]))
+  }
+
   @Test("Complete symmetry graphs retain deadlock findings without treating them as truncation")
   func completeDeadlockGraphsAgree() throws {
     let states = [state("A"), state("B")]
