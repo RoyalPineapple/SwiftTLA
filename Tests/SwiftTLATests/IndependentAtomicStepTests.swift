@@ -95,10 +95,11 @@ struct IndependentAtomicStepTests {
         { scope in
             let value = scope.sharedVar(initial: 0)
             let advance = Macro { Assign(value, to: value + 1) }
-            Algorithm("Nested") {
+            let nested = Algorithm(label: "Nested") {
                 \(local)
                 Do(Step.next) { advance() }
             }
+            nested
         }
         """), sourceTypes: sourceTypes)
         #expect(spec.diagnostics.isEmpty)

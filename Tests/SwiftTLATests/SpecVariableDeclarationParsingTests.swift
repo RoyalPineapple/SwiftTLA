@@ -373,7 +373,7 @@ import SwiftTLAMacros
     @Test func algorithmTypedFormalDefinitionParsesWithClosureBinders() throws {
         let source = """
         {
-            Algorithm("Formal", scoped: { scope in
+            let Formal = Algorithm(scoped: { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 FormalDefinition("same", taking: Int.self, Int.self) { ballot, value in
                     ballot == value
@@ -383,6 +383,7 @@ import SwiftTLAMacros
                     Stop()
                 }
             })
+            Formal
         }
         """
         let closure = try parseSpecTestClosure(source)

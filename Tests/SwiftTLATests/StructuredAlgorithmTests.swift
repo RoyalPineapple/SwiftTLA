@@ -35,7 +35,7 @@ private struct StructuredCarModel {
 
     static var spec: TLASpec {
         #spec("StructuredCar") {
-            Algorithm("StructuredCar", scoped: { scope in
+            let structuredCar = Algorithm(label: "StructuredCar", scoped: { scope in
                 let cars = scope.sharedVar(_name: "cars", initial: Function<Car, CarState>.literal(
                     (.north, CarState(floor: 1, door: .closed)),
                     (.south, CarState(floor: 2, door: .closed))
@@ -47,6 +47,7 @@ private struct StructuredCarModel {
                     }
                 }
             })
+            structuredCar
         }
     }
 }

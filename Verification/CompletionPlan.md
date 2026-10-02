@@ -145,6 +145,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       dictionary bindings, state handles, type diagnostics, source authority,
       and compiler-boundary errors now use bound declaration syntax. The
       intended diagnostic and 14 related guarded tests passed locally.
+      Bound algorithm identities now cover the typed formal-definition parser
+      sample, nested specification macro, multi-binding generated model, and
+      structured generated model. Their 40 focused guarded tests passed;
+      direct formal-core builders remain explicit comparison oracles.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck

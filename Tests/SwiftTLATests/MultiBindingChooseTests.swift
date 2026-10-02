@@ -46,7 +46,7 @@ private struct MultiBindingChooseModel {
 
     static var spec: TLASpec {
         #spec("MultiBindingChoose") {
-            Algorithm("MultiBindingChoose", scoped: { scope in
+            let multiBindingChoose = Algorithm(label: "MultiBindingChoose", scoped: { scope in
                 let selected = scope.sharedVar(_name: "selected", initial: 0)
                 Each(Node.all) { _ in
                     Do(Step.choose) {
@@ -56,6 +56,7 @@ private struct MultiBindingChooseModel {
                     }
                 }
             })
+            multiBindingChoose
         }
     }
 }
