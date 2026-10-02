@@ -17,7 +17,8 @@ struct SymbolicRecordConstructionModel {
                 Assign(packet, to: Packet.expression(
                     payload: Payload.expression(value: saved.payload.value + 1), ready: true))
             }
-            Validation("Configured") { Bind(start, to: 2) }
+            let configured = Validation(label: "Configured") { Bind(start, to: 2) }
+            configured
         }
     }
 }

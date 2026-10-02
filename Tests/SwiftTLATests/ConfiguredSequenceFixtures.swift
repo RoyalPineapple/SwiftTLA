@@ -8,7 +8,7 @@ struct ConfiguredAlgorithmBindingMachine {
     static var spec: TLASpec {
         #spec("ConfiguredAlgorithmBindingMachine") { model in
             let limit = model.parameter(as: Int.self, in: 1...2)
-            Algorithm("Bindings", scoped: { scope in
+            let bindings = Algorithm(label: "Bindings", scoped: { scope in
                 let lengths = IntRange(1, through: limit)
                 let domain = Sequences(of: Set<Int>([7]), lengths: lengths)
                 let rows = domain
@@ -18,8 +18,11 @@ struct ConfiguredAlgorithmBindingMachine {
                 }
                 Invariant("Bounded") { row.count <= limit }
             })
-            Validation("One") { Bind(limit, to: 1) }
-            Validation("Two") { Bind(limit, to: 2) }
+            bindings
+            let one = Validation(label: "One") { Bind(limit, to: 1) }
+            one
+            let two = Validation(label: "Two") { Bind(limit, to: 2) }
+            two
         }
     }
 }
@@ -40,26 +43,31 @@ struct ConfiguredSequenceDomainMachine {
             let zeroBased = scope.sharedVar(in: ZeroBasedSequences(of: members, lengths: lengths))
             Do(Step.stay) { Skip() }
             Invariant("Bounded") { row.count <= 2 && sorted.count <= 2 && zeroBased.count <= 2 }
-            Validation("Empty") {
+            let empty = Validation(label: "Empty") {
                 Bind(members, to: Set<Int>([]))
                 Bind(lengths, to: Set<Int>([0, 1, 2]))
             }
-            Validation("One") {
+            empty
+            let one = Validation(label: "One") {
                 Bind(members, to: Set<Int>([1]))
                 Bind(lengths, to: Set<Int>([0, 1, 2]))
             }
-            Validation("Two") {
+            one
+            let two = Validation(label: "Two") {
                 Bind(members, to: Set<Int>([1, 2]))
                 Bind(lengths, to: Set<Int>([0, 1, 2]))
             }
-            Validation("Zero length") {
+            two
+            let zeroLength = Validation(label: "Zero length") {
                 Bind(members, to: Set<Int>([1, 2]))
                 Bind(lengths, to: Set<Int>([0]))
             }
-            Validation("Positive lengths") {
+            zeroLength
+            let positiveLengths = Validation(label: "Positive lengths") {
                 Bind(members, to: Set<Int>([1, 2]))
                 Bind(lengths, to: Set<Int>([1, 2]))
             }
+            positiveLengths
         }
     }
 }
@@ -82,10 +90,11 @@ struct NominalSequenceMachine {
             let row = scope.sharedVar(in: Sequences(of: members, lengths: IntRange(0, through: limit)))
             Do(Step.stay) { Skip() }
             Invariant("Bounded") { row.count <= limit }
-            Validation("Nominal") {
+            let nominal = Validation(label: "Nominal") {
                 Bind(members, to: Set<Choice>([Choice.one, Choice.two]))
                 Bind(limit, to: 2)
             }
+            nominal
         }
     }
 }

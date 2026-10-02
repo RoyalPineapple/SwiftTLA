@@ -10,7 +10,8 @@ struct UnboundedLocalRecursionFixture: Sendable {
                     If(number == 0, then: 0,
                         else: number.expr + recursion(number.expr - 1))
                 }, in: { recursion in recursion(4) == 10 }))
-            Validation("sum") {}.checkingDeadlock(false)
+            let sum = Validation {}.checkingDeadlock(false)
+            sum
         }
     }
 }

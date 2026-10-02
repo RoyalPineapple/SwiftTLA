@@ -124,6 +124,12 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       selected initial states, scoped invariants, and record-field assignment
       now use bound declarations. Their 38 focused guarded tests, including
       external label diagnostics, passed locally.
+      Eleven more fixture files now use bound declarations across Swift
+      records, process fairness, breadth-first exploration, sequence index
+      conversion and configuration, symbolic records, scenario expectations,
+      parser fixtures, local recursion, and enabledness. Their 73 focused
+      guarded tests passed locally. One shared fixture file still has
+      positional Algorithm declarations.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck

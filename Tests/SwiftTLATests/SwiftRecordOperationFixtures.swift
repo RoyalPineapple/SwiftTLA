@@ -12,13 +12,14 @@ func swiftRecordModel(target: String = "packet", replacement: String = "Packet(c
             static var spec: TLASpec {
                 #spec("Records") { scope in
                     let packet = scope.sharedVar(_name: "packet", initial: Packet(count: 0, ready: false))
-                    Algorithm("Records") {
+                    let records = Algorithm(label: "Records") {
                         Do(Step.advance) {
                             let saved = packet
                             Assign(\(target), to: \(replacement))
                             Stop()
                         }
                     }
+                    records
                     Invariant("Bounded") { packet.count <= 1 }
                 }
             }

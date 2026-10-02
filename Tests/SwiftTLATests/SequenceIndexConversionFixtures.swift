@@ -14,7 +14,7 @@ struct SequenceIndexConversionMachine: Sendable {
             Import(ZSequences.module, configuring: ZSequences.boundedNaturalNumbers(through: 3))
             let rootMembers = scope.sharedVar(initial: ZSequences.oneBased(from:
                 ZSequences.zeroBased(from: Array<Element>([.second, .first, .second]))))
-            Algorithm("Conversion", scoped: { algorithm in
+            let conversion = Algorithm(label: "Conversion", scoped: { algorithm in
                 let zero = algorithm.sharedVar(initial: ZSequences.zeroBased(from: input))
                 let one = algorithm.sharedVar(initial: ZSequences.oneBased(from: zero))
                 let empty = algorithm.sharedVar(initial: ZSequences.oneBased(from:
@@ -28,9 +28,13 @@ struct SequenceIndexConversionMachine: Sendable {
                 }
                 agrees { one == ZSequences.oneBased(from: zero) && members.count == 3 && empty.count == 0 }
             })
-            Validation("Empty") { Bind(input, to: Array<Int>([])) }
-            Validation("Single") { Bind(input, to: Array<Int>([7])) }
-            Validation("Repeated") { Bind(input, to: Array<Int>([3, 1, 3])) }
+            conversion
+            let empty = Validation(label: "Empty") { Bind(input, to: Array<Int>([])) }
+            empty
+            let single = Validation(label: "Single") { Bind(input, to: Array<Int>([7])) }
+            single
+            let repeated = Validation(label: "Repeated") { Bind(input, to: Array<Int>([3, 1, 3])) }
+            repeated
         }
     }
 }

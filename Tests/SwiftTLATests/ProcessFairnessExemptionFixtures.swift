@@ -10,7 +10,7 @@ struct ProcessFairnessExemptionModel: Sendable {
             let entered = scope.sharedVar(initial: false)
             let Entered = Temporal()
             Entered(.eventually(entered))
-            Algorithm("ProcessFairnessExemption") {
+            let processFairnessExemption = Algorithm(label: "ProcessFairnessExemption") {
                 Each(Set<Int>([0]), fairness: .weak(excluding: [Step.ncs])) { member in
                     While(Step.ncs, true) { Goto(Step.cs) }
                     Do(Step.cs) {
@@ -19,6 +19,7 @@ struct ProcessFairnessExemptionModel: Sendable {
                     }
                 }
             }
+            processFairnessExemption
         }
     }
 }

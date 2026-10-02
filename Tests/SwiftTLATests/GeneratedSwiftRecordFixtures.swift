@@ -19,7 +19,7 @@ struct GeneratedSwiftRecord {
         #spec("GeneratedSwiftRecord") { scope in
             let packet = scope.sharedVar(_name: "packet", initial: Packet(count: 0, ready: false))
             let previousCount = scope.sharedVar(_name: "previousCount", initial: -1)
-            Algorithm("GeneratedSwiftRecord") {
+            let generatedSwiftRecord = Algorithm(label: "GeneratedSwiftRecord") {
                 Do(Step.advance) {
                     let saved = packet
                     When(saved.count == 0)
@@ -28,6 +28,7 @@ struct GeneratedSwiftRecord {
                     Stop()
                 }
             }
+            generatedSwiftRecord
             Invariant("Bounded") { packet.count <= 1 }
         }
     }

@@ -9,19 +9,21 @@ struct ScenarioExpectations {
         #spec("ScenarioExpectations") { scope in
             let limit = scope.parameter(as: Int.self, in: 1...2)
             let value = scope.sharedVar(_name: "value", initial: 0)
-            Algorithm("Counter") {
+            let counter = Algorithm(label: "Counter") {
                 Do(Step.advance, when: value < limit) {
                     Assign(value, to: value + 1)
                     Goto(Step.advance)
                 }
             }
+            counter
             let bounded = Invariant("Bounded") { value <= limit }
             let beyondLimit = Reachable("BeyondLimit") { value > limit }
             bounded
             beyondLimit
-            Validation("Expected unreachable goal") {
+            let expectedUnreachableGoal = Validation(label: "Expected unreachable goal") {
                 Bind(limit, to: 2)
             }.expect(beyondLimit, .violated).expectDeadlock(.violated)
+            expectedUnreachableGoal
         }
     }
 }

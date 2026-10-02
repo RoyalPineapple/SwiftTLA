@@ -68,7 +68,8 @@ struct BoundStepEnabledness {
             }
             let Finished = Temporal()
             Finished(.eventually(finish.enabled))
-            Validation("Choices") { Bind(choices, to: Set<Int>([1, 2])) }
+            let choicesValidation = Validation(label: "Choices") { Bind(choices, to: Set<Int>([1, 2])) }
+            choicesValidation
         }
     }
 }

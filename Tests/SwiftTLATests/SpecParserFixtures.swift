@@ -56,10 +56,11 @@ struct DefinePhaseGeneratedModel {
 
     static var spec: TLASpec {
         #spec("DefinePhaseGeneratedModel") {
-            Algorithm("Phase", scoped: { scope in
+            let phase = Algorithm(label: "Phase", scoped: { scope in
                 let mode: SharedVariable<Mode> = scope.sharedVar(_name: "mode", initial: .define)
                 Do(Step.stay) { Assign(mode, to: mode) }
             })
+            phase
             FormalDefinition("Visible", parameters: [], body: true, plusCalPhase: .define)
         }
     }
