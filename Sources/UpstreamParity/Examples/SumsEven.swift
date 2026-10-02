@@ -11,9 +11,10 @@ package struct SumsEvenModel: Sendable {
             Assume(MaxNat >= 0 && ForAll(in: IntRange(0, through: MaxNat)) { x in
                 (x.expr + x.expr) % 2 == 0
             })
-            Validation("MC_sums_even") {
+            let MC_sums_even = Validation {
                 Bind(MaxNat, to: 1_000_000)
             }.checkingDeadlock(false)
+            MC_sums_even
         }
     }
 }

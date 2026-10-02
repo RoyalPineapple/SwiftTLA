@@ -17,7 +17,7 @@ package struct TeachingSimpleN5Model: Sendable {
     package static var spec: TLASpec {
         #spec("Simple") {
             Extends(.integers)
-            Algorithm("Simple", scoped: { scope in
+            let Simple = Algorithm(scoped: { scope in
                 let x = scope.sharedVar(initial: Function<Process, Int>.mapping { _ in 0 })
                 let y = scope.sharedVar(initial: Function<Process, Int>.mapping { _ in 0 })
                 let predecessor = Function<Process, Process>.literal(
@@ -52,7 +52,9 @@ package struct TeachingSimpleN5Model: Sendable {
                         || Exists(in: Process.all) { process in y[process] == 1 }
                 }
             })
-            Validation("Simple") {}
+            Simple
+            let simpleValidation = Validation(label: "Simple") {}
+            simpleValidation
         }
     }
 }

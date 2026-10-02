@@ -65,10 +65,11 @@ package struct QueensModel: Sendable {
             Invariant { sols.isSubset(of: solutions) && (!todo.isEmpty || solutions.isSubset(of: sols)) }
             NoSolutions { sols.isEmpty }
             Termination(.eventually(todo.isEmpty))
-            Validation("FourQueens") { Bind(N, to: 4) }
+            let FourQueens = Validation { Bind(N, to: 4) }
                 .checking(only: [TypeInvariant, Invariant, NoSolutions])
                 .checkingDeadlock(false)
                 .expect(NoSolutions, .violated)
+            FourQueens
         }
     }
 }

@@ -89,7 +89,7 @@ package struct CigaretteSmokersModel: Sendable {
                 Ingredients.filtering { ingredient in smokers[ingredient].smoking }.cardinality <= 1
             }
 
-            Validation("CigaretteSmokers") {
+            let CigaretteSmokers = Validation {
                 Bind(Ingredients, to: Set<Ingredient>([.matches, .paper, .tobacco]))
                 Bind(Offers, to: Set<Set<Ingredient>>([
                     Set<Ingredient>([.matches, .paper]),
@@ -97,7 +97,8 @@ package struct CigaretteSmokersModel: Sendable {
                     Set<Ingredient>([.paper, .tobacco])
                 ]))
             }
-            Validation("APCigaretteSmokers") {
+            CigaretteSmokers
+            let APCigaretteSmokers = Validation {
                 Bind(Ingredients, to: Set<Ingredient>([.apMatches, .apPaper, .apTobacco]))
                 Bind(Offers, to: Set<Set<Ingredient>>([
                     Set<Ingredient>([.apMatches, .apPaper]),
@@ -105,6 +106,7 @@ package struct CigaretteSmokersModel: Sendable {
                     Set<Ingredient>([.apPaper, .apTobacco])
                 ]))
             }
+            APCigaretteSmokers
         }
     }
 }

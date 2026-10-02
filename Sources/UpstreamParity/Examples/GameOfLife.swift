@@ -47,9 +47,10 @@ package struct GameOfLifeModel: Sendable {
 
             TypeOK { grids.contains(grid) }
 
-            Validation("GameOfLife") {
+            let GameOfLife = Validation {
                 Bind(N, to: 4)
             }
+            GameOfLife
         }
     }
 }

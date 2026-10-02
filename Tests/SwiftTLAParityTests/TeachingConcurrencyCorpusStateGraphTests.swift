@@ -6,7 +6,8 @@ struct TeachingConcurrencyCorpusStateGraphTests {
     @Test("The five-process Simple configuration checks its complete graph and three invariants")
     func configuredSimple() throws {
         let scenario = try #require(TeachingSimpleN5Model.validationScenarios().first)
-        #expect(scenario.name == "Simple")
+        #expect(scenario.name == "simpleValidation")
+        #expect(scenario.displayName == "Simple")
         let run = try NativeScenarioRun(scenario, maximumStates: 1_000)
         try run.validateExpectations()
         #expect(run.coverage.coversCompleteScenario)
@@ -22,7 +23,8 @@ struct TeachingConcurrencyCorpusStateGraphTests {
     @Test("The eight-process SimpleRegular configuration checks its complete graph and three invariants")
     func configuredSimpleRegular() throws {
         let scenario = try #require(TeachingSimpleRegularN8Model.validationScenarios().first)
-        #expect(scenario.name == "SimpleRegular")
+        #expect(scenario.name == "simpleRegularValidation")
+        #expect(scenario.displayName == "SimpleRegular")
         let run = try NativeScenarioRun(scenario, maximumStates: 300_000)
         try run.validateExpectations()
         #expect(run.coverage.coversCompleteScenario)

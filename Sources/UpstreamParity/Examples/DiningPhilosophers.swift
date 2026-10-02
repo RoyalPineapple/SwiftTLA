@@ -36,7 +36,7 @@ package struct DiningPhilosophersModel: Sendable {
             let TypeOK = Invariant()
             let ExclusiveAccess = Invariant()
 
-            Algorithm("DiningPhilosophers", scoped: { scope in
+            let DiningPhilosophers = Algorithm(scoped: { scope in
                 let forks = scope.sharedVar(initial: Function<Philosopher, Fork>.literal(
                     (Philosopher.one, Fork(holder: Philosopher.one, clean: false)),
                     (Philosopher.two, Fork(holder: Philosopher.one, clean: false)),
@@ -143,10 +143,13 @@ package struct DiningPhilosophersModel: Sendable {
                     }
                 }
             })
-            Validation("NP5") {}
-            Validation("AP NP5") {}
+            DiningPhilosophers
+            let NP5 = Validation {}
+            NP5
+            let apNP5 = Validation(label: "AP NP5") {}
                 .checking(only: [TypeOK, ExclusiveAccess])
                 .behavior(.initialAndNext)
+            apNP5
         }
     }
 }

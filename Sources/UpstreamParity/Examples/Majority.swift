@@ -66,10 +66,11 @@ package struct MajorityModel: Sendable {
                         }.cardinality <= i - 1 - cnt
                     }
             }
-            Validation("MCMajority") {
+            let MCMajority = Validation {
                 Bind(Value, to: Set<Element>([Element.A, Element.B, Element.C]))
                 Bind(bound, to: 5)
             }.checkingDeadlock(false)
+            MCMajority
         }
     }
 }

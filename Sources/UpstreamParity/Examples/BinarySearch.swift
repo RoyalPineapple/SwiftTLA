@@ -22,7 +22,7 @@ package struct BinarySearchModel: Sendable {
             let TypeOK = Invariant()
             let Inv = Invariant()
             let Termination = Temporal()
-            Algorithm("BinarySearch", fairness: .weak, scoped: { scope in
+            let BinarySearch = Algorithm(fairness: .weak, scoped: { scope in
                 let seq = scope.sharedVar(in: SortedSequences(
                     of: Values,
                     lengths: IntRange(1, through: MaxSeqLen)
@@ -82,10 +82,12 @@ package struct BinarySearchModel: Sendable {
                 }
                 Termination(.eventually(Finished()))
             })
-            Validation("MCBinarySearch") {
+            BinarySearch
+            let MCBinarySearch = Validation {
                 Bind(Values, to: Set<Int>([1, 2, 3, 4, 5]))
                 Bind(MaxSeqLen, to: 8)
             }
+            MCBinarySearch
         }
     }
 }

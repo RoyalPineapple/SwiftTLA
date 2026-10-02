@@ -7,7 +7,8 @@ struct DiningPhilosophersCorpusConfigurationTests {
     @Test("Spec and INIT/NEXT configurations share the complete Dining graph")
     func preservesBothConfigurations() throws {
         let scenarios = try DiningPhilosophersModel.validationScenarios()
-        #expect(scenarios.map(\.name) == ["NP5", "AP NP5"])
+        #expect(scenarios.map(\.name) == ["NP5", "apNP5"])
+        #expect(scenarios.map(\.displayName) == ["NP5", "AP NP5"])
         let runs = try scenarios.map { try NativeScenarioRun($0, maximumStates: 67) }
         for run in runs { try run.validateExpectations() }
         #expect(runs[0].native.graph == runs[1].native.graph)

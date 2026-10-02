@@ -17,7 +17,7 @@ package struct NQueensModel: Sendable {
             let NoSolutions = Invariant()
             let Invariant = Invariant()
             let Termination = Temporal()
-            Algorithm("Queens", fairness: .weak, scoped: { scope in
+            let Queens = Algorithm(fairness: .weak, scoped: { scope in
                 let todo = scope.sharedVar(initial: Set<[Int]>([Array<Int>([])]))
                 let sols = scope.sharedVar(initial: Set<[Int]>([]))
 
@@ -86,7 +86,9 @@ package struct NQueensModel: Sendable {
                     }
                 }
             })
-            Validation("FourQueens") { Bind(N, to: 4) }.expect(NoSolutions, .violated)
+            Queens
+            let FourQueens = Validation { Bind(N, to: 4) }.expect(NoSolutions, .violated)
+            FourQueens
         }
     }
 }

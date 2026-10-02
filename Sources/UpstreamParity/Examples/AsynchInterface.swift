@@ -45,8 +45,10 @@ package struct AsynchInterfaceModel: Sendable {
             TypeInvariant {
                 Data.contains(val) && rdy >= 0 && rdy <= 1 && ack >= 0 && ack <= 1
             }
-            Validation("Upstream") { Bind(Data, to: Set<Datum>([Datum.d1, Datum.d2, Datum.d3])) }
-            Validation("APAsynchInterface") { Bind(Data, to: Set<Datum>([Datum.ap1, Datum.ap2])) }
+            let Upstream = Validation { Bind(Data, to: Set<Datum>([Datum.d1, Datum.d2, Datum.d3])) }
+            Upstream
+            let APAsynchInterface = Validation { Bind(Data, to: Set<Datum>([Datum.ap1, Datum.ap2])) }
+            APAsynchInterface
         }
     }
 }

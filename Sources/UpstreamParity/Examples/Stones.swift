@@ -44,10 +44,11 @@ package struct StonesModel: Sendable {
                                 } || PrintT("No solution")
                             })
                     }))
-            Validation("Stones") {
+            let Stones = Validation {
                 Bind(W, to: 40)
                 Bind(N, to: 4)
             }.checkingDeadlock(false)
+            Stones
         }
     }
 }

@@ -52,8 +52,10 @@ package struct ChannelModel: Sendable {
                     && IntRange(0, through: 1).contains(chan.rdy)
                     && IntRange(0, through: 1).contains(chan.ack)
             }
-            Validation("Upstream") { Bind(Data, to: Set<Datum>([Datum.d1, Datum.d2, Datum.d3])) }
-            Validation("APChannel") { Bind(Data, to: Set<Datum>([Datum.ap1, Datum.ap2])) }
+            let Upstream = Validation { Bind(Data, to: Set<Datum>([Datum.d1, Datum.d2, Datum.d3])) }
+            Upstream
+            let APChannel = Validation { Bind(Data, to: Set<Datum>([Datum.ap1, Datum.ap2])) }
+            APChannel
         }
     }
 }

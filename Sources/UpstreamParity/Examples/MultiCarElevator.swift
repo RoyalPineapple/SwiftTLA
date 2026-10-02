@@ -92,7 +92,8 @@ package struct MultiCarElevator: Sendable {
                     && cars[car].floor == floor)
                 Assign(cars[car].rider, to: "none")
             }
-            Validation("MultiCarElevator") {}.checkingDeadlock(false)
+            let MultiCarElevator = Validation {}.checkingDeadlock(false)
+            MultiCarElevator
         }
     }
 }

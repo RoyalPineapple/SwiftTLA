@@ -12,7 +12,7 @@ package struct SumSequenceModel: Sendable {
         #spec("SumSequence") { model in
             Extends(.integers)
             let Values = model.parameter(as: Set<Int>.self, in: Subsets(of: Int.all))
-            Algorithm("SumSequence", fairness: .weak, scoped: { scope in
+            let SumSequence = Algorithm(fairness: .weak, scoped: { scope in
                 let seq = scope.sharedVar(in: Sequences(of: Values))
                 let sum = scope.sharedVar(initial: 0)
                 let n = scope.sharedVar(initial: 1)
@@ -48,6 +48,7 @@ package struct SumSequenceModel: Sendable {
                 }
                 Eventually("Termination", Finished())
             })
+            SumSequence
         }
     }
 }

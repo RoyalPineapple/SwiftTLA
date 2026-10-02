@@ -30,7 +30,7 @@ package struct EchoModel: Sendable {
     package static var spec: TLASpec {
         #spec("Echo") {
             Extends(.finiteSets)
-            Algorithm("Echo", scoped: { (scope: AlgorithmScope) in
+            let Echo = Algorithm(scoped: { (scope: AlgorithmScope) in
                 let inbox: SharedVariable<[Node: Set<Message>]> = scope.sharedVar(initial: [
                     .a: Set<Message>(), .b: Set<Message>(), .c: Set<Message>()
                 ])
@@ -83,6 +83,7 @@ package struct EchoModel: Sendable {
                     }
                 })
             })
+            Echo
         }
     }
 }

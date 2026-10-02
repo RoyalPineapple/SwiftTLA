@@ -30,7 +30,7 @@ package struct ParallelReachableModel: Sendable {
     package static var spec: TLASpec {
         #spec("ParallelReachability") {
             Extends(.finiteSets)
-            Algorithm("ParallelReachability", scoped: { scope in
+            let ParallelReachability = Algorithm(scoped: { scope in
                 let nodes = SetExpr<Node>.literal(.one, .two, .three, .four)
                 let successors = Select(
                     from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { graph in
@@ -89,6 +89,7 @@ package struct ParallelReachableModel: Sendable {
                     frontier.isSubset(of: SetExpr<Node>.literal(.one, .two, .three, .four))
                 }
             })
+            ParallelReachability
         }
     }
 }

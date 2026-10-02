@@ -5053,7 +5053,7 @@
           "implementations": [
             {
               "file": "Sources/UpstreamParity/Examples/DiningPhilosophers.swift",
-              "scenario": "AP NP5",
+              "scenario": "apNP5",
               "caseID": "ap-dining-philosophers"
             }
           ],
@@ -8152,7 +8152,7 @@
           "verifiedSourceSHA": "6e1cd676062674e83985bab679e5e642c3b82f96",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [{"file": "Sources/UpstreamParity/Examples/PrisonerSingleSwitch.swift", "scenario": "Prisoner", "caseID": "prisoners-single-switch-0"}],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/PrisonerSingleSwitch.swift", "scenario": "prisonerValidation", "caseID": "prisoners-single-switch-0"}],
           "evidence": [{
             "sourceSHA": "6e1cd676062674e83985bab679e5e642c3b82f96",
             "developerToolsVersion": "16.4",
@@ -9711,7 +9711,7 @@
           "implementations": [
             {
               "file": "Sources/UpstreamParity/Examples/HourClock2.swift",
-              "scenario": "AP Upstream",
+              "scenario": "apUpstream",
               "caseID": "ap-hour-clock-2"
             }
           ],
@@ -10130,7 +10130,7 @@
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
-            {"file": "Sources/UpstreamParity/Examples/TeachingConcurrency_Simple.swift", "scenario": "Simple", "caseID": "teaching-simple-5"}
+            {"file": "Sources/UpstreamParity/Examples/TeachingConcurrency_Simple.swift", "scenario": "simpleValidation", "caseID": "teaching-simple-5"}
           ],
           "evidence": [{
             "sourceSHA": "bcde58919466b453beaf60c58a9c4d340dc01502",
@@ -10154,7 +10154,7 @@
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
-            {"file": "Sources/UpstreamParity/Examples/TeachingConcurrency_SimpleRegular.swift", "scenario": "SimpleRegular", "caseID": "teaching-simple-regular-8"}
+            {"file": "Sources/UpstreamParity/Examples/TeachingConcurrency_SimpleRegular.swift", "scenario": "simpleRegularValidation", "caseID": "teaching-simple-regular-8"}
           ],
           "evidence": [{
             "sourceSHA": "bcde58919466b453beaf60c58a9c4d340dc01502",

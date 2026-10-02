@@ -90,6 +90,14 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       The seven DieHard-family validation declarations now use bound identities
       while retaining their published configuration names; all 11 selected
       DieHard-family checking tests passed through the guarded local wrapper.
+      All remaining upstream-example Algorithm and Validation declarations now
+      use bound identities. Five scenario selectors whose names could not be
+      reused as distinct Swift bindings retain their former text as display
+      labels, with manifest and coverage selectors updated but case IDs and
+      pinned upstream inputs unchanged. A guarded 17-test batch covering the
+      affected teaching, Dining, HourClock2, Prisoner, Chang-Roberts, and
+      inventory contracts passed locally; hosted parity for these edits is
+      still pending.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck

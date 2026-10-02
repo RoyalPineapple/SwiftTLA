@@ -16,7 +16,7 @@ package struct FindHighestModel: Sendable {
             let InductiveInvariant = Invariant()
             let DoneIndexValue = Invariant()
             let Correctness = Invariant()
-            Algorithm("Highest", scoped: { scope in
+            let Highest = Algorithm(scoped: { scope in
                 let f = scope.sharedVar(in: Sequences(
                     of: IntRange(0, through: MaxNat),
                     lengths: IntRange(0, through: MaxNat)
@@ -52,10 +52,12 @@ package struct FindHighestModel: Sendable {
                     }
                 }
             })
-            Validation("MCFindHighest") {
+            Highest
+            let MCFindHighest = Validation {
                 Bind(MaxLength, to: 3)
                 Bind(MaxNat, to: 4)
             }
+            MCFindHighest
         }
     }
 }

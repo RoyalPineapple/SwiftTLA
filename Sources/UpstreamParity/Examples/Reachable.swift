@@ -28,7 +28,7 @@ package struct ReachableModel: Sendable {
         #spec("Reachable") {
             Extends(.finiteSets)
             Extends(.integers)
-            Algorithm("Reachable", fairness: .weak, scoped: { scope in
+            let Reachable = Algorithm(fairness: .weak, scoped: { scope in
                 let nodes = SetExpr<Node>.literal(.one, .two, .three, .four)
                 let successors = Select(
                     from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { graph in
@@ -59,6 +59,7 @@ package struct ReachableModel: Sendable {
                 }
                 Eventually("EventuallyFinished", Finished())
             })
+            Reachable
         }
     }
 }

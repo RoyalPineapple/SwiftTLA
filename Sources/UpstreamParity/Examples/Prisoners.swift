@@ -76,10 +76,11 @@ package struct PrisonersModel: Sendable {
             }))
             Liveness(.eventually(done))
 
-            Validation("Prisoners") {
+            let Prisoners = Validation {
                 Bind(Prisoner, to: Set<PrisonerID>([.p1, .p2, .p3, .p4]))
                 Bind(Counter, to: PrisonerID.p1)
             }
+            Prisoners
         }
     }
 }

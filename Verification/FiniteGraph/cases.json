@@ -434,7 +434,7 @@
     {
       "id": "ap-dining-philosophers",
       "sourceModel": "dining-philosophers",
-      "scenario": "AP NP5",
+      "scenario": "apNP5",
       "module": "dining-philosophers/APDiningPhilosophers.tla",
       "configuration": "dining-philosophers/APDiningPhilosophers.cfg",
       "imports": ["dining-philosophers/DiningPhilosophers.tla"],
@@ -498,7 +498,7 @@
     {
       "id": "ap-hour-clock-2",
       "sourceModel": "hour-clock-2",
-      "scenario": "AP Upstream",
+      "scenario": "apUpstream",
       "module": "hour-clock/APHourClock2.tla",
       "configuration": "hour-clock/APHourClock2.cfg",
       "imports": ["hour-clock/HourClock2.tla", "hour-clock/HourClock.tla"],
@@ -1082,7 +1082,7 @@
     {
       "id": "teaching-simple-5",
       "sourceModel": "teaching-simple",
-      "scenario": "Simple",
+      "scenario": "simpleValidation",
       "module": "teaching-concurrency/Simple.tla",
       "configuration": "teaching-concurrency/Simple.cfg",
       "imports": ["boulanger/TLAPS.tla"],
@@ -1101,7 +1101,7 @@
     {
       "id": "teaching-simple-regular-8",
       "sourceModel": "teaching-simple-regular",
-      "scenario": "SimpleRegular",
+      "scenario": "simpleRegularValidation",
       "module": "teaching-concurrency/SimpleRegular.tla",
       "configuration": "teaching-concurrency/SimpleRegular.cfg",
       "imports": ["boulanger/TLAPS.tla"],
@@ -1182,7 +1182,7 @@
     {
       "id": "prisoners-single-switch-0",
       "sourceModel": "prisoners-single-switch",
-      "scenario": "Prisoner",
+      "scenario": "prisonerValidation",
       "module": "prisoners-single-switch/Prisoner.tla",
       "configuration": "prisoners-single-switch/Prisoner.cfg",
       "imports": [],

@@ -25,7 +25,8 @@ package struct TwoPhaseModel: Sendable {
             }
 
             Inv { SetExpr<Int>.literal(0, 1).contains(p) && SetExpr<Int>.literal(0, 1).contains(c) }
-            Validation("MCTwoPhase") {}
+            let MCTwoPhase = Validation {}
+            MCTwoPhase
         }
     }
 }

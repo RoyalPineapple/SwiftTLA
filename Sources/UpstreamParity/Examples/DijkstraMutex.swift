@@ -51,7 +51,7 @@ package struct DijkstraMutexModel: Sendable {
     package static var spec: TLASpec {
         #spec("DijkstraMutex") {
             Extends(.integers)
-            Algorithm("Mutex", scoped: { scope in
+            let Mutex = Algorithm(scoped: { scope in
                 let b = scope.sharedVar(initial: Function<Process, Bool>.literal(
                     (.one, true), (.two, true), (.three, true)
                 ))
@@ -155,6 +155,7 @@ package struct DijkstraMutexModel: Sendable {
                     }
                 }
             })
+            Mutex
         }
     }
 }

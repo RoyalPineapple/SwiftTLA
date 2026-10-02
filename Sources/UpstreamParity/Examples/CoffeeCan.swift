@@ -63,10 +63,14 @@ package struct CoffeeCanModel: Sendable {
                 then: .eventually(can.black == 1 && can.white == 0),
                 else: .eventually(can.black == 0 && can.white == 1)))
 
-            Validation("CoffeeCan100Beans") { Bind(MaxBeanCount, to: 100) }
-            Validation("CoffeeCan1000Beans") { Bind(MaxBeanCount, to: 1000) }
-            Validation("CoffeeCan3000Beans") { Bind(MaxBeanCount, to: 3000) }
-            Validation("APCoffeeCan") { Bind(MaxBeanCount, to: 5) }.checking(only: [TypeInvariant])
+            let CoffeeCan100Beans = Validation { Bind(MaxBeanCount, to: 100) }
+            CoffeeCan100Beans
+            let CoffeeCan1000Beans = Validation { Bind(MaxBeanCount, to: 1000) }
+            CoffeeCan1000Beans
+            let CoffeeCan3000Beans = Validation { Bind(MaxBeanCount, to: 3000) }
+            CoffeeCan3000Beans
+            let APCoffeeCan = Validation { Bind(MaxBeanCount, to: 5) }.checking(only: [TypeInvariant])
+            APCoffeeCan
         }
     }
 }
