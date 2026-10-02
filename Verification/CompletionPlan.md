@@ -103,9 +103,7 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       presentation-only labels retain readable scenario titles. A guarded
       52-test batch covering selected checks, configured processes, records,
       dictionaries, temporal checks, refinement, and binary evidence passed
-      locally. The nested formal-core `TLASpec("UnitCounter")` algorithm still
-      uses its explicit formal name; public positional authoring and parser
-      rejection are not complete.
+      locally. Public positional authoring and parser rejection are not complete.
       Four parity fixture files, seven configured-model fixtures, three
       external-consumer fixtures, and the two documentation models now use
       bound declarations. Their guarded local checks passed: 42 focused model
@@ -151,6 +149,9 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       direct formal-core builders remain explicit comparison oracles.
       Three native-code-generation parser samples now use bound algorithms;
       their focused emission and execution checks passed locally.
+      The nested `TLASpec("UnitCounter")` inside a generated refinement model
+      now binds and registers `UnitLoop`; both focused refinement checks passed.
+      No positional Algorithm or Validation calls remain under `Sources/`.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck
