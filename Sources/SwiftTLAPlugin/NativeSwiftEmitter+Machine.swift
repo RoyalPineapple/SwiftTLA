@@ -38,6 +38,12 @@ extension NativeSwiftEmitter {
             defer { context = run! }
             return try _successors(checking: &run)
         }
+        public func visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>,
+                                    _ visit: (Action, Self) throws -> Bool) throws -> Bool {
+            var run: CheckingContext<CheckingRegisters>? = context
+            defer { context = run! }
+            return try _visitSuccessors(checking: &run, visit)
+        }
         public struct Snapshot: Hashable, Sendable {
             public let state: State
             \(fields)
@@ -472,6 +478,8 @@ extension NativeSwiftEmitter {
             public func enabledActions() throws -> [Action] { [] }
             public func successors() throws -> [(action: Action, machine: Self)] { [] }
             private func _successors(checking context: inout CheckingContext<CheckingRegisters>?) throws -> [(action: Action, machine: Self)] { [] }
+            private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
+                                          _ visit: (Action, Self) throws -> Bool) throws -> Bool { false }
             public func formalCall(for action: Action) throws -> FormalActionCall {}
             """)
         }
@@ -578,12 +586,24 @@ extension NativeSwiftEmitter {
             return try _successors(checking: &context)
         }
         private func _successors(checking context: inout CheckingContext<CheckingRegisters>?) throws -> [(action: Action, machine: Self)] {
-            try _actions().flatMap { action in
-                try _successors(for: action, checking: &context).map { execution in
+            var result: [(action: Action, machine: Self)] = []
+            _ = try _visitSuccessors(checking: &context) { action, machine in
+                result.append((action, machine))
+                return true
+            }
+            return result
+        }
+        private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
+                                      _ visit: (Action, Self) throws -> Bool) throws -> Bool {
+            var found = false
+            for action in try _actions() {
+                for execution in try _successors(for: action, checking: &context) {
                     try Self._validateCollections(execution\(collectionArguments))
-                    return (action, Self(execution: execution\(collectionArguments)))
+                    found = true
+                    if try !visit(action, Self(execution: execution\(collectionArguments))) { return true }
                 }
             }
+            return found
         }
         public func enabledActions() throws -> [Action] {
             try _actions().filter { try isEnabled($0) }

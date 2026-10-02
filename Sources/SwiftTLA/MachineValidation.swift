@@ -221,39 +221,50 @@ public enum MachineValidator {
                 pending[head].machine = nil
                 head += 1
                 let successorStartedAt = DispatchTime.now().uptimeNanoseconds
-                let successors = try machine.successors(checking: &context)
-                successorNanoseconds += DispatchTime.now().uptimeNanoseconds - successorStartedAt
-                successorCalls += 1
-                if successors.isEmpty {
-                    deadlockFound = true
-                    try emitEvent(.deadlock(state: source))
-                    if checking.checkDeadlock && stopOnViolation { return summary(.decisiveViolation) }
-                }
-                for successor in successors {
-                    guard sameConfiguration(successor.machine) else {
+                var processingNanoseconds: UInt64 = 0
+                var decision: MachineValidationSummary<Machine.Property>.Completion?
+                let hasSuccessor = try machine.visitSuccessors(checking: &context) { action, successor in
+                    let processingStartedAt = DispatchTime.now().uptimeNanoseconds
+                    defer {
+                        processingNanoseconds += DispatchTime.now().uptimeNanoseconds - processingStartedAt
+                    }
+                    guard sameConfiguration(successor) else {
                         throw ExplorationError.configurationMismatch
                     }
                     // State predicates and the constraint are functions of a complete
                     // snapshot. A previously discovered target has already passed
                     // those checks; only its additional labeled edge is new.
-                    let snapshot = successor.machine.snapshot
+                    let snapshot = successor.snapshot
                     let (key, existing) = stateID(snapshot)
                     if let target = existing {
                         edgeCount += 1
-                        try emitEvent(.edge(source: source, action: successor.action, target: target))
-                        continue
+                        try emitEvent(.edge(source: source, action: action, target: target))
+                        return true
                     }
-                    let reached = try checkReachability(successor.machine, predecessor: source,
-                                                        action: successor.action)
-                    let failed = try checkInvariants(successor.machine, predecessor: source,
-                                                     action: successor.action)
-                    if failed && stopOnViolation { return summary(.decisiveViolation) }
-                    if reached && stopOnReachability { return summary(.decisiveReachability) }
-                    guard try constraintHolds(successor.machine) else { continue }
-                    let target = try insertDiscovered(successor.machine, key: key,
-                        initial: false, predecessor: source, action: successor.action)
+                    let reached = try checkReachability(successor, predecessor: source, action: action)
+                    let failed = try checkInvariants(successor, predecessor: source, action: action)
+                    if failed && stopOnViolation {
+                        decision = .decisiveViolation
+                        return false
+                    }
+                    if reached && stopOnReachability {
+                        decision = .decisiveReachability
+                        return false
+                    }
+                    guard try constraintHolds(successor) else { return true }
+                    let target = try insertDiscovered(successor, key: key,
+                        initial: false, predecessor: source, action: action)
                     edgeCount += 1
-                    try emitEvent(.edge(source: source, action: successor.action, target: target))
+                    try emitEvent(.edge(source: source, action: action, target: target))
+                    return true
+                }
+                successorNanoseconds += DispatchTime.now().uptimeNanoseconds - successorStartedAt - processingNanoseconds
+                successorCalls += 1
+                if let decision { return summary(decision) }
+                if !hasSuccessor {
+                    deadlockFound = true
+                    try emitEvent(.deadlock(state: source))
+                    if checking.checkDeadlock && stopOnViolation { return summary(.decisiveViolation) }
                 }
             }
             // The frontier has no reason to retain machines already expanded.

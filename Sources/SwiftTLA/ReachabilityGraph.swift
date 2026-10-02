@@ -29,6 +29,12 @@ public protocol StateMachine: Sendable {
     func successors() throws -> [(action: Action, machine: Self)]
     func initialCheckingRegisters() throws -> CheckingRegisters
     func successors(checking context: inout CheckingContext<CheckingRegisters>) throws -> [(action: Action, machine: Self)]
+    /// Visits generated transitions in order. Returning false stops after that transition.
+    /// The result reports whether any transition was enabled.
+    func visitSuccessors(
+        checking context: inout CheckingContext<CheckingRegisters>,
+        _ visit: (Action, Self) throws -> Bool
+    ) throws -> Bool
 }
 
 public enum ExplorationError: Error, Equatable, Sendable {

@@ -47,4 +47,14 @@ struct CheckingContextProbe: StateMachine {
         guard context.registers.visited.insert(node).inserted else { throw Failure.lostRegisters }
         return try machine.successors().map { ($0.action, Self(machine: $0.machine)) }
     }
+
+    func visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>,
+                         _ visit: (Action, Self) throws -> Bool) throws -> Bool {
+        var found = false
+        for successor in try successors(checking: &context) {
+            found = true
+            if try !visit(successor.action, successor.machine) { break }
+        }
+        return found
+    }
 }

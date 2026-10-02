@@ -28,6 +28,14 @@ struct BoulangerCorpusExecutionTests {
 
         let choices = try machine.successors().filter { $0.action == .e1(process: 1) }
         #expect(Set(choices.map { $0.machine.snapshot }).count == 2)
+        var context = CheckingContext(registers: try machine.initialCheckingRegisters())
+        var streamed: [BoulangerModel.Snapshot] = []
+        let found = try machine.visitSuccessors(checking: &context) { action, successor in
+            if action == .e1(process: 1) { streamed.append(successor.snapshot) }
+            return true
+        }
+        #expect(found)
+        #expect(streamed == choices.map { $0.machine.snapshot })
         for choice in choices {
             #expect(try choice.machine.violatedInvariants().isEmpty)
         }

@@ -30,8 +30,18 @@ struct CheckingContextTests {
         try context.advanceBreadthFirstLevel()
         let application = try machine.successors()
         let checking = try machine.successors(checking: &context)
+        var streamContext = CheckingContext(registers: try machine.initialCheckingRegisters())
+        try streamContext.advanceBreadthFirstLevel()
+        var streamed: [(action: ConvergingFrontiers.Action, snapshot: ConvergingFrontiers.Snapshot)] = []
+        let found = try machine.visitSuccessors(checking: &streamContext) { action, successor in
+            streamed.append((action, successor.snapshot))
+            return true
+        }
+        #expect(found)
         #expect(application.map(\.action) == checking.map(\.action))
         #expect(application.map { $0.machine.snapshot } == checking.map { $0.machine.snapshot })
+        #expect(streamed.map(\.action) == checking.map(\.action))
+        #expect(streamed.map(\.snapshot) == checking.map { $0.machine.snapshot })
         #expect(machine.snapshot == (try ConvergingFrontiers.makeMachine(.init(node: 1))).snapshot)
     }
 
