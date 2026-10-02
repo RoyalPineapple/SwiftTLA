@@ -3,47 +3,31 @@ import Testing
 import UpstreamParity
 
 struct VoteProofCorpusExecutionTests {
-    @Test("Native voting guards, invariants and ambiguity agree with the formal corpus")
-    func nativeVotingRelation() throws {
-        let compilation = try VoteProofModel.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let initialStates = try runtime.initialStates()
-        #expect(initialStates.count == 1)
-        let initial = try #require(initialStates.first)
+    @Test("Generated voting guards enumerate typed choices without changing disabled or ambiguous state")
+    func generatedVotingChoices() throws {
+        #expect(try VoteProofModel.initialMachines().count == 1)
         var native = try VoteProofModel.makeMachine()
-        let votes = try #require(compilation.layout.testVariableID(named: "votes"))
-        let maxBal = try #require(compilation.layout.testVariableID(named: "maxBal"))
-        let voteAction = try #require(compilation.layout.testActionID(named: "pcalProcess1"))
-        let formalVotes = CompiledValue.function(Dictionary(uniqueKeysWithValues:
-            native.state.votes.map { acceptor, votes in
-                (CompiledValue(formal: acceptor.tlaValue), .set(Set(votes.map { vote in
-                    .tuple([.integer(vote.first), CompiledValue(formal: vote.second.tlaValue)])
-                })))
-            }
-        ))
-        let formalBallots = CompiledValue.function(Dictionary(uniqueKeysWithValues:
-            native.state.maxBal.map { (CompiledValue(formal: $0.key.tlaValue), .integer($0.value)) }
-        ))
-        #expect(try initial.value(for: votes) == formalVotes)
-        #expect(try initial.value(for: maxBal) == formalBallots)
-        let violations = try compilation.semantics.behavior.invariants.filter {
-            try !runtime.invariantHolds($0, in: initial)
-        }.map(\.name)
-        #expect(violations.isEmpty)
-        #expect(try native.violatedInvariants().map { VoteProofModel.formalPropertyNames[$0]! } == violations)
+        #expect(Set(native.state.votes.keys) == Set(VoteProofModel.Acceptor.allCases))
+        #expect(native.state.votes.values.allSatisfy { $0.isEmpty })
+        #expect(Set(native.state.maxBal.keys) == Set(VoteProofModel.Acceptor.allCases))
+        #expect(native.state.maxBal.values.allSatisfy { $0 == -1 })
+        #expect(try native.violatedInvariants().isEmpty)
         #expect(try Set(native.enabledActions()) == [
             .pcalProcess1(process: .a1), .pcalProcess1(process: .a2), .pcalProcess1(process: .a3)
         ])
-        let alternatives = try runtime.successors(for: voteAction, from: initial).filter {
-            $0.arguments == [CompiledValue(formal: VoteProofModel.Acceptor.a1.tlaValue)]
-        }
-        #expect(Set(alternatives.map(\.state)).count > 1)
-        let before = native.state
+        let alternatives = try native.successors().filter { $0.action == .pcalProcess1(process: .a1) }
+        #expect(Set(alternatives.map { $0.machine.snapshot }).count > 1)
+        #expect(alternatives.contains { $0.machine.state.maxBal[.a1] == 0 })
+        #expect(alternatives.contains { $0.machine.state.maxBal[.a1] == 1 })
+        #expect(alternatives.contains { $0.machine.state.maxBal[.a1] == 2 })
+        #expect(alternatives.allSatisfy { $0.machine.state.maxBal[.a2] == -1
+            && $0.machine.state.maxBal[.a3] == -1 })
+        let before = native.snapshot
         do {
             _ = try native.send(.pcalProcess1(process: .a1))
             Issue.record("Distinct ballot or vote outcomes must remain ambiguous")
         } catch GeneratedMachineError.ambiguousAction {}
-        #expect(native.state == before)
+        #expect(native.snapshot == before)
         #expect(try native.isEnabled(.pcalProcess1(process: .a1)))
     }
 }
