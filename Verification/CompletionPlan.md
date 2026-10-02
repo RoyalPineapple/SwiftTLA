@@ -87,7 +87,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       CI run `37056344561` failed only at the Apple evidence gate's obsolete
       six-test assertion; all seven GeneratedAppleModel and six CameraAdoption
       tests passed. Local commit `eae684ea` fixes that gate, but this SHA is
-      not an ordinary-CI-green admission candidate.
+      not an ordinary-CI-green admission candidate. Local commit `d0db3ba6`
+      partitions full state values during binary ingestion and removes the
+      second state hash/read pass; all 27 focused comparison tests pass. The
+      speedup remains unmeasured until a hosted run of that commit.
 - [ ] Preserve complete initial states, full state values, labeled edges,
       selected property/deadlock outcomes, and integrity-checked artifacts.
 - [ ] Run the exact case first, related regressions second, then ordinary CI and
@@ -214,7 +217,12 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       The remaining source-owned paths include `ModelChecker`,
       `RefinementChecker`, and `CompiledSpecification+TemporalAnalysis`; their
       formal-core test callers must migrate to generated-machine contracts, not
-      simply be deleted without equivalent behavioral proof.
+      simply be deleted without equivalent behavioral proof. VoteProof's
+      corpus execution test now checks generated initial values, typed ballot
+      choices, invariants, and ambiguity directly; its compiled-runtime oracle
+      and duplicate rendering-suite witness were removed in local commit
+      `097a1092`. The focused execution and rendering suites pass locally;
+      hosted acceptance remains pending.
 - [ ] Close AC-13 by removing replaced spellings, duplicate configuration,
       obsolete callers, compatibility aliases, and stale documentation.
 - [ ] Close AC-14 with generated-machine identity by default and sound,
