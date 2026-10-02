@@ -44,6 +44,7 @@ public struct ClockModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("Clock") {
+            let ValidTime = Invariant()
             let clock = Algorithm(label: "Clock", scoped: { scope in
                 let hour = scope.sharedVar(in: 0...23)
                 let minute = scope.sharedVar(in: 0...59)
@@ -79,7 +80,7 @@ public struct ClockModel: Sendable {
                     }
                 }
 
-                Invariant("ValidTime") {
+                ValidTime {
                     hour >= 0 && hour <= 23 &&
                     minute >= 0 && minute <= 59 &&
                     second >= 0 && second <= 59

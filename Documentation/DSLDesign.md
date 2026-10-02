@@ -574,7 +574,9 @@ solution even when some executions loop forever without finding it.
 Write puzzle goals positively:
 
 ```swift
-Reachable("Solved") {
+let Solved = Reachable()
+// Inside the algorithm:
+Solved {
     board.isSolved
 }
 ```
@@ -629,11 +631,12 @@ process population. Its predicate can reference the member and process-local sta
 The population must depend only on constants or immutable model parameters.
 
 ```swift
+let EachRecurs = AlwaysEventually()
 Each(members, fairness: .weak) { member in
     While(Step.toggle, true) {
         Assign(value, to: 1 - value)
     }
-    AlwaysEventually("EachRecurs", value == member)
+    EachRecurs(value == member)
 }
 ```
 
