@@ -103,14 +103,13 @@ extension ParserSession {
                 }
                 continue
             }
-            if let root = validationRoot(call) {
+            if validationRoot(call) != nil {
                 guard declaration.bindingSpecifier.text == "let", specBindings.validations[sourceName] == nil else {
                     components.diagnostics.append(.init(message: "A validation requires a unique immutable let binding.", source: binding))
                     continue
                 }
                 var parsed = TLASpec(name: components.name, variables: [], actions: [], invariants: [])
-                let boundName = root.arguments.first.map { $0.label == nil } == true ? nil : sourceName
-                _ = parseValidation(call, into: &parsed, boundName: boundName)
+                _ = parseValidation(call, into: &parsed, boundName: sourceName)
                 components.diagnostics.append(contentsOf: parsed.diagnostics)
                 if let validation = parsed.validationScenarios.first {
                     specBindings.validations[sourceName] = validation
@@ -287,8 +286,7 @@ extension ParserSession {
                     ))
                     continue
                 }
-                let boundName = call.arguments.first.map { $0.label == nil } == true ? nil : sourceName
-                if let algorithm = parseAlgorithm(call, into: &components, boundName: boundName) {
+                if let algorithm = parseAlgorithm(call, into: &components, boundName: sourceName) {
                     specBindings.algorithms[sourceName] = algorithm
                 }
             } else if typedFacadeType(call.calledExpression)?.name == "CollectionVar" {

@@ -1802,7 +1802,7 @@ private struct ProcedureGeneratedModel {
 
     static var spec: TLASpec {
         #spec("ProcedureGenerated") {
-            Algorithm("ProcedureGenerated", scoped: { scope in
+            let ProcedureGenerated = Algorithm(scoped: { scope in
                 let output = scope.sharedVar(_name: "output", initial: 0)
                 Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
                     let offset = scope.localVar(_name: "offset", initial: 1)
@@ -1814,6 +1814,7 @@ private struct ProcedureGeneratedModel {
                 Do(Step.start) { Call(ProcedureName.work, with: 7) }
                 Do(Step.finished) { Stop() }
             })
+            ProcedureGenerated
         }
     }
 }
@@ -1837,7 +1838,7 @@ private struct MacroProcessGeneratedModel {
 
     static var spec: TLASpec {
         #spec("MacroProcessGenerated") {
-            Algorithm("MacroProcessGenerated", scoped: { scope in
+            let MacroProcessGenerated = Algorithm(scoped: { scope in
                 let marked = scope.sharedVar(_name: "marked", initial: Function<Node, Bool>.literal((.first, false), (.second, false)))
                 let mark = Macro { (node: MacroParameter<Node>) in
                     Assign(marked, to: marked.updating(node, to: true))
@@ -1848,6 +1849,7 @@ private struct MacroProcessGeneratedModel {
                     Do(Step.done) { Stop() }
                 }
             })
+            MacroProcessGenerated
         }
     }
 }
@@ -1868,7 +1870,7 @@ private struct FunctionDomainGeneratedModel {
 
     static var spec: TLASpec {
         #spec("FunctionDomainGenerated") {
-            Algorithm("FunctionDomainGenerated", scoped: { scope in
+            let FunctionDomainGenerated = Algorithm(scoped: { scope in
                 let successors = scope.sharedVar(_name: "successors", in: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
@@ -1884,6 +1886,7 @@ private struct FunctionDomainGeneratedModel {
                     }
                 }
             })
+            FunctionDomainGenerated
         }
     }
 }
@@ -1894,7 +1897,7 @@ private struct StaticFormalSelectionModel {
 
     static var spec: TLASpec {
         #spec("StaticFormalSelection") {
-            Algorithm("StaticFormalSelection", scoped: { scope in
+            let StaticFormalSelection = Algorithm(scoped: { scope in
                 let selected = Select(
                     from: SetExpr<Int>.literal(1, 2, 3),
                     matching: { value in value.expr % 2 == 0 }
@@ -1904,6 +1907,7 @@ private struct StaticFormalSelectionModel {
                 Do(Step.done) { Stop() }
                 Invariant("SelectedEven") { current == 2 }
             })
+            StaticFormalSelection
         }
     }
 }
@@ -1926,7 +1930,7 @@ private struct StaticFilteredFunctionSelectionModel {
 
     static var spec: TLASpec {
         #spec("StaticFilteredFunctionSelection") {
-            Algorithm("StaticFilteredFunctionSelection", scoped: { scope in
+            let StaticFilteredFunctionSelection = Algorithm(scoped: { scope in
                 let successors = Select(
                     from: Where(Functions(
                         from: Node.all,
@@ -1943,6 +1947,7 @@ private struct StaticFilteredFunctionSelectionModel {
                 Do(Step.done) { Stop() }
                 Invariant("CurrentIsDefined") { current == current.expr }
             })
+            StaticFilteredFunctionSelection
         }
     }
 }

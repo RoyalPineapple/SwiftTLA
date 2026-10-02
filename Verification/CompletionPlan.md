@@ -103,7 +103,8 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       presentation-only labels retain readable scenario titles. A guarded
       52-test batch covering selected checks, configured processes, records,
       dictionaries, temporal checks, refinement, and binary evidence passed
-      locally. Public positional authoring and parser rejection are not complete.
+      locally. Public positional authoring and parser rejection were closed
+      locally later in this migration; hosted acceptance remains pending.
       Four parity fixture files, seven configured-model fixtures, three
       external-consumer fixtures, and the two documentation models now use
       bound declarations. Their guarded local checks passed: 42 focused model
@@ -152,9 +153,24 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       The nested `TLASpec("UnitCounter")` inside a generated refinement model
       now binds and registers `UnitLoop`; both focused refinement checks passed.
       No positional Algorithm or Validation calls remain under `Sources/`.
-      Migrate every remaining positional-name caller and scenario reference,
-      remove the old public forms, and settle the remaining
-      declaration/anonymous rules. Recheck
+      Forty-five algorithm parser samples now use bound declarations; their
+      62 focused tests passed. The parser now rejects inline, mutable,
+      positional-name, and explicit `_name` Algorithm/Validation declarations
+      instead of accepting another identity source. Five generated models in
+      the builder contract suite were migrated, while direct formal-core
+      builders remain package-local fixtures. The targeted identity diagnostic
+      and 148 related parser/builder tests passed; after package-scoping the
+      positional constructors, the targeted diagnostic passed again with the
+      entire local package compiling through the guarded wrapper, and all 148
+      related parser/builder tests passed again. This is local diagnostic
+      evidence, not hosted acceptance.
+      A binding named `algorithm` still collides with a PlusCal reserved word;
+      source identity must remain the Swift binding while only the formal
+      rendering name is escaped.
+      Audit remaining package-local positional formal-core fixtures and
+      scenario references; do not expose them as application authoring.
+      Settle reserved-name rendering and the remaining declaration/anonymous
+      rules. Recheck
       generated TLA and native scenario identity on the migrated matrix.
 - [ ] Audit AC-01 through AC-19 against each criterion's full acceptance text.
       Existing `implemented` labels are not acceptance evidence by themselves.

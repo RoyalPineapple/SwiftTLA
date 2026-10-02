@@ -55,7 +55,7 @@ import SwiftTLAMacros
             "Procedure(ProcedureName.work, scoped: { scope in scope.localVar(initial: false) })"
         ] {
             let parsed = parseAlgorithm(
-                try parseSpecTestClosure("{ Algorithm(\"Counter\") { \(body) } }"),
+                try parseSpecTestClosure("{ let Counter = Algorithm { \(body) } }"),
                 enums: [parserTestEnum("ParserNode", finiteValues: [.string("left"), .string("right")]), procedureNames]
             )
             let diagnostic = try #require(parsed.diagnostics.first)
@@ -71,7 +71,7 @@ import SwiftTLAMacros
     func rejectsUndecodableElseBranch(_ statement: String) throws {
         let parsed = parseAlgorithm(try parseSpecTestClosure("""
         {
-            Algorithm("Conditional", scoped: { scope in
+            let Conditional = Algorithm(scoped: { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.increment) {
                     \(statement)
@@ -89,7 +89,7 @@ import SwiftTLAMacros
     func rejectsInvalidStepGuard(_ argument: String) throws {
         let parsed = parseAlgorithm(try parseSpecTestClosure("""
         {
-            Algorithm("InvalidGuard", scoped: { scope in
+            let InvalidGuard = Algorithm(scoped: { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.increment, \(argument)) {
                     Assign(count, to: count + 1)
@@ -105,7 +105,7 @@ import SwiftTLAMacros
     func parsesBoundedAlgorithm() throws {
         let source = """
         {
-            Algorithm("Counter", scoped: { scope in
+            let Counter = Algorithm(scoped: { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Each(Node.all) { node in
                     Do(TestControlLabel.increment, when: count < 2) {
@@ -113,6 +113,7 @@ import SwiftTLAMacros
                     }
                 }
             })
+            Counter
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -138,12 +139,13 @@ import SwiftTLAMacros
     func retainsUnsupportedProcedureDeclarationForCompilerDiagnostic() throws {
         let parsed = parseAlgorithm(try parseSpecTestClosure("""
         {
-            Algorithm("ProcedureCapability") {
+            let ProcedureCapability = Algorithm {
                 Procedure(ProcedureName.work) {
                     Do(TestControlLabel.advance) { Return() }
                     WeakFairnessNext()
                 }
             }
+            ProcedureCapability
         }
         """), enums: [procedureNames])
 
@@ -164,13 +166,14 @@ import SwiftTLAMacros
     func preservesFunctionMappingTypeForGeneratedSurface() throws {
         let source = """
         {
-            Algorithm("Counter", scoped: { scope in
+            let Counter = Algorithm(scoped: { scope in
                 let values = scope.sharedVar(_name: "values", initial: Function<Node, SetExpr<Int>>.mapping { _ in SetExpr<Int>() })
                 Do(TestControlLabel.increment) {
                     Assign(values, to: values)
                     Stop()
                 }
             })
+            Counter
         }
         """
         let parsed = parseAlgorithm(
@@ -187,13 +190,14 @@ import SwiftTLAMacros
     func parsesScopedSharedBindingInMappingInitializer() throws {
         let source = """
         {
-            Algorithm("MappingScope", scoped: { scope in
+            let MappingScope = Algorithm(scoped: { scope in
                 let enabled = scope.sharedVar(_name: "enabled", initial: true)
                 let values = scope.sharedVar(_name: "values", initial: Function<Node, Int>.mapping { _ in
                     If(enabled == true, then: 1, else: 0)
                 })
                 Do(TestControlLabel.done) { Stop() }
             })
+            MappingScope
         }
         """
         let parsed = parseAlgorithm(
@@ -209,7 +213,7 @@ import SwiftTLAMacros
     func parsesScopedSharedBindingInEachBody() throws {
         let source = """
         {
-            Algorithm("EachScope", scoped: { scope in
+            let EachScope = Algorithm(scoped: { scope in
                 let enabled = scope.sharedVar(_name: "enabled", initial: true)
                 Each(Node.all) { _ in
                     Do(TestControlLabel.advance, when: enabled == true) {
@@ -217,6 +221,7 @@ import SwiftTLAMacros
                     }
                 }
             })
+            EachScope
         }
         """
         let parsed = parseAlgorithm(
@@ -232,13 +237,14 @@ import SwiftTLAMacros
     func parsesScopedSharedBindingInMacroDeclaration() throws {
         let source = """
         {
-            Algorithm("MacroScope", scoped: { scope in
+            let MacroScope = Algorithm(scoped: { scope in
                 let enabled = scope.sharedVar(_name: "enabled", initial: true)
                 let waitUntilEnabled = Macro { (value: MacroParameter<Bool>) in
                     When(enabled == value.expr)
                 }
                 Do(TestControlLabel.advance) { waitUntilEnabled(enabled) }
             })
+            MacroScope
         }
         """
         let parsed = parseAlgorithm(try parseSpecTestClosure(source))
@@ -251,7 +257,7 @@ import SwiftTLAMacros
     func parsesScopedEnumCases(localName: String) throws {
         let source = """
         {
-            Algorithm("EnumScope", scoped: { scope in
+            let EnumScope = Algorithm(scoped: { scope in
                 let phases = scope.sharedVar(_name: "phases", initial: Function<Node, Phase>.mapping { node in
                     If(node == Node.one, then: .ready, else: .done)
                 })
@@ -262,6 +268,7 @@ import SwiftTLAMacros
                     }
                 })
             })
+            EnumScope
         }
         """
         let parsed = parseAlgorithm(
@@ -296,7 +303,7 @@ import SwiftTLAMacros
     func parsesTupleAppendInLet() throws {
         let source = """
         {
-            Algorithm("TupleAppend", scoped: { scope in
+            let TupleAppend = Algorithm(scoped: { scope in
                 let values = scope.sharedVar(_name: "values", initial: TupleExpr<Int>())
                 Do(TestControlLabel.advance) {
                     Let(values.expr.appending(1)) { extended in
@@ -305,6 +312,7 @@ import SwiftTLAMacros
                     Stop()
                 }
             })
+            TupleAppend
         }
         """
         let parsed = parseAlgorithm(try parseSpecTestClosure(source))
@@ -318,7 +326,7 @@ import SwiftTLAMacros
         let source = """
         {
             Extends(.sequences)
-            Algorithm("TupleCount", scoped: { scope in
+            let TupleCount = Algorithm(scoped: { scope in
                 let values = scope.sharedVar(_name: "values", initial: TupleExpr<Int>.literal(1, 2))
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.advance) {
@@ -326,6 +334,7 @@ import SwiftTLAMacros
                     Stop()
                 }
             })
+            TupleCount
         }
         """
         let parsed = parseAlgorithm(try parseSpecTestClosure(source))
@@ -339,7 +348,7 @@ import SwiftTLAMacros
     func parsesZeroBasedSequenceCount() throws {
         let source = """
         {
-            Algorithm("ZeroBasedCount", scoped: { scope in
+            let ZeroBasedCount = Algorithm(scoped: { scope in
                 let input = scope.sharedVar(_name: "input", in: ZeroBasedSequences(
                     of: SetExpr<Int>.literal(1, 2),
                     lengths: 1...2
@@ -350,6 +359,7 @@ import SwiftTLAMacros
                     Stop()
                 }
             })
+            ZeroBasedCount
         }
         """
         let parsed = parseAlgorithm(try parseSpecTestClosure(source))
@@ -365,7 +375,7 @@ import SwiftTLAMacros
         let source = """
         {
             Extends(.sequences)
-            Algorithm("BoundTupleCount", scoped: { scope in
+            let BoundTupleCount = Algorithm(scoped: { scope in
                 let pending = scope.sharedVar(_name: "pending",
                     initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>.literal(1))
                 )
@@ -382,6 +392,7 @@ import SwiftTLAMacros
                     }
                 }
             })
+            BoundTupleCount
         }
         """
         let parsed = parseAlgorithm(try parseSpecTestClosure(source))
@@ -396,7 +407,7 @@ import SwiftTLAMacros
         let source = """
         {
             Extends(.sequences)
-            Algorithm("TupleDomain", scoped: { scope in
+            let TupleDomain = Algorithm(scoped: { scope in
                 let domain = SetExpr<TupleExpr<Node>>.literal(
                     TupleExpr<Node>.literal(Node.one, Node.two),
                     TupleExpr<Node>.literal(Node.two, Node.one)
@@ -412,6 +423,7 @@ import SwiftTLAMacros
                     Stop()
                 }
             })
+            TupleDomain
         }
         """
         let nodes = parserTestEnum(
@@ -429,20 +441,21 @@ import SwiftTLAMacros
     func bindsTypedLocalAlgorithmComponent() throws {
         let source = """
         {
-            let algorithm: Algorithm = Algorithm("Counter", scoped: { scope in
+            let counter: Algorithm = Algorithm(scoped: { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.increment) {
                     Assign(count, to: count + 1)
                     Stop()
                 }
             })
-            algorithm
+            counter
         }
         """
         let parsed = parseAlgorithm(try parseSpecTestClosure(source))
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.sourceAlgorithms.count == 1)
+        #expect(parsed.sourceAlgorithms.map(\.model.name) == ["counter"])
         let compilation = try compile(parsed, named: "Counter")
         #expect(compilation.description.variables.map(\.name) == ["pc", "count"])
         #expect(compilation.description.actions.map(\.name) == ["increment", "Terminating"])
@@ -501,7 +514,7 @@ import SwiftTLAMacros
     func rejectsLocalDeclarationScopeAtAlgorithmLevel() throws {
         let source = """
         {
-            Algorithm("Counter", scoped: { scope in
+            let Counter = Algorithm(scoped: { scope in
                 let count = scope.localVar(_name: "count", initial: 0)
                 Do(TestControlLabel.increment) { Stop() }
             })
@@ -517,7 +530,7 @@ import SwiftTLAMacros
     func rejectsProcessLocalInSiblingProcess() throws {
         let source = """
         {
-            Algorithm("SiblingScopes") {
+            let SiblingScopes = Algorithm {
                 Each(Node.all, scoped: { node, scope in
                     let local = scope.localVar(_name: "local", initial: 0)
                     Do(TestControlLabel.increment, when: local == 0) {
@@ -546,7 +559,7 @@ import SwiftTLAMacros
     func rejectsProcessLocalOutsideProcess() throws {
         let source = """
         {
-            Algorithm("LocalProperty") {
+            let LocalProperty = Algorithm {
                 Each(Node.all, scoped: { node, scope in
                     let local = scope.localVar(_name: "local", initial: 0)
                     Do(TestControlLabel.done) { Stop() }
@@ -566,12 +579,13 @@ import SwiftTLAMacros
         let source = """
         { scope in
             let count = scope.sharedVar(_name: "storedCount", initial: 0)
-            Algorithm("Counter") {
+            let Counter = Algorithm {
                 Do(TestControlLabel.increment) {
                     Assign(count, to: count + 1)
                     Stop()
                 }
             }
+            Counter
         }
         """
         let parsed = parseAlgorithm(try parseSpecTestClosure(source))
@@ -601,7 +615,7 @@ import SwiftTLAMacros
     func unknownAlgorithmIdentifierIsRejectedAsUnregistered() throws {
         let source = """
         {
-            Algorithm("Unsupported") {
+            let Unsupported = Algorithm {
                 UnsupportedAlgorithmConstruct()
             }
         }
@@ -656,7 +670,7 @@ import SwiftTLAMacros
         for testCase in cases {
             let source = """
             {
-                Algorithm("Nested") {
+                let Nested = Algorithm {
                     \(testCase.body)
                 }
             }
@@ -679,7 +693,7 @@ import SwiftTLAMacros
     func formalExpressionClosuresDoNotBecomeAlgorithmDeclarations() throws {
         let source = """
         {
-            Algorithm("FormalClosureBoundary") { scope in
+            let FormalClosureBoundary = Algorithm { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.advance) {
                     let imported: Expr<Int> = ModuleCall("Instance", "Value", count)
@@ -695,6 +709,7 @@ import SwiftTLAMacros
                     }, in: { recursion in recursion(ballot.expr) })
                 }
             }
+            FormalClosureBoundary
         }
         """
 
@@ -813,8 +828,8 @@ import SwiftTLAMacros
     ])
     func rejectsUndecodableFairness(_ fairness: String) throws {
         for declaration in [
-            "Algorithm(\"InvalidFairness\", fairness: \(fairness)) {}",
-            "Algorithm(\"InvalidFairness\") { Each(Node.all, fairness: \(fairness)) { node in } }"
+            "let InvalidFairness = Algorithm(fairness: \(fairness)) {}",
+            "let InvalidFairness = Algorithm { Each(Node.all, fairness: \(fairness)) { node in } }"
         ] {
             let parsed = parseAlgorithm(
                 try parseSpecTestClosure("{ \(declaration) }"),
@@ -829,7 +844,7 @@ import SwiftTLAMacros
     func parsesMechanicalPlusCalStatements() throws {
         let source = """
         {
-            Algorithm("Counter") { scope in
+            let Counter = Algorithm { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Each(Node.all, fairness: .strong) { node in
                     While(TestControlLabel.increment, count < 2) {
@@ -841,6 +856,7 @@ import SwiftTLAMacros
                     }
                 }
             }
+            Counter
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -862,7 +878,7 @@ import SwiftTLAMacros
     func parsesAlgorithmTemporalDeclarations() throws {
         let source = """
         {
-            Algorithm("Temporal") { scope in
+            let Temporal = Algorithm { scope in
                 let value = scope.sharedVar(_name: "value", initial: 0)
                 Do(TestControlLabel.advance) {
                     Assign(value, to: value + 1)
@@ -873,6 +889,7 @@ import SwiftTLAMacros
                 AlwaysEventually("recurs", value > 0)
                 EventuallyAlways("settles", value >= 0)
             }
+            Temporal
         }
         """
         let parsed = parseAlgorithm(try parseSpecTestClosure(source))
@@ -887,7 +904,7 @@ import SwiftTLAMacros
     func preservesProcessScopedFormalLambdaMeaning() throws {
         let source = """
         {
-            Algorithm("ScopedFormalLambda") { scope in
+            let ScopedFormalLambda = Algorithm { scope in
                 let counters = scope.sharedVar(_name: "counters", initial: Function<Worker, Int>.literal(
                     (.left, 0),
                     (.right, 0)
@@ -906,6 +923,7 @@ import SwiftTLAMacros
                     }
                 }
             }
+            ScopedFormalLambda
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -934,7 +952,7 @@ import SwiftTLAMacros
     func malformedFormalLambdaRetainsSixFieldDiagnostic() throws {
         let source = """
         {
-            Algorithm("MalformedFormalLambda") { scope in
+            let MalformedFormalLambda = Algorithm { scope in
                 let counter = scope.sharedVar(_name: "counter", initial: 0)
                 Do(TestControlLabel.advance) {
                     Assign(counter, to: Expr<Int>(StateExpr.operatorApplication(
@@ -963,7 +981,7 @@ import SwiftTLAMacros
     func parsesThreeIndependentWithBindings() throws {
         let source = """
         {
-            Algorithm("ThreeWith") { scope in
+            let ThreeWith = Algorithm { scope in
                 let selected = scope.sharedVar(_name: "selected", initial: 0)
                 Do(TestControlLabel.choose) {
                     With(
@@ -975,6 +993,7 @@ import SwiftTLAMacros
                     }
                 }
             }
+            ThreeWith
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -990,7 +1009,7 @@ import SwiftTLAMacros
     func parsesStatementMacro() throws {
         let source = """
         {
-            Algorithm("MacroLock") { scope in
+            let MacroLock = Algorithm { scope in
                 let lock = scope.sharedVar(_name: "lock", initial: 1)
                 let acquire = Macro { (value: MacroParameter<Int>) in
                     When(value == 1)
@@ -1000,6 +1019,7 @@ import SwiftTLAMacros
                     Do(TestControlLabel.acquire) { acquire(lock) }
                 }
             }
+            MacroLock
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1018,7 +1038,7 @@ import SwiftTLAMacros
     func parsesTwoParameterStatementMacro() throws {
         let source = """
         {
-            Algorithm("CopyValue") { scope in
+            let CopyValue = Algorithm { scope in
                 let destination = scope.sharedVar(_name: "destination", initial: 0)
                 let source = scope.sharedVar(_name: "source", initial: 7)
                 let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
@@ -1026,6 +1046,7 @@ import SwiftTLAMacros
                 }
                 Do(TestControlLabel.copy) { copy(destination, source) }
             }
+            CopyValue
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1045,7 +1066,7 @@ import SwiftTLAMacros
     func parsesExpressionStatementMacroArguments() throws {
         let source = """
         {
-            Algorithm("OffsetValue") { scope in
+            let OffsetValue = Algorithm { scope in
                 let destination = scope.sharedVar(_name: "destination", initial: 0)
                 let source = scope.sharedVar(_name: "source", initial: 7)
                 let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
@@ -1053,6 +1074,7 @@ import SwiftTLAMacros
                 }
                 Do(TestControlLabel.copy) { copy(destination, source.expr + 1) }
             }
+            OffsetValue
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1071,7 +1093,7 @@ import SwiftTLAMacros
     func parsesTypedPairStatementMacro() throws {
         let source = """
         {
-            Algorithm("PairVote") {
+            let PairVote = Algorithm {
                 FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, value in
                     ballot >= 0 && value >= 0
                 }
@@ -1083,6 +1105,7 @@ import SwiftTLAMacros
                 }
                 Do(TestControlLabel.vote) { vote(Pair.literal(1, 2)) }
             }
+            PairVote
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1099,7 +1122,7 @@ import SwiftTLAMacros
     func diagnosesExpressionMacroAssignmentTarget() throws {
         let source = """
         {
-            Algorithm("InvalidMacroTarget") { scope in
+            let InvalidMacroTarget = Algorithm { scope in
                 let destination = scope.sharedVar(_name: "destination", initial: 0)
                 let write = Macro { (target: MacroParameter<Int>) in
                     Assign(target, to: 1)
@@ -1122,7 +1145,7 @@ import SwiftTLAMacros
     func parsesTypedProcedureBindings(localName: String) throws {
         let source = """
         {
-            Algorithm("ProcedureSource") { scope in
+            let ProcedureSource = Algorithm { scope in
                 let output = scope.sharedVar(_name: "output", initial: 0)
                 Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
                     let offset = scope.localVar(_name: "\(localName)", initial: 1)
@@ -1134,6 +1157,7 @@ import SwiftTLAMacros
                 Do(TestControlLabel.start) { Call(ProcedureName.work, with: 7) }
                 Do(TestControlLabel.finished) { Stop() }
             }
+            ProcedureSource
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1149,7 +1173,7 @@ import SwiftTLAMacros
     func diagnosesStatementMacroArity() throws {
         let source = """
         {
-            Algorithm("BadMacroCall") { scope in
+            let BadMacroCall = Algorithm { scope in
                 let destination = scope.sharedVar(_name: "destination", initial: 0)
                 let source = scope.sharedVar(_name: "source", initial: 7)
                 let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
@@ -1170,13 +1194,14 @@ import SwiftTLAMacros
     func parsesParameterlessStatementMacro() throws {
         let source = """
         {
-            Algorithm("ParameterlessMacro") { scope in
+            let ParameterlessMacro = Algorithm { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 let increment = Macro {
                     Assign(count, to: count + 1)
                 }
                 Do(TestControlLabel.increment) { increment() }
             }
+            ParameterlessMacro
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1195,7 +1220,7 @@ import SwiftTLAMacros
     func parsesFilteredFunctionInitialDomain() throws {
         let source = """
         {
-            Algorithm("FunctionDomain") { scope in
+            let FunctionDomain = Algorithm { scope in
                 let successors = scope.sharedVar(_name: "successors", in: Where(
                     Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
                 ) { successor in
@@ -1205,6 +1230,7 @@ import SwiftTLAMacros
                 })
                 Do(TestControlLabel.done) { Stop() }
             }
+            FunctionDomain
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1232,7 +1258,7 @@ import SwiftTLAMacros
     func parsesScopedFunctionSetInvariant() throws {
         let source = """
         {
-            Algorithm("FunctionSetInvariant", scoped: { scope in
+            let FunctionSetInvariant = Algorithm(scoped: { scope in
                 let values = scope.sharedVar(_name: "values", initial: Function<Node, Int>.mapping { _ in 0 })
                 let grouped = scope.sharedVar(_name: "grouped", initial: Function<Node, SetExpr<Node>>.mapping { _ in SetExpr<Node>() })
                 let members = scope.sharedVar(_name: "members", initial: SetExpr<Node>())
@@ -1246,6 +1272,7 @@ import SwiftTLAMacros
                         ).contains(grouped.expr)
                 }
             })
+            FunctionSetInvariant
         }
         """
         let parsed = parseAlgorithm(
@@ -1265,12 +1292,13 @@ import SwiftTLAMacros
     func parsesRecordFunctionComprehension() throws {
         let source = """
         {
-            Algorithm("RecordFunction") { scope in
+            let RecordFunction = Algorithm { scope in
                 let cars = scope.sharedVar(_name: "cars", initial: Function<Car, CarState>.mapping { _ in
                     CarState(floor: 4, door: Door.closed)
                 })
                 Do(TestControlLabel.hold) { Assign(cars, to: cars.expr) }
             }
+            RecordFunction
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1303,10 +1331,11 @@ import SwiftTLAMacros
     func parsesEmptySetFunctionComprehension() throws {
         let source = """
         {
-            Algorithm("Votes") { scope in
+            let Votes = Algorithm { scope in
                 let votes = scope.sharedVar(_name: "votes", initial: Function<Acceptor, SetExpr<Int>>.mapping { _ in SetExpr() })
                 Do(TestControlLabel.hold) { Assign(votes, to: votes.expr) }
             }
+            Votes
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1330,7 +1359,7 @@ import SwiftTLAMacros
     func parsesTypedFunctionLiteral() throws {
         let source = """
         {
-            Algorithm("FiniteFunction") {
+            let FiniteFunction = Algorithm {
                 Each(Node.all) { node in
                     Do(TestControlLabel.hold) {
                         let successor = Function<Node, Node>.literal(
@@ -1341,6 +1370,7 @@ import SwiftTLAMacros
                     }
                 }
             }
+            FiniteFunction
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1361,7 +1391,7 @@ import SwiftTLAMacros
     func parsesStaticFormalSelection() throws {
         let source = """
         {
-            Algorithm("StaticChoice") { scope in
+            let StaticChoice = Algorithm { scope in
                 let selected = Select(
                     from: SetExpr<Int>.literal(1, 2, 3),
                     matching: { value in value.expr % 2 == 0 }
@@ -1369,6 +1399,7 @@ import SwiftTLAMacros
                 let current: SharedVariable<Int> = scope.sharedVar(_name: "current", initial: selected)
                 Do(TestControlLabel.done) { Stop() }
             }
+            StaticChoice
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1392,7 +1423,7 @@ import SwiftTLAMacros
     func parsesStatementMacroWithProcessIdentifier() throws {
         let source = """
         {
-            Algorithm("MacroProcess") { scope in
+            let MacroProcess = Algorithm { scope in
                 let marked = scope.sharedVar(_name: "marked", initial: Function<Node, Bool>.literal((Node.left, false), (Node.right, false)))
                 let mark = Macro { (node: MacroParameter<Node>) in
                     Assign(marked, to: marked.updating(node, to: true))
@@ -1401,6 +1432,7 @@ import SwiftTLAMacros
                     Do(TestControlLabel.mark) { mark(node) }
                 }
             }
+            MacroProcess
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1422,11 +1454,12 @@ import SwiftTLAMacros
     func parsesDeclaredAlgorithmLabels() throws {
         let source = """
         {
-            Algorithm("RawLabel") {
+            let RawLabel = Algorithm {
                 Do(Step.start) { Goto(Step.finish) }
                 While(Step.loop, true) { Goto(Step.finish) }
                 Do(Step.finish) { Stop() }
             }
+            RawLabel
         }
         """
         let closure = try parseSpecTestClosure(source)
@@ -1463,7 +1496,7 @@ import SwiftTLAMacros
                 }
                 let parsed = parseAlgorithm(try parseSpecTestClosure("""
                 {
-                    Algorithm("InvalidLabel") {
+                    let InvalidLabel = Algorithm {
                         \(statement)
                     }
                 }
@@ -1501,7 +1534,7 @@ import SwiftTLAMacros
                 let parsed = parseAlgorithm(
                     try parseSpecTestClosure("""
                     {
-                        Algorithm("InvalidProcedureName") {
+                        let InvalidProcedureName = Algorithm {
                             \(body)
                         }
                     }
@@ -1523,7 +1556,7 @@ import SwiftTLAMacros
     func parsedAlgorithmCompilesDeclaredProcessOwner() throws {
         let source = """
         {
-            Algorithm("Counter", scoped: { scope in
+            let Counter = Algorithm(scoped: { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
                 Each(ParserNode.all) { _ in
                     Do(TestControlLabel.increment, when: count < 2) {
@@ -1531,6 +1564,7 @@ import SwiftTLAMacros
                     }
                 }
             })
+            Counter
         }
         """
         let closure = try parseSpecTestClosure(source)

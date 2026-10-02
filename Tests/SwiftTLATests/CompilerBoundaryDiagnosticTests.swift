@@ -207,11 +207,17 @@ struct CompilerBoundaryDiagnosticTests {
         #expect(try parsed.compile().identity == labelled.compile().identity)
     }
 
-    @Test("Unnamed builders reject inline and mutable declarations")
-    func unnamedBuildersRequireImmutableBindings() throws {
+    @Test("Algorithm and Validation require immutable bindings without positional names")
+    func buildersRequireImmutableIdentityBindings() throws {
         for body in [
             "Algorithm {}",
             "Validation {}",
+            "Algorithm(\"Named\") {}",
+            "Validation(\"Named\") {}",
+            "let algorithm = Algorithm(\"Named\") {}",
+            "let validation = Validation(\"Named\") {}",
+            "let algorithm = Algorithm(_name: \"Faked\") {}",
+            "let validation = Validation(_name: \"Faked\") {}",
             "var algorithm = Algorithm {}",
             "var validation = Validation {}"
         ] {
@@ -220,6 +226,7 @@ struct CompilerBoundaryDiagnosticTests {
             let parsed = SpecParser.parseSpecClosure(named: "InvalidBinding", closure)
 
             #expect(parsed.diagnostics.count == 1)
+            #expect(parsed.diagnostics[0].message.contains("immutable let binding"))
             #expect(parsed.sourceAlgorithms.isEmpty)
             #expect(parsed.validationScenarios.isEmpty)
         }

@@ -276,7 +276,9 @@ extension ParserSession {
     ) -> Algorithm? {
         algorithmParseFailure = nil
         algorithmSourceDiagnostic = nil
-        guard let name = boundName ?? extractStringArg(call, index: 0),
+        guard let name = boundName,
+              call.arguments.allSatisfy({ $0.label != nil }),
+              !call.arguments.contains(where: { $0.label?.text == "_name" }),
               let closure = algorithmBuilderClosure(in: call)
         else {
             components.diagnostics.append(.init(

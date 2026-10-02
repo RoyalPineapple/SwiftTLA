@@ -24,7 +24,10 @@ extension ParserSession {
         }
         guard compilerGrammarName(in: root.calledExpression) == "Validation" else { return false }
         func declaration() throws(SourceParseDiagnostic) -> ValidationDeclaration {
-            guard let name = boundName ?? extractStringArg(root, index: 0), let body = root.trailingClosure else {
+            guard let name = boundName,
+                  root.arguments.allSatisfy({ $0.label != nil }),
+                  !root.arguments.contains(where: { $0.label?.text == "_name" }),
+                  let body = root.trailingClosure else {
                 throw SourceParseDiagnostic(message: "Validation requires an immutable let binding and typed parameter bindings.", source: root)
             }
             let displayLabel = try declarationDisplayLabel(root, kind: "validation")
