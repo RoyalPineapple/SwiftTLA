@@ -77,7 +77,9 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       and generated stateful and assumption-only scenarios; focused local
       checks passed, but hosted acceptance remains pending. All five canonical
       corpus models now use bound algorithm and validation identities, with
-      their published names preserved in focused local rendering checks.
+      their published names preserved in focused local rendering checks. The
+      configured Counter uses binding identities and separate display labels;
+      its focused checking and scenario-admission regressions passed locally.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck

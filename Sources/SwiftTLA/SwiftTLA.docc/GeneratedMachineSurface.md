@@ -60,9 +60,11 @@ A property from another model cannot identify a result in this model.
 
 ## Model-owned validation scenarios
 
-`Validation("Completes at two") { Bind(limit, to: 2); Bind(stopAtLimit, to: true) }`
-declares a finite configuration beside the algorithm. `.expectDeadlock(.violated)`
-changes the expected deadlock outcome without disabling its check.
+`let completesAtTwo = Validation(label: "Completes at two") { Bind(limit, to: 2); Bind(stopAtLimit, to: true) }`
+followed by `completesAtTwo` inside `#spec` declares a finite configuration
+beside the algorithm. The binding is its identity; the optional label is only
+for display. `.expectDeadlock(.violated)` changes the expected deadlock outcome
+without disabling its check.
 
 `Model.validationScenarios()` returns immutable generated scenario values.
 Each scenario provides `initialMachines()`, `explore(maximumStates:)`, and `render()`.

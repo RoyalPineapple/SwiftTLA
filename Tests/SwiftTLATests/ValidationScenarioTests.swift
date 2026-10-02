@@ -7,7 +7,8 @@ struct ValidationScenarioTests {
     @Test("model-owned scenarios derive configuration, complete exploration, and symbolic export")
     func derivesCounterRuns() throws {
         let scenarios = try ConfiguredCounter.validationScenarios()
-        #expect(scenarios.map(\.name) == ["Completes at two", "Deadlocks at four"])
+        #expect(scenarios.map(\.name) == ["completesAtTwo", "deadlocksAtFour"])
+        #expect(scenarios.map(\.displayName) == ["Completes at two", "Deadlocks at four"])
         #expect(scenarios.map { $0.configuration.limit } == [2, 4])
         #expect(try scenarios[0].render().tlaBundle.tla == scenarios[1].render().tlaBundle.tla)
         for scenario in scenarios {

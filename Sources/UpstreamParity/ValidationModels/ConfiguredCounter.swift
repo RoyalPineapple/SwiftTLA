@@ -13,7 +13,7 @@ package struct ConfiguredCounter {
             let value = scope.sharedVar(initial: 0)
             let previous = scope.sharedVar(initial: 0)
             let copied = scope.sharedVar(initial: 0)
-            Algorithm("Counter") {
+            let Counter = Algorithm {
                 Each(Process.all) { _ in
                     Do(Step.advance, when: value < limit) {
                         let saved = value
@@ -29,17 +29,20 @@ package struct ConfiguredCounter {
                     }
                 }
             }
+            Counter
             Invariant("OrderedCopy") { copied == value }
             Invariant("Bounded") { value <= limit }
             Reachable("AtLimit") { value == limit }
-            Validation("Completes at two") {
+            let completesAtTwo = Validation(label: "Completes at two") {
                 Bind(limit, to: 2)
                 Bind(stopAtLimit, to: true)
             }
-            Validation("Deadlocks at four") {
+            completesAtTwo
+            let deadlocksAtFour = Validation(label: "Deadlocks at four") {
                 Bind(limit, to: 4)
                 Bind(stopAtLimit, to: false)
             }.expectDeadlock(.violated)
+            deadlocksAtFour
         }
     }
 }
