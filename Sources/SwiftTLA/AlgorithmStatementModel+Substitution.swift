@@ -96,7 +96,7 @@ extension AlgorithmStatementModel {
         case .choose(let variable, let domain, let body):
             { () -> AlgorithmStatementModel in
                 let scoped = scopedBody(variable: variable, body: body)
-                return .choose(variable: scoped.variable, domain: domain, scoped.body)
+                return .choose(variable: scoped.variable, domain: expression(domain), scoped.body)
             }()
         case .call(let target, let arguments):
             .call(target: target, arguments: arguments.map(expression))
@@ -206,7 +206,7 @@ extension AlgorithmStatementModel {
             )
         case .choose(let variable, let domain, let body):
             let scoped = scopedBody(variable: variable, body: body)
-            return .choose(variable: scoped.variable, domain: domain, scoped.body)
+            return .choose(variable: scoped.variable, domain: expression(domain), scoped.body)
         case .call(let target, let arguments):
             return .call(target: target, arguments: arguments.map(expression))
         }

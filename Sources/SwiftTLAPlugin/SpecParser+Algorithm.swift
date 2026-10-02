@@ -1282,9 +1282,9 @@ extension ParserSession {
             else { return nil }
             let choices = closureParameterNames(in: closure)
             guard choices.count == call.arguments.count else { return nil }
-            let domains = call.arguments.map(\.expression).compactMap { syntax in
-                finiteAlgorithmDomain(syntax)?.values
-                    ?? parseIntegerClosedRange(syntax).map { $0.map(TLAValue.int) }
+            let domains = call.arguments.map(\.expression).compactMap { syntax -> StateExpr? in
+                finiteAlgorithmDomain(syntax).map { .setLiteral($0.values.map(StateExpr.value)) }
+                    ?? parseIntegerClosedRange(syntax).map { .integerRange(.int($0.lowerBound), .int($0.upperBound)) }
             }
             guard domains.count == choices.count else { return nil }
             let replacements = choices.indices.map { generatedBinderName(line: UInt(call.positionAfterSkippingLeadingTrivia.utf8Offset), column: UInt($0)) }

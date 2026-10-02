@@ -21,7 +21,7 @@ struct ProcedureLoweringTests {
                     .step(.init(label: .init(name: "start"), statements: [
                         .letBinding(variable: letName, value: .int(1), [
                             .with(variable: withName, source: .setLiteral([.value(.int(1))]), [
-                                .choose(variable: chooseName, domain: [.int(1)], [
+                                .choose(variable: chooseName, domain: .setLiteral([.value(.int(1))]), [
                                     .set(target: .root("output"), value: .add(.variable(letName), .add(.variable(withName), .variable(chooseName))))
                                 ])
                             ])

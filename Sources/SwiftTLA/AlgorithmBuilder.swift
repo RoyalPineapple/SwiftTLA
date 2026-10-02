@@ -1401,7 +1401,7 @@ public func Choose<Value: FiniteTLAValueDomain>(
 ) -> StepStatement {
     let name = generatedBinderName(file: file, line: line, column: column)
     let value = ProcessIdentifier<Value>(expression: .variable(name))
-    return StepStatement(model: .choose(variable: name, domain: domain.values.map(\.tlaValue), body(value).map(\.model)))
+    return StepStatement(model: .choose(variable: name, domain: domain.stateExpr, body(value).map(\.model)))
 }
 
 /// Binds an ordered pair of values from finite domains. This lowers to nested
@@ -1420,8 +1420,8 @@ public func Choose<First: FiniteTLAValueDomain, Second: FiniteTLAValueDomain>(
     let second = ProcessIdentifier<Second>(expression: .variable(secondName))
     return StepStatement(model: .choose(
         variable: firstName,
-        domain: firstDomain.values.map(\.tlaValue),
-        [.choose(variable: secondName, domain: secondDomain.values.map(\.tlaValue), body(first, second).map(\.model))]
+        domain: firstDomain.stateExpr,
+        [.choose(variable: secondName, domain: secondDomain.stateExpr, body(first, second).map(\.model))]
     ))
 }
 
@@ -1441,7 +1441,7 @@ public func Choose(
     let value = WithValue<Int>(expression: .variable(name))
     return StepStatement(model: .choose(
         variable: name,
-        domain: domain.map(TLAValue.int),
+        domain: .integerRange(.int(domain.lowerBound), .int(domain.upperBound)),
         body(value).map(\.model)
     ))
 }
@@ -1461,8 +1461,8 @@ public func Choose(
     let second = WithValue<Int>(expression: .variable(secondName))
     return StepStatement(model: .choose(
         variable: firstName,
-        domain: firstDomain.map(TLAValue.int),
-        [.choose(variable: secondName, domain: secondDomain.map(TLAValue.int), body(first, second).map(\.model))]
+        domain: .integerRange(.int(firstDomain.lowerBound), .int(firstDomain.upperBound)),
+        [.choose(variable: secondName, domain: .integerRange(.int(secondDomain.lowerBound), .int(secondDomain.upperBound)), body(first, second).map(\.model))]
     ))
 }
 
@@ -1731,7 +1731,13 @@ package enum AlgorithmValidator {
                 validateStatements(then, at: anchor, labels: labels, procedures: procedures, procedureArities: procedureArities, inProcedure: inProcedure, diagnostics: &diagnostics)
                 validateStatements(otherwise, at: anchor, labels: labels, procedures: procedures, procedureArities: procedureArities, inProcedure: inProcedure, diagnostics: &diagnostics)
             case .choose(_, let domain, let body):
-                validateDomain(domain, at: anchor, diagnostics: &diagnostics)
+                if case .setLiteral(let members) = domain {
+                    if members.isEmpty {
+                        diagnostics.append(.init(.emptyDomain, at: anchor))
+                    } else if Set(members).count != members.count {
+                        diagnostics.append(.init(.duplicateDomainMember, at: anchor))
+                    }
+                }
                 validateStatements(body, at: anchor, labels: labels, procedures: procedures, procedureArities: procedureArities, inProcedure: inProcedure, diagnostics: &diagnostics)
             case .goto(let label):
                 if index < statements.index(before: statements.endIndex) {

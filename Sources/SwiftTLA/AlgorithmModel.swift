@@ -613,7 +613,7 @@ package indirect enum AlgorithmStatementModel: Sendable, Equatable {
     case with(variable: String, source: StateExpr, [AlgorithmStatementModel])
     case ifElse(StateExpr, [AlgorithmStatementModel], [AlgorithmStatementModel])
     case either([AlgorithmStatementModel], [AlgorithmStatementModel])
-    case choose(variable: String, domain: [TLAValue], [AlgorithmStatementModel])
+    case choose(variable: String, domain: StateExpr, [AlgorithmStatementModel])
     case goto(AlgorithmLabelModel)
     case call(target: String, arguments: [StateExpr])
     case `return`
@@ -666,7 +666,7 @@ func scheduleAtomicStatements(
             return [.with(variable: name, source: expression(source), continued(renamed))]
         case .choose(let variable, let domain, let body):
             return continued([.with(variable: variable,
-                source: .setLiteral(domain.map(StateExpr.value)), body)])
+                source: expression(domain), body)])
         case .ifElse(let condition, let then, let otherwise):
             return [.ifElse(expression(condition), continued(then), continued(otherwise))]
         case .either(let first, let second):

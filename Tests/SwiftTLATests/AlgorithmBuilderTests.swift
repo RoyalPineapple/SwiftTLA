@@ -1134,7 +1134,7 @@ struct AlgorithmBuilderTests {
             name: "ProjectedStatements",
             components: [
                 .step(.init(label: .init(name: "advance"), statements: [
-                    .choose(variable: "selected", domain: [.int(1), .int(2)], [
+                    .choose(variable: "selected", domain: .setLiteral([.value(.int(1)), .value(.int(2))]), [
                         .set(target: .root("value"), value: .variable("selected"))
                     ]),
                     .stop
@@ -1688,6 +1688,7 @@ struct AlgorithmBuilderTests {
         let (compilation, initial) = try initialState(of: spec)
         let successors = try successors(named: "choose", in: compilation, from: initial)
         #expect(Set(try successors.map { try value(named: "selected", in: $0, compilation: compilation) }) == [.int(1), .int(2), .int(3)])
+        #expect(try compilation.render().tlaBundle.tla.contains("\\in 1..3"))
     }
 
     @Test("dependent typed function initialization is evaluated after earlier initial state choices")
