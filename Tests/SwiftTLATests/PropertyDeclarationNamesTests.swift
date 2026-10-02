@@ -83,6 +83,8 @@ struct PropertyDeclarationNamesTests {
     @Test("equal display labels preserve distinct identities, selections, and outcomes")
     func keepsLabelsOutOfSemantics() throws {
         let scenarios = try LabelledPropertyClaims.validationScenarios()
+        #expect(scenarios.map(\.name) == ["All", "Selected"])
+        #expect(scenarios.map(\.displayName) == ["Shared scenario", "Shared scenario"])
         let all = try NativeScenarioRun(scenarios[0], maximumStates: 4)
         let selected = try NativeScenarioRun(scenarios[1], maximumStates: 4)
         try all.validateExpectations()

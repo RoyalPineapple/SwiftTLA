@@ -29,11 +29,11 @@ package struct LabelledPropertyClaims {
                 response(value == 0, value == 0)
             })
             Loop
-            let All = Validation {}
+            let All = Validation(label: "Shared scenario") {}
                 .expect(safe, .violated)
                 .expect(eventually, .violated)
             All
-            let Selected = Validation {}.checking(only: [reachable, always])
+            let Selected = Validation(label: "Shared scenario") {}.checking(only: [reachable, always])
             Selected
         }
     }
