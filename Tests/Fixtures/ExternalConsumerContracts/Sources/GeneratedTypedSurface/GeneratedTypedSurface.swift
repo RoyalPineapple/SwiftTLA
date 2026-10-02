@@ -13,18 +13,19 @@ public struct GeneratedTypedSurface {
   }
 
   static var spec: TLASpec {
-    #spec("GeneratedTypedSurface") { scope in
-      let value = scope.sharedVar(_name: "value", initial: 0)
-      let packet = scope.sharedVar(_name: "packet", initial: Packet(count: 0, ready: false))
-      let generatedTypedSurface = Algorithm(label: "GeneratedTypedSurface") {
+    #spec("GeneratedTypedSurface") {
+      let ConsistentCount = Invariant()
+      let generatedTypedSurface = Algorithm(label: "GeneratedTypedSurface", scoped: { scope in
+        let value = scope.sharedVar(initial: 0)
+        let packet = scope.sharedVar(initial: Packet(count: 0, ready: false))
         Do(Step.advance, when: value < 1) {
           Assign(value, to: packet.count + 1)
           Assign(packet.count, to: packet.count + 1)
           Assign(packet.ready, to: true)
         }
-      }
+        ConsistentCount { packet.count == value }
+      })
       generatedTypedSurface
-      Invariant("ConsistentCount") { packet.count == value }
     }
   }
 }
