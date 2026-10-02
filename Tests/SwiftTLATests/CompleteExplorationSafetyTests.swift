@@ -1,36 +1,28 @@
 import Testing
-@testable import SwiftTLA
+import SwiftTLA
 
 struct CompleteExplorationSafetyTests {
-    @Test("violations retain separate witnesses without truncating any initial branch")
+    @Test("complete native exploration retains every initial branch and safety failure")
     func preservesGraphAndAllSafetyChecks() throws {
-        let value = Var<Int>("value")
-        let specification = TLASpec("CompleteSafety") {
-            Variable(value, in: Set([0, 10]))
-            Action("advance") { value.becomes(value + 1).when(value >= 10 && value < 13) }
-            Invariant("BelowEleven") { value < 11 }
-            Invariant("BelowThirteen") { value < 13 }
-        }
-        let compilation = try specification.compile()
-        let checker = ModelChecker(compilation: compilation,
-            configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled))
-        let exploration = try checker.explore()
-        #expect(exploration.isComplete)
-        #expect(exploration.initialStateIDs.count == 2)
-        #expect(exploration.graph.states.count == 5)
-        #expect(exploration.graph.transitions.values.reduce(0) { $0 + $1.count } == 3)
-        #expect(exploration.safetyViolations.count == 3)
-        #expect(Set(exploration.safetyViolations.compactMap { $0.diagnostic?.subject })
-            == ["BelowEleven", "BelowThirteen"])
-        #expect(exploration.safetyViolations.first?.diagnostic?.kind == .deadlock)
-        #expect(try checker.check().diagnostic?.subject == "BelowEleven")
-        try exploration.validate(for: compilation)
+        let scenario = try #require(CompleteExplorationSafetyModel.validationScenarios().first)
+        let graph = try scenario.explore(maximumStates: 10)
 
-        let bounded = try ModelChecker(compilation: compilation,
-            configuration: .init(maximumStateLimit: 4, symmetryReduction: .disabled)).explore()
-        #expect(!bounded.isComplete)
-        #expect(bounded.completion.diagnostic?.kind == .stateLimit)
-        #expect(Set(bounded.safetyViolations.compactMap { $0.diagnostic?.subject }) == ["BelowEleven"])
-        #expect(bounded.safetyViolations.contains { $0.diagnostic?.kind == .deadlock })
+        #expect(Set(graph.initialStates.map { $0.state.value }) == [0, 10])
+        #expect(Set(graph.transitions.keys.map { $0.state.value }) == [0, 10, 11, 12, 13])
+        #expect(graph.transitions.values.reduce(0) { $0 + $1.count } == 3)
+
+        let failures = Dictionary(uniqueKeysWithValues: graph.safetyViolations.map {
+            ($0.key.state.value, Set($0.value))
+        })
+        #expect(failures[0] == [.deadlock])
+        #expect(failures[11] == [.invariant(.belowEleven)])
+        #expect(failures[12] == [.invariant(.belowEleven)])
+        #expect(failures[13] == [.invariant(.belowEleven), .invariant(.belowThirteen), .deadlock])
+
+        let last = try #require(graph.transitions.keys.first { $0.state.value == 13 })
+        #expect(try graph.trace(to: last).map { $0.state.state.value } == [10, 11, 12, 13])
+        #expect(throws: ExplorationError.stateLimitExceeded(4)) {
+            _ = try scenario.explore(maximumStates: 4)
+        }
     }
 }
