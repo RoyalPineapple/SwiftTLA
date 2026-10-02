@@ -120,7 +120,7 @@ struct ConditionalTemporalTests {
         let build = try buildExternalConsumer("InvalidModelProperty")
         #expect(build.status != 0)
         let errors = build.output.split(separator: "\n").filter { $0.contains(": error:") }
-        for line in [56, 57, 58, 59, 60] {
+        for line in [58, 59, 60, 61, 62] {
             #expect(errors.contains { $0.contains("InvalidModelProperty.swift:\(line):") },
                 "Missing composed temporal rejection: \(errors.joined(separator: "\n"))")
         }

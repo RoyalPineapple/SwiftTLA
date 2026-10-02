@@ -38,7 +38,7 @@ struct NativePropertyIdentityTests {
         let build = try buildExternalConsumer("InvalidModelProperty")
         #expect(build.status != 0)
         let errors = build.output.split(separator: "\n").filter { $0.contains(": error:") }
-        for line in [24, 25, 26] {
+        for line in [26, 27, 28] {
             #expect(errors.contains { $0.contains("InvalidModelProperty.swift:\(line):") },
                 "Missing property identity rejection: \(errors.joined(separator: "\n"))")
         }

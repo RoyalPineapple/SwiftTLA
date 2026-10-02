@@ -56,7 +56,7 @@ struct ScopedTemporalTests {
         let build = try buildExternalConsumer("InvalidModelProperty")
         #expect(build.status != 0)
         let errors = build.output.split(separator: "\n").filter { $0.contains(": error:") }
-        for line in [30, 31, 32, 33] {
+        for line in [32, 33, 34, 35] {
             #expect(errors.contains { $0.contains("InvalidModelProperty.swift:\(line):") },
                 "Missing temporal handle rejection: \(errors.joined(separator: "\n"))")
         }

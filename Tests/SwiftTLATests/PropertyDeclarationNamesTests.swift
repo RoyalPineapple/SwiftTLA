@@ -72,7 +72,7 @@ struct PropertyDeclarationNamesTests {
         let build = try buildExternalConsumer("InvalidModelProperty")
         #expect(build.status != 0)
         let errors = build.output.split(separator: "\n").filter { $0.contains(": error:") }
-        for line in [40, 41, 49, 50] {
+        for line in [42, 43, 51, 52] {
             #expect(errors.contains {
                 $0.contains("InvalidModelProperty.swift:\(line):")
                     && $0.contains("A property label requires one nonempty string literal without interpolation.")

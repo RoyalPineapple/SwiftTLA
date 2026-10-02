@@ -6,7 +6,8 @@ struct First {
     static var spec: TLASpec {
         #spec("First") { scope in
             let count = scope.sharedVar(_name: "count", initial: 0)
-            Invariant("Safe") { count == 0 }
+            let Safe = Invariant()
+            Safe { count == 0 }
         }
     }
 }
@@ -16,7 +17,8 @@ struct Second {
     static var spec: TLASpec {
         #spec("Second") { scope in
             let count = scope.sharedVar(_name: "count", initial: 0)
-            Invariant("Safe") { count == 0 }
+            let Safe = Invariant()
+            Safe { count == 0 }
         }
     }
 }

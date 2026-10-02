@@ -95,7 +95,7 @@ struct ScopedReachabilityTests {
         let build = try buildExternalConsumer("InvalidModelProperty")
         #expect(build.status != 0)
         let errors = build.output.split(separator: "\n").filter { $0.contains(": error:") }
-        for line in [36, 37] {
+        for line in [38, 39] {
             #expect(errors.contains { $0.contains("InvalidModelProperty.swift:\(line):") },
                 "Missing reachability rejection: \(errors.joined(separator: "\n"))")
         }
