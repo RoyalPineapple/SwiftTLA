@@ -499,7 +499,7 @@ public final class SpecificationScope {
     public func sharedVar(_name name: String = "", label: String? = nil, in range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVariable<Int>(
             name: name,
-            initialization: .memberOf(.setLiteral(range.map { .value(.int($0)) })),
+            initialization: .memberOf(.integerRange(.int(range.lowerBound), .int(range.upperBound))),
             displayLabel: label
         )
         declarations.append(variable.specificationDeclaration)
@@ -545,7 +545,7 @@ public final class AlgorithmScope {
     public func sharedVar(_name name: String = "", label: String? = nil, in range: ClosedRange<Int>) -> SharedVariable<Int> {
         let variable = SharedVariable<Int>(
             name: name,
-            initialization: .memberOf(.setLiteral(range.map { .value(.int($0)) })),
+            initialization: .memberOf(.integerRange(.int(range.lowerBound), .int(range.upperBound))),
             displayLabel: label
         )
         declarations.append(variable.algorithmElement)

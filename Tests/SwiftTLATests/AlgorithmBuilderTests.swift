@@ -1551,7 +1551,7 @@ struct AlgorithmBuilderTests {
         #expect(name == "__pcal_assert_0")
     }
 
-    @Test("SharedVar range expands to the declared finite initial states")
+    @Test("SharedVar closed ranges supply every declared initial state")
     func lowersNondeterministicSharedInitialization() throws {
         let algorithm = Algorithm("NondeterministicSharedInitialization", scoped: { scope in
             let value = scope.sharedVar(_name: "value", in: 1...3)
@@ -1569,9 +1569,6 @@ struct AlgorithmBuilderTests {
         let states = try CompiledRuntime(compilation: compilation).initialStates()
 
         #expect(Set(try states.map { try $0.value(for: value).rendered(using: compilation.layout) }) == [.int(1), .int(2), .int(3)])
-        #expect(spec.variables.first { $0.name == "value" }?.initialization == .memberOf(.setLiteral([
-            .value(.int(1)), .value(.int(2)), .value(.int(3))
-        ])))
     }
 
     @Test("SharedVar initial domains can depend on earlier formal state")

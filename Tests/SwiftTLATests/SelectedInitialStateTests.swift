@@ -2,6 +2,13 @@ import Testing
 import SwiftTLA
 
 struct SelectedInitialStateTests {
+    @Test("Closed integer initialization retains a symbolic domain in TLA export")
+    func exportsClosedIntegerDomain() throws {
+        let tla = try SelectedInitialStateModel.render().tlaBundle.tla
+        let domainLine = tla.split(separator: "\n").first { $0.contains("value \\in") }
+        #expect(domainLine == "  /\\ value \\in 0..100000")
+    }
+
     @Test("Selected initialization preserves dependent values and domains")
     func validatesDependentInitialization() throws {
         let initial = SelectedInitialStateModel.State(value: 100_000, copy: 100_001, neighbor: 100_001)

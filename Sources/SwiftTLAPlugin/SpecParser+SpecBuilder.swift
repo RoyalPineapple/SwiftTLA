@@ -598,7 +598,7 @@ extension ParserSession {
     ) -> (expression: StateExpr, elementType: String)? {
         if let range = parseIntegerClosedRange(expression) {
             return (
-                expression: .setLiteral(range.map { .int($0) }),
+                expression: .integerRange(.int(range.lowerBound), .int(range.upperBound)),
                 elementType: "Int"
             )
         }
