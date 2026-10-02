@@ -10,7 +10,7 @@ struct GeneratedTLCOracleTests {
         var expectations = original.expectations
         expectations[.falseInvariant] = .satisfied
         let changed = ConstantStateClaims.ValidationScenario(
-            name: original.name, configuration: original.configuration,
+            name: original.name, displayName: original.displayName, configuration: original.configuration,
             checking: original.checking, checkingMode: original.checkingMode, behavior: original.behavior,
             expectations: expectations, deadlockExpectation: original.deadlockExpectation)
         let pin = try testReferencePin()
@@ -25,7 +25,7 @@ struct GeneratedTLCOracleTests {
     func decisiveModeChangesCacheIdentity() throws {
         let decisive = try #require(DieHardestModel.validationScenarios().first)
         let exhaustive = DieHardestModel.ValidationScenario(
-            name: decisive.name, configuration: decisive.configuration,
+            name: decisive.name, displayName: decisive.displayName, configuration: decisive.configuration,
             checking: decisive.checking, checkingMode: .exhaustive, behavior: decisive.behavior,
             expectations: decisive.expectations, deadlockExpectation: decisive.deadlockExpectation)
         let pin = try testReferencePin()

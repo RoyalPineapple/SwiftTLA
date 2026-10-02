@@ -1,14 +1,17 @@
 package struct AlgorithmModel: Sendable {
     package let name: String
+    package let displayLabel: String?
     package let sequentialFairness: SequentialAlgorithmFairness
     package let components: [AlgorithmComponentModel]
 
     package init(
         name: String,
+        displayLabel: String? = nil,
         sequentialFairness: SequentialAlgorithmFairness = .none,
         components: [AlgorithmComponentModel]
     ) {
         self.name = name
+        self.displayLabel = displayLabel
         self.sequentialFairness = sequentialFairness
         self.components = components
     }

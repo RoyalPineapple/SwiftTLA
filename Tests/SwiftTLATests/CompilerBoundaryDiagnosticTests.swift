@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import SwiftParser
 import SwiftSyntax
@@ -172,7 +173,7 @@ struct CompilerBoundaryDiagnosticTests {
 
     @Test("Bound algorithm and validation use their Swift binding identities")
     func boundBuildersUseSwiftBindingIdentities() throws {
-        let closure = try #require(Parser.parse(source: """
+        let source = """
         {
             let counter = Algorithm(scoped: { scope in
                 let count = scope.sharedVar(_name: "count", initial: 0)
@@ -185,15 +186,24 @@ struct CompilerBoundaryDiagnosticTests {
             let complete = Validation {}
             complete
         }
-        """).statements.first?.item.as(ClosureExprSyntax.self))
-        let parsed = SpecParser.parseSpecClosure(named: "BoundBuilders", closure,
-            sourceTypes: .init(enums: [SourceEnum(typeName: "TestControlLabel",
-                cases: [("increment", .string("increment"))])]))
+        """
+        let labelledSource = source
+            .replacingOccurrences(of: "Algorithm(scoped:", with: "Algorithm(label: \"Counter\", scoped:")
+            .replacingOccurrences(of: "Validation {}", with: "Validation(label: \"Complete\") {}")
+        let metadata = SourceTypeMetadata(enums: [SourceEnum(typeName: "TestControlLabel",
+            cases: [("increment", .string("increment"))])])
+        let closure = try #require(Parser.parse(source: source)
+            .statements.first?.item.as(ClosureExprSyntax.self))
+        let labelledClosure = try #require(Parser.parse(source: labelledSource)
+            .statements.first?.item.as(ClosureExprSyntax.self))
+        let parsed = SpecParser.parseSpecClosure(named: "BoundBuilders", closure, sourceTypes: metadata)
+        let labelled = SpecParser.parseSpecClosure(named: "BoundBuilders", labelledClosure, sourceTypes: metadata)
 
         #expect(parsed.diagnostics.isEmpty)
+        #expect(labelled.diagnostics.isEmpty)
         #expect(parsed.sourceAlgorithms.map(\.model.name) == ["counter"])
         #expect(parsed.validationScenarios.map(\.name) == ["complete"])
-        _ = try parsed.compile()
+        #expect(try parsed.compile().identity == labelled.compile().identity)
     }
 
     @Test("Unnamed builders reject inline and mutable declarations")
@@ -207,6 +217,24 @@ struct CompilerBoundaryDiagnosticTests {
             let closure = try #require(Parser.parse(source: "{ \(body) }")
                 .statements.first?.item.as(ClosureExprSyntax.self))
             let parsed = SpecParser.parseSpecClosure(named: "InvalidBinding", closure)
+
+            #expect(parsed.diagnostics.count == 1)
+            #expect(parsed.sourceAlgorithms.isEmpty)
+            #expect(parsed.validationScenarios.isEmpty)
+        }
+    }
+
+    @Test("Builder display labels require nonempty literals")
+    func builderDisplayLabelsRequireLiterals() throws {
+        for body in [
+            "let algorithm = Algorithm(label: \"\") {}",
+            "let validation = Validation(label: \"\") {}",
+            "let algorithm = Algorithm(label: \"bad \\(value)\") {}",
+            "let validation = Validation(label: \"bad \\(value)\") {}"
+        ] {
+            let closure = try #require(Parser.parse(source: "{ \(body) }")
+                .statements.first?.item.as(ClosureExprSyntax.self))
+            let parsed = SpecParser.parseSpecClosure(named: "InvalidLabel", closure)
 
             #expect(parsed.diagnostics.count == 1)
             #expect(parsed.sourceAlgorithms.isEmpty)

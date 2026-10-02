@@ -67,6 +67,7 @@ public protocol ModelValidationScenario: Sendable {
     associatedtype Machine: StateMachine
     associatedtype Property: Hashable, Sendable where Property == Machine.Property
     var name: String { get }
+    var displayName: String { get }
     var checking: ModelChecks<Property> { get }
     var checkingMode: ValidationCheckingMode { get }
     var behavior: ModelBehavior { get }
@@ -91,6 +92,7 @@ public struct AssumptionEvaluation: Sendable {
 /// A configured module that evaluates assumptions but declares no state machine.
 public protocol AssumptionValidationScenario: Sendable {
     var name: String { get }
+    var displayName: String { get }
     func evaluateAssumptions() throws -> AssumptionEvaluation
     func render() throws -> RenderedSpecification
 }
@@ -128,6 +130,7 @@ public enum ValidationBuilder {
 
 public struct ValidationDeclaration: SpecComponent {
     package let name: String
+    package let displayLabel: String?
     package let bindings: [ValidationBinding]
     package var expectations: [(property: PropertyReference, expected: ValidationExpectation)] = []
     package var deadlockExpectations: [ValidationExpectation] = []
@@ -136,8 +139,9 @@ public struct ValidationDeclaration: SpecComponent {
     package var behaviorSelections: [ModelBehavior] = []
     package var checkingModeSelections: [ValidationCheckingMode] = []
 
-    package init(name: String, bindings: [ValidationBinding]) {
+    package init(name: String, displayLabel: String? = nil, bindings: [ValidationBinding]) {
         self.name = name
+        self.displayLabel = displayLabel
         self.bindings = bindings
     }
 
@@ -178,15 +182,18 @@ public struct ValidationDeclaration: SpecComponent {
     }
 }
 
-public func Validation(_ name: String, @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration {
-    .init(name: name, bindings: bindings())
+public func Validation(_ name: String, label: String? = nil,
+                       @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration {
+    .init(name: name, displayLabel: label, bindings: bindings())
 }
 
 /// Used by `#spec` after it supplies the enclosing immutable binding name.
-public func Validation(_name name: String, @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration {
-    .init(name: name, bindings: bindings())
+public func Validation(_name name: String, label: String? = nil,
+                       @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration {
+    .init(name: name, displayLabel: label, bindings: bindings())
 }
 
-public func Validation(@ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration {
+public func Validation(label: String? = nil,
+                       @ValidationBuilder _ bindings: () -> [ValidationBinding]) -> ValidationDeclaration {
     preconditionFailure("An unnamed Validation must be bound to let inside #spec.")
 }

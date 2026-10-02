@@ -6,6 +6,7 @@ struct AssumptionOnlyValidationTests {
     func checksConfiguredAssumptionsWithoutState() throws {
         let scenarios = try AssumptionOnlyFixture.validationScenarios()
         #expect(scenarios.map(\.name) == ["even", "odd"])
+        #expect(scenarios.map(\.displayName) == ["Even value", "Odd value"])
         let evaluations = try scenarios.map { try $0.evaluateAssumptions() }
         #expect(evaluations.map(\.satisfied) == [true, false])
         #expect(evaluations.allSatisfy { $0.evaluatedValues.isEmpty })

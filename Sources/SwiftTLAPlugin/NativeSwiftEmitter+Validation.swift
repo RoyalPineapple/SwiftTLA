@@ -51,6 +51,7 @@ extension NativeSwiftEmitter {
                 ? ".\((scenario.deadlockExpectation ?? .satisfied).rawValue)" : "nil"
             scenarios.append("""
             ValidationScenario(name: \(String(reflecting: scenario.name)),
+                displayName: \(String(reflecting: scenario.displayLabel ?? scenario.name)),
                 \(hasConfiguration ? "configuration: try Configuration(\(bindings))," : "")
                 checking: ModelChecks(properties: [\(selected.map { ".\($0.1)" }.joined(separator: ", "))], checkDeadlock: \(scenario.checkDeadlock)),
                 checkingMode: .\(scenario.checkingMode.rawValue),
@@ -65,6 +66,7 @@ extension NativeSwiftEmitter {
             public typealias Machine = \(model.typeName)
             public typealias Property = \(model.typeName).Property
             public let name: String
+            public let displayName: String
             \(hasConfiguration ? "public let configuration: Configuration" : "")
             public let checking: ModelChecks<Property>
             public let checkingMode: ValidationCheckingMode

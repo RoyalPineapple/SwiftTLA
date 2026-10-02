@@ -755,6 +755,7 @@ public struct Algorithm: Sendable, SpecComponent {
     package let model: AlgorithmModel
 
     public init(
+        label: String? = nil,
         fairness: SequentialAlgorithmFairness = .none,
         @AlgorithmBuilder _ body: () -> [AlgorithmElement]
     ) {
@@ -762,6 +763,7 @@ public struct Algorithm: Sendable, SpecComponent {
     }
 
     public init(
+        label: String? = nil,
         fairness: SequentialAlgorithmFairness = .none,
         @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement]
     ) {
@@ -771,31 +773,36 @@ public struct Algorithm: Sendable, SpecComponent {
     /// Used by `#spec` after it supplies the enclosing immutable binding name.
     public init(
         _name name: String,
+        label: String? = nil,
         fairness: SequentialAlgorithmFairness = .none,
         @AlgorithmBuilder _ body: () -> [AlgorithmElement]
     ) {
-        self.init(name, fairness: fairness, body)
+        self.init(name, label: label, fairness: fairness, body)
     }
 
     /// Used by `#spec` after it supplies the enclosing immutable binding name.
     public init(
         _name name: String,
+        label: String? = nil,
         fairness: SequentialAlgorithmFairness = .none,
         @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement]
     ) {
-        self.init(name, fairness: fairness, scoped: body)
+        self.init(name, label: label, fairness: fairness, scoped: body)
     }
 
     public init(
         _ name: String,
+        label: String? = nil,
         fairness: SequentialAlgorithmFairness = .none,
         @AlgorithmBuilder _ body: () -> [AlgorithmElement]
     ) {
-        model = AlgorithmModel(name: name, sequentialFairness: fairness, components: body().map(\.model))
+        model = AlgorithmModel(name: name, displayLabel: label,
+            sequentialFairness: fairness, components: body().map(\.model))
     }
 
     public init(
         _ name: String,
+        label: String? = nil,
         fairness: SequentialAlgorithmFairness = .none,
         @AlgorithmBuilder scoped body: (AlgorithmScope) -> [AlgorithmElement]
     ) {
@@ -803,6 +810,7 @@ public struct Algorithm: Sendable, SpecComponent {
         let components = body(scope)
         model = AlgorithmModel(
             name: name,
+            displayLabel: label,
             sequentialFairness: fairness,
             components: scope.declarations.map(\.model) + components.map(\.model)
         )

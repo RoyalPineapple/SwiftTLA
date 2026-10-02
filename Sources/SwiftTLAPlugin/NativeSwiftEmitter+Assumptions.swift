@@ -47,11 +47,12 @@ extension NativeSwiftEmitter {
                 }
                 return "\(parameter.reference.name): \(try expression(value, state: ""))"
             }.joined(separator: ", ")
-            return "ValidationScenario(name: \(String(reflecting: scenario.name))\(configured ? ", configuration: try Configuration(\(bindings))" : ""))"
+            return "ValidationScenario(name: \(String(reflecting: scenario.name)), displayName: \(String(reflecting: scenario.displayLabel ?? scenario.name))\(configured ? ", configuration: try Configuration(\(bindings))" : ""))"
         }
         declarations += try nativeDeclarations("""
         public struct ValidationScenario: AssumptionValidationScenario {
             public let name: String
+            public let displayName: String
             \(configured ? "public let configuration: Configuration" : "")
             public func evaluateAssumptions() throws -> AssumptionEvaluation {
                 try \(model.typeName).evaluateAssumptions(\(parameterCall))

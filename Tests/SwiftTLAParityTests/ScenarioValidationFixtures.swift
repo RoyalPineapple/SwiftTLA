@@ -23,6 +23,7 @@ struct IncompleteCounterScenario: ModelValidationScenario {
     typealias Property = ConfiguredCounter.Property
     let original: ConfiguredCounter.ValidationScenario
     var name: String { original.name }
+    var displayName: String { original.displayName }
     var checking: ModelChecks<Property> { original.checking }
     var behavior: ModelBehavior { original.behavior }
     var expectations: [Property: ValidationExpectation] { [:] }

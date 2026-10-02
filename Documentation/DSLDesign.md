@@ -111,9 +111,13 @@ an unchecked formal identifier.
 `Algorithm` and `Validation` require immutable `let` bindings inside `#spec`.
 The binding is their stable identity; the builder expression is registered by
 referencing that binding. For example, `let protocolAlgorithm = Algorithm { ... }; protocolAlgorithm`
-and `let exhaustive = Validation { ... }; exhaustive`. Neither positional names
-nor display labels define identity. The exact optional-label syntax and the
-registration rules for other non-state declarations remain to be settled.
+and `let exhaustive = Validation { ... }; exhaustive`. Both accept an optional
+nonempty literal `label:` for presentation: `Algorithm(label: "Protocol") { ... }`
+or `Validation(label: "Exhaustive check") { ... }`. Interpolation is rejected.
+Duplicate labels are allowed; generated scenario `name` remains the identity
+and `displayName` uses the label or falls back to that name. Compiled algorithm
+descriptions expose the same `name`/`displayName` distinction. The registration
+rules for other non-state declarations remain to be settled.
 Anonymous declarations must have useful source locations in diagnostics; do not
 invent another mandatory naming system merely to support them. The positional
 forms elsewhere in this draft describe existing code awaiting migration.
@@ -1352,7 +1356,7 @@ settled below; the other decisions remain open.
 | ID | Decision |
 | --- | --- |
 | B-01 | Parameter and domain syntax: distinguish value types, legal model domains, finite scenario bindings, and runner resource limits. Define parameter-dependent structure without changing generated API types |
-| B-02 | Algorithm and Validation identity decision settled: require an immutable `let` binding and explicit registration by reference. Complete caller migration, optional display labels, and the remaining declaration/anonymous rules without duplicate names or hidden side effects |
+| B-02 | Algorithm and Validation require an immutable `let` binding, explicit registration by reference, and optional presentation-only `label:`. Complete caller migration and the remaining declaration/anonymous rules without duplicate names or hidden side effects |
 | B-03 | Settled: typed `.expect(property, .violated)` and `.expectDeadlock(.violated)` change scenario admission only; checking retains its default selections and typed result shapes |
 | B-04 | Temporal and symmetry syntax: settle explicit fairness and interchangeability declarations, scope references, validation rules, and permitted reductions; neither fairness nor symmetry is automatic |
 | B-05 | Swift value/helper contracts: define supported operations, helper functions, exact inference rules and required annotations under the no-guessing rule, checked arithmetic, collection indexing, and failure behavior |

@@ -307,7 +307,8 @@ package struct CompiledTypeChecker: Sendable {
                 }
                 values[binder] = try checkOperand(value, expected: type)
             }
-            return CompiledValidationScenario(name: scenario.name, bindings: values,
+            return CompiledValidationScenario(name: scenario.name, displayLabel: scenario.displayLabel,
+                bindings: values,
                 expectations: scenario.expectations, deadlockExpectation: scenario.deadlockExpectation,
                 checks: scenario.checks, checkDeadlock: scenario.checkDeadlock, behavior: scenario.behavior,
                 checkingMode: scenario.checkingMode)

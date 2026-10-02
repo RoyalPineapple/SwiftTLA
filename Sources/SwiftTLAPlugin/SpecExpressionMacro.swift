@@ -324,6 +324,11 @@ private final class DSLRewriter: SyntaxRewriter {
         if let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
            constructor == "Algorithm" || constructor == "Validation" {
             guard call.arguments.first?.label != nil || call.arguments.isEmpty else { return nil }
+            let labels = call.arguments.filter { $0.label?.text == "label" }
+            if labels.count > 1 || (labels.first != nil
+                && labels.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue?.isEmpty != false) {
+                context.diagnose(Diagnostic(node: Syntax(call), message: BuilderLabelDiagnostic()))
+            }
             var result = call
             let identity = LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
                 expression: StringLiteralExprSyntax(content: name), trailingComma: .commaToken())
@@ -409,6 +414,12 @@ private struct BuilderBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-builder-binding")
     let severity: DiagnosticSeverity = .error
     let message = "Algorithm and Validation require an immutable named let binding inside #spec."
+}
+
+private struct BuilderLabelDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-builder-label")
+    let severity: DiagnosticSeverity = .error
+    let message = "An Algorithm or Validation label requires one nonempty string literal without interpolation."
 }
 
 private struct PropertyLabelDiagnostic: DiagnosticMessage {

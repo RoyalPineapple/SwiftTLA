@@ -26,7 +26,8 @@ package struct CompiledBehavior: Sendable {
             parameterDomains: parameterDomains.mapValues(transform),
             checkingRegisterInitializations: checkingRegisterInitializations.mapValues(transform),
             validationScenarios: validationScenarios.map {
-                try .init(name: $0.name, bindings: $0.bindings.mapValues(transform),
+                try .init(name: $0.name, displayLabel: $0.displayLabel,
+                    bindings: $0.bindings.mapValues(transform),
                     expectations: $0.expectations, deadlockExpectation: $0.deadlockExpectation,
                     checks: $0.checks, checkDeadlock: $0.checkDeadlock, behavior: $0.behavior,
                     checkingMode: $0.checkingMode)
@@ -54,6 +55,7 @@ package struct CompiledBehavior: Sendable {
 
 package struct CompiledValidationScenario: Sendable {
     package let name: String
+    package let displayLabel: String?
     package let bindings: [BinderID: CompiledExpression]
     package let expectations: [PropertyID: ValidationExpectation]
     package let deadlockExpectation: ValidationExpectation?

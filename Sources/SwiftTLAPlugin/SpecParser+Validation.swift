@@ -27,6 +27,7 @@ extension ParserSession {
             guard let name = boundName ?? extractStringArg(root, index: 0), let body = root.trailingClosure else {
                 throw SourceParseDiagnostic(message: "Validation requires an immutable let binding and typed parameter bindings.", source: root)
             }
+            let displayLabel = try declarationDisplayLabel(root, kind: "validation")
             var bindings: [ValidationBinding] = []
             for statement in body.statements {
                 guard case .expr(let expression) = statement.item,
@@ -41,7 +42,7 @@ extension ParserSession {
                 }
                 bindings.append(.init(parameter: parameter, value: value))
             }
-            var scenario = ValidationDeclaration(name: name, bindings: bindings)
+            var scenario = ValidationDeclaration(name: name, displayLabel: displayLabel, bindings: bindings)
             for override in overrides.reversed() {
                 if let member = override.calledExpression.as(MemberAccessExprSyntax.self) {
                     if member.declName.baseName.sourceIdentifierName == "behavior" {

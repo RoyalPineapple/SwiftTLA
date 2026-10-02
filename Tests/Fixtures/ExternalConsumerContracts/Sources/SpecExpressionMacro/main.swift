@@ -31,7 +31,7 @@ struct Counter {
 
     static var spec: TLASpec {
         #spec("Counter") {
-            let counterAlgorithm = Algorithm(scoped: { scope in
+            let counterAlgorithm = Algorithm(label: "Counting algorithm", scoped: { scope in
                 let value = scope.sharedVar(_name: "value", initial: 0)
                 let cars = scope.sharedVar(_name: "cars", initial: Function<CarID, Car>.literal(
                     (.one, Car(floor: 1, doorsOpen: false)),
@@ -48,13 +48,22 @@ struct Counter {
                 })
             })
             counterAlgorithm
-            let complete = Validation {}.checkingDeadlock(false)
+            let complete = Validation(label: "Complete run") {}.checkingDeadlock(false)
             complete
+            let repeated = Validation(label: "Complete run") {}.checkingDeadlock(false)
+            repeated
         }
     }
 }
 
-_ = try Counter.spec.compile()
+let compilation = try Counter.spec.compile()
+let scenarios = try Counter.validationScenarios()
+guard compilation.description.algorithms.map(\.name) == ["counterAlgorithm"],
+      compilation.description.algorithms.map(\.displayName) == ["Counting algorithm"],
+      scenarios.map(\.name) == ["complete", "repeated"],
+      scenarios.map(\.displayName) == ["Complete run", "Complete run"] else {
+    throw FixtureError.invalidTransition
+}
 var counter = try Counter.makeMachine()
 let transition = try counter.send(.advance)
 guard transition.after.value == 1,

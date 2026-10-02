@@ -480,7 +480,8 @@ struct CompiledLowerer {
                 }
                 expectations[property.id] = expectation.expected
             }
-            scenarios.append(.init(name: scenario.name, bindings: bindings, expectations: expectations,
+            scenarios.append(.init(name: scenario.name, displayLabel: scenario.displayLabel,
+                bindings: bindings, expectations: expectations,
                 deadlockExpectation: scenario.deadlockExpectations.first, checks: checks, checkDeadlock: checkDeadlock,
                 behavior: scenario.behaviorSelections.first ?? .specification,
                 checkingMode: scenario.checkingModeSelections.first ?? .exhaustive))

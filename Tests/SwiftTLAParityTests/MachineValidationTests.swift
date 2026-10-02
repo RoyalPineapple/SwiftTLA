@@ -185,7 +185,7 @@ struct MachineValidationTests {
         var expectations = scenario.expectations
         expectations[.falseInvariant] = .satisfied
         let changed = ConstantStateClaims.ValidationScenario(
-            name: scenario.name, configuration: scenario.configuration,
+            name: scenario.name, displayName: scenario.displayName, configuration: scenario.configuration,
             checking: scenario.checking, checkingMode: scenario.checkingMode, behavior: scenario.behavior,
             expectations: expectations, deadlockExpectation: scenario.deadlockExpectation)
         let changedReport = try NativeValidationRunner.run(
@@ -232,6 +232,7 @@ private struct RenderlessScenario<Base: ModelValidationScenario>: ModelValidatio
     typealias Property = Base.Property
     let base: Base
     var name: String { base.name }
+    var displayName: String { base.displayName }
     var checking: ModelChecks<Property> { base.checking }
     var behavior: ModelBehavior { base.behavior }
     var expectations: [Property: ValidationExpectation] { base.expectations }

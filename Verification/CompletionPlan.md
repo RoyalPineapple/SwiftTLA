@@ -73,8 +73,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       supplies identity. The parser and `#spec` rewrite support this form.
       Focused parser rejection tests and an executing external consumer passed
       locally; these are diagnostic evidence, not hosted acceptance.
-- [ ] Finish B-02: define and expose optional labels, migrate every existing
-      positional-name caller and scenario reference, remove those old public
+- [ ] Finish B-02: optional labels now reach compiled algorithm descriptions
+      and generated stateful and assumption-only scenarios; focused local
+      checks passed, but hosted acceptance remains pending. Migrate every
+      positional-name caller and scenario reference, remove the old public
       forms, and settle the remaining declaration/anonymous rules. Recheck
       generated TLA and native scenario identity on the migrated matrix.
 - [ ] Audit AC-01 through AC-19 against each criterion's full acceptance text.

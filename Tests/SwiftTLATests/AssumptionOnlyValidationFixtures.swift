@@ -7,8 +7,10 @@ struct AssumptionOnlyFixture: Sendable {
         #spec("AssumptionOnlyFixture") { scope in
             let limit = scope.parameter(as: Int.self, in: 0...3)
             Assume(limit % 2 == 0)
-            Validation("even") { Bind(limit, to: 2) }.checkingDeadlock(false)
-            Validation("odd") { Bind(limit, to: 3) }.checkingDeadlock(false)
+            let even = Validation(label: "Even value") { Bind(limit, to: 2) }.checkingDeadlock(false)
+            even
+            let odd = Validation(label: "Odd value") { Bind(limit, to: 3) }.checkingDeadlock(false)
+            odd
         }
     }
 }

@@ -285,6 +285,13 @@ extension ParserSession {
             ))
             return nil
         }
+        let displayLabel: String?
+        do {
+            displayLabel = try declarationDisplayLabel(call, kind: "algorithm")
+        } catch {
+            components.diagnostics.append(error)
+            return nil
+        }
         let fairness: SequentialAlgorithmFairness
         if let expression = call.arguments.first(where: { $0.label?.text == "fairness" })?.expression {
             guard let access = expression.as(MemberAccessExprSyntax.self) else {
@@ -443,7 +450,8 @@ extension ParserSession {
             algorithmComponents.append(component)
         }
 
-        let model = AlgorithmModel(name: name, sequentialFairness: fairness, components: algorithmComponents)
+        let model = AlgorithmModel(name: name, displayLabel: displayLabel,
+            sequentialFairness: fairness, components: algorithmComponents)
         let diagnostics = AlgorithmValidator.validate(model)
         guard diagnostics.isEmpty else {
             components.diagnostics.append(.init(

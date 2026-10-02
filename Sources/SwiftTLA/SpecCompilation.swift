@@ -53,6 +53,7 @@ public struct CompilationDescription: Sendable, Equatable {
     public let parameters: [ParameterDescription]
     public let variables: [VariableDescription]
     public let actions: [ActionDescription]
+    public let algorithms: [AlgorithmDescription]
     public let invariants: [String]
     public let reachabilityProperties: [String]
     public let temporalProperties: [String]
@@ -78,6 +79,11 @@ public struct ActionDescription: Sendable, Equatable {
     public let name: String
     public let renderedName: String
     public let sourceOffset: Int?
+}
+
+public struct AlgorithmDescription: Sendable, Equatable {
+    public let name: String
+    public let displayName: String
 }
 
 public struct ProcedureDescription: Sendable, Equatable {
@@ -800,6 +806,9 @@ public extension TLASpec {
                     renderedName: $0.renderedName,
                     sourceOffset: $0.declaration.sourceOffset
                 )
+            },
+            algorithms: sourceAlgorithms.map {
+                .init(name: $0.model.name, displayName: $0.model.displayLabel ?? $0.model.name)
             },
             invariants: semantics.behavior.invariants.map(\.name),
             reachabilityProperties: semantics.behavior.reachabilityProperties.map(\.name),
