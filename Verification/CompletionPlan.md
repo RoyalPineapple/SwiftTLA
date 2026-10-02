@@ -149,6 +149,8 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       sample, nested specification macro, multi-binding generated model, and
       structured generated model. Their 40 focused guarded tests passed;
       direct formal-core builders remain explicit comparison oracles.
+      Three native-code-generation parser samples now use bound algorithms;
+      their focused emission and execution checks passed locally.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck
