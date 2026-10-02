@@ -110,17 +110,17 @@ an unchecked formal identifier.
 
 `Algorithm` and `Validation` require immutable `let` bindings inside `#spec`.
 The binding is their stable identity; the builder expression is registered by
-referencing that binding. For example, `let protocolAlgorithm = Algorithm { ... }; protocolAlgorithm`
-and `let exhaustive = Validation { ... }; exhaustive`. Both accept an optional
-nonempty literal `label:` for presentation: `Algorithm(label: "Protocol") { ... }`
-or `Validation(label: "Exhaustive check") { ... }`. Interpolation is rejected.
+referencing that binding. For example,
+`let protocolAlgorithm = Algorithm(label: "Protocol") { ... }; protocolAlgorithm`
+and `let exhaustive = Validation(label: "Exhaustive check") { ... }; exhaustive`.
+The nonempty literal `label:` is optional and only for presentation;
+interpolation is rejected.
 Duplicate labels are allowed; generated scenario `name` remains the identity
 and `displayName` uses the label or falls back to that name. Compiled algorithm
 descriptions expose the same `name`/`displayName` distinction. The registration
 rules for other non-state declarations remain to be settled.
 Anonymous declarations must have useful source locations in diagnostics; do not
-invent another mandatory naming system merely to support them. The positional
-forms elsewhere in this draft describe existing code awaiting migration.
+invent another mandatory naming system merely to support them.
 
 Inside `#spec`, scoped state declarations derive their names from immutable Swift bindings:
 
@@ -202,7 +202,8 @@ No program counter, source-order scheduling, or termination action is added.
     Do(Step.reset, when: count == 2) {
         Assign(count, to: 0)
     }
-    Validation("Complete") {}
+    let complete = Validation {}
+    complete
 }
 ```
 
@@ -399,12 +400,14 @@ The predicate retains its inner scope and any process-member quantification.
 
 ```swift
 let safe = Invariant()
-Algorithm("Worker", scoped: { scope in
+let worker = Algorithm(scoped: { scope in
     let value = scope.sharedVar(initial: 0)
     Do(Step.wait) { Goto(Step.wait) }
     safe { value == 0 }
 })
-Validation("Safety") {}.checking(only: [safe])
+worker
+let safety = Validation {}.checking(only: [safe])
+safety
 ```
 
 A bare forward handle is not a builder component. A scenario reference without a registered predicate fails compilation.
@@ -487,7 +490,7 @@ For example, the existing `RecurringPopulation` declarations supply `members`, `
 
 ```swift
 let EachRecurs = AlwaysEventually()
-Algorithm("Toggle") {
+let toggle = Algorithm {
     Each(members, fairness: .weak) { member in
         While(Step.toggle, true) {
             Assign(value, to: 1 - value)
@@ -495,8 +498,10 @@ Algorithm("Toggle") {
         EachRecurs(value == member)
     }
 }
-Validation("Outside cycle") { Bind(members, to: Set<Int>([2])) }
+toggle
+let outsideCycle = Validation(label: "Outside cycle") { Bind(members, to: Set<Int>([2])) }
     .expect(EachRecurs, .violated)
+outsideCycle
 ```
 
 Acceptance requires the expected violation and actionable native and TLC lassos for member `2`.
@@ -722,11 +727,12 @@ verdict. Neither choice permits a truncated graph to pass equivalence validation
 The check-selection syntax is:
 
 ```swift
-Validation("Upstream selection") {
+let upstreamSelection = Validation(label: "Upstream selection") {
     Bind(processCount, to: 3)
 }
 .checking(only: [exclusion])
 .checkingDeadlock(false)
+upstreamSelection
 ```
 
 `checking(only:)` accepts registered property handles from the same model.
@@ -843,10 +849,11 @@ let nodes = scope.parameter(as: Set<Int>.self,
 let quorum = scope.parameter(as: Int.self, in: IntRange(1, through: nodes.cardinality))
 let selected = scope.sharedVar(initial: Set<Int>([]))
 
-Validation("Three nodes") {
+let threeNodes = Validation(label: "Three nodes") {
     Bind(nodes, to: Set<Int>([1, 2, 3]))
     Bind(quorum, to: 2)
 }
+threeNodes
 ```
 
 The generated configuration stores `Set<Int>`. Its initializer checks both the
@@ -974,10 +981,11 @@ Ordinary dictionary literals can bind function-valued model parameters:
 ```swift
 let capacity = scope.parameter(as: [String: Int].self,
     in: Functions(from: jugs, to: Set<Int>([3, 5])))
-Validation("Two jugs") {
+let twoJugs = Validation(label: "Two jugs") {
     Bind(jugs, to: Set<String>(["small", "big"]))
     Bind(capacity, to: ["small": 3, "big": 5])
 }
+twoJugs
 ```
 
 The parameter type supplies the key and value types, including for `[:]`.
@@ -1037,16 +1045,18 @@ exclusion {
     criticalSection.count <= 1
 }
 
-Validation("Correct protocol") {
+let correctProtocol = Validation(label: "Correct protocol") {
     Bind(processCount, to: 3)
     Bind(lockEnabled, to: true)
 }
+correctProtocol
 
-Validation("Missing lock") {
+let missingLock = Validation(label: "Missing lock") {
     Bind(processCount, to: 3)
     Bind(lockEnabled, to: false)
 }
 .expect(exclusion, .violated)
+missingLock
 ```
 
 The `exclusion { ... }` expression registers the predicate in the builder.
@@ -1366,7 +1376,8 @@ For B-03, the public modifiers `expect(_ property: some ModelProperty, _ expecte
 and `expectDeadlock(_ expected: ValidationExpectation)` accept `.satisfied` or
 `.violated`. All declared properties and deadlock are
 selected by default. An expected unfinished stuck state is written as
-`Validation("Expected stuck") {}.expectDeadlock(.violated)`; the same check
+`let expectedStuck = Validation(label: "Expected stuck") {}.expectDeadlock(.violated); expectedStuck`;
+the same check
 remains enabled and must return a replayable deadlock witness. Normal completion
 must satisfy the default deadlock check. An expectation for a disabled check,
 such as `.checkingDeadlock(false).expectDeadlock(.violated)`, is invalid.

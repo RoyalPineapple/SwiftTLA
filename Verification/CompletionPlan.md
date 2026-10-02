@@ -80,6 +80,8 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       their published names preserved in focused local rendering checks. The
       configured Counter uses binding identities and separate display labels;
       its focused checking and scenario-admission regressions passed locally.
+      DSL spec examples and the generated-machine guide now show bound
+      declarations; the matching guide fixture passed guarded Xcode tests.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck
