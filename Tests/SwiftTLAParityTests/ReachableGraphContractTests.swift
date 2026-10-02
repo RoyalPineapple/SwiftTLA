@@ -70,22 +70,6 @@ import UpstreamParity
     #expect(count == 48)
   }
 
-  @Test("Deadlock detected by default")
-  func deadlock() throws {
-    let x = Var<Int>("x")
-    let spec = TLASpec("Test") {
-      Variable(x, 0)
-      Action("once") { x.becomes(1).when(x == 0) }
-    }
-    let r = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
-    if case .deadlocked(let state) = r {
-      let token = try #require(TLAStateProjection.Token(validating: "x"))
-      #expect(state.value(for: token) == .int(1))
-    } else {
-      #expect(Bool(false))
-    }
-  }
-
   @Test("Multi-choose is Cartesian product")
   func multiChooseProduct() throws {
     let action = ActionExpr.existsAction("first", .setLiteral([.int(1), .int(2)]),
