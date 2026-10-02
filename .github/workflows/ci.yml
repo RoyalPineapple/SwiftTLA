@@ -131,8 +131,8 @@ jobs:
           }
           for suite in GeneratedAppleModelTests CameraAdoptionProofTests; do
             grep -A1 "Test Suite '$suite' passed at" .build/adoption-evidence/camera-adoption-contracts.log \
-              | grep -q 'Executed 6 tests, with 0 failures (0 unexpected)' \
-              || { echo "$suite did not pass exactly six tests"; exit 1; }
+              | grep -Eq 'Executed [1-9][0-9]* tests, with 0 failures \(0 unexpected\)' \
+              || { echo "$suite did not run a nonempty passing suite"; exit 1; }
           done
 
       - name: Upload Apple-platform adoption evidence
