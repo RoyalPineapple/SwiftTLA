@@ -12,6 +12,10 @@ package struct SumSequenceModel: Sendable {
         #spec("SumSequence") { model in
             Extends(.integers)
             let Values = model.parameter(as: Set<Int>.self, in: Subsets(of: Int.all))
+            let TypeOK = Invariant()
+            let Inv = Invariant()
+            let PCorrect = Invariant()
+            let Termination = Eventually()
             let SumSequence = Algorithm(fairness: .weak, scoped: { scope in
                 let seq = scope.sharedVar(in: Sequences(of: Values))
                 let sum = scope.sharedVar(initial: 0)
@@ -35,18 +39,18 @@ package struct SumSequenceModel: Sendable {
                 let typeOK = Sequences(of: Values).contains(seq)
                     && Int.all.contains(sum)
                     && n >= 1 && n <= seq.count + 1
-                Invariant("TypeOK") {
+                TypeOK {
                     typeOK
                 }
-                Invariant("Inv") {
+                Inv {
                     typeOK
                     sum == sums.first()
                     !Finished() || n == seq.count + 1
                 }
-                Invariant("PCorrect") {
+                PCorrect {
                     !Finished() || sum == sums.second()
                 }
-                Eventually("Termination", Finished())
+                Termination(Finished())
             })
             SumSequence
         }
