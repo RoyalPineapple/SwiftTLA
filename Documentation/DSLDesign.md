@@ -1338,24 +1338,44 @@ completion of the project. The full pinned corpus remains required. Track missin
 implementations, incomplete variants/configurations, and missing native/TLC
 agreement separately. Do not redefine membership from the implementation registry.
 
-## 11. Specification blockers
+## 11. Specification decisions
 
-Close each item with exact signatures, semantics, and one positive and one
+Close each open item with exact signatures, semantics, and one positive and one
 negative acceptance example. Implementers must not resolve these silently by
-inventing a second API or preserving an accidental existing behavior.
+inventing a second API or preserving an accidental existing behavior. B-03 is
+settled below; the other decisions remain open.
 
-| ID | Decision required before affected implementation |
+| ID | Decision |
 | --- | --- |
 | B-01 | Parameter and domain syntax: distinguish value types, legal model domains, finite scenario bindings, and runner resource limits. Define parameter-dependent structure without changing generated API types |
 | B-02 | Declaration/reference syntax: use Swift names by default, optional display labels, and the selected positive `Reachable` declaration; settle builder registration and anonymous declarations without duplicate names or hidden side effects |
-| B-03 | Expected-outcome syntax and result vocabulary: express an expected stuck state under the settled default check; define result shapes for safety, reachability, liveness, and deadlock |
+| B-03 | Settled: typed `.expect(property, .violated)` and `.expectDeadlock(.violated)` change scenario admission only; checking retains its default selections and typed result shapes |
 | B-04 | Temporal and symmetry syntax: settle explicit fairness and interchangeability declarations, scope references, validation rules, and permitted reductions; neither fairness nor symmetry is automatic |
 | B-05 | Swift value/helper contracts: define supported operations, helper functions, exact inference rules and required annotations under the no-guessing rule, checked arithmetic, collection indexing, and failure behavior |
 | B-06 | Corpus fit and migration: preserve existing models when moving to ordered assignments; demonstrate procedures, recursion, and required composition without a second execution backend |
 
-Until a blocker is closed, its code examples remain candidate syntax. The
-architecture and explicit guard contract do not become optional because other
-parts of the surface remain unresolved.
+For B-03, the public modifiers `expect(_ property: some ModelProperty, _ expected: ValidationExpectation)`
+and `expectDeadlock(_ expected: ValidationExpectation)` accept `.satisfied` or
+`.violated`. All declared properties and deadlock are
+selected by default. An expected unfinished stuck state is written as
+`Validation("Expected stuck") {}.expectDeadlock(.violated)`; the same check
+remains enabled and must return a replayable deadlock witness. Normal completion
+must satisfy the default deadlock check. An expectation for a disabled check,
+such as `.checkingDeadlock(false).expectDeadlock(.violated)`, is invalid.
+
+Safety violations carry finite traces; reachability success carries a finite
+witness and exhaustive reachability failure is `unreachable` without a trace;
+temporal violations may carry a lasso; deadlock violations carry a trace to an
+unfinished stuck state. A decisive safety result leaves other selected checks
+unevaluated, not satisfied. Incomplete exploration, unsupported checks, and
+unavailable verdicts cannot satisfy an expectation. ScenarioExpectationTests
+exercises the positive and negative deadlock cases and rejects missing,
+incomplete, and unavailable evidence. This syntax decision does not credit
+AC-09's separate native/TLC parity matrix.
+
+Until another blocker is closed, its code examples remain candidate syntax.
+The architecture and explicit guard contract do not become optional because
+other parts of the surface remain unresolved.
 
 ## 12. Implementation and completion
 
