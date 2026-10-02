@@ -10826,6 +10826,24 @@
           "artifactSHA256": "af3883b8c8772868a567160e676cb1cb301e36625fec46cb093eb95267146294",
           "acceptanceComplete": false,
           "scope": "Eighteen temporal property comparisons and three deadlock comparisons are exact. Retained traces distinguish stuttering and cyclic counterexamples, and no-fairness LeavesZero is violated while weak/strong variants satisfy it. This fixed matrix does not exercise every AC-09 termination or expected-deadlock scenario."
+        },
+        {
+          "sourceSHA": "c631af7df826b5419b3d49685332df5b36eabfe3",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36826780597/job/110259424382",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36826780597/artifacts/11145973603",
+          "artifactSHA256": "78519c461ebad2c0be34f23c682a095ec5b6570950d4907049dff03d77256a84",
+          "acceptanceComplete": false,
+          "scope": "counter-0 (Completes at two) retained one initial state, a complete three-state/three-edge graph, and exact native-versus-generated-TLA comparison. AtLimit was reached; Bounded, OrderedCopy, the generated assertion, and default deadlock were satisfied. Its completed control location is not treated as an unfinished deadlock. This is one hosted configuration, not the full AC-09 matrix."
+        },
+        {
+          "sourceSHA": "c631af7df826b5419b3d49685332df5b36eabfe3",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36826780597/job/110259424250",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36826780597/artifacts/11145844074",
+          "artifactSHA256": "22499135be2219345ad1d632eb2666ee8faf491cc67790a0af5f601205573d4b",
+          "acceptanceComplete": false,
+          "scope": "counter-1 (Deadlocks at four) retained one initial state, a complete five-state/four-edge graph, and exact native-versus-generated-TLA comparison. AtLimit was reached; Bounded, OrderedCopy, and the generated assertion were satisfied; default deadlock was violated as expected. The expected verdict did not suppress the other checks or truncate graph comparison. This is one hosted configuration, not the full AC-09 matrix."
         }
       ]
     },
