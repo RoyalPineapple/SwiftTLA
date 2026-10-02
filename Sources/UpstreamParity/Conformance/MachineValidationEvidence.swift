@@ -16,6 +16,8 @@ private struct MachineValidationProfile: Encodable {
     let reachabilitySeconds: Double
     let constraintSeconds: Double
     let seenLookupSeconds: Double
+    let seenHashSeconds: Double
+    let seenProbeSeconds: Double
     let seenInsertSeconds: Double
     let configurationSeconds: Double
     let eventSeconds: Double
@@ -141,7 +143,7 @@ package enum MachineValidationEvidence {
             return seconds(nanoseconds) * Double(total) / Double(samples)
         }
         let profile = MachineValidationProfile(
-            schema: "swifttla.native-validation-profile.v2", caseID: caseID,
+            schema: "swifttla.native-validation-profile.v3", caseID: caseID,
             elapsedSeconds: seconds(DispatchTime.now().uptimeNanoseconds - startedAt),
             explorationSeconds: seconds(result.timing.elapsedNanoseconds),
             successorSeconds: seconds(result.timing.successorNanoseconds),
@@ -149,6 +151,8 @@ package enum MachineValidationEvidence {
             reachabilitySeconds: seconds(result.timing.reachabilityNanoseconds),
             constraintSeconds: seconds(result.timing.constraintNanoseconds),
             seenLookupSeconds: seconds(result.timing.seenLookupNanoseconds),
+            seenHashSeconds: seconds(result.timing.seenHashNanoseconds),
+            seenProbeSeconds: seconds(result.timing.seenProbeNanoseconds),
             seenInsertSeconds: seconds(result.timing.seenInsertNanoseconds),
             configurationSeconds: seconds(result.timing.configurationNanoseconds),
             eventSeconds: seconds(result.timing.eventNanoseconds),

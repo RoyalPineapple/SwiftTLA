@@ -50,6 +50,8 @@ public struct MachineValidationTiming: Sendable {
     public let reachabilityNanoseconds: UInt64
     public let constraintNanoseconds: UInt64
     public let seenLookupNanoseconds: UInt64
+    public let seenHashNanoseconds: UInt64
+    public let seenProbeNanoseconds: UInt64
     public let seenInsertNanoseconds: UInt64
     public let configurationNanoseconds: UInt64
     public let eventNanoseconds: UInt64
@@ -90,7 +92,8 @@ public enum MachineValidator {
         var invariantNanoseconds: UInt64 = 0
         var reachabilityNanoseconds: UInt64 = 0
         var constraintNanoseconds: UInt64 = 0
-        var seenLookupNanoseconds: UInt64 = 0
+        var seenHashNanoseconds: UInt64 = 0
+        var seenProbeNanoseconds: UInt64 = 0
         var seenInsertNanoseconds: UInt64 = 0
         var configurationNanoseconds: UInt64 = 0
         var eventNanoseconds: UInt64 = 0
@@ -108,7 +111,9 @@ public enum MachineValidator {
                     invariantNanoseconds: invariantNanoseconds,
                     reachabilityNanoseconds: reachabilityNanoseconds,
                     constraintNanoseconds: constraintNanoseconds,
-                    seenLookupNanoseconds: seenLookupNanoseconds,
+                    seenLookupNanoseconds: seenHashNanoseconds + seenProbeNanoseconds,
+                    seenHashNanoseconds: seenHashNanoseconds,
+                    seenProbeNanoseconds: seenProbeNanoseconds,
                     seenInsertNanoseconds: seenInsertNanoseconds,
                     configurationNanoseconds: configurationNanoseconds,
                     eventNanoseconds: eventNanoseconds,
@@ -138,8 +143,11 @@ public enum MachineValidator {
         func stateID(_ snapshot: Machine.Snapshot) -> (IndexedSnapshot<Machine.Snapshot>, Int?) {
             let started = DispatchTime.now().uptimeNanoseconds
             let key = IndexedSnapshot(snapshot)
+            let hashed = DispatchTime.now().uptimeNanoseconds
             let result = seen[key]
-            seenLookupNanoseconds += DispatchTime.now().uptimeNanoseconds - started
+            let finished = DispatchTime.now().uptimeNanoseconds
+            seenHashNanoseconds += hashed - started
+            seenProbeNanoseconds += finished - hashed
             return (key, result)
         }
 
