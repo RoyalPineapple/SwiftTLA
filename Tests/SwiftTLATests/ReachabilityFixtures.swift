@@ -10,13 +10,14 @@ struct ReachabilityCounter {
             let target = scope.parameter(as: Int.self, in: 0...3)
             let exploredThrough = scope.parameter(as: Int.self, in: 1...2)
             let count = scope.sharedVar(initial: 0)
-            Algorithm("Counter") {
+            let counter = Algorithm(label: "Counter") {
                 Do(Step.advance, when: count < 2) {
                     Assign(count, to: count + 1)
                     Goto(Step.advance)
                 }
                 StateConstraint(count <= exploredThrough)
             }
+            counter
             Invariant("Bounded") { count <= 2 }
             Reachable("Target") { count == target }
         }

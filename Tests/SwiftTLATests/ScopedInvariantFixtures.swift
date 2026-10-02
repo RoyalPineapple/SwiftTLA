@@ -11,7 +11,7 @@ struct ScopedInvariantMachine {
             let stable = Invariant()
             let unvisited = Invariant()
             let top = Invariant()
-            Algorithm("Visits", scoped: { algorithm in
+            let visits = Algorithm(label: "Visits", scoped: { algorithm in
                 let value = algorithm.sharedVar(_name: "value", initial: 0)
                 Each(nodes, scoped: { member, process in
                     let visited = process.localVar(_name: "visited", initial: false)
@@ -23,9 +23,12 @@ struct ScopedInvariantMachine {
                 })
                 stable { value == 0 }
             })
+            visits
             top { true }
-            Validation("All") { Bind(nodes, to: Set<Int>([1, 2])) }.expect(unvisited, .violated)
-            Validation("Selected") { Bind(nodes, to: Set<Int>([1, 2])) }.checking(only: [stable, top])
+            let all = Validation(label: "All") { Bind(nodes, to: Set<Int>([1, 2])) }.expect(unvisited, .violated)
+            all
+            let selected = Validation(label: "Selected") { Bind(nodes, to: Set<Int>([1, 2])) }.checking(only: [stable, top])
+            selected
         }
     }
 }

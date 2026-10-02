@@ -8,7 +8,7 @@ struct BoundStateNamesModel {
     static var spec: TLASpec {
         #spec("BoundStateNames") { specification in
             let text = specification.sharedVar(label: "Current text", initial: "payload")
-            Algorithm("Workers", scoped: { algorithm in
+            let workers = Algorithm(label: "Workers", scoped: { algorithm in
                 let count = algorithm.sharedVar(label: "Current text", in: 0...1)
                 Each(Set<Int>([1]), scoped: { member, process in
                     let seen = process.localVar(label: "Visited?", initial: false)
@@ -20,6 +20,7 @@ struct BoundStateNamesModel {
                     }
                 })
             })
+            workers
         }
     }
 }
@@ -33,7 +34,7 @@ struct EscapedStateNamesModel {
             let `repeat` = `class`.sharedVar(initial: "payload")
             let `switch` = `class`.parameter(as: Int.self, in: 0...1)
             let `defer` = Invariant()
-            Algorithm("Workers", scoped: { `struct` in
+            let workers = Algorithm(label: "Workers", scoped: { `struct` in
                 let `default` = `struct`.sharedVar(initial: `switch`)
                 Each(Set<Int>([1]), scoped: { member, `enum` in
                     let `case` = `enum`.localVar(initial: false)
@@ -46,7 +47,9 @@ struct EscapedStateNamesModel {
                 })
                 `defer` { `default` <= 2 }
             })
-            Validation("One") { Bind(`switch`, to: 1) }.checking(only: [`defer`])
+            workers
+            let one = Validation(label: "One") { Bind(`switch`, to: 1) }.checking(only: [`defer`])
+            one
         }
     }
 }

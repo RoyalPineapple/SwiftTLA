@@ -7,12 +7,13 @@ struct IndependentLocalChoices: Sendable {
 
     static var spec: TLASpec {
         #spec("IndependentLocalChoices") {
-            Algorithm("IndependentLocalChoices") {
+            let independentLocalChoices = Algorithm(label: "IndependentLocalChoices") {
                 Each(Set<Int>([1, 2]), scoped: { (_: ProcessIdentifier<Int>, scope: ProcessScope) in
                     let choice = scope.localVar(in: Subsets(of: Set<Int>([1, 2])))
                     Do(Step.stay) { Assign(choice, to: choice) }
                 })
             }
+            independentLocalChoices
         }
     }
 }

@@ -119,6 +119,11 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       integer and sequence domains, initial-state selection, property naming,
       native property keys, function spaces, imported module configurations,
       and symbolic configuration. Their 38 focused guarded tests passed locally.
+      Nine generated-machine fixture files covering process locals, sequential
+      loops, ordered steps, escaped state and parameter names, reachability,
+      selected initial states, scoped invariants, and record-field assignment
+      now use bound declarations. Their 38 focused guarded tests, including
+      external label diagnostics, passed locally.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck

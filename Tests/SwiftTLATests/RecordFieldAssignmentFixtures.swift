@@ -19,7 +19,7 @@ struct RecordFieldAssignmentModel {
         #spec("RecordFieldAssignment") { scope in
             let envelope = scope.sharedVar(_name: "envelope", initial: Envelope(packet: Packet(count: 0, ready: false), untouched: 7))
             let savedCount = scope.sharedVar(_name: "savedCount", initial: -1)
-            Algorithm("RecordFieldAssignment") {
+            let recordFieldAssignment = Algorithm(label: "RecordFieldAssignment") {
                 Do(Step.advance) {
                     let saved = envelope
                     Assign(envelope.packet.count, to: 1)
@@ -29,6 +29,7 @@ struct RecordFieldAssignmentModel {
                     Stop()
                 }
             }
+            recordFieldAssignment
             Invariant("Bounded") { envelope.packet.count <= 2 }
         }
     }

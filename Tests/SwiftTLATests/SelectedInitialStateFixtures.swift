@@ -7,7 +7,7 @@ struct SelectedInitialStateModel: Sendable {
 
     static var spec: TLASpec {
         #spec("SelectedInitialState") {
-            Algorithm("SelectedInitialState", scoped: { scope in
+            let selectedInitialState = Algorithm(label: "SelectedInitialState", scoped: { scope in
                 let value = scope.sharedVar(in: 0...100_000)
                 let copy: SharedVariable<Int> = scope.sharedVar(initial: value + 1)
                 let neighbor = scope.sharedVar(in: IntRange(value, through: value + 1))
@@ -16,6 +16,7 @@ struct SelectedInitialStateModel: Sendable {
                     Assign(value, to: value + 1)
                 }
             })
+            selectedInitialState
         }
     }
 }
