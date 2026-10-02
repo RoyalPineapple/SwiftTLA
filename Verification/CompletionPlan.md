@@ -59,7 +59,15 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       100,000 states took 19.64 seconds before and 19.15 seconds with cached
       per-field snapshot hashes; the 2.5% gain did not justify that extra state
       storage, so the experiment was reverted. This is not a full-run speedup
-      claim. Measure each phase again before claiming improvement.
+      claim. A separate isolated diagnostic measured 300,000 projections of
+      Boulanger's initial snapshot at 6.33–6.44 seconds before hoisting
+      validated field-name tokens into generated static storage and 5.12–5.25
+      seconds afterward, with the model re-expanded between measurements.
+      This improves that local projection microcase, not the 1,297-second
+      hosted warm-oracle path. The previous hosted profile attributed about
+      98 seconds to typed projection; the isolated change still needs a full
+      hosted phase measurement and cannot by itself close the 919-second gap.
+      Measure each phase again before claiming a full-run improvement.
 - [ ] Preserve complete initial states, full state values, labeled edges,
       selected property/deadlock outcomes, and integrity-checked artifacts.
 - [ ] Run the exact case first, related regressions second, then ordinary CI and

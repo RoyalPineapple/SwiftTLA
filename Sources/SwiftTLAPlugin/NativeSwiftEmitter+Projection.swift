@@ -4,15 +4,20 @@ import SwiftTLA
 extension NativeSwiftEmitter {
     /// Serialize resolved native values only at the independent validation boundary.
     func formalProjectionDeclarations() throws -> [DeclSyntax] {
-        let entries = try program.layout.variables.map { variable in
+        let tokens = try program.layout.variables.map { variable in
             let name = variable.declaration.name
             guard TLAStateProjection.Token(validating: name) != nil else {
                 throw unsupported("invalid formal state identifier: \(name)")
             }
+            return "TLAStateProjection.Token(validating: \(String(reflecting: name)))!"
+        }.joined(separator: ", ")
+        let entries = try program.layout.variables.enumerated().map { index, variable in
             let value = try formalValue(stateValue(variable.id, prefix: "snapshot."), type: program.variableTypes[variable.id]!)
-            return ".init(token: TLAStateProjection.Token(validating: \(String(reflecting: name)))!, value: \(value))"
+            return ".init(token: Self.__swifttlaFormalProjectionTokens[\(index)], value: \(value))"
         }.joined(separator: ",\n")
         return [DeclSyntax(stringLiteral: """
+        private static let __swifttlaFormalProjectionTokens: [TLAStateProjection.Token] = [\(tokens)]
+        """), DeclSyntax(stringLiteral: """
         public func formalProjection(of snapshot: Snapshot) throws -> TLAStateProjection {
             try TLAStateProjection(validating: [\(entries)])
         }
