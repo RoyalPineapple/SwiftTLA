@@ -133,82 +133,36 @@ struct LivenessCheckerTests {
     }
   }
 
-  @Test("Eventually holds when the target belongs to a fair cycle")
-  func eventuallySatisfied() throws {
-    let position = Var<Int>("position")
-    let spec = TLASpec("FairCycle") {
-      Variable(position, in: IntRange(1, through: 12))
-      let advance = Action("advance") {
-        (position < 12 && position.becomes(position + 1)) ||
-          (position == 12 && position.becomes(1))
-      }
-      advance
-      Eventually("reachesTwelve", position == 12)
-      WeakFairness(advance)
-    }
-    let compilation = try spec.compile()
-    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let results = try exploration.analyzeTemporalProperties(in: compilation)
-    #expect(results.map(\.status) == [.satisfied])
-  }
-
-  @Test("Eventually fails when the target is unreachable")
-  func eventuallyViolated() throws {
-    let position = Var<Int>("position")
-    let spec = TLASpec("CycleWithUnreachableProperty") {
-      Variable(position, in: IntRange(1, through: 12))
-      Action("advance") {
-        (position < 12 && position.becomes(position + 1)) ||
-          (position == 12 && position.becomes(1))
-      }
-      Eventually("reachesThirteen", position == 13)
-    }
-    let compilation = try spec.compile()
-    let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    let results = try exploration.analyzeTemporalProperties(in: compilation)
-    #expect(results.map(\.status) == [.violated])
+  @Test("a fair cycle reaches its member but not an absent target")
+  func eventualTargetsInFairCycle() throws {
+    let states = Set(1...12)
+    let transitions = Dictionary(uniqueKeysWithValues: states.map { state in
+      (state, [GraphEdge(source: state, action: 0, target: state == 12 ? 1 : state + 1)])
+    })
+    let checker = LivenessChecker<Int, Int, Int>(states: states, transitions: transitions,
+      fairness: [(scope: 0, isStrong: false)], matches: { $0 == $1 },
+      actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+    #expect(try checker.analyze(.eventually { state, _ in state == 12 },
+      initialStates: [1], renderScope: { _ in "advance" }).status == .satisfied)
+    #expect(try checker.analyze(.eventually { state, _ in state == 13 },
+      initialStates: [1], renderScope: { _ in "advance" }).status == .violated)
   }
 
   @Test("WF satisfied, SF violated: A exits SCC, B+C cycle within")
   func wfSfDifferential() throws {
-    let x = Var<Int>("x")
-    let weakSpec = TLASpec("WFSFTest") {
-      Variable(x, 0)
-      let a = Action("A") { x == 0 && x.becomes(2) }
-      a
-      Action("B") { x == 0 && x.becomes(1) }
-      Action("C") { x == 1 && x.becomes(0) }
-      AlwaysEventually("neverThree", x == 3)
-      WeakFairness(a)
+    let transitions: [Int: [GraphEdge<Int, String>]] = [
+      0: [.init(source: 0, action: "A", target: 2), .init(source: 0, action: "B", target: 1)],
+      1: [.init(source: 1, action: "C", target: 0)],
+      2: []
+    ]
+    func analyze(strong: Bool) throws -> TemporalAnalysis<Int, String?> {
+      let checker = LivenessChecker<Int, String, String>(states: [0, 1, 2], transitions: transitions,
+        fairness: [(scope: "A", isStrong: strong)], matches: { $0 == $1 },
+        actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+      return try checker.analyze(.alwaysEventually { state, _ in state == 3 },
+        initialStates: [0], renderScope: { $0 })
     }
-    let strongSpec = TLASpec("WFSFTest") {
-      Variable(x, 0)
-      let a = Action("A") { x == 0 && x.becomes(2) }
-      a
-      Action("B") { x == 0 && x.becomes(1) }
-      Action("C") { x == 1 && x.becomes(0) }
-      AlwaysEventually("neverThree", x == 3)
-      StrongFairness(a)
-    }
-    let weakCompilation = try weakSpec.compile()
-    let exploration = try ModelChecker(compilation: weakCompilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
-    let weak = try #require(
-      exploration.analyzeTemporalProperties(in: weakCompilation).first
-    )
-    let strongCompilation = try strongSpec.compile()
-    let strongExploration = try ModelChecker(
-      compilation: strongCompilation,
-      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
-    ).explore()
-    let strong = try #require(
-      strongExploration.analyzeTemporalProperties(in: strongCompilation).first
-    )
-    let xToken = try #require(TLAStateProjection.Token(validating: "x"))
-    let cycle = Set(exploration.graph.states.compactMap { id, projection in
-      let value = projection.value(for: xToken)
-      return value == .int(0) || value == .int(1) ? id : nil
-    })
-    #expect(weak.fairComponents.contains(cycle))
-    #expect(strong.rejectedComponents.contains(cycle))
+    #expect(try analyze(strong: false).fairComponents.contains([0, 1]))
+    #expect(try analyze(strong: true).rejectedComponents.contains([0, 1]))
   }
 }
