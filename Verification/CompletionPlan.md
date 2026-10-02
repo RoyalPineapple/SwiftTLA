@@ -42,11 +42,12 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
 - [x] Reconcile the `767fe50b` hosted runs, required jobs and retained
       artifacts against the exact draft PR head. Both independent paths and
       ordinary CI passed; no result was inferred from an earlier SHA.
-- [ ] Bring Boulanger's complete warm-oracle native-plus-comparison path to an
-      acceptable measured runtime without truncating states or edges. On the
+- [ ] Bring Boulanger's complete warm-oracle native-plus-comparison path under
+      the accepted 1,200-second ceiling without truncating states or edges. This
+      is an admission ceiling, not a claim that the runtime is irreducible. On the
       green `767fe50b` SHA, native exploration took 1,044 seconds (1,051
       including its command); warm-oracle comparison took about 246 seconds,
-      for about 1,297 seconds together—above the accepted 919-second reference.
+      for about 1,297 seconds together—above that ceiling.
       Generated-TLA TLC evidence was restored from cache for that native job;
       the separate upstream parity job spent about 21.5 minutes generating
       cold TLC evidence before comparison. The
@@ -66,8 +67,14 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       This improves that local projection microcase, not the 1,297-second
       hosted warm-oracle path. The previous hosted profile attributed about
       98 seconds to typed projection; the isolated change still needs a full
-      hosted phase measurement and cannot by itself close the 919-second gap.
-      Measure each phase again before claiming a full-run improvement.
+      hosted phase measurement and cannot by itself close the runtime gap.
+      The later retained `ff35ad76` native profile attributes 300 seconds to
+      seen-state lookup, 266 seconds to evidence events (including an estimated
+      89 seconds of typed projection and 126 seconds of canonical encoding),
+      and 233 seconds to successor generation. The next diagnostic splits
+      lookup hashing from table probing. Optimize whichever phase the split
+      identifies, then measure the full warm-oracle path again before claiming
+      an improvement.
 - [ ] Preserve complete initial states, full state values, labeled edges,
       selected property/deadlock outcomes, and integrity-checked artifacts.
 - [ ] Run the exact case first, related regressions second, then ordinary CI and
