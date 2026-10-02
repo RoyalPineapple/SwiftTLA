@@ -12,9 +12,9 @@ private struct DescribedIntegerState {
     }
     enum Step: String, CaseIterable { case advance }
     static var spec: TLASpec {
-        #spec("DescribedIntegerState") {
+        #spec {
             let describedIntegerState = Algorithm(label: "DescribedIntegerState", scoped: { scope in
-                let rank = scope.sharedVar(_name: "rank", initial: Rank.low)
+                let rank = scope.sharedVar(initial: Rank.low)
                 Do(Step.advance) {
                     Assign(rank, to: Rank.high)
                 }
@@ -28,9 +28,9 @@ private struct DescribedIntegerState {
 private struct BoundedExecutionCounter {
     enum Step: String, CaseIterable { case advance }
     static var spec: TLASpec {
-        #spec("BoundedExecutionCounter") {
+        #spec {
             let boundedExecutionCounter = Algorithm(label: "BoundedExecutionCounter", scoped: { scope in
-                let count = scope.sharedVar(_name: "count", initial: 0)
+                let count = scope.sharedVar(initial: 0)
                 While(Step.advance, true) {
                     When(count < 3)
                     Assign(count, to: count + 1)
@@ -45,10 +45,10 @@ private struct BoundedExecutionCounter {
 private struct SavedValueExecutionSwap {
     enum Step: String, CaseIterable { case swap }
     static var spec: TLASpec {
-        #spec("SavedValueExecutionSwap") {
+        #spec {
             let savedValueExecutionSwap = Algorithm(label: "SavedValueExecutionSwap", scoped: { scope in
-                let left = scope.sharedVar(_name: "left", initial: 1)
-                let right = scope.sharedVar(_name: "right", initial: 2)
+                let left = scope.sharedVar(initial: 1)
+                let right = scope.sharedVar(initial: 2)
                 While(Step.swap, true) {
                     let originalLeft = left
                     Assign(left, to: right)
@@ -64,9 +64,9 @@ private struct SavedValueExecutionSwap {
 private struct ConstrainedExecutionChoice {
     enum Step: String, CaseIterable { case select }
     static var spec: TLASpec {
-        #spec("ConstrainedExecutionChoice") {
+        #spec {
             let constrainedExecutionChoice = Algorithm(label: "ConstrainedExecutionChoice", scoped: { scope in
-                let selected = scope.sharedVar(_name: "selected", initial: 0)
+                let selected = scope.sharedVar(initial: 0)
                 While(Step.select, true) {
                     Choose(1...3) { choice in
                         Assign(selected, to: choice.expr)
@@ -83,9 +83,10 @@ private struct ConstrainedExecutionChoice {
 private struct AmbiguousExecutionChoice {
     enum Step: String, CaseIterable { case select }
     static var spec: TLASpec {
-        #spec("AmbiguousExecutionChoice") {
+        #spec {
+            let BelowTwo = Invariant()
             let ambiguousExecutionChoice = Algorithm(label: "AmbiguousExecutionChoice", scoped: { scope in
-                let selected = scope.sharedVar(_name: "selected", in: 0...1)
+                let selected = scope.sharedVar(in: 0...1)
                 While(Step.select, true) {
                     When(selected < 2)
                     Choose(1...3) { choice in
@@ -93,7 +94,7 @@ private struct AmbiguousExecutionChoice {
                     }
                 }
                 StateConstraint(selected <= 2)
-                Invariant("BelowTwo") { selected < 2 }
+                BelowTwo { selected < 2 }
             })
             ambiguousExecutionChoice
         }
