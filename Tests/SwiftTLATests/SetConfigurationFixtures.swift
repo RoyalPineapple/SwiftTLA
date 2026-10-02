@@ -11,22 +11,25 @@ struct SetConfiguredMachine {
                 in: Set<Set<Int>>([Set<Int>([1]), Set<Int>([1, 2, 3])]))
             let quorum = scope.parameter(as: Int.self, in: IntRange(1, through: nodes.cardinality))
             let selected = scope.sharedVar(_name: "selected", initial: Set<Int>([]))
-            Algorithm("Selection") {
+            let selection = Algorithm(label: "Selection") {
                 Do(Step.adopt, when: selected.isEmpty) {
                     Assign(selected, to: nodes)
                     Goto(Step.adopt)
                 }
             }
+            selection
             Invariant("Members") { selected.isSubset(of: nodes) }
             Reachable("Quorum") { selected.cardinality >= quorum }
-            Validation("One node") {
+            let oneNode = Validation(label: "One node") {
                 Bind(nodes, to: Set<Int>([1]))
                 Bind(quorum, to: 1)
             }.expectDeadlock(.violated)
-            Validation("Three nodes") {
+            oneNode
+            let threeNodes = Validation(label: "Three nodes") {
                 Bind(nodes, to: Set<Int>([1, 2, 3]))
                 Bind(quorum, to: 2)
             }.expectDeadlock(.violated)
+            threeNodes
         }
     }
 }

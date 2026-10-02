@@ -15,10 +15,13 @@ struct SetChoiceMachine {
                     Assign(selected, to: member)
                 }
             }
-            Validation("Empty") { Bind(members, to: Set<Int>([])) }
+            let empty = Validation(label: "Empty") { Bind(members, to: Set<Int>([])) }
                 .expectDeadlock(.violated)
-            Validation("Singleton") { Bind(members, to: Set<Int>([1])) }
-            Validation("Multiple") { Bind(members, to: Set<Int>([1, 2])) }
+            empty
+            let singleton = Validation(label: "Singleton") { Bind(members, to: Set<Int>([1])) }
+            singleton
+            let multiple = Validation(label: "Multiple") { Bind(members, to: Set<Int>([1, 2])) }
+            multiple
         }
     }
 }

@@ -10,7 +10,7 @@ public struct ClockModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("Clock") {
-            Algorithm("Clock", scoped: { scope in
+            let clock = Algorithm(label: "Clock", scoped: { scope in
                 let hour = scope.sharedVar(in: 0...23)
                 let minute = scope.sharedVar(in: 0...59)
                 let second = scope.sharedVar(in: 0...59)
@@ -51,6 +51,7 @@ public struct ClockModel: Sendable {
                     second >= 0 && second <= 59
                 }
             })
+            clock
         }
     }
 }

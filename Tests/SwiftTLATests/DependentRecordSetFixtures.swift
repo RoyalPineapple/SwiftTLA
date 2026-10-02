@@ -17,8 +17,10 @@ struct DependentRecordSetModel {
                 }
             }.filtering { $0.first + $0.second <= maximum })
             Do(Step.stay) { Assign(pair, to: pair) }
-            Validation("Zero") { Bind(maximum, to: 0) }
-            Validation("Four") { Bind(maximum, to: 4) }
+            let zero = Validation(label: "Zero") { Bind(maximum, to: 0) }
+            zero
+            let four = Validation(label: "Four") { Bind(maximum, to: 4) }
+            four
         }
     }
 }

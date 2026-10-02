@@ -10,7 +10,7 @@ struct ConfiguredLocalFamilyModel: Sendable {
             let members = scope.parameter(as: Set<Int>.self,
                 in: Set<Set<Int>>([Set<Int>([]), Set<Int>([7]), Set<Int>([2, 5])]))
             let Family = Invariant()
-            Algorithm("Publish") {
+            let publish = Algorithm(label: "Publish") {
                 Each(members, scoped: { member, process in
                     let value = process.localVar(initial: member + 10)
                     let family = value.family(for: Int.self)
@@ -22,9 +22,13 @@ struct ConfiguredLocalFamilyModel: Sendable {
                     Family { familyValid }
                 })
             }
-            Validation("Empty") { Bind(members, to: Set<Int>([])) }
-            Validation("One") { Bind(members, to: Set<Int>([7])) }
-            Validation("Sparse") { Bind(members, to: Set<Int>([2, 5])) }
+            publish
+            let empty = Validation(label: "Empty") { Bind(members, to: Set<Int>([])) }
+            empty
+            let one = Validation(label: "One") { Bind(members, to: Set<Int>([7])) }
+            one
+            let sparse = Validation(label: "Sparse") { Bind(members, to: Set<Int>([2, 5])) }
+            sparse
         }
     }
 }

@@ -19,7 +19,7 @@ struct InvalidTypedDSLUnknownField {
 
   static var spec: TLASpec {
     #spec("InvalidTypedDSLUnknownField") {
-      Algorithm("InvalidTypedDSLUnknownField", scoped: { scope in
+      let invalidTypedDSLUnknownField = Algorithm(label: "InvalidTypedDSLUnknownField", scoped: { scope in
         let cars = scope.sharedVar(_name: "cars", initial: Function<CarID, Car>.literal(
           (.one, Car(floor: 0))
         ))
@@ -27,6 +27,7 @@ struct InvalidTypedDSLUnknownField {
           Assign(cars[.one].person, to: 2)
         }
       })
+      invalidTypedDSLUnknownField
     }
   }
 }

@@ -15,7 +15,7 @@ struct CounterScreenModel {
 
     static var spec: TLASpec {
         #spec("CounterScreenModel") {
-            Algorithm("CounterScreenModel", scoped: { scope in
+            let counterScreenModel = Algorithm(label: "CounterScreenModel", scoped: { scope in
                 let value = scope.sharedVar(_name: "value", initial: 0)
                 Each(Process.all) { _ in
                     Do(Step.advance, when: value < 1) {
@@ -24,6 +24,7 @@ struct CounterScreenModel {
                     }
                 }
             })
+            counterScreenModel
         }
     }
 }

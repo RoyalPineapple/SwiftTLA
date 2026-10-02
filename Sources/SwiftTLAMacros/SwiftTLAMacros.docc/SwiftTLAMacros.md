@@ -31,7 +31,7 @@ struct Counter {
 
     static var spec: TLASpec {
         #spec("Counter") {
-            Algorithm("Counter", scoped: { scope in
+            let counter = Algorithm(scoped: { scope in
                 let count = scope.sharedVar(initial: 0)
 
                 Do(Step.advance) {
@@ -39,6 +39,7 @@ struct Counter {
                     Assign(count, to: count + 1)
                 }
             })
+            counter
         }
     }
 }

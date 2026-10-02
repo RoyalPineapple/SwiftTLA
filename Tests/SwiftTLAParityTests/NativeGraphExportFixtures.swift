@@ -8,12 +8,13 @@ struct ReachabilityExportModel {
     static var spec: TLASpec {
         #spec("ReachabilityExport") { scope in
             let value = scope.sharedVar(_name: "value", initial: 0)
-            Algorithm("Counter") {
+            let counter = Algorithm(label: "Counter") {
                 Do(Step.advance, when: value < 2) {
                     Assign(value, to: value + 1)
                     Goto(Step.advance)
                 }
             }
+            counter
             Reachable("Positive") { value > 0 }
             Reachable("BeyondLimit") { value > 2 }
         }

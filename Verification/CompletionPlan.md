@@ -106,6 +106,11 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       locally. The nested formal-core `TLASpec("UnitCounter")` algorithm still
       uses its explicit formal name; public positional authoring and parser
       rejection are not complete.
+      Four parity fixture files, seven configured-model fixtures, three
+      external-consumer fixtures, and the two documentation models now use
+      bound declarations. Their guarded local checks passed: 42 focused model
+      tests, three external-consumer checks, and five Xcode documentation
+      fixture tests. These are local diagnostics, not hosted acceptance.
       Migrate every remaining positional-name caller and scenario reference,
       remove the old public forms, and settle the remaining
       declaration/anonymous rules. Recheck

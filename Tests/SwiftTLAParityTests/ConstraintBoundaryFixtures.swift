@@ -8,7 +8,7 @@ struct ConstraintReachabilityCounter {
     static var spec: TLASpec {
         #spec("ConstraintReachabilityCounter") { scope in
             let excluded = Reachable()
-            Algorithm("Counter", scoped: { scope in
+            let counter = Algorithm(label: "Counter", scoped: { scope in
                 let count = scope.sharedVar(initial: 0)
                 Do(Step.advance) {
                     Assign(count, to: count + 1)
@@ -17,6 +17,7 @@ struct ConstraintReachabilityCounter {
                 StateConstraint(count < 2)
                 excluded { count == 2 }
             })
+            counter
         }
     }
 }
@@ -29,13 +30,14 @@ struct ConstraintBoundaryCounter {
         #spec("ConstraintBoundaryCounter") { scope in
             let safetyLimit = scope.parameter(as: Int.self, in: 2...3)
             let count = scope.sharedVar(_name: "count", initial: 0)
-            Algorithm("Counter") {
+            let counter = Algorithm(label: "Counter") {
                 Do(Step.advance) {
                     Assign(count, to: count + 1)
                     Goto(Step.advance)
                 }
                 StateConstraint(count < 2)
             }
+            counter
             Invariant("Bounded") { count < safetyLimit }
         }
     }
@@ -48,13 +50,14 @@ struct ConstraintInitialCounter {
     static var spec: TLASpec {
         #spec("ConstraintInitialCounter") { scope in
             let count = scope.sharedVar(_name: "count", in: 0...2)
-            Algorithm("Counter") {
+            let counter = Algorithm(label: "Counter") {
                 Do(Step.stay) {
                     Skip()
                     Goto(Step.stay)
                 }
                 StateConstraint(count < 2)
             }
+            counter
             Invariant("Bounded") { count < 2 }
         }
     }

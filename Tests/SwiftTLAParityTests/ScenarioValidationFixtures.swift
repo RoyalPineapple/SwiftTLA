@@ -9,11 +9,14 @@ struct DeadlockScenarios {
     static var spec: TLASpec {
         #spec("DeadlockScenarios") { scope in
             let value = scope.sharedVar(_name: "value", initial: 0)
-            Algorithm("Blocked") {
+            let blocked = Algorithm(label: "Blocked") {
                 Do(Step.wait, when: value < 0) { Goto(Step.wait) }
             }
-            Validation("Unexpected deadlock") {}
-            Validation("Expected deadlock") {}.expectDeadlock(.violated)
+            blocked
+            let unexpectedDeadlock = Validation(label: "Unexpected deadlock") {}
+            unexpectedDeadlock
+            let expectedDeadlock = Validation(label: "Expected deadlock") {}.expectDeadlock(.violated)
+            expectedDeadlock
         }
     }
 }

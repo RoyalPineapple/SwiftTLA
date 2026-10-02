@@ -12,7 +12,8 @@ struct TraceReplayCounter {
             Do(Step.Next) { Assign(x, to: x + 1) }
             let BelowThree = Invariant()
             BelowThree { x < 3 }
-            Validation("Infinite") {}.expect(BelowThree, .violated)
+            let infinite = Validation(label: "Infinite") {}.expect(BelowThree, .violated)
+            infinite
         }
     }
 }
@@ -26,7 +27,8 @@ struct TraceReplayInitialFailure {
             Do(Step.Next) { Assign(x, to: x + 1) }
             let BelowThree = Invariant()
             BelowThree { x < 3 }
-            Validation("Initial failure") {}.expect(BelowThree, .violated)
+            let initialFailure = Validation(label: "Initial failure") {}.expect(BelowThree, .violated)
+            initialFailure
         }
     }
 }
@@ -38,7 +40,8 @@ struct TraceReplayDeadlock {
         #spec("TraceReplayDeadlock") { scope in
             let x = scope.sharedVar(initial: 0)
             Do(Step.Next, when: x < 0) { Assign(x, to: x + 1) }
-            Validation("Deadlock") {}.expectDeadlock(.violated)
+            let deadlock = Validation(label: "Deadlock") {}.expectDeadlock(.violated)
+            deadlock
         }
     }
 }
@@ -58,7 +61,8 @@ struct TraceReplayQueries {
             ReachedTwo { x == 2 }
             let Later = Reachable()
             Later { x == 4 }
-            Validation("Mixed queries") {}.expect(BelowThree, .violated)
+            let mixedQueries = Validation(label: "Mixed queries") {}.expect(BelowThree, .violated)
+            mixedQueries
         }
     }
 }

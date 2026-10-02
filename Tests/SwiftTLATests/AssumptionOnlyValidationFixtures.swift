@@ -22,8 +22,10 @@ struct PrintedAssumptionFixture: Sendable {
             Extends(.tlc)
             let limit = scope.parameter(as: Int.self, in: 0...3)
             Assume((limit == 2 && PrintT(limit)) || PrintT("No solution"))
-            Validation("solution") { Bind(limit, to: 2) }.checkingDeadlock(false)
-            Validation("fallback") { Bind(limit, to: 3) }.checkingDeadlock(false)
+            let solution = Validation { Bind(limit, to: 2) }.checkingDeadlock(false)
+            solution
+            let fallback = Validation { Bind(limit, to: 3) }.checkingDeadlock(false)
+            fallback
         }
     }
 }

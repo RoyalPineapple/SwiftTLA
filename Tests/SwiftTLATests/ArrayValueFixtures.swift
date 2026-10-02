@@ -24,8 +24,10 @@ struct ArrayValueMachine {
             }
             Do(Step.select) { Assign(row, to: row.selecting { element in element != 2 }) }
             Invariant("Shape") { row.count <= 4 && choices.count == 3 && choices[1.expr] == Choice.one }
-            Validation("Empty") { Bind(input, to: Array<Int>([])) }
-            Validation("Repeated") { Bind(input, to: Array<Int>([2, 1, 2])) }
+            let empty = Validation(label: "Empty") { Bind(input, to: Array<Int>([])) }
+            empty
+            let repeated = Validation(label: "Repeated") { Bind(input, to: Array<Int>([2, 1, 2])) }
+            repeated
         }
     }
 }

@@ -9,12 +9,13 @@ struct GeneratedStorageAccess {
 
   static var spec: TLASpec {
     #spec("GeneratedStorageAccess") {
-      Algorithm("GeneratedStorageAccess", scoped: { scope in
+      let generatedStorageAccess = Algorithm(label: "GeneratedStorageAccess", scoped: { scope in
         let value = scope.sharedVar(_name: "value", initial: 0)
         Do(Step.advance, when: value < 1) {
           Assign(value, to: value + 1)
         }
       })
+      generatedStorageAccess
     }
   }
 }

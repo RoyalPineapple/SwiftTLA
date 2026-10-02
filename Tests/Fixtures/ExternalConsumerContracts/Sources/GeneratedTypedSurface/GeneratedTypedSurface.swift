@@ -16,13 +16,14 @@ public struct GeneratedTypedSurface {
     #spec("GeneratedTypedSurface") { scope in
       let value = scope.sharedVar(_name: "value", initial: 0)
       let packet = scope.sharedVar(_name: "packet", initial: Packet(count: 0, ready: false))
-      Algorithm("GeneratedTypedSurface") {
+      let generatedTypedSurface = Algorithm(label: "GeneratedTypedSurface") {
         Do(Step.advance, when: value < 1) {
           Assign(value, to: packet.count + 1)
           Assign(packet.count, to: packet.count + 1)
           Assign(packet.ready, to: true)
         }
       }
+      generatedTypedSurface
       Invariant("ConsistentCount") { packet.count == value }
     }
   }
