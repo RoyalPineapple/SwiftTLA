@@ -299,6 +299,8 @@ struct ModelCollectionPredicateTests {
     let build = try buildExternalConsumer("InvalidCollectionPredicateMacro")
 
     #expect(build.status != 0)
+    #expect(build.output.contains("InvalidCollectionPredicateMacro.swift:16:"))
+    #expect(build.output.contains("Invariant 'unsupported' contains an unsupported invariant expression."))
   }
 
   private func predicateClosure() throws -> ClosureExprSyntax {

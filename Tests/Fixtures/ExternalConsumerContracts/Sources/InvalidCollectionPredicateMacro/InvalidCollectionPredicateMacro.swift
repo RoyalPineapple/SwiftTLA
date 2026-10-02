@@ -11,7 +11,8 @@ struct InvalidCollectionPredicateModel {
     #spec("InvalidCollectionPredicateModel") {
       let devices = CollectionVar<FixtureDevice, Int>("devices")
       ModelCollection(devices, verificationScope: 1, initial: 0)
-      Invariant("unsupported") {
+      let unsupported = Invariant()
+      unsupported {
         devices.allSatisfy { $0 >= 0 && unmodeledPredicate($0) }
       }
     }
