@@ -17,7 +17,8 @@ formal bundles from the generated export API.
 ## Generate a machine
 
 Import `SwiftTLA` and `SwiftTLAMacros`. Apply `@TLAModel` to a struct with a
-`static var spec: TLASpec` declaration.
+`static var spec: TLASpec` declaration. An unnamed `#spec` uses the enclosing
+Swift struct name for the TLA+ module.
 
 **Example ID:** `generated-machine-bounded-model`
 **Fixture:** `Tests/Fixtures/GeneratedMachineDocumentation/Sources/GeneratedMachineDocumentation/BoundedCounter.swift`
@@ -39,7 +40,7 @@ struct BoundedCounter {
     }
 
     static var spec: TLASpec {
-        #spec("BoundedCounter") {
+        #spec {
             let boundedCounter = Algorithm(scoped: { scope in
                 let value = scope.sharedVar(initial: 0)
                 Each(Process.all) { _ in
@@ -210,7 +211,7 @@ struct CounterHost {
     }
 
     static var spec: TLASpec {
-        #spec("CounterHost") {
+        #spec {
             let counterHost = Algorithm(scoped: { scope in
                 let value = scope.sharedVar(initial: 0)
                 Each(Process.all) { _ in

@@ -14,7 +14,7 @@ struct CounterHost {
     }
 
     static var spec: TLASpec {
-        #spec("CounterHost") {
+        #spec {
             let counterHost = Algorithm(scoped: { scope in
                 let value = scope.sharedVar(initial: 0)
                 Each(Process.all) { _ in

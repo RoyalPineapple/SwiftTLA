@@ -14,7 +14,7 @@ struct BoundedCounter {
     }
 
     static var spec: TLASpec {
-        #spec("BoundedCounter") {
+        #spec {
             let boundedCounter = Algorithm(scoped: { scope in
                 let value = scope.sharedVar(initial: 0)
                 Each(Process.all) { _ in
