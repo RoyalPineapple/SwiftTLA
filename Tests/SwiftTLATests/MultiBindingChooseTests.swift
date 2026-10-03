@@ -30,7 +30,18 @@ struct MultiBindingChooseTests {
     }
 
     @Test("macro parser produces the same nested choice model as the builder")
-    func parserBuilderFidelity() {
+    func parserBuilderFidelity() throws {
+        let compilation = try MultiBindingChooseModel.spec.compile()
+        let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+        let choose = try #require(compilation.layout.testActionID(named: "choose"))
+        let selected = try #require(compilation.layout.testVariableID(named: "selected"))
+        let successors = try CompiledRuntime(compilation: compilation)
+            .successors(for: choose, from: initial)
+        let values = try Set(successors.map {
+            try $0.state.value(for: selected).rendered(using: compilation.layout)
+        })
+        #expect(values == [.int(110), .int(111), .int(210), .int(211)])
+        #expect(try compilation.render().tlaBundle.tla.contains("\\E"))
     }
 }
 

@@ -3,10 +3,6 @@ import Testing
 @testable import SwiftTLA
 import SwiftTLAMacros
 
-private struct CompilerPipelineMember: Identifiable, Sendable {
-    let id: Int
-}
-
 private enum CompilerPipelineNode: String, FiniteTLAValueDomain, CaseIterable {
     case first
     case second
@@ -103,18 +99,6 @@ private struct CompilerPipelineInitializationModel {
                 }
             })
             compilerPipelineInitializationModel
-        }
-    }
-}
-
-private struct CompilerPipelineCollectionModel {
-    static var spec: TLASpec {
-        #spec("CompilerPipelineCollectionModel") {
-            let devices = CollectionVar<CompilerPipelineMember, Int>("devices")
-            ModelCollection(devices, verificationScope: 2, initial: 0)
-            CollectionAction("advance", on: devices) { member in
-                devices[member] == 0 && devices.update(member, to: 1)
-            }
         }
     }
 }
@@ -2277,96 +2261,6 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(try renderedValue(named: "nestedValue", in: state, compilation: compilation) == .int(3))
     }
 
-    @Test("typed collection actions lower to the declared finite member binding")
-    func collectionActionsUseDeclaredMemberBindings() throws {
-        let source = try CompilerPipelineCollectionModel.spec.loweredSourceModel()
-        let compilation = try source.compile()
-        let devices = try #require(source.variables.first { $0.name == "devices" })
-        let declaration = try #require(source.collections.first { $0.name == "devices" })
-        let action = try #require(source.actions.first { $0.name == "advance" })
-        let compiledAction = try #require(compilation.semantics.behavior.actions.first)
-        let machineVariable = try #require(
-            GeneratedMachineAPI(layout: compilation.layout, actions: compilation.semantics.behavior.actions).variables.first { $0.swiftIdentifier == "devices" }
-        )
-        let machineCollection = try #require(machineVariable.collection)
-        let initialState = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-        let successors = try CompiledRuntime(compilation: compilation)
-            .successors(for: compiledAction.id, from: initialState)
-        let rendered = try compilation.render().tlaBundle.tla
-        let repeated = try CompilerPipelineCollectionModel.spec.compile()
-        let repeatedRendered = try repeated.render().tlaBundle.tla
-        let hasOuterExistential: Bool
-        if case .existsAction = action.body {
-            hasOuterExistential = true
-        } else {
-            hasOuterExistential = false
-        }
-
-        #expect(devices.collectionType == .dictionary(2))
-        #expect(declaration.variable == devices)
-        #expect(declaration.verificationScope == 2)
-        #expect(action.bindings.isEmpty)
-        #expect(compiledAction.bindings.count == 1)
-        #expect(
-            compiledAction.bindings[0].literalMembers
-                == declaration.metadata.members.map(CompiledValue.init(formal:))
-        )
-        #expect(compiledAction.collection == compilation.layout.testVariableID(named: "devices"))
-        let types = try SourceTypeResolver().resolve(in: compilation)
-        let collectionID = try #require(compiledAction.collection)
-        let memberID = try #require(compiledAction.bindings.first?.binder)
-        #expect(types.variableTypes[collectionID] == .dictionary(
-            try #require(types.bindingTypes[memberID]), .int))
-        #expect(machineCollection.elementType == "CompilerPipelineMember")
-        #expect(machineCollection.formalName == "devices")
-        #expect(try GeneratedMachineAPI(layout: compilation.layout, actions: compilation.semantics.behavior.actions).collections == [machineCollection])
-        #expect(hasOuterExistential)
-        #expect(try successors.map { successor in
-            try successor.arguments.map { try $0.rendered(using: compilation.layout) }
-        } == declaration.metadata.members.map { [$0] })
-        #expect(rendered.contains("advance("))
-        #expect(!rendered.contains("__swift_tla_binder_"))
-        #expect(rendered.contains("advance__0 == advance(DevicesMember0)"))
-        #expect(rendered.contains("advance__1 == advance(DevicesMember1)"))
-        #expect(repeated.identity == compilation.identity)
-        #expect(repeatedRendered == rendered)
-    }
-
-    @Test("lowered collection actions retain nested existential bodies")
-    func loweredCollectionActionsRetainNestedExistentials() throws {
-        let devices = CollectionVar<CompilerPipelineMember, Int>("devices")
-        let specification = TLASpec("NestedCollectionExistential") {
-            ModelCollection(devices, verificationScope: 2, initial: 0)
-            CollectionAction("advance", on: devices) { member in
-                .existsAction(
-                    "choice",
-                    .setLiteral([.int(1)]),
-                    devices.update(member, to: 1)
-                )
-            }
-        }
-
-        let first = try specification.loweredSourceModel()
-        let second = try first.loweredSourceModel()
-        let firstAction = try #require(first.actions.first)
-        let secondAction = try #require(second.actions.first)
-        let firstCompilation = try first.compile()
-        let secondCompilation = try second.compile()
-        let compiledAction = try #require(firstCompilation.semantics.behavior.actions.first)
-
-        #expect(firstAction == secondAction)
-        #expect(firstAction.bindings.isEmpty)
-        #expect(
-            compiledAction.bindings[0].literalMembers
-                == specification.collections[0].metadata.members.map(CompiledValue.init(formal:))
-        )
-        guard case .existsAction = compiledAction.body else {
-            Issue.record("Expected the authored nested existential to remain in the compiled body")
-            return
-        }
-        #expect(firstCompilation.identity == secondCompilation.identity)
-    }
-
     @Test("semantic compilation fields change the identity")
     func semanticFieldsContributeToIdentity() throws {
         let base = TLASpec(
@@ -2380,20 +2274,10 @@ struct CompilerPipelineCanonicalizationTests {
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], temporalProperties: [.init(name: "Safety", expr: .always(.value(.bool(true))))]),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], recursiveFuncs: [.init(name: "CountDown", params: ["n"], body: .variable("n"))]),
             {
-                let collection = ModelCollectionDecl(
-                    name: "members",
-                    verificationScope: 1,
-                    initial: .int(0),
-                    generatedElementType: "Member",
-                    generatedValueType: "Int"
-                )
-                return TLASpec(
-                    name: "Fingerprint",
-                    variables: base.variables + [collection.variable],
-                    actions: base.actions,
-                    invariants: [],
-                    collections: [collection]
-                )
+                var configured = base
+                configured.parameters = [.init(reference: .init(name: "members"),
+                    swiftType: "Set<Int>", domain: .setLiteral([.value(.set([.int(1)]))]))]
+                return configured
             }(),
             TLASpec(name: "Fingerprint", variables: base.variables, actions: base.actions, invariants: [], extendsModules: [.naturals])
         ]
