@@ -88,6 +88,7 @@ package enum SymmetryOrbitDifferenceKind: String, Encodable, Sendable {
   case rawGraph
   case variableNames
   case undeclaredAction
+  case unsoundSymmetry
   case reducedInitialStates
   case quotientTransition
   case checkOutcome
@@ -197,6 +198,11 @@ package func compareSymmetryOrbits(
     maximumPermutationCount: input.maximumPermutationCount
   )
   let actionPlan = try SymmetryActionPlan(input.renderedActions)
+  if let difference = try symmetryInvariantDifference(
+    input.swiftRaw.graph, generators: input.permutations, actionPlan: actionPlan
+  ) {
+    return .difference([difference])
+  }
   let tlcRepresentatives = try reducedRepresentatives(input.tlcReduced, derivation: derivation)
 
   let rawInitialRepresentatives = try initialRepresentatives(input.swiftRaw, derivation: derivation)
@@ -234,6 +240,40 @@ package func compareSymmetryOrbits(
     orbits: orbits,
     quotientTransitions: expectedQuotient
   ))
+}
+
+private func symmetryInvariantDifference(
+  _ graph: CanonicalGraph,
+  generators: [SymmetryPermutation],
+  actionPlan: SymmetryActionPlan
+) throws -> SymmetryOrbitDifference? {
+  let edges = graph.edges
+  // Preservation under every generator implies preservation under their closed group.
+  for permutation in generators {
+    for key in graph.initialStateKeys {
+      guard let state = graph.states[key] else { throw SymmetryOrbitError.incompleteOrbit(key.canonicalEncoding) }
+      let transformed = try permutation.apply(state).key
+      guard graph.initialStateKeys.contains(transformed) else {
+        return SymmetryOrbitDifference(kind: .unsoundSymmetry,
+          detail: "Declared symmetry maps initial state \(key) to non-initial state \(transformed)")
+      }
+    }
+    for edge in edges {
+      guard let source = graph.states[edge.source], let target = graph.states[edge.target] else {
+        throw SymmetryOrbitError.incompleteOrbit(edge.canonicalEncoding)
+      }
+      let transformed = CanonicalEdge(
+        source: try permutation.apply(source).key,
+        action: try actionPlan.transformedAction(edge.action, by: permutation),
+        target: try permutation.apply(target).key
+      )
+      guard edges.contains(transformed) else {
+        return SymmetryOrbitDifference(kind: .unsoundSymmetry,
+          detail: "Declared symmetry does not preserve transition \(edge.canonicalEncoding): missing \(transformed.canonicalEncoding)")
+      }
+    }
+  }
+  return nil
 }
 
 private func reducedRepresentatives(
@@ -336,23 +376,25 @@ private struct SymmetryActionPlan {
     sourceRepresentative: CanonicalStateKey,
     group: [SymmetryPermutation]
   ) throws -> String {
-    guard let call = calls[action] else {
-      throw SymmetryOrbitError.undeclaredAction(action)
-    }
     var candidates: [String] = []
     for permutation in group where try permutation.apply(source).key == sourceRepresentative {
-      let transformed = SymmetryActionCall(
-        sourceName: call.sourceName,
-        arguments: try call.arguments.map(permutation.apply)
-      )
-      guard let renderedName = renderedNames[transformed] else {
-        throw SymmetryOrbitError.actionPlanNotClosed(action: action)
-      }
-      candidates.append(renderedName)
+      candidates.append(try transformedAction(action, by: permutation))
     }
     guard let representative = candidates.min(by: canonicalBytes) else {
       throw SymmetryOrbitError.incompleteOrbit(source.key.canonicalEncoding)
     }
     return representative
+  }
+
+  func transformedAction(_ action: String, by permutation: SymmetryPermutation) throws -> String {
+    guard let call = calls[action] else { throw SymmetryOrbitError.undeclaredAction(action) }
+    let transformed = SymmetryActionCall(
+      sourceName: call.sourceName,
+      arguments: try call.arguments.map(permutation.apply)
+    )
+    guard let renderedName = renderedNames[transformed] else {
+      throw SymmetryOrbitError.actionPlanNotClosed(action: action)
+    }
+    return renderedName
   }
 }

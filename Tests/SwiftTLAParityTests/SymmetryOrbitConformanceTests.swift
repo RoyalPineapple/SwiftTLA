@@ -62,6 +62,47 @@ struct SymmetryOrbitConformanceTests {
     #expect(comparison.quotientTransitions.count == 1)
   }
 
+  @Test("A declared symmetry cannot hide a non-equivariant transition")
+  func asymmetricRawTransitionCannotPassQuotientComparison() throws {
+    let states = [state("A"), state("B")]
+    let rawEdge = CanonicalEdge(source: states[0].key, action: "step", target: states[1].key)
+    let raw = try GraphRun(
+      isComplete: true,
+      graph: CanonicalGraph(initialStates: states, states: states, edges: [rawEdge]),
+      observableActions: ["step"], outcome: .noViolation
+    )
+    let reduced = try run(states: [states[0]], edges: [CanonicalEdge(
+      source: states[0].key, action: "step", target: states[0].key
+    )])
+    let input = try comparisonInput(swiftRaw: raw, tlcRaw: raw, tlcReduced: reduced)
+    guard case .difference(let differences) = try compareSymmetryOrbits(input) else {
+      Issue.record("A quotient match must not establish an invalid symmetry")
+      return
+    }
+    #expect(differences.map(\.kind) == [.unsoundSymmetry])
+    #expect(differences[0].detail.contains("does not preserve transition"))
+  }
+
+  @Test("A declared symmetry must preserve the complete initial-state set")
+  func asymmetricInitialStatesCannotPassQuotientComparison() throws {
+    let states = [state("A"), state("B")]
+    let edges = [
+      CanonicalEdge(source: states[0].key, action: "step", target: states[1].key),
+      CanonicalEdge(source: states[1].key, action: "step", target: states[0].key)
+    ]
+    let raw = try run(states: states, edges: edges, initialStates: [states[0]])
+    let reduced = try run(states: [states[0]], edges: [CanonicalEdge(
+      source: states[0].key, action: "step", target: states[0].key
+    )])
+    let input = try comparisonInput(swiftRaw: raw, tlcRaw: raw, tlcReduced: reduced)
+    guard case .difference(let differences) = try compareSymmetryOrbits(input) else {
+      Issue.record("A quotient match must not hide an asymmetric initial state")
+      return
+    }
+    #expect(differences.map(\.kind) == [.unsoundSymmetry])
+    #expect(differences[0].detail.contains("non-initial state"))
+  }
+
   @Test("A noncanonical TLC representative preserves the same orbit")
   func noncanonicalTLCRepresentativePreservesOrbit() throws {
     let input = try fixture(reducedStates: [state("B")])
@@ -125,10 +166,19 @@ struct SymmetryOrbitConformanceTests {
   @Test("Reduced initial states must represent the raw initial orbits")
   func reducedInitialStateDifferenceIsStructured() throws {
     let rawStates = [state("A"), state("B"), state("Z")]
+    let rawEdges = [
+      CanonicalEdge(source: rawStates[0].key, action: "step", target: rawStates[1].key),
+      CanonicalEdge(source: rawStates[1].key, action: "step", target: rawStates[0].key),
+      CanonicalEdge(source: rawStates[2].key, action: "step", target: rawStates[2].key)
+    ]
+    let reducedEdges = [
+      CanonicalEdge(source: rawStates[2].key, action: "step", target: rawStates[2].key),
+      CanonicalEdge(source: rawStates[0].key, action: "step", target: rawStates[0].key)
+    ]
     let input = try comparisonInput(
-      swiftRaw: run(states: rawStates),
-      tlcRaw: run(states: rawStates),
-      tlcReduced: run(states: [state("Z"), state("A")])
+      swiftRaw: run(states: rawStates, edges: rawEdges, initialStates: Array(rawStates.prefix(2))),
+      tlcRaw: run(states: rawStates, edges: rawEdges, initialStates: Array(rawStates.prefix(2))),
+      tlcReduced: run(states: [rawStates[2], rawStates[0]], edges: reducedEdges)
     )
     guard case .difference(let differences) = try compareSymmetryOrbits(input) else {
       Issue.record("Expected a structured difference")
@@ -300,6 +350,7 @@ struct SymmetryOrbitConformanceTests {
   private func run(
     states: [CanonicalState],
     edges: [CanonicalEdge]? = nil,
+    initialStates: [CanonicalState]? = nil,
     outcome: GraphRunOutcome = .noViolation,
     isComplete: Bool = true
   ) throws -> GraphRun {
@@ -308,7 +359,7 @@ struct SymmetryOrbitConformanceTests {
       : [CanonicalEdge(source: states[0].key, action: "step", target: states[0].key)])
     return try GraphRun(
       isComplete: isComplete,
-      graph: CanonicalGraph(initialStates: [states[0]], states: states, edges: edges),
+      graph: CanonicalGraph(initialStates: initialStates ?? states, states: states, edges: edges),
       observableActions: Set(edges.map(\.action)),
       outcome: outcome
     )
@@ -318,10 +369,17 @@ struct SymmetryOrbitConformanceTests {
     reducedStates: [CanonicalState]
   ) throws -> SymmetryOrbitComparisonInput {
     let rawStates = [state("A"), state("B")]
+    let rawEdges = [
+      CanonicalEdge(source: rawStates[0].key, action: "step", target: rawStates[1].key),
+      CanonicalEdge(source: rawStates[1].key, action: "step", target: rawStates[0].key)
+    ]
+    let reducedEdges = [CanonicalEdge(
+      source: reducedStates[0].key, action: "step", target: reducedStates[0].key
+    )]
     return try comparisonInput(
-      swiftRaw: run(states: rawStates),
-      tlcRaw: run(states: rawStates),
-      tlcReduced: run(states: reducedStates)
+      swiftRaw: run(states: rawStates, edges: rawEdges),
+      tlcRaw: run(states: rawStates, edges: rawEdges),
+      tlcReduced: run(states: reducedStates, edges: reducedEdges)
     )
   }
 
