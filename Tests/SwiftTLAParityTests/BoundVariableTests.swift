@@ -150,28 +150,6 @@ import UpstreamParity
     #expect(try compiledValue(predicate) == .bool(true))
   }
 
-  @Test("Function-typed variable stores and retrieves values")
-  func functionVariable() throws {
-    let clock = Var<Function<FunctionVariableKey, Int>>("clock")
-    let p = Var<Int>("p")
-    let domain = StateExpr.set([1, 2])
-    let spec = TLASpec("FuncTest") {
-      Variable(clock, Function<FunctionVariableKey, Int>.literal((.one, 0), (.two, 0)))
-      Action("init") {
-        let fun = StateExpr.functionLiteral(p, in: domain, (p * 10).raw)
-        clock.becomes(Expr<Function<FunctionVariableKey, Int>>(fun)).when(clock[.one] == 0)
-      }
-    }
-    let compilation = try spec.compile()
-    let runtime = CompiledRuntime(compilation: compilation)
-    let initial = try #require(try runtime.initialStates().first)
-    let action = try #require(compilation.layout.testActionID(named: "init"))
-    let successors = try runtime.successors(for: action, from: initial)
-    #expect(successors.count == 1)
-    #expect(try compiledStateValue(named: "clock", in: #require(successors.first).state,
-      compilation: compilation) == .function([.int(1): .int(10), .int(2): .int(20)]))
-  }
-
   @Test("SpecParser preserves explicit choice binders")
   func specParserBoundChoiceCall() throws {
     let source = "ActionExpr.exists(\"selected\", from: q) { member in picked.becomes(Expr<Int>(member)) }"

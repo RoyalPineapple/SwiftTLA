@@ -62,11 +62,3 @@ enum PartialFunctionKey: Int, CaseIterable, FiniteTLAValueDomain {
   static let finiteValues: [Self] = [.one]
   static var defaultValue: Self { .one }
 }
-
-enum FunctionVariableKey: Int, CaseIterable, FiniteTLAValueDomain {
-  case one = 1
-  case two = 2
-
-  static var finiteValues: [Self] { allCases }
-  static var defaultValue: Self { .one }
-}
