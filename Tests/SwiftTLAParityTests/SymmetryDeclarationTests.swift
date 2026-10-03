@@ -2,7 +2,7 @@
 import Testing
 
 struct SymmetryDeclarationTests {
-  @Test("TLA+ symmetry operator and config directive are emitted")
+  @Test("TLA+ symmetry operator supports explicit TLC reduction")
   func symmetryTLAOutput() throws {
     let spec = TLASpec("SymOut") {
       let x = Var<Int>("x")
@@ -10,11 +10,14 @@ struct SymmetryDeclarationTests {
       Invariant("TypeOK") { x >= 1 }
       Symmetry("x", [1, 2, 3] as Set<Int>)
     }
-    let tla = try spec.compile().render().tlaBundle.tla
+    let rendered = try spec.compile().render()
+    let tla = rendered.tlaBundle.tla
     #expect(tla.contains("EXTENDS Integers, FiniteSets, Sequences, TLC"))
     #expect(tla.contains("Symmx == Permutations({1, 2, 3})"))
     #expect(tla.contains("Symmx"))
-    #expect(try spec.compile().render().tlaBundle.cfg.contains("SYMMETRY Symmx"))
+    #expect(!rendered.tlaBundle.cfg.contains("SYMMETRY"))
+    #expect(try rendered.tlaBundle(symmetryReduction: .enabled(maximumPermutationCount: 6))
+      .cfg.contains("SYMMETRY Symmx"))
   }
 
   @Test("Direct symmetry names and domains are validated during compilation")

@@ -141,10 +141,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       selects one registered handle for a safety-only TLC configuration;
       foreign, duplicate, and unregistered selections are rejected in focused
       local checks. Remaining fairness/symmetry scope references and hosted
-      acceptance are still open. A regression demonstrated that generated
-      scenario rendering previously enabled declared symmetry without a selection; the one-line
-      renderer correction now defaults those scenarios to unreduced TLC, with
-      13 related rendering and configuration checks passing locally.
+      acceptance are still open. Generated scenarios and plain model exports
+      now default to unreduced TLC even when a permutation operator is
+      declared; explicit reduction remains available. The exact regression
+      and 25 related rendering, configuration, and symmetry checks pass locally.
 - [x] Settle B-01's fixed-collection replacement design: a typed configuration
       parameter contains stable member IDs; `Each` and typed dictionary state
       use those IDs, while application objects stay outside model state. The

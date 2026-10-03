@@ -324,7 +324,7 @@ public struct CompiledSpecification: Sendable {
                 nextSafeAction: "Export through the generated model with its typed configuration.")
         }
         let renderedBundle = TLAModuleBundle(
-            root: .init(name: metadata.name, tla: rootModule.renderedModuleSource, cfg: rootModule.configuration.render(usesSymmetryReduction: true)),
+            root: .init(name: metadata.name, tla: rootModule.renderedModuleSource, cfg: rootModule.configuration.render(usesSymmetryReduction: false)),
             imports: try imports.map { imported in
                 let plan = try imported.metadata.renderModule(imported)
                 return .init(name: imported.metadata.name, tla: plan.renderedModuleSource, cfg: nil)
@@ -430,7 +430,7 @@ public struct RenderedSpecification: Sendable {
             declarations: declarations, checkDeadlock: checkDeadlock,
             invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements, symmetry: symmetry)
         let bundle = TLAModuleBundle(root: .init(name: name, tla: try configuredSource(source),
-            cfg: configuration.render(usesSymmetryReduction: true)),
+            cfg: configuration.render(usesSymmetryReduction: false)),
             imports: _generatedImports.map { .init(name: $0.name, tla: $0.source) }, provenance: .compiled(
                 identity: .init(value: compilationIdentity),
                 ownership: [.init(moduleName: name, owningRoot: name, structuralPath: [])]
@@ -456,14 +456,12 @@ public struct RenderedSpecification: Sendable {
     public func tlaBundle(
         symmetryReduction: SymmetryReduction
     ) throws -> TLAModuleBundle {
-        if try configuration.usesSupportedSymmetryReduction(symmetryReduction) {
-            return tlaBundle
-        }
+        let usesSymmetryReduction = try configuration.usesSupportedSymmetryReduction(symmetryReduction)
         return TLAModuleBundle(
             root: .init(
                 name: tlaBundle.root.name,
                 tla: tlaBundle.root.tla,
-                cfg: configuration.render(usesSymmetryReduction: false)
+                cfg: configuration.render(usesSymmetryReduction: usesSymmetryReduction)
             ),
             imports: tlaBundle.imports,
             provenance: tlaBundle.provenance

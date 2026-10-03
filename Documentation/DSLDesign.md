@@ -622,7 +622,9 @@ reduced
 The Swift binding supplies the declaration's stable name and the generated
 TLA+ permutation operator name. An inline declaration, mutable binding, empty
 set, overlapping domains, composite member, or duplicate registration fails
-compilation. The native checker retains the complete unreduced graph.
+compilation. The native checker retains the complete unreduced graph. A plain
+model export also keeps TLC unreduced; it retains the permutation operator so
+an explicit reduction request or validation scenario can select it.
 `usingSymmetry` selects one registered, model-owned declaration for that
 scenario's TLC configuration. An absent selection keeps TLC unreduced; a
 foreign or duplicate selection fails compilation. Temporal or refinement

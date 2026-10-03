@@ -15,20 +15,26 @@ struct SymmetryExportTests {
         #expect(!bundle.cfg.contains("SYMMETRY"))
     }
 
-    @Test("Explicit finite symmetry is present in the TLA module and TLC configuration")
+    @Test("Declared symmetry remains available without reducing the default TLC check")
     func explicitSymmetryExportsToBothFiles() throws {
         let spec = TLASpec("ExplicitSymmetry") {
             Symmetry("Members", Set([1, 2]))
         }
 
-        let bundle = try spec.compile().render().tlaBundle
+        let rendered = try spec.compile().render()
+        let bundle = rendered.tlaBundle
         #expect(bundle.tla.contains("SymmMembers == Permutations({1, 2})"))
-        #expect(bundle.cfg.contains("SYMMETRY SymmMembers"))
+        #expect(!bundle.cfg.contains("SYMMETRY"))
+        #expect(try rendered.tlaBundle(symmetryReduction: .enabled(maximumPermutationCount: 2))
+            .cfg.contains("SYMMETRY SymmMembers"))
     }
 
     @Test("A validation scenario does not select declared symmetry by default")
     func scenarioDefaultsToUnreducedChecking() throws {
-        #expect(try SymmetryScenarioModel.render().tlaBundle.cfg.contains("SYMMETRY Symmmembers"))
+        let model = try SymmetryScenarioModel.render()
+        #expect(!model.tlaBundle.cfg.contains("SYMMETRY"))
+        #expect(try model.tlaBundle(symmetryReduction: .enabled(maximumPermutationCount: 2))
+            .cfg.contains("SYMMETRY Symmmembers"))
         let scenarios = try SymmetryScenarioModel.validationScenarios()
         let ordinary = try #require(scenarios.first(where: { $0.name == "ordinary" }))
         let reduced = try #require(scenarios.first(where: { $0.name == "reduced" }))
