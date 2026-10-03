@@ -449,6 +449,17 @@ extension ParserSession {
                 ))
                 return nil
             }
+            if case .procedure(let procedure) = component,
+               algorithmComponents.contains(where: {
+                   if case .procedure(let earlier) = $0 { return earlier.name == procedure.name }
+                   return false
+               }) {
+                components.diagnostics.append(.init(
+                    message: "Procedure '\(procedure.name)' is declared more than once in Algorithm '\(name)'.",
+                    source: call
+                ))
+                return nil
+            }
             algorithmComponents.append(component)
         }
 

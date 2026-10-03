@@ -175,6 +175,41 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("A duplicate procedure diagnostic points to the second declaration")
+    func duplicateProcedurePointsToSecondDeclaration() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Routine: String, CaseIterable, FiniteTLAValueDomain { case scan }
+            enum Step: String, CaseIterable, FiniteTLAValueDomain { case start, first, second, finished }
+            static var spec: TLASpec {
+                #spec {
+                    let algorithm = Algorithm {
+                        Procedure(Routine.scan) { Do(Step.first) { Return() } }
+                        Procedure(Routine.scan) { Do(Step.second) { Return() } }
+                        Do(Step.start) { Call(Routine.scan) }
+                        Do(Step.finished) { Stop() }
+                    }
+                    algorithm
+                }
+            }
+        }
+        """)
+        let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let duplicate = try #require(Array(source.tokens(viewMode: .sourceAccurate))
+            .filter { $0.text == "Procedure" }.last)
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(model)
+            Issue.record("A duplicate procedure must fail at its second declaration")
+        } catch let diagnostic as SourceParseDiagnostic {
+            #expect(diagnostic.message.contains("Procedure 'scan' is declared more than once"))
+            #expect(diagnostic.sourceSpan.location == .utf8Offset(
+                duplicate.positionAfterSkippingLeadingTrivia.utf8Offset))
+            let emitted = parserDiagnostic(diagnostic, in: model)
+            #expect(emitted.node.positionAfterSkippingLeadingTrivia == duplicate.positionAfterSkippingLeadingTrivia)
+        }
+    }
+
     @Test("Generated property type errors point to their predicate registration")
     func generatedPropertyTypeErrorPointsToRegistration() throws {
         for (handle, registration, insideAlgorithm, path) in [
