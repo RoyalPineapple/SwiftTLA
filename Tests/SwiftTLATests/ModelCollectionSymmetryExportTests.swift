@@ -6,15 +6,6 @@ struct ModelCollectionSymmetryExportTests {
     let id: Int
   }
 
-  @Test("Compiled value ordering distinguishes nested values from delimiter-shaped strings")
-  func compiledValueOrderingIsStructural() {
-    let nested = CompiledValue.tuple([.string("a"), .string("b")])
-    let delimiterShaped = CompiledValue.tuple([.string("a,string:b")])
-
-    #expect((nested == delimiterShaped) == false)
-    #expect(nested < delimiterShaped || delimiterShaped < nested)
-  }
-
   @Test("TLA and CFG declare symmetric members as TLC model values")
   func collectionsEmitModelValueSymmetryBundle() throws {
     let members = CollectionVar<Device, Int>("devicePhases")

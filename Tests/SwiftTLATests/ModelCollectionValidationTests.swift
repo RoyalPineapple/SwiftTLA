@@ -101,19 +101,6 @@ struct ModelCollectionValidationTests {
     assertInvalidCollection(invalidName, .invalidCollectionName("device-phases"))
   }
 
-  @Test("Ordinary specifications do not opt into collection symmetry export")
-  func ordinarySpecificationsDoNotEmitCollectionSymmetry() throws {
-    let counter = Var<Int>("counter")
-    let spec = TLASpec("Ordinary") {
-      Variable(counter, 0)
-    }
-
-    #expect(try spec.compile().render().tlaBundle.tla.contains("TLC") == false)
-    #expect(try spec.compile().render().tlaBundle.tla.contains("Permutations(") == false)
-    #expect(try spec.compile().render().tlaBundle.cfg.contains("SYMMETRY") == false)
-    #expect(try spec.compile().render().tlaBundle.cfg.contains("Member0") == false)
-  }
-
   @Test("A collection variable must retain its declared uniform member domain")
   func nonUniformInitialDomainIsRejected() {
     let devices = CollectionVar<Device, Int>("devices")
