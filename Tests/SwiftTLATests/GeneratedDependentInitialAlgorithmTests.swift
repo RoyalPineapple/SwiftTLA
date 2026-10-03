@@ -1,23 +1,20 @@
-@testable import SwiftTLAPlugin
-import Foundation
 import Testing
-@testable import SwiftTLA
-import SwiftTLAMacros
-import SwiftParser
-import SwiftSyntax
+import SwiftTLA
 
 struct GeneratedDependentInitialAlgorithmTests {
-    @Test("#spec preserves a dependent typed function initializer")
-    func compiledSpecificationPreservesDependentInitialStates() throws {
-        let compilation = try GeneratedDependentInitialAlgorithm.spec.compile()
-        let mirrors = try #require(compilation.layout.testVariableID(named: "mirrors"))
-        let states = try CompiledRuntime(compilation: compilation).initialStates().map {
-            try $0.value(for: mirrors).rendered(using: compilation.layout)
+    @Test("generated initialization preserves a dependent typed function")
+    func generatedInitialStatesPreserveDependency() throws {
+        let machines = try GeneratedDependentInitialAlgorithm.initialMachines()
+        let mirrors = try #require(TLAStateProjection.Token(validating: "mirrors"))
+        #expect(machines.count == 2)
+        #expect(Set(machines.map { $0.state.seed }) == [false, true])
+        for machine in machines {
+            #expect(machine.state.mirrors[.left] == (machine.state.seed ? .active : .inactive))
+            #expect(machine.state.mirrors[.right] == .inactive)
+            #expect(try machine.formalProjection(of: machine.snapshot).value(for: mirrors) == .function([
+                .string("left"): .string(machine.state.seed ? "active" : "inactive"),
+                .string("right"): .string("inactive")
+            ]))
         }
-
-        #expect(Set(states) == [
-            .function([.string("left"): .string("inactive"), .string("right"): .string("inactive")]),
-            .function([.string("left"): .string("active"), .string("right"): .string("inactive")])
-        ])
     }
 }
