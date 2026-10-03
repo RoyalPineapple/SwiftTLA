@@ -9,8 +9,6 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
     public init(initialMachines: [Machine], maximumStates: Int,
         behavior: ModelBehavior = .specification) throws {
         guard let machine = initialMachines.first else { throw ExplorationError.noInitialStates }
-        self.machine = machine
-        self.behavior = behavior
         var snapshots: [Machine.Snapshot] = []
         var initialIDs: [Int] = []
         var edges: [(source: Int, action: Machine.Action, target: Int)] = []
@@ -32,11 +30,27 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
         guard case .exhausted = summary.completion else {
             throw ExplorationError.configurationMismatch
         }
+        try self.init(machine: machine, snapshots: snapshots, initialIDs: initialIDs,
+            edges: edges, behavior: behavior)
+    }
+
+    package init(machine: Machine, snapshots: [Machine.Snapshot], initialIDs: [Int],
+        edges: [(source: Int, action: Machine.Action, target: Int)],
+        behavior: ModelBehavior
+    ) throws {
+        self.machine = machine
+        self.behavior = behavior
+        guard initialIDs.allSatisfy({ snapshots.indices.contains($0) }) else {
+            throw ExplorationError.configurationMismatch
+        }
         initialStates = Set(initialIDs.map { snapshots[$0] })
         var adjacency = Dictionary(uniqueKeysWithValues: snapshots.map {
             ($0, [(action: Machine.Action, target: Machine.Snapshot)]())
         })
         for edge in edges {
+            guard snapshots.indices.contains(edge.source), snapshots.indices.contains(edge.target) else {
+                throw ExplorationError.configurationMismatch
+            }
             adjacency[snapshots[edge.source], default: []].append(
                 (edge.action, snapshots[edge.target]))
         }

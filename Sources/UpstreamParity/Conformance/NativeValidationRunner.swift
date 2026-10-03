@@ -66,12 +66,27 @@ package enum NativeValidationRunner {
         guard !decisive || (safety.count == 1 && scenario.checking.properties == safety) else {
             throw NativeValidationRunnerError.unavailable("decisive mode requires one selected safety check")
         }
+        let needsGraph = !scenario.checking.properties.intersection(temporal.union(refinement)).isEmpty
+        var snapshots: [Scenario.Machine.Snapshot] = []
+        var initialIDs: [Int] = []
+        var edges: [(source: Int, action: Scenario.Machine.Action, target: Int)] = []
+        let observe: ((MachineValidationEvent<Scenario.Machine>) throws -> Void)? = needsGraph ? { event in
+            switch event {
+            case .state(let id, let snapshot, let initial, _, _):
+                guard id == snapshots.count else { throw ExplorationError.configurationMismatch }
+                snapshots.append(snapshot)
+                if initial { initialIDs.append(id) }
+            case .edge(let source, let action, let target):
+                edges.append((source, action, target))
+            default: break
+            }
+        } : nil
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let batch = try MachineValidationEvidence.write(
             scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: decisive,
             stopOnReachability: decisive,
             checking: .init(properties: safety, checkDeadlock: scenario.checking.checkDeadlock),
-            to: directory.appendingPathComponent("machine.bin"))
+            to: directory.appendingPathComponent("machine.bin"), observe: observe)
         switch (scenario.checkingMode, batch.completion) {
         case (.exhaustive, .exhausted),
              (.decisiveCounterexample, .decisiveViolation),
@@ -83,9 +98,9 @@ package enum NativeValidationRunner {
         }
         var temporalResults: [Scenario.Property: TemporalAnalysis<Scenario.Machine.Snapshot, Scenario.Machine.Action?>] = [:]
         var refinementFailures: [Scenario.Property: RefinementFailure<Scenario.Machine.Snapshot, Scenario.Machine.Action>] = [:]
-        if !scenario.checking.properties.intersection(temporal.union(refinement)).isEmpty {
-            var complete = try MachineValidationGraph(initialMachines: initial,
-                maximumStates: maximumStates, behavior: scenario.behavior)
+        if needsGraph {
+            var complete = try MachineValidationGraph(machine: first, snapshots: snapshots,
+                initialIDs: initialIDs, edges: edges, behavior: scenario.behavior)
             temporalResults = try complete.temporalResults(checking: scenario.checking.properties)
             refinementFailures = try first.validationRefinementFailures(
                 in: &complete, checking: scenario.checking.properties)

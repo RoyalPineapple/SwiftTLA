@@ -37,7 +37,8 @@ package enum MachineValidationEvidence {
     package static func write<Scenario: ModelValidationScenario>(
         scenario: Scenario, caseID: String, maximumStates: Int, stopOnViolation: Bool,
         stopOnReachability: Bool = false,
-        checking: ModelChecks<Scenario.Property>? = nil, to output: URL
+        checking: ModelChecks<Scenario.Property>? = nil, to output: URL,
+        observe: ((MachineValidationEvent<Scenario.Machine>) throws -> Void)? = nil
     ) throws -> MachineValidationSummary<Scenario.Property> {
         let startedAt = DispatchTime.now().uptimeNanoseconds
         let propertyNames = scenario.formalPropertyNames
@@ -130,6 +131,7 @@ package enum MachineValidationEvidence {
                 try writer.reached(property: name, key: stateKey(snapshot),
                     predecessor: predecessor.map(UInt64.init), action: action)
             }
+            try observe?(event)
         }
         let completion: UInt8 = switch result.completion {
         case .exhausted: 0
