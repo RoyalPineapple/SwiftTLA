@@ -7,6 +7,12 @@ import XCTest
 final class GeneratedAppleModelTests: XCTestCase {
     private struct RecordingFailure: Error {}
 
+    func testBoundInvariantsRemainSelectedForExport() throws {
+        XCTAssertEqual(try BluetoothModel.render().checkNames, Set(["knownCentralPhase"]))
+        XCTAssertEqual(try PeripheralModel.render().checkNames, Set(["knownPeripheralPhase"]))
+        XCTAssertEqual(try CameraWorkflow.render().checkNames, Set(["validPhase"]))
+    }
+
     func testBluetoothGeneratedLifecycleExposesScanActions() async throws {
         var machine = try BluetoothModel.makeMachine()
         _ = try machine.send(.poweredOn)

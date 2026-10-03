@@ -19,18 +19,34 @@ private struct GeneratedHigherOrderFormalModel {
           ))]
         )
       )
-      Algorithm("GeneratedHigherOrderFormalModel", scoped: { scope in
-        let counter = scope.sharedVar("counter", initial: 0)
+      let generatedHigherOrderFormalModel = Algorithm(label: "GeneratedHigherOrderFormalModel", scoped: { scope in
+        let counter = scope.sharedVar(_name: "counter", initial: 0)
         Do(Step.advance) {
           Assign(counter, to: counter.expr + 1)
         }
       })
+      generatedHigherOrderFormalModel
     }
   }
 }
 
 @Suite("Formal operators")
 struct FormalOperatorTests {
+  @Test("module-level recursive functions can be passed as operator arguments")
+  func passesRecursiveOperator() throws {
+    let sum = RecursiveFunc(name: "Sum", params: ["n"], body: .ifThenElse(
+      .equal(.variable("n"), .int(0)), .int(0),
+      .add(.variable("n"), .recursiveCall("Sum", [.subtract(.variable("n"), .int(1))]))
+    ))
+    let apply = FormalOperatorDefinition(name: "Apply", parameters: [
+      .operator("operation", arity: 1), .value("argument")
+    ], body: .operatorApplication(.reference("operation", arity: 1), [.value(.variable("argument"))]))
+    let expression = StateExpr.operatorApplication(.reference("Apply", arity: 2), [
+      .operator(.reference("Sum", arity: 1)), .value(.int(3))
+    ])
+    #expect(try compiledValue(expression, recursiveFunctions: [sum], formalOperators: [apply]) == .int(6))
+  }
+
   @Test("a nullary formal operator uses standard TLA+ syntax")
   func rendersNullaryFormalOperatorWithoutParentheses() throws {
     let initialState = FormalOperatorDefinition(
@@ -46,7 +62,7 @@ struct FormalOperatorTests {
       formalOperatorDefinitions: [initialState]
     )
 
-    #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("InitialState == 0"))
+    #expect(try spec.compile().render().tlaBundle.tla.contains("InitialState == 0"))
   }
 
   @Test("a #spec higher-order formal definition preserves parser and builder trees")
@@ -86,7 +102,7 @@ struct FormalOperatorTests {
       invariants: []
     )
 
-    let rendered = try spec.compile().renderedTLAModuleBundle().root.tla
+    let rendered = try spec.compile().render().tlaBundle.root.tla
 
     #expect(rendered.contains("(LET value == counter IN (value + 1))"))
   }
@@ -249,11 +265,11 @@ struct FormalOperatorTests {
           )
         )
       )],
-      invariants: [NamedInvariant(
+      invariants: [NamedStatePredicate(
         name: "bounded",
         body: .lessOrEqual(.variable("counter"), .int(2))
       )],
-      constraint: .lessOrEqual(.variable("counter"), .int(2)),
+      constraints: [.init(.lessOrEqual(.variable("counter"), .int(2)))],
       formalOperatorDefinitions: [applyTwice]
     )
 
@@ -261,8 +277,14 @@ struct FormalOperatorTests {
     let initial = try firstCompiledState(in: compilation)
     let successor = try #require(try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial).first)
     #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(2))
-    let outcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
-    #expect({ if case .ok = outcome { true } else { false } }())
+    let exploration = try ModelChecker(compilation: compilation, configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.graph.states.count == 2)
+    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.invariantViolated])
+    #expect(exploration.outcome.diagnostic?.subject == "bounded")
+    let boundary = try #require(exploration.outcome.diagnostic?.state)
+    #expect(try value("counter", in: boundary) == .int(4))
+    #expect(try exploration.outcome.diagnostic?.trace.map { try value("counter", in: $0.state) } == [.int(0), .int(2), .int(4)])
   }
 
   @Test("an imported module exports executable formal operators")
@@ -302,7 +324,7 @@ struct FormalOperatorTests {
         )
       )],
       invariants: [],
-      constraint: .lessOrEqual(.variable("counter"), .int(2)),
+      constraints: [.init(.lessOrEqual(.variable("counter"), .int(2)))],
       imports: [library]
     )
 
@@ -310,8 +332,10 @@ struct FormalOperatorTests {
     let initial = try firstCompiledState(in: compilation)
     let successor = try #require(try compiledSuccessors(named: "advance", arguments: [], in: compilation, from: initial).first)
     #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(2))
-    let outcome = try ModelChecker(compilation: try consumer.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
-    #expect({ if case .ok = outcome { true } else { false } }())
+    let exploration = try ModelChecker(compilation: compilation, configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
+    #expect(exploration.isComplete)
+    #expect(exploration.graph.states.count == 2)
+    #expect(exploration.safetyViolations.isEmpty)
   }
 
   @Test("Folds is executable after import, not only emitted source")
@@ -342,7 +366,7 @@ struct FormalOperatorTests {
           .linkedOperators.formalOperatorDefinitions
       ) == .int(6)
     )
-    let rendered = try Folds.module.compile().renderedTLAModuleBundle().tla
+    let rendered = try Folds.module.compile().render().tlaBundle.tla
     #expect(rendered.contains("MapThenFoldSet(op(_, _),"))
     #expect(rendered.contains("choose(_),"))
   }
@@ -387,7 +411,7 @@ struct FormalOperatorTests {
     #expect(try compiledValue(pointwise, formalOperators: functions) == .function([
       .int(1): .int(11), .int(2): .int(22), .int(3): .int(33)
     ]))
-    #expect(try FunctionsModule.module.compile().renderedTLAModuleBundle().tla.contains("Restrict(f, S) =="))
+    #expect(try FunctionsModule.module.compile().render().tlaBundle.tla.contains("Restrict(f, S) =="))
   }
 
   @Test("Util definitions execute without flattening their Functions dependency")
@@ -428,7 +452,7 @@ struct FormalOperatorTests {
     #expect(try compiledValue(permutations, formalOperators: util) == .set([
       .tuple([.int(1), .int(2)]), .tuple([.int(2), .int(1)])
     ]))
-    #expect(try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle().tla.contains(
+    #expect(try KeyValueStoreUtil.module.compile().render().tlaBundle.tla.contains(
       "ReduceSet(op(_, _),"
     ))
   }

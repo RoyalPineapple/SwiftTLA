@@ -54,9 +54,10 @@ public struct CameraWorkflow {
     private enum Step: String, CaseIterable { case ready, record, stopRecording, recordingSucceeded, recordingFailed, recordingCancelled, play, live }
 
     public static var spec: TLASpec {
-        #spec("CameraWorkflow") {
-            Algorithm("CameraWorkflow", scoped: { scope in
-                let phase = scope.sharedVar("phase", initial: Phase.starting)
+        #spec {
+            let validPhase = Invariant()
+            let cameraWorkflow = Algorithm(scoped: { scope in
+                let phase = scope.sharedVar(initial: Phase.starting)
                 Each(ReadyProcess.all) { _ in
                     Do(Step.ready) { When(phase == Phase.starting); Assign(phase, to: Phase.live); Goto(Step.ready) }
                 }
@@ -81,8 +82,9 @@ public struct CameraWorkflow {
                 Each(LiveProcess.all) { _ in
                     Do(Step.live) { When(phase == Phase.playing); Assign(phase, to: Phase.live); Goto(Step.live) }
                 }
-                Invariant("validPhase") { phase == Phase.starting || phase == Phase.live || phase == Phase.recording || phase == Phase.stopping || phase == Phase.playing }
+                validPhase { phase == Phase.starting || phase == Phase.live || phase == Phase.recording || phase == Phase.stopping || phase == Phase.playing }
             })
+            cameraWorkflow
         }
     }
 }

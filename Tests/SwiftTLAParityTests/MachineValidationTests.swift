@@ -1,0 +1,248 @@
+import Testing
+import SwiftTLA
+@testable import UpstreamParity
+import Foundation
+
+struct MachineValidationTests {
+    @Test("distinct generated states remain distinct when their snapshot hashes collide")
+    func retainsFullStateIdentityAcrossHashCollisions() throws {
+        let initial = try ReachabilityExportModel.initialMachines().map(CollidingReachabilityMachine.init(base:))
+        var values: Set<Int> = []
+        _ = try MachineValidator.run(
+            initialMachines: initial, maximumStates: 3,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false
+        ) { event in
+            if case .state(_, let snapshot, _, _, _) = event {
+                values.insert(snapshot.base.state.value)
+            }
+        }
+        #expect(values == [0, 1, 2])
+    }
+
+    @Test("generated machine validation emits each reachable state and transition")
+    func emitsCompleteFiniteBehavior() throws {
+        var states: [Int: Int] = [:]
+        var initials: Set<Int> = []
+        var edges: Set<String> = []
+        let initial = try ReachabilityExportModel.initialMachines()
+        let result = try MachineValidator.run(
+            initialMachines: initial + initial, maximumStates: 3,
+            checking: .init(properties: [.Positive, .BeyondLimit], checkDeadlock: false),
+            stopOnViolation: false
+        ) { event in
+            switch event {
+            case .state(let id, let snapshot, let initial, _, _):
+                states[id] = snapshot.state.value
+                if initial { initials.insert(id) }
+            case .edge(let source, _, let target):
+                edges.insert("\(source)->\(target)")
+            default: break
+            }
+        }
+        if case .exhausted = result.completion {} else { Issue.record("Validation stopped early") }
+        #expect(result.initialStates == 1)
+        #expect(result.states == 3)
+        #expect(result.edges == 2)
+        #expect(initials.count == 1)
+        #expect(states.values.sorted() == [0, 1, 2])
+        #expect(edges == ["0->1", "1->2"])
+        #expect(result.reachedProperties == [.Positive])
+    }
+
+    @Test("a decisive invariant failure retains the generated successor outside the completed graph")
+    func stopsAtGeneratedViolation() throws {
+        var failure: (value: Int, predecessor: Int?)?
+        let result = try MachineValidator.run(
+            initialMachines: FailingExportModel.initialMachines(), maximumStates: 3,
+            checking: .init(properties: [.BelowTwo, .BelowThree], checkDeadlock: false),
+            stopOnViolation: true
+        ) { event in
+            if case .invariantFailure(let property, let snapshot, let predecessor, _) = event,
+               property == .BelowTwo {
+                failure = (snapshot.state.value, predecessor)
+            }
+        }
+        if case .decisiveViolation = result.completion {} else { Issue.record("Expected an early violation") }
+        #expect(result.violatedInvariants == [.BelowTwo])
+        #expect(failure?.value == 2)
+        #expect(failure?.predecessor != nil)
+        #expect(result.states == 2)
+        #expect(result.edges == 0)
+    }
+
+    @Test("a selected reachability witness stops without claiming a complete graph")
+    func stopsAtReachabilityWitness() throws {
+        var witnessed: Int?
+        let result = try MachineValidator.run(
+            initialMachines: ReachabilityExportModel.initialMachines(), maximumStates: 3,
+            checking: .init(properties: [.Positive], checkDeadlock: false),
+            stopOnViolation: true, stopOnReachability: true
+        ) { event in
+            if case .reachability(_, let snapshot, _, _) = event {
+                witnessed = snapshot.state.value
+            }
+        }
+        if case .decisiveReachability = result.completion {} else {
+            Issue.record("A reachability witness is not exhaustive completion")
+        }
+        #expect(witnessed == 1)
+        #expect(result.reachedProperties == [.Positive])
+        #expect(result.states < 3)
+    }
+
+    @Test("a decisive generated scenario reports its witness without exhausting an unbounded graph")
+    func retainsDecisiveDieHardestResult() throws {
+        let scenario = try #require(DieHardestModel.validationScenarios().first)
+        #expect(scenario.checkingMode == .decisiveCounterexample)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let report = try NativeValidationRunner.run(
+            scenario: scenario, caseID: "die-hardest-0", maximumStates: 100_000, to: directory)
+        #expect(!report.graphComplete)
+        #expect(report.properties["NotSolved"] == .violated)
+        #expect(report.deadlock?.rawValue == "unavailable")
+    }
+
+    @Test("native evidence records a complete generated machine without TLC")
+    func writesIndependentEvidence() throws {
+        let scenario = RenderlessScenario(base: try ConfiguredCounter.validationScenarios()[0])
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output = directory.appendingPathComponent("native.bin")
+        let summary = try MachineValidationEvidence.write(
+            scenario: scenario, caseID: "counter-0", maximumStates: 100,
+            stopOnViolation: false, to: output)
+        let evidence = try Data(contentsOf: output)
+        let profileURL = output.deletingPathExtension().appendingPathExtension("profile.json")
+        let profile = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: profileURL)) as? [String: Any])
+        if case .exhausted = summary.completion {} else { Issue.record("Expected complete traversal") }
+        #expect(summary.states >= 3)
+        #expect(summary.edges >= 2)
+        #expect(evidence.starts(with: Data("STLAGRF2".utf8)))
+        #expect(evidence.count > 100)
+        #expect(profile["schema"] as? String == "swifttla.native-validation-profile.v3")
+        #expect(profile["seenHashSeconds"] as? Double != nil)
+        #expect(profile["seenProbeSeconds"] as? Double != nil)
+        #expect(profile["estimatedTypedProjectionSeconds"] as? Double != nil)
+        #expect(profile["estimatedCanonicalEncodingSeconds"] as? Double != nil)
+        #expect(profile["stateEvents"] as? Int == summary.states)
+        #expect(profile["edgeEvents"] as? Int == summary.edges)
+    }
+
+    @Test("generated assertions and reachability retain all selected scenario outcomes")
+    func validatesConfiguredCounter() throws {
+        let scenario = try ConfiguredCounter.validationScenarios()[0]
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let report = try NativeValidationRunner.run(scenario: scenario, caseID: "counter-0",
+            maximumStates: 100, to: directory)
+        var evidence = try BinaryGraphEvidenceReader(directory.appendingPathComponent("machine.bin"))
+        #expect(try evidence.bytes(8) == Data("STLAGRF2".utf8))
+        #expect(try evidence.byte() == 2)
+        #expect(try evidence.string() == "counter-0")
+        evidence.close()
+        #expect(report.properties["__pcal_assert_0"] == .satisfied)
+        #expect(report.properties["AtLimit"] == .reached)
+        #expect(report.deadlock == .satisfied)
+        #expect(report.graphComplete)
+    }
+
+    @Test("a state limit cannot satisfy an expected invariant violation")
+    func rejectsLimitedExpectedFailure() throws {
+        let scenario = try #require(TraceReplayCounter.validationScenarios().first)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        #expect(throws: ExplorationError.stateLimitExceeded(1)) {
+            try NativeValidationRunner.run(scenario: scenario, caseID: "limited-counter",
+                maximumStates: 1, to: directory)
+        }
+        #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("report.json").path))
+    }
+
+    @Test("an invariant violation retains the complete graph and every selected verdict")
+    func retainsCompleteEvidenceAfterInvariantViolation() throws {
+        let scenario = try ConstantStateClaims.validationScenarios()[0]
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let changedDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+            try? FileManager.default.removeItem(at: changedDirectory)
+        }
+        let report = try NativeValidationRunner.run(scenario: scenario, caseID: "constant-state-claims-0",
+            maximumStates: 10, to: directory)
+        #expect(report.graphComplete)
+        #expect(report.initialStates == 1)
+        #expect(report.states == 1)
+        #expect(report.edges == 1)
+        #expect(report.properties["falseInvariant"] == .violated)
+        #expect(report.properties["trueInvariant"] == .satisfied)
+        #expect(report.properties["initialWitness"] == .reached)
+        #expect(report.properties["absentWitness"] == .unreachable)
+        #expect(report.deadlockSelected)
+        #expect(report.deadlock == .satisfied)
+        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("report.json").path))
+
+        var expectations = scenario.expectations
+        expectations[.falseInvariant] = .satisfied
+        let changed = ConstantStateClaims.ValidationScenario(
+            name: scenario.name, displayName: scenario.displayName, configuration: scenario.configuration,
+            checking: scenario.checking, checkingMode: scenario.checkingMode, behavior: scenario.behavior,
+            selectedSymmetry: scenario.selectedSymmetry,
+            expectations: expectations, deadlockExpectation: scenario.deadlockExpectation)
+        let changedReport = try NativeValidationRunner.run(
+            scenario: changed, caseID: "constant-state-claims-0", maximumStates: 10,
+            to: changedDirectory)
+        #expect(changedReport.properties == report.properties)
+        #expect(changedReport.graphComplete == report.graphComplete)
+        #expect(FileManager.default.fileExists(atPath: changedDirectory.appendingPathComponent("report.json").path))
+    }
+
+    @Test("selected temporal and refinement checks use the generated-machine graph")
+    func checksGraphProperties() throws {
+        let temporal = try SelectedChecksModel.validationScenarios()[0]
+        let refinement = try RefinementScenarioCounter.validationScenarios()[1]
+        let temporalDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let refinementDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: temporalDirectory)
+            try? FileManager.default.removeItem(at: refinementDirectory)
+        }
+        let temporalReport = try NativeValidationRunner.run(
+            scenario: temporal, caseID: "selected-checks-0", maximumStates: 10, to: temporalDirectory)
+        let refinementReport = try NativeValidationRunner.run(
+            scenario: refinement, caseID: "refinement-counter-1", maximumStates: 10,
+            to: refinementDirectory)
+        #expect(temporalReport.properties["StaysZero"] == .violated)
+        #expect(refinementReport.properties["UnitSteps"] == .violated)
+    }
+
+    @Test("unsupported selected checks fail instead of receiving an unchecked pass")
+    func rejectsUnsupportedChecks() throws {
+        let scenario = try SelectedChecksModel.validationScenarios()[0]
+        #expect(throws: ExplorationError.unsupportedValidationProperty("StaysZero")) {
+            try MachineValidator.run(
+                initialMachines: scenario.initialMachines(), maximumStates: 10,
+                checking: scenario.checking, stopOnViolation: true
+            ) { _ in }
+        }
+    }
+}
+
+private struct RenderlessScenario<Base: ModelValidationScenario>: ModelValidationScenario {
+    typealias Machine = Base.Machine
+    typealias Property = Base.Property
+    let base: Base
+    var name: String { base.name }
+    var displayName: String { base.displayName }
+    var checking: ModelChecks<Property> { base.checking }
+    var behavior: ModelBehavior { base.behavior }
+    var expectations: [Property: ValidationExpectation] { base.expectations }
+    var deadlockExpectation: ValidationExpectation? { base.deadlockExpectation }
+    var formalPropertyNames: [Property: String] { base.formalPropertyNames }
+    func initialMachines() throws -> [Machine] { try base.initialMachines() }
+    func render() throws -> RenderedSpecification { throw RenderlessError.called }
+}
+
+private enum RenderlessError: Error { case called }

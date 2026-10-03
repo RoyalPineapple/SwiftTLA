@@ -26,50 +26,24 @@ package struct EWD998TerminationModel: Sendable {
         terminationDetected: SharedVariable<Bool>
     ) -> ActionExpr {
         let node = Expr<Node>(.variable("node"))
-        let nodeIsActive: StateExpr = active[node] == true
-        let zeroInactive: StateExpr = active[.zero] == false
-        let oneInactive: StateExpr = active[.one] == false
-        let twoInactive: StateExpr = active[.two] == false
-        let threeInactive: StateExpr = active[.three] == false
-        let firstTwoNodesInactive: StateExpr = .and(zeroInactive, oneInactive)
-        let firstThreeNodesInactive: StateExpr = .and(firstTwoNodesInactive, twoInactive)
-        let allNodesInactive: StateExpr = .and(firstThreeNodesInactive, threeInactive)
-        let zeroPending: StateExpr = pending[.zero] == 0
-        let onePending: StateExpr = pending[.one] == 0
-        let twoPending: StateExpr = pending[.two] == 0
-        let threePending: StateExpr = pending[.three] == 0
-        let firstTwoPending: StateExpr = .and(zeroPending, onePending)
-        let firstThreePending: StateExpr = .and(firstTwoPending, twoPending)
-        let noPendingMessages: StateExpr = .and(firstThreePending, threePending)
-        let terminationIsDetectable: StateExpr = .and(allNodesInactive, noPendingMessages)
-        let zeroActive: StateExpr = .notEqual(active[.zero].raw, .value(.bool(false)))
-        let oneActive: StateExpr = .notEqual(active[.one].raw, .value(.bool(false)))
-        let twoActive: StateExpr = .notEqual(active[.two].raw, .value(.bool(false)))
-        let threeActive: StateExpr = .notEqual(active[.three].raw, .value(.bool(false)))
-        let zeroHasPendingMessages: StateExpr = .notEqual(pending[.zero].raw, .value(.int(0)))
-        let oneHasPendingMessages: StateExpr = .notEqual(pending[.one].raw, .value(.int(0)))
-        let twoHasPendingMessages: StateExpr = .notEqual(pending[.two].raw, .value(.int(0)))
-        let threeHasPendingMessages: StateExpr = .notEqual(pending[.three].raw, .value(.int(0)))
-        let firstTwoActive: StateExpr = .or(zeroActive, oneActive)
-        let firstThreeActive: StateExpr = .or(firstTwoActive, twoActive)
-        let anyNodeActive: StateExpr = .or(firstThreeActive, threeActive)
-        let zeroOrOnePending: StateExpr = .or(zeroHasPendingMessages, oneHasPendingMessages)
-        let firstThreePendingWork: StateExpr = .or(zeroOrOnePending, twoHasPendingMessages)
-        let anyPendingWork: StateExpr = .or(firstThreePendingWork, threeHasPendingMessages)
-        let activeOrPendingWorkRemains: StateExpr = .or(anyNodeActive, anyPendingWork)
-        let detectTermination: ActionExpr = .and(.guard_(terminationIsDetectable), terminationDetected.becomes(true))
-        let preserveTerminationStatus: ActionExpr = .and(.guard_(activeOrPendingWorkRemains), terminationDetected.stays)
+        let nodeIsActive = active[node]
+        let allNodesInactive = !active[.zero] && !active[.one] && !active[.two] && !active[.three]
+        let noPendingMessages = pending[.zero] == 0 && pending[.one] == 0
+            && pending[.two] == 0 && pending[.three] == 0
+        let terminationIsDetectable = allNodesInactive && noPendingMessages
+        let detectTermination = terminationDetected.becomes(true).when(terminationIsDetectable)
+        let preserveTerminationStatus = terminationDetected.stays.when(!terminationIsDetectable)
         let terminationStatus: ActionExpr = .or(detectTermination, preserveTerminationStatus)
         let deactivateNode: ActionExpr = active.becomes(active.updating(node, to: false))
         let preservePendingMessages: ActionExpr = pending.stays
 
-        let activeNodeTerminates: ActionExpr = .and(.guard_(nodeIsActive), deactivateNode)
+        let activeNodeTerminates: ActionExpr = deactivateNode.when(nodeIsActive)
         let pendingMessagesPreserved: ActionExpr = .and(activeNodeTerminates, preservePendingMessages)
         return .and(pendingMessagesPreserved, terminationStatus)
     }
 
     private static func specificationComponents(_ scope: SpecificationScope) -> [SpecComponent] {
-        let active = scope.sharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
+        let active = scope.sharedVar(_name: "active", in: SetExpr<Function<Node, Bool>>.literal(
             Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, false), (.three, false)),
             Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, false), (.three, true)),
             Function<Node, Bool>.literal((.zero, false), (.one, false), (.two, true), (.three, false)),
@@ -87,10 +61,10 @@ package struct EWD998TerminationModel: Sendable {
             Function<Node, Bool>.literal((.zero, true), (.one, true), (.two, true), (.three, false)),
             Function<Node, Bool>.literal((.zero, true), (.one, true), (.two, true), (.three, true))
         ))
-        let pending = scope.sharedVar("pending", initial: Function<Node, Int>.literal(
+        let pending = scope.sharedVar(_name: "pending", initial: Function<Node, Int>.literal(
             (.zero, 0), (.one, 0), (.two, 0), (.three, 0)
         ))
-        let terminationDetected = scope.sharedVar("terminationDetected", initial: false)
+        let terminationDetected = scope.sharedVar(_name: "terminationDetected", initial: false)
 
         let standardModules: SpecComponent = Extends(.naturals)
         let pendingBound: SpecComponent = Constraint(
@@ -103,13 +77,12 @@ package struct EWD998TerminationModel: Sendable {
                 && pending[.two] >= 0 && pending[.three] >= 0
         }
 
+        let allNodesInactive: Expr<Bool> = active[.zero] == false && active[.one] == false
+            && active[.two] == false && active[.three] == false
+        let noPendingMessages: Expr<Bool> = pending[.zero] == 0 && pending[.one] == 0
+            && pending[.two] == 0 && pending[.three] == 0
         let safety: SpecComponent = Invariant("Safe") {
-            !terminationDetected || (
-                active[.zero] == false && active[.one] == false
-                    && active[.two] == false && active[.three] == false
-                    && pending[.zero] == 0 && pending[.one] == 0
-                    && pending[.two] == 0 && pending[.three] == 0
-            )
+            !terminationDetected || (allNodesInactive && noPendingMessages)
         }
 
         let terminate: SpecComponent = SwiftTLA.Action("Terminate", parameters: [
@@ -145,10 +118,7 @@ package struct EWD998TerminationModel: Sendable {
         }
 
         let detectTermination: SpecComponent = SwiftTLA.Action("DetectTermination") {
-            active[.zero] == false && active[.one] == false
-                && active[.two] == false && active[.three] == false
-                && pending[.zero] == 0 && pending[.one] == 0
-                && pending[.two] == 0 && pending[.three] == 0
+            allNodesInactive && noPendingMessages
                 && terminationDetected.becomes(true)
                 && active.stays && pending.stays
         }

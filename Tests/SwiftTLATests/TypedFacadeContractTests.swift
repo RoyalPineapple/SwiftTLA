@@ -4,6 +4,58 @@ import Testing
 
 @Suite("Typed facade contracts")
 struct TypedFacadeContractTests {
+  typealias Packet = GeneratedSwiftRecord.Packet
+
+  @Test("indexed writable locations remain readable through their assignment-target contract")
+  func indexedAssignmentTargets() {
+    func read<Target: AssignmentTarget>(_ target: Target) -> Expr<Target.Value> {
+      target.expr
+    }
+    let cars = Var<Function<CarID, Int>>("cars")
+    let concrete = cars[CarID.carA]
+    let symbolic = cars[Expr(CarID.carB)]
+    let concreteMatches: Bool = read(concrete).stateExpr == cars.expr[CarID.carA].stateExpr
+    let symbolicMatches: Bool = read(symbolic).stateExpr == cars.expr[Expr(CarID.carB)].stateExpr
+    #expect(concreteMatches)
+    #expect(symbolicMatches)
+  }
+
+  @Test("Boolean expressions and literals compose temporal implications")
+  func typedTemporalImplications() {
+    let ready = Var<Bool>("ready")
+    let completed = Expr<Bool>(true)
+    #expect(ready.leadsTo(completed).map(\.stateExpr) == .leadsTo(.variable("ready"), .value(.bool(true))))
+    #expect(completed.leadsTo(false).map(\.stateExpr) == .leadsTo(.value(.bool(true)), .value(.bool(false))))
+    #expect(true.leadsTo(ready).map(\.stateExpr) == .leadsTo(.value(.bool(true)), .variable("ready")))
+  }
+
+  @Test("Boolean literals compose on either side of typed comparisons", arguments: [false, true])
+  func booleanLiteralComparisons(value: Bool) throws {
+    let expression = Expr(value)
+    let opposite: Bool = !value
+    let predicates: [Expr<Bool>] = [
+      expression == value, value == expression,
+      expression != opposite, opposite != expression
+    ]
+    for predicate in predicates {
+      #expect(try compiledValue(predicate.raw) == .bool(true))
+    }
+  }
+
+  @Test("Integer-backed identities compare within their declared domain")
+  func orderedIdentityPredicates() throws {
+    enum Rank: Int, FiniteTLAValueDomain {
+      case low = 1, high = 2
+      static var defaultValue: Self { .low }
+      static let finiteValues: [Self] = [.low, .high]
+    }
+    let low = Expr(Rank.low)
+    let high = Expr(Rank.high)
+    let ordered: Expr<Bool> = low < high && low <= high && high > low && high >= low
+    #expect(try compiledValue(ordered.raw) == .bool(true))
+    #expect(try compiledValue((high < low).raw) == .bool(false))
+  }
+
   enum CarID: String, CaseIterable, FiniteTLAValueDomain {
     case carA
     case carB
@@ -20,88 +72,35 @@ struct TypedFacadeContractTests {
     static let finiteValues = allCases
   }
 
-  struct CarFields {
-    let floor: Int
-    let doorsOpen: Bool
+  @Test("Conditional branches retain enum context for values and expressions")
+  func conditionalBranchesAcceptEnumLiterals() throws {
+    let person = PersonID.bob.expr
+    let literalFirst = If(true, then: .alice, else: person)
+    let literalLast = If(false, then: person, else: .alice)
+    #expect(try compiledValue(literalFirst.stateExpr) == .string("alice"))
+    #expect(try compiledValue(literalLast.stateExpr) == .string("alice"))
   }
 
-  enum CarSchema: TLARecordSchema {
-    typealias Fields = CarFields
-    static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
-      let key = field as AnyKeyPath
-      if key == \CarFields.floor { return "floor" }
-      if key == \CarFields.doorsOpen { return "doorsOpen" }
-      return nil
-    }
-
-    static let floor = field(\CarFields.floor)
-    static let doorsOpen = field(\CarFields.doorsOpen)
-    static let fields = [
-      TLARecordFieldDeclaration(floor, default: 0),
-      TLARecordFieldDeclaration(doorsOpen, default: false)
-    ]
+  @Test("Collection expressions retain contextual enum literals")
+  func collectionExpressionsAcceptEnumLiterals() throws {
+    let empty = SetExpr<PersonID>().expr
+    let inserted = empty.inserting(.alice)
+    #expect(try compiledValue(inserted.stateExpr) == .set([.string("alice")]))
+    #expect(try compiledValue(inserted.contains(.alice).stateExpr) == .bool(true))
+    let sequence = TupleExpr<PersonID>().expr.appending(.alice)
+    #expect(try compiledValue(sequence.stateExpr) == .tuple([.string("alice")]))
   }
 
-  struct GarageFields {
-    let car: Record<CarSchema>
-    let owner: PersonID
-  }
-
-  enum GarageSchema: TLARecordSchema {
-    typealias Fields = GarageFields
-
-    static func fieldName<Value>(for field: KeyPath<GarageFields, Value>) -> String? {
-      let key = field as AnyKeyPath
-      if key == \GarageFields.car { return "car" }
-      if key == \GarageFields.owner { return "owner" }
-      return nil
-    }
-
-    static let car = field(\GarageFields.car)
-    static let owner = field(\GarageFields.owner)
-    static let fields = [
-      TLARecordFieldDeclaration(car, default: Record<CarSchema>()),
-      TLARecordFieldDeclaration(owner, default: PersonID.alice)
-    ]
-  }
-
-  @Test("record decoding validates declared fields and nested values")
-  func recordDecodingValidatesSchema() throws {
-    #expect(Record<CarSchema>(formalValue: .record([
-      "floor": .bool(false),
-      "doorsOpen": .bool(false)
-    ])) == nil)
-    #expect(Record<CarSchema>(formalValue: .record(TLARecord([
-      .init("floor", .int(0)),
-      .init("floor", .int(1))
-    ]))) == nil)
-    #expect(Record<CarSchema>(formalValue: .record(["floor": .int(0)])) == nil)
-    #expect(Record<CarSchema>(formalValue: .record([
-      "floor": .int(0),
-      "doorsOpen": .bool(false),
-      "owner": .string("alice")
-    ])) == nil)
-
-    let formal: TLAValue = .record([
-      "car": .record(["floor": .int(2), "doorsOpen": .bool(true)]),
-      "owner": .string("bob")
-    ])
-    let garage = try #require(Record<GarageSchema>(formalValue: formal))
-    #expect(garage.tlaValue == formal)
-    #expect(garage.value(for: GarageSchema.owner) == .bob)
-    #expect(garage.value(for: GarageSchema.car)?.value(for: CarSchema.floor) == 2)
-  }
-
-  @Test("typed reads, set mutation, and nested updates lower to typed expressions")
+  @Test("typed record reads, set mutation, and function updates evaluate")
   func typedFacadeLowersAndEvaluates() throws {
-    let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
+    let cars = Var<Function<CarID, Packet>>("cars")
     let calls = Var<SetExpr<PersonID>>("calls")
 
     #expect(
-      cars[.carA][CarSchema.floor].raw
+      cars[.carA].count.raw
         == .recordAccess(
           .functionApply(.variable("cars"), .value(.string("carA"))),
-          "floor"
+          "count"
         ))
     #expect(
       calls.inserting(.alice)
@@ -111,49 +110,45 @@ struct TypedFacadeContractTests {
         ))
 
     let update = cars.updating(.carA) { car in
-      car.updating(CarSchema.floor, to: 2)
+      Packet.expression(count: 2, ready: car.ready)
     }
     let expected = StateExpr.except(
       .variable("cars"),
       .value(.string("carA")),
-      .except(
-        .functionApply(.variable("cars"), .value(.string("carA"))),
-        .value(.string("floor")),
-        .value(.int(2))
-      )
+      .recordLiteral(.init(orderedFields: [
+        .init(name: "count", value: .int(2)),
+        .init(name: "ready", value: .recordAccess(
+          .functionApply(.variable("cars"), .value(.string("carA"))), "ready"))
+      ]))
     )
     #expect(update.raw == expected)
 
     let value = try compiledValue(update.raw, values: [
       ("cars", .function([
-        .string("carA"): .record(["floor": .int(0), "doorsOpen": .bool(false)]),
-        .string("carB"): .record(["floor": .int(1), "doorsOpen": .bool(true)])
+        .string("carA"): .record(["count": .int(0), "ready": .bool(false)]),
+        .string("carB"): .record(["count": .int(1), "ready": .bool(true)])
       ]))
     ])
     #expect(
       value
         == .function([
-          .string("carA"): .record(["floor": .int(2), "doorsOpen": .bool(false)]),
-          .string("carB"): .record(["floor": .int(1), "doorsOpen": .bool(true)])
+          .string("carA"): .record(["count": .int(2), "ready": .bool(false)]),
+          .string("carB"): .record(["count": .int(1), "ready": .bool(true)])
         ]))
   }
 
-  @Test("typed record expressions are usable as set elements")
+  @Test("ordinary Swift record expressions are usable as set elements")
   func recordExpressionSetOperationsLowerAndEvaluate() throws {
-    let closed = Record<CarSchema>.literal(
-      .init(CarSchema.floor, 0),
-      .init(CarSchema.doorsOpen, false)
-    )
-    let open = Record<CarSchema>.literal(
-      .init(CarSchema.floor, 1),
-      .init(CarSchema.doorsOpen, true)
-    )
-    let cars = Function<CarID, Record<CarSchema>>.literal((.carA, closed), (.carB, open))
-    let calls = Var<SetExpr<Record<CarSchema>>>("calls")
-    let literal = SetExpr<Record<CarSchema>>.literal(closed, open)
+    let closed = Packet.expression(count: 0, ready: false)
+    let open = Packet.expression(count: 1, ready: true)
+    let cars = Function<CarID, Packet>.literal((.carA, closed), (.carB, open))
+    let calls = Var<SetExpr<Packet>>("calls")
+    let literal = SetExpr<Packet>.literal(closed, open)
 
     #expect(
-      closed.raw == StateExpr.record(["floor": .value(.int(0)), "doorsOpen": .value(.bool(false))]))
+      closed.raw == .recordLiteral(.init(orderedFields: [
+        .init(name: "count", value: .int(0)), .init(name: "ready", value: .bool(false))
+      ])))
     #expect(literal.raw == .setLiteral([closed.raw, open.raw]))
     #expect(
       calls.inserting(closed)
@@ -161,7 +156,7 @@ struct TypedFacadeContractTests {
     #expect(
       calls.removing(closed)
         == .assign(.named("calls"), .setDifference(.variable("calls"), .setLiteral([closed.raw]))))
-    #expect(calls.contains(closed) == .in(closed.raw, .variable("calls")))
+    #expect(calls.contains(closed).raw == .in(closed.raw, .variable("calls")))
     guard case .functionLiteral = cars.raw else {
       Issue.record("Expected the typed function literal to lower to StateExpr.functionLiteral")
       return
@@ -169,8 +164,8 @@ struct TypedFacadeContractTests {
     #expect(
       try compiledValue(cars.raw)
         == .function([
-          .string("carA"): .record(["floor": .int(0), "doorsOpen": .bool(false)]),
-          .string("carB"): .record(["floor": .int(1), "doorsOpen": .bool(true)])
+          .string("carA"): .record(["count": .int(0), "ready": .bool(false)]),
+          .string("carB"): .record(["count": .int(1), "ready": .bool(true)])
         ]))
   }
 
@@ -186,18 +181,19 @@ struct TypedFacadeContractTests {
     let build = try buildExternalConsumer("InvalidTypedFacade")
 
     #expect(build.status != 0)
-    #expect(build.output.contains("TLAField"))
-    #expect(build.output.contains("InvalidTypedFacade.swift:32:"))
+    #expect(build.output.contains("InvalidTypedFacade.swift:18:"))
     #expect(build.output.contains("member 'person'"))
-    #expect(build.output.contains("no exact matches in call to instance method 'becomes'"))
-    #expect(build.output.contains("candidate expects value of type 'TLAValue'"))
-    #expect(build.output.contains("value of type 'Expr<TLAValue>' has no member 'becomes'"))
-    for member in [
-      "floor", "updated", "applying", "union", "intersection", "subtracting", "isSubset", "isIn",
-      "cardinality", "isEmpty", "flattened", "subsets", "domain", "count", "head", "tail", "filtering",
-      "mapping", "appending", "concatenating", "at", "integerDivided"
-    ] {
-      #expect(build.output.contains("'\(member)'"))
+    #expect(build.output.contains("requires that 'StateExpr' conform to 'TypedExpression'"))
+    let errors = build.output.split(separator: "\n").filter { $0.contains(": error:") }
+    #expect(errors.contains {
+      $0.contains("InvalidTypedFacade.swift:24:")
+        && $0.contains("requires that 'TLAValue' conform to '_GeneratedRecordValue'")
+    })
+    let rejectedLines = [18, 135, 136, 138, 139, 140, 143, 144, 146, 147]
+      + Array(123...133) + Array(23...26) + Array(28...41) + Array(43...58) + Array(60...71)
+    for line in rejectedLines {
+      #expect(errors.contains { $0.contains("InvalidTypedFacade.swift:\(line):") },
+              "Expected the invalid operation on fixture line \(line) to be rejected. Compiler errors:\n\(errors.joined(separator: "\n"))")
     }
   }
 
@@ -207,22 +203,21 @@ struct TypedFacadeContractTests {
 
     #expect(build.status != 0)
     for expected in [
-      "InvalidTypedDSL.swift:41:",
+      "InvalidTypedDSL.swift:27:",
       "parameter 'person' requires an explicitly written finite values array",
-      "InvalidTypedDSL.swift:58:",
+      "InvalidTypedDSL.swift:44:",
       "parameter 'car' requires a non-empty finite values array",
-      "InvalidTypedDSL.swift:75:",
-      "parameter 'direction' has duplicate finite-domain values",
-      "InvalidTypedDSL.swift:96:",
-      "Parameterized action 'unsupportedUpdate' contains an unsupported typed update; use a directly written finite enum case or schema field token."
+      "InvalidTypedDSL.swift:61:",
+      "parameter 'direction' has duplicate finite-domain values"
     ] {
       #expect(build.output.contains(expected))
     }
 
     let unknownField = try buildExternalConsumer("InvalidTypedDSLUnknownField")
     #expect(unknownField.status != 0)
-    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:39:"))
-    #expect(unknownField.output.contains("type 'CarSchema' has no member 'person'"))
+    #expect(unknownField.output.contains("InvalidTypedDSLUnknownField.swift:26:"))
+    #expect(unknownField.output.contains("Statement 1 could not be decoded"))
+    #expect(unknownField.output.contains("Assign(cars[.one].person, to: 2)"))
   }
 
   @Test("formal AST construction is explicit")

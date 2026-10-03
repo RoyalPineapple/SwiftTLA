@@ -16,27 +16,9 @@ struct Counter {
         var tlaValue: TLAValue { .string(rawValue) }
     }
 
-    struct CarFields {
+    struct Car: Hashable, Sendable {
         let floor: Int
         let doorsOpen: Bool
-    }
-
-    enum CarSchema: TLARecordSchema {
-        typealias Fields = CarFields
-
-        static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \CarFields.floor { return "floor" }
-            if key == \CarFields.doorsOpen { return "doorsOpen" }
-            return nil
-        }
-
-        static let floor = field(\CarFields.floor)
-        static let doorsOpen = field(\CarFields.doorsOpen)
-        static let fields = [
-            TLARecordFieldDeclaration(floor, default: 0),
-            TLARecordFieldDeclaration(doorsOpen, default: false)
-        ]
     }
 
     enum CarID: String, FiniteTLAValueDomain {
@@ -49,36 +31,44 @@ struct Counter {
 
     static var spec: TLASpec {
         #spec("Counter") {
-            Algorithm("Counter", scoped: { scope in
-                let value = scope.sharedVar("value", initial: 0)
-                let cars = scope.sharedVar("cars", initial: Function<CarID, Record<CarSchema>>.literal(
-                    (.one, Record<CarSchema>.literal(.init(CarSchema.floor, 1), .init(CarSchema.doorsOpen, false))),
-                    (.two, Record<CarSchema>.literal(.init(CarSchema.floor, 2), .init(CarSchema.doorsOpen, false)))
+            let counterAlgorithm = Algorithm(label: "Counting algorithm", scoped: { scope in
+                let value = scope.sharedVar(_name: "value", initial: 0)
+                let cars = scope.sharedVar(_name: "cars", initial: Function<CarID, Car>.literal(
+                    (.one, Car(floor: 1, doorsOpen: false)),
+                    (.two, Car(floor: 2, doorsOpen: false))
                 ))
                 Each(Node.all, scoped: { _, scope in
-                    let visits = scope.localVar("visits", initial: 0)
-                    Do(Step.advance) {
-                        When(value < 1)
+                    let visits = scope.localVar(_name: "visits", initial: 0)
+                    Do(Step.advance, when: value < 1) {
                         Assign(value, to: value + 1)
-                        Assign(cars, to: cars.updating(.one) { car in
-                            car.updating(CarSchema.floor, to: 2)
-                        })
+                        Assign(cars[.one].floor, to: 2)
                         Assign(visits, to: visits + 1)
                         Stop()
                     }
                 })
             })
+            counterAlgorithm
+            let complete = Validation(label: "Complete run") {}.checkingDeadlock(false)
+            complete
+            let repeated = Validation(label: "Complete run") {}.checkingDeadlock(false)
+            repeated
         }
     }
 }
 
+let compilation = try Counter.spec.compile()
+let scenarios = try Counter.validationScenarios()
+guard compilation.description.algorithms.map(\.name) == ["counterAlgorithm"],
+      compilation.description.algorithms.map(\.displayName) == ["Counting algorithm"],
+      scenarios.map(\.name) == ["complete", "repeated"],
+      scenarios.map(\.displayName) == ["Complete run", "Complete run"] else {
+    throw FixtureError.invalidTransition
+}
 var counter = try Counter.makeMachine()
 let transition = try counter.send(.advance)
 guard transition.after.value == 1,
-      transition.after.cars[.one]?.tlaValue == .record([
-        "floor": .int(2),
-        "doorsOpen": .bool(false)
-      ]) else {
+      transition.after.cars[.one]?.floor == 2,
+      transition.after.cars[.one]?.doorsOpen == false else {
     throw FixtureError.invalidTransition
 }
 

@@ -24,19 +24,19 @@ func testReferencePin() throws -> TLCReferencePin {
     javaVersion: try #require(java["version"] as? String),
     javaArchiveSHA256: try #require(arm64["sha256"] as? String),
     bridgeClass: try #require(bridge["class"] as? String),
-    bridgeSourceSHA256: try #require(bridge["sourceSha256"] as? String),
-    bridgeBinarySHA256: try #require(bridge["binarySha256"] as? String)
+    bridgeSourceHashes: try #require(bridge["sources"] as? [String: String]),
+    bridgeBinarySHA256: SHA256.hex(Data("test bridge binary".utf8))
   )
 }
 
-func completeGraphStream(_ finiteGraphCase: FiniteGraphCase) throws -> Data {
+func completeGraphStream(_ finiteGraphCase: FiniteGraphCase, resolvedActions: [[String: Any]]? = nil) throws -> Data {
   let runID = "00000000-0000-4000-8000-000000000001"
   let state0: [String: Any] = ["fingerprint": "1", "level": 1, "bindings": [binding(0, "x", "0")]]
   let state1: [String: Any] = ["fingerprint": "2", "level": 2, "bindings": [binding(0, "x", "1")]]
   let headerData = Data((try header(finiteGraphCase)).utf8)
   let initial: [String: Any] = record(
     "initial", 1, runID, finiteGraphCase.id, ["callback": "writeState.initial", "state": state0])
-  let transition: [String: Any] = record(
+  var transition: [String: Any] = record(
     "transition", 2, runID, finiteGraphCase.id,
     [
       "callback": "writeState.action", "source": state0, "target": state1,
@@ -44,6 +44,7 @@ func completeGraphStream(_ finiteGraphCase: FiniteGraphCase) throws -> Data {
       "stateFlags": ["raw": 0, "seen": false, "notInModel": false],
       "visualization": "none", "predicateLocation": NSNull(), "reachable": "reachable"
     ])
+  if let resolvedActions { transition["resolvedActions"] = resolvedActions }
   let records = try [headerData, jsonLine(initial), jsonLine(transition)]
   let body = records.reduce(into: Data()) {
     $0.append($1)
@@ -80,18 +81,21 @@ func completeGraphStreamWithStutteringObservation(_ finiteGraphCase: FiniteGraph
   )) + Data([10])
   return body + footer
 }
-func completeGraphStreamWithExcludedPredicateObservation(_ finiteGraphCase: FiniteGraphCase) throws -> Data {
+func completeGraphStreamWithExcludedPredicateObservation(
+  _ finiteGraphCase: FiniteGraphCase, sourceValue: String = "2", targetValue: String = "2"
+) throws -> Data {
   let runID = "00000000-0000-4000-8000-000000000001"
   let lines = String(decoding: try completeGraphStream(finiteGraphCase), as: UTF8.self)
     .split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
   let header = Data((lines[0] + "\n").utf8)
   let initial = Data((lines[1] + "\n").utf8)
   let transition = Data((lines[2] + "\n").utf8)
-  let state: [String: Any] = ["fingerprint": "3", "level": 2, "bindings": [binding(0, "x", "2")]]
+  let source: [String: Any] = ["fingerprint": "3", "level": 2, "bindings": [binding(0, "x", sourceValue)]]
+  let target: [String: Any] = ["fingerprint": "3", "level": 2, "bindings": [binding(0, "x", targetValue)]]
   let excluded = try jsonLine(record(
     "transition", 3, runID, finiteGraphCase.id,
     [
-      "callback": "writeState.actionPredicate", "source": state, "target": state,
+      "callback": "writeState.actionPredicate", "source": source, "target": target,
       "action": ["name": "Next", "location": "<Next(2) line 1, col 1 to line 1, col 2 of module Fixture>", "named": true],
       "stateFlags": ["raw": 2, "seen": false, "notInModel": true],
       "visualization": "none", "predicateLocation": "line 1, col 1 to line 1, col 2 of module Fixture", "reachable": "excluded"
@@ -110,6 +114,7 @@ func completeGraphStreamWithExcludedPredicateObservation(_ finiteGraphCase: Fini
 func fingerprintAliasGraphStream(
   _ finiteGraphCase: FiniteGraphCase,
   aliasSeen: Bool,
+  representativeValue: String = "A",
   aliasFingerprint: String = "2",
   aliasValue: String = "A",
   aliasStableValue: String = "0"
@@ -121,7 +126,7 @@ func fingerprintAliasGraphStream(
   ]
   let representative: [String: Any] = [
     "fingerprint": "2", "level": 2,
-    "bindings": [binding(0, "x", "A"), binding(1, "stable", "0")]
+    "bindings": [binding(0, "x", representativeValue), binding(1, "stable", "0")]
   ]
   let alias: [String: Any] = [
     "fingerprint": aliasFingerprint,
@@ -168,8 +173,12 @@ func binding(_ ordinal: Int, _ name: String, _ tla: String) -> [String: Any] {
 func record(
   _ type: String, _ sequence: Int, _ runID: String, _ caseID: String, _ fields: [String: Any]
 ) -> [String: Any] {
-  fields.merging([
-    "schema": "swifttla.tlc.graph-events", "version": 2, "type": type, "seq": sequence,
+  var fields = fields
+  if type == "transition", fields["resolvedActions"] == nil, let action = fields["action"] {
+    fields["resolvedActions"] = [action]
+  }
+  return fields.merging([
+    "schema": "swifttla.tlc.graph-events", "version": 3, "type": type, "seq": sequence,
     "runId": runID, "caseId": caseID
   ]) { _, new in new }
 }
@@ -286,7 +295,7 @@ func launchRequest(
   try TLCProcessRequest(
     javaExecutable: URL(fileURLWithPath: "/usr/bin/java"),
     jar: URL(fileURLWithPath: "/tmp/tla2tools.jar"),
-    bridgeClasses: URL(fileURLWithPath: "/tmp/bridge-classes"),
+    bridgeJar: URL(fileURLWithPath: "/tmp/bridge.jar"),
     bundle: TLCProcessRequest.declaredBundle(root: module, configuration: configuration),
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
@@ -296,11 +305,11 @@ func launchRequest(
 }
 func requestWithReferenceArtifacts(
   jar: URL,
-  bridgeClasses: URL,
+  bridgeJar: URL,
   artifacts: TLCReferenceArtifacts
 ) throws -> TLCProcessRequest {
   TLCProcessRequest(
-    javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: jar, bridgeClasses: bridgeClasses,
+    javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: jar, bridgeJar: bridgeJar,
     bundle: .external(root: TLAModuleFile(name: "Fixture", tla: "---- MODULE Fixture ----", cfg: "SPECIFICATION Spec")),
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),
@@ -311,7 +320,7 @@ func requestWithReferenceArtifacts(
 }
 func header(_ finiteGraphCase: FiniteGraphCase) throws -> String {
   let record: [String: Any] = [
-    "schema": "swifttla.tlc.graph-events", "version": 2, "type": "header",
+    "schema": "swifttla.tlc.graph-events", "version": 3, "type": "header",
     "callback": "writer.header",
     "seq": 0, "runId": "00000000-0000-4000-8000-000000000001", "caseId": finiteGraphCase.id
   ]

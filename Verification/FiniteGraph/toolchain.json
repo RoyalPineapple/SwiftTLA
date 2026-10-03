@@ -2,7 +2,7 @@
   "schema": "TLCReferencePin",
   "tlc": {
     "tag": "v1.8.0",
-    "commit": "b123b22654942bd7f8b1bcadcc47da4ee2cf4c0e",
+    "commit": "867aefb69ffc2452031292587b389d1fc3eb43ff",
     "standardModules": [
       "Bags", "FiniteSets", "Integers", "Json", "Naturals", "Randomization", "RealTime",
       "Reals", "Sequences", "TLC", "TLCExt", "Toolbox", "_DotTrace", "_JsonTrace",
@@ -10,9 +10,12 @@
       "_TLCTracePlain"
     ],
     "jar": {
-      "repository": "tlaplus/tlaplus",
-      "assetID": 544648411,
-      "sha256": "b658b4e504fdf0b721caf7066320f6b6fe5805f4dd2f717d0e47baba4097205e"
+      "repository": "RoyalPineapple/SwiftTLA",
+      "artifactID": 10402680455,
+      "archiveSHA256": "008db0c23893cd152f3e75acdff7caace1c94b6e3051bf4dd1652d5a928d2959",
+      "buildRunID": 34982844008,
+      "buildRevision": "e49581d1751d08a2a397e8730cc8e7655da87bc3",
+      "sha256": "d0245f8253beed96bb27b56803e73253fab956beb13d3983e40ee4e7efbcd39e"
     }
   },
   "java": {
@@ -31,8 +34,12 @@
   },
   "bridge": {
     "class": "org.swifttla.conformance.LosslessStateWriter",
-    "source": "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java",
-    "sourceSha256": "0bdc542fc5058c152c3a3d9efd2df39fd7f6281645c0f54db41d146772a51929",
-    "binarySha256": "723cfa84460279ccdc8770e2e3c7301585b32e7fa652de18b1eb37974c0fe061"
+    "sources": {
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/CanonicalBinaryState.java": "55e8eeac044488c4b7b910e06b130796512c82ac4cc5d06ea579307344250af4",
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/ConfigurationParser.java": "f5c776ba9d07f3bd4b760b81900a1212e991d86ba43d6e474cfeca4a72f9d388",
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/InstanceActions.java": "1197df262b61e26cdd062bab4f549f66c78dc26df23210a84f95ad18957e9dbc",
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java": "71c07f5c7b768c94c9a6305402815fb53e1b2fa4907283cd2470197423c63e8e",
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/TLCEvaluationOutput.java": "42ca0b8833868f35de4b29841906cbea41ef976b3559bcace84bb2e4ed98cbd8"
+    }
   }
 }

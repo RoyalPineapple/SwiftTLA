@@ -1,14 +1,31 @@
-public struct SymmetrySetDecl: SpecComponent {
+import Foundation
+
+public struct SymmetryReference: Hashable, Sendable {
+  private let identity = UUID()
+}
+
+public struct SymmetrySetDecl: SpecComponent, Sendable {
   public let variableName: String
-  public let values: Set<TLAValue>
-  init(_ variableName: String, _ values: Set<TLAValue>) {
+  package let reference: SymmetryReference
+  let values: Set<TLAValue>
+
+  package init(_ variableName: String, _ values: Set<TLAValue>) {
     self.variableName = variableName
+    reference = .init()
     self.values = values
   }
+
+  package func resolved() -> SymmetrySet {
+    return SymmetrySet(variableName: variableName, values: values, reference: reference)
+  }
 }
-public func Symmetry(_ variableName: String, _ values: Set<some TLAValueConvertible>)
-  -> SymmetrySetDecl {
+
+public func Symmetry(_ variableName: String, _ values: Set<some TLAValueConvertible>) -> SymmetrySetDecl {
   SymmetrySetDecl(variableName, Set(values.map(\.tlaValue)))
+}
+
+public func Symmetry(_name: String = "", _ values: Set<some TLAValueConvertible>) -> SymmetrySetDecl {
+  SymmetrySetDecl(_name, Set(values.map(\.tlaValue)))
 }
 
 extension TLASpec {
@@ -19,6 +36,7 @@ extension TLASpec {
         + formalParameters.map(\.name)
         + actions.map(\.name)
         + invariants.map(\.name)
+        + reachabilityProperties.map(\.name)
         + temporalProperties.map(\.name)
         + recursiveFuncs.map(\.name)
         + formalOperatorDefinitions.map(\.name)
@@ -29,12 +47,9 @@ extension TLASpec {
 
   func validateSymmetryDeclarations() throws {
     var renderedSymbols = renderedDeclarationNames()
-    renderedSymbols.formUnion(symmetricCollections.flatMap(\.metadata.generatedSymbols))
 
     var names = Set<String>()
-    var domainOwner = Dictionary(uniqueKeysWithValues: symmetricCollections.flatMap { collection in
-      collection.metadata.members.map { ($0, "symmetric collection '\(collection.name)'") }
-    })
+    var domainOwner: [TLAValue: String] = [:]
 
     for (index, symmetry) in symmetrySets.enumerated() {
       let path = "symmetrySets[\(index)]"

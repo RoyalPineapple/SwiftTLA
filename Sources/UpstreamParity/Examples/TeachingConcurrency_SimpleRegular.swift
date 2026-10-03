@@ -1,11 +1,7 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// The published eight-process bounded model of PlusCal `SimpleRegular`.
-///
-/// Unlike `Simple`, each shared register holds the set of values a concurrent
-/// read may observe. The three labels preserve the upstream regular-register
-/// write/write/read steps.
+// Upstream: specifications/TeachingConcurrency/SimpleRegular.tla, SimpleRegular.cfg (N = 8).
 @TLAModel
 package struct TeachingSimpleRegularN8Model: Sendable {
     package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
@@ -25,14 +21,17 @@ package struct TeachingSimpleRegularN8Model: Sendable {
     package static var spec: TLASpec {
         #spec("SimpleRegular") {
             Extends(.integers)
-            Algorithm("SimpleRegular", scoped: { scope in
-                let x = scope.sharedVar("x", initial: Function<Process, SetExpr<Int>>.literal(
+            let PCorrect = Invariant()
+            let TypeOK = Invariant()
+            let Inv = Invariant()
+            let SimpleRegular = Algorithm(scoped: { scope in
+                let x = scope.sharedVar(initial: Function<Process, SetExpr<Int>>.literal(
                     (.p0, SetExpr<Int>.literal(0)), (.p1, SetExpr<Int>.literal(0)),
                     (.p2, SetExpr<Int>.literal(0)), (.p3, SetExpr<Int>.literal(0)),
                     (.p4, SetExpr<Int>.literal(0)), (.p5, SetExpr<Int>.literal(0)),
                     (.p6, SetExpr<Int>.literal(0)), (.p7, SetExpr<Int>.literal(0))
                 ))
-                let y = scope.sharedVar("y", initial: Function<Process, Int>.literal(
+                let y = scope.sharedVar(initial: Function<Process, Int>.literal(
                     (.p0, 0), (.p1, 0), (.p2, 0), (.p3, 0),
                     (.p4, 0), (.p5, 0), (.p6, 0), (.p7, 0)
                 ))
@@ -55,22 +54,31 @@ package struct TeachingSimpleRegularN8Model: Sendable {
                     }
                 }
 
-                Invariant("PCorrect") {
-                    !All(Process.all) { process in Finished(process) }
-                        || !All(Process.all) { process in y[process] != 1 }
+                let typeOK = ForAll(Process.all) { process in
+                    !x[process].isEmpty
+                        && x[process].isSubset(of: SetExpr<Int>.literal(0, 1))
+                        && SetExpr<Int>.literal(0, 1).contains(y[process])
+                        && (At(Step.a1, process) || At(Step.a2, process)
+                            || At(Step.b, process) || Finished(process))
                 }
-                Invariant("TypeOK") {
-                    All(Process.all) { process in y[process] == 0 || y[process] == 1 }
+                PCorrect {
+                    !ForAll(Process.all) { process in Finished(process) }
+                        || Exists(in: Process.all) { process in y[process] == 1 }
+                }
+                TypeOK { typeOK }
+                Inv {
+                    typeOK
+                    ForAll(Process.all) { process in
+                        !(At(Step.b, process) || Finished(process))
+                            || x[process] == SetExpr<Int>.literal(1)
+                    }
+                    !ForAll(Process.all) { process in Finished(process) }
+                        || Exists(in: Process.all) { process in y[process] == 1 }
                 }
             })
+            SimpleRegular
+            let simpleRegularValidation = Validation(label: "SimpleRegular") {}
+            simpleRegularValidation
         }
     }
-}
-
-extension Example {
-    package static let teachingSimpleRegularN8 = FiniteModelFixture(
-        expectedDistinct: 277_726,
-        maximumStateLimit: 300_000,
-        spec: TeachingSimpleRegularN8Model.spec,
-    )
 }

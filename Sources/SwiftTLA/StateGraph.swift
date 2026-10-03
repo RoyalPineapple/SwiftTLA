@@ -69,33 +69,41 @@ package struct StateGraph: Sendable {
 package struct FiniteExploration {
     public let graph: StateGraph
     public let initialStateIDs: [StateGraph.StateID]
-    public let outcome: ModelCheckOutcome
+    public let completion: ModelCheckOutcome
+    /// One concrete witness per violated safety check; graph traversal continues after discovery.
+    public let safetyViolations: [ModelCheckOutcome]
+    public var outcome: ModelCheckOutcome {
+        safetyViolations.first { if case .invariantViolated = $0 { true } else { false } }
+            ?? safetyViolations.first ?? completion
+    }
     package let compilationIdentity: CompilationIdentity
     package let configuration: FiniteExplorationConfiguration
     let compiledStates: [StateGraph.StateID: CompiledState]
 
     public var isComplete: Bool {
-        if case .ok = outcome { return true }
+        if case .ok = completion { return true }
         return false
     }
 
     init(
         graph: StateGraph,
         initialStateIDs: [StateGraph.StateID],
-        outcome: ModelCheckOutcome,
+        completion: ModelCheckOutcome,
+        safetyViolations: [ModelCheckOutcome] = [],
         compilationIdentity: CompilationIdentity,
         configuration: FiniteExplorationConfiguration,
         compiledStates: [StateGraph.StateID: CompiledState]
     ) {
         self.graph = graph
         self.initialStateIDs = initialStateIDs
-        self.outcome = outcome
+        self.completion = completion
+        self.safetyViolations = safetyViolations
         self.compilationIdentity = compilationIdentity
         self.configuration = configuration
         self.compiledStates = compiledStates
     }
 
-    func requireValidEvidence(in compilation: CompiledSpecification) throws {
+    func validate(for compilation: CompiledSpecification) throws {
         guard compilationIdentity == compilation.identity else {
             throw CompiledEvaluationError.invalidCompilationIdentity(
                 expected: compilation.identity, actual: compilationIdentity
@@ -105,20 +113,20 @@ package struct FiniteExploration {
         guard (!isComplete || !initialStateIDs.isEmpty),
               initialStateIDs.allSatisfy({ compiledStates[$0] != nil }),
               Set(graph.states.keys) == Set(compiledStates.keys) else {
-            throw invalidEvidence("initial identities and compiled states do not cover the explored graph")
+            throw inconsistentGraph("initial state IDs and compiled states do not cover the explored graph")
         }
         for (id, state) in compiledStates {
             try state.requireIdentity(compilation.identity)
             guard try state.projection(using: compilation.layout) == graph.states[id] else {
-                throw invalidEvidence("compiled state \(id) disagrees with its graph projection")
+                throw inconsistentGraph("compiled state \(id) disagrees with its graph projection")
             }
         }
     }
 
-    private func invalidEvidence(_ actual: String) -> CompilationDiagnostic {
+    private func inconsistentGraph(_ actual: String) -> CompilationDiagnostic {
         .init(
-            code: .compilationIdentityMismatch, stage: .checking, path: "exploration.evidence",
-            expected: "matching compiled evidence and initial identities for the explored graph",
+            code: .compilationIdentityMismatch, stage: .checking, path: "exploration.graph",
+            expected: "compiled states and initial state IDs consistent with the explored graph",
             actual: actual, nextSafeAction: "Explore the compiled specification again before checking properties."
         )
     }

@@ -50,23 +50,22 @@ struct SpecBuilderTests {
   @Test("typed shared declarations retain their generated state type")
   func typedSharedDeclarationsRetainGeneratedStateType() throws {
     let compilation = try TLASpec("TypedSharedDeclaration") { scope in
-      let _: SharedVariable<Int> = scope.sharedVar(
-        "count",
+      let _: SharedVariable<Int> = scope.sharedVar(_name: "count",
         initial: IntRange(1, through: 3).cardinality
       )
     }.compile()
 
-    #expect(compilation.machineSurfacePlan.variables.map(\.swiftType) == ["Int"])
+    #expect(compilation.layout.variables.filter { $0.declaration.origin == .source }.map(\.generatedSwiftType) == ["Int"])
   }
 
   @Test("literal and typed-expression initializers have one compilation identity")
   func literalAndExpressionInitializersShareIdentity() throws {
     let expression = Expr<Int>(.value(.int(1)))
     let literal = try TLASpec("EquivalentInitializer") { scope in
-      let _ = scope.sharedVar("count", initial: 1)
+      let _ = scope.sharedVar(_name: "count", initial: 1)
     }.compile()
     let typedExpression = try TLASpec("EquivalentInitializer") { scope in
-      let _ = scope.sharedVar("count", initial: expression)
+      let _ = scope.sharedVar(_name: "count", initial: expression)
     }.compile()
 
     #expect(literal.identity == typedExpression.identity)

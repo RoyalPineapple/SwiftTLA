@@ -52,9 +52,10 @@ public struct BluetoothModel {
     private enum Step: String, CaseIterable { case poweredOn, poweredOff, resetting, unsupported, unauthorized, startScan, stopScan }
 
     public static var spec: TLASpec {
-        #spec("BluetoothModel") {
-            Algorithm("BluetoothModel", scoped: { scope in
-                let phase = scope.sharedVar("phase", initial: Phase.unknown)
+        #spec {
+            let knownCentralPhase = Invariant()
+            let bluetoothModel = Algorithm(scoped: { scope in
+                let phase = scope.sharedVar(initial: Phase.unknown)
                 Each(PoweredOnProcess.all) { _ in
                     Do(Step.poweredOn) {
                         When(phase == .unknown || phase == .resetting || phase == .poweredOff)
@@ -96,8 +97,9 @@ public struct BluetoothModel {
                 Each(StopScanProcess.all) { _ in
                     Do(Step.stopScan) { When(phase == .scanning); Assign(phase, to: Phase.poweredOn); Goto(Step.stopScan) }
                 }
-                Invariant("knownCentralPhase") { phase == .unknown || phase == .resetting || phase == .unsupported || phase == .unauthorized || phase == .poweredOff || phase == .poweredOn || phase == .scanning }
+                knownCentralPhase { phase == .unknown || phase == .resetting || phase == .unsupported || phase == .unauthorized || phase == .poweredOff || phase == .poweredOn || phase == .scanning }
             })
+            bluetoothModel
         }
     }
 

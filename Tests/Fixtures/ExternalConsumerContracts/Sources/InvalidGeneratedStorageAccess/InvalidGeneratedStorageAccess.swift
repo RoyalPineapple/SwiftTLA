@@ -9,19 +9,19 @@ struct GeneratedStorageAccess {
 
   static var spec: TLASpec {
     #spec("GeneratedStorageAccess") {
-      Algorithm("GeneratedStorageAccess", scoped: { scope in
-        let value = scope.sharedVar("value", initial: 0)
-        Do(Step.advance) {
-          When(value < 1)
+      let generatedStorageAccess = Algorithm(label: "GeneratedStorageAccess", scoped: { scope in
+        let value = scope.sharedVar(_name: "value", initial: 0)
+        Do(Step.advance, when: value < 1) {
           Assign(value, to: value + 1)
         }
       })
+      generatedStorageAccess
     }
   }
 }
 
 let generatedMachine = try GeneratedStorageAccess.makeMachine()
-_ = generatedMachine._storage
+_ = generatedMachine._execution
 
 func inspect(_ actor: GeneratedStorageAccess.Actor) async {
   _ = await actor.machine

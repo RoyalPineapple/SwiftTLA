@@ -1,3 +1,4 @@
+import SwiftTLA
 import Foundation
 
 package struct SourceInputPin: Equatable, Codable, Sendable {
@@ -19,7 +20,7 @@ package struct SourceInputPin: Equatable, Codable, Sendable {
   private enum CodingKeys: String, CodingKey, CaseIterable { case path, sha256 }
 
   package init(from decoder: Decoder) throws {
-    let container = try StrictEvidenceDecoding.container(decoder, keyedBy: CodingKeys.self)
+    let container = try decoder.container(validatingKeys: CodingKeys.self)
     try self.init(
       path: container.decode(String.self, forKey: .path),
       sha256: container.decode(String.self, forKey: .sha256))

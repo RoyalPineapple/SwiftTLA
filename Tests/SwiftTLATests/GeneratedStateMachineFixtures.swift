@@ -1,0 +1,417 @@
+@testable import SwiftTLAPlugin
+import Foundation
+import Testing
+@testable import SwiftTLA
+import SwiftTLAMacros
+import SwiftParser
+import SwiftSyntax
+
+@TLAModel
+struct SanitizedActionModel {
+    static var spec: TLASpec {
+        #spec("SanitizedActionModel") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            SwiftTLA.Action("procedure.work.enter") { value.becomes(1) }
+            SwiftTLA.Action("procedure_work_enter") { value.becomes(2) }
+            SwiftTLA.Action("step-2") { value.becomes(3) }
+            SwiftTLA.Action("Terminating") { value.becomes(4) }
+        }
+    }
+}
+
+@TLAModel
+struct InvocationNamedActionModel {
+    static var spec: TLASpec {
+        #spec("InvocationNamedActionModel") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            SwiftTLA.Action("toInvocation") { value.becomes(1) }
+        }
+    }
+}
+
+@TLAModel
+struct GeneratedAlgorithmCounter {
+    enum Step: String, CaseIterable { case increment }
+
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
+        case left
+        case right
+
+        static var defaultValue: Self { .left }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedAlgorithmCounter") {
+            let generatedAlgorithmCounter = Algorithm(label: "GeneratedAlgorithmCounter", scoped: { scope in
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Each(Node.all, fairness: .weak) { _ in
+                    While(Step.increment, count < 2) {
+                        When(count < 2)
+                        Assert(count >= 0)
+                        Assign(count, to: count + 1)
+                    }
+                }
+            })
+            generatedAlgorithmCounter
+        }
+    }
+}
+
+@TLAModel
+struct SeededCounterMachine {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("SeededCounterMachine") {
+            let seededCounterMachine = Algorithm(label: "SeededCounterMachine", scoped: { scope in
+                let value = scope.sharedVar(_name: "value", in: 0...2)
+
+                While(Step.advance, true) {
+                    Either {
+                        When(value < 2)
+                        Assign(value, to: value + 1)
+                    } or: {
+                        When(value == 2)
+                        Assign(value, to: 0)
+                    }
+                }
+            })
+            seededCounterMachine
+        }
+    }
+}
+
+@TLAModel
+struct GeneratedRestrictedProcessDomain {
+    enum Step: String, CaseIterable { case increment }
+
+    enum Member: Int, CaseIterable, FiniteTLAValueDomain {
+        case worker = 1
+
+        static var defaultValue: Self { .worker }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .int(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedRestrictedProcessDomain") {
+            let generatedRestrictedProcessDomain = Algorithm(label: "GeneratedRestrictedProcessDomain", scoped: { scope in
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Each(Member.all) { _ in
+                    Do(Step.increment) {
+                        Assign(count, to: count + 1)
+                    }
+                }
+            })
+            generatedRestrictedProcessDomain
+        }
+    }
+}
+
+@TLAModel
+struct GeneratedSequentialCounter {
+    enum Step: String, CaseIterable {
+        case increment
+        case finish
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedSequentialCounter") {
+            let generatedSequentialCounter = Algorithm(label: "GeneratedSequentialCounter", scoped: { scope in
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Do(Step.increment) {
+                    Let(count + 1) { nextCount in
+                        Assign(count, to: nextCount.expr)
+                    }
+                }
+                Do(Step.finish) {
+                    Stop()
+                }
+            })
+            generatedSequentialCounter
+        }
+    }
+}
+
+@TLAModel
+struct GeneratedSavedValueSwap {
+    enum Step: String, CaseIterable { case swap }
+
+    static var spec: TLASpec {
+        #spec("GeneratedSavedValueSwap") {
+            let generatedSavedValueSwap = Algorithm(label: "GeneratedSavedValueSwap", scoped: { scope in
+                let left = scope.sharedVar(_name: "left", initial: 1)
+                let right = scope.sharedVar(_name: "right", initial: 2)
+                Do(Step.swap) {
+                    let originalLeft = left
+                    Assign(left, to: right)
+                    Assign(right, to: originalLeft)
+                }
+            })
+            generatedSavedValueSwap
+        }
+    }
+}
+
+@TLAModel
+struct GeneratedPairPattern {
+    enum Step: String, CaseIterable { case choose }
+
+    static var spec: TLASpec {
+        #spec("GeneratedPairPattern") {
+            let generatedPairPattern = Algorithm(label: "GeneratedPairPattern", scoped: { scope in
+                let selected = scope.sharedVar(_name: "selected", initial: 0)
+                Do(Step.choose) {
+                    With(SetExpr<Pair<Int, Bool>>.literal(
+                        Pair(first: 1, second: true),
+                        Pair(first: 2, second: false)
+                    )) { number, flag in
+                        Assert((number.expr == 1) || !flag.expr)
+                        Assign(selected, to: number.expr)
+                    }
+                }
+            })
+            generatedPairPattern
+        }
+    }
+}
+
+@TLAModel
+struct GeneratedDuplicateSuccessor {
+    enum Step: String, CaseIterable { case choose }
+
+    static var spec: TLASpec {
+        #spec("GeneratedDuplicateSuccessor") {
+            let generatedDuplicateSuccessor = Algorithm(label: "GeneratedDuplicateSuccessor", scoped: { scope in
+                let selected = scope.sharedVar(_name: "selected", initial: 0)
+                Do(Step.choose) {
+                    With(SetExpr<Int>.literal(1, 2)) { _ in
+                        Assign(selected, to: 1)
+                    }
+                }
+            })
+            generatedDuplicateSuccessor
+        }
+    }
+}
+
+@TLAModel
+struct GeneratedRangeInitializedAlgorithm {
+    enum Step: String, CaseIterable { case advance }
+
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
+        case clock
+
+        static var defaultValue: Self { .clock }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedRangeInitializedAlgorithm") {
+            let generatedRangeInitializedAlgorithm = Algorithm(label: "GeneratedRangeInitializedAlgorithm", scoped: { scope in
+                let hour = scope.sharedVar(_name: "hour", in: 1...3)
+                Each(Node.all) { _ in
+                    Do(Step.advance, when: hour < 3) {
+                        Assign(hour, to: hour + 1)
+                    }
+                }
+            })
+            generatedRangeInitializedAlgorithm
+        }
+    }
+}
+
+@TLAModel
+struct GeneratedIntegerChoiceAlgorithm {
+    enum Step: String, CaseIterable { case choose }
+
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
+        case only
+
+        static var defaultValue: Self { .only }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedIntegerChoice") {
+            let generatedIntegerChoice = Algorithm(label: "GeneratedIntegerChoice", scoped: { scope in
+                let selected = scope.sharedVar(_name: "selected", initial: 0)
+                Each(Node.all) { _ in
+                    Do(Step.choose) {
+                        Choose(1...3) { choice in
+                            Assign(selected, to: choice.expr)
+                        }
+                    }
+                }
+            })
+            generatedIntegerChoice
+        }
+    }
+}
+
+@TLAModel
+struct GeneratedProcessLocalInvariant {
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
+        case left
+        case right
+
+        static var defaultValue: Self { .left }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Label: String, CaseIterable {
+        case receive
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedProcessLocalInvariant") {
+            let generatedProcessLocalInvariant = Algorithm(label: "GeneratedProcessLocalInvariant", scoped: { scope in
+                Each(Node.all, scoped: { selfID, scope in
+                    let count = scope.localVar(_name: "count", initial: 0)
+                    Do(Label.receive) {
+                        Skip()
+                    }
+                    Invariant("LocalCount") { count == 0 }
+                    Invariant("ControlLocation") {
+                        At(Label.receive, selfID) || Finished(selfID)
+                    }
+                })
+            })
+            generatedProcessLocalInvariant
+        }
+    }
+}
+
+@TLAModel
+struct GeneratedDependentInitialAlgorithm {
+    enum Step: String, CaseIterable { case stop }
+
+    enum Node: String, CaseIterable, FiniteTLAValueDomain {
+        case left
+        case right
+
+        static var defaultValue: Self { .left }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    enum Phase: String, CaseIterable, FiniteTLAValueDomain {
+        case active
+        case inactive
+
+        static var defaultValue: Self { .active }
+        static let finiteValues = allCases
+        var tlaValue: TLAValue { .string(rawValue) }
+    }
+
+    static var spec: TLASpec {
+        #spec("GeneratedDependentInitialAlgorithm") {
+            let generatedDependentInitialAlgorithm = Algorithm(label: "GeneratedDependentInitialAlgorithm", scoped: { scope in
+                let seed = scope.sharedVar(_name: "seed", in: SetExpr<Bool>.literal(false, true))
+                let mirrors = scope.sharedVar(_name: "mirrors", initial: Function<Node, Phase>.mapping { node in
+                    If(node == Node.left && seed == true, then: Phase.active, else: Phase.inactive)
+                })
+                Each(Node.all) { _ in
+                    Do(Step.stop) {
+                        Assign(mirrors, to: mirrors)
+                        Stop()
+                    }
+                }
+            })
+            generatedDependentInitialAlgorithm
+        }
+    }
+}
+
+@TLAModel
+struct GeneratedAlgorithmMachine {
+    enum Step: String, CaseIterable { case tick }
+
+    static var spec: TLASpec {
+        #spec("GeneratedAlgorithmMachine") {
+            let generatedAlgorithmMachine = Algorithm(label: "GeneratedAlgorithmMachine", scoped: { scope in
+                let count = scope.sharedVar(_name: "count", initial: 1)
+                Do(Step.tick) {
+                    If(count < 12) {
+                        Assign(count, to: count + 1)
+                    } else: {
+                        Assign(count, to: 1)
+                    }
+                }
+                Invariant("valid") { count >= 1 && count <= 12 }
+            })
+            generatedAlgorithmMachine
+        }
+    }
+}
+
+@TLAModel
+struct SingleParameterActionMachine {
+    static var spec: TLASpec {
+        #spec("SingleParameterActionMachine") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            SwiftTLA.Action("select", parameters: [ActionParameter("choice", values: [1, 2])]) {
+                value.becomes(1)
+            }
+        }
+    }
+
+}
+
+@TLAModel
+struct ThreeParameterActionMachine {
+    static var spec: TLASpec {
+        #spec("ThreeParameterActionMachine") {
+            let value = Var<Int>("value")
+            Variable(value, 0)
+            SwiftTLA.Action("transfer", parameters: [
+                ActionParameter("source", values: [1, 2]),
+                ActionParameter("destination", values: [10, 20]),
+                ActionParameter("amount", values: [100, 200])
+            ]) {
+                value.becomes(1)
+            }
+        }
+    }
+
+}
+
+@TLAModel
+struct EndToEndThreeParameterActionMachine {
+    static var spec: TLASpec {
+        #spec("EndToEndThreeParameterActionMachine") {
+            let value = Var<Int>("value")
+            let source = Expr<Int>(.variable("source"))
+            let destination = Expr<Int>(.variable("destination"))
+            let amount = Expr<Int>(.variable("amount"))
+            Variable(value, 0)
+            SwiftTLA.Action("transfer", parameters: [
+                ActionParameter("source", values: [1, 2]),
+                ActionParameter("destination", values: [10, 20]),
+                ActionParameter("amount", values: [100, 200])
+            ]) {
+                value.becomes(source + destination + amount)
+            }
+        }
+    }
+}
+
+@TLAModel
+struct NestedComposedCounter {
+    static var spec: TLASpec {
+        #spec("NestedComposedCounter") {
+            let count = Var<Int>("count")
+            Variable(count, 0)
+            SwiftTLA.Action("advance") { count.becomes(count + 1).when(count < 2) }
+        }
+    }
+
+}

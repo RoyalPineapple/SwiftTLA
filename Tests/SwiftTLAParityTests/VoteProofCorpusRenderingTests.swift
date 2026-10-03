@@ -1,18 +1,9 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 @testable import UpstreamParity
 
 struct VoteProofCorpusRenderingTests {
-    @Test("VoteProof retains nested typed binder identities during execution")
-    func nestedTypedBindersExecute() throws {
-        let exploration = try ModelChecker(
-            compilation: try VoteProofModel.spec.compile(),
-            configuration: try .init(maximumStateLimit: 1, symmetryReduction: .disabled)
-        ).explore()
-
-        #expect(exploration.graph.states.count == 1)
-    }
-
     @Test("VoteProof #spec macro compiles and preserves typed local recursion and formal module composition")
     func specMacroCompilationPreservesFormalStructure() throws {
         let source = VoteProofModel.spec
@@ -33,7 +24,7 @@ struct VoteProofCorpusRenderingTests {
         #expect(definitions["VoteProofVotesAreSafe"]?.plusCalDependencies == ["SafeAt"])
         #expect(definitions["VoteProofChosenValuesAgree"]?.plusCalDependencies == ["chosen"])
 
-        let bundle = compilation.renderedTLAModuleBundle()
+        let bundle = try compilation.render().tlaBundle
         #expect(source.constants == [
             ConstantDecl("Value", .set([.string("v1"), .string("v2")])),
             ConstantDecl("Acceptor", .set([.string("a1"), .string("a2"), .string("a3")])),
@@ -56,7 +47,7 @@ struct VoteProofCorpusRenderingTests {
         #expect(bundle.root.tla.contains("LET RECURSIVE SA") == false)
         #expect(bundle.root.tla.contains("IN SA["))
         #expect(bundle.root.tla.contains("THEN TRUE ELSE (SA["))
-        #expect(bundle.root.tla.contains(")) /\\ \\A "))
+        #expect(bundle.root.tla.contains(")) /\\ (\\A "))
         #expect(bundle.root.tla.contains(" \\in ("))
         #expect(bundle.root.tla.contains("\nChosenIn("))
         #expect(bundle.root.tla.contains("VoteProofTypeOK =="))
@@ -64,7 +55,7 @@ struct VoteProofCorpusRenderingTests {
         #expect(bundle.root.tla.contains("VInv4 == VoteProofChosenValuesAgree"))
         #expect(bundle.root.tla.contains("Refines == C!Spec"))
 
-        let plusCal = try compilation.renderedPlusCalBundle().root.tla
+        let plusCal = try compilation.render().plusCalBundle().root.tla
         #expect(plusCal.contains("--algorithm Voting"))
         #expect(plusCal.contains("LET RECURSIVE SA") == false)
         let algorithmRange = try #require(plusCal.range(of: "(*--algorithm Voting"))
@@ -80,5 +71,20 @@ struct VoteProofCorpusRenderingTests {
         #expect(chosenRange.lowerBound < defineEndRange.lowerBound)
         #expect(chosenRange.lowerBound < instanceRange.lowerBound)
         #expect(instanceRange.lowerBound < refinesRange.lowerBound)
+    }
+
+    @Test("VoteProof generated export retains the specialized abstract behavior and refinement")
+    func generatedExportRetainsAbstractBehavior() throws {
+        let rendered = try VoteProofModel.render()
+        for bundle in [rendered.tlaBundle, try rendered.plusCalBundle()] {
+            try bundle.validateDeclaredClosure()
+            let abstract = try #require(bundle.imports.first { $0.name == "VoteProof__Refinement0" })
+            #expect(abstract.tla.contains("Init == chosen = {}"))
+            #expect(abstract.tla.contains("chosen' = {candidate}"))
+            #expect(abstract.tla.contains("[][Next]_chosen"))
+            #expect(bundle.root.tla.contains("C == INSTANCE VoteProof__Refinement0 WITH chosen <-"))
+            #expect(bundle.root.tla.contains("Refines == C!Spec"))
+            #expect(bundle.cfg.contains("PROPERTY Refines\n"))
+        }
     }
 }

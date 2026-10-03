@@ -1,5 +1,4 @@
 import Foundation
-import SwiftSyntax
 
 /// The source range attached to a compiler diagnostic.
 package struct CompilerSourceSpan: Sendable, Hashable, CustomStringConvertible {
@@ -43,7 +42,7 @@ package struct SourceParseDiagnostic: Error, Sendable, Hashable, CustomStringCon
     package let actual: String
     package let nextSafeAction: String
 
-    init(
+    package init(
         message: String,
         source: String,
         expected: String = "a supported SwiftTLA declaration or expression",
@@ -62,7 +61,7 @@ package struct SourceParseDiagnostic: Error, Sendable, Hashable, CustomStringCon
         )
     }
 
-    init(
+    package init(
         code: Code? = nil,
         message: String,
         source: String,
@@ -80,29 +79,6 @@ package struct SourceParseDiagnostic: Error, Sendable, Hashable, CustomStringCon
         self.expected = expected
         self.actual = actual.isEmpty ? source.trimmingCharacters(in: .whitespacesAndNewlines) : actual
         self.nextSafeAction = nextSafeAction
-    }
-
-    init<Node: SyntaxProtocol>(
-        message: String,
-        source: Node,
-        expected: String = "a supported SwiftTLA declaration or expression",
-        actual: String = "",
-        nextSafeAction: String = "Rewrite this source fragment using the supported SwiftTLA builder form, then compile again."
-    ) {
-        let fragment = source.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.init(
-            code: nil,
-            message: message,
-            source: fragment,
-            sourcePath: [],
-            sourceSpan: CompilerSourceSpan(
-                location: .utf8Offset(source.positionAfterSkippingLeadingTrivia.utf8Offset),
-                utf8Length: fragment.utf8.count
-            ),
-            expected: expected,
-            actual: actual,
-            nextSafeAction: nextSafeAction
-        )
     }
 
     package var renderedMessage: String {

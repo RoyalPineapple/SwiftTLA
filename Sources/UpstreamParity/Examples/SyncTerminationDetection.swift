@@ -17,7 +17,7 @@ package struct SyncTerminationDetectionModel: Sendable {
     package static var spec: TLASpec {
         #spec("SyncTerminationDetection") { scope in
             Extends(.integers)
-            let active = scope.sharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
+            let active = scope.sharedVar(in: SetExpr<Function<Node, Bool>>.literal(
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, false)),
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, true)),
                 Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, false)),
@@ -27,7 +27,7 @@ package struct SyncTerminationDetectionModel: Sendable {
                 Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, false)),
                 Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, true))
             ))
-            let terminationDetected = scope.sharedVar("terminationDetected", initial: false)
+            let terminationDetected = scope.sharedVar(initial: false)
 
             SwiftTLA.Action("Terminate_0") {
                 active[.zero] == true && active.becomes(active.updating(.zero, to: false)) && terminationDetected.stays

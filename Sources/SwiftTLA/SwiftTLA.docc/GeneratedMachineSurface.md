@@ -1,7 +1,8 @@
 # Generated machine surface
 
-`@TLAModel` generates a typed Swift state machine from one compiled
-specification.
+`@TLAModel` compiles the inline specification at build time and generates a
+typed Swift state machine. Its initialization, guards, and transitions execute
+ordinary Swift without runtime specification compilation or interpretation.
 Apply it to a struct with a static `TLASpec` declaration.
 
 ## Generated types
@@ -10,21 +11,25 @@ Each generated machine exposes these `Sendable` value types:
 
 - `State`: immutable typed values for declared variables.
 - `Action`: a typed action identity and typed parameters.
+- `Property`: a model-owned identity for each invariant, reachability goal, temporal property, and refinement.
 - `Transition`: the typed action and state before and after one successful transition.
 
+Collections use native `Set`, `Array`, and `Dictionary` values. Pairs and records
+use generated immutable structs, and finite unions use generated enums.
 
 ## Direct generated-machine execution
 
 `send(_:)` applies one typed action. `isEnabled(_:)` reports whether one action
-is permitted in the current state. Both methods can throw. `state` contains
-the complete current typed state.
+is permitted in the current state. Both methods can throw. `state` exposes the
+current values of declared variables; the machine also preserves compiler
+control state internally.
 
 SwiftUI stores the generated machine directly in `@State`. A successful
 `send(_:)` replaces the complete value with its next state.
 
 ## Generated actor
 
-`Actor` is a thin asynchronous adapter over one generated machine. It
+`Actor` owns one generated machine. It
 serializes `send(_:)` and exposes the same typed state and actions.
 
 ```swift
@@ -40,3 +45,82 @@ assert(seededState.count == 0)
 
 The typed initializer selects one unique state from the source model's declared
 initial states.
+
+## Property checks
+
+`violatedInvariants()` reports the `Property` values of false invariants without changing
+state. `assumptionsHold()` checks assumptions. State constraints select states
+for exploration. They do not change application transitions or action enabledness.
+Invariant checks include excluded initial states and successor candidates.
+
+Native result dictionaries use `Model.Property` keys, not strings.
+Scenario expectations use the same property type.
+A property from another model cannot identify a result in this model.
+`formalPropertyNames` maps property identities to names at the export or reporting boundary.
+
+## Model-owned validation scenarios
+
+`let completesAtTwo = Validation(label: "Completes at two") { Bind(limit, to: 2); Bind(stopAtLimit, to: true) }`
+followed by `completesAtTwo` inside `#spec` declares a finite configuration
+beside the algorithm. The binding is its identity; the optional label is only
+for display. `.expectDeadlock(.violated)` changes the expected deadlock outcome
+without disabling its check.
+
+`Model.validationScenarios()` returns immutable generated scenario values.
+Each scenario provides `initialMachines()`, `explore(maximumStates:)`, and `render()`.
+Generated scenarios conform to `ModelValidationScenario`, which supplies shared
+exploration through the generated machine.
+By default, typed `expectations` include every property, with `.satisfied` as the
+expected outcome. `.expect(propertyHandle, .violated)` overrides one expectation.
+The property handle must appear in the specification body to register its declaration.
+
+`.checking(only: [propertyHandle])` selects specific registered properties.
+An empty array selects no properties. `.checkingDeadlock(false)` disables the
+deadlock check without asserting an expected outcome. Duplicate selections and
+expectations for unselected checks fail compilation.
+
+The generated `checking` value has type `ModelChecks<Property>`.
+Native exploration and formal export consume this same selection.
+Unselected predicates do not run. Selection does not change application transitions
+or truncate the reachable graph.
+
+Scenarios default to `.behavior(.specification)`, which includes the declared fairness.
+`.behavior(.initialAndNext)` selects the same initial states and transitions without
+specification fairness. Export uses `INIT Init` and `NEXT Next` for this choice.
+The generated `behavior` value has type `ModelBehavior`.
+Native temporal checking and export consume this same value.
+The graph remains complete, but liveness and refinement outcomes can differ.
+Evidence records the behavior choice without claiming validation of omitted specification fairness.
+
+Scalar scenario bindings retain parameter identities and checked value types.
+Missing, duplicate, and foreign bindings fail explicitly. Collection bindings
+and refinement expectations remain unfinished.
+
+The native checker uses the generated machine and its selected checks. It does
+not invoke TLC or the repository parity tools. Expected failures change the
+expected verdict, not the model or selected checks. See the
+[independent validation pipeline](../../../Documentation/FiniteGraphComparison.md)
+for external agreement evidence.
+
+## Positive reachability
+
+`Reachable("AtLimit") { value == limit }` declares a positive goal beside the
+algorithm. The predicate and its resolved bindings remain positive through
+native generation. `matchedReachabilityProperties()` reports matching goals
+in the current execution state.
+
+`ReachabilityGraph.reachabilityResults` contains a result for every selected goal.
+The default selection includes every declared goal.
+`.reached(snapshot)` identifies a witness. `trace(to:)` returns its complete
+execution trace. `.unreachable` requires complete exploration without a match.
+A state limit throws instead of producing an unreachable result. A match does
+not stop graph capture or suppress safety checks.
+
+Reachability checks include excluded candidates, as TLC invariant checks do.
+A witness can end outside the constrained graph. Its state and trace remain
+available without adding that state to the graph.
+
+TLA+ export negates the predicate only at the final rendering boundary and
+retains metadata that identifies the positive claim. The adapter that interprets
+TLC counterexamples belongs to validation infrastructure, not the generated
+machine.

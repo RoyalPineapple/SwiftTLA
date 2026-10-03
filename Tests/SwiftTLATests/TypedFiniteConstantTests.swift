@@ -1,3 +1,4 @@
+@testable import SwiftTLAPlugin
 import SwiftParser
 import SwiftSyntax
 @testable import SwiftTLA
@@ -56,7 +57,7 @@ struct TypedFiniteConstantTests {
         }
 
         #expect(spec.constants == [ConstantDecl("Value", .set([.int(1), .int(2)]))])
-        #expect(try spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
+        #expect(try spec.compile().render().tlaBundle.tla.contains("ASSUME Value = {1, 2}"))
     }
 
     @Test func parserRetainsTheSameTypedFiniteSet() throws {
@@ -67,7 +68,7 @@ struct TypedFiniteConstantTests {
             Variable(count, 0)
         }
         """)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.constants == [ConstantDecl("Value", .set([.int(1), .int(2)]))])
@@ -75,7 +76,7 @@ struct TypedFiniteConstantTests {
 
     @Test func macroExpansionRetainsTheTypedFiniteSet() throws {
         #expect(TypedFiniteConstantGeneratedModel.spec.constants == [ConstantDecl("Value", .set([.int(1), .int(2)]))])
-        #expect(try TypedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {1, 2}"))
+        #expect(try TypedFiniteConstantGeneratedModel.spec.compile().render().tlaBundle.tla.contains("ASSUME Value = {1, 2}"))
     }
 
     @Test func macroExpansionRetainsNestedFiniteEnumConstants() throws {
@@ -87,8 +88,26 @@ struct TypedFiniteConstantTests {
                 .set([.string("a2"), .string("a3")])
             ]))
         ])
-        #expect(try NestedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Value = {\"v1\", \"v2\"}"))
-        #expect(try NestedFiniteConstantGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("ASSUME Quorum = {{\"a1\", \"a2\"}, {\"a2\", \"a3\"}}"))
+        #expect(try NestedFiniteConstantGeneratedModel.spec.compile().render().tlaBundle.tla.contains("ASSUME Value = {\"v1\", \"v2\"}"))
+        #expect(try NestedFiniteConstantGeneratedModel.spec.compile().render().tlaBundle.tla.contains("ASSUME Quorum = {{\"a1\", \"a2\"}, {\"a2\", \"a3\"}}"))
+    }
+
+    @Test func parserRejectsUnconsumedConstantSyntax() throws {
+        let declarations = [
+            #"Constant("Bad", 1, 2)"#,
+            #"Constant(name: "Bad", 1)"#,
+            #"Constant("Bad", value: 1)"#,
+            #"Constant("Bad", 1) { 2 }"#,
+            #"Constant("Bad", 1) { 2 } otherwise: { 3 }"#,
+            #"Constant("Bad")"#
+        ]
+        for declaration in declarations {
+            let closure = try parseClosure("{ Constant(\"Kept\", 7); \(declaration) }")
+            let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+            #expect(parsed.constants == [ConstantDecl("Kept", .int(7))])
+            #expect(parsed.diagnostics.count == 1, "\(declaration): \(parsed.diagnostics)")
+            #expect(parsed.diagnostics.first?.expected == "Constant(\"Name\", value)")
+        }
     }
 
     @Test func parserDiagnosesDynamicConstantValues() throws {
@@ -99,7 +118,7 @@ struct TypedFiniteConstantTests {
             Constant("Value", values)
         }
         """)
-        let parsed = SpecParser.parseSpecClosure(closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
 
         guard let diagnostic = parsed.diagnostics.first else {
             Issue.record("Expected a dynamic constant diagnostic")

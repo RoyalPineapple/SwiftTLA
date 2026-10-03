@@ -2,24 +2,22 @@
 
 **SwiftTLA turns typed state rules into a typed Swift machine.**
 
-Write one Swift source model for state, actions, and invariants. `compile()`
-validates declarations, binds names, links modules, lowers behavior, allocates
-private identities, renders TLA+/PlusCal text, assembles the formal bundles,
-and publishes one immutable compiled specification.
-`@TLAModel` generates typed `State`, `Action`, and `Transition` values from that
-meaning. SwiftUI stores the generated machine directly. The generated `Actor`
-serializes access to that machine.
+Write one Swift source model for state, actions, and invariants. At build time,
+`@TLAModel` compiles that model and generates typed `State`, `Action`, and
+`Transition` values together with native Swift initialization, guards, and
+updates. The generated machine executes this Swift code directly. SwiftUI
+stores the machine as a value; the generated `Actor` serializes access to it.
+For formal verification, `compile()` uses the same compiler to produce an
+immutable specification for bounded exploration and TLA+/PlusCal rendering.
 
 **One source model. Typed application state. Bounded formal evidence.**
 
 ```text
-Swift source model
-        │ compile()
-        ▼
-CompiledSpecification
- ├── generated State, Action, Transition, and machine
- ├── compiled runtime and bounded exploration
- └── rendered TLA+ bundle and, for one authored Algorithm, PlusCal bundle
+Swift source model → validated, resolved compiler representation
+ ├── @TLAModel → native Swift State, Action, Transition, and machine
+ └── compile() → CompiledSpecification
+                 ├── formal runtime and bounded exploration
+                 └── TLA+ bundle and, for one authored Algorithm, PlusCal bundle
 
 Generated machine
  ├── value stored in SwiftUI @State
@@ -46,10 +44,11 @@ public struct ClockModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("Clock") {
-            Algorithm("Clock", scoped: { scope in
-                let hour = scope.sharedVar("hour", in: 0...23)
-                let minute = scope.sharedVar("minute", in: 0...59)
-                let second = scope.sharedVar("second", in: 0...59)
+            let ValidTime = Invariant()
+            let clock = Algorithm(label: "Clock", scoped: { scope in
+                let hour = scope.sharedVar(in: 0...23)
+                let minute = scope.sharedVar(in: 0...59)
+                let second = scope.sharedVar(in: 0...59)
 
                 While(Step.tick, true) {
                     Either {
@@ -81,12 +80,13 @@ public struct ClockModel: Sendable {
                     }
                 }
 
-                Invariant("ValidTime") {
+                ValidTime {
                     hour >= 0 && hour <= 23 &&
                     minute >= 0 && minute <= 59 &&
                     second >= 0 && second <= 59
                 }
             })
+            clock
         }
     }
 }
