@@ -120,8 +120,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       parameter contains stable member IDs; `Each` and typed dictionary state
       use those IDs, while application objects stay outside model state. The
       DSL spec records the positive authoring form and negative boundaries.
-      Migrating `ModelCollection` callers, deleting that API, and proving the
-      replacement in generated execution and hosted parity remain open.
+      An external consumer now executes and exports this nominal-ID form;
+      its focused run and ten related configuration/process tests pass locally.
+      Migrating all `ModelCollection` callers, deleting that API, and proving
+      complete hosted parity remain open.
 - [x] Settle B-02 identity for `Algorithm` and `Validation`: each requires an
       immutable `let` binding, registered by reference; a display label never
       supplies identity. The parser and `#spec` rewrite support this form.

@@ -3,18 +3,19 @@ import SwiftTLAMacros
 
 @TLAModel
 struct DeviceContract {
+    enum DeviceID: String, CaseIterable { case east, west }
     enum Label: String, CaseIterable { case advance }
 
     static var spec: TLASpec {
         #spec("Devices") { scope in
-            let count = scope.parameter(as: Int.self, in: 1...4)
-            let devices: Expr<Set<Int>> = IntRange(1, through: count)
+            let devices = scope.parameter(as: Set<DeviceID>.self,
+                in: Subsets(of: Set<DeviceID>([.east, .west])))
             let phase = scope.sharedVar(initial:
-                Dictionary<Int, Int>.mapping(over: devices) { _ in 0 })
+                Dictionary<DeviceID, Int>.mapping(over: devices) { _ in 0 })
             let NonnegativePhase = Invariant()
 
             let advance = Algorithm(scoped: { scope in
-                Each(devices, scoped: { (device: ProcessIdentifier<Int>, scope: ProcessScope) in
+                Each(devices, scoped: { (device: ProcessIdentifier<DeviceID>, scope: ProcessScope) in
                     Do(Label.advance) {
                         Assign(phase[device], to: phase[device] + 1)
                         Goto(Label.advance)
@@ -26,25 +27,25 @@ struct DeviceContract {
                 ForAll(in: devices) { device in phase[device] >= 0 }
             }
 
-            let twoDevices = Validation { Bind(count, to: 2) }
+            let twoDevices = Validation { Bind(devices, to: Set<DeviceID>([.east, .west])) }
             twoDevices
         }
     }
 }
 
-let configuration = try DeviceContract.Configuration(count: 2)
+let configuration = try DeviceContract.Configuration(devices: [.east, .west])
 var machine = try DeviceContract.makeMachine(configuration: configuration)
-guard machine.state.phase == [1: 0, 2: 0] else {
+guard machine.state.phase == [.east: 0, .west: 0] else {
     throw FixtureError.invalidInitialState
 }
-let transition = try machine.send(.advance(process: 1))
-guard transition.after.phase == [1: 1, 2: 0], machine.state.phase == transition.after.phase else {
+let transition = try machine.send(.advance(process: .east))
+guard transition.after.phase == [.east: 1, .west: 0], machine.state.phase == transition.after.phase else {
     throw FixtureError.invalidTransition
 }
 let scenarios = try DeviceContract.validationScenarios()
 guard scenarios.count == 1,
       scenarios[0].checking.properties == [.NonnegativePhase],
-      try scenarios[0].render().tlaBundle.cfg.contains("CONSTANT count = 2") else {
+      try scenarios[0].render().tlaBundle.cfg.contains("CONSTANT devices") else {
     throw FixtureError.invalidScenario
 }
 

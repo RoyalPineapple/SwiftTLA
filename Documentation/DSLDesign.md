@@ -1050,7 +1050,7 @@ shape is:
 
 ```swift
 let devices = scope.parameter(as: Set<DeviceID>.self,
-    in: Subsets(of: DeviceID.all))
+    in: Subsets(of: Set<DeviceID>([.east, .west])))
 let phase = scope.sharedVar(initial:
     Dictionary<DeviceID, Int>.mapping(over: devices) { _ in 0 })
 
