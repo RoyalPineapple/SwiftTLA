@@ -154,3 +154,21 @@ struct RejectedAbstractAssumptionRefinement {
         }
     }
 }
+
+@TLAModel
+struct RejectedConcreteAssumptionRefinement {
+    static var spec: TLASpec {
+        #spec("RejectedConcreteAssumptionRefinement") { scope in
+            let abstract = TLASpec("UnrestrictedAbstract") {
+                let value = Var<Int>("value")
+                Variable(value, 0)
+            }
+            let count = scope.sharedVar(_name: "count", initial: 0)
+            Assume(false)
+            let instance = Instance("Counter", of: abstract)
+            instance
+            let Refines = Refinement(instance: instance, mappings: [.init(Var<Int>("value"), from: count)])
+            Refines
+        }
+    }
+}

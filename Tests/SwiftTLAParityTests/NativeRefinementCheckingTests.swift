@@ -110,4 +110,34 @@ struct NativeRefinementCheckingTests {
                 initialMachines: RejectedAbstractAssumptionRefinement.initialMachines(), maximumStates: 1)
         }
     }
+
+    @Test("concrete failures take precedence over unfinished refinement")
+    func preservesConcreteFailures() throws {
+        let invalidInitial = try #require(InvalidNativeRefinement.initialMachines().first { $0.state.count == 0 })
+        guard case .counterexample(let invariant) = try ReachabilityGraph.check(
+            initialMachines: [invalidInitial], maximumStates: 2,
+            checking: .init(properties: [.BelowTwo, .Refines], checkDeadlock: false)) else {
+            Issue.record("Expected the concrete invariant counterexample")
+            return
+        }
+        #expect(invariant.violations == [.invariant(.BelowTwo)])
+        #expect(invariant.unevaluatedProperties.contains(.Refines))
+
+        guard case .counterexample(let deadlock) = try ReachabilityGraph.check(
+            initialMachines: NativeRefinementCounter.initialMachines(), maximumStates: 5,
+            checking: .init(properties: [.Refines], checkDeadlock: true)) else {
+            Issue.record("Expected the concrete deadlock counterexample")
+            return
+        }
+        #expect(deadlock.violations == [.deadlock])
+        #expect(deadlock.unevaluatedProperties == [.Refines])
+
+        #expect(throws: ExplorationError.assumptionViolated) {
+            try ReachabilityGraph<RejectedConcreteAssumptionRefinement>.check(
+                initialMachines: RejectedConcreteAssumptionRefinement.initialMachines(), maximumStates: 1)
+        }
+        #expect(throws: ExplorationError.noInitialStates) {
+            try ReachabilityGraph<NativeRefinementCounter>.check(initialMachines: [], maximumStates: 1)
+        }
+    }
 }
