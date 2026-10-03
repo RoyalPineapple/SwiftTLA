@@ -295,7 +295,7 @@ struct NativeCodeGenerationTests {
         for action in [ready, advance] {
             #expect(generated.contains("func _isEnabled\(action.ordinal)("))
             #expect(generated.contains("try Self._isEnabled\(action.ordinal)(in: state)"))
-            #expect(generated.contains("func _updates\(action.ordinal)("))
+            #expect(generated.contains("func _visitUpdates\(action.ordinal)("))
         }
         #expect(!Parser.parse(source: "struct Expansion {\n\(generated)\n}").hasError)
         let temporal = try #require(program.behavior.temporalProperties.first)
@@ -502,7 +502,7 @@ struct NativeCodeGenerationTests {
             $0.declaration.name == "advance"
         })
         #expect(!generated.contains("func isTerminated()"))
-        #expect(generated.contains("func _updates\(advance.id.ordinal)("))
+        #expect(generated.contains("func _visitUpdates\(advance.id.ordinal)("))
         #expect(!Parser.parse(source: "struct Expansion {\n\(generated)\n}").hasError)
         print("native-code-generation model=counter declarations=\(members.count) sourceBytes=\(generated.utf8.count)")
     }

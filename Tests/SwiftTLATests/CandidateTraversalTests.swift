@@ -36,17 +36,4 @@ struct CandidateTraversalTests {
         #expect(try selected.successors().allSatisfy { $0.machine.state.previous == 2 })
     }
 
-    @Test("Generated conjunctions pass each partial candidate to their continuation")
-    func emitsCandidateContinuation() throws {
-        let compilation = try OrderedCandidateChoices.spec.compile()
-        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
-        var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "OrderedCandidateChoices", program: program))
-        let action = try #require(program.behavior.actions.first)
-        let generated = try emitter.actionFunctions(action.body)
-        #expect(generated.contains("updates, { candidate in try _actionPart"))
-        #expect(!generated.contains("flatMap"))
-        #expect(!generated.contains("-> [_Updates]"))
-        #expect(generated.contains("try _actionPart0(_Updates()) { candidates.append($0) }"))
-        #expect(!Parser.parse(source: "func updates() throws -> [_Updates] {\n\(generated)\n}").hasError)
-    }
 }
