@@ -42,7 +42,7 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
 - [x] Reconcile the `767fe50b` hosted runs, required jobs and retained
       artifacts against the exact draft PR head. Both independent paths and
       ordinary CI passed; no result was inferred from an earlier SHA.
-- [ ] Bring Boulanger's complete warm-oracle native-plus-comparison path under
+- [x] Bring Boulanger's complete warm-oracle native-plus-comparison path under
       the accepted 1,200-second ceiling without truncating states or edges. This
       is an admission ceiling, not a claim that the runtime is irreducible. On the
       green `767fe50b` SHA, native exploration took 1,044 seconds (1,051
@@ -91,6 +91,20 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       partitions full state values during binary ingestion and removes the
       second state hash/read pass; all 27 focused comparison tests pass. The
       speedup remains unmeasured until a hosted run of that commit.
+      Hosted run `37091564929` on SHA `80a3bc8f` completed Boulanger's
+      full 7,866,982-state, 52,701,220-edge native graph in 791.78 seconds
+      and compared it exactly with warm generated-TLA TLC evidence in 168.92
+      seconds: 960.70 seconds combined. The native profile reports 48.39
+      seconds hashing, 124.55 seconds probing, 36.98 seconds inserting,
+      264.71 seconds generating successors, and 190.35 seconds emitting
+      evidence. Its peak resident size was 3.40 GB. This meets the accepted
+      1,200-second performance ceiling on that SHA; it does not admit the
+      whole PR. Ordinary CI failed generated-code source-shape assertions,
+      and three upstream parity jobs failed while replacing stale cache
+      directories. Local commits `5f09a271` and `b5e29170` address those
+      failures but need a new source-aligned hosted run after the frozen run
+      finishes. Do not pursue a new state-index design on the older 438-second
+      probe profile without a renewed measured need.
 - [ ] Preserve complete initial states, full state values, labeled edges,
       selected property/deadlock outcomes, and integrity-checked artifacts.
 - [ ] Run the exact case first, related regressions second, then ordinary CI and
