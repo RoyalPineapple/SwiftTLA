@@ -62,25 +62,14 @@ struct EnumDomainTests {
     #expect(tla.contains("UNCHANGED phase"))
   }
 
-  @Test("Enum var initial state is first case raw value")
-  func enumInitialState() throws {
-    let mode = Var<IntEnumToggleModel.Mode>("mode")
-    let spec = TLASpec("EnumInit") {
-      Variable(mode, IntEnumToggleModel.Mode.idle)
-    }
-    let compilation = try spec.compile()
-    let states = try CompiledRuntime(compilation: compilation).initialStates()
-    let state = try #require(states.first)
-    let projection = try state.projection(using: compilation.layout)
-    let modeToken = try #require(TLAStateProjection.Token(validating: "mode"))
-    #expect(states.count == 1)
-    #expect(projection.value(for: modeToken) == .int(0))
-  }
-
   @Test("integer-backed enum states retain typed toggles and raw TLA values")
   func checksIntegerEnumMachine() throws {
-    let initial = try #require(IntEnumToggleModel.initialMachines().first)
+    let initialMachines = try IntEnumToggleModel.initialMachines()
+    #expect(initialMachines.count == 1)
+    let initial = try #require(initialMachines.first)
     #expect(initial.state.mode == .idle)
+    let mode = try #require(TLAStateProjection.Token(validating: "mode"))
+    #expect(try initial.formalProjection(of: initial.snapshot).value(for: mode) == .int(0))
     let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 2)
     #expect(Set(graph.transitions.keys.map(\.state.mode)) == [.idle, .active])
     #expect(graph.transitions[initial.snapshot]?.first?.target.state.mode == .active)

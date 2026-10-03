@@ -320,7 +320,12 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       parity claim follows from these focused tests. The non-empty-subset
       authoring regression now checks generated initial states and export
       instead of a duplicate compiled-runtime oracle; its focused and
-      neighboring tests pass locally.
+      neighboring tests pass locally. The integer-backed enum's duplicate
+      compiled-runtime initial-state probe has been removed: the generated
+      machine now checks its sole typed initial state and exact formal value
+      before exploring both transitions. Its focused and related projection
+      tests pass locally. This removes one legacy checker caller without
+      claiming AC-12 completion.
 - [ ] Close AC-13 by removing replaced spellings, duplicate configuration,
       obsolete callers, compatibility aliases, and stale documentation. The
       legacy `CollectionVarType` field had no effect on model behavior; it was
