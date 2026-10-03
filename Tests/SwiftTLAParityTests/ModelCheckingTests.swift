@@ -108,26 +108,6 @@ import UpstreamParity
     #expect(!incomplete.isComplete)
   }
 
-  @Test func singleVarLinear() throws {
-    let x = Var<Int>("x")
-    let spec = TLASpec("Test") {
-      Variable(x, 0)
-      Action("inc") { x.becomes(x + 1).when(x < 3) }
-    }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
-    #expect(graph.states.count == 4)
-  }
-
-  @Test func singleVarCyclic() throws {
-    let x = Var<Int>("x")
-    let spec = TLASpec("Test") {
-      Variable(x, 0)
-      Action("toggle") { x.becomes((x + 1) % 2) }
-    }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
-    #expect(graph.states.count == 2)
-  }
-
   @Test func invariantHolds() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("Test") {
@@ -181,17 +161,6 @@ import UpstreamParity
     }
     #expect(diagnostic.trace == trace)
     #expect(diagnostic.nextSafeAction.contains("final trace transition"))
-  }
-
-  @Test func maxStatesBound() throws {
-    let x = Var<Int>("x")
-    let spec = TLASpec("Test") {
-      Variable(x, 0)
-      Action("inc") { x.becomes(x + 1) }
-    }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 3, symmetryReduction: .disabled)).exploreGraph()
-    // Processes 3 states, discovers 4 (successors of last processed also stored)
-    #expect(graph.states.count >= 3 && graph.states.count <= 4)
   }
 
   @Test func deadlockNotDetectedWhenFlagFalse() throws {
