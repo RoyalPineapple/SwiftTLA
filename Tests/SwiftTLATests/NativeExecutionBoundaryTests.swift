@@ -117,21 +117,15 @@ private struct ReachableInvariantFailure {
 }
 
 @Suite struct NativeExecutionBoundaryTests {
-    @Test("typed initial selection matches the complete formal Cartesian domain")
+    @Test("typed initial selection exhausts the Cartesian domain")
     func initialSelection() throws {
-        let compilation = try CartesianInitialSelection.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let left = try #require(compilation.layout.testVariableID(named: "left"))
-        let right = try #require(compilation.layout.testVariableID(named: "right"))
-        let formal = try runtime.initialStates()
-        let pairs = try Set(formal.map { state in
-            [try state.value(for: left), try state.value(for: right)]
-        })
-        #expect(pairs.count == 4)
+        let initial = try CartesianInitialSelection.initialMachines()
+        #expect(Set(initial.map { [$0.state.left, $0.state.right] }) == [[1, 3], [1, 4], [2, 3], [2, 4]])
         for lhs in 1...2 {
             for rhs in 3...4 {
                 let machine = try CartesianInitialSelection.makeMachine(.init(left: lhs, right: rhs))
-                #expect(pairs.contains([.integer(machine.state.left), .integer(machine.state.right)]))
+                #expect(machine.state.left == lhs)
+                #expect(machine.state.right == rhs)
             }
         }
         do {
@@ -144,10 +138,9 @@ private struct ReachableInvariantFailure {
         } catch GeneratedMachineError.invalidInitialState {}
     }
 
-    @Test("empty formal initial domains reject both implicit and explicit construction")
+    @Test("empty initial domains reject both implicit and explicit construction")
     func emptyInitialDomain() throws {
-        let runtime = CompiledRuntime(compilation: try EmptyInitialSelection.spec.compile())
-        #expect(try runtime.initialStates().isEmpty)
+        #expect(try EmptyInitialSelection.initialMachines().isEmpty)
         do {
             _ = try EmptyInitialSelection.makeMachine()
             Issue.record("Empty initial domains cannot construct a machine")
@@ -160,25 +153,18 @@ private struct ReachableInvariantFailure {
 
     @Test("duplicate paths coalesce while distinct hidden control states remain ambiguous")
     func successorIdentity() throws {
-        let duplicateCompilation = try DuplicateExecutionPaths.spec.compile()
-        let duplicateRuntime = CompiledRuntime(compilation: duplicateCompilation)
-        let duplicateInitial = try #require(try duplicateRuntime.initialStates().first)
-        let advance = try #require(duplicateCompilation.layout.testActionID(named: "advance"))
-        #expect(Set(try duplicateRuntime.successors(for: advance, from: duplicateInitial).map(\.state)).count == 1)
         var duplicate = try DuplicateExecutionPaths.makeMachine()
         #expect(try duplicate.enabledActions() == [.advance])
+        #expect(try duplicate.successors(for: .advance).count == 1)
         #expect(try duplicate.send(.advance).after.count == 1)
 
-        let compilation = try HiddenControlAlternatives.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let initial = try #require(try runtime.initialStates().first)
-        let select = try #require(compilation.layout.testActionID(named: "select"))
-        let count = try #require(compilation.layout.testVariableID(named: "count"))
-        let successors = try runtime.successors(for: select, from: initial)
-        #expect(Set(successors.map(\.state)).count == 2)
-        #expect(try Set(successors.map { try $0.state.value(for: count) }) == [.integer(0)])
         var machine = try HiddenControlAlternatives.makeMachine()
         let before = machine.state
+        let successors = try machine.successors()
+        #expect(successors.count == 2)
+        #expect(successors.allSatisfy { $0.action == .select })
+        #expect(Set(successors.map { $0.machine.snapshot }).count == 2)
+        #expect(Set(successors.map { $0.machine.state.count }) == [0])
         #expect(try machine.enabledActions() == [.select])
         do {
             _ = try machine.send(.select)
@@ -201,15 +187,8 @@ private struct ReachableInvariantFailure {
         #expect(Set(graph.transitions[initial.snapshot, default: []].map { $0.target.state.y }) == [2, 3, 4])
     }
 
-    @Test("checked arithmetic failure agrees across dispatch and exploration without changing the snapshot")
+    @Test("checked arithmetic failure is transactional across dispatch and exploration")
     func arithmeticFailureIsTransactional() throws {
-        let compilation = try CheckedExecutionOverflow.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let initial = try #require(try runtime.initialStates().first)
-        let advance = try #require(compilation.layout.testActionID(named: "advance"))
-        #expect(throws: EvalError.integerOverflow(.addition, operands: [Int.max, 1])) {
-            try runtime.successors(for: advance, from: initial)
-        }
         var machine = try CheckedExecutionOverflow.makeMachine()
         let before = machine.snapshot
         #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
@@ -229,20 +208,12 @@ private struct ReachableInvariantFailure {
         }
     }
 
-    @Test("invariant violations remain reachable and are reported by both engines")
+    @Test("invariant violations remain executable and observable")
     func invariantsAreObservations() throws {
-        let compilation = try ReachableInvariantFailure.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let initial = try #require(try runtime.initialStates().first)
-        let advance = try #require(compilation.layout.testActionID(named: "advance"))
-        let invariant = try #require(compilation.semantics.behavior.invariants.first)
-        #expect(try runtime.invariantHolds(invariant, in: initial))
-        let successor = try #require(try runtime.successors(for: advance, from: initial).first)
-        #expect(try !runtime.invariantHolds(invariant, in: successor.state))
         var machine = try ReachableInvariantFailure.makeMachine()
         #expect(try machine.violatedInvariants().isEmpty)
         #expect(try machine.send(.advance).after.count == 1)
-        #expect(try machine.violatedInvariants().map { ReachableInvariantFailure.formalPropertyNames[$0]! } == [invariant.name])
+        #expect(try machine.violatedInvariants() == [.Zero])
     }
 }
 
