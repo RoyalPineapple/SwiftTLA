@@ -488,6 +488,7 @@ extension NativeSwiftEmitter {
         var visitorCases: [String] = []
         var formalCases: [String] = []
         var enumeration: [String] = []
+        var visitorEnumeration: [String] = []
         for api in model.api.actions {
             let action = program[api.compiledAction]
             var pattern: [String] = []
@@ -554,6 +555,7 @@ extension NativeSwiftEmitter {
             """)
             let actionValue = ".\(api.swiftIdentifier)" + (actionArguments.isEmpty ? "" : "(\(actionArguments.joined(separator: ", ")))")
             enumeration.append("do {\n" + loops + "result.append(\(actionValue))\n" + closing + "}\n")
+            visitorEnumeration.append("do {\n" + loops + "try _visitAction(\(actionValue))\n" + closing + "}\n")
         }
         return try nativeDeclarations("""
         public func formalCall(for action: Action) throws -> FormalActionCall {
@@ -606,7 +608,7 @@ extension NativeSwiftEmitter {
                                       _ visit: (Action, Self) throws -> Bool) throws -> Bool {
             var found = false
             do {
-                for action in try _actions() {
+                func _visitAction(_ action: Action) throws {
                     try _visitSuccessors(for: action, checking: &context) { execution in
                         try Self._validateCollections(execution\(collectionArguments))
                         found = true
@@ -615,6 +617,7 @@ extension NativeSwiftEmitter {
                         }
                     }
                 }
+                \(visitorEnumeration.joined(separator: "\n"))
             } catch is _StopSuccessorTraversal {
             }
             return found
