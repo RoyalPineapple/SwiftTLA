@@ -329,6 +329,7 @@ jobs:
           if [ "$reuse" = false ] && [ -d "$cached" ]; then
             stale=$(mktemp -d "$RUNNER_TEMP/stale-upstream.XXXXXX")
             mv "$cached" "$stale/$CASE_ID"
+            rmdir "$(dirname "$cached")"
           fi
           echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
       - name: Compare generated and upstream TLA through TLC
