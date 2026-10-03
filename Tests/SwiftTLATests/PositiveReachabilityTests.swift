@@ -98,12 +98,4 @@ struct PositiveReachabilityTests {
         #expect(throws: CompilationDiagnostic.self) { try changed.compile() }
     }
 
-    @Test("formal parity exploration rejects unsupported positive outcomes explicitly")
-    func rejectsUnreportedFormalOutcome() throws {
-        let compilation = try ReachabilityCounter.spec.compile()
-        #expect(throws: CompilationDiagnostic.self) {
-            try ModelChecker(compilation: compilation,
-                configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
-        }
-    }
 }

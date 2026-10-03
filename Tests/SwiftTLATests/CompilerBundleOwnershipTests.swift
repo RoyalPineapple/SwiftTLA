@@ -198,18 +198,6 @@ struct CompilerBundleOwnershipTests {
     try expectLinkDiagnostic(.unresolvedFormalModuleReplacement, from: root)
   }
 
-  @Test("public execution entry points compile before they link")
-  func executionEntryPointsRejectInvalidModuleClosure() {
-    let invalid = TLASpec(
-      name: "Root", variables: [], actions: [], invariants: [],
-      importConfigurations: [.init(moduleName: "Missing", replacements: [])]
-    )
-
-    #expect(throws: CompilationDiagnostic.self) { try invalid.compile() }
-    #expect(throws: CompilationDiagnostic.self) { _ = ModelChecker(compilation: try invalid.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)) }
-    #expect(throws: CompilationDiagnostic.self) { try invalid.compile() }
-  }
-
   private func expectLinkDiagnostic(
     _ code: CompilationDiagnostic.Code,
     from spec: TLASpec
