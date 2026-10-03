@@ -14,8 +14,8 @@ struct ArrayValueMachine {
     static var spec: TLASpec {
         #spec("ArrayValueMachine") { scope in
             let input = scope.parameter(as: [Int].self,
-                in: Set<[Int]>([Array<Int>([]), Array<Int>([2, 1, 2])]))
-            let row = scope.sharedVar(initial: Array<Int>([]))
+                in: Set<[Int]>([[Int](), [Int]([2, 1, 2])]))
+            let row = scope.sharedVar(initial: [Int]())
             let choices = scope.sharedVar(initial: Array<Choice>([.one, .two, .one]))
             Do(Step.adopt) { Assign(row, to: input.appending(3)) }
             Do(Step.remove) {

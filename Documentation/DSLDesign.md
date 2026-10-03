@@ -920,8 +920,8 @@ The compiler preserves element order, repeated elements, and nominal element typ
 
 ```swift
 let input = scope.parameter(as: [Int].self,
-    in: Set<[Int]>([Array<Int>([]), Array<Int>([2, 1, 2])]))
-let row = scope.sharedVar(initial: Array<Int>([]))
+    in: Set<[Int]>([[Int](), [Int]([2, 1, 2])]))
+let row = scope.sharedVar(initial: [Int]())
 ```
 
 Array expressions support append, concatenation, indexed reads, indexed removal,

@@ -314,6 +314,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       explicit symmetry admission plus complete TLC-orbit comparison.
 - [ ] Close AC-17 through AC-19 with direct Swift value types, stable
       declaration-derived names, and compile-time type resolution/diagnostics.
+      Ordinary `[Element]()` and `[Element]([...])` array constructors now
+      resolve in `#spec` through the same type resolver as `Array<Element>`.
+      The generated array fixture failed before this parser fix and its four
+      related tests pass locally afterward; hosted acceptance remains open.
 - [ ] Confirm the four required end-to-end model classes (Counter, mutual
       exclusion, puzzle, distributed protocol) each execute as an application,
       explore the same generated transitions, validate separately with TLC,

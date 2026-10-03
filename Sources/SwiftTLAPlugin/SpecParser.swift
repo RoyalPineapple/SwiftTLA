@@ -1868,6 +1868,10 @@ final class ParserSession {
             if let key, let value { return .set(.dictionary(key, value)) }
         }
         if let record = nominalRecordType(call.calledExpression) { return record }
+        if isSwiftCollectionConstructor(call, named: "Array"),
+           call.calledExpression.is(ArrayExprSyntax.self) {
+            return try? sourceTypeResolver.resolve(call.calledExpression.trimmedDescription)
+        }
         if (isSwiftCollectionConstructor(call, named: "Set") || isSwiftCollectionConstructor(call, named: "Array")),
            call.calledExpression.is(GenericSpecializationExprSyntax.self) {
             return try? sourceTypeResolver.resolve(call.calledExpression.trimmedDescription)
@@ -1952,6 +1956,10 @@ final class ParserSession {
     }
 
     func isSwiftCollectionConstructor(_ call: FunctionCallExprSyntax, named name: String) -> Bool {
+        if name == "Array",
+           let array = call.calledExpression.as(ArrayExprSyntax.self),
+           array.elements.count == 1,
+           case .array = (try? sourceTypeResolver.resolve(array.trimmedDescription)) { return true }
         let base = call.calledExpression.as(GenericSpecializationExprSyntax.self)?.expression ?? call.calledExpression
         let path = Self.sourceTypePath(base)
         return path == [name] || path == ["Swift", name]
