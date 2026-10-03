@@ -8,9 +8,8 @@ struct InvalidModelStoredState {
   let reference = MutableReferenceState()
 
   static var spec: TLASpec {
-    #spec("InvalidModelStoredState") {
-      let count = Var<Int>("count")
-      Variable(count, 0)
+    #spec("InvalidModelStoredState") { scope in
+      let count = scope.sharedVar(initial: 0)
     }
   }
 }

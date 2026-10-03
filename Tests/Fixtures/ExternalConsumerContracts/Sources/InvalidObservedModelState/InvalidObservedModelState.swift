@@ -8,9 +8,8 @@ struct InvalidObservedModelState {
   }
 
   static var spec: TLASpec {
-    #spec("InvalidObservedModelState") {
-      let state = Var<Int>("state")
-      Variable(state, 0)
+    #spec("InvalidObservedModelState") { scope in
+      let state = scope.sharedVar(initial: 0)
     }
   }
 }
