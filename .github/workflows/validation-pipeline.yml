@@ -304,8 +304,35 @@ jobs:
           path: .build/validation-evidence/upstream/${{ matrix.case }}
           # The input key already hashes rendered TLA/CFG, action names, and pinned TLC/bridge inputs.
           key: upstream-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/UpstreamTLCParity.swift', 'Sources/UpstreamParity/Conformance/AssumptionValidationEvidence.swift', 'Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Sources/UpstreamParity/Conformance/BinaryGraphEvidence.swift', 'Sources/UpstreamParity/Conformance/CanonicalBinaryState.swift', 'Sources/UpstreamParity/Conformance/CompactTLCGraphEvent.swift', 'Sources/UpstreamParity/Conformance/TLCGraphReader.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift', 'Sources/UpstreamParity/Conformance/TLCTraceParser.swift', 'Tools/TLCGraphBridge/**/*.java') }}
+          restore-keys: upstream-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream-key.outputs.key }}-
+      - name: Verify reusable upstream TLC evidence
+        id: upstream-reuse
+        env:
+          CACHE_HIT: ${{ steps.upstream-cache.outputs.cache-hit }}
+          UPSTREAM_INPUT_KEY: ${{ steps.upstream-key.outputs.key }}
+        run: |
+          set -euo pipefail
+          [[ "$CASE_ID" =~ ^[a-z0-9_-]+$ ]]
+          cached=".build/validation-evidence/upstream/$CASE_ID"
+          reuse=false
+          if [ "$CACHE_HIT" = true ]; then
+            reuse=true
+          elif [ "$CACHE_HIT" = false ] && [ -f "$cached/evidence-origin.json" ]; then
+            origin=$(jq -er --arg key "$UPSTREAM_INPUT_KEY" 'select(.cacheKey == $key) | .sourceSHA | select(test("^[0-9a-f]{40}$"))' "$cached/evidence-origin.json") || origin=""
+            # A prefix hit is reusable only when the retained TLC and comparator code is unchanged.
+            if [ -n "$origin" ] &&
+                { git cat-file -e "$origin^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$origin"; } &&
+                git diff --quiet "$origin" HEAD -- Sources/UpstreamParity/Conformance Sources/TLCValidate Tools/TLCGraphBridge; then
+              reuse=true
+            fi
+          fi
+          if [ "$reuse" = false ] && [ -d "$cached" ]; then
+            stale=$(mktemp -d "$RUNNER_TEMP/stale-upstream.XXXXXX")
+            mv "$cached" "$stale/$CASE_ID"
+          fi
+          echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
       - name: Compare generated and upstream TLA through TLC
-        if: steps.upstream-cache.outputs.cache-hit != 'true'
+        if: steps.upstream-reuse.outputs.reuse != 'true'
         timeout-minutes: 120
         run: |
           set -o pipefail
@@ -315,7 +342,7 @@ jobs:
             --arg run "$GITHUB_RUN_ID" '{cacheKey:$key,sourceSHA:$sha,originRunID:$run}' \
             > ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"
       - name: Recompare retained complete TLC evidence
-        if: steps.upstream-cache.outputs.cache-hit == 'true'
+        if: steps.upstream-reuse.outputs.reuse == 'true'
         run: .build/validation-bin/tlc-validate upstream recompare --case "$CASE_ID" --evidence .build/validation-evidence/upstream
       - name: Attach model-owned check coverage
         run: .build/validation-bin/tlc-validate upstream annotate --case "$CASE_ID" --evidence .build/validation-evidence/upstream
