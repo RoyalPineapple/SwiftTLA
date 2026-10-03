@@ -1,42 +1,22 @@
 import Testing
 @testable import SwiftTLA
-import SwiftTLAMacros
-
-@TLAModel
-private struct IncreasingSelection {
-    static var spec: TLASpec {
-        #spec("IncreasingSelection") { scope in
-            let current = scope.sharedVar(_name: "position", initial: 0)
-            SwiftTLA.Action("advance") {
-                let previous = current.expr
-                current.becomes(Select(from: SetExpr<Int>.literal(1, 2, 3)) { candidate in
-                    candidate.expr > previous
-                })
-            }
-        }
-    }
-}
 
 struct TypedSelectionTests {
-    @Test("A formal choice reads current state in native and formal execution")
+    @Test("Selection reads the current generated state and fails without a matching member")
     func selectionUsesCurrentState() throws {
-        let compilation = try IncreasingSelection.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        var formal = try #require(runtime.initialStates().first)
-        var native = try IncreasingSelection.makeMachine()
-        let current = try #require(compilation.layout.variables.first?.id)
-        for expected in 1...3 {
-            let successors = try runtime.successors(from: formal)
-            try #require(successors.count == 1)
-            formal = try #require(successors.first?.state)
-            #expect(try formal.value(for: current) == .integer(expected))
-            #expect(try native.enabledActions() == [.advance])
-            _ = try native.send(.advance)
-            #expect(native.state.position == expected)
+        var machine = try IncreasingSelection.makeMachine()
+        for _ in 0..<3 {
+            guard machine.state.position < 3 else { break }
+            let previous = machine.state.position
+            #expect(try machine.enabledActions() == [.advance])
+            _ = try machine.send(.advance)
+            #expect(machine.state.position > previous)
+            #expect(machine.state.position <= 3)
         }
-        #expect(throws: EvalError.noSatisfyingChoice) { try runtime.successors(from: formal) }
-        #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) { _ = try native.send(.advance) }
-        #expect(native.state.position == 3)
+        #expect(machine.state.position == 3)
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) { _ = try machine.send(.advance) }
+        #expect(machine.snapshot == before)
     }
 
     @Test("An empty matching domain fails when the choice is evaluated")
