@@ -118,14 +118,20 @@ private struct NonEmptySubsetGeneratedModel {
     enum Step: String, CaseIterable { case keep }
 
     static var spec: TLASpec {
-        #spec("NonEmptySubsetGeneratedModel") {
+        #spec("NonEmptySubsetGeneratedModel") { model in
+            let members = model.parameter(as: Set<Int>.self,
+                in: Set<Set<Int>>([Set<Int>([1, 2]), Set<Int>([1, 2, 3])]))
             let nonEmptySubsetGeneratedModel = Algorithm(label: "NonEmptySubsetGeneratedModel", scoped: { scope in
                 let selectedKeys = scope.sharedVar(_name: "selectedKeys", in: NonEmptySubsets(
-                    of: Set<Int>([1, 2])
+                    of: members
                 ))
                 Do(Step.keep) { Assign(selectedKeys, to: selectedKeys.expr) }
             })
             nonEmptySubsetGeneratedModel
+            let twoMembers = Validation { Bind(members, to: Set<Int>([1, 2])) }
+            twoMembers
+            let threeMembers = Validation { Bind(members, to: Set<Int>([1, 2, 3])) }
+            threeMembers
         }
     }
 }
@@ -674,11 +680,24 @@ private struct FoldGeneratedModel {
         #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().render().tlaBundle.tla.contains("0.."))
     }
 
-    @Test("non-empty Swift-set subsets initialize generated machines without the empty set")
-    func nonEmptySwiftSetSubsetsInitializeGeneratedMachines() throws {
-        let initial = try NonEmptySubsetGeneratedModel.initialMachines()
-        #expect(Set(initial.map(\.state.selectedKeys)) == [Set([1]), Set([2]), Set([1, 2])])
-        #expect(try NonEmptySubsetGeneratedModel.render().tlaBundle.tla.contains("SUBSET"))
+    @Test("configured Swift-set subsets preserve type and exclude the empty set")
+    func configuredSwiftSetSubsetsPreserveType() throws {
+        let scenarios = try NonEmptySubsetGeneratedModel.validationScenarios()
+        #expect(scenarios.count == 2)
+        let expected: [Set<Set<Int>>] = [
+            [Set([1]), Set([2]), Set([1, 2])],
+            [Set([1]), Set([2]), Set([3]), Set([1, 2]), Set([1, 3]), Set([2, 3]), Set([1, 2, 3])]
+        ]
+        let rendered = try scenarios.map { try $0.render() }
+        #expect(rendered[0].tlaBundle.tla == rendered[1].tlaBundle.tla)
+        #expect(rendered[0].tlaBundle.cfg.contains("CONSTANT members = {1, 2}"))
+        #expect(rendered[1].tlaBundle.cfg.contains("CONSTANT members = {1, 2, 3}"))
+        for (scenario, values) in zip(scenarios, expected) {
+            let initial = try scenario.initialMachines()
+            let selected: Set<Set<Int>> = Set(initial.map(\.state.selectedKeys))
+            #expect(selected == values)
+        }
+        #expect(rendered[0].tlaBundle.tla.contains("SUBSET"))
     }
 
     @Test("typed bounded quantifiers parse, evaluate, and generate")

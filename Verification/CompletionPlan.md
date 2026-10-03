@@ -345,6 +345,11 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       pass locally. `NonEmptySubsets` now accepts ordinary Swift sets and
       preserves their set type in generated state; its exact regression failed
       to compile before the fix and 25 collection/KVsnap tests pass locally.
+      The same fixture now binds a typed set parameter in two model-owned
+      scenarios: generated initial states are exactly the three and seven
+      non-empty subsets, and TLA export retains one symbolic module with two
+      CFG bindings. Its focused case and 29 related collection/configuration
+      tests pass locally. This does not settle every B-01 domain decision.
       Hosted acceptance remains open.
 - [ ] Confirm the four required end-to-end model classes (Counter, mutual
       exclusion, puzzle, distributed protocol) each execute as an application,
