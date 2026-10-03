@@ -303,6 +303,12 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       and duplicate rendering-suite witness were removed in local commit
       `097a1092`. The focused execution and rendering suites pass locally;
       hosted acceptance remains pending.
+      Three collection fixtures now use generated independent `Do` steps and
+      native exploration instead of formal `ModelChecker` calls. Their complete
+      small labeled graphs, invariant/deadlock outcomes, and rendered collection
+      operations pass focused local checks; the formal value round-trip remains
+      a separate serialization-boundary test. This does not credit AC-12 or
+      independent TLC parity.
 - [ ] Close AC-13 by removing replaced spellings, duplicate configuration,
       obsolete callers, compatibility aliases, and stale documentation. The
       legacy `CollectionVarType` field had no effect on model behavior; it was
