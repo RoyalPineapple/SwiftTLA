@@ -366,10 +366,12 @@ struct CompiledSpecificationRendererTests {
         #expect(bundle.root.tla.contains("--algorithm Authored"))
         #expect(bundle.root.cfg == directBundle.root.cfg)
         #expect(bundle.imports.map(\.name) == ["Support"])
-        guard case .compiled = bundle.provenance else {
+        #expect(bundle.provenance == directBundle.provenance)
+        guard case let .compiled(identity, _, _) = bundle.provenance else {
             Issue.record("A compiled authored PlusCal bundle lost its provenance.")
             return
         }
+        #expect(identity == compilation.identity)
 
     }
 
