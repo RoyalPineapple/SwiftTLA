@@ -3942,8 +3942,8 @@
     {
       "path": "specifications/chang_roberts",
       "name": "Chang-Roberts Algorithm for Leader Election in a Ring",
-      "audit": "Pinned module roles and both published configurations mapped to one typed generated model; local generated-machine checks and manifest rendering passed. Hosted parity remains pending.",
-      "gap": "Neither configuration has hosted generated-TLA-versus-upstream or native-versus-generated-TLA evidence. Do not credit complete initial states, labeled graphs, safety, liveness, or deadlock until both paths pass on a pushed SHA.",
+      "audit": "Pinned module roles, both published configurations, one typed implementation, legacy cleanup, and complete two-path hosted parity audited on 40b5752b.",
+      "gap": "No published TLC-configuration gap remains at verified SHA 40b5752b: generated TLA matches pinned upstream and generated Swift matches generated-TLA TLC on complete initial states, labeled graphs, and selected safety and liveness checks. Both published configurations disable deadlock checking; no deadlock verdict is credited. APChangRoberts deliberately omits Liveness. The final pushed revision and broader DSL/corpus still require separate admission.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -3973,7 +3973,8 @@
           "module": "specifications/chang_roberts/APChangRoberts.tla",
           "configuration": "specifications/chang_roberts/APChangRoberts.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "40b5752b733317ba306b98989c95e547e18f357f",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -3983,13 +3984,25 @@
               "caseID": "chang-roberts-ap"
             }
           ],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "40b5752b733317ba306b98989c95e547e18f357f",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801/artifacts/11268556166",
+            "artifactSHA256": "1d3f15334f2abb2fae64b4c064f073e25a7a70cc2323a473619a5dd5a5afcad4",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801/artifacts/11268462684",
+            "nativeArtifactSHA256": "878572a2717a1ea3a0f3b53627470fe3b2af5afe7f9580102ac22be59449ca52",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Downloaded artifacts from completed hosted SHA 40b5752b: generated TLA versus pinned APChangRoberts and native generated Swift versus generated-TLA TLC both report exact complete initial-state and labeled-graph parity (8 initial states, 137 states, 219 edges). Both selected properties, TypeOK and Correctness, are satisfied on all sides. The published AP configuration selects Init/Next, disables deadlock checking, and omits Liveness; both coverage records identify that omission, so neither an unchecked deadlock nor Liveness verdict is credited. Pinned sourceInput ceeaa904 SHA-256 cc5e6adf949b003f353eeb4b8e5ea6499b99bc477fd7dc799c045b9e83221366. Native TLC-oracle evidence was restored by exact input cache key from origin SHA 21669a2d; the hosted comparison and native report are bound to 40b5752b."
+          }]
         },
         {
           "module": "specifications/chang_roberts/MCChangRoberts.tla",
           "configuration": "specifications/chang_roberts/MCChangRoberts.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "40b5752b733317ba306b98989c95e547e18f357f",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -3999,7 +4012,18 @@
               "caseID": "chang-roberts-mc"
             }
           ],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "40b5752b733317ba306b98989c95e547e18f357f",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801/artifacts/11268670892",
+            "artifactSHA256": "60264d1e4f56570f1d2fb6a1e1b7082fc33d569ebde317f8153c6aa4c1d88d14",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801/artifacts/11269105183",
+            "nativeArtifactSHA256": "c93738a871341a3d452b015af6cce6d49660ed37e1cdd8603e44551fc118aec3",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Downloaded artifacts from completed hosted SHA 40b5752b: generated TLA versus pinned MCChangRoberts and native generated Swift versus generated-TLA TLC both report exact complete initial-state and labeled-graph parity (8 initial states, 137 states, 219 edges). TypeOK, Correctness, and Liveness are satisfied on all sides, including hosted TLC liveness obligations. The published Spec configuration disables deadlock checking, so no deadlock verdict is credited. Pinned sourceInput ceeaa904 SHA-256 5005fd1f2e674a146399044de17c89c268c79b2bcc1f08297f878f2adad96614. Native TLC-oracle evidence was restored by exact input cache key from origin SHA 21669a2d; the hosted comparison and native report are bound to 40b5752b."
+          }]
         }
       ],
       "partialCases": []
