@@ -42,6 +42,16 @@ struct CheckingContextTests {
         #expect(application.map { $0.machine.snapshot } == checking.map { $0.machine.snapshot })
         #expect(streamed.map(\.action) == checking.map(\.action))
         #expect(streamed.map(\.snapshot) == checking.map { $0.machine.snapshot })
+        var stoppedContext = CheckingContext(registers: try machine.initialCheckingRegisters())
+        try stoppedContext.advanceBreadthFirstLevel()
+        var stoppedAfter: [ConvergingFrontiers.Snapshot] = []
+        let stoppedWithSuccessor = try machine.visitSuccessors(checking: &stoppedContext) { _, successor in
+            stoppedAfter.append(successor.snapshot)
+            return false
+        }
+        #expect(stoppedWithSuccessor)
+        #expect(checking.count > 1)
+        #expect(stoppedAfter == [checking[0].machine.snapshot])
         #expect(machine.snapshot == (try ConvergingFrontiers.makeMachine(.init(node: 1))).snapshot)
     }
 

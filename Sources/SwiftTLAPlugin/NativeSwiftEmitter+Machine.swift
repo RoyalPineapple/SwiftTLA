@@ -395,12 +395,7 @@ extension NativeSwiftEmitter {
             }
             """)
         }
-        return declarations.joined(separator: "\n") + """
-
-        var candidates: [_Updates] = []
-        try _actionPart0(_Updates()) { candidates.append($0) }
-        return candidates
-        """
+        return declarations.joined(separator: "\n") + "\ntry _actionPart0(_Updates(), emit)"
     }
 
     mutating func updateFunction(_ action: CompiledAction, collectionParameters: String) throws -> DeclSyntax {
@@ -411,7 +406,8 @@ extension NativeSwiftEmitter {
             "\(binder($0.binder)): \(try swiftType(program.bindingTypes[$0.binder]!))"
         }.joined(separator: ", ")
         return DeclSyntax(stringLiteral: """
-        private static func _updates\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters), checking context: inout CheckingContext<CheckingRegisters>?) throws -> [_Updates] {
+        private static func _visitUpdates\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters), checking context: inout CheckingContext<CheckingRegisters>?,
+                                                   _ emit: (_Updates) throws -> Void) throws {
             \(try actionFunctions(action.body))
         }
         """)
@@ -447,7 +443,9 @@ extension NativeSwiftEmitter {
             }
             private static func _isEnabled\(action.id.ordinal)(in state: Snapshot\(collectionParameters), checking context: inout CheckingContext<CheckingRegisters>?) throws -> Bool {
                 \(loops)
-                if try !_updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(collectionArguments), checking: &context).isEmpty { return true }
+                var enabled = false
+                try _visitUpdates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments.joined(separator: ", "))\(collectionArguments), checking: &context) { _ in enabled = true }
+                if enabled { return true }
                 \(closing)
                 return false
             }
@@ -462,11 +460,15 @@ extension NativeSwiftEmitter {
         }.joined(separator: ", ")
         let arguments = action.bindings.map { "\(binder($0.binder)): \(binder($0.binder))" }.joined(separator: ", ")
         return DeclSyntax(stringLiteral: """
-        private static func _successors\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters), checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
-            let updates = try _updates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(collectionArguments), checking: &context)
-            let candidates = updates.map { $0.applying(to: state) }
-            return candidates.reduce(into: [Snapshot]()) { states, state in
-                if !states.contains(state) { states.append(state) }
+        private static func _visitSuccessors\(action.id.ordinal)(from state: Snapshot\(parameters.isEmpty ? "" : ", " + parameters)\(collectionParameters), checking context: inout CheckingContext<CheckingRegisters>?,
+                                                      _ visit: (Snapshot) throws -> Void) throws {
+            var emitted: [Snapshot] = []
+            try _visitUpdates\(action.id.ordinal)(from: state\(arguments.isEmpty ? "" : ", " + arguments)\(collectionArguments), checking: &context) { updates in
+                let candidate = updates.applying(to: state)
+                if !emitted.contains(candidate) {
+                    emitted.append(candidate)
+                    try visit(candidate)
+                }
             }
         }
         """)
@@ -483,14 +485,14 @@ extension NativeSwiftEmitter {
             public func formalCall(for action: Action) throws -> FormalActionCall {}
             """)
         }
-        var cases: [String] = []
+        var visitorCases: [String] = []
         var formalCases: [String] = []
         var enumeration: [String] = []
         for api in model.api.actions {
             let action = program[api.compiledAction]
             var pattern: [String] = []
             var invocation: [String] = []
-            var validations: [String] = []
+            var visitorValidations: [String] = []
             var actionArguments: [String] = []
             var formalArguments: [String] = []
             var loops = ""
@@ -522,7 +524,7 @@ extension NativeSwiftEmitter {
                 formalArguments.append(try formalValue(argumentValue, type: type))
                 if apiBinding.isPublic || api.collection != nil {
                     if let collection = api.collection {
-                        validations.append("""
+                        let validation = """
                         guard \(domain).contains(\(name)) else {
                             throw GeneratedMachineStateDiagnostic.typeMismatch(
                                 path: \(String(reflecting: collection.formalName + ".member")),
@@ -530,9 +532,10 @@ extension NativeSwiftEmitter {
                                 actual: String(describing: \(name))
                             )
                         }
-                        """)
+                        """
+                        visitorValidations.append(validation)
                     } else {
-                        validations.append("guard \(domain).contains(\(name)) else { return [] }")
+                        visitorValidations.append("guard \(domain).contains(\(name)) else { return }")
                     }
                     invocation.append("\(name): \(name)")
                     loops += "for \(name) in \(domain) {\n"
@@ -544,10 +547,10 @@ extension NativeSwiftEmitter {
             let label = ".\(api.swiftIdentifier)" + (pattern.isEmpty ? "" : "(\(pattern.joined(separator: ", ")))")
             let formalName = program.layout.actions[action.id.ordinal].renderedName
             formalCases.append("case \(label): return FormalActionCall(name: \(String(reflecting: formalName)), arguments: [\(formalArguments.joined(separator: ", "))])")
-            cases.append("""
+            visitorCases.append("""
             case \(label):
-                \(validations.joined(separator: "\n"))
-                return try Self._successors\(action.id.ordinal)(from: _execution\(invocation.isEmpty ? "" : ", " + invocation.joined(separator: ", "))\(collectionArguments), checking: &context)
+                \(visitorValidations.joined(separator: "\n"))
+                try Self._visitSuccessors\(action.id.ordinal)(from: _execution\(invocation.isEmpty ? "" : ", " + invocation.joined(separator: ", "))\(collectionArguments), checking: &context, visit)
             """)
             let actionValue = ".\(api.swiftIdentifier)" + (actionArguments.isEmpty ? "" : "(\(actionArguments.joined(separator: ", ")))")
             enumeration.append("do {\n" + loops + "result.append(\(actionValue))\n" + closing + "}\n")
@@ -563,8 +566,14 @@ extension NativeSwiftEmitter {
             return try _successors(for: action, checking: &context)
         }
         private func _successors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?) throws -> [Snapshot] {
+            var result: [Snapshot] = []
+            try _visitSuccessors(for: action, checking: &context) { result.append($0) }
+            return result
+        }
+        private func _visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>?,
+                                      _ visit: (Snapshot) throws -> Void) throws {
             switch action {
-                \(cases.joined(separator: "\n"))
+                \(visitorCases.joined(separator: "\n"))
             }
         }
         public func isEnabled(_ action: Action) throws -> Bool {
@@ -596,15 +605,21 @@ extension NativeSwiftEmitter {
         private func _visitSuccessors(checking context: inout CheckingContext<CheckingRegisters>?,
                                       _ visit: (Action, Self) throws -> Bool) throws -> Bool {
             var found = false
-            for action in try _actions() {
-                for execution in try _successors(for: action, checking: &context) {
-                    try Self._validateCollections(execution\(collectionArguments))
-                    found = true
-                    if try !visit(action, Self(execution: execution\(collectionArguments))) { return true }
+            do {
+                for action in try _actions() {
+                    try _visitSuccessors(for: action, checking: &context) { execution in
+                        try Self._validateCollections(execution\(collectionArguments))
+                        found = true
+                        if try !visit(action, Self(execution: execution\(collectionArguments))) {
+                            throw _StopSuccessorTraversal()
+                        }
+                    }
                 }
+            } catch is _StopSuccessorTraversal {
             }
             return found
         }
+        private struct _StopSuccessorTraversal: Error {}
         public func enabledActions() throws -> [Action] {
             try _actions().filter { try isEnabled($0) }
         }
