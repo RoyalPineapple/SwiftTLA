@@ -20,3 +20,14 @@ struct SelectedInitialStateModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct FiniteSetInitialStateModel: Sendable {
+    static var spec: TLASpec {
+        #spec { scope in
+            let value = scope.sharedVar(in: Set<Int>([1, 2, 3]))
+            let TypeOK = Invariant()
+            TypeOK { value >= 1 && value <= 3 }
+        }
+    }
+}

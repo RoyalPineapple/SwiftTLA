@@ -2,6 +2,18 @@ import Testing
 import SwiftTLA
 
 struct SelectedInitialStateTests {
+    @Test("a finite set initializes every generated state and remains explicit in TLA")
+    func enumeratesFiniteSetInitialStates() throws {
+        let initial = try FiniteSetInitialStateModel.initialMachines()
+        let graph = try ReachabilityGraph(initialMachines: initial, maximumStates: 3)
+        #expect(Set(initial.map { $0.state.value }) == [1, 2, 3])
+        #expect(graph.initialStates.count == 3)
+        #expect(graph.transitions.count == 3)
+        #expect(graph.safetyViolations.count == 3)
+        #expect(graph.safetyViolations.values.flatMap { $0 }.allSatisfy { $0 == .deadlock })
+        #expect(try FiniteSetInitialStateModel.render().tlaBundle.tla.contains("value \\in {1, 2, 3}"))
+    }
+
     @Test("Closed integer initialization retains a symbolic domain in TLA export")
     func exportsClosedIntegerDomain() throws {
         let tla = try SelectedInitialStateModel.render().tlaBundle.tla
