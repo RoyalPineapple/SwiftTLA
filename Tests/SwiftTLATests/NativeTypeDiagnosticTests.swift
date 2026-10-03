@@ -523,14 +523,22 @@ import Testing
 
     @Test("Alias and record cycles are rejected without poisoning resolved types")
     func recursiveDeclarationsAreRejected() throws {
-        let resolver = SourceTypeResolver(metadata: try swiftRecordMetadata("""
+        let metadata = try swiftRecordMetadata("""
             typealias Count = Int
             typealias First = `Second`
             typealias Second = /* cycle */ First
             struct Node { let next: Node }
-            """))
+            """)
+        let resolver = SourceTypeResolver(metadata: metadata)
         #expect(try resolver.resolve("Count") == .int)
-        #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("First") }
+        do {
+            _ = try resolver.resolve("First")
+            Issue.record("A cyclic alias must fail at its source reference")
+        } catch let diagnostic as CompilationDiagnostic {
+            let cycle = try #require(metadata.aliases["Second"])
+            #expect(diagnostic.path == "nativeMachine.aliases.First")
+            #expect(diagnostic.sourceOffset == cycle.positionAfterSkippingLeadingTrivia.utf8Offset)
+        }
         #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("Node") }
         #expect(try resolver.resolve("Count") == .int)
     }

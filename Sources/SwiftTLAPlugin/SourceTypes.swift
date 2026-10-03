@@ -143,7 +143,7 @@ final class SourceTypeResolver {
             arguments = reference.genericArgumentClause
             if arguments == nil, let alias = metadata.aliases[name] {
                 guard !resolving.contains(name) else {
-                    throw CompiledValueType.diagnostic("aliases.\(name)", "cyclic type alias")
+                    throw located(CompiledValueType.diagnostic("aliases.\(name)", "cyclic type alias"), at: type)
                 }
                 return try resolveType(alias, resolving: resolving.union([name]))
             }
