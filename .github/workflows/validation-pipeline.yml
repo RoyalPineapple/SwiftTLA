@@ -335,17 +335,49 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
+  temporal-symmetry-parity:
+    name: Temporal and symmetry parity
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.case_id == '' && inputs.case_ids == '' && inputs.replay_run_id == '') }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          fetch-depth: 0
+          submodules: false
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+      - name: Compare native temporal and symmetry results with TLC
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+        run: ./scripts/run_temporal_symmetry_conformance.sh --output .build/temporal-symmetry-conformance
+      - name: Retain source revision
+        if: always()
+        run: |
+          mkdir -p .build/temporal-symmetry-conformance
+          printf '%s\n' "$SWIFT_TLA_SHA" > .build/temporal-symmetry-conformance/source-sha.txt
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: temporal-symmetry-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/temporal-symmetry-conformance
+          if-no-files-found: error
+
   validation-pipeline:
     name: ${{ github.event_name == 'workflow_dispatch' && (inputs.case_id != '' || inputs.case_ids != '') && 'Independent validation diagnostic' || 'Independent validation admission' }}
-    needs: [prepare, dsl-native-parity, upstream-parity]
+    needs: [prepare, dsl-native-parity, upstream-parity, temporal-symmetry-parity]
     if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.replay_run_id == '') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Require both independent parity jobs
+      - name: Require complete independent validation
         env:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           NATIVE_RESULT: ${{ needs.dsl-native-parity.result }}
           UPSTREAM_RESULT: ${{ needs.upstream-parity.result }}
+          TEMPORAL_RESULT: ${{ needs.temporal-symmetry-parity.result }}
           FOCUSED_CASE: ${{ inputs.case_id }}
           BATCH_CASES: ${{ inputs.case_ids }}
         run: |
@@ -353,13 +385,16 @@ jobs:
           if [ -n "$BATCH_CASES" ]; then
             test "$NATIVE_RESULT" = success
             test "$UPSTREAM_RESULT" = success
+            test "$TEMPORAL_RESULT" = skipped
           elif [ -n "$FOCUSED_CASE" ]; then
             { test "$NATIVE_RESULT" = success || test "$NATIVE_RESULT" = skipped; }
             { test "$UPSTREAM_RESULT" = success || test "$UPSTREAM_RESULT" = skipped; }
             { test "$NATIVE_RESULT" = success || test "$UPSTREAM_RESULT" = success; }
+            test "$TEMPORAL_RESULT" = skipped
           else
             test "$NATIVE_RESULT" = success
             test "$UPSTREAM_RESULT" = success
+            test "$TEMPORAL_RESULT" = success
           fi
 
   comparison-replay:
