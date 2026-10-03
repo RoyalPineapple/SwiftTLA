@@ -296,7 +296,15 @@ package struct CompiledTypeChecker: Sendable {
                 throw CompiledValueType.unresolvedDiagnostic(bindings[parameter.binder] ?? .unknown,
                     at: "parameters.\(parameter.reference.name)")
             }
-            parameterDomains[parameter.binder] = try checkOperand(domain, expected: .set(type))
+            do {
+                parameterDomains[parameter.binder] = try checkOperand(domain, expected: .set(type))
+            } catch let diagnostic as CompilationDiagnostic {
+                var located = Self.contextualDiagnostic("parameters.\(parameter.reference.name).domain", causedBy: diagnostic)
+                if case .utf8Offset(let offset) = parameter.reference.sourceSpan.location {
+                    located.sourceOffset = offset
+                }
+                throw located
+            }
         }
         var initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)] = []
         let scenarios = try inputs.semantics.behavior.validationScenarios.map { scenario in

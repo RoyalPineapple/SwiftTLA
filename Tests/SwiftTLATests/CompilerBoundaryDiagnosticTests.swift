@@ -133,6 +133,37 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("A parameter type error points to its declaration")
+    func parameterTypeErrorPointsToDeclaration() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Step: String, CaseIterable, FiniteTLAValueDomain { case advance }
+            static var spec: TLASpec {
+                #spec { scope in
+                    let enabled = scope.parameter(as: Bool.self, in: Set<Int>([1]))
+                    let counter = Algorithm(scoped: { scope in
+                        let count = scope.sharedVar(initial: 0)
+                        Do(Step.advance) { Stop() }
+                    })
+                    counter
+                }
+            }
+        }
+        """)
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let enabled = try #require(source.tokens(viewMode: .sourceAccurate).first { $0.text == "enabled" })
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(declaration)
+            Issue.record("An integer domain must not satisfy a Boolean parameter declaration")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.contains("parameters.enabled"))
+            #expect(diagnostic.sourceOffset == enabled.positionAfterSkippingLeadingTrivia.utf8Offset)
+            let emitted = modelCompilationDiagnostic(diagnostic, in: declaration)
+            #expect(emitted.node.positionAfterSkippingLeadingTrivia == enabled.positionAfterSkippingLeadingTrivia)
+        }
+    }
+
     @Test("Parser diagnostics prevent partial compilation")
     func parserDiagnosticPreventsPartialCompilation() throws {
         let closure = try #require(
