@@ -290,10 +290,14 @@ struct UpstreamParityTests {
         #expect(isSuccessful(exploration))
     }
 
-    @Test("Sync termination detector uses typed finite function state")
+    @Test("Sync termination detector checks its generated finite-function state")
     func syncTerminationTypedFunctionParity() throws {
-        let exploration = try explore(SyncTerminationDetectionModel.spec, maximumStateLimit: 50_000)
-        #expect(exploration.graph.states.count == Example.syncTD.expectedDistinct)
+        let graph = try ReachabilityGraph(
+            initialMachines: SyncTerminationDetectionModel.initialMachines(),
+            maximumStates: Example.syncTD.maximumStateLimit
+        )
+        #expect(graph.transitions.count == Example.syncTD.expectedDistinct)
+        #expect(graph.safetyViolations.isEmpty)
     }
 }
 
