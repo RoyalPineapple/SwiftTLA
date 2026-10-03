@@ -145,6 +145,9 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       now default to unreduced TLC even when a permutation operator is
       declared; explicit reduction remains available. The exact regression
       and 25 related rendering, configuration, and symmetry checks pass locally.
+      A selected temporal claim with symmetry now fails during compilation,
+      while an unselected temporal declaration leaves a safety-only scenario
+      valid. The regression failed before the guard; 22 related tests pass locally.
 - [x] Settle B-01's fixed-collection replacement design: a typed configuration
       parameter contains stable member IDs; `Each` and typed dictionary state
       use those IDs, while application objects stay outside model state. The

@@ -473,6 +473,17 @@ struct CompiledLowerer {
             let checks = Set(properties.filter { property in
                 selectedReferences.map { selected in property.reference.map(selected.contains) ?? false } ?? true
             }.map(\.id))
+            if selectedSymmetry != nil {
+                let unsupported = properties.filter {
+                    checks.contains($0.id) && ($0.declaration.kind == .temporalProperty || $0.declaration.kind == .refinement)
+                }.map(\.declaration.name)
+                guard unsupported.isEmpty else {
+                    throw CompilationDiagnostic(code: .unsupportedSymmetryReduction, stage: .validation,
+                        path: "validation.\(scenario.name).symmetry", expected: "safety-only selected checks",
+                        actual: unsupported.sorted().joined(separator: ", "),
+                        nextSafeAction: "Remove the symmetry selection or run temporal and refinement checks unreduced.")
+                }
+            }
             let checkDeadlock = scenario.deadlockSelections.first ?? spec.checkDeadlock
             let references = scenario.bindings.map(\.parameter)
             guard Set(references) == parameters, references.count == parameters.count else {

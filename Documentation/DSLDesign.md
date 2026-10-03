@@ -627,8 +627,9 @@ model export also keeps TLC unreduced; it retains the permutation operator so
 an explicit reduction request or validation scenario can select it.
 `usingSymmetry` selects one registered, model-owned declaration for that
 scenario's TLC configuration. An absent selection keeps TLC unreduced; a
-foreign or duplicate selection fails compilation. Temporal or refinement
-checks cannot enable reduction. The selection changes neither transitions nor
+foreign or duplicate selection fails compilation. A scenario selecting symmetry
+and a temporal or refinement check fails compilation; an unselected declaration
+does not prohibit a safety-only scenario. The selection changes neither transitions nor
 native checking. Other B-04 scope references and native/TLC evidence remain open.
 
 Without a scenario-level selection, model-owned validation renders an

@@ -71,6 +71,39 @@ struct SymmetryExportTests {
             }
         }
     }
+
+    @Test("A scenario rejects symmetry with selected temporal checks during compilation")
+    func scenarioSymmetryRequiresSafetyOnlyChecks() throws {
+        let state = Var<Int>("state")
+        let members = Symmetry("members", Set([1, 2]))
+        let progress = Eventually("progress", state == 1)
+        let spec = TLASpec("TemporalSymmetry") {
+            Variable(state, 1)
+            members
+            progress
+            Validation(_name: "check") {}.usingSymmetry(members)
+        }
+        do {
+            _ = try spec.compile()
+            Issue.record("Selected temporal checking must reject symmetry before export")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unsupportedSymmetryReduction)
+            #expect(diagnostic.path == "validation.check.symmetry")
+            #expect(diagnostic.actual == "progress")
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        }
+
+        let stable = Invariant("stable") { state >= 0 }
+        let safetyOnly = TLASpec("SelectedSafetySymmetry") {
+            Variable(state, 1)
+            members
+            stable
+            progress
+            Validation(_name: "check") {}.checking(only: [stable]).usingSymmetry(members)
+        }
+        _ = try safetyOnly.compile()
+    }
 }
 
 @TLAModel
