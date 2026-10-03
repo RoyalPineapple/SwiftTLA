@@ -16,8 +16,21 @@ Twelve DSL criteria are marked implemented, not finally accepted; seven are
 marked missing. Ordinary CI run `37004522387` and the full Independent Validation
 Pipeline run `37004522298` passed on this exact SHA. The latter passed 100 native
 and 53 upstream parity jobs, retained 154 nonempty artifacts, and admitted the
-unfiltered matrix. This qualifies the current matrix, not the unfinished DSL
+unfiltered matrix. This qualifies that matrix, not the unfinished DSL
 contract or the full pinned corpus.
+
+The later frozen PR head `d533f10b` passed ordinary CI run `37120573684`
+(all five jobs, including Apple-platform examples) and unfiltered validation
+run `37120573710` (166 successful jobs, one intentionally skipped diagnostic,
+and 165 nonempty retained artifacts). The PR was still draft at that SHA.
+Boulanger's complete native graph contained 7,866,982 states and 52,701,220
+edges. Native exploration took 938.38 seconds; warm-oracle comparison took
+about 178.12 seconds (59.60 native spool, 67.96 TLC spool, 50.55 graph
+comparison), about 1,116.50 seconds together. The native job reported
+`compare boulanger-0: exact`; the separate cold upstream parity job generated
+new TLC evidence and reported `upstream boulanger: exact`. The current local
+commits after `d533f10b` have only focused diagnostic evidence and require a
+new source-aligned hosted admission run before they can inherit these claims.
 
 Only the full, unfiltered hosted matrix and ordinary CI on the same final pushed
 SHA can establish final admission. Focused diagnostics guide development but
