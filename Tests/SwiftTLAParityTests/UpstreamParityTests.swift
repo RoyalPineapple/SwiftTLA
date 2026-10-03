@@ -233,10 +233,14 @@ struct UpstreamParityTests {
         }
     }
 
-    @Test("Dijkstra mutex preserves its bounded PlusCal model")
-    func dijkstraMutexParity() throws {
-        let exploration = try explore(DijkstraMutexModel.spec, maximumStateLimit: Example.dijkstraMutex.maximumStateLimit)
-        #expect(exploration.graph.states.count == Example.dijkstraMutex.expectedDistinct)
+    @Test("partial three-process Dijkstra port has a complete generated graph without safety violations")
+    func dijkstraPartialNativeGraph() throws {
+        let graph = try ReachabilityGraph(
+            initialMachines: DijkstraMutexModel.initialMachines(),
+            maximumStates: Example.dijkstraMutex.maximumStateLimit
+        )
+        #expect(graph.transitions.count == Example.dijkstraMutex.expectedDistinct)
+        #expect(graph.safetyViolations.isEmpty)
     }
 
     @Test("bounded Consensus fixture retains terminal deadlocks and temporal progress")

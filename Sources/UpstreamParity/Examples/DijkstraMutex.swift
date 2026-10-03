@@ -1,8 +1,8 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// Dijkstra's original mutual-exclusion algorithm, bounded to the four
-/// processes in the published LSpec model.
+/// This partial Dijkstra model has three processes.
+/// It does not yet match either published TLC configuration.
 ///
 /// `temporary` begins as the upstream model's opaque `defaultInitValue`.
 /// It then holds either the current owner or the set of peers still to

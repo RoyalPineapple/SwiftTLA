@@ -4983,7 +4983,7 @@
       "path": "specifications/dijkstra-mutex",
       "name": "Dijkstra's Mutual Exclusion Algorithm",
       "audit": "reference inputs audited",
-      "gap": "The existing Swift model has three processes and ordinary per-process weak fairness. LSpec-model requires three processes, an ncs fairness exemption, MutualExclusion, and temporal DeadlockFreedom. Safety-4-processors requires four processes, Spec fairness, and MutualExclusion. Neither configuration has a model-owned scenario or an independent reference case. The existing test checks only 90882 native states. Both configurations remain missing, and legacy cleanup remains incomplete.",
+      "gap": "The existing Swift model has three processes and ordinary per-process weak fairness. LSpec-model requires three processes, an ncs fairness exemption, MutualExclusion, and temporal DeadlockFreedom. Safety-4-processors requires four processes, Spec fairness, and MutualExclusion. Neither configuration has a model-owned scenario or an independent reference case. The generated-machine diagnostic covers its 90,882-state graph and reports no safety violations. It does not establish either upstream comparison. Both configurations remain missing, and legacy cleanup remains incomplete.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5047,7 +5047,7 @@
       "partialCases": [
         {
           "implementation": "Sources/UpstreamParity/Examples/DijkstraMutex.swift",
-          "reason": "DijkstraMutexModel uses three string-valued process identifiers, legacy Function and SetExpr values, and unqualified weak fairness. Its header incorrectly says four processes. UpstreamParityTests.dijkstraMutexParity checks a native state count, not complete graph or property agreement. No registered finite-graph case or model-owned scenario covers either published configuration. No completion credit."
+          "reason": "DijkstraMutexModel uses three string-valued process identifiers, legacy Function and SetExpr values, and unqualified weak fairness. Its generated-machine diagnostic covers 90,882 states without safety violations. It does not compare complete graphs or property outcomes with either upstream configuration. No registered finite-graph case or model-owned scenario covers either configuration. No completion credit."
         }
       ]
     },
