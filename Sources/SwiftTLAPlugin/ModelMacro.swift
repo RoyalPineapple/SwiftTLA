@@ -190,11 +190,15 @@ enum TLASpecVerifier {
                                   let val = raw.representedLiteralValue {
                             value = .string(val)
                         } else {
-                            throw ModelMacroError.invalidEnumRawValue(caseName: element.name.sourceIdentifierName)
+                            throw ModelMacroError.invalidEnumRawValue(
+                                typeName: enumDecl.name.sourceIdentifierName,
+                                caseName: element.name.sourceIdentifierName)
                         }
                     } else if intBacked {
                         guard let integer = nextInteger else {
-                            throw ModelMacroError.invalidEnumRawValue(caseName: element.name.sourceIdentifierName)
+                            throw ModelMacroError.invalidEnumRawValue(
+                                typeName: enumDecl.name.sourceIdentifierName,
+                                caseName: element.name.sourceIdentifierName)
                         }
                         value = .int(integer)
                         let next = integer.addingReportingOverflow(1)
@@ -367,7 +371,7 @@ enum ModelMacroError: Error, CustomStringConvertible, Equatable {
     case dynamicModuleName
     case nonLiteralSpecification
     case dynamicFiniteDomain(typeName: String)
-    case invalidEnumRawValue(caseName: String)
+    case invalidEnumRawValue(typeName: String, caseName: String)
     case duplicateTypeDeclaration(typeName: String)
     case duplicateEnumCase(typeName: String, caseName: String)
     case duplicateEnumRawValue(typeName: String, caseName: String)
@@ -387,7 +391,8 @@ enum ModelMacroError: Error, CustomStringConvertible, Equatable {
         case .duplicateTypeDeclaration(let typeName): "Type '\(typeName)' is declared more than once in the model"
         case .duplicateEnumCase(let typeName, let caseName): "Enum \(typeName) declares case '\(caseName)' more than once"
         case .duplicateEnumRawValue(let typeName, let caseName): "Enum \(typeName) case '\(caseName)' repeats an earlier case's raw value"
-        case .invalidEnumRawValue(let caseName): "Enum case '\(caseName)' requires an integer or string literal raw value"
+        case .invalidEnumRawValue(let typeName, let caseName):
+            "Enum \(typeName) case '\(caseName)' requires an integer or string literal raw value"
         case .emptyFiniteEnum: "A SwiftTLA finite enum must declare at least one case"
         case .emptyValueEnum: "A SwiftTLA value enum must declare at least one case"
         }
@@ -638,14 +643,57 @@ package func modelCompilationDiagnostic(
     )
 }
 
-private func modelMacroDiagnostic(
+func modelMacroDiagnostic(
     _ error: ModelMacroError,
     in declaration: some DeclGroupSyntax
 ) -> Diagnostic {
     Diagnostic(
-        node: Syntax(declaration),
+        node: modelMacroErrorNode(error, in: declaration) ?? Syntax(declaration),
         message: ModelDiagnostic("model-macro-failure", message: error.description)
     )
+}
+
+private func modelMacroErrorNode(
+    _ error: ModelMacroError,
+    in declaration: some DeclGroupSyntax
+) -> Syntax? {
+    let members = declaration.memberBlock.members
+    if case .duplicateTypeDeclaration(let name) = error {
+        let names = members.compactMap { member -> TokenSyntax? in
+            if let type = member.decl.as(TypeAliasDeclSyntax.self) { return type.name }
+            if let type = member.decl.as(StructDeclSyntax.self) { return type.name }
+            return member.decl.as(EnumDeclSyntax.self)?.name
+        }
+        return names.filter { $0.sourceIdentifierName == name }.dropFirst().first.map(Syntax.init)
+    }
+
+    let typeName: String
+    let bindingName: String?
+    let caseName: String?
+    switch error {
+    case .dynamicFiniteDomain(let name):
+        typeName = name; bindingName = "finiteValues"; caseName = nil
+    case .unsupportedEnumEncoding(let name):
+        typeName = name; bindingName = "tlaValue"; caseName = nil
+    case .invalidEnumRawValue(let name, let member),
+         .duplicateEnumCase(let name, let member),
+         .duplicateEnumRawValue(let name, let member):
+        typeName = name; bindingName = nil; caseName = member
+    default:
+        return nil
+    }
+    guard let type = members.compactMap({ $0.decl.as(EnumDeclSyntax.self) })
+        .first(where: { $0.name.sourceIdentifierName == typeName }) else { return nil }
+    if let bindingName {
+        let bindings = type.memberBlock.members.compactMap { $0.decl.as(VariableDeclSyntax.self) }
+            .flatMap { Array($0.bindings) }
+        return bindings.last(where: {
+            $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName == bindingName
+        }).map { Syntax($0.pattern) }
+    }
+    let cases = type.memberBlock.members.compactMap { $0.decl.as(EnumCaseDeclSyntax.self) }
+        .flatMap { Array($0.elements) }
+    return cases.last(where: { $0.name.sourceIdentifierName == caseName }).map { Syntax($0.name) }
 }
 
 private final class ParserDiagnosticNodeFinder: SyntaxAnyVisitor {

@@ -435,7 +435,7 @@ struct SpecificationSourceAuthorityTests {
             #expect(info.cases.last?.value == .int(Int.max))
         }
         let declaration = try declaration("enum Limit: Int, TLAValueType { case maximum = 9223372036854775807, overflow }")
-        #expect(throws: ModelMacroError.invalidEnumRawValue(caseName: "overflow")) {
+        #expect(throws: ModelMacroError.invalidEnumRawValue(typeName: "Limit", caseName: "overflow")) {
             _ = try TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members)
         }
     }

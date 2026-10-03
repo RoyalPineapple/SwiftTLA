@@ -23,7 +23,37 @@ struct CompilerBoundaryDiagnosticTests {
             _ = try TLASpecVerifier.collectEnumVariables(from: declaration.memberBlock.members)
             Issue.record("Expected an explicit unsupported enum raw value to fail.")
         } catch let error as ModelMacroError {
-            #expect(error == .invalidEnumRawValue(caseName: "waiting"))
+            #expect(error == .invalidEnumRawValue(typeName: "Phase", caseName: "waiting"))
+        }
+    }
+
+    @Test("Unsupported enum declarations diagnose the offending source")
+    func unsupportedEnumDeclarationsPointToSource() throws {
+        for (members, tokenName, occurrence) in [
+            ("enum Phase: String, CaseIterable, FiniteTLAValueDomain { case first; static let finiteValues = makeDomain() }", "finiteValues", 0),
+            ("enum Phase: String, TLAValueType { case first; var tlaValue: TLAValue { encode(rawValue) } }", "tlaValue", 0),
+            ("enum Phase: String, TLAValueType { case first = \"same\", second = \"same\" }", "second", 0),
+            ("enum Phase: String, TLAValueType { case first; case first }", "first", 1),
+            ("enum Other: Int, TLAValueType { case first = 1 }; enum Phase: Int, TLAValueType { case first = true }", "first", 1),
+            ("enum Phase: String, TLAValueType { case first }; enum Phase: String, TLAValueType { case second }", "Phase", 1)
+        ] {
+            let source = Parser.parse(source: """
+            struct InvalidModel {
+                \(members)
+                static var spec: TLASpec { #spec {} }
+            }
+            """)
+            let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+            let token = try #require(Array(model.tokens(viewMode: .sourceAccurate))
+                .filter { $0.text == tokenName }.dropFirst(occurrence).first)
+
+            do {
+                _ = try TLASpecVerifier.parseAndVerify(model)
+                Issue.record("Unsupported enum declaration must fail")
+            } catch let error as ModelMacroError {
+                let diagnostic = modelMacroDiagnostic(error, in: model)
+                #expect(diagnostic.node.positionAfterSkippingLeadingTrivia == token.positionAfterSkippingLeadingTrivia)
+            }
         }
     }
 
