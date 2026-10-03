@@ -1158,6 +1158,7 @@ extension ParserSession {
                     return
                 }
                 parsed.append(.init(target: mappedName, source: expression))
+                recordRefinementMapping(named: name, target: mappedName, at: source)
             }
             mappings = parsed
         } else {
@@ -1169,6 +1170,7 @@ extension ParserSession {
         }
         components.refinements.append(.init(name: name, instance: instance.reference, operator: target,
             mappings: mappings, reference: .init(name: name, displayLabel: label)))
+        recordRefinementDeclaration(named: name, at: call)
     }
 
     private func refinementTargetName(_ expression: ExprSyntax) -> String? {

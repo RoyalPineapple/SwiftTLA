@@ -53,14 +53,30 @@ final class ParserSession {
             call.positionAfterSkippingLeadingTrivia.utf8Offset)
     }
 
+    func recordRefinementDeclaration(named name: String, at call: FunctionCallExprSyntax) {
+        propertyDeclarationOffsets["refinements.\(name)", default: []].append(
+            call.positionAfterSkippingLeadingTrivia.utf8Offset)
+    }
+
+    func recordRefinementMapping(named name: String, target: String, at expression: ExprSyntax) {
+        propertyDeclarationOffsets["refinements.\(name).mappings.\(target)", default: []].append(
+            expression.positionAfterSkippingLeadingTrivia.utf8Offset)
+    }
+
     func propertyDeclarationOffset(for diagnosticPath: String) -> Int? {
         let path = diagnosticPath.hasPrefix("nativeMachine.")
             ? diagnosticPath.dropFirst("nativeMachine.".count) : diagnosticPath[...]
         guard path.hasPrefix("invariants.") || path.hasPrefix("reachabilityProperties.")
-            || path.hasPrefix("temporalProperties.") else { return nil }
+            || path.hasPrefix("temporalProperties.") || path.hasPrefix("refinements.") else { return nil }
         let end = path.range(of: " → ")?.lowerBound ?? path.endIndex
-        guard let offsets = propertyDeclarationOffsets[String(path[..<end])], offsets.count == 1 else { return nil }
-        return offsets[0]
+        var key = String(path[..<end])
+        while true {
+            if let offsets = propertyDeclarationOffsets[key] {
+                return offsets.count == 1 ? offsets[0] : nil
+            }
+            guard key.hasPrefix("refinements."), let dot = key.lastIndex(of: ".") else { return nil }
+            key = String(key[..<dot])
+        }
     }
     enum FormalModuleProvider: Equatable {
         case folds

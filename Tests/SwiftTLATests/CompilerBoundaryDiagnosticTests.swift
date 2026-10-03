@@ -216,6 +216,46 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("Generated refinement errors point to the mapping or declaration")
+    func generatedRefinementErrorsPointToSource() throws {
+        for (mappings, token, path) in [
+            ("[.init(Var<Int>(\"value\"), from: true)]", "true", "refinements.Refines.mappings.value"),
+            ("[]", "Refinement", "refinements.Refines.mappings")
+        ] {
+            let source = Parser.parse(source: """
+        struct InvalidModel {
+            static var spec: TLASpec {
+                #spec { scope in
+                    let abstract = TLASpec("Abstract") {
+                        let value = Var<Int>("value")
+                        Variable(value, 0)
+                        SwiftTLA.Action("stay") { value.stays }
+                    }
+                    let count = scope.sharedVar(initial: 0)
+                    let target = Instance("Target", of: abstract)
+                    target
+                    let Refines = Refinement(instance: target,
+                        mappings: \(mappings))
+                    Refines
+                }
+            }
+        }
+        """)
+            let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+            let location = try #require(source.tokens(viewMode: .sourceAccurate).first { $0.text == token })
+
+            do {
+                _ = try TLASpecVerifier.parseAndVerify(declaration)
+                Issue.record("An incompatible or missing refinement mapping must fail compilation")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.contains(path))
+                #expect(diagnostic.sourceOffset == location.positionAfterSkippingLeadingTrivia.utf8Offset)
+                let emitted = modelCompilationDiagnostic(diagnostic, in: declaration)
+                #expect(emitted.node.positionAfterSkippingLeadingTrivia == location.positionAfterSkippingLeadingTrivia)
+            }
+        }
+    }
+
     @Test("Parameter and checking-register type errors point to their declarations")
     func typedInputErrorsPointToDeclarations() throws {
         for (input, name, path) in [
