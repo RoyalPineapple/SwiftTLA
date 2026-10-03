@@ -263,10 +263,14 @@ struct UpstreamParityTests {
         #expect(isSuccessful(exploration))
     }
 
-    @Test("Reachable bounded source port compiles its formal graph choice")
+    @Test("Reachable bounded source port checks its generated machine")
     func reachableBoundedPort() throws {
-        let exploration = try explore(ReachableModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.reachable.expectedDistinct)
+        let graph = try ReachabilityGraph(
+            initialMachines: ReachableModel.initialMachines(),
+            maximumStates: Example.reachable.maximumStateLimit
+        )
+        #expect(graph.transitions.count == Example.reachable.expectedDistinct)
+        #expect(graph.safetyViolations.isEmpty)
     }
 
     @Test("Parallel Reachable bounded source port checks its generated machine")
