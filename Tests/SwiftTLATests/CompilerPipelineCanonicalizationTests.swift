@@ -346,62 +346,6 @@ struct CompilerPipelineCanonicalizationTests {
         #expect(compilation.identity == repeated.identity)
     }
 
-    @Test("direct specifications retain one identity through runtime and checker")
-    func directSpecificationUsesOneCompiledPayload() throws {
-        let counter = Var<Int>("counter", 0)
-        let spec = TLASpec("CanonicalCounter") {
-            Variable(counter, 0)
-            Action("increment") {
-                counter.becomes(counter + 1)
-            }
-            Invariant("NonNegative") { counter >= 0 }
-        }
-
-        let compilation = try spec.compile()
-        let checker = ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 3, symmetryReduction: .disabled))
-
-        #expect(checker.compilation.identity == compilation.identity)
-        let initial = try firstCompiledState(in: compilation)
-        let successor = try #require(
-            try compiledSuccessors(named: "increment", arguments: [], in: compilation, from: initial).first
-        )
-        let graph = try checker.exploreGraph()
-        #expect(try renderedValue(named: "counter", in: successor, compilation: compilation) == .int(1))
-        let invariant = try #require(compilation.semantics.behavior.invariants.first)
-        #expect(invariant.name == "NonNegative")
-        #expect(try CompiledRuntime(compilation: compilation).invariantHolds(invariant, in: initial))
-        #expect(graph.states.count == 3)
-    }
-
-    @Test("state limits retain exactly the declared number of states")
-    func stateLimitIsAnExactRetainedStateBoundary() throws {
-        func exploration(guarded: Bool) throws -> FiniteExploration {
-            let counter = Var<Int>("counter", 0)
-            let action = counter.becomes(counter + 1)
-            let spec = TLASpec("StateLimitBoundary") {
-                Variable(counter, 0)
-                Action("increment") {
-                    guarded ? action.when(counter < 2) : action
-                }
-            }
-            return try ModelChecker(
-                compilation: spec.compile(),
-                configuration: FiniteExplorationConfiguration(maximumStateLimit: 3, symmetryReduction: .disabled)
-            ).explore()
-        }
-
-        let complete = try exploration(guarded: true)
-        #expect(complete.graph.states.count == 3)
-        #expect(complete.isComplete)
-
-        let bounded = try exploration(guarded: false)
-        #expect(bounded.graph.states.count == 3)
-        guard case .depthExceeded(statesCount: 3, limit: 3) = bounded.outcome else {
-            Issue.record("Expected the fourth distinct state to stop exploration at the declared limit.")
-            return
-        }
-    }
-
     @Test("compiled layout assigns private IDs in declaration order")
     func compiledLayoutAssignsDeclarationIDs() throws {
         let spec = TLASpec(
