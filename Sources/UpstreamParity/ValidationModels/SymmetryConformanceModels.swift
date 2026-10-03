@@ -20,7 +20,8 @@ package struct SymmetryConformanceScope2: Sendable {
     #spec("ModelCollection2") { scope in
       Constant("m0", Member.m0)
       Constant("m1", Member.m1)
-      Symmetry("Member", Set(Member.all))
+      let memberSymmetry = Symmetry(Set(Member.all))
+      memberSymmetry
       let chosen = scope.sharedVar(initial: Function<Member, Int>.mapping { _ in 0 })
       Do(Step.choose, over: Member.all) { member in
         When(chosen[member] == 0)
@@ -50,7 +51,8 @@ package struct SymmetryConformanceScope3: Sendable {
       Constant("m0", Member.m0)
       Constant("m1", Member.m1)
       Constant("m2", Member.m2)
-      Symmetry("Member", Set(Member.all))
+      let memberSymmetry = Symmetry(Set(Member.all))
+      memberSymmetry
       let chosen = scope.sharedVar(initial: Function<Member, Int>.mapping { _ in 0 })
       Do(Step.choose, over: Member.all) { member in
         When(chosen[member] == 0)
@@ -81,7 +83,8 @@ package struct SymmetryConformanceScope4: Sendable {
       Constant("m1", Member.m1)
       Constant("m2", Member.m2)
       Constant("m3", Member.m3)
-      Symmetry("Member", Set(Member.all))
+      let memberSymmetry = Symmetry(Set(Member.all))
+      memberSymmetry
       let chosen = scope.sharedVar(initial: Function<Member, Int>.mapping { _ in 0 })
       Do(Step.choose, over: Member.all) { member in
         When(chosen[member] == 0)
@@ -113,7 +116,8 @@ package struct SymmetryConformanceScope5: Sendable {
       Constant("m2", Member.m2)
       Constant("m3", Member.m3)
       Constant("m4", Member.m4)
-      Symmetry("Member", Set(Member.all))
+      let memberSymmetry = Symmetry(Set(Member.all))
+      memberSymmetry
       let chosen = scope.sharedVar(initial: Function<Member, Int>.mapping { _ in 0 })
       Do(Step.choose, over: Member.all) { member in
         When(chosen[member] == 0)

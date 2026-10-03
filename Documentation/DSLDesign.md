@@ -604,6 +604,25 @@ and TLA+ export; it is not a runtime scheduling mechanism.
 
 Fairness belongs to behavior because it changes allowed executions.
 
+### Explicit finite symmetry
+
+Symmetry is never inferred from a process population or a value type. In
+`#spec`, an immutable `let` binding owns each finite symmetry declaration, and
+the author registers that binding once:
+
+```swift
+let memberSymmetry = Symmetry(Set(Member.all))
+memberSymmetry
+```
+
+The Swift binding supplies the declaration's stable name and the generated
+TLA+ permutation operator name. An inline declaration, mutable binding, empty
+set, overlapping domains, composite member, or duplicate registration fails
+compilation. The native checker retains the complete unreduced graph; an
+explicit declaration selects TLC symmetry only where that checking mode is
+sound. The remaining parameter-dependent domain and scope decisions stay in
+B-04 until their native and TLC evidence is complete.
+
 `WeakFairness(step, on: value)` and `StrongFairness(step, on: value)` select a typed current-state projection.
 `WeakFairnessNext(on: value)` and `StrongFairnessNext(on: value)` apply that projection to the complete transition relation.
 An eligible transition must change the projection. Changes to other state do not count as fairness progress.

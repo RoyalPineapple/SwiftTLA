@@ -259,6 +259,7 @@ final class ParserSession {
         var instances: [String: FormalModuleInstance] = [:]
         var algorithms: [String: Algorithm] = [:]
         var validations: [String: ValidationDeclaration] = [:]
+        var symmetries: [String: SymmetrySetDecl] = [:]
         var modules: [String: TLASpec] = [:]
     }
     var specBindings = SpecBindings()

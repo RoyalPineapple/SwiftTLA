@@ -16,6 +16,10 @@ public func Symmetry(_ variableName: String, _ values: Set<some TLAValueConverti
   SymmetrySetDecl(variableName, Set(values.map(\.tlaValue)))
 }
 
+public func Symmetry(_name: String = "", _ values: Set<some TLAValueConvertible>) -> SymmetrySetDecl {
+  SymmetrySetDecl(_name, Set(values.map(\.tlaValue)))
+}
+
 extension TLASpec {
   func renderedDeclarationNames() -> Set<String> {
     Set(

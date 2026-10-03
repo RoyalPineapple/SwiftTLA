@@ -134,6 +134,11 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
 - [ ] Resolve B-01, B-04, B-05, and B-06 in the DSL spec with exact
       signatures, semantics, a positive fixture, and a negative diagnostic.
       Keep the settled B-02 declaration-identity and B-03 expectation contracts.
+- [ ] B-04 now has a bound, registered finite-symmetry declaration in `#spec`;
+      the formal-core string-named declaration remains only for direct formal
+      builders. The focused parser, generated export, and complete native
+      symmetry-graph checks pass locally. Parameter-dependent domains, remaining
+      fairness/symmetry scope references, and hosted acceptance are still open.
 - [x] Settle B-01's fixed-collection replacement design: a typed configuration
       parameter contains stable member IDs; `Each` and typed dictionary state
       use those IDs, while application objects stay outside model state. The

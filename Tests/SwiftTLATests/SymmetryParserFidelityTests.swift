@@ -11,7 +11,8 @@ struct SymmetryParserFidelityTests {
     func parsesFiniteDomainSet() throws {
         let closure = try #require(Parser.parse(source: """
         {
-            Symmetry("TxId", Set(Transaction.all))
+            let TxId = Symmetry(Set(Transaction.all))
+            TxId
         }
         """).statements.first?.item.as(ClosureExprSyntax.self))
 
@@ -42,6 +43,37 @@ struct SymmetryParserFidelityTests {
             [.string("t1"), .string("t2")]
         ])
     }
+
+    @Test("Symmetry requires a bound registration in #spec")
+    func rejectsUnboundSymmetry() throws {
+        let inline = try #require(Parser.parse(source: """
+        {
+            Symmetry(Set(Transaction.all))
+        }
+        """).statements.first?.item.as(ClosureExprSyntax.self))
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", inline,
+            sourceTypes: .init(enums: [
+                .init(typeName: "Transaction", cases: [],
+                    finiteValues: [.string("t1"), .string("t2")])
+            ]))
+        #expect(parsed.diagnostics.map(\.message) == [
+            "Symmetry requires an immutable named let binding and a registration reference."
+        ])
+
+        let mutable = try #require(Parser.parse(source: """
+        {
+            var TxId = Symmetry(Set(Transaction.all))
+            TxId
+        }
+        """).statements.first?.item.as(ClosureExprSyntax.self))
+        let mutableParsed = SpecParser.parseSpecClosure(named: "Parsed", mutable,
+            sourceTypes: .init(enums: [
+                .init(typeName: "Transaction", cases: [],
+                    finiteValues: [.string("t1"), .string("t2")])
+            ]))
+        #expect(mutableParsed.diagnostics.map(\.message).contains(
+            "Symmetry requires a unique immutable let binding."))
+    }
 }
 
 @TLAModel
@@ -56,7 +88,8 @@ private struct GeneratedSymmetryModel {
     static var spec: TLASpec {
         #spec("GeneratedSymmetry") { scope in
             let value = scope.sharedVar(_name: "value", initial: 0)
-            Symmetry("TxId", Set(Transaction.all))
+            let TxId = Symmetry(Set(Transaction.all))
+            TxId
             Invariant("TypeOK") { value >= 0 }
         }
     }

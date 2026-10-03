@@ -130,6 +130,17 @@ private final class DSLRewriter: SyntaxRewriter {
             let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
                 ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SwiftTLA"
                     ? member?.declName.baseName.sourceIdentifierName : nil)
+            if constructor == "Symmetry" {
+                guard node.bindingSpecifier.text == "let" else {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: SymmetryBindingDiagnostic()))
+                    return binding
+                }
+                let identity = LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
+                    expression: StringLiteralExprSyntax(content: name), trailingComma: .commaToken())
+                call.arguments = LabeledExprListSyntax([identity] + Array(call.arguments))
+                binding.initializer?.value = ExprSyntax(call)
+                return binding
+            }
             if let boundCall = addingBuilderBindingName(to: call, name: name) {
                 guard node.bindingSpecifier.text == "let" else {
                     context.diagnose(Diagnostic(node: Syntax(source), message: BuilderBindingDiagnostic()))
@@ -414,6 +425,12 @@ private struct BuilderBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-builder-binding")
     let severity: DiagnosticSeverity = .error
     let message = "Algorithm and Validation require an immutable named let binding inside #spec."
+}
+
+private struct SymmetryBindingDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-symmetry-binding")
+    let severity: DiagnosticSeverity = .error
+    let message = "Symmetry requires an immutable named let binding inside #spec."
 }
 
 private struct BuilderLabelDiagnostic: DiagnosticMessage {

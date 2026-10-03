@@ -52,6 +52,10 @@ extension ParserSession {
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let validation = specBindings.validations[reference.baseName.sourceIdentifierName] {
                 components.validationScenarios.append(validation)
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
+                      let symmetry = specBindings.symmetries[reference.baseName.sourceIdentifierName] {
+                symmetryDeclarations.append(symmetry)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &components)
             } else if case .decl(let decl) = statement.item,
@@ -275,6 +279,14 @@ extension ParserSession {
                 }
                 if let action = parseAction(call, into: &components, loopVar: nil, loopValue: nil) {
                     specBindings.actions[sourceName] = action
+                }
+            } else if compilerGrammarName(in: call.calledExpression) == "Symmetry" {
+                guard declaration.bindingSpecifier.text == "let", specBindings.symmetries[sourceName] == nil else {
+                    components.diagnostics.append(.init(message: "Symmetry requires a unique immutable let binding.", source: binding))
+                    continue
+                }
+                if let symmetry = parseSymmetry(call, named: sourceName, into: &components) {
+                    specBindings.symmetries[sourceName] = symmetry
                 }
             } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm" {
                 guard declaration.bindingSpecifier.text == "let", specBindings.algorithms[sourceName] == nil else {
@@ -1020,7 +1032,11 @@ extension ParserSession {
         case "Refinement":
             parseRefinement(call, into: &components)
         case "Symmetry":
-            parseSymmetry(call, into: &components)
+            components.diagnostics.append(.init(
+                message: "Symmetry requires an immutable named let binding and a registration reference.",
+                source: call,
+                expected: "let TxId = Symmetry(Set(Transaction.all)); TxId"
+            ))
         default:
             components.diagnostics.append(.init(
                 message: "Specification body contains an unsupported declaration '\(name)'.",
@@ -1055,20 +1071,21 @@ extension ParserSession {
 
     private func parseSymmetry(
         _ call: FunctionCallExprSyntax,
+        named bindingName: String,
         into components: inout TLASpec
-    ) {
-        guard let variableName = extractStringArg(call, index: 0), !variableName.isEmpty,
-              let valuesSyntax = call.arguments.dropFirst().first?.expression,
+    ) -> SymmetrySetDecl? {
+        guard call.arguments.filter({ $0.label == nil }).count == 1,
+              let valuesSyntax = call.arguments.first(where: { $0.label == nil })?.expression,
               let values = parseSymmetryValues(valuesSyntax)
         else {
             components.diagnostics.append(.init(
-                message: "Symmetry requires a name and a finite domain.",
+                message: "Symmetry requires a finite domain.",
                 source: call,
-                expected: "Symmetry(\"TxId\", Set(Transaction.all))"
+                expected: "let TxId = Symmetry(Set(Transaction.all)); TxId"
             ))
-            return
+            return nil
         }
-        symmetryDeclarations.append(.init(variableName, Set(values)))
+        return .init(bindingName, Set(values))
     }
 
     private func parseRefinement(

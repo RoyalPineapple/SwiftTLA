@@ -79,7 +79,8 @@ package struct KVsnapModel: Sendable {
             Constant("t2", Transaction.t2)
             Constant("t3", Transaction.t3)
             Constant("NoVal", NoValue.noVal)
-            Symmetry("TxId", Set(Transaction.all))
+            let TxId = Symmetry(Set(Transaction.all))
+            TxId
 
             Instance("CC", of: ClientCentric.module, with: [
                 ModuleArgument("Keys", value: SetExpr<Key>.literal(.k1, .k2)),
