@@ -90,4 +90,16 @@ struct NativeRefinementCheckingTests {
         #expect(witness.cycle.allSatisfy { $0.state.count == 1 })
     }
 
+    @Test("refinement maps action enabledness from the generated machine")
+    func mapsActionEnabledness() throws {
+        let initial = try #require(EnablednessNativeRefinement.initialMachines().first)
+        #expect(try Set(initial.enabledActions()) == [.ready, .advance])
+        let advanced = try #require(initial.successors().first { $0.action == .advance })
+        #expect(try advanced.machine.enabledActions().isEmpty)
+        let graph = try ReachabilityGraph(initialMachines: EnablednessNativeRefinement.initialMachines(), maximumStates: 3)
+        #expect(graph.transitions.count == 2)
+        #expect(graph.refinementFailures.isEmpty)
+        let exported = try NativeModelRun(graph, rendered: EnablednessNativeRefinement.render())
+        #expect(exported.checks.properties["Refines"] == .satisfied)
+    }
 }

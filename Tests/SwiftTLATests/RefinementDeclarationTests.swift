@@ -242,8 +242,8 @@ struct RefinementDeclarationTests {
     #expect(parsed.refinements.first?.operator == .liveSpec)
   }
 
-  @Test("refinement mappings use compiled action enabledness")
-  func mapsActionEnabledness() throws {
+  @Test("local operators retain enabledness dependencies in refinement mappings")
+  func tracksLocalOperatorEnablednessInRefinementMapping() throws {
     let abstractEnabled = Var<Bool>("abstractEnabled", true)
     let abstract = TLASpec("Abstract") {
       Variable(abstractEnabled)
@@ -283,14 +283,6 @@ struct RefinementDeclarationTests {
     #expect(try runtime.evaluate(refinement.variableMappings, in: initial) == [.boolean(true)])
     let advanced = try #require(try runtime.successors(from: initial).first { $0.state != initial })
     #expect(try runtime.evaluate(refinement.variableMappings, in: advanced.state) == [.boolean(false)])
-
-    let exploration = try ModelChecker(
-      compilation: compilation,
-      configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled)
-    ).explore()
-    #expect(exploration.isComplete)
-    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
-    #expect(try RefinementChecker(compilation: compilation).check(exploration) == nil)
   }
 
   @Test("refinement preserves concrete failures instead of diagnosing a state limit")

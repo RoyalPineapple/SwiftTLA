@@ -106,3 +106,33 @@ struct StoppedConcreteRefinement {
         }
     }
 }
+
+@TLAModel
+struct EnablednessNativeRefinement {
+    static var spec: TLASpec {
+        #spec("EnablednessNativeRefinement") { scope in
+            let abstract = TLASpec("EnablednessAbstract") {
+                let enabled = Var<Bool>("enabled")
+                Variable(enabled, true)
+                SwiftTLA.Action("advance") { enabled.becomes(false).when(enabled) }
+                WeakFairnessNext()
+            }
+            let count = scope.sharedVar(_name: "count", initial: 0)
+            let ready = SwiftTLA.Action("ready") {
+                count.becomes(count + 1).when(count < 1)
+            }
+            let advance = SwiftTLA.Action("advance") {
+                StateExpr.enabled(ready) && count.becomes(count + 1)
+            }
+            ready
+            advance
+            WeakFairnessNext()
+            let instance = Instance("Counter", of: abstract)
+            instance
+            let Refines = Refinement(instance: instance, mappings: [
+                .init(Var<Bool>("enabled"), from: StateExpr.enabled(advance))
+            ])
+            Refines
+        }
+    }
+}
