@@ -116,6 +116,12 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
 - [ ] Resolve B-01, B-04, B-05, and B-06 in the DSL spec with exact
       signatures, semantics, a positive fixture, and a negative diagnostic.
       Keep the settled B-02 declaration-identity and B-03 expectation contracts.
+- [x] Settle B-01's fixed-collection replacement design: a typed configuration
+      parameter contains stable member IDs; `Each` and typed dictionary state
+      use those IDs, while application objects stay outside model state. The
+      DSL spec records the positive authoring form and negative boundaries.
+      Migrating `ModelCollection` callers, deleting that API, and proving the
+      replacement in generated execution and hosted parity remain open.
 - [x] Settle B-02 identity for `Algorithm` and `Validation`: each requires an
       immutable `let` binding, registered by reference; a display label never
       supplies identity. The parser and `#spec` rewrite support this form.

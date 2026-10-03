@@ -873,8 +873,10 @@ intersection, difference, insertion, and removal. These operations preserve the
 declared element type. Compilation rejects distinct Swift members that collapse
 to one formal value. A set declaration does not imply symmetry.
 
-The next section defines configurable `Each` populations.
-Replacement of fixed `ModelCollection` declarations remains part of B-01.
+The next section defines configurable `Each` populations. Fixed
+`ModelCollection` declarations must be replaced by a typed set-valued
+configuration parameter of stable member IDs. Application objects are not
+model state; their IDs are. This decision does not make members symmetric.
 
 #### Ordinary Swift arrays
 
@@ -1040,7 +1042,42 @@ Process domains remain symbolic in TLA+ output. Action metadata contains the
 configured members and complete arguments. Explicit fairness applies separately
 to each process instance. A set does not declare fairness or symmetry.
 
-This settles the process-population syntax in B-01.
+This settles the process-population syntax and the replacement design for
+fixed `ModelCollection` declarations in B-01. Assume the model declares
+`enum DeviceID: String, CaseIterable { case east, west }` and
+`enum Step: String, CaseIterable { case advance }`. The intended authoring
+shape is:
+
+```swift
+let devices = scope.parameter(as: Set<DeviceID>.self,
+    in: Subsets(of: DeviceID.all))
+let phase = scope.sharedVar(initial:
+    Dictionary<DeviceID, Int>.mapping(over: devices) { _ in 0 })
+
+let protocolAlgorithm = Algorithm(scoped: { _ in
+    Each(devices) { member in
+        Do(Step.advance) { Assign(phase[member], to: phase[member] + 1) }
+    }
+})
+protocolAlgorithm
+
+let pair = Validation(label: "Pair") {
+    Bind(devices, to: Set<DeviceID>([.east, .west]))
+}
+pair
+```
+
+`DeviceID` values identify the same members in configuration, actions, state,
+and formal output. A different binding changes the population and dictionary
+domain without changing generated `State` or `Action` types. The compiler must
+reject `Each(activeDevices)` when `activeDevices` is mutable model state, and
+configuration construction must reject a member type whose distinct Swift IDs
+collapse to the same formal value. No parallel `CollectionVar` schema, opaque
+generated member constants, or fixed verification-scope declaration remains in
+the completed authoring API. Existing `ModelCollection` callers and fixtures
+must be migrated and that API deleted; the current implementation has not yet
+done this.
+
 Generated scenarios support empty, singleton, and multi-member populations, including explicit weak and strong fairness.
 Independent validation remains required for every upstream configuration. Collection composition remains open.
 
@@ -1076,7 +1113,8 @@ Scalar and set-valued parameters use the contracts in this section. Bindings are
 values, not opaque closures that backends evaluate differently. State, parameter,
 and operator dependencies in scenario bindings currently produce explicit diagnostics.
 Parameter-dependent process populations use the configured `Each` contract.
-Fixed `ModelCollection` bindings remain open and produce explicit diagnostics.
+Fixed `ModelCollection` replacement follows the member-ID parameter contract
+above; legacy callers remain to be migrated before that API can be deleted.
 
 Registered refinements have model-owned property handles and participate in every scenario by default.
 A `let` binding alone does not register a refinement. Its handle must also appear as a specification builder expression.
