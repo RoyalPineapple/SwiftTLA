@@ -95,6 +95,17 @@ struct CompilerBoundaryDiagnosticTests {
                 })
                 counter
             }
+            """,
+            """
+            #spec {
+                let counter = Algorithm(scoped: { scope in
+                    Each(Control.all, scoped: { _, process in
+                        let count: LocalVariable<Int> = process.localVar(initial: true)
+                        Do(Control.advance) { Stop() }
+                    })
+                })
+                counter
+            }
             """
         ] {
             let source = Parser.parse(source: """
