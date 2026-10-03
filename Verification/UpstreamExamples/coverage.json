@@ -10848,10 +10848,26 @@
     },
     {
       "id": "AC-09",
-      "status": "missing",
+      "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "NativeReachabilityTests covers complete graphs after invariant violations, normal termination, and unfinished blocked machines. NativeTemporalCheckingTests retains replayable typed cycles. The 6d0617ab independent temporal matrix has TLC agreement for stuttering, temporal violations, and deadlock satisfaction; CoffeeCan AP/100/1000 has invariant/temporal/deadlock comparisons. On hosted PR SHA c631af7df826b5419b3d49685332df5b36eabfe3, both Counter scenarios matched generated-TLA TLC with complete graphs and all selected properties: counter-0 completed normally with 3 states, 3 edges, and satisfied deadlock; counter-1 reached the expected unfinished deadlock with 5 states, 4 edges, and a violated deadlock verdict. The source and retained native/oracle/comparison reports were inspected, and the full independent matrix and ordinary CI were green on that SHA. AC-09 remains uncredited pending a source-aligned audit that joins the termination, stuttering, and temporal-cycle cases into the required acceptance matrix on the final candidate.",
+      "reason": "At hosted SHA 40b5752b, ordinary CI passed NativeReachabilityTests, NativeTemporalCheckingTests, and ScenarioExpectationTests. The independent matrix retained complete exact native-versus-generated-TLA graphs and all selected verdicts for Counter termination and unfinished deadlock, a violated invariant and temporal property, and transition-property stuttering. Its separate temporal matrix compared 18 native/TLC property results and three deadlock results exactly, including a same-state stuttering lasso. The two bound DeadlockScenarios differ only in expectation and produce identical native graphs and checks while changing admission. This source-aligned AC-09 matrix is accepted; final-head admission and the full corpus remain separate obligations.",
       "evidence": [
+        {
+          "sourceSHA": "40b5752b733317ba306b98989c95e547e18f357f",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801/artifacts/11267842174",
+          "artifactSHA256": "52809e512005e459fa0300d8fc4cf59bb63bfdbd3436f8101d6c2c4a3eff5d26",
+          "supportingArtifacts": [
+            {"caseID": "counter-0", "id": 11267883025, "sha256": "d2f49fb3b4e68a09d0a4617ce023fe1ac268218fa61b740eed5c409e15373c2c"},
+            {"caseID": "counter-1", "id": 11267648309, "sha256": "e17919572e933903d4331b93e91be073a7147390c09e39d41198696c8f9e2a81"},
+            {"caseID": "labelled-property-claims-0", "id": 11268435234, "sha256": "89a33c7cacc1fe225691f4a2825efb2337e0557103b4b3ae6306ccebbb73b615"},
+            {"caseID": "transition-property-claims-0", "id": 11267947374, "sha256": "12490656ed7f2016b1b25169494ea0c4e6b70150cc8aa0c5e00333a69ebd7575"}
+          ],
+          "ordinaryRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736799",
+          "acceptanceComplete": true,
+          "scope": "Downloaded source-SHA-bound Counter, labelled-property, transition-property, and temporal-matrix artifacts. Counter-0 has 1 initial/3 states/3 edges and satisfied deadlock after normal completion; Counter-1 has 1 initial/5 states/4 edges and violated deadlock at an unfinished control state. Labelled-property-claims-0 has a violated invariant and Eventually property on its complete self-loop graph. Transition-property-claims-0 retains selectedStuttering and all five selected properties. These four case comparisons have graphCompared=true, coversCompleteScenario=true, no omitted properties, and result=exact. All 21 temporal-matrix property/deadlock records have status=exact; the EventuallyP counterexample includes matching native and TLC same-state lassos. Ordinary CI passes the expectation-only deadlock and replayable native-trace tests. This accepts AC-09 only, not 78-family completion."
+        },
         {
           "sourceSHA": "6d0617ab720ad6fb54f6dce11f642dbe63863c9d",
           "developerToolsVersion": "16.4",
