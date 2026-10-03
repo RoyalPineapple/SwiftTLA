@@ -82,23 +82,6 @@ import UpstreamParity
     #expect(try spec.compile().render().tlaBundle.tla.contains("select__0 == select(1)"))
   }
 
-  @Test("parameterized invocations retain every label when they discover one successor")
-  func parameterizedInvocationsRetainLabelsForSharedNewSuccessor() throws {
-    let value = Var<Int>("value")
-    let spec = TLASpec("SharedSuccessor") {
-      Variable(value, 0)
-      Action("openDoor", parameters: [ActionParameter("trigger", values: [0, 1])]) {
-        value.becomes(1)
-      }
-    }
-
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).exploreGraph()
-    let transitions = try #require(graph.transitions[.init(0)])
-
-    #expect(transitions.map(\.action) == ["openDoor(0)", "openDoor(1)"])
-    #expect(transitions.map(\.target) == [.init(1), .init(1)])
-  }
-
   @Test func explorationResultMatchesExistingCheckerViews() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("ExplorationSnapshot") {

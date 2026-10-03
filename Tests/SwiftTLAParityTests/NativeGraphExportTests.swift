@@ -36,6 +36,21 @@ struct NativeGraphExportTests {
         #expect(try CanonicalGraph(native) == expected)
     }
 
+    @Test("distinct parameterized actions retain their labels when they share a target")
+    func retainsParameterizedLabelsForSharedTarget() throws {
+        let native = try ReachabilityGraph(
+            initialMachines: SharedTargetParameterizedModel.initialMachines(), maximumStates: 2)
+        let zero = CanonicalState(bindings: ["value": .integer(0)])
+        let one = CanonicalState(bindings: ["value": .integer(1)])
+        let expected = try CanonicalGraph(initialStates: [zero], states: [zero, one], edges: [
+            .init(source: zero.key, action: "openDoor(0)", target: one.key),
+            .init(source: zero.key, action: "openDoor(1)", target: one.key),
+            .init(source: one.key, action: "openDoor(0)", target: one.key),
+            .init(source: one.key, action: "openDoor(1)", target: one.key)
+        ])
+        #expect(try CanonicalGraph(native) == expected)
+    }
+
     @Test("native export retains all reachability targets and a shortest witness without truncation")
     func exportsPositiveOutcomes() throws {
         let graph = try ReachabilityGraph(initialMachines: ReachabilityExportModel.initialMachines(), maximumStates: 3)
