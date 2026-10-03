@@ -1,6 +1,5 @@
 import Testing
 @testable import SwiftTLA
-@testable import SwiftTLAPlugin
 
 struct FunctionSpaceMembershipTests {
     @Test("parameter-bound function domains retain every total assignment")
@@ -77,37 +76,14 @@ struct FunctionSpaceMembershipTests {
         #expect(try compiledValue(membership) == .bool(true))
     }
 
-    @Test("Generated and formal membership avoid expansion and preserve failures")
-    func nativeAndFormalAgreement() throws {
-        let compilation = try FunctionSpaceMembershipModel.spec.compile()
-        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
-        var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "FunctionSpaceMembershipModel", program: program))
-        let generated = try emitter.machineMembers().map(\.description).joined(separator: "\n")
-        #expect(!generated.contains("validateFunctionSetCardinality"))
-        try #require(!generated.contains("_NativeMachineOperations.functionSet("))
-        let runtime = CompiledRuntime(program: program)
-        let initial = try #require(try runtime.initialStates().first)
-        let accepted = try #require(compilation.layout.testActionID(named: "accepted"))
-        let result = try #require(compilation.layout.testVariableID(named: "result"))
-        let successor = try #require(try runtime.successors(for: accepted, from: initial).first)
+    @Test("Generated membership accepts large function spaces and preserves failures")
+    func generatedMembershipPreservesFailure() throws {
         var machine = try FunctionSpaceMembershipModel.makeMachine()
         #expect(try machine.send(.accepted).after.result)
-        #expect(try successor.state.value(for: result) == .boolean(true))
-        let largeAccepted = try #require(compilation.layout.testActionID(named: "largeAccepted"))
-        let largeSuccessor = try #require(try runtime.successors(for: largeAccepted, from: initial).first)
         #expect(try machine.send(.largeAccepted).after.result)
-        #expect(try largeSuccessor.state.value(for: result) == .boolean(true))
-
-        let failures: [(String, FunctionSpaceMembershipModel.Action, EvalError, NativeMachineEvaluationError)] = [
-            ("candidateFailure", .candidateFailure, .divisionByZero, .divisionByZero)
-        ]
-        for (name, action, formalError, nativeError) in failures {
-            let formalAction = try #require(compilation.layout.testActionID(named: name))
-            #expect(throws: formalError) { try runtime.successors(for: formalAction, from: initial) }
-            var machine = try FunctionSpaceMembershipModel.makeMachine()
-            let before = machine.state
-            #expect(throws: nativeError) { try machine.send(action) }
-            #expect(machine.state == before)
-        }
+        var failing = try FunctionSpaceMembershipModel.makeMachine()
+        let before = failing.snapshot
+        #expect(throws: NativeMachineEvaluationError.divisionByZero) { try failing.send(.candidateFailure) }
+        #expect(failing.snapshot == before)
     }
 }

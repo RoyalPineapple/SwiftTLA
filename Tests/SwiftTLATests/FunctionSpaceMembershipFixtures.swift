@@ -60,27 +60,25 @@ enum CollidingFunctionKey: Hashable, TLAValueType {
     }
 }
 
-// Independent formal actions exercise generated failures without advancing process control.
 @TLAModel
 struct FunctionSpaceMembershipModel {
     enum Key: String, CaseIterable, FiniteTLAValueDomain { case first, second, third }
+    enum Step: String, CaseIterable { case accepted, candidateFailure, largeAccepted }
 
     static var spec: TLASpec {
-        #spec("FunctionSpaceMembershipModel") {
-            let result = Var<Bool>("result")
-            let zero = Var<Int>("zero")
-            Variable(result, false)
-            Variable(zero, 0)
-            SwiftTLA.Action("accepted") {
-                result.becomes(Functions(from: Key.all, to: SetExpr<Int>.literal(0, 1))
+        #spec { scope in
+            let result = scope.sharedVar(initial: false)
+            let zero = scope.sharedVar(initial: 0)
+            Do(Step.accepted) {
+                Assign(result, to: Functions(from: Key.all, to: Set<Int>([0, 1]))
                     .contains(Function<Key, Int>.mapping { _ in 0 }))
             }
-            SwiftTLA.Action("candidateFailure") {
-                result.becomes(Functions(from: Key.all, to: SetExpr<Int>())
-                    .contains(Function<Key, Int>.mapping { _ in 1 / zero.expr }))
+            Do(Step.candidateFailure) {
+                Assign(result, to: Functions(from: Key.all, to: Set<Int>([]))
+                    .contains(Function<Key, Int>.mapping { _ in 1 / zero }))
             }
-            SwiftTLA.Action("largeAccepted") {
-                result.becomes(Functions(from: IntRange(0, through: 99), to: SetExpr<Int>.literal(0, 1))
+            Do(Step.largeAccepted) {
+                Assign(result, to: Functions(from: IntRange(0, through: 99), to: Set<Int>([0, 1]))
                     .contains(Dictionary<Int, Int>.mapping(over: IntRange(0, through: 99)) { _ in 0 }))
             }
         }

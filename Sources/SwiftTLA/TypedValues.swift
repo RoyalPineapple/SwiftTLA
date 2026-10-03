@@ -201,10 +201,10 @@ public func InjectiveSequence<Domain: FormalSetValue>(
 
 /// The bounded TLA+ function space from one finite domain to a finite set of
 /// values.
-public func Functions<Domain: FiniteTLAValueDomain, Range: TLAValueType>(
+public func Functions<Domain: FiniteTLAValueDomain, Range: FormalSetValue>(
   from domain: FiniteDomain<Domain>,
-  to values: some TypedExpression<SetExpr<Range>>
-) -> Expr<SetExpr<Function<Domain, Range>>> {
+  to values: some TypedExpression<Range>
+) -> Expr<SetExpr<Function<Domain, Range.Element>>> {
   Expr(.functionSet(.setLiteral(domain.members.map(\.stateExpr)), values.stateExpr))
 }
 
