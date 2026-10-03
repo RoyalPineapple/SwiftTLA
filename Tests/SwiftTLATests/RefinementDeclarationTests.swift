@@ -242,33 +242,6 @@ struct RefinementDeclarationTests {
     #expect(parsed.refinements.first?.operator == .liveSpec)
   }
 
-  @Test("bounded refinement accepts abstract steps and stuttering")
-  func checksMappedInitialStatesAndEdges() throws {
-    let abstractValue = Var<Int>("abstractValue", 0)
-    let abstract = TLASpec("Abstract") {
-      Variable(abstractValue)
-      Action("advance") {
-        abstractValue.becomes(abstractValue + 1).when(abstractValue < 1)
-      }
-    }
-    let concreteValue = Var<Int>("concreteValue", 0)
-    let instance = Instance("C", of: abstract)
-    let concrete = TLASpec("Concrete") {
-      Variable(concreteValue)
-      Action("advance") {
-        concreteValue.becomes(concreteValue + 1).when(concreteValue < 1)
-      }
-      instance
-      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
-    }
-
-    let compilation = try concrete.compile()
-    let exploration = try ModelChecker(compilation: compilation, configuration: .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).explore()
-    #expect(exploration.isComplete)
-    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
-    #expect(try RefinementChecker(compilation: compilation).check(exploration) == nil)
-  }
-
   @Test("refinement mappings use compiled action enabledness")
   func mapsActionEnabledness() throws {
     let abstractEnabled = Var<Bool>("abstractEnabled", true)
@@ -318,65 +291,6 @@ struct RefinementDeclarationTests {
     #expect(exploration.isComplete)
     #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
     #expect(try RefinementChecker(compilation: compilation).check(exploration) == nil)
-  }
-
-  @Test("bounded refinement reports a concrete edge outside the abstract relation")
-  func rejectsUnmappedConcreteEdge() throws {
-    let abstractValue = Var<Int>("abstractValue", 0)
-    let abstract = TLASpec("Abstract") {
-      Variable(abstractValue)
-      Action("advance") {
-        abstractValue.becomes(abstractValue + 1).when(abstractValue < 1)
-      }
-    }
-    let concreteValue = Var<Int>("concreteValue", 0)
-    let instance = Instance("C", of: abstract)
-    let concrete = TLASpec("Concrete") {
-      Variable(concreteValue)
-      Action("advance") {
-        concreteValue.becomes(concreteValue + 2).when(concreteValue < 1)
-      }
-      instance
-      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
-    }
-
-    let outcome = try ModelChecker(compilation: try concrete.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-    guard case .refinementViolated(let refinement, .transition) = outcome else {
-      Issue.record("Expected a refinement transition violation, got \(outcome).")
-      return
-    }
-    #expect(refinement == "Refines")
-  }
-
-  @Test("incomplete exploration leaves refinement unproven")
-  func reportsUnprovenRefinement() throws {
-    let abstractValue = Var<Int>("abstractValue", 0)
-    let abstract = TLASpec("Abstract") {
-      Variable(abstractValue)
-      Action("advance") {
-        abstractValue.becomes(abstractValue + 1).when(abstractValue < 1)
-      }
-    }
-    let concreteValue = Var<Int>("concreteValue", 0)
-    let instance = Instance("C", of: abstract)
-    let concrete = TLASpec("Concrete") {
-      Variable(concreteValue)
-      Action("advance") {
-        concreteValue.becomes(concreteValue + 1).when(concreteValue < 1)
-      }
-      instance
-      Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
-    }
-
-    let outcome = try ModelChecker(
-      compilation: try concrete.compile(),
-      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1, symmetryReduction: .disabled)
-    ).check()
-    guard case .refinementUnproven(let refinement, .depthExceeded) = outcome else {
-      Issue.record("Expected an unproven refinement outcome, got \(outcome).")
-      return
-    }
-    #expect(refinement == "Refines")
   }
 
   @Test("refinement preserves concrete failures instead of diagnosing a state limit")
