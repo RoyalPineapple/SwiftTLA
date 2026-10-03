@@ -1824,6 +1824,10 @@ final class ParserSession {
            let candidates = call.arguments.first(where: { $0.label?.text == "from" })?.expression {
             return typedFacadeValueType(candidates, scope: scope)?.selectedElement
         }
+        if compilerGrammarName(in: call.calledExpression) == "Where",
+           let candidates = call.arguments.first?.expression {
+            return typedFacadeValueType(candidates, scope: scope)
+        }
         if let member = call.calledExpression.as(MemberAccessExprSyntax.self),
            member.declName.baseName.sourceIdentifierName == "integerDivided",
            decodeTypedFacadeValue(expression, scope: scope) != nil {

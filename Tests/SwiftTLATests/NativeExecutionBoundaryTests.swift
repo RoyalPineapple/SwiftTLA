@@ -8,7 +8,7 @@ private struct CartesianInitialSelection {
     static var spec: TLASpec {
         #spec("CartesianInitialSelection") {
             let cartesianInitialSelection = Algorithm(label: "CartesianInitialSelection", scoped: { scope in
-                let left = scope.sharedVar(_name: "left", in: 1...2)
+                let left = scope.sharedVar(_name: "left", in: Where(Set<Int>([0, 1, 2])) { value in value > 0 })
                 let right = scope.sharedVar(_name: "right", in: 3...4)
                 Do(Step.advance) { Assign(left, to: left + right) }
             })
@@ -23,7 +23,7 @@ private struct EmptyInitialSelection {
     static var spec: TLASpec {
         #spec("EmptyInitialSelection") {
             let emptyInitialSelection = Algorithm(label: "EmptyInitialSelection", scoped: { scope in
-                let count = scope.sharedVar(_name: "count", in: Where(SetExpr<Int>.literal(1)) { value in value < 0 })
+                let count = scope.sharedVar(_name: "count", in: Where(Set<Int>([1])) { value in value < 0 })
                 Do(Step.advance) { Assign(count, to: count + 1) }
             })
             emptyInitialSelection

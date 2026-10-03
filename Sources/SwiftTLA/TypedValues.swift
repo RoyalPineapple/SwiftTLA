@@ -241,17 +241,17 @@ public func NonEmptySubsets<Element: TLAValueType>(
 }
 // swiftlint:enable identifier_name
 
-/// Narrows a finite formal set with a typed TLA+ predicate.
-public func Where<Value: TLAValueType, Predicate: TypedExpression<Bool>>(
-  _ candidates: some TypedExpression<SetExpr<Value>>,
+/// Narrows a finite typed set with a TLA+ predicate.
+public func Where<Domain: FormalSetValue, Predicate: TypedExpression<Bool>>(
+  _ candidates: some TypedExpression<Domain>,
   file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
-  matching predicate: (WithValue<Value>) -> Predicate
-) -> Expr<SetExpr<Value>> {
+  matching predicate: (WithValue<Domain.Element>) -> Predicate
+) -> Expr<Domain> {
   let binding = generatedBinderName(file: file, line: line, column: column)
-  return Expr(.setFilter(
+  return Expr<Domain>(.setFilter(
     candidates.stateExpr,
     binding,
-    predicate(WithValue<Value>(expression: .variable(binding))).stateExpr
+    predicate(WithValue<Domain.Element>(expression: .variable(binding))).stateExpr
   ))
 }
 

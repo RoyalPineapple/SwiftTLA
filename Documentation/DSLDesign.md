@@ -905,8 +905,9 @@ state and action types. Export changes constant bindings, not the transition mod
 
 Set expressions support membership, cardinality, subset checks, union,
 intersection, difference, insertion, and removal. These operations preserve the
-declared element type. Compilation rejects distinct Swift members that collapse
-to one formal value. A set declaration does not imply symmetry.
+declared element type. `Where` accepts an ordinary Swift set and preserves its
+set type while filtering members. Compilation rejects distinct Swift members
+that collapse to one formal value. A set declaration does not imply symmetry.
 
 The next section defines configurable `Each` populations. Fixed
 `ModelCollection` declarations must be replaced by a typed set-valued
@@ -1440,11 +1441,12 @@ agreement separately. Do not redefine membership from the implementation registr
 Close each open item with exact signatures, semantics, and one positive and one
 negative acceptance example. Implementers must not resolve these silently by
 inventing a second API or preserving an accidental existing behavior. B-02 and
-B-03 are settled below; the other decisions remain open.
+B-03 are settled below. B-01's fixed-collection replacement is settled, but
+its remaining domain decisions and B-04 through B-06 are open.
 
 | ID | Decision |
 | --- | --- |
-| B-01 | Parameter and domain syntax: distinguish value types, legal model domains, finite scenario bindings, and runner resource limits. Define parameter-dependent structure without changing generated API types |
+| B-01 | Settle remaining parameter-dependent domain syntax, finite scenario bindings, and runner-limit separation. Fixed `ModelCollection` replacement is settled: typed configuration parameters contain stable member IDs used by `Each` and dictionary state; application objects stay outside model state |
 | B-02 | Settled: name-bearing declarations use their specified immutable Swift binding or typed enum identity; `Algorithm` and `Validation` require explicit registration by bound reference. Inline control statements need no extra identity. Optional `label:` is presentation-only |
 | B-03 | Settled: typed `.expect(property, .violated)` and `.expectDeadlock(.violated)` change scenario admission only; checking retains its default selections and typed result shapes |
 | B-04 | Temporal and symmetry syntax: settle explicit fairness and interchangeability declarations, scope references, validation rules, and permitted reductions; neither fairness nor symmetry is automatic |

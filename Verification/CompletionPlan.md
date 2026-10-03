@@ -332,7 +332,14 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       Ordinary `[Element]()` and `[Element]([...])` array constructors now
       resolve in `#spec` through the same type resolver as `Array<Element>`.
       The generated array fixture failed before this parser fix and its four
-      related tests pass locally afterward; hosted acceptance remains open.
+      related tests pass locally afterward. The generated function-space
+      membership fixture now uses `#spec`, `Do`, and ordinary Swift `Set`
+      ranges rather than formal `Var`/`Action` declarations; its generated
+      large-domain and failure contract plus ten neighboring tests pass
+      locally at `624b8aa1`. `Where` now accepts ordinary Swift sets without
+      changing their type; the generated positive and empty initial-domain
+      regressions failed to compile before the fix and nine related tests
+      pass locally. Hosted acceptance remains open.
 - [ ] Confirm the four required end-to-end model classes (Counter, mutual
       exclusion, puzzle, distributed protocol) each execute as an application,
       explore the same generated transitions, validate separately with TLC,
