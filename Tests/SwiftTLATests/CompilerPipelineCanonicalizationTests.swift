@@ -2344,9 +2344,6 @@ struct CompilerPipelineCanonicalizationTests {
                     origin: .source
                 )
             ], actions: base.actions, invariants: []),
-            TLASpec(name: "StructuralFingerprint", variables: [
-                .init(name: "value", initial: .int(0), collectionType: .dictionary(2))
-            ], actions: base.actions, invariants: []),
             TLASpec(name: "StructuralFingerprint", variables: base.variables, actions: base.actions, invariants: [], imports: [importedA]),
             TLASpec(name: "StructuralFingerprint", variables: base.variables, actions: base.actions, invariants: [], imports: [importedB])
         ]
@@ -2356,8 +2353,8 @@ struct CompilerPipelineCanonicalizationTests {
             let variantIdentity = try variant.compile().identity
             #expect(variantIdentity != identity)
         }
-        let importedAIdentity = try variants[3].compile().identity
-        let importedBIdentity = try variants[4].compile().identity
+        let importedAIdentity = try variants[2].compile().identity
+        let importedBIdentity = try variants[3].compile().identity
         #expect(importedAIdentity != importedBIdentity)
     }
 

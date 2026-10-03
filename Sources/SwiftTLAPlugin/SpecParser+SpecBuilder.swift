@@ -431,7 +431,6 @@ extension ParserSession {
                 }
                 components.variables[components.variables.count - 1] = .init(
                     name: variable.name, initialization: variable.initialization,
-                    collectionType: variable.collectionType,
                     displayLabel: variable.displayLabel,
                     generatedSwiftType: variable.generatedSwiftType,
                     resolvedValueType: variable.generatedSwiftType == nil ? valueType : nil,
@@ -1450,7 +1449,6 @@ extension ParserSession {
         components.variables[matchingIndices[0]] = .init(
             name: replacement.name,
             initialization: replacement.initialization,
-            collectionType: replacement.collectionType,
             generatedSwiftType: replacement.generatedSwiftType ?? existing.generatedSwiftType,
             resolvedValueType: replacement.resolvedValueType ?? existing.resolvedValueType,
             origin: replacement.origin

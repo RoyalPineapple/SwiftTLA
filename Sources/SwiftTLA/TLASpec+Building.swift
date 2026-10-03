@@ -24,7 +24,7 @@ extension TLASpec {
       if let v = comp as? VarDecl {
         variables.append(
           NamedVar(
-            name: v.name, initialization: v.initialization, collectionType: v.collectionType,
+            name: v.name, initialization: v.initialization,
             displayLabel: v.displayLabel,
             generatedSwiftType: v.generatedSwiftType, origin: .source))
       } else if let a = comp as? ActionDecl {

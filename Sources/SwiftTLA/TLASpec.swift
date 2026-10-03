@@ -1,10 +1,3 @@
-public enum CollectionVarType: Sendable, Equatable {
-  case scalar
-  case set
-  case array(Int)
-  case dictionary(Int)
-}
-
 package enum VariableOrigin: Sendable, Equatable {
   case source
   case compiler
@@ -27,18 +20,16 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
   public let name: String
   package let displayLabel: String?
   public let initialization: VariableInitialization
-  public let collectionType: CollectionVarType
   package let generatedSwiftType: String?
   package let resolvedValueType: CompiledValueType?
   package let origin: VariableOrigin
 
   public init(
-    name: String, initial: TLAValue, collectionType: CollectionVarType = .scalar
+    name: String, initial: TLAValue
   ) {
     self.init(
       name: name,
       initialization: .value(initial),
-      collectionType: collectionType,
       generatedSwiftType: nil,
       origin: .source
     )
@@ -46,7 +37,6 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
 
   package init(
     name: String, initialization: VariableInitialization,
-    collectionType: CollectionVarType = .scalar,
     displayLabel: String? = nil,
     generatedSwiftType: String? = nil,
     resolvedValueType: CompiledValueType? = nil,
@@ -55,7 +45,6 @@ public struct NamedVar: Sendable, CustomStringConvertible, Equatable {
     self.name = name
     self.displayLabel = displayLabel
     self.initialization = initialization.normalized
-    self.collectionType = collectionType
     self.generatedSwiftType = generatedSwiftType
     self.resolvedValueType = resolvedValueType
     self.origin = origin
@@ -375,19 +364,16 @@ public struct VarDecl: SpecComponent, Sendable {
   public let name: String
   package let displayLabel: String?
   public let initialization: VariableInitialization
-  public let collectionType: CollectionVarType
   package let generatedSwiftType: String?
   package init(
     _ name: String,
     initialization: VariableInitialization,
-    collectionType: CollectionVarType = .scalar,
     displayLabel: String? = nil,
     generatedSwiftType: String? = nil
   ) {
     self.name = name
     self.displayLabel = displayLabel
     self.initialization = initialization.normalized
-    self.collectionType = collectionType
     self.generatedSwiftType = generatedSwiftType
   }
 }

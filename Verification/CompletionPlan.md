@@ -304,7 +304,12 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       `097a1092`. The focused execution and rendering suites pass locally;
       hosted acceptance remains pending.
 - [ ] Close AC-13 by removing replaced spellings, duplicate configuration,
-      obsolete callers, compatibility aliases, and stale documentation.
+      obsolete callers, compatibility aliases, and stale documentation. The
+      legacy `CollectionVarType` field had no effect on model behavior; it was
+      only copied through declarations and included in the compilation
+      fingerprint. Its public type, field plumbing, and test-only identity
+      variant have been removed locally. The 80-test compiler-pipeline suite
+      and static guard pass; this still needs hosted admission on a new SHA.
 - [ ] Close AC-14 with generated-machine identity by default and sound,
       explicit symmetry admission plus complete TLC-orbit comparison.
 - [ ] Close AC-17 through AC-19 with direct Swift value types, stable

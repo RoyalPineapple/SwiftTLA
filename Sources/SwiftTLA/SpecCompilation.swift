@@ -1380,17 +1380,9 @@ private struct CanonicalSpecificationEncoder {
     }
 
     private func canonicalVariable(_ variable: NamedVar) -> String {
-        let collection: String
-        switch variable.collectionType {
-        case .scalar: collection = node("scalar-collection", [])
-        case .set: collection = node("set-collection", [])
-        case .array(let scope): collection = node("array-collection", [String(scope)])
-        case .dictionary(let scope): collection = node("dictionary-collection", [String(scope)])
-        }
         return node("variable", [
             variable.name,
             canonicalInitialization(variable.initialization),
-            collection,
             canonicalOptional(variable.generatedSwiftType),
             canonicalOptional(variable.resolvedValueType.map(nativeTypeKey))
         ])
