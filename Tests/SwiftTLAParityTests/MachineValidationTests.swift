@@ -189,6 +189,7 @@ struct MachineValidationTests {
         let changed = ConstantStateClaims.ValidationScenario(
             name: scenario.name, displayName: scenario.displayName, configuration: scenario.configuration,
             checking: scenario.checking, checkingMode: scenario.checkingMode, behavior: scenario.behavior,
+            selectedSymmetry: scenario.selectedSymmetry,
             expectations: expectations, deadlockExpectation: scenario.deadlockExpectation)
         let changedReport = try NativeValidationRunner.run(
             scenario: changed, caseID: "constant-state-claims-0", maximumStates: 10,

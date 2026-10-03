@@ -29,8 +29,41 @@ struct SymmetryExportTests {
     @Test("A validation scenario does not select declared symmetry by default")
     func scenarioDefaultsToUnreducedChecking() throws {
         #expect(try SymmetryScenarioModel.render().tlaBundle.cfg.contains("SYMMETRY Symmmembers"))
-        let scenario = try #require(SymmetryScenarioModel.validationScenarios().first)
-        #expect(try !scenario.render().tlaBundle.cfg.contains("SYMMETRY"))
+        let scenarios = try SymmetryScenarioModel.validationScenarios()
+        let ordinary = try #require(scenarios.first(where: { $0.name == "ordinary" }))
+        let reduced = try #require(scenarios.first(where: { $0.name == "reduced" }))
+        #expect(try !ordinary.render().tlaBundle.cfg.contains("SYMMETRY"))
+        #expect(try reduced.render().tlaBundle.cfg.contains("SYMMETRY Symmmembers"))
+    }
+
+    @Test("Scenario symmetry selection rejects foreign and duplicate handles")
+    func scenarioSymmetryRequiresOneOwnedHandle() {
+        let registered = Symmetry("members", Set([1, 2]))
+        let foreign = Symmetry("members", Set([1, 2]))
+        let state = Var<Int>("state")
+        let foreignSpec = TLASpec("ForeignSymmetry") {
+            Variable(state, 0)
+            registered
+            Validation(_name: "check") {}.usingSymmetry(foreign)
+        }
+        let duplicateSpec = TLASpec("DuplicateSymmetry") {
+            Variable(state, 0)
+            registered
+            Validation(_name: "check") {}
+                .usingSymmetry(registered).usingSymmetry(registered)
+        }
+        for (spec, reason) in [(foreignSpec, "foreign or unregistered symmetry selection"),
+                               (duplicateSpec, "duplicate check selection")] {
+            do {
+                _ = try spec.compile()
+                Issue.record("Expected symmetry selection to reject \(reason)")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "validation.check")
+                #expect(diagnostic.actual == reason)
+            } catch {
+                Issue.record("Expected CompilationDiagnostic, got \(error)")
+            }
+        }
     }
 }
 
@@ -51,6 +84,8 @@ private struct SymmetryScenarioModel {
             Do(Step.stay) { Assign(value, to: value) }
             let ordinary = Validation {}
             ordinary
+            let reduced = Validation {}.usingSymmetry(members)
+            reduced
         }
     }
 }

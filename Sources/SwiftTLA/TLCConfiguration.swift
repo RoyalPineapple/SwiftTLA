@@ -73,6 +73,22 @@ package struct TLCConfiguration: Equatable, Sendable {
             symmetry: symmetry)
     }
 
+    func selectingSymmetry(_ name: String?) throws -> Self {
+        if let name {
+            guard symmetry.contains(name) else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
+                    path: "symmetry selection", expected: "a declared symmetry operator",
+                    actual: name, nextSafeAction: "Select a symmetry declared by this model.")
+            }
+            try validateSymmetryChecks()
+        }
+        return Self(behavior: behavior, assumptionsOnly: assumptionsOnly,
+            declarations: declarations, checkDeadlock: checkDeadlock,
+            invariants: invariants, reachabilityProperties: reachabilityProperties,
+            properties: properties, refinements: refinements,
+            symmetry: name.map { [$0] } ?? [])
+    }
+
     func usesSupportedSymmetryReduction(_ reduction: SymmetryReduction) throws -> Bool {
         guard case .enabled(let maximumPermutationCount) = reduction else { return false }
         guard maximumPermutationCount > 0 else {
@@ -85,13 +101,17 @@ package struct TLCConfiguration: Equatable, Sendable {
                 path: "symmetryReduction", expected: "an explicit symmetry declaration",
                 actual: "none", nextSafeAction: "Declare interchangeable members or disable symmetry reduction.")
         }
+        try validateSymmetryChecks()
+        return true
+    }
+
+    private func validateSymmetryChecks() throws {
         guard properties.isEmpty && refinements.isEmpty else {
             throw CompilationDiagnostic(code: .unsupportedSymmetryReduction, stage: .rendering,
                 path: "symmetryReduction", expected: "safety-only selected checks",
                 actual: "temporal or refinement properties selected",
                 nextSafeAction: "Run those checks on the complete, unreduced graph.")
         }
-        return true
     }
 
     func render(usesSymmetryReduction: Bool) -> String {

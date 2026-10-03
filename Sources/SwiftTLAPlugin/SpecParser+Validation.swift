@@ -5,7 +5,7 @@ extension ParserSession {
     func validationRoot(_ call: FunctionCallExprSyntax) -> FunctionCallExprSyntax? {
         var root = call
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
-              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "behavior"].contains(member.declName.baseName.sourceIdentifierName),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "behavior", "usingSymmetry"].contains(member.declName.baseName.sourceIdentifierName),
               let base = member.base?.as(FunctionCallExprSyntax.self) {
             root = base
         }
@@ -17,7 +17,7 @@ extension ParserSession {
         var root = call
         var overrides: [FunctionCallExprSyntax] = []
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
-              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "behavior"].contains(member.declName.baseName.sourceIdentifierName),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "behavior", "usingSymmetry"].contains(member.declName.baseName.sourceIdentifierName),
               let base = member.base?.as(FunctionCallExprSyntax.self) {
             overrides.append(root)
             root = base
@@ -56,6 +56,15 @@ extension ParserSession {
                             throw SourceParseDiagnostic(message: "Behavior selection requires .specification or .initialAndNext.", source: override)
                         }
                         scenario.behaviorSelections.append(behavior)
+                        continue
+                    }
+                    if member.declName.baseName.sourceIdentifierName == "usingSymmetry" {
+                        guard override.arguments.count == 1,
+                              let reference = override.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
+                              let symmetry = specBindings.symmetries[reference.baseName.sourceIdentifierName] else {
+                            throw SourceParseDiagnostic(message: "Symmetry selection requires a registered model-owned symmetry binding.", source: override)
+                        }
+                        scenario.symmetrySelections.append(symmetry.reference)
                         continue
                     }
                     if member.declName.baseName.sourceIdentifierName == "checkingMode" {

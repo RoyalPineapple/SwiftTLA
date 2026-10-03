@@ -327,7 +327,7 @@ package struct CompiledTypeChecker: Sendable {
                 bindings: values,
                 expectations: scenario.expectations, deadlockExpectation: scenario.deadlockExpectation,
                 checks: scenario.checks, checkDeadlock: scenario.checkDeadlock, behavior: scenario.behavior,
-                checkingMode: scenario.checkingMode)
+                checkingMode: scenario.checkingMode, symmetry: scenario.symmetry)
         }
         var actions: [CompiledAction] = []
         var invariants: [CompiledStatePredicate] = []

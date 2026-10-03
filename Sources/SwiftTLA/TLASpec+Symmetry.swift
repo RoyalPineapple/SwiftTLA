@@ -1,14 +1,22 @@
+import Foundation
+
+public struct SymmetryReference: Hashable, Sendable {
+  private let identity = UUID()
+}
+
 public struct SymmetrySetDecl: SpecComponent, Sendable {
   public let variableName: String
+  package let reference: SymmetryReference
   let values: Set<TLAValue>
 
   package init(_ variableName: String, _ values: Set<TLAValue>) {
     self.variableName = variableName
+    reference = .init()
     self.values = values
   }
 
   package func resolved() -> SymmetrySet {
-    return SymmetrySet(variableName: variableName, values: values)
+    return SymmetrySet(variableName: variableName, values: values, reference: reference)
   }
 }
 

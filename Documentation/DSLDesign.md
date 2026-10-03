@@ -613,15 +613,21 @@ the author registers that binding once:
 ```swift
 let memberSymmetry = Symmetry(Set(Member.all))
 memberSymmetry
+let ordinary = Validation {}
+ordinary
+let reduced = Validation {}.usingSymmetry(memberSymmetry)
+reduced
 ```
 
 The Swift binding supplies the declaration's stable name and the generated
 TLA+ permutation operator name. An inline declaration, mutable binding, empty
 set, overlapping domains, composite member, or duplicate registration fails
-compilation. The native checker retains the complete unreduced graph. A
-separate explicit check request may select TLC symmetry only where that
-checking mode is sound. B-04 remains open for scenario-level selection, other
-scope references, and native/TLC evidence.
+compilation. The native checker retains the complete unreduced graph.
+`usingSymmetry` selects one registered, model-owned declaration for that
+scenario's TLC configuration. An absent selection keeps TLC unreduced; a
+foreign or duplicate selection fails compilation. Temporal or refinement
+checks cannot enable reduction. The selection changes neither transitions nor
+native checking. Other B-04 scope references and native/TLC evidence remain open.
 
 Without a scenario-level selection, model-owned validation renders an
 unreduced TLC configuration even when the model declares an available symmetry
@@ -700,9 +706,9 @@ unreduced model remains valid.
 
 Ordering, a distinguished member, or identity-dependent behavior can make members
 non-interchangeable. An explicit declaration does not excuse an unsound reduction.
-The bound finite-set syntax and its validation rules are specified above.
-Scenario-level selection and remaining scope references still require B-04
-decisions and evidence.
+The bound finite-set syntax, scenario selection, and their validation rules are
+specified above. Remaining scope references and independent parity evidence
+still require B-04 work.
 
 ## 6. Validation scenarios attached to the model
 

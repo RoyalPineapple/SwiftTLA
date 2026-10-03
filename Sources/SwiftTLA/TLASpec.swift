@@ -930,9 +930,23 @@ public func StrongFairnessNext() -> FairnessDecl {
 public struct SymmetrySet: Hashable, Sendable, CustomStringConvertible {
   public let variableName: String
   public let values: Set<TLAValue>
+  package let reference: SymmetryReference?
   public init(variableName: String, values: Set<TLAValue>) {
     self.variableName = variableName
     self.values = values
+    reference = nil
+  }
+  package init(variableName: String, values: Set<TLAValue>, reference: SymmetryReference) {
+    self.variableName = variableName
+    self.values = values
+    self.reference = reference
+  }
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.variableName == rhs.variableName && lhs.values == rhs.values
+  }
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(variableName)
+    hasher.combine(values)
   }
   public var description: String { "SYMMETRY \(variableName)" }
 }

@@ -450,8 +450,18 @@ struct CompiledLowerer {
         for scenario in spec.validationScenarios {
             guard scenario.propertySelections.count <= 1, scenario.deadlockSelections.count <= 1,
                   scenario.behaviorSelections.count <= 1,
-                  scenario.checkingModeSelections.count <= 1 else {
+                  scenario.checkingModeSelections.count <= 1,
+                  scenario.symmetrySelections.count <= 1 else {
                 throw invalid(scenario.name, "duplicate check selection")
+            }
+            let selectedSymmetry: SymmetrySet?
+            if let reference = scenario.symmetrySelections.first {
+                guard let symmetry = spec.symmetrySets.first(where: { $0.reference == reference }) else {
+                    throw invalid(scenario.name, "foreign or unregistered symmetry selection")
+                }
+                selectedSymmetry = symmetry
+            } else {
+                selectedSymmetry = nil
             }
             let selectedReferences = scenario.propertySelections.first
             if let selectedReferences {
@@ -505,7 +515,8 @@ struct CompiledLowerer {
                 bindings: bindings, expectations: expectations,
                 deadlockExpectation: scenario.deadlockExpectations.first, checks: checks, checkDeadlock: checkDeadlock,
                 behavior: scenario.behaviorSelections.first ?? .specification,
-                checkingMode: scenario.checkingModeSelections.first ?? .exhaustive))
+                checkingMode: scenario.checkingModeSelections.first ?? .exhaustive,
+                symmetry: selectedSymmetry))
         }
         return scenarios
     }

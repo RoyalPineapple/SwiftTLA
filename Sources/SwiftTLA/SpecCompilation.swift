@@ -509,7 +509,7 @@ public struct RenderedSpecification: Sendable {
 
     /// Converts model-owned check identities at the formal export boundary.
     public func selectingChecks<Property: Hashable & Sendable>(_ checks: ModelChecks<Property>, formalPropertyNames: [Property: String],
-        behavior: ModelBehavior? = nil) throws -> Self {
+        behavior: ModelBehavior? = nil, symmetry: String? = nil) throws -> Self {
         let names = try Set(checks.properties.map { property in
             guard let name = formalPropertyNames[property] else {
                 throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "check selection",
@@ -524,9 +524,10 @@ public struct RenderedSpecification: Sendable {
                 nextSafeAction: "Use the generated model's formal property names.")
         }
         let selected = try configuration.selecting(names, checkDeadlock: checks.checkDeadlock, behavior: behavior)
+            .selectingSymmetry(symmetry)
         func bundle(_ original: TLAModuleBundle) -> TLAModuleBundle {
             .init(root: .init(name: original.root.name, tla: original.root.tla,
-                cfg: selected.render(usesSymmetryReduction: false)), imports: original.imports, provenance: original.provenance)
+                cfg: selected.render(usesSymmetryReduction: symmetry != nil)), imports: original.imports, provenance: original.provenance)
         }
         return .init(tlaBundle: bundle(tlaBundle), configuration: selected, actions: actions,
             renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map { $0.map(bundle) },
@@ -1284,7 +1285,10 @@ private struct CanonicalSpecificationEncoder {
                     }),
                     canonicalList(scenario.deadlockSelections.map { String($0) }),
                     canonicalList(scenario.behaviorSelections.map(\.rawValue)),
-                    canonicalList(scenario.checkingModeSelections.map(\.rawValue))])
+                    canonicalList(scenario.checkingModeSelections.map(\.rawValue)),
+                    canonicalList(scenario.symmetrySelections.map { reference in
+                        String(spec.symmetrySets.firstIndex(where: { $0.reference == reference }) ?? -1)
+                    })])
             }
             list("validation", scenarios) { $0 }
         }

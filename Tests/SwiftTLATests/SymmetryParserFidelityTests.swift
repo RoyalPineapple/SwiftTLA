@@ -74,6 +74,19 @@ struct SymmetryParserFidelityTests {
         #expect(mutableParsed.diagnostics.map(\.message).contains(
             "Symmetry requires a unique immutable let binding."))
     }
+
+    @Test("Scenario symmetry selection requires a registered local handle")
+    func rejectsForeignScenarioSymmetry() throws {
+        let closure = try #require(Parser.parse(source: """
+        {
+            let check = Validation {}.usingSymmetry(other)
+            check
+        }
+        """).statements.first?.item.as(ClosureExprSyntax.self))
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+        #expect(parsed.diagnostics.map(\.message).contains(
+            "Symmetry selection requires a registered model-owned symmetry binding."))
+    }
 }
 
 @TLAModel

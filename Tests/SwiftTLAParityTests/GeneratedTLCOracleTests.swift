@@ -12,6 +12,7 @@ struct GeneratedTLCOracleTests {
         let changed = ConstantStateClaims.ValidationScenario(
             name: original.name, displayName: original.displayName, configuration: original.configuration,
             checking: original.checking, checkingMode: original.checkingMode, behavior: original.behavior,
+            selectedSymmetry: original.selectedSymmetry,
             expectations: expectations, deadlockExpectation: original.deadlockExpectation)
         let pin = try testReferencePin()
         let originalKey = try GeneratedTLCOracle.cacheKey(
@@ -27,6 +28,7 @@ struct GeneratedTLCOracleTests {
         let exhaustive = DieHardestModel.ValidationScenario(
             name: decisive.name, displayName: decisive.displayName, configuration: decisive.configuration,
             checking: decisive.checking, checkingMode: .exhaustive, behavior: decisive.behavior,
+            selectedSymmetry: decisive.selectedSymmetry,
             expectations: decisive.expectations, deadlockExpectation: decisive.deadlockExpectation)
         let pin = try testReferencePin()
         let decisiveBundle = try decisive.render().tlaBundle

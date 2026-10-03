@@ -137,10 +137,12 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
 - [ ] B-04 now has a bound, registered finite-symmetry declaration in `#spec`;
       the formal-core string-named declaration remains only for direct formal
       builders. The focused parser, generated export, and complete native
-      symmetry-graph checks pass locally. Scenario-level symmetry selection,
-      remaining fairness/symmetry scope references, and hosted acceptance are
-      still open. A regression demonstrated that generated scenario rendering
-      previously enabled declared symmetry without a selection; the one-line
+      symmetry-graph checks pass locally. Scenario-level `usingSymmetry` now
+      selects one registered handle for a safety-only TLC configuration;
+      foreign, duplicate, and unregistered selections are rejected in focused
+      local checks. Remaining fairness/symmetry scope references and hosted
+      acceptance are still open. A regression demonstrated that generated
+      scenario rendering previously enabled declared symmetry without a selection; the one-line
       renderer correction now defaults those scenarios to unreduced TLC, with
       13 related rendering and configuration checks passing locally.
 - [x] Settle B-01's fixed-collection replacement design: a typed configuration

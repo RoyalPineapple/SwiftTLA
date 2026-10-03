@@ -138,6 +138,7 @@ public struct ValidationDeclaration: SpecComponent {
     package var deadlockSelections: [Bool] = []
     package var behaviorSelections: [ModelBehavior] = []
     package var checkingModeSelections: [ValidationCheckingMode] = []
+    package var symmetrySelections: [SymmetryReference] = []
 
     package init(name: String, displayLabel: String? = nil, bindings: [ValidationBinding]) {
         self.name = name
@@ -178,6 +179,12 @@ public struct ValidationDeclaration: SpecComponent {
     public func checkingMode(_ mode: ValidationCheckingMode) -> Self {
         var copy = self
         copy.checkingModeSelections.append(mode)
+        return copy
+    }
+
+    public func usingSymmetry(_ symmetry: SymmetrySetDecl) -> Self {
+        var copy = self
+        copy.symmetrySelections.append(symmetry.reference)
         return copy
     }
 }

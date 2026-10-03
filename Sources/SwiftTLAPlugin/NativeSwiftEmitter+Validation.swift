@@ -46,6 +46,7 @@ extension NativeSwiftEmitter {
             }.joined(separator: ", ")
             let deadlock = scenario.checkDeadlock
                 ? ".\((scenario.deadlockExpectation ?? .satisfied).rawValue)" : "nil"
+            let symmetry = scenario.symmetry.map { String(reflecting: "Symm\($0.variableName)") } ?? "nil"
             scenarios.append("""
             ValidationScenario(name: \(String(reflecting: scenario.name)),
                 displayName: \(String(reflecting: scenario.displayLabel ?? scenario.name)),
@@ -53,6 +54,7 @@ extension NativeSwiftEmitter {
                 checking: ModelChecks(properties: [\(selected.map { ".\($0.1)" }.joined(separator: ", "))], checkDeadlock: \(scenario.checkDeadlock)),
                 checkingMode: .\(scenario.checkingMode.rawValue),
                 behavior: .\(scenario.behavior.rawValue),
+                selectedSymmetry: \(symmetry),
                 expectations: [\(selected.isEmpty ? ":" : expectations)],
                 deadlockExpectation: \(deadlock))
             """)
@@ -68,6 +70,7 @@ extension NativeSwiftEmitter {
             public let checking: ModelChecks<Property>
             public let checkingMode: ValidationCheckingMode
             public let behavior: ModelBehavior
+            let selectedSymmetry: String?
             public let expectations: [Property: ValidationExpectation]
             public let deadlockExpectation: ValidationExpectation?
 
@@ -78,7 +81,7 @@ extension NativeSwiftEmitter {
                 Machine.formalPropertyNames
             }
             public func render() throws -> RenderedSpecification {
-                try \(model.typeName).render(\(arguments)).selectingChecks(checking, formalPropertyNames: Machine.formalPropertyNames, behavior: behavior)
+                try \(model.typeName).render(\(arguments)).selectingChecks(checking, formalPropertyNames: Machine.formalPropertyNames, behavior: behavior, symmetry: selectedSymmetry)
             }
         }
         public static func validationScenarios() throws -> [ValidationScenario] {
