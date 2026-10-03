@@ -18,18 +18,16 @@ struct SimultaneousUpdateSemanticsTests {
         let compilation = try spec.compile()
         let initial = try firstCompiledState(in: compilation)
 
-        let successor = try #require(try compiledSuccessors(named: "swap", arguments: [], in: compilation, from: initial).first)
-        let verification = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).check()
+        let forward = try compiledSuccessors(named: "swap", arguments: [], in: compilation, from: initial)
+        let successor = try #require(forward.first)
+        let backward = try compiledSuccessors(named: "swap", arguments: [], in: compilation, from: successor)
 
         #expect(try renderedValue(named: "left", in: successor, compilation: compilation) == .int(2))
         #expect(try renderedValue(named: "right", in: successor, compilation: compilation) == .int(1))
         #expect(try renderedValue(named: "left", in: initial, compilation: compilation) == .int(1))
         #expect(try renderedValue(named: "right", in: initial, compilation: compilation) == .int(2))
-        guard case .ok(let stateCount) = verification else {
-            Issue.record("Expected the model checker to verify the two-state swap graph, found \(verification)")
-            return
-        }
-        #expect(stateCount == 2)
+        #expect(forward.count == 1)
+        #expect(backward == [initial])
     }
 
     @Test("aliased right-hand sides use one coherent pre-state")
