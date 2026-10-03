@@ -60,10 +60,12 @@ extension ParserSession {
                     }
                     if member.declName.baseName.sourceIdentifierName == "usingSymmetry" {
                         guard override.arguments.count == 1,
-                              let reference = override.arguments.first?.expression.as(DeclReferenceExprSyntax.self),
+                              let argument = override.arguments.first,
+                              let reference = argument.expression.as(DeclReferenceExprSyntax.self),
                               let symmetry = specBindings.symmetries[reference.baseName.sourceIdentifierName] else {
                             throw SourceParseDiagnostic(message: "Symmetry selection requires a registered model-owned symmetry binding.", source: override)
                         }
+                        recordValidationSymmetry(named: scenario.name, at: argument.expression)
                         scenario.symmetrySelections.append(symmetry.reference)
                         continue
                     }

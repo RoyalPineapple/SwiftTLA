@@ -148,6 +148,9 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       A selected temporal claim with symmetry now fails during compilation,
       while an unselected temporal declaration leaves a safety-only scenario
       valid. The regression failed before the guard; 22 related tests pass locally.
+      Macro diagnostics now point to the offending symmetry handle rather than
+      the model root; that regression failed before the source-map fix and
+      passed with 36 related compiler-boundary and scenario tests.
 - [x] Settle B-01's fixed-collection replacement design: a typed configuration
       parameter contains stable member IDs; `Each` and typed dictionary state
       use those IDs, while application objects stay outside model state. The

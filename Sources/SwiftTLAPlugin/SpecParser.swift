@@ -84,6 +84,11 @@ final class ParserSession {
         propertyDeclarationOffsets["validation.\(scenario).\(parameter)", default: []].append(
             value.positionAfterSkippingLeadingTrivia.utf8Offset)
     }
+
+    func recordValidationSymmetry(named scenario: String, at value: ExprSyntax) {
+        propertyDeclarationOffsets["validation.\(scenario).symmetry", default: []].append(
+            value.positionAfterSkippingLeadingTrivia.utf8Offset)
+    }
     enum FormalModuleProvider: Equatable {
         case folds
         case functions

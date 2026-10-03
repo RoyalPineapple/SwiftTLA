@@ -431,6 +431,40 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("Unsupported scenario symmetry points to the selected handle")
+    func temporalScenarioSymmetryPointsToSelection() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Member: String, CaseIterable, FiniteTLAValueDomain { case a, b }
+            static var spec: TLASpec {
+                #spec { scope in
+                    let value = scope.sharedVar(initial: 0)
+                    let members = Symmetry(Set(Member.all))
+                    members
+                    let progress = Eventually()
+                    progress(value == 1)
+                    let check = Validation {}.usingSymmetry(members)
+                    check
+                }
+            }
+        }
+        """)
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let selected = try #require(Array(source.tokens(viewMode: .sourceAccurate))
+            .last { $0.text == "members" })
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(declaration)
+            Issue.record("Temporal checking with selected symmetry must fail")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unsupportedSymmetryReduction)
+            #expect(diagnostic.path == "validation.check.symmetry")
+            #expect(diagnostic.sourceOffset == selected.positionAfterSkippingLeadingTrivia.utf8Offset)
+            let emitted = modelCompilationDiagnostic(diagnostic, in: declaration)
+            #expect(emitted.node.positionAfterSkippingLeadingTrivia == selected.positionAfterSkippingLeadingTrivia)
+        }
+    }
+
     @Test("Parser diagnostics prevent partial compilation")
     func parserDiagnosticPreventsPartialCompilation() throws {
         let closure = try #require(
