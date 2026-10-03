@@ -918,8 +918,10 @@ extension ParserSession {
             if let expression {
                 if name == "Assume" {
                     components.assume = components.assume.map { .and($0, expression) } ?? expression
+                    recordModelPredicate(named: "assume", at: call)
                 } else {
                     components.constraint = components.constraint.map { .and($0, expression) } ?? expression
+                    recordModelPredicate(named: "constraint", at: call)
                 }
             } else {
                 components.diagnostics.append(.init(

@@ -510,6 +510,7 @@ extension ParserSession {
             guard let argument = call.arguments.first,
                   let condition = decodeAlgorithmStateExpression(argument.expression, scope: scope)
             else { return nil }
+            recordModelPredicate(named: "constraint", at: call)
             return .stateConstraint(condition)
         default:
             return nil

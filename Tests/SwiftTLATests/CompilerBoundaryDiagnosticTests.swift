@@ -292,6 +292,44 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("Constraint and assumption type errors point to their predicates")
+    func booleanModelPredicatesPointToSource() throws {
+        for (declaration, token, path) in [
+            ("Constraint(1)", "Constraint", "constraint"),
+            ("Assume(1)", "Assume", "assume"),
+            ("", "StateConstraint", "constraint")
+        ] {
+            let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Step: String, CaseIterable, FiniteTLAValueDomain { case advance }
+            static var spec: TLASpec {
+                #spec {
+                    \(declaration)
+                    let algorithm = Algorithm(scoped: { scope in
+                        let count = scope.sharedVar(initial: 0)
+                        \(token == "StateConstraint" ? "StateConstraint(1)" : "")
+                        Do(Step.advance) { Stop() }
+                    })
+                    algorithm
+                }
+            }
+        }
+        """)
+            let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+            let predicate = try #require(source.tokens(viewMode: .sourceAccurate).first { $0.text == token })
+
+            do {
+                _ = try TLASpecVerifier.parseAndVerify(model)
+                Issue.record("An integer predicate must not satisfy a Boolean model condition")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.hasPrefix("nativeMachine.\(path) → "))
+                #expect(diagnostic.sourceOffset == predicate.positionAfterSkippingLeadingTrivia.utf8Offset)
+                let emitted = modelCompilationDiagnostic(diagnostic, in: model)
+                #expect(emitted.node.positionAfterSkippingLeadingTrivia == predicate.positionAfterSkippingLeadingTrivia)
+            }
+        }
+    }
+
     @Test("An incompatible scenario binding points to its supplied value")
     func incompatibleScenarioBindingPointsToValue() throws {
         let source = Parser.parse(source: """

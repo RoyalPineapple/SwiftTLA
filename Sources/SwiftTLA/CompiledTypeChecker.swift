@@ -405,11 +405,19 @@ package struct CompiledTypeChecker: Sendable {
                 throw Self.contextualDiagnostic("temporalProperties.\(property.name)", causedBy: diagnostic)
             }
         }
-        constraint = try inputs.semantics.behavior.constraint.map { predicate in
-            try predicate.map { try checkOperand($0, expected: .bool) }
+        do {
+            constraint = try inputs.semantics.behavior.constraint.map { predicate in
+                try predicate.map { try checkOperand($0, expected: .bool) }
+            }
+        } catch let diagnostic as CompilationDiagnostic {
+            throw Self.contextualDiagnostic("constraint", causedBy: diagnostic)
         }
-        assume = try inputs.semantics.behavior.assume.map { predicate in
-            try predicate.map { try checkOperand($0, expected: .bool) }
+        do {
+            assume = try inputs.semantics.behavior.assume.map { predicate in
+                try predicate.map { try checkOperand($0, expected: .bool) }
+            }
+        } catch let diagnostic as CompilationDiagnostic {
+            throw Self.contextualDiagnostic("assume", causedBy: diagnostic)
         }
         for variable in inputs.layout.variables {
             guard let type = variables[variable.id], type.resolved else {
