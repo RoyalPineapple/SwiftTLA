@@ -48,6 +48,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "die-hardest-global-freeze", scenarios: { try DieHardestGlobalFreezeModel.validationScenarios() }),
     .init(id: "die-hardest-parallel", scenarios: { try DieHardestParallelModel.validationScenarios() }),
     .init(id: "channel", scenarios: { try ChannelModel.validationScenarios() }),
+    .init(id: "moving-cat", scenarios: { try CatModel.validationScenarios() }),
     .init(id: "asynch-interface", scenarios: { try AsynchInterfaceModel.validationScenarios() }),
     .init(id: "majority", scenarios: { try MajorityModel.validationScenarios() }),
     .init(id: "n-queens", scenarios: { try NQueensModel.validationScenarios() }),

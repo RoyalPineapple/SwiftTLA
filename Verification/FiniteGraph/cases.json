@@ -1300,6 +1300,57 @@
       "moduleSHA256": "cc5e6adf949b003f353eeb4b8e5ea6499b99bc477fd7dc799c045b9e83221366",
       "cfgSHA256": "2be4e803efd01745131a8d14efb22f00c4a10b2c53191a713f6c580b266152fe",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "moving-cat-even",
+      "sourceModel": "moving-cat",
+      "scenario": "CatEvenBoxes",
+      "module": "moving-cat/Cat.tla",
+      "configuration": "moving-cat/CatEvenBoxes.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Moving_Cat_Puzzle/Cat.tla",
+        "sha256": "407c41f11d1caf62911f383c521f80858bde0f0554036095308dedd2ebb6fb1d"
+      },
+      "exploration": {"maximumStateLimit": 100, "symmetryReduction": "disabled"},
+      "moduleSHA256": "407c41f11d1caf62911f383c521f80858bde0f0554036095308dedd2ebb6fb1d",
+      "cfgSHA256": "8a9884ce1422248d7f3e12800c2502951e7f7492209842d28344961b4ad4f700",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "moving-cat-odd",
+      "sourceModel": "moving-cat",
+      "scenario": "CatOddBoxes",
+      "module": "moving-cat/Cat.tla",
+      "configuration": "moving-cat/CatOddBoxes.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Moving_Cat_Puzzle/Cat.tla",
+        "sha256": "407c41f11d1caf62911f383c521f80858bde0f0554036095308dedd2ebb6fb1d"
+      },
+      "exploration": {"maximumStateLimit": 100, "symmetryReduction": "disabled"},
+      "moduleSHA256": "407c41f11d1caf62911f383c521f80858bde0f0554036095308dedd2ebb6fb1d",
+      "cfgSHA256": "e8f895ca68afa1ee638b55b52dfcf2c22354300751a031dd9f0ed003eeb5957c",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "moving-cat-ap",
+      "sourceModel": "moving-cat",
+      "scenario": "APCat",
+      "module": "moving-cat/APCat.tla",
+      "configuration": "moving-cat/APCat.cfg",
+      "imports": ["moving-cat/Cat.tla"],
+      "dependencies": [{"importingModule": "APCat", "importedModule": "Cat"}],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/Moving_Cat_Puzzle/APCat.tla",
+        "sha256": "75964cb318385a742b662f3cb272088d0bc4313bf0608de9c483311646e7ff3d"
+      },
+      "exploration": {"maximumStateLimit": 100, "symmetryReduction": "disabled"},
+      "moduleSHA256": "75964cb318385a742b662f3cb272088d0bc4313bf0608de9c483311646e7ff3d",
+      "cfgSHA256": "3355df100b4f4681bd1f18b1cc3e00d59739cf45691ff591e8237b2da95f18e3",
+      "timeoutSeconds": 120
     }
   ]
 }

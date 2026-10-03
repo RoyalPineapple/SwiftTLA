@@ -7423,23 +7423,27 @@
     {
       "path": "specifications/Moving_Cat_Puzzle",
       "name": "The Moving Cat Puzzle",
-      "audit": "pinned source and configuration inputs audited",
-      "gap": "Cat.tla is direct TLA+ with Number_Of_Boxes=6/5, TypeOK, Victory, and WF_cat_box(Move_Cat); APCat.tla is a typed annotation wrapper with Number_Of_Boxes=4 and TypeOK. Current Swift models hardcode 6 and 5 separately, omit Victory and the projected Move_Cat fairness obligation, and have no model-owned scenario or APCat implementation. Generated-machine local diagnostics cover 48/30 states and 80/48 edges, not exact graph/property parity. All three published configurations and legacy cleanup remain missing.",
-      "legacyCleanupComplete": false,
+      "audit": "Pinned direct-TLA module and annotation wrapper mapped to one typed configured model; local generated-machine graphs and selected checks passed for all three published configurations.",
+      "gap": "All three configurations still need hosted generated-TLA-versus-pinned-upstream and native-versus-generated-TLA evidence for complete initial states, labeled graphs, selected TypeOK and Victory outcomes, and default deadlock. The local state/edge counts do not establish exact parity.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/Moving_Cat_Puzzle/APCat.tla",
-          "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "configured annotation wrapper",
+          "reason": "The published APCat configuration instantiates Cat with Number_Of_Boxes=4 and selects TypeOK; its Apalache type annotations are comments for TLC.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Cat.swift"
+          ],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/Moving_Cat_Puzzle/Cat.tla",
-          "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "configured root and shared dependency",
+          "reason": "The even and odd configurations select Cat directly with Number_Of_Boxes=6 and 5, TypeOK, Victory, and projected weak fairness; APCat instantiates the same module.",
+          "implementations": [
+            "Sources/UpstreamParity/Examples/Cat.swift"
+          ],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -7447,39 +7451,52 @@
           "module": "specifications/Moving_Cat_Puzzle/APCat.tla",
           "configuration": "specifications/Moving_Cat_Puzzle/APCat.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Cat.swift",
+              "scenario": "APCat",
+              "caseID": "moving-cat-ap"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/Moving_Cat_Puzzle/Cat.tla",
           "configuration": "specifications/Moving_Cat_Puzzle/CatEvenBoxes.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Cat.swift",
+              "scenario": "CatEvenBoxes",
+              "caseID": "moving-cat-even"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/Moving_Cat_Puzzle/Cat.tla",
           "configuration": "specifications/Moving_Cat_Puzzle/CatOddBoxes.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/Cat.swift",
+              "scenario": "CatOddBoxes",
+              "caseID": "moving-cat-odd"
+            }
+          ],
           "evidence": []
         }
       ],
-      "partialCases": [
-        {
-          "implementation": "Sources/UpstreamParity/Examples/CatEvenBoxes.swift",
-          "reason": "CatEvenBoxesModel and CatOddBoxesModel generate typed machine graphs for the 6-box and 5-box configurations. MovingCatCorpusStateGraphTests checks state and edge counts locally. No model-owned scenarios, complete graph/property parity, Victory, projected fairness, APCat wrapper, or hosted evidence. No completion credit."
-        }
-      ]
+      "partialCases": []
     },
     {
       "path": "specifications/MultiCarElevator",
