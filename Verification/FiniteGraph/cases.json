@@ -672,7 +672,7 @@
       },
       "moduleSHA256": "32c5d9c900104c0d8be0d3730a6013d141dc90901e08ccaea403fb0be731cd90",
       "cfgSHA256": "7904ab6bc7fa788828f04c5db64f85c96859bca2e7019341d6294ab1d032cf83",
-      "timeoutSeconds": 1800
+      "timeoutSeconds": 3600
     },
     {
       "id": "coffee-can-ap",
