@@ -402,11 +402,20 @@ extension CompiledExpression {
 package struct CompiledStateQuery: Sendable {
     package let expression: CompiledExpression
     package let enabledActions: Set<ActionID>
+    package let clauseSourceOffsets: [Int?]
+
+    package init(expression: CompiledExpression, enabledActions: Set<ActionID>,
+        clauseSourceOffsets: [Int?] = []) {
+        self.expression = expression
+        self.enabledActions = enabledActions
+        self.clauseSourceOffsets = clauseSourceOffsets
+    }
 
     package func map(
         _ transform: (CompiledExpression) throws -> CompiledExpression
     ) rethrows -> CompiledStateQuery {
-        .init(expression: try transform(expression), enabledActions: enabledActions)
+        .init(expression: try transform(expression), enabledActions: enabledActions,
+            clauseSourceOffsets: clauseSourceOffsets)
     }
 }
 

@@ -1168,7 +1168,7 @@ public extension TLASpec {
             }
             specialized.parameters += self.parameters.filter { modelParameterDependencies.contains($0.reference) }
             // A TLC exploration constraint is configuration, not part of C!Spec.
-            specialized.constraint = nil
+            specialized.constraints = []
             return .init(
                 id: property.id,
                 name: refinement.name,
@@ -1335,10 +1335,16 @@ private struct CanonicalSpecificationEncoder {
         }
         list("temporal", temporalProperties) { $0 }
         list("fairness", spec.fairness, canonicalFairness)
-        field("assume", canonicalOptional(spec.assume.map(canonicalExpression)))
+        let assumption = spec.assumptions.map(\.expression).reduce(nil as StateExpr?) { partial, expression in
+            partial.map { .and($0, expression) } ?? expression
+        }
+        field("assume", canonicalOptional(assumption.map(canonicalExpression)))
         field("checkDeadlock", node("bool", [String(spec.checkDeadlock)]))
         list("extendsModules", spec.extendsModules) { $0.rawValue }
-        field("constraint", canonicalOptional(spec.constraint.map(canonicalExpression)))
+        let constraint = spec.constraints.map(\.expression).reduce(nil as StateExpr?) { partial, expression in
+            partial.map { .and($0, expression) } ?? expression
+        }
+        field("constraint", canonicalOptional(constraint.map(canonicalExpression)))
         let recursiveFunctions = spec.recursiveFuncs.map {
             node("recursive-function", [$0.name, canonicalList($0.params), canonicalExpression($0.body)])
         }

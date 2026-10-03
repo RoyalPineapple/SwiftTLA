@@ -324,22 +324,38 @@ struct CompiledLowerer {
         }
         operators.formalDefinitionIDs = allFormalOperators.map(\.id)
         operators.recursiveFunctionIDs = allRecursiveFunctions.map(\.id)
-        let assume = try lowerOptional(spec.assume, at: "assume", scope: rootScope)
-        if let assume {
-            let requirements = assume.stateRequirements(operators: operators)
-            guard requirements.variables.isEmpty && requirements.requiresCompleteState == false else {
-                throw CompilationDiagnostic(
+        func conjoin(_ expressions: [CompiledExpression]) -> CompiledExpression? {
+            expressions.reduce(nil) { partial, expression in
+                partial.map { .init(operation: .and, children: [$0, expression]) } ?? expression
+            }
+        }
+        func lowerClause(_ clause: ModelPredicateClause, at path: String) throws -> CompiledExpression {
+            do { return try lower(clause.expression, at: path, scope: rootScope) }
+            catch var diagnostic as CompilationDiagnostic {
+                if diagnostic.sourceOffset == nil { diagnostic.sourceOffset = clause.sourceOffset }
+                throw diagnostic
+            }
+        }
+        let assumptionClauses = try spec.assumptions.enumerated().map { index, clause in
+            let expression = try lowerClause(clause, at: "assume[\(index)]")
+            let requirements = expression.stateRequirements(operators: operators)
+            guard requirements.variables.isEmpty && !requirements.requiresCompleteState else {
+                var diagnostic = CompilationDiagnostic(
                     code: .stateDependentAssumption,
                     stage: .lowering,
-                    path: "assume",
+                    path: "assume[\(index)]",
                     expected: "a state-independent module assumption",
                     actual: requirements.requiresCompleteState
                         ? "an assumption that evaluates action enabledness"
                         : "an assumption that reads model state",
                     nextSafeAction: "Express state rules as invariants or temporal properties."
                 )
+                diagnostic.sourceOffset = clause.sourceOffset
+                throw diagnostic
             }
+            return expression
         }
+        let assume = conjoin(assumptionClauses)
         let orderedInitializations = try orderedInitializations(
             initializations,
             operators: operators
@@ -364,8 +380,14 @@ struct CompiledLowerer {
             }
             return property.map(predicate)
         }
-        let constraintExpression = try lowerOptional(spec.constraint, at: "constraint", scope: rootScope)
-        let constraint = constraintExpression.map(predicate)
+        let constraintClauses = try spec.constraints.enumerated().map { index, clause in
+            try lowerClause(clause, at: "constraint[\(index)]")
+        }
+        let constraint = conjoin(constraintClauses).map {
+            let query = predicate($0)
+            return CompiledStateQuery(expression: query.expression, enabledActions: query.enabledActions,
+                clauseSourceOffsets: spec.constraints.map(\.sourceOffset))
+        }
         let scenarios = try lowerValidationScenarios(spec)
         for replacement in formalModuleReplacements {
             let requirements = replacement.expression.stateRequirements(operators: operators)
@@ -399,7 +421,8 @@ struct CompiledLowerer {
                         enabledActions: condition.projection.map { predicate($0).enabledActions } ?? [])
                 },
                 constraint: constraint,
-                assume: assume.map { .init(expression: $0, enabledActions: []) }),
+                assume: assume.map { .init(expression: $0, enabledActions: [],
+                    clauseSourceOffsets: spec.assumptions.map(\.sourceOffset)) }),
             operators: operators,
             formalModuleReplacements: formalModuleReplacements,
             moduleInstances: moduleInstances,

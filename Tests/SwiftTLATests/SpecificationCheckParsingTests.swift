@@ -20,13 +20,13 @@ import SwiftTLAMacros
         let parsed = SpecParser.parseSpecClosure(named: "Assumptions", try parseSpecTestClosure("{ Assume(true); Assume(false) }"))
         let built = TLASpec("Assumptions") { Assume(true); Assume(false) }
         #expect(parsed.diagnostics.isEmpty)
-        #expect(parsed.assume == built.assume)
+        #expect(parsed.assumptions.map(\.expression) == built.assumptions.map(\.expression))
     }
 
     @Test("Malformed assumptions fail at the source boundary", arguments: ["Assume()", "Assume(true, false)", "Assume(unknown())"])
     func rejectsMalformedAssumptions(_ source: String) throws {
         let parsed = SpecParser.parseSpecClosure(named: "Assumptions", try parseSpecTestClosure("{ \(source) }"))
         #expect(!parsed.diagnostics.isEmpty)
-        #expect(parsed.assume == nil)
+        #expect(parsed.assumptions.isEmpty)
     }
 }

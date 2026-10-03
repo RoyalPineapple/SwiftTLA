@@ -703,7 +703,7 @@ public enum AlgorithmBuilder {
     }
 
     public static func buildExpression(_ component: ConstraintDecl) -> [AlgorithmElement] {
-        [AlgorithmElement(model: .stateConstraint(component.body))]
+        [AlgorithmElement(model: .stateConstraint(.init(component.body)))]
     }
 
     public static func buildExpression(_ component: FormalOperatorDecl) -> [AlgorithmElement] {
@@ -717,7 +717,7 @@ public enum AlgorithmBuilder {
 /// differently from a correctness `Invariant`: a state constraint limits
 /// exploration, while an invariant is checked in every retained state.
 public func StateConstraint(_ expression: some TypedExpression<Bool>) -> AlgorithmElement {
-    AlgorithmElement(model: .stateConstraint(expression.stateExpr))
+    AlgorithmElement(model: .stateConstraint(.init(expression.stateExpr)))
 }
 
 @resultBuilder

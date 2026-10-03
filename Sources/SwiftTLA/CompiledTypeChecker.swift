@@ -405,19 +405,11 @@ package struct CompiledTypeChecker: Sendable {
                 throw Self.contextualDiagnostic("temporalProperties.\(property.name)", causedBy: diagnostic)
             }
         }
-        do {
-            constraint = try inputs.semantics.behavior.constraint.map { predicate in
-                try predicate.map { try checkOperand($0, expected: .bool) }
-            }
-        } catch let diagnostic as CompilationDiagnostic {
-            throw Self.contextualDiagnostic("constraint", causedBy: diagnostic)
+        constraint = try inputs.semantics.behavior.constraint.map {
+            try checkModelPredicate($0, named: "constraint")
         }
-        do {
-            assume = try inputs.semantics.behavior.assume.map { predicate in
-                try predicate.map { try checkOperand($0, expected: .bool) }
-            }
-        } catch let diagnostic as CompilationDiagnostic {
-            throw Self.contextualDiagnostic("assume", causedBy: diagnostic)
+        assume = try inputs.semantics.behavior.assume.map {
+            try checkModelPredicate($0, named: "assume")
         }
         for variable in inputs.layout.variables {
             guard let type = variables[variable.id], type.resolved else {
@@ -820,6 +812,42 @@ package struct CompiledTypeChecker: Sendable {
         case .array(let element), .dictionary(.int, let element): return element
         default: throw CompiledValueType.diagnostic("sequence", "invalid sequence representation")
         }
+    }
+
+    private mutating func checkModelPredicate(_ predicate: CompiledStateQuery,
+        named name: String) throws -> CompiledStateQuery {
+        let offsets = predicate.clauseSourceOffsets
+        guard !offsets.isEmpty else {
+            do { return try predicate.map { try checkOperand($0, expected: .bool) } }
+            catch let diagnostic as CompilationDiagnostic {
+                throw Self.contextualDiagnostic(name, causedBy: diagnostic)
+            }
+        }
+        var clauses: [CompiledExpression] = []
+        var first = predicate.expression
+        for _ in 1..<offsets.count {
+            guard case .and = first.operation, first.children.count == 2 else {
+                throw CompiledValueType.diagnostic(name, "invalid predicate clause structure")
+            }
+            clauses.append(first.children[1])
+            first = first.children[0]
+        }
+        clauses.append(first)
+        var checked: [CompiledExpression] = []
+        for (index, clause) in clauses.reversed().enumerated() {
+            do { checked.append(try checkOperand(clause, expected: .bool)) }
+            catch let diagnostic as CompilationDiagnostic {
+                let sourceSpan = offsets[index].map {
+                    CompilerSourceSpan(location: .utf8Offset($0), utf8Length: 0)
+                }
+                throw Self.contextualDiagnostic("\(name)[\(index)]", causedBy: diagnostic,
+                    sourceSpan: sourceSpan)
+            }
+        }
+        let expression = checked.dropFirst().reduce(checked[0]) {
+            .init(operation: .and, resultType: .bool, children: [$0, $1])
+        }
+        return .init(expression: expression, enabledActions: predicate.enabledActions)
     }
 
     private static func contextualDiagnostic(_ context: String, causedBy cause: CompilationDiagnostic,

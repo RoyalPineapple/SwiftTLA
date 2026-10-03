@@ -917,11 +917,11 @@ extension ParserSession {
                 : nil
             if let expression {
                 if name == "Assume" {
-                    components.assume = components.assume.map { .and($0, expression) } ?? expression
-                    recordModelPredicate(named: "assume", at: call)
+                    components.assumptions.append(.init(expression,
+                        sourceOffset: call.positionAfterSkippingLeadingTrivia.utf8Offset))
                 } else {
-                    components.constraint = components.constraint.map { .and($0, expression) } ?? expression
-                    recordModelPredicate(named: "constraint", at: call)
+                    components.constraints.append(.init(expression,
+                        sourceOffset: call.positionAfterSkippingLeadingTrivia.utf8Offset))
                 }
             } else {
                 components.diagnostics.append(.init(

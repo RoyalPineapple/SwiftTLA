@@ -140,7 +140,7 @@ struct CompilerPipelineCanonicalizationTests {
             variables: [.init(name: "value", initial: .int(0))],
             actions: [],
             invariants: [],
-            assume: .operatorApplication(.reference("Current", arity: 0), []),
+            assumptions: [.init(.operatorApplication(.reference("Current", arity: 0), []))],
             formalOperatorDefinitions: [
                 .init(name: "Current", parameters: [], body: .variable("value"))
             ]
@@ -150,7 +150,7 @@ struct CompilerPipelineCanonicalizationTests {
             variables: [.init(name: "value", initial: .int(0))],
             actions: [.init(name: "stay", body: .unchanged(.named("value")))],
             invariants: [],
-            assume: .enabledAction("stay")
+            assumptions: [.init(.enabledAction("stay"))]
         )
         let cases = [
             (stateRead, "an assumption that reads model state"),
@@ -165,7 +165,7 @@ struct CompilerPipelineCanonicalizationTests {
             } catch let diagnostic as CompilationDiagnostic {
                 #expect(diagnostic.code == .stateDependentAssumption)
                 #expect(diagnostic.stage == .lowering)
-                #expect(diagnostic.path == "assume")
+                #expect(diagnostic.path == "assume[0]")
                 #expect(diagnostic.actual == actual)
             } catch {
                 Issue.record("Expected a CompilationDiagnostic, got \(error).")

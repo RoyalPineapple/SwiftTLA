@@ -223,7 +223,8 @@ package struct AlgorithmModel: Sendable {
                         plusCalDependencies: definition.plusCalDependencies
                     )
                 )
-            case .stateConstraint(let constraint): return .stateConstraint(expression(constraint))
+            case .stateConstraint(let constraint): return .stateConstraint(.init(
+                expression(constraint.expression), sourceOffset: constraint.sourceOffset))
             case .local(let declaration): return .local(state(declaration))
             case .step(let declaration): return .step(step(declaration))
             }
@@ -416,7 +417,7 @@ package indirect enum AlgorithmComponentModel: Sendable {
     case temporal(NamedTemporal)
     case formalOperator(FormalOperatorDefinition)
     /// A TLC state-space bound whose excluded states are omitted from exploration.
-    case stateConstraint(StateExpr)
+    case stateConstraint(ModelPredicateClause)
     case invalidPlacement(InvalidAlgorithmComponent)
     case local(AlgorithmStateModel)
     case step(AlgorithmStepModel)

@@ -269,7 +269,7 @@ struct FormalOperatorTests {
         name: "bounded",
         body: .lessOrEqual(.variable("counter"), .int(2))
       )],
-      constraint: .lessOrEqual(.variable("counter"), .int(2)),
+      constraints: [.init(.lessOrEqual(.variable("counter"), .int(2)))],
       formalOperatorDefinitions: [applyTwice]
     )
 
@@ -324,7 +324,7 @@ struct FormalOperatorTests {
         )
       )],
       invariants: [],
-      constraint: .lessOrEqual(.variable("counter"), .int(2)),
+      constraints: [.init(.lessOrEqual(.variable("counter"), .int(2)))],
       imports: [library]
     )
 

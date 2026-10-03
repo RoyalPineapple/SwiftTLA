@@ -284,10 +284,10 @@ public struct TLASpec: Sendable {
   package var reachabilityProperties: [NamedStatePredicate]
   package var temporalProperties: [NamedTemporal]
   package var fairness: [FairnessCondition]
-  package var assume: StateExpr?
+  package var assumptions: [ModelPredicateClause]
   package var checkDeadlock: Bool
   package var extendsModules: [StandardModule]
-  package var constraint: StateExpr?
+  package var constraints: [ModelPredicateClause]
   package var recursiveFuncs: [RecursiveFunc]
   /// Executable, higher-order operator definitions retained as formal AST data.
   package var formalOperatorDefinitions: [FormalOperatorDefinition]
@@ -311,9 +311,9 @@ public struct TLASpec: Sendable {
     name: String, variables: [NamedVar], constants: [ConstantDecl] = [],
     formalParameters: [FormalModuleParameter] = [],
     actions: [NamedAction], invariants: [NamedStatePredicate], reachabilityProperties: [NamedStatePredicate] = [], temporalProperties: [NamedTemporal] = [],
-    fairness: [FairnessCondition] = [], assume: StateExpr? = nil, checkDeadlock: Bool = true,
+    fairness: [FairnessCondition] = [], assumptions: [ModelPredicateClause] = [], checkDeadlock: Bool = true,
     extendsModules: [StandardModule] = [.integers],
-    constraint: StateExpr? = nil,
+    constraints: [ModelPredicateClause] = [],
     recursiveFuncs: [RecursiveFunc] = [],
     formalOperatorDefinitions: [FormalOperatorDefinition] = [], imports: [TLASpec] = [],
     importConfigurations: [FormalModuleConfiguration] = [],
@@ -330,10 +330,10 @@ public struct TLASpec: Sendable {
     self.reachabilityProperties = reachabilityProperties
     self.temporalProperties = temporalProperties
     self.fairness = fairness
-    self.assume = assume
+    self.assumptions = assumptions
     self.checkDeadlock = checkDeadlock
     self.extendsModules = canonicalStandardModules(extendsModules)
-    self.constraint = constraint
+    self.constraints = constraints
     self.recursiveFuncs = recursiveFuncs
     self.formalOperatorDefinitions = formalOperatorDefinitions
     self.imports = imports
@@ -651,6 +651,16 @@ extension TLASpec {
     return refinement.mappings.map { .init($0.target, expression: $0.source) }
   }
 }
+package struct ModelPredicateClause: Sendable, Equatable {
+  package let expression: StateExpr
+  package let sourceOffset: Int?
+
+  package init(_ expression: StateExpr, sourceOffset: Int? = nil) {
+    self.expression = expression
+    self.sourceOffset = sourceOffset
+  }
+}
+
 public struct AssumeDecl: SpecComponent, Equatable {
   public let expr: StateExpr
   package init(_ expr: StateExpr) { self.expr = expr }

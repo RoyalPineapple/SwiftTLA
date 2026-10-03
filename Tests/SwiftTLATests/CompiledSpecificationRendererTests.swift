@@ -109,7 +109,7 @@ struct CompiledSpecificationRendererTests {
                 .assign(.named("count"), .value(.int(1))))),
             .init(name: "ready", body: .unchanged(.named("count")))
         ], invariants: [.init(name: "CanAdvance", body: .enabledAction("advance"))],
-            constraint: .enabledAction("ready")).compile()
+            constraints: [.init(.enabledAction("ready"))]).compile()
         let rendered = try compilation.render().tlaBundle.tla
         let ready = try #require(rendered.range(of: "ready =="))
         let advance = try #require(rendered.range(of: "advance =="))

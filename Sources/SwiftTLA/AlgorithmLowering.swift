@@ -131,11 +131,9 @@ enum AlgorithmLowerer {
                         generatedSwiftType: process.typeName)], reference: temporal.reference)
             }
         }
-        let declaredConstraint = algorithm.components.compactMap { component -> StateExpr? in
+        let declaredConstraints = algorithm.components.compactMap { component -> ModelPredicateClause? in
             guard case .stateConstraint(let constraint) = component else { return nil }
             return constraint
-        }.reduce(nil) { partial, constraint in
-            partial.map { .and($0, constraint) } ?? constraint
         }
 
         var variables = shared.map { state in
@@ -418,7 +416,7 @@ enum AlgorithmLowerer {
             reachabilityProperties: declaredReachability + processReachability,
             temporalProperties: declaredTemporal + processTemporal,
             fairness: fairness,
-            constraint: declaredConstraint,
+            constraints: declaredConstraints,
             formalOperatorDefinitions: resolvedFormalOperators,
             sourceAlgorithms: [Algorithm(model: algorithm)]))
     }
@@ -527,11 +525,9 @@ enum AlgorithmLowerer {
             guard case .temporal(let temporal) = component else { return nil }
             return temporal
         }
-        let declaredConstraint = algorithm.components.compactMap { component -> StateExpr? in
+        let declaredConstraints = algorithm.components.compactMap { component -> ModelPredicateClause? in
             guard case .stateConstraint(let constraint) = component else { return nil }
             return constraint
-        }.reduce(nil) { partial, constraint in
-            partial.map { .and($0, constraint) } ?? constraint
         }
 
         let sharedVariables = shared.map { state in
@@ -577,7 +573,7 @@ enum AlgorithmLowerer {
                 reachabilityProperties: declaredReachability,
                 temporalProperties: declaredTemporal,
                 fairness: sequentialFairnessConditions(for: algorithm.sequentialFairness),
-                constraint: declaredConstraint,
+                constraints: declaredConstraints,
                 formalOperatorDefinitions: formalOperatorDefinitions,
                 sourceAlgorithms: [Algorithm(model: algorithm)]
             ))
@@ -686,7 +682,7 @@ enum AlgorithmLowerer {
             reachabilityProperties: declaredReachability,
             temporalProperties: declaredTemporal,
             fairness: sequentialFairnessConditions(for: algorithm.sequentialFairness),
-            constraint: declaredConstraint,
+            constraints: declaredConstraints,
             formalOperatorDefinitions: formalOperatorDefinitions,
             sourceAlgorithms: [Algorithm(model: algorithm)]
         ))

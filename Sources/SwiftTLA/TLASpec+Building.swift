@@ -57,11 +57,11 @@ extension TLASpec {
       } else if let parameter = comp as? FormalModuleParameter {
         formalParameters.append(parameter)
       } else if let a = comp as? AssumeDecl {
-        assume = assume.map { .and($0, a.expr) } ?? a.expr
+        assumptions.append(.init(a.expr))
       } else if let e = comp as? ExtendsDecl {
         extendsModules.append(contentsOf: e.modules)
       } else if let c = comp as? ConstraintDecl {
-        constraint = constraint.map { .and($0, c.body) } ?? c.body
+        constraints.append(.init(c.body))
       } else if let rf = comp as? RecursiveFuncDecl {
         recursiveFuncs.append(rf.funcDef)
       } else if let definition = comp as? FormalOperatorDecl {
@@ -105,7 +105,7 @@ extension TLASpec {
     var reachabilityProperties = reachabilityProperties
     var temporalProperties = temporalProperties
     var fairness = fairness
-    var constraint = constraint
+    var constraints = constraints
     var formalOperatorDefinitions = formalOperatorDefinitions
     var authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
 
@@ -139,9 +139,7 @@ extension TLASpec {
         temporalProperties += lowered.temporalProperties
         fairness += lowered.fairness
         formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions
-        if let loweredConstraint = lowered.constraint {
-          constraint = constraint.map { .and($0, loweredConstraint) } ?? loweredConstraint
-        }
+        constraints += lowered.constraints
       }
     }
 
@@ -174,10 +172,10 @@ extension TLASpec {
       reachabilityProperties: reachabilityProperties,
       temporalProperties: temporalProperties,
       fairness: fairness,
-      assume: assume,
+      assumptions: assumptions,
       checkDeadlock: checkDeadlock,
       extendsModules: extendsModules,
-      constraint: constraint,
+      constraints: constraints,
       recursiveFuncs: recursiveFuncs,
       formalOperatorDefinitions: formalOperatorDefinitions,
       imports: imports,

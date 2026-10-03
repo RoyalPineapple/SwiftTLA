@@ -855,7 +855,7 @@ struct AlgorithmBuilderTests {
         #expect(spec.invariants.map(\.name) == ["NonNegative"])
         #expect(spec.temporalProperties.map(\.name) == ["EventuallyPositive"])
         #expect(spec.fairness.isEmpty)
-        #expect(spec.constraint == .lessThan(.variable("value"), .value(.int(3))))
+        #expect(spec.constraints.map(\.expression) == [.lessThan(.variable("value"), .value(.int(3)))])
     }
 
     @Test("a process-local invariant lowers over its process family")

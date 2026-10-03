@@ -676,8 +676,8 @@ package struct FormalModuleClosure: Sendable {
       }
       freeNames.formUnion(scoped.freeVariableNames)
     }
-    if let constraint = module.constraint { freeNames.formUnion(constraint.freeVariableNames) }
-    if let assume = module.assume { freeNames.formUnion(assume.freeVariableNames) }
+    module.constraints.forEach { freeNames.formUnion($0.expression.freeVariableNames) }
+    module.assumptions.forEach { freeNames.formUnion($0.expression.freeVariableNames) }
     for function in module.recursiveFuncs {
       freeNames.formUnion(function.body.freeVariableNames.subtracting(Set(function.params)))
     }

@@ -294,10 +294,13 @@ struct CompilerBoundaryDiagnosticTests {
 
     @Test("Constraint and assumption type errors point to their predicates")
     func booleanModelPredicatesPointToSource() throws {
-        for (declaration, token, path) in [
-            ("Constraint(1)", "Constraint", "constraint"),
-            ("Assume(1)", "Assume", "assume"),
-            ("", "StateConstraint", "constraint")
+        for (declaration, algorithmPredicate, token, path, clause) in [
+            ("Constraint(1)", "", "Constraint", "constraint", 0),
+            ("Constraint(true)\nConstraint(1)", "", "Constraint", "constraint", 1),
+            ("Assume(1)", "", "Assume", "assume", 0),
+            ("Assume(true)\nAssume(1)", "", "Assume", "assume", 1),
+            ("", "StateConstraint(1)", "StateConstraint", "constraint", 0),
+            ("", "StateConstraint(true)\nStateConstraint(1)", "StateConstraint", "constraint", 1)
         ] {
             let source = Parser.parse(source: """
         struct InvalidModel {
@@ -307,7 +310,7 @@ struct CompilerBoundaryDiagnosticTests {
                     \(declaration)
                     let algorithm = Algorithm(scoped: { scope in
                         let count = scope.sharedVar(initial: 0)
-                        \(token == "StateConstraint" ? "StateConstraint(1)" : "")
+                        \(algorithmPredicate)
                         Do(Step.advance) { Stop() }
                     })
                     algorithm
@@ -316,13 +319,13 @@ struct CompilerBoundaryDiagnosticTests {
         }
         """)
             let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
-            let predicate = try #require(source.tokens(viewMode: .sourceAccurate).first { $0.text == token })
+            let predicate = try #require(Array(source.tokens(viewMode: .sourceAccurate)).last { $0.text == token })
 
             do {
                 _ = try TLASpecVerifier.parseAndVerify(model)
                 Issue.record("An integer predicate must not satisfy a Boolean model condition")
             } catch let diagnostic as CompilationDiagnostic {
-                #expect(diagnostic.path.hasPrefix("nativeMachine.\(path) → "))
+                #expect(diagnostic.path.hasPrefix("nativeMachine.\(path)[\(clause)] → "))
                 #expect(diagnostic.sourceOffset == predicate.positionAfterSkippingLeadingTrivia.utf8Offset)
                 let emitted = modelCompilationDiagnostic(diagnostic, in: model)
                 #expect(emitted.node.positionAfterSkippingLeadingTrivia == predicate.positionAfterSkippingLeadingTrivia)

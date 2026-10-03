@@ -148,8 +148,8 @@ extension TLASpec {
             return condition
         }
         specialized.fairness = self.fairness.map(fairness)
-        specialized.assume = assume.map(state)
-        specialized.constraint = constraint.map(state)
+        specialized.assumptions = assumptions.map { .init(state($0.expression), sourceOffset: $0.sourceOffset) }
+        specialized.constraints = constraints.map { .init(state($0.expression), sourceOffset: $0.sourceOffset) }
         specialized.recursiveFuncs = recursiveFuncs.map { $0.substitutingVariables(parameters) }
         specialized.formalOperatorDefinitions = formalOperatorDefinitions.map { $0.substitutingVariables(parameters) }
         specialized.importConfigurations = importConfigurations.map { configuration in

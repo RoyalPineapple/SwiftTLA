@@ -273,7 +273,7 @@ struct NativeCodeGenerationTests {
                 .guard_(.enabledAction("ready")), .assign(.named("count"), .value(.int(1)))))
         ], invariants: [.init(name: "CanAdvance", body: .enabledAction("advance"))],
             temporalProperties: [.init(name: "AlwaysCanAdvance", expr: .always(.enabledAction("advance")))],
-            constraint: .or(.equal(.variable("count"), .value(.int(0))), .not(.enabledAction("ready"))))
+            constraints: [.init(.or(.equal(.variable("count"), .value(.int(0))), .not(.enabledAction("ready"))))])
         let compilation = try specification.compile()
         let ready = try #require(compilation.layout.testActionID(named: "ready"))
         let advance = try #require(compilation.layout.testActionID(named: "advance"))

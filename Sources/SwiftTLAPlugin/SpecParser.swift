@@ -63,18 +63,12 @@ final class ParserSession {
             expression.positionAfterSkippingLeadingTrivia.utf8Offset)
     }
 
-    func recordModelPredicate(named name: String, at call: FunctionCallExprSyntax) {
-        propertyDeclarationOffsets[name, default: []].append(
-            call.positionAfterSkippingLeadingTrivia.utf8Offset)
-    }
-
     func propertyDeclarationOffset(for diagnosticPath: String) -> Int? {
         let path = diagnosticPath.hasPrefix("nativeMachine.")
             ? diagnosticPath.dropFirst("nativeMachine.".count) : diagnosticPath[...]
         let end = path.range(of: " → ")?.lowerBound ?? path.endIndex
         var key = String(path[..<end])
-        guard key == "constraint" || key == "assume"
-            || key.hasPrefix("invariants.") || key.hasPrefix("reachabilityProperties.")
+        guard key.hasPrefix("invariants.") || key.hasPrefix("reachabilityProperties.")
             || key.hasPrefix("temporalProperties.") || key.hasPrefix("refinements.")
             || key.hasPrefix("validation.") else { return nil }
         while true {

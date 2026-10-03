@@ -38,7 +38,7 @@ func canonicalTestSpec(
         invariants: invariants.map { NamedStatePredicate(name: $0.name, body: $0.body) },
         temporalProperties: temporal.map { NamedTemporal(name: $0.name, expr: $0.expr) },
         fairness: fairness,
-        constraint: constraint,
+        constraints: constraint.map { [.init($0)] } ?? [],
         formalOperatorDefinitions: formalOperatorDefinitions,
         imports: imports,
         importConfigurations: importConfigurations,
