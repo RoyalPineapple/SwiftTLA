@@ -48,6 +48,28 @@ private struct DuplicateExecutionPaths {
 }
 
 @TLAModel
+private struct NestedChoiceExecution {
+    enum Step: String, CaseIterable { case choose }
+    static var spec: TLASpec {
+        #spec("NestedChoiceExecution") {
+            let nestedChoiceExecution = Algorithm(label: "NestedChoiceExecution", scoped: { scope in
+                let x = scope.sharedVar(initial: 0)
+                let y = scope.sharedVar(initial: 0)
+                Do(Step.choose, when: x == 0) {
+                    Assign(x, to: 1)
+                    Either {
+                        Either { Assign(y, to: 2) } or: { Assign(y, to: 3) }
+                    } or: {
+                        Assign(y, to: 4)
+                    }
+                }
+            })
+            nestedChoiceExecution
+        }
+    }
+}
+
+@TLAModel
 private struct HiddenControlAlternatives {
     enum Step: String, CaseIterable { case select, left, right }
     static var spec: TLASpec {
@@ -164,6 +186,19 @@ private struct ReachableInvariantFailure {
         } catch GeneratedMachineError.ambiguousAction {}
         #expect(machine.state == before)
         #expect(try machine.enabledActions() == [.select])
+    }
+
+    @Test("nested choices after an ordered write retain every generated successor")
+    func nestedChoiceSuccessors() throws {
+        let initial = try NestedChoiceExecution.makeMachine()
+        let successors = try initial.successors(for: .choose)
+        #expect(successors.count == 3)
+        #expect(successors.allSatisfy { $0.state.x == 1 })
+        #expect(Set(successors.map(\.state.y)) == [2, 3, 4])
+        let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 4)
+        #expect(graph.transitions.count == 4)
+        #expect(graph.transitions[initial.snapshot]?.count == 3)
+        #expect(Set(graph.transitions[initial.snapshot, default: []].map { $0.target.state.y }) == [2, 3, 4])
     }
 
     @Test("checked arithmetic failure agrees across dispatch and exploration without changing the snapshot")
