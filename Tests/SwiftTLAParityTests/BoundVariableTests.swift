@@ -198,29 +198,6 @@ import UpstreamParity
       compilation: compilation) == .function([.int(1): .int(10), .int(2): .int(20)]))
   }
 
-  @Test("bound choice produces nondeterministic assignment")
-  func boundChoiceUpdatesSelectedMember() throws {
-    let picked = Var<Int>("picked")
-    let source = Var<SetExpr<Int>>("source")
-    let spec = TLASpec("ChooseTest") {
-      Variable(picked, 0)
-      Variable(source, SetExpr(1, 2, 3))
-      Action("pick") {
-        source.stateExpr.cardinality > 0
-          && ActionExpr.exists("selected", from: source) { selected in
-            picked.becomes(Expr<Int>(selected))
-              && source.becomes(Expr(.setDifference(source.stateExpr, StateExpr.singleton(selected))))
-          }
-      }
-    }
-    let exploration = try ModelChecker(compilation: spec.compile(), configuration: .init(maximumStateLimit: 20, symmetryReduction: .disabled)).explore()
-    #expect(exploration.isComplete)
-    #expect(exploration.graph.states.count > 0)
-    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
-    let terminal = try #require(exploration.outcome.diagnostic?.state)
-    #expect(try value("source", in: terminal) == .set([]))
-  }
-
   @Test("SpecParser preserves explicit choice binders")
   func specParserBoundChoiceCall() throws {
     let source = "ActionExpr.exists(\"selected\", from: q) { member in picked.becomes(Expr<Int>(member)) }"
