@@ -150,7 +150,7 @@ import UpstreamParity
     #expect(try compiledValue(predicate) == .bool(true))
   }
 
-  @Test("Sequence variable append and read in model checker")
+  @Test("Sequence variable append and read preserve the selected value")
   func sequenceVariableAppendRead() throws {
     let seq = Var<TupleExpr<Int>>("seq")
     let result = Var<Int>("result")
@@ -164,14 +164,16 @@ import UpstreamParity
       Action("pop") { seq.stateExpr.count > 0 && result.becomes(Expr<Int>(seq.stateExpr.at(1))) }
     }
     let compilation = try spec.compile()
-    let exploration = try ModelChecker(
-      compilation: compilation,
-      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
-    ).explore()
-    let resultToken = try #require(TLAStateProjection.Token(validating: "result"))
-    let results = Set(exploration.graph.states.values.compactMap { $0.value(for: resultToken) })
-    #expect(results.contains(.int(0)))
-    #expect(results.contains(.int(42)))
+    let runtime = CompiledRuntime(compilation: compilation)
+    let initial = try #require(try runtime.initialStates().first)
+    let push = try #require(compilation.layout.testActionID(named: "push"))
+    let pushed = try runtime.successors(for: push, from: initial)
+    let pop = try #require(compilation.layout.testActionID(named: "pop"))
+    let popped = try runtime.successors(for: pop, from: #require(pushed.first).state)
+    #expect(pushed.count == 1)
+    #expect(popped.count == 1)
+    #expect(try compiledStateValue(named: "result", in: initial, compilation: compilation) == .int(0))
+    #expect(try compiledStateValue(named: "result", in: #require(popped.first).state, compilation: compilation) == .int(42))
   }
 
   @Test("Function-typed variable stores and retrieves values")
@@ -187,20 +189,13 @@ import UpstreamParity
       }
     }
     let compilation = try spec.compile()
-    let exploration = try ModelChecker(
-      compilation: compilation,
-      configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
-    ).explore()
-    let clockToken = try #require(TLAStateProjection.Token(validating: "clock"))
-    var found = false
-    for state in exploration.graph.states.values {
-      if case .function(let m)? = state.value(for: clockToken) {
-        if m[.int(1)] == .int(10) && m[.int(2)] == .int(20) {
-          found = true
-        }
-      }
-    }
-    #expect(found)
+    let runtime = CompiledRuntime(compilation: compilation)
+    let initial = try #require(try runtime.initialStates().first)
+    let action = try #require(compilation.layout.testActionID(named: "init"))
+    let successors = try runtime.successors(for: action, from: initial)
+    #expect(successors.count == 1)
+    #expect(try compiledStateValue(named: "clock", in: #require(successors.first).state,
+      compilation: compilation) == .function([.int(1): .int(10), .int(2): .int(20)]))
   }
 
   @Test("bound choice produces nondeterministic assignment")
