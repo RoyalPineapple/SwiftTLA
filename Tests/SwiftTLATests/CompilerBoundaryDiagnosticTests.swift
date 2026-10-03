@@ -177,10 +177,12 @@ struct CompilerBoundaryDiagnosticTests {
 
     @Test("Generated property type errors point to their predicate registration")
     func generatedPropertyTypeErrorPointsToRegistration() throws {
-        for (handle, insideAlgorithm, path) in [
-            ("Invariant", false, "invariants.Claim"),
-            ("Reachable", false, "reachabilityProperties.Claim"),
-            ("Invariant", true, "invariants.Claim")
+        for (handle, registration, insideAlgorithm, path) in [
+            ("Invariant", "Claim { 1 }", false, "invariants.Claim"),
+            ("Reachable", "Claim { 1 }", false, "reachabilityProperties.Claim"),
+            ("Invariant", "Claim { 1 }", true, "invariants.Claim"),
+            ("Eventually", "Claim(1)", false, "temporalProperties.Claim"),
+            ("Eventually", "Claim(1)", true, "temporalProperties.Claim")
         ] {
             let source = Parser.parse(source: """
         struct InvalidModel {
@@ -188,11 +190,11 @@ struct CompilerBoundaryDiagnosticTests {
             static var spec: TLASpec {
                 #spec {
                     let Claim = \(handle)()
-                    \(insideAlgorithm ? "" : "Claim { 1 }")
+                    \(insideAlgorithm ? "" : registration)
                     let algorithm = Algorithm(scoped: { scope in
                         let count = scope.sharedVar(initial: 0)
                         Do(Step.advance) { Stop() }
-                        \(insideAlgorithm ? "Claim { 1 }" : "")
+                        \(insideAlgorithm ? registration : "")
                     })
                     algorithm
                 }

@@ -48,10 +48,16 @@ final class ParserSession {
             call.positionAfterSkippingLeadingTrivia.utf8Offset)
     }
 
+    func recordTemporalDeclaration(named name: String, at call: FunctionCallExprSyntax) {
+        propertyDeclarationOffsets["temporalProperties.\(name)", default: []].append(
+            call.positionAfterSkippingLeadingTrivia.utf8Offset)
+    }
+
     func propertyDeclarationOffset(for diagnosticPath: String) -> Int? {
         let path = diagnosticPath.hasPrefix("nativeMachine.")
             ? diagnosticPath.dropFirst("nativeMachine.".count) : diagnosticPath[...]
-        guard path.hasPrefix("invariants.") || path.hasPrefix("reachabilityProperties.") else { return nil }
+        guard path.hasPrefix("invariants.") || path.hasPrefix("reachabilityProperties.")
+            || path.hasPrefix("temporalProperties.") else { return nil }
         let end = path.range(of: " → ")?.lowerBound ?? path.endIndex
         guard let offsets = propertyDeclarationOffsets[String(path[..<end])], offsets.count == 1 else { return nil }
         return offsets[0]

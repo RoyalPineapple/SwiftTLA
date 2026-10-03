@@ -656,7 +656,9 @@ extension ParserSession {
         default:
             return nil
         }
-        return expression.map { .init(name: name, expr: $0) }
+        guard let expression else { return nil }
+        recordTemporalDeclaration(named: name, at: call)
+        return .init(name: name, expr: expression)
     }
 
     func parseBoundTemporal(
@@ -670,17 +672,20 @@ extension ParserSession {
         if let handle = specBindings.properties[name] as? TemporalPropertyHandle,
            arguments.count == 1,
            let condition = decodeTemporalCondition(arguments[0].expression, scope: scope) {
+            recordTemporalDeclaration(named: handle.reference.name, at: call)
             return handle.declaration(condition)
         }
         if let handle = specBindings.properties[name] as? TemporalHandle,
            arguments.count == 1,
            let predicate = decodeTypedFacadeValue(arguments[0].expression, scope: scope) {
+            recordTemporalDeclaration(named: handle.reference.name, at: call)
             return handle.declaration(predicate)
         }
         if let handle = specBindings.properties[name] as? LeadsToHandle,
            arguments.count == 2,
            let premise = decodeTypedFacadeValue(arguments[0].expression, scope: scope),
            let consequence = decodeTypedFacadeValue(arguments[1].expression, scope: scope) {
+            recordTemporalDeclaration(named: handle.reference.name, at: call)
             return handle.declaration(premise, consequence)
         }
         return nil
