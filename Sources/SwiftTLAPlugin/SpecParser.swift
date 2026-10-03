@@ -8,6 +8,7 @@ import Foundation
 final class ParserSession {
     var symmetryDeclarations: [SymmetrySetDecl] = []
     var stateDeclarationOffsets: [String: [Int]] = [:]
+    var actionDeclarationOffsets: [String: [Int]] = [:]
 
     func recordStateDeclaration(named name: String, at binding: PatternBindingSyntax) {
         stateDeclarationOffsets[name, default: []].append(
@@ -21,6 +22,22 @@ final class ParserSession {
         let suffix = diagnosticPath.dropFirst(prefix.count)
         let name = String(suffix.prefix { $0 != "." && $0 != " " && $0 != "→" })
         guard let offsets = stateDeclarationOffsets[name], offsets.count == 1 else { return nil }
+        return offsets[0]
+    }
+
+    func recordActionDeclaration(named name: String, at call: FunctionCallExprSyntax) {
+        actionDeclarationOffsets[name, default: []].append(
+            call.positionAfterSkippingLeadingTrivia.utf8Offset)
+    }
+
+    func actionDeclarationOffset(for diagnosticPath: String) -> Int? {
+        let prefix = diagnosticPath.hasPrefix("nativeMachine.actions.")
+            ? "nativeMachine.actions." : "actions."
+        guard diagnosticPath.hasPrefix(prefix) else { return nil }
+        let suffix = diagnosticPath.dropFirst(prefix.count)
+        let end = suffix.range(of: " → ")?.lowerBound ?? suffix.endIndex
+        let name = String(suffix[..<end])
+        guard let offsets = actionDeclarationOffsets[name], offsets.count == 1 else { return nil }
         return offsets[0]
     }
     enum FormalModuleProvider: Equatable {

@@ -48,7 +48,9 @@ enum TLASpecVerifier {
             )
         } catch let diagnostic as CompilationDiagnostic {
             var located = diagnostic
-            located.sourceOffset = located.sourceOffset ?? parser.stateDeclarationOffset(for: located.path)
+            located.sourceOffset = located.sourceOffset
+                ?? parser.stateDeclarationOffset(for: located.path)
+                ?? parser.actionDeclarationOffset(for: located.path)
             throw located
         }
     }

@@ -590,7 +590,8 @@ extension ParserSession {
                     construct: construct,
                     processParameter: "__pcal_sequential",
                     macros: macros,
-                    scope: procedureScope
+                    scope: procedureScope,
+                    actionOwner: name
                   ),
                   case .step = component
             else {
@@ -1028,7 +1029,8 @@ extension ParserSession {
         construct: AlgorithmSourceConstruct,
         processParameter: String,
         macros: [String: AlgorithmMacroDefinition],
-        scope: TypedFacadeScope
+        scope: TypedFacadeScope,
+        actionOwner: String? = nil
     ) -> AlgorithmComponentModel? {
         if isUnboundPropertyHandle(call) {
             algorithmParseFailure = "Bind the property handle to an immutable let, then register its predicate using that binding."
@@ -1071,6 +1073,7 @@ extension ParserSession {
                 }
                 loopCondition = nil
             }
+            recordActionDeclaration(named: actionOwner.map { "procedure.\($0).\(label)" } ?? label, at: call)
             return .step(.init(label: .init(name: label), statements: statements, loopCondition: loopCondition))
         case .invariant, .reachable:
             guard let predicate = parseAlgorithmStateProperty(call, scope: scope) else { return nil }

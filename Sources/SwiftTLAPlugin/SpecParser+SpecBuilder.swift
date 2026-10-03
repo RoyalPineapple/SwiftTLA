@@ -9,6 +9,7 @@ extension ParserSession {
     func parseSpecClosure(named name: String, _ closure: ClosureExprSyntax) -> TLASpec {
         var components = TLASpec(name: name, variables: [], actions: [], invariants: [])
         stateDeclarationOffsets = [:]
+        actionDeclarationOffsets = [:]
         let outerSymmetry = symmetryDeclarations
         symmetryDeclarations = []
         defer { symmetryDeclarations = outerSymmetry }

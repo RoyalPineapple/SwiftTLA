@@ -133,6 +133,48 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("Generated action type errors point to their labeled step")
+    func generatedActionTypeErrorPointsToStep() throws {
+        for (body, action) in [
+            ("Do(Step.advance) { Assign(count, to: true) }", "actions.advance"),
+            ("""
+            Procedure(ProcedureName.helper) {
+                Do(Step.advance) { Assign(count, to: true); Return() }
+            }
+            Do(Step.start) { Call(ProcedureName.helper) }
+            Do(Step.finished) { Stop() }
+            """, "actions.procedure.helper.advance")
+        ] {
+            let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Step: String, CaseIterable, FiniteTLAValueDomain { case start, advance, finished }
+            enum ProcedureName: String, CaseIterable, FiniteTLAValueDomain { case helper }
+            static var spec: TLASpec {
+                #spec {
+                    let algorithm = Algorithm(scoped: { scope in
+                        let count: SharedVariable<Int> = scope.sharedVar(initial: 0)
+                        \(body)
+                    })
+                    algorithm
+                }
+            }
+        }
+        """)
+            let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+            let step = try #require(source.tokens(viewMode: .sourceAccurate).first { $0.text == "Do" })
+
+            do {
+                _ = try TLASpecVerifier.parseAndVerify(declaration)
+                Issue.record("A Boolean action value must not update an integer state")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.contains(action))
+                #expect(diagnostic.sourceOffset == step.positionAfterSkippingLeadingTrivia.utf8Offset)
+                let emitted = modelCompilationDiagnostic(diagnostic, in: declaration)
+                #expect(emitted.node.positionAfterSkippingLeadingTrivia == step.positionAfterSkippingLeadingTrivia)
+            }
+        }
+    }
+
     @Test("Parameter and checking-register type errors point to their declarations")
     func typedInputErrorsPointToDeclarations() throws {
         for (input, name, path) in [
