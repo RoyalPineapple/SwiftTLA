@@ -3942,30 +3942,30 @@
     {
       "path": "specifications/chang_roberts",
       "name": "Chang-Roberts Algorithm for Leader Election in a Ring",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
-      "legacyCleanupComplete": false,
+      "audit": "Pinned module roles and both published configurations mapped to one typed generated model; local generated-machine checks and manifest rendering passed. Hosted parity remains pending.",
+      "gap": "Neither configuration has hosted generated-TLA-versus-upstream or native-versus-generated-TLA evidence. Do not credit complete initial states, labeled graphs, safety, liveness, or deadlock until both paths pass on a pushed SHA.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/chang_roberts/APChangRoberts.tla",
-          "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "configured Apalache-annotation wrapper",
+          "reason": "The published AP configuration selects Init and Next with N=3, Id=<<3,1,2>>, TypeOK, Correctness, and deadlock disabled. TLC can check the same wrapper; its type annotations are comments and do not change transitions.",
+          "implementations": ["Sources/UpstreamParity/Examples/ChangRoberts.swift"],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/chang_roberts/ChangRoberts.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
-          "implementations": [],
-          "dispositionComplete": false
+          "role": "shared PlusCal algorithm dependency",
+          "reason": "Both configured roots instantiate this module. It defines the state variables, labeled n0/n1 transitions, weak process fairness, TypeOK, Correctness, and Liveness; no standalone configuration is published.",
+          "implementations": ["Sources/UpstreamParity/Examples/ChangRoberts.swift"],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/chang_roberts/MCChangRoberts.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
-          "dispositionComplete": false
+          "reason": "The published MC configuration selects Spec with N=3, Id=<<1,2,3>>, TypeOK, Correctness, Liveness, and deadlock disabled.",
+          "implementations": ["Sources/UpstreamParity/Examples/ChangRoberts.swift"],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -3973,20 +3973,32 @@
           "module": "specifications/chang_roberts/APChangRoberts.tla",
           "configuration": "specifications/chang_roberts/APChangRoberts.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/ChangRoberts.swift",
+              "scenario": "APChangRoberts",
+              "caseID": "chang-roberts-ap"
+            }
+          ],
           "evidence": []
         },
         {
           "module": "specifications/chang_roberts/MCChangRoberts.tla",
           "configuration": "specifications/chang_roberts/MCChangRoberts.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/ChangRoberts.swift",
+              "scenario": "MCChangRoberts",
+              "caseID": "chang-roberts-mc"
+            }
+          ],
           "evidence": []
         }
       ],

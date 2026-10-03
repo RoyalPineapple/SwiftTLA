@@ -1266,6 +1266,40 @@
       "moduleSHA256": "ffde8f33fd0c4fdf75e6e719637837397f3607550981e40516b5a56e2b70c75e",
       "cfgSHA256": "903e5e0e79daa9e074b619acf1ffabe167bc2c5b01232da2380d279726504045",
       "timeoutSeconds": 600
+    },
+    {
+      "id": "chang-roberts-mc",
+      "sourceModel": "chang-roberts",
+      "scenario": "MCChangRoberts",
+      "module": "chang-roberts/MCChangRoberts.tla",
+      "configuration": "chang-roberts/MCChangRoberts.cfg",
+      "imports": ["chang-roberts/ChangRoberts.tla"],
+      "dependencies": [{"importingModule": "MCChangRoberts", "importedModule": "ChangRoberts"}],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/chang_roberts/MCChangRoberts.tla",
+        "sha256": "5005fd1f2e674a146399044de17c89c268c79b2bcc1f08297f878f2adad96614"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "5005fd1f2e674a146399044de17c89c268c79b2bcc1f08297f878f2adad96614",
+      "cfgSHA256": "225c5006ca95dfb375285d06e1812ec82229f3a2acff9cb6942f0688a11a93ef",
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "chang-roberts-ap",
+      "sourceModel": "chang-roberts",
+      "scenario": "APChangRoberts",
+      "module": "chang-roberts/APChangRoberts.tla",
+      "configuration": "chang-roberts/APChangRoberts.cfg",
+      "imports": ["chang-roberts/ChangRoberts.tla"],
+      "dependencies": [{"importingModule": "APChangRoberts", "importedModule": "ChangRoberts"}],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/chang_roberts/APChangRoberts.tla",
+        "sha256": "cc5e6adf949b003f353eeb4b8e5ea6499b99bc477fd7dc799c045b9e83221366"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "cc5e6adf949b003f353eeb4b8e5ea6499b99bc477fd7dc799c045b9e83221366",
+      "cfgSHA256": "2be4e803efd01745131a8d14efb22f00c4a10b2c53191a713f6c580b266152fe",
+      "timeoutSeconds": 120
     }
   ]
 }

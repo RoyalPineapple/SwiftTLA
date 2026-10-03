@@ -1,161 +1,100 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// Chang–Roberts leader election, translated from the upstream PlusCal model.
-///
-/// The three nodes own a generated program counter. `initiator` is the only
-/// nondeterministic initial value; `processState` is derived from it in the
-/// formal initial state. Every message is explicitly delivered clockwise.
+// Upstream: specifications/chang_roberts/ChangRoberts.tla.
 @TLAModel
 package struct ChangRobertsModel: Sendable {
-    package enum Node: Int, CaseIterable, FiniteTLAValueDomain {
-        case one = 1
-        case two = 2
-        case three = 3
-
-        package static var defaultValue: Self { .one }
-        package static let finiteValues = allCases
-
-        package var tlaValue: TLAValue { .int(rawValue) }
-    }
-
-    package enum ProcessState: String, TLAValueType {
+    package enum ProcessState: String, CaseIterable, FiniteTLAValueDomain {
         case candidate = "cand"
         case lost
         case won
 
         package static var defaultValue: Self { .candidate }
+        package static let finiteValues = allCases
     }
 
-    private enum Step: String, CaseIterable {
-        case n0
-        case n1
-    }
+    private enum Step: String, CaseIterable { case n0, n1 }
 
     package static var spec: TLASpec {
-        #spec("ChangRoberts") {
-            let ChangRoberts = Algorithm(scoped: { scope in
-                let initiator = scope.sharedVar(in: SetExpr<Function<Node, Bool>>.literal(
-                    Function<Node, Bool>.literal((.one, false), (.two, false), (.three, false)),
-                    Function<Node, Bool>.literal((.one, false), (.two, false), (.three, true)),
-                    Function<Node, Bool>.literal((.one, false), (.two, true), (.three, false)),
-                    Function<Node, Bool>.literal((.one, false), (.two, true), (.three, true)),
-                    Function<Node, Bool>.literal((.one, true), (.two, false), (.three, false)),
-                    Function<Node, Bool>.literal((.one, true), (.two, false), (.three, true)),
-                    Function<Node, Bool>.literal((.one, true), (.two, true), (.three, false)),
-                    Function<Node, Bool>.literal((.one, true), (.two, true), (.three, true))
-                ))
-                let processState = scope.sharedVar(initial: Function<Node, ProcessState>.mapping { node in
-                    If(
-                        initiator[node] == true,
-                        then: .candidate,
-                        else: .lost
-                    )
+        #spec("ChangRoberts") { model in
+            Extends(.naturals, .sequences)
+            let N = model.parameter(as: Int.self, in: Int.all)
+            let Id = model.parameter(as: [Int].self, in: Sequences(of: Int.all))
+            let Node = IntRange(1, through: N)
+            Assume(N > 0 && Id.count == N
+                && ForAll(in: Node) { node in Id[node] >= 0
+                    && ForAll(in: Node) { other in node == other || Id[node] != Id[other] }
                 })
-                let successor = scope.sharedVar(initial: Function<Node, Node>.literal(
-                    (.one, .two), (.two, .three), (.three, .one)
-                ))
-                let messages = scope.sharedVar(initial: Function<Node, SetExpr<Node>>.literal(
-                    (.one, SetExpr<Node>()),
-                    (.two, SetExpr<Node>()),
-                    (.three, SetExpr<Node>())
-                ))
+            let TypeOK = Invariant()
+            let Correctness = Invariant()
+            let Liveness = Temporal()
 
-                Each(Node.all, fairness: .weak) { node in
+            let ChangRoberts = Algorithm(scoped: { scope in
+                let msgs = scope.sharedVar(initial: Dictionary<Int, Set<Int>>.mapping(over: Node) { _ in Set<Int>() })
+                let initiator: SharedVariable<[Int: Bool]> = scope.sharedVar(in:
+                    Functions(from: Node, to: Set<Bool>([false, true])))
+                let state = scope.sharedVar(initial: Dictionary<Int, ProcessState>.mapping(over: Node) { node in
+                    If(initiator[node], then: ProcessState.candidate, else: ProcessState.lost)
+                })
+
+                Each(Node, fairness: .weak) { node in
+                    let successor = If(node == N, then: 1, else: node + 1)
                     Do(Step.n0) {
-                        Either {
-                            When(initiator[node] == true)
-                            Assign(messages, to: messages.updating(
-                                successor[node],
-                                to: messages[successor[node]].inserting(node)
-                            ))
-                        } or: {
-                            When(initiator[node] == false)
+                        If(initiator[node]) {
+                            Assign(msgs[successor], to: msgs[successor].inserting(Id[node]))
                         }
                     }
-
-                    Do(Step.n1) {
-                        With(messages[node]) { candidate in
-                            Either {
-                                When(processState[node] == .lost)
-                                Assign(messages, to: messages
-                                    .updating(node, to: messages[node].removing(candidate))
-                                    .updating(
-                                        successor[node],
-                                        to: messages[successor[node]].inserting(candidate)
-                                    ))
-                            } or: {
-                                Either {
-                                    When(
-                                        processState[node] != .lost
-                                            && candidate < node
-                                    )
-                                    Assign(messages, to: messages
-                                        .updating(node, to: messages[node].removing(candidate))
-                                        .updating(
-                                            successor[node],
-                                            to: messages[successor[node]].inserting(candidate)
-                                        ))
-                                    Assign(processState, to: processState.updating(node, to: .lost))
-                                } or: {
-                                    Either {
-                                    When(
-                                        processState[node] != .lost
-                                            && candidate > node
-                                    )
-                                    Assign(messages, to: messages.updating(
-                                        node,
-                                        to: messages[node].removing(candidate)
-                                    ))
-                                    } or: {
-                                        When(
-                                            processState[node] != .lost
-                                                && candidate == node
-                                        )
-                                        Assign(messages, to: messages.updating(
-                                            node,
-                                            to: messages[node].removing(candidate)
-                                        ))
-                                        Assign(processState, to: processState.updating(node, to: .won))
-                                    }
+                    While(Step.n1, true) {
+                        With(msgs[node]) { candidate in
+                            Assign(msgs[node], to: msgs[node].removing(candidate))
+                            If(state[node] == ProcessState.lost || candidate < Id[node]) {
+                                Assign(msgs[successor], to: msgs[successor].inserting(candidate))
+                                If(state[node] != ProcessState.lost) {
+                                    Assign(state[node], to: ProcessState.lost)
+                                }
+                            } else: {
+                                If(candidate == Id[node]) {
+                                    Assign(state[node], to: ProcessState.won)
                                 }
                             }
                         }
-                        Goto(Step.n1)
                     }
                 }
 
-                Invariant("Correctness") {
-                    ForAll(Node.all) { winner in
-                        processState[winner] != .won || (
-                            initiator[winner] == true && ForAll(Node.all) { other in
-                                other == winner || (
-                                    processState[other] == .lost
-                                        && (initiator[other] == false || other > winner)
-                                )
+                TypeOK {
+                    msgs.keys == Node && initiator.keys == Node && state.keys == Node
+                    ForAll(in: Node) { node in
+                        Set<ProcessState>([.candidate, .lost, .won]).contains(state[node])
+                            && ForAll(in: msgs[node]) { message in
+                                Exists(in: Node) { owner in message == Id[owner] }
                             }
-                        )
                     }
                 }
-                LeadsTo(
-                    "Liveness",
-                    processState[.one] == .candidate
-                        || processState[.two] == .candidate
-                        || processState[.three] == .candidate,
-                    processState[.one] == .won
-                        || processState[.two] == .won
-                        || processState[.three] == .won
-                )
+                Correctness {
+                    ForAll(in: Node) { node in
+                        state[node] != ProcessState.won || (initiator[node]
+                            && ForAll(in: Node) { other in
+                                other == node || (state[other] == ProcessState.lost
+                                    && (!initiator[other] || Id[other] > Id[node]))
+                            })
+                    }
+                }
+                let hasCandidate = Exists(in: Node) { node in state[node] == ProcessState.candidate }
+                let hasWinner = Exists(in: Node) { node in state[node] == ProcessState.won }
+                Liveness(.conditional(hasCandidate, then: .eventually(hasWinner), else: .always(true)))
             })
             ChangRoberts
+
+            let MCChangRoberts = Validation {
+                Bind(N, to: 3)
+                Bind(Id, to: [1, 2, 3])
+            }.checkingDeadlock(false)
+            MCChangRoberts
+            let APChangRoberts = Validation {
+                Bind(N, to: 3)
+                Bind(Id, to: [3, 1, 2])
+            }.behavior(.initialAndNext).checking(only: [TypeOK, Correctness]).checkingDeadlock(false)
+            APChangRoberts
         }
     }
-}
-
-extension Example {
-    package static let changRobertsN3 = FiniteModelFixture(
-        expectedDistinct: 137,
-        maximumStateLimit: 50_000,
-        spec: ChangRobertsModel.spec,
-    )
 }

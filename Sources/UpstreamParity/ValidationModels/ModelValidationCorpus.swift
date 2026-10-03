@@ -67,7 +67,8 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "least-circular-substring", scenarios: { try LeastCircularSubstringModel.validationScenarios() }),
     .init(id: "find-highest", scenarios: { try FindHighestModel.validationScenarios() }),
     .init(id: "binary-search", scenarios: { try BinarySearchModel.validationScenarios() }),
-    .init(id: "quicksort", scenarios: { try QuicksortModel.validationScenarios() })
+    .init(id: "quicksort", scenarios: { try QuicksortModel.validationScenarios() }),
+    .init(id: "chang-roberts", scenarios: { try ChangRobertsModel.validationScenarios() })
 ]
 
 private let modelRegistrations = fixtureModelRegistrations + upstreamModelRegistrations
