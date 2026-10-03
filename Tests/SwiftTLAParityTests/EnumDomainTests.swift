@@ -1,72 +1,15 @@
-import Foundation
 @testable import SwiftTLA
 import Testing
-import UpstreamParity
 
-@Suite(.serialized) struct EnumDomainTests { @Test("Int-backed enum Var model-checks correctly")
-  func intEnumVar() throws {
-    let mode = Var<Mode>("mode")
-    let spec = TLASpec("IntEnum") {
-      Variable(mode, Mode.idle)
-      Action("toggle") {
-        (mode == Mode.idle) && mode.becomes(Mode.active)
-          || (mode == Mode.active) && mode.becomes(Mode.idle)
-      }
-    }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
-    #expect(graph.states.count == 2)
-  }
-
-  @Test("Int-backed initialized enum variable model-checks correctly")
-  func intEnumInitializedVar() throws {
-    let mode = Var("mode", Mode.idle)
-    let spec = TLASpec("IntEnumSV") {
-      Variable(mode)
-      Action("toggle") {
-        (mode == Mode.idle) && mode.becomes(Mode.active)
-          || (mode == Mode.active) && mode.becomes(Mode.idle)
-      }
-    }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
-    #expect(graph.states.count == 2)
-  }
-
-  @Test("String-backed enum Var model-checks correctly")
-  func stringEnumVar() throws {
-    let state = Var<Status>("state")
-    let spec = TLASpec("StringEnum") {
-      Variable(state, Status.on)
-      Action("toggle") {
-        (state == Status.on) && state.becomes(Status.off)
-          || (state == Status.off) && state.becomes(Status.on)
-      }
-    }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
-    #expect(graph.states.count == 2)
-  }
-
-  @Test("String-backed initialized enum variable model-checks correctly")
-  func stringEnumInitializedVar() throws {
-    let state = Var("state", Status.on)
-    let spec = TLASpec("StringEnumSV") {
-      Variable(state)
-      Action("toggle") {
-        (state == Status.on) && state.becomes(Status.off)
-          || (state == Status.off) && state.becomes(Status.on)
-      }
-    }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
-    #expect(graph.states.count == 2)
-  }
-
+struct EnumDomainTests {
   @Test("Int-backed enum TLA+ output uses raw values")
   func intEnumTLAOutput() throws {
-    let mode = Var<Mode>("mode")
+    let mode = Var<IntEnumToggleModel.Mode>("mode")
     let spec = TLASpec("IntEnum") {
-      Variable(mode, Mode.idle)
+      Variable(mode, IntEnumToggleModel.Mode.idle)
       Action("toggle") {
-        (mode == Mode.idle) && mode.becomes(Mode.active)
-          || (mode == Mode.active) && mode.becomes(Mode.idle)
+        (mode == IntEnumToggleModel.Mode.idle) && mode.becomes(IntEnumToggleModel.Mode.active)
+          || (mode == IntEnumToggleModel.Mode.active) && mode.becomes(IntEnumToggleModel.Mode.idle)
       }
     }
     let tla = try spec.compile().render().tlaBundle.tla
@@ -76,12 +19,12 @@ import UpstreamParity
 
   @Test("String-backed enum TLA+ output uses raw string values")
   func stringEnumTLAOutput() throws {
-    let state = Var<Status>("state")
+    let state = Var<StringEnumToggleModel.Status>("state")
     let spec = TLASpec("StringEnum") {
-      Variable(state, Status.on)
+      Variable(state, StringEnumToggleModel.Status.on)
       Action("toggle") {
-        (state == Status.on) && state.becomes(Status.off)
-          || (state == Status.off) && state.becomes(Status.on)
+        (state == StringEnumToggleModel.Status.on) && state.becomes(StringEnumToggleModel.Status.off)
+          || (state == StringEnumToggleModel.Status.off) && state.becomes(StringEnumToggleModel.Status.on)
       }
     }
     let tla = try spec.compile().render().tlaBundle.tla
@@ -89,35 +32,16 @@ import UpstreamParity
     #expect(tla.contains("toggle =="))
   }
 
-  @Test("Enum values work in invariant expressions")
-  func enumInInvariant() throws {
-    let mode = Var<Mode>("mode")
-    let spec = TLASpec("IntEnumInv") {
-      Variable(mode, Mode.idle)
-      Action("toggle") {
-        (mode == Mode.idle) && mode.becomes(Mode.active)
-          || (mode == Mode.active) && mode.becomes(Mode.idle)
-      }
-      Invariant("TypeOK") { (mode == Mode.idle) || (mode == Mode.active) }
-    }
-    let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
-    if case .ok(let count) = checkOutcome {
-      #expect(count == 2)
-    } else {
-      #expect(Bool(false), "Invariant should hold")
-    }
-  }
-
   @Test("Enum-backed spec produces valid TLA+ bundle")
   func enumBundle() throws {
-    let mode = Var<Mode>("mode")
+    let mode = Var<IntEnumToggleModel.Mode>("mode")
     let spec = TLASpec("IntEnumBundle") {
-      Variable(mode, Mode.idle)
+      Variable(mode, IntEnumToggleModel.Mode.idle)
       Action("toggle") {
-        (mode == Mode.idle) && mode.becomes(Mode.active)
-          || (mode == Mode.active) && mode.becomes(Mode.idle)
+        (mode == IntEnumToggleModel.Mode.idle) && mode.becomes(IntEnumToggleModel.Mode.active)
+          || (mode == IntEnumToggleModel.Mode.active) && mode.becomes(IntEnumToggleModel.Mode.idle)
       }
-      Invariant("TypeOK") { (mode == Mode.idle) || (mode == Mode.active) }
+      Invariant("TypeOK") { (mode == IntEnumToggleModel.Mode.idle) || (mode == IntEnumToggleModel.Mode.active) }
     }
     let bundle = try spec.compile().render().tlaBundle
     #expect(bundle.tla.contains("MODULE"))
@@ -125,26 +49,13 @@ import UpstreamParity
     #expect(bundle.cfg.contains("INVARIANT TypeOK"))
   }
 
-  @Test("Multi-state Int-backed enum explores all values")
-  func multiStateIntEnum() throws {
-    let phase = Var<Mode>("phase")
-    let spec = TLASpec("MultiEnum") {
-      Variable(phase, Mode.idle)
-      Action("activate") { phase.becomes(Mode.active).when(phase == Mode.idle) }
-      Action("deactivate") { phase.becomes(Mode.idle).when(phase == Mode.active) }
-    }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
-    let values = try Set(graph.states.values.compactMap { try value("phase", in: $0) })
-    #expect(values == Set([TLAValue.int(0), TLAValue.int(1)]))
-  }
-
   @Test("Enum vars work with stays expression")
   func enumStays() throws {
-    let phase = Var<Mode>("phase")
+    let phase = Var<IntEnumToggleModel.Mode>("phase")
     let spec = TLASpec("EnumStays") {
-      Variable(phase, Mode.idle)
+      Variable(phase, IntEnumToggleModel.Mode.idle)
       Action("noop") {
-        (phase == Mode.idle) && phase.stays
+        (phase == IntEnumToggleModel.Mode.idle) && phase.stays
       }
     }
     let tla = try spec.compile().render().tlaBundle.tla
@@ -153,9 +64,9 @@ import UpstreamParity
 
   @Test("Enum var initial state is first case raw value")
   func enumInitialState() throws {
-    let mode = Var<Mode>("mode")
+    let mode = Var<IntEnumToggleModel.Mode>("mode")
     let spec = TLASpec("EnumInit") {
-      Variable(mode, Mode.idle)
+      Variable(mode, IntEnumToggleModel.Mode.idle)
     }
     let compilation = try spec.compile()
     let states = try CompiledRuntime(compilation: compilation).initialStates()
@@ -164,5 +75,33 @@ import UpstreamParity
     let modeToken = try #require(TLAStateProjection.Token(validating: "mode"))
     #expect(states.count == 1)
     #expect(projection.value(for: modeToken) == .int(0))
+  }
+
+  @Test("integer-backed enum states retain typed toggles and raw TLA values")
+  func checksIntegerEnumMachine() throws {
+    let initial = try #require(IntEnumToggleModel.initialMachines().first)
+    #expect(initial.state.mode == .idle)
+    let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 2)
+    #expect(Set(graph.transitions.keys.map(\.state.mode)) == [.idle, .active])
+    #expect(graph.transitions[initial.snapshot]?.first?.target.state.mode == .active)
+    let active = try #require(graph.transitions.keys.first { $0.state.mode == .active })
+    #expect(graph.transitions[active]?.first?.target.state.mode == .idle)
+    #expect(graph.transitions.values.flatMap { $0 }.map(\.action) == [.toggle, .toggle])
+    #expect(graph.safetyViolations.isEmpty)
+    #expect(try IntEnumToggleModel.render().tlaBundle.tla.contains("mode = 0"))
+  }
+
+  @Test("string-backed enum states retain typed toggles and raw TLA values")
+  func checksStringEnumMachine() throws {
+    let initial = try #require(StringEnumToggleModel.initialMachines().first)
+    #expect(initial.state.status == .on)
+    let graph = try ReachabilityGraph(initialMachines: [initial], maximumStates: 2)
+    #expect(Set(graph.transitions.keys.map(\.state.status)) == [.on, .off])
+    #expect(graph.transitions[initial.snapshot]?.first?.target.state.status == .off)
+    let off = try #require(graph.transitions.keys.first { $0.state.status == .off })
+    #expect(graph.transitions[off]?.first?.target.state.status == .on)
+    #expect(graph.transitions.values.flatMap { $0 }.map(\.action) == [.toggle, .toggle])
+    #expect(graph.safetyViolations.isEmpty)
+    #expect(try StringEnumToggleModel.render().tlaBundle.tla.contains("status = \"on\""))
   }
 }
