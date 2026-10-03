@@ -1,18 +1,42 @@
 import Dispatch
 
-/// A cached lookup hash never substitutes for equality of complete snapshots.
-private struct IndexedSnapshot<Value: Hashable>: Hashable {
-    let value: Value
-    private let cachedHash: Int
+/// Hashes select candidate snapshots; only complete snapshot equality identifies a state.
+private struct SeenSnapshots<Snapshot: Hashable> {
+    private static var pageSize: Int { 16_384 }
 
-    init(_ value: Value) {
-        self.value = value
-        cachedHash = value.hashValue
+    private var firstByHash: [Int: Int] = [:]
+    private var collisions: [Int: [Int]] = [:]
+    // Fixed pages keep a growing state index from copying every retained snapshot.
+    private var pages: [[Snapshot]] = []
+    private(set) var count = 0
+
+    func id(for snapshot: Snapshot, hash: Int) -> Int? {
+        guard let first = firstByHash[hash] else { return nil }
+        if value(at: first) == snapshot { return first }
+        for id in collisions[hash] ?? [] where value(at: id) == snapshot { return id }
+        return nil
     }
 
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.value == rhs.value }
+    mutating func insert(_ snapshot: Snapshot, hash: Int) -> Int {
+        let id = count
+        if pages.isEmpty || pages[pages.count - 1].count == Self.pageSize {
+            var page: [Snapshot] = []
+            page.reserveCapacity(Self.pageSize)
+            pages.append(page)
+        }
+        pages[pages.count - 1].append(snapshot)
+        count += 1
+        if firstByHash[hash] == nil {
+            firstByHash[hash] = id
+        } else {
+            collisions[hash, default: []].append(id)
+        }
+        return id
+    }
 
-    func hash(into hasher: inout Hasher) { hasher.combine(cachedHash) }
+    private func value(at id: Int) -> Snapshot {
+        pages[id / Self.pageSize][id % Self.pageSize]
+    }
 }
 
 /// The generated machine is the execution authority for native validation.
@@ -80,7 +104,7 @@ public enum MachineValidator {
         }
 
         var context = CheckingContext(registers: try first.initialCheckingRegisters())
-        var seen: [IndexedSnapshot<Machine.Snapshot>: Int] = [:]
+        var seen = SeenSnapshots<Machine.Snapshot>()
         var pending: [(id: Int, machine: Machine?)] = []
         var head = 0
         var initialCount = 0
@@ -140,15 +164,15 @@ public enum MachineValidator {
             return result
         }
 
-        func stateID(_ snapshot: Machine.Snapshot) -> (IndexedSnapshot<Machine.Snapshot>, Int?) {
+        func stateID(_ snapshot: Machine.Snapshot) -> (Int, Int?) {
             let started = DispatchTime.now().uptimeNanoseconds
-            let key = IndexedSnapshot(snapshot)
+            let hash = snapshot.hashValue
             let hashed = DispatchTime.now().uptimeNanoseconds
-            let result = seen[key]
+            let result = seen.id(for: snapshot, hash: hash)
             let finished = DispatchTime.now().uptimeNanoseconds
             seenHashNanoseconds += hashed - started
             seenProbeNanoseconds += finished - hashed
-            return (key, result)
+            return (hash, result)
         }
 
         func checkInvariants(_ machine: Machine, predecessor: Int?, action: Machine.Action?) throws -> Bool {
@@ -180,16 +204,15 @@ public enum MachineValidator {
             return found
         }
 
-        func insertDiscovered(_ machine: Machine, key: IndexedSnapshot<Machine.Snapshot>,
+        func insertDiscovered(_ machine: Machine, snapshot: Machine.Snapshot, hash: Int,
             initial: Bool, predecessor: Int?, action: Machine.Action?) throws -> Int {
             guard seen.count < maximumStates else { throw ExplorationError.stateLimitExceeded(maximumStates) }
-            let id = seen.count
             let insertStarted = DispatchTime.now().uptimeNanoseconds
-            seen[key] = id
+            let id = seen.insert(snapshot, hash: hash)
             seenInsertNanoseconds += DispatchTime.now().uptimeNanoseconds - insertStarted
             pending.append((id, machine))
             if initial { initialCount += 1 }
-            try emitEvent(.state(id: id, snapshot: key.value, initial: initial,
+            try emitEvent(.state(id: id, snapshot: snapshot, initial: initial,
                             predecessor: predecessor, action: action))
             return id
         }
@@ -203,9 +226,9 @@ public enum MachineValidator {
             if reached && stopOnReachability { return summary(.decisiveReachability) }
             guard try constraintHolds(machine) else { continue }
             let snapshot = machine.snapshot
-            let (key, existing) = stateID(snapshot)
+            let (hash, existing) = stateID(snapshot)
             if existing == nil {
-                _ = try insertDiscovered(machine, key: key,
+                _ = try insertDiscovered(machine, snapshot: snapshot, hash: hash,
                     initial: true, predecessor: nil, action: nil)
             }
         }
@@ -235,7 +258,7 @@ public enum MachineValidator {
                     // snapshot. A previously discovered target has already passed
                     // those checks; only its additional labeled edge is new.
                     let snapshot = successor.snapshot
-                    let (key, existing) = stateID(snapshot)
+                    let (hash, existing) = stateID(snapshot)
                     if let target = existing {
                         edgeCount += 1
                         try emitEvent(.edge(source: source, action: action, target: target))
@@ -252,7 +275,7 @@ public enum MachineValidator {
                         return false
                     }
                     guard try constraintHolds(successor) else { return true }
-                    let target = try insertDiscovered(successor, key: key,
+                    let target = try insertDiscovered(successor, snapshot: snapshot, hash: hash,
                         initial: false, predecessor: source, action: action)
                     edgeCount += 1
                     try emitEvent(.edge(source: source, action: action, target: target))
