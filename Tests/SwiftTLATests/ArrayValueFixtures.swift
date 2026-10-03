@@ -31,3 +31,23 @@ struct ArrayValueMachine {
         }
     }
 }
+
+@TLAModel
+struct ArrayAppendReadMachine {
+    enum Step: String, CaseIterable { case push, pop }
+
+    static var spec: TLASpec {
+        #spec("ArrayAppendReadMachine") { scope in
+            let sequence = scope.sharedVar(initial: [Int]())
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.push) {
+                When(sequence.count == 0)
+                Assign(sequence, to: sequence.appending(42))
+            }
+            Do(Step.pop) {
+                When(sequence.count > 0)
+                Assign(result, to: sequence[1.expr])
+            }
+        }
+    }
+}

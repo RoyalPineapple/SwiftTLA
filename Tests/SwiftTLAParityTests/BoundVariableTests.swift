@@ -150,32 +150,6 @@ import UpstreamParity
     #expect(try compiledValue(predicate) == .bool(true))
   }
 
-  @Test("Sequence variable append and read preserve the selected value")
-  func sequenceVariableAppendRead() throws {
-    let seq = Var<TupleExpr<Int>>("seq")
-    let result = Var<Int>("result")
-    let spec = TLASpec("SeqTest") {
-      Variable(seq, TupleExpr<Int>())
-      Variable(result, 0)
-      Action("push") {
-        seq.becomes(Expr<TupleExpr<Int>>(seq.stateExpr.appending(42))).when(seq.expr.count == 0)
-          && result.stays
-      }
-      Action("pop") { seq.stateExpr.count > 0 && result.becomes(Expr<Int>(seq.stateExpr.at(1))) }
-    }
-    let compilation = try spec.compile()
-    let runtime = CompiledRuntime(compilation: compilation)
-    let initial = try #require(try runtime.initialStates().first)
-    let push = try #require(compilation.layout.testActionID(named: "push"))
-    let pushed = try runtime.successors(for: push, from: initial)
-    let pop = try #require(compilation.layout.testActionID(named: "pop"))
-    let popped = try runtime.successors(for: pop, from: #require(pushed.first).state)
-    #expect(pushed.count == 1)
-    #expect(popped.count == 1)
-    #expect(try compiledStateValue(named: "result", in: initial, compilation: compilation) == .int(0))
-    #expect(try compiledStateValue(named: "result", in: #require(popped.first).state, compilation: compilation) == .int(42))
-  }
-
   @Test("Function-typed variable stores and retrieves values")
   func functionVariable() throws {
     let clock = Var<Function<FunctionVariableKey, Int>>("clock")

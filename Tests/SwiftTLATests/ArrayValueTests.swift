@@ -68,4 +68,20 @@ struct ArrayValueTests {
             #expect(try scenario.render().checkNames == ["Shape"])
         }
     }
+
+    @Test("an appended sequence element can be read by a later generated step")
+    func appendedElementRead() throws {
+        var machine = try ArrayAppendReadMachine.makeMachine()
+        #expect(machine.state.sequence.isEmpty)
+        #expect(machine.state.result == 0)
+        #expect(try machine.send(.push).after.sequence == [42])
+        #expect(try machine.send(.pop).after.result == 42)
+
+        let graph = try ReachabilityGraph(
+            initialMachines: ArrayAppendReadMachine.initialMachines(), maximumStates: 10)
+        #expect(graph.transitions.count == 3)
+        #expect(graph.transitions.values.reduce(0) { $0 + $1.count } == 3)
+        #expect(graph.safetyViolations.isEmpty)
+        #expect(try ArrayAppendReadMachine.render().tlaBundle.tla.contains("sequence[1]"))
+    }
 }
