@@ -43,18 +43,14 @@ Native graph artifacts remain available even if the TLC toolchain is unavailable
 
 ## Symmetry cases
 
-Each symmetry case uses one compiled specification. SwiftTLA renders the raw
-and reduced TLC configurations from that compilation.
+Each symmetry case uses one generated Swift machine. SwiftTLA renders raw and
+reduced TLC configurations from the same resolved model.
 
-The case compares four graphs:
-
-1. raw SwiftTLA graph.
-2. reduced SwiftTLA graph.
-3. raw TLC graph.
-4. reduced TLC graph.
-
-The orbit comparison validates each representative and quotient transition.
-It also compares the raw SwiftTLA and TLC graphs exactly.
+The case retains three complete graphs: the unreduced generated Swift graph,
+the raw TLC graph, and the symmetry-reduced TLC graph. It compares the two raw
+graphs exactly, then validates the reduced TLC graph's representatives and
+quotient transitions under the declared permutations. Native checking does
+not construct a reduced graph or discard distinct states.
 
 ## Run the hosted comparison
 
