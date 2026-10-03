@@ -37,6 +37,21 @@ exact head. Local commits after `26b3886f`, including the B-01 legacy
 collection cutover, have only focused diagnostics and require their own
 source-aligned hosted admission.
 
+Frozen draft PR head `0477d5d3` subsequently passed ordinary CI run
+`37129359585` (all five jobs, including Apple-platform examples) and the full,
+unfiltered Independent Validation Pipeline run `37129359588` (166 successful
+jobs, one intentionally skipped diagnostic, and 165 nonempty, unexpired
+artifacts). The PR head still matched this SHA when reconciled. The Boulanger
+native run reported the complete 7,866,982-state, 52,701,220-edge graph and
+`compare boulanger-0: exact`; native exploration took 586.65 seconds and the
+warm-oracle comparison phases about 148.69 seconds, or about 735.34 seconds
+combined, below the accepted 1,200-second ceiling. This excludes cold TLC
+generation, which ran separately in the upstream parity job and reported
+`upstream boulanger: exact`. Local commits after `0477d5d3` close further
+symmetry-selection and diagnostic gaps, but still need admission on their own
+final pushed SHA. This hosted matrix does not complete the DSL or 78-family
+goal.
+
 Only the full, unfiltered hosted matrix and ordinary CI on the same final pushed
 SHA can establish final admission. Focused diagnostics guide development but
 never confer family or final-revision credit. Create PRs in draft mode and keep
