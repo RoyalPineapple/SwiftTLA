@@ -5,54 +5,36 @@ import Testing
 @Suite(.serialized)
 struct NestedComposableMacroConformanceTests {
     @Test("Parameterized execution retains every choice while exploration applies constraints")
-    func runtimeSuccessorsPreserveEveryCheckedParameterizedSuccessor() throws {
-        let value = Var<Int>("value")
-        let spec = TLASpec("ConstrainedParameterizedChoice") {
-            Variable(value, 0)
-            Action("choose", parameters: [ActionParameter("branch", values: [1, 2])]) {
-                ActionExpr.exists("selected", from: StateExpr.set([1, 2, 3])) { selected in
-                    value.becomes(Expr<Int>(selected))
+    func parameterizedChoicesRetainRawAndConstrainedEdges() throws {
+        let graph = try ReachabilityGraph(
+            initialMachines: ConstrainedParameterizedChoice.initialMachines(), maximumStates: 4)
+        #expect(Set(graph.transitions.keys.map(\.state.value)) == [0, 1, 2])
+        #expect(graph.safetyViolations.isEmpty)
+
+        var pending = try ConstrainedParameterizedChoice.initialMachines()
+        var visited: Set<ConstrainedParameterizedChoice.Snapshot> = []
+        while let machine = pending.popLast() {
+            guard visited.insert(machine.snapshot).inserted else { continue }
+            let raw = try machine.successors()
+            #expect(raw.count == 6)
+            let rawEdges = raw.map { ($0.action, $0.machine.state.value) }
+            for branch in [1, 2] {
+                for selected in 1...3 {
+                    #expect(rawEdges.contains { $0.0 == .choose(branch: branch) && $0.1 == selected })
                 }
             }
-            Constraint(value <= 2)
-        }
-        let compilation = try spec.compile()
-        let exploration = try ModelChecker(
-            compilation: compilation,
-            configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)
-        ).explore()
-        let graph = exploration.graph
-        #expect(exploration.isComplete)
-        #expect(exploration.safetyViolations.isEmpty)
-        let runtime = CompiledRuntime(compilation: compilation)
+            #expect(rawEdges.filter { $0.1 == 3 }.count == 2)
 
-        for sourceID in graph.states.keys {
-            let checked = try (graph.transitions[sourceID] ?? []).compactMap { transition -> (action: String, arguments: [TLAValue], state: TLAStateProjection)? in
-                guard let successor = graph.states[transition.target] else { return nil }
-                return (
-                    transition.label.action,
-                    try transition.label.formalArguments(using: compilation.layout),
-                    successor
-                )
+            let retained = rawEdges.filter { $0.1 <= 2 }
+            let checked = try #require(graph.transitions[machine.snapshot])
+            #expect(checked.count == 4)
+            #expect(retained.count == checked.count)
+            for edge in retained {
+                #expect(checked.contains { $0.action == edge.0 && $0.target.state.value == edge.1 })
             }
-            let state = try #require(exploration.compiledStates[sourceID])
-            let raw = try runtime.successors(from: state)
-            let runtimeSuccessors = try raw.map { successor in
-                (
-                    action: compilation.layout.actions[successor.action.ordinal].declaration.name,
-                    arguments: try successor.arguments.map { try $0.rendered(using: compilation.layout) },
-                    state: try successor.state.projection(using: compilation.layout)
-                )
-            }
-            #expect(raw.count == 6)
-            let retained = try zip(raw, runtimeSuccessors).filter {
-                try runtime.constraintHolds(in: $0.0.state)
-            }.map(\.1)
-            #expect(retained.count == 4)
-            #expect(multiset(retained) == multiset(checked))
-            let value = try #require(TLAStateProjection.Token(validating: "value"))
-            #expect(runtimeSuccessors.filter { $0.state.value(for: value) == .int(3) }.count == 2)
+            pending.append(contentsOf: raw.filter { $0.machine.state.value <= 2 }.map(\.machine))
         }
+        #expect(visited.count == 3)
     }
 
     @Test("Nested machine and actor expose matching typed execution")
@@ -163,14 +145,4 @@ struct NestedComposableMacroConformanceTests {
     }
 
     private func requireSendable<Value: Sendable>(_: Value.Type) {}
-
-    private func multiset(
-        _ transitions: [(action: String, arguments: [TLAValue], state: TLAStateProjection)]
-    ) -> [String: Int] {
-        Dictionary(
-            transitions.map { ("\($0.action):\($0.arguments) -> \($0.state)", 1) },
-            uniquingKeysWith: +
-        )
-    }
-
 }
