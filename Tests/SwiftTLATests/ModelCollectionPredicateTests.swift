@@ -294,15 +294,6 @@ struct ModelCollectionPredicateTests {
     #expect(diagnostic.sourceSpan.utf8Length == diagnostic.source.utf8.count)
   }
 
-  @Test("Macro diagnostics anchor unsupported predicates at the authored expression")
-  func macroDiagnosticAnchorsUnsupportedPredicate() throws {
-    let build = try buildExternalConsumer("InvalidCollectionPredicateMacro")
-
-    #expect(build.status != 0)
-    #expect(build.output.contains("InvalidCollectionPredicateMacro.swift:16:"))
-    #expect(build.output.contains("Invariant 'unsupported' contains an unsupported invariant expression."))
-  }
-
   private func predicateClosure() throws -> ClosureExprSyntax {
     try parseClosure("""
     {

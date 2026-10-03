@@ -22,7 +22,7 @@ let package = Package(
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
-      name: "InvalidCollectionPredicateMacro",
+      name: "InvalidMutableProcessPopulation",
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(

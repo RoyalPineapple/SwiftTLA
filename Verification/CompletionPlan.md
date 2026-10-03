@@ -122,6 +122,9 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       DSL spec records the positive authoring form and negative boundaries.
       An external consumer now executes and exports this nominal-ID form;
       its focused run and ten related configuration/process tests pass locally.
+      A separate external `#spec` consumer confirms that `Each` rejects a
+      mutable state-backed population at lowering; its focused test passed
+      locally.
       Migrating all `ModelCollection` callers, deleting that API, and proving
       complete hosted parity remain open.
 - [x] Settle B-02 identity for `Algorithm` and `Validation`: each requires an
