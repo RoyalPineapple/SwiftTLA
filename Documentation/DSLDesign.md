@@ -618,10 +618,14 @@ memberSymmetry
 The Swift binding supplies the declaration's stable name and the generated
 TLA+ permutation operator name. An inline declaration, mutable binding, empty
 set, overlapping domains, composite member, or duplicate registration fails
-compilation. The native checker retains the complete unreduced graph; an
-explicit declaration selects TLC symmetry only where that checking mode is
-sound. The remaining parameter-dependent domain and scope decisions stay in
-B-04 until their native and TLC evidence is complete.
+compilation. The native checker retains the complete unreduced graph. A
+separate explicit check request may select TLC symmetry only where that
+checking mode is sound. B-04 remains open for scenario-level selection, other
+scope references, and native/TLC evidence.
+
+Without a scenario-level selection, model-owned validation renders an
+unreduced TLC configuration even when the model declares an available symmetry
+set. Native checking also keeps the full graph.
 
 `WeakFairness(step, on: value)` and `StrongFairness(step, on: value)` select a typed current-state projection.
 `WeakFairnessNext(on: value)` and `StrongFairnessNext(on: value)` apply that projection to the complete transition relation.
@@ -696,7 +700,9 @@ unreduced model remains valid.
 
 Ordering, a distinguished member, or identity-dependent behavior can make members
 non-interchangeable. An explicit declaration does not excuse an unsound reduction.
-The exact declaration syntax and validation rules remain to be specified.
+The bound finite-set syntax and its validation rules are specified above.
+Scenario-level selection and remaining scope references still require B-04
+decisions and evidence.
 
 ## 6. Validation scenarios attached to the model
 

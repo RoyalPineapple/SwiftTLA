@@ -526,7 +526,7 @@ public struct RenderedSpecification: Sendable {
         let selected = try configuration.selecting(names, checkDeadlock: checks.checkDeadlock, behavior: behavior)
         func bundle(_ original: TLAModuleBundle) -> TLAModuleBundle {
             .init(root: .init(name: original.root.name, tla: original.root.tla,
-                cfg: selected.render(usesSymmetryReduction: true)), imports: original.imports, provenance: original.provenance)
+                cfg: selected.render(usesSymmetryReduction: false)), imports: original.imports, provenance: original.provenance)
         }
         return .init(tlaBundle: bundle(tlaBundle), configuration: selected, actions: actions,
             renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map { $0.map(bundle) },
