@@ -82,32 +82,19 @@ struct GraphRunRecordsTests {
     }
   }
 
-  @Test("exported failures preserve their check category in retained records")
+  @Test("retained failure records preserve their check category")
   func preservesFailureCategories() throws {
-    let value = Var<Int>("value")
-    let compilation = try TLASpec("FailureCategories") { Variable(value, 0) }.compile()
-    let exploration = try ModelChecker(
-      compilation: compilation,
-      configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)
-    ).explore()
-    let initial = try #require(exploration.initialStateIDs.first)
-    let projection = try #require(exploration.graph.states[initial])
-    let outcomes: [(ModelCheckOutcome, [String: String])] = [
-      (.invariantViolated(invariant: "Check", state: projection, trace: [.init(state: projection, action: "init")]),
-       ["kind": "invariantViolation", "message": "Check"]),
-      (.refinementViolated(refinement: "Check",
-        failure: .initialState(mapped: projection, abstractInitialStates: [])),
-       ["kind": "refinementViolation", "message": "Check"])
+    let state = CanonicalState(bindings: ["value": .integer(0)])
+    let graph = try CanonicalGraph(initialStates: [state], states: [state], edges: [])
+    let outcomes: [(GraphRunOutcome, [String: String])] = [
+      (.invariantViolation("Check"), ["kind": "invariantViolation", "message": "Check"]),
+      (.refinementViolation("Check"), ["kind": "refinementViolation", "message": "Check"])
     ]
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: url) }
     for (outcome, expected) in outcomes {
-      let failed = FiniteExploration(
-        graph: exploration.graph, initialStateIDs: exploration.initialStateIDs,
-        completion: outcome, compilationIdentity: exploration.compilationIdentity,
-        configuration: exploration.configuration, compiledStates: exploration.compiledStates
-      )
-      let run = try FormalGraphExporter().export(failed)
+      let run = try GraphRun(isComplete: false, graph: graph,
+        observableActions: [], outcome: outcome)
       try GraphRunRecords.write(run, to: url)
       let completion = try #require(records(in: Data(contentsOf: url)).last)
       #expect(completion["outcome"] as? [String: String] == expected)
