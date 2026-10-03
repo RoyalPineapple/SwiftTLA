@@ -66,11 +66,3 @@ package struct CatOddBoxesModel: Sendable {
         }
     }
 }
-
-extension Example {
-    package static let catEvenBoxes = FiniteModelFixture(
-        expectedDistinct: 48,
-        maximumStateLimit: 50_000,
-        spec: CatEvenBoxesModel.spec,
-    )
-}

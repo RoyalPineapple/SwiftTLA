@@ -7423,8 +7423,8 @@
     {
       "path": "specifications/Moving_Cat_Puzzle",
       "name": "The Moving Cat Puzzle",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned source and configuration inputs audited",
+      "gap": "Cat.tla is direct TLA+ with Number_Of_Boxes=6/5, TypeOK, Victory, and WF_cat_box(Move_Cat); APCat.tla is a typed annotation wrapper with Number_Of_Boxes=4 and TypeOK. Current Swift models hardcode 6 and 5 separately, omit Victory and the projected Move_Cat fairness obligation, and have no model-owned scenario or APCat implementation. Generated-machine local diagnostics cover 48/30 states and 80/48 edges, not exact graph/property parity. All three published configurations and legacy cleanup remain missing.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -7474,7 +7474,12 @@
           "evidence": []
         }
       ],
-      "partialCases": []
+      "partialCases": [
+        {
+          "implementation": "Sources/UpstreamParity/Examples/CatEvenBoxes.swift",
+          "reason": "CatEvenBoxesModel and CatOddBoxesModel generate typed machine graphs for the 6-box and 5-box configurations. MovingCatCorpusStateGraphTests checks state and edge counts locally. No model-owned scenarios, complete graph/property parity, Victory, projected fairness, APCat wrapper, or hosted evidence. No completion credit."
+        }
+      ]
     },
     {
       "path": "specifications/MultiCarElevator",

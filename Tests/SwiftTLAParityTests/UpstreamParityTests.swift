@@ -282,14 +282,6 @@ struct UpstreamParityTests {
         #expect(isSuccessful(exploration))
     }
 
-    @Test("Moving Cat models use typed direction state")
-    func movingCatTypedDirectionParity() throws {
-        let even = try explore(CatEvenBoxesModel.spec, maximumStateLimit: 50_000)
-        let odd = try explore(CatOddBoxesModel.spec, maximumStateLimit: 50_000)
-        #expect(even.graph.states.count == Example.catEvenBoxes.expectedDistinct)
-        #expect(odd.graph.states.count == Example.catOddBoxes.expectedDistinct)
-    }
-
     @Test("Sync termination detector uses typed finite function state")
     func syncTerminationTypedFunctionParity() throws {
         let exploration = try explore(SyncTerminationDetectionModel.spec, maximumStateLimit: 50_000)

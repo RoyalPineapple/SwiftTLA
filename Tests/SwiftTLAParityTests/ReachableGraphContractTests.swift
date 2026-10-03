@@ -63,13 +63,6 @@ import UpstreamParity
     #expect(summary.violatedInvariants.isEmpty)
   }
 
-  @Test("Moving cat CatEvenBoxes = 48 states (parity catalog)")
-  func movingCatEven() throws {
-    let count = try ModelChecker(compilation: try Example.catEvenBoxes.spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 500, symmetryReduction: .disabled))
-      .exploreGraph().states.count
-    #expect(count == 48)
-  }
-
   @Test("Multi-choose is Cartesian product")
   func multiChooseProduct() throws {
     let action = ActionExpr.existsAction("first", .setLiteral([.int(1), .int(2)]),
