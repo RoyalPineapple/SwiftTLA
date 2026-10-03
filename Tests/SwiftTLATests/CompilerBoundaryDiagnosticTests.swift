@@ -292,6 +292,39 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("An incompatible scenario binding points to its supplied value")
+    func incompatibleScenarioBindingPointsToValue() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Step: String, CaseIterable, FiniteTLAValueDomain { case advance }
+            static var spec: TLASpec {
+                #spec { scope in
+                    let limit = scope.parameter(as: Int.self, in: 0...3)
+                    let counter = Algorithm(scoped: { scope in
+                        let count = scope.sharedVar(initial: 0)
+                        Do(Step.advance) { Stop() }
+                    })
+                    counter
+                    let Invalid = Validation { Bind(limit, to: true) }
+                    Invalid
+                }
+            }
+        }
+        """)
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let suppliedValue = try #require(source.tokens(viewMode: .sourceAccurate).first { $0.text == "true" })
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(declaration)
+            Issue.record("A Boolean value must not satisfy an integer scenario parameter")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.contains("validation.Invalid"))
+            #expect(diagnostic.sourceOffset == suppliedValue.positionAfterSkippingLeadingTrivia.utf8Offset)
+            let emitted = modelCompilationDiagnostic(diagnostic, in: declaration)
+            #expect(emitted.node.positionAfterSkippingLeadingTrivia == suppliedValue.positionAfterSkippingLeadingTrivia)
+        }
+    }
+
     @Test("Parser diagnostics prevent partial compilation")
     func parserDiagnosticPreventsPartialCompilation() throws {
         let closure = try #require(

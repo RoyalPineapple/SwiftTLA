@@ -312,10 +312,16 @@ package struct CompiledTypeChecker: Sendable {
         let scenarios = try inputs.semantics.behavior.validationScenarios.map { scenario in
             var values: [BinderID: CompiledExpression] = [:]
             for (binder, value) in scenario.bindings {
-                guard let type = bindings[binder] else {
+                guard let type = bindings[binder],
+                      let parameter = inputs.layout.parameters.first(where: { $0.binder == binder }) else {
                     throw CompiledValueType.unresolvedDiagnostic(.unknown, at: "validation.\(scenario.name)")
                 }
-                values[binder] = try checkOperand(value, expected: type)
+                do {
+                    values[binder] = try checkOperand(value, expected: type)
+                } catch let diagnostic as CompilationDiagnostic {
+                    throw Self.contextualDiagnostic("validation.\(scenario.name).\(parameter.reference.name)",
+                        causedBy: diagnostic)
+                }
             }
             return CompiledValidationScenario(name: scenario.name, displayLabel: scenario.displayLabel,
                 bindings: values,

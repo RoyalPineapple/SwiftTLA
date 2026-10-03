@@ -67,7 +67,8 @@ final class ParserSession {
         let path = diagnosticPath.hasPrefix("nativeMachine.")
             ? diagnosticPath.dropFirst("nativeMachine.".count) : diagnosticPath[...]
         guard path.hasPrefix("invariants.") || path.hasPrefix("reachabilityProperties.")
-            || path.hasPrefix("temporalProperties.") || path.hasPrefix("refinements.") else { return nil }
+            || path.hasPrefix("temporalProperties.") || path.hasPrefix("refinements.")
+            || path.hasPrefix("validation.") else { return nil }
         let end = path.range(of: " → ")?.lowerBound ?? path.endIndex
         var key = String(path[..<end])
         while true {
@@ -77,6 +78,11 @@ final class ParserSession {
             guard key.hasPrefix("refinements."), let dot = key.lastIndex(of: ".") else { return nil }
             key = String(key[..<dot])
         }
+    }
+
+    func recordValidationBinding(named scenario: String, parameter: String, at value: ExprSyntax) {
+        propertyDeclarationOffsets["validation.\(scenario).\(parameter)", default: []].append(
+            value.positionAfterSkippingLeadingTrivia.utf8Offset)
     }
     enum FormalModuleProvider: Equatable {
         case folds
