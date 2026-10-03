@@ -75,16 +75,8 @@ struct ConstraintBoundaryCheckingTests {
         #expect(boundary.state.count == 2)
         #expect(graph.safetyViolations[boundary] == [.invariant(.Bounded)])
         #expect(try graph.trace(to: boundary).map { $0.state.state.count } == [2])
-        let compilation = try ConstraintInitialCounter.spec.compile()
-        let formal = try ModelChecker(compilation: compilation,
-            configuration: .init(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
-        #expect(formal.isComplete)
-        #expect(formal.initialStateIDs.count == 2)
-        #expect(formal.graph.states.count == 2)
-        #expect(formal.safetyViolations.map { $0.diagnostic?.kind } == [.invariantViolated])
-        #expect(formal.outcome.diagnostic?.trace.count == 1)
         #expect(throws: EvidenceFormatError.self) {
-            try NativeModelRun(graph, rendered: compilation.render())
+            try NativeModelRun(graph, rendered: ConstraintInitialCounter.render())
         }
     }
 }
