@@ -233,36 +233,50 @@ final class SourceTypeResolver {
                 throw CompiledValueType.diagnostic("types.\(name)", "recursive Swift record requires a finite nonrecursive field shape")
             }
             guard declaration.genericParameterClause == nil else {
-                throw CompiledValueType.diagnostic("types.\(name)", "generic Swift records require resolved type arguments")
+                throw located(CompiledValueType.diagnostic("types.\(name)",
+                    "generic Swift records require resolved type arguments"), at: declaration.name)
             }
             var fields: [CompiledFieldType] = []
             var views: [FormalValueShape.Field] = []
             for member in declaration.memberBlock.members {
-                guard !member.decl.is(InitializerDeclSyntax.self) else {
-                    throw CompiledValueType.diagnostic("types.\(name)", "custom Swift record initializers require a compiled implementation")
+                if let initializer = member.decl.as(InitializerDeclSyntax.self) {
+                    throw located(CompiledValueType.diagnostic("types.\(name)",
+                        "custom Swift record initializers require a compiled implementation"), at: initializer)
                 }
                 guard let variable = member.decl.as(VariableDeclSyntax.self),
                       !variable.modifiers.contains(where: { $0.name.text == "static" || $0.name.text == "class" }) else { continue }
                 guard variable.attributes.isEmpty, !variable.modifiers.contains(where: { $0.name.text == "lazy" }) else {
-                    throw CompiledValueType.diagnostic("types.\(name)", "model record fields cannot use property wrappers, attributes, or lazy storage")
+                    throw located(CompiledValueType.diagnostic("types.\(name)",
+                        "model record fields cannot use property wrappers, attributes, or lazy storage"), at: variable)
                 }
                 for binding in variable.bindings {
                     guard let field = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.sourceIdentifierName,
                           let annotation = binding.typeAnnotation?.type,
                           binding.accessorBlock == nil else {
-                        throw CompiledValueType.diagnostic("types.\(name)", "model record fields must be stored properties with explicit Swift types")
+                        throw located(CompiledValueType.diagnostic("types.\(name)",
+                            "model record fields must be stored properties with explicit Swift types"), at: binding.pattern)
                     }
                     guard !fields.contains(where: { $0.name == field }) else {
-                        throw CompiledValueType.diagnostic("types.\(name).\(field)", "duplicate Swift record field")
+                        throw located(CompiledValueType.diagnostic("types.\(name).\(field)",
+                            "duplicate Swift record field"), at: binding.pattern)
                     }
-                    let value = try resolveType(annotation, resolving: resolving.union([identity]))
+                    let value: ResolvedSourceType
+                    do {
+                        value = try resolveType(annotation, resolving: resolving.union([identity]))
+                    } catch var diagnostic as CompilationDiagnostic {
+                        diagnostic.sourceOffset = diagnostic.sourceOffset
+                            ?? binding.pattern.positionAfterSkippingLeadingTrivia.utf8Offset
+                        throw diagnostic
+                    }
                     var pending = [value.type]
                     while let component = pending.popLast() {
                         if case .named(let typeName) = component, enums.cases[typeName] == nil {
-                            throw CompiledValueType.diagnostic("types.\(name).\(field)", "unresolved Swift field type \(typeName)")
+                            throw located(CompiledValueType.diagnostic("types.\(name).\(field)",
+                                "unresolved Swift field type \(typeName)"), at: binding.pattern)
                         }
                         guard component != .unknown else {
-                            throw CompiledValueType.unresolvedDiagnostic(component, at: "types.\(name).\(field)")
+                            throw located(CompiledValueType.unresolvedDiagnostic(component,
+                                at: "types.\(name).\(field)"), at: binding.pattern)
                         }
                         pending.append(contentsOf: component.components)
                     }
@@ -279,6 +293,12 @@ final class SourceTypeResolver {
             view = .unsupported(name)
         }
         return .init(type: .named(name), view: view)
+    }
+
+    private func located(_ diagnostic: CompilationDiagnostic, at source: some SyntaxProtocol) -> CompilationDiagnostic {
+        var diagnostic = diagnostic
+        diagnostic.sourceOffset = source.positionAfterSkippingLeadingTrivia.utf8Offset
+        return diagnostic
     }
 }
 

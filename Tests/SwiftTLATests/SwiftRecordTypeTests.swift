@@ -196,17 +196,25 @@ struct SwiftRecordTypeTests {
         #expect(resolved.strictlyContains(.int))
     }
 
-    @Test("unsupported Swift record fields fail instead of guessing a type", arguments: [
-        "struct Record { let value = 1 }",
-        "struct Record { var value: Int { 1 } }",
-        "struct Record { var children: [Record] }",
-        "struct Record { let missing: [Missing] }",
-        "struct Record { let value: Int; init(value: Int) { self.value = value + 1 } }",
-        "struct Record { @Wrapper var value: Int }",
-        "struct Record<T> { let value: T }"
+    @Test("unsupported Swift record declarations fail at the offending source", arguments: [
+        ("struct Record { let value = 1 }", "value"),
+        ("struct Record { var value: Int { 1 } }", "value"),
+        ("struct Record { var children: [Record] }", "children"),
+        ("struct Record { let missing: [Missing] }", "missing"),
+        ("struct Record { let value: Int; init(value: Int) { self.value = value + 1 } }", "init"),
+        ("struct Record { @Wrapper var value: Int }", "@"),
+        ("struct Record<T> { let value: T }", "Record")
     ])
-    func rejectsUnsupportedRecords(_ declaration: String) throws {
-        let resolver = SourceTypeResolver(metadata: try swiftRecordMetadata(declaration))
-        #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("Record") }
+    func rejectsUnsupportedRecords(_ declaration: String, _ offendingToken: String) throws {
+        let metadata = try swiftRecordMetadata(declaration)
+        let record = try #require(metadata.structs["Record"])
+        let token = try #require(record.tokens(viewMode: .sourceAccurate).first { $0.text == offendingToken })
+        let resolver = SourceTypeResolver(metadata: metadata)
+        do {
+            _ = try resolver.resolve("Record")
+            Issue.record("Unsupported record must fail during type resolution")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.sourceOffset == token.positionAfterSkippingLeadingTrivia.utf8Offset)
+        }
     }
 }
