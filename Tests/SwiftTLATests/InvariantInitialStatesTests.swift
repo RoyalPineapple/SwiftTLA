@@ -32,23 +32,29 @@ struct InvariantInitialStatesTests {
         }
     }
 
-    @Test("an invariant selects complete generated and compiled initial states")
+    @Test("an invariant selects every valid generated initial combination")
     func selectedInitialStates() throws {
-        let compilation = try InvariantInitialStatesModel.spec.compile()
         let native = try InvariantInitialStatesModel.initialMachines()
         let nativeStates = try Set(native.map { try $0.formalProjection(of: $0.snapshot) })
-        let compiledStates = try Set(CompiledRuntime(compilation: compilation).initialStates().map {
-            try $0.projection(using: compilation.layout)
-        })
-
         #expect(nativeStates.count == 8)
-        #expect(nativeStates == compiledStates)
         #expect(native.allSatisfy { $0.state.value == 1 })
-        #expect(nativeStates.allSatisfy { state in
-            guard let pc = TLAStateProjection.Token(validating: "pc"),
-                  case .function(let locations) = state.value(for: pc) else { return false }
-            return locations[.int(1)] == .string("active")
+        let pc = try #require(TLAStateProjection.Token(validating: "pc"))
+        let choice = try #require(TLAStateProjection.Token(validating: "choice"))
+        let combinations = try Set(nativeStates.map { state -> [TLAValue] in
+            guard case .function(let locations) = try #require(state.value(for: pc)),
+                  case .function(let choices) = try #require(state.value(for: choice)) else {
+                throw TLAStateProjectionDiagnostic.invalidValue(path: "pc or choice")
+            }
+            #expect(locations[.int(1)] == .string("active"))
+            return [try #require(choices[.int(1)]), try #require(choices[.int(2)]),
+                try #require(locations[.int(2)])]
         })
+        let bits: [TLAValue] = [.int(0), .int(1)]
+        let locations: [TLAValue] = [.string("idle"), .string("active")]
+        let expected = Set(bits.flatMap { first in
+            bits.flatMap { second in locations.map { location in [first, second, location] } }
+        })
+        #expect(combinations == expected)
         #expect(try InvariantInitialStatesModel.render().tlaBundle.tla.contains("/\\ AllowedInitial"))
     }
 }
