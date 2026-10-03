@@ -63,6 +63,41 @@ struct ParameterizedAtomicStepTests {
         }
     }
 
+    @Test("three action arguments retain every Cartesian invocation and generated value")
+    func exploresThreeArgumentCartesianActions() throws {
+        let native = try ReachabilityGraph(initialMachines: ThreeArgumentActionModel.initialMachines(), maximumStates: 9)
+        let zero = CanonicalState(bindings: ["value": .integer(0)])
+        let combinations = [1, 2].flatMap { source in
+            [10, 20].flatMap { destination in
+                [100, 200].map { amount in (source, destination, amount) }
+            }
+        }
+        let expected = try CanonicalGraph(
+            initialStates: [zero],
+            states: [zero] + combinations.map { source, destination, amount in
+                CanonicalState(bindings: ["value": .integer(source + destination + amount)])
+            },
+            edges: combinations.map { source, destination, amount in
+                let target = CanonicalState(bindings: ["value": .integer(source + destination + amount)])
+                return CanonicalEdge(source: zero.key,
+                    action: "transfer(\(source), \(destination), \(amount))", target: target.key)
+            })
+        #expect(try CanonicalGraph(native) == expected)
+
+        var machine = try ThreeArgumentActionModel.makeMachine()
+        #expect(try machine.isEnabled(.transfer(source: 2, destination: 20, amount: 200)))
+        _ = try machine.send(.transfer(source: 2, destination: 20, amount: 200))
+        #expect(machine.state.value == 222)
+
+        let rendered = try ThreeArgumentActionModel.render()
+        #expect(rendered.tlaBundle.tla.contains("transfer(source, destination, amount) =="))
+        #expect(rendered.actions.count == 8)
+        #expect(rendered.actions.allSatisfy { $0.sourceName == "transfer" })
+        #expect(Set(rendered.actions.map(\.arguments)) == Set(combinations.map { source, destination, amount in
+            [.int(source), .int(destination), .int(amount)]
+        }))
+    }
+
     @Test("parameterized steps reject malformed domains, bindings, and scheduled placement", arguments: [
         "Do(Step.select, over: 1) { member in Skip() }",
         "Do(Step.select, over: Set<Int>([0])) { Skip() }",
