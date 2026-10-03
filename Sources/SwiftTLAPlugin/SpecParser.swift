@@ -9,6 +9,7 @@ final class ParserSession {
     var symmetryDeclarations: [SymmetrySetDecl] = []
     var stateDeclarationOffsets: [String: [Int]] = [:]
     var actionDeclarationOffsets: [String: [Int]] = [:]
+    var propertyDeclarationOffsets: [String: [Int]] = [:]
 
     func recordStateDeclaration(named name: String, at binding: PatternBindingSyntax) {
         stateDeclarationOffsets[name, default: []].append(
@@ -38,6 +39,21 @@ final class ParserSession {
         let end = suffix.range(of: " → ")?.lowerBound ?? suffix.endIndex
         let name = String(suffix[..<end])
         guard let offsets = actionDeclarationOffsets[name], offsets.count == 1 else { return nil }
+        return offsets[0]
+    }
+
+    func recordPropertyDeclaration(named name: String, reachability: Bool, at call: FunctionCallExprSyntax) {
+        let kind = reachability ? "reachabilityProperties" : "invariants"
+        propertyDeclarationOffsets["\(kind).\(name)", default: []].append(
+            call.positionAfterSkippingLeadingTrivia.utf8Offset)
+    }
+
+    func propertyDeclarationOffset(for diagnosticPath: String) -> Int? {
+        let path = diagnosticPath.hasPrefix("nativeMachine.")
+            ? diagnosticPath.dropFirst("nativeMachine.".count) : diagnosticPath[...]
+        guard path.hasPrefix("invariants.") || path.hasPrefix("reachabilityProperties.") else { return nil }
+        let end = path.range(of: " → ")?.lowerBound ?? path.endIndex
+        guard let offsets = propertyDeclarationOffsets[String(path[..<end])], offsets.count == 1 else { return nil }
         return offsets[0]
     }
     enum FormalModuleProvider: Equatable {

@@ -175,6 +175,45 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("Generated property type errors point to their predicate registration")
+    func generatedPropertyTypeErrorPointsToRegistration() throws {
+        for (handle, insideAlgorithm, path) in [
+            ("Invariant", false, "invariants.Claim"),
+            ("Reachable", false, "reachabilityProperties.Claim"),
+            ("Invariant", true, "invariants.Claim")
+        ] {
+            let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Step: String, CaseIterable, FiniteTLAValueDomain { case advance }
+            static var spec: TLASpec {
+                #spec {
+                    let Claim = \(handle)()
+                    \(insideAlgorithm ? "" : "Claim { 1 }")
+                    let algorithm = Algorithm(scoped: { scope in
+                        let count = scope.sharedVar(initial: 0)
+                        Do(Step.advance) { Stop() }
+                        \(insideAlgorithm ? "Claim { 1 }" : "")
+                    })
+                    algorithm
+                }
+            }
+        }
+        """)
+            let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+            let registration = try #require(source.tokens(viewMode: .sourceAccurate).filter { $0.text == "Claim" }.last)
+
+            do {
+                _ = try TLASpecVerifier.parseAndVerify(declaration)
+                Issue.record("An integer predicate must not satisfy a Boolean property")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.contains(path))
+                #expect(diagnostic.sourceOffset == registration.positionAfterSkippingLeadingTrivia.utf8Offset)
+                let emitted = modelCompilationDiagnostic(diagnostic, in: declaration)
+                #expect(emitted.node.positionAfterSkippingLeadingTrivia == registration.positionAfterSkippingLeadingTrivia)
+            }
+        }
+    }
+
     @Test("Parameter and checking-register type errors point to their declarations")
     func typedInputErrorsPointToDeclarations() throws {
         for (input, name, path) in [

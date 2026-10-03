@@ -10,6 +10,7 @@ extension ParserSession {
         var components = TLASpec(name: name, variables: [], actions: [], invariants: [])
         stateDeclarationOffsets = [:]
         actionDeclarationOffsets = [:]
+        propertyDeclarationOffsets = [:]
         let outerSymmetry = symmetryDeclarations
         symmetryDeclarations = []
         defer { symmetryDeclarations = outerSymmetry }
@@ -851,6 +852,7 @@ extension ParserSession {
                 } else {
                     registerProperty(InvDecl(reference: handle.reference, body: body), into: &components)
                 }
+                recordPropertyDeclaration(named: handle.reference.name, reachability: handle is ReachableHandle, at: call)
             } catch { components.diagnostics.append(error) }
             return
         }
@@ -1694,6 +1696,7 @@ extension ParserSession {
             } else {
                 components.invariants.append(.init(name: name, body: body))
             }
+            recordPropertyDeclaration(named: name, reachability: reachability, at: call)
         } catch {
             components.diagnostics.append(error)
         }

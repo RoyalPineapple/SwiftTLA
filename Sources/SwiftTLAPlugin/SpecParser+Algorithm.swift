@@ -497,7 +497,8 @@ extension ParserSession {
                 scope: scope
             )
         case .invariant, .reachable:
-            guard let predicate = parseAlgorithmStateProperty(call, scope: scope) else { return nil }
+            guard let predicate = parseAlgorithmStateProperty(call, scope: scope,
+                reachability: construct == .reachable) else { return nil }
             return construct == .reachable ? .reachable(predicate) : .invariant(predicate)
         case .leadsTo, .eventually, .always, .alwaysEventually, .eventuallyAlways:
             guard let temporal = parseAlgorithmTemporal(call, construct: construct, scope: scope) else { return nil }
@@ -696,13 +697,15 @@ extension ParserSession {
               let handle = specBindings.properties[name],
               handle is InvariantHandle || handle is ReachableHandle,
               call.arguments.isEmpty else { return nil }
-        guard let predicate = parseAlgorithmStateProperty(call, scope: scope, reference: handle.reference) else { return nil }
+        guard let predicate = parseAlgorithmStateProperty(call, scope: scope,
+            reachability: handle is ReachableHandle, reference: handle.reference) else { return nil }
         return handle is ReachableHandle ? .reachable(predicate) : .invariant(predicate)
     }
 
     private func parseAlgorithmStateProperty(
         _ call: FunctionCallExprSyntax,
         scope: TypedFacadeScope,
+        reachability: Bool,
         reference: PropertyReference? = nil
     ) -> NamedStatePredicate? {
         guard let name = reference?.name ?? extractStringArg(call, index: 0),
@@ -739,6 +742,7 @@ extension ParserSession {
         }
         guard !expressions.isEmpty else { return nil }
         let body = expressions.dropFirst().reduce(expressions[0], StateExpr.and)
+        recordPropertyDeclaration(named: name, reachability: reachability, at: call)
         return .init(name: name, body: body, reference: reference)
     }
 
@@ -1076,7 +1080,8 @@ extension ParserSession {
             recordActionDeclaration(named: actionOwner.map { "procedure.\($0).\(label)" } ?? label, at: call)
             return .step(.init(label: .init(name: label), statements: statements, loopCondition: loopCondition))
         case .invariant, .reachable:
-            guard let predicate = parseAlgorithmStateProperty(call, scope: scope) else { return nil }
+            guard let predicate = parseAlgorithmStateProperty(call, scope: scope,
+                reachability: construct == .reachable) else { return nil }
             return construct == .reachable ? .reachable(predicate) : .invariant(predicate)
         case .leadsTo, .eventually, .always, .alwaysEventually, .eventuallyAlways:
             guard let temporal = parseAlgorithmTemporal(call, construct: construct, scope: scope) else { return nil }
