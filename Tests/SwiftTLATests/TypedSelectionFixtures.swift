@@ -19,3 +19,20 @@ struct IncreasingSelection {
         }
     }
 }
+
+@TLAModel
+struct ClosedMissingSelection {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec {
+            let closedMissingSelection = Algorithm(scoped: { scope in
+                let position = scope.sharedVar(initial: 0)
+                Do(Step.advance) {
+                    Assign(position, to: Select(from: Set<Int>([1])) { _ in false })
+                }
+            })
+            closedMissingSelection
+        }
+    }
+}

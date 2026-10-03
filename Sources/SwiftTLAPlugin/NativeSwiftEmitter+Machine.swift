@@ -106,7 +106,10 @@ extension NativeSwiftEmitter {
         declarations += try dispatchDeclarations(configurationArguments: appendedArguments)
         declarations += try propertyDeclarations(configurationParameters: appendedParameters)
         declarations += try refinementDeclarations(nested: nested)
-        if nested { return declarations }
+        if nested {
+            declarations += try choiceCacheDeclarations()
+            return declarations
+        }
         declarations += try exportDeclarations()
         declarations += actorMembers()
         if !program.layout.controlLocations.isEmpty {
@@ -118,6 +121,7 @@ extension NativeSwiftEmitter {
             """)
         }
         declarations += try valueTypeDeclarations()
+        declarations += try choiceCacheDeclarations()
         return declarations
     }
 

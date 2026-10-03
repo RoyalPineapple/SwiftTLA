@@ -24,4 +24,14 @@ struct TypedSelectionTests {
         let choice = Select(from: SetExpr<Int>.literal(1)) { _ in false }
         #expect(throws: EvalError.noSatisfyingChoice) { try evaluateClosed(choice.stateExpr) }
     }
+
+    @Test("A closed missing selection fails only when its generated action runs")
+    func closedMissingSelectionDoesNotChangeTheMachine() throws {
+        var machine = try ClosedMissingSelection.makeMachine()
+        let before = machine.snapshot
+        #expect(throws: NativeMachineEvaluationError.noSatisfyingChoice) {
+            _ = try machine.send(.advance)
+        }
+        #expect(machine.snapshot == before)
+    }
 }

@@ -18,6 +18,8 @@ struct NativeSwiftEmitter {
     private var successorBindings: [BinderID: (value: CompiledExpression, substitutions: [BinderID: String])] = [:]
     private var nativeBinderTypes: [BinderID: CompiledValueType] = [:]
     private var expressionOrdinals: [CompiledExpression: Int] = [:]
+    private var closedChoices: [CompiledExpression: Int] = [:]
+    private var closedChoiceDeclarations: [String] = []
     private var hasDepthScope = false
     private var nextMembershipPredicate = 0
     var checkingContextName: String?
@@ -548,7 +550,45 @@ struct NativeSwiftEmitter {
         activeFunctions: Set<ResolvedFunctionID> = []
     ) throws -> String {
         if let value = expressionValues[id] { return value }
+        if case .choose = id.operation, isClosedChoice(id) {
+            if let ordinal = closedChoices[id] { return "(try Self._closedChoice\(ordinal).get())" }
+            let ordinal = closedChoices.count
+            closedChoices[id] = ordinal
+            let value = try expressionBody(id, state: "", substitutions: [:], activeFunctions: [])
+            closedChoiceDeclarations.append("""
+            private static let _closedChoice\(ordinal): Result<\(try swiftType(id.resultType)), any Error> = Result { \(value) }
+            """)
+            return "(try Self._closedChoice\(ordinal).get())"
+        }
         return try expressionBody(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+    }
+
+    func choiceCacheDeclarations() throws -> [DeclSyntax] {
+        try closedChoiceDeclarations.flatMap(nativeDeclarations)
+    }
+
+    private func isClosedChoice(_ root: CompiledExpression) -> Bool {
+        var pending = [root]
+        var bound: Set<BinderID> = []
+        var referenced: Set<BinderID> = []
+        while let expression = pending.popLast() {
+            switch expression.operation {
+            case .boundValue(let binder): referenced.insert(binder)
+            case .setFilter(let binder), .setMap(let binder), .forAll(let binder),
+                 .exists(let binder), .choose(let binder), .sequenceSelect(let binder),
+                 .functionLiteral(let binder), .letValue(let binder):
+                bound.insert(binder)
+            case .foldFunction(let binders): bound.formUnion(binders)
+            case .stateVariable, .checkingRegister, .setCheckingRegister, .checkingLevel,
+                 .enabledAction, .nextState, .stutteringStep, .printT, .call,
+                 .checkedCall, .operatorReference, .operatorApplication, .letIn,
+                 .integerSet:
+                return false
+            default: break
+            }
+            pending.append(contentsOf: expression.children)
+        }
+        return referenced.isSubset(of: bound)
     }
 
     private mutating func expressionBody(
