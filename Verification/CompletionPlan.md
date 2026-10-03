@@ -28,9 +28,14 @@ edges. Native exploration took 938.38 seconds; warm-oracle comparison took
 about 178.12 seconds (59.60 native spool, 67.96 TLC spool, 50.55 graph
 comparison), about 1,116.50 seconds together. The native job reported
 `compare boulanger-0: exact`; the separate cold upstream parity job generated
-new TLC evidence and reported `upstream boulanger: exact`. The current local
-commits after `d533f10b` have only focused diagnostic evidence and require a
-new source-aligned hosted admission run before they can inherit these claims.
+new TLC evidence and reported `upstream boulanger: exact`. Frozen PR head
+`26b3886f` subsequently passed ordinary CI run `37124869258` (all five jobs,
+including Apple-platform examples) and unfiltered validation run
+`37124869254` (166 successful jobs, one intentionally skipped diagnostic, and
+165 distinct, nonempty, unexpired artifacts). The PR remained draft at that
+exact head. Local commits after `26b3886f`, including the B-01 legacy
+collection cutover, have only focused diagnostics and require their own
+source-aligned hosted admission.
 
 Only the full, unfiltered hosted matrix and ordinary CI on the same final pushed
 SHA can establish final admission. Focused diagnostics guide development but
