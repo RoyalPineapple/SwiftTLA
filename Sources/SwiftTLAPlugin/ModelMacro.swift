@@ -37,15 +37,20 @@ enum TLASpecVerifier {
         let sourceMetadata = try sourceTypes(in: memberList, enums: enumInfos)
         let parser = ParserSession(sourceTypes: sourceMetadata)
         let parsed = parser.parseSpecClosure(named: source.name, source.closure)
-        let compilation = try parsed.compile()
-        if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty && parsed.assume == nil {
-            throw ModelMacroError.emptyState
+        do {
+            let compilation = try parsed.compile()
+            if parsed.variables.isEmpty && parsed.sourceAlgorithms.isEmpty && parsed.assume == nil {
+                throw ModelMacroError.emptyState
+            }
+            return try MacroCompilation(
+                typeName: typeName,
+                program: try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation))
+            )
+        } catch let diagnostic as CompilationDiagnostic {
+            var located = diagnostic
+            located.sourceOffset = located.sourceOffset ?? parser.stateDeclarationOffset(for: located.path)
+            throw located
         }
-
-        return try MacroCompilation(
-            typeName: typeName,
-            program: try CompiledProgram(inputs: parser.sourceTypeResolver.resolve(in: compilation))
-        )
     }
 
     // MARK: - Helpers
@@ -608,15 +613,24 @@ package func parserDiagnostic(
     )
 }
 
-private func modelCompilationDiagnostic(
+package func modelCompilationDiagnostic(
     _ diagnostic: CompilationDiagnostic,
     in declaration: some DeclGroupSyntax
 ) -> Diagnostic {
-    Diagnostic(
-        node: Syntax(declaration),
+    let sourceNode: Syntax?
+    if let sourceOffset = diagnostic.sourceOffset {
+        let finder = ParserDiagnosticNodeFinder(location: .utf8Offset(sourceOffset))
+        finder.walk(Syntax(declaration))
+        sourceNode = finder.resolvedNode()
+    } else {
+        sourceNode = nil
+    }
+    return Diagnostic(
+        node: sourceNode ?? Syntax(declaration),
         message: ModelDiagnostic("model-compilation-failure", message:
             "What failed: compilation failed [\(diagnostic.code.rawValue)] at \(diagnostic.stage.rawValue) \(diagnostic.path). "
-                + "Where: this @TLAModel declaration. Expected: \(diagnostic.expected). "
+                + "Where: \(sourceNode == nil ? "this @TLAModel declaration" : "the indicated source declaration"). "
+                + "Expected: \(diagnostic.expected). "
                 + "Actual: \(diagnostic.actual). Next safe action: \(diagnostic.nextSafeAction)")
     )
 }

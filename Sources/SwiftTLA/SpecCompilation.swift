@@ -659,6 +659,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
     public let expected: String
     public let actual: String
     public let nextSafeAction: String
+    package var sourceOffset: Int?
 
     public init(
         code: Code,
@@ -674,6 +675,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         self.expected = expected
         self.actual = actual
         self.nextSafeAction = nextSafeAction
+        sourceOffset = nil
     }
 
     public var description: String {

@@ -965,6 +965,7 @@ extension ParserSession {
         }
         let resolvedState = AlgorithmStateModel(root: state.root, initialization: state.initialization,
             displayLabel: state.displayLabel, swiftTypeName: state.swiftTypeName, resolvedValueType: inferredType)
+        recordStateDeclaration(named: resolvedState.root, at: binding)
         let component: AlgorithmComponentModel = kind == .shared ? .shared(resolvedState) : .local(resolvedState)
         return (sourceName, component, valueType)
     }

@@ -79,6 +79,49 @@ struct CompilerBoundaryDiagnosticTests {
         #expect(requiredFacts.allSatisfy(emitted.contains))
     }
 
+    @Test("A generated value type error points to the offending state declaration")
+    func generatedTypeErrorPointsToStateDeclaration() throws {
+        for body in [
+            """
+            #spec { scope in
+                let count: SharedVariable<Int> = scope.sharedVar(initial: true)
+            }
+            """,
+            """
+            #spec {
+                let counter = Algorithm(scoped: { scope in
+                    let count: SharedVariable<Int> = scope.sharedVar(initial: true)
+                    Do(Control.advance) { Stop() }
+                })
+                counter
+            }
+            """
+        ] {
+            let source = Parser.parse(source: """
+            struct InvalidModel {
+                enum Control: String, CaseIterable, FiniteTLAValueDomain {
+                    case advance
+                }
+                static var spec: TLASpec {
+                    \(body)
+                }
+            }
+            """)
+            let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+            let count = try #require(source.tokens(viewMode: .sourceAccurate).first { $0.text == "count" })
+
+            do {
+                _ = try TLASpecVerifier.parseAndVerify(declaration)
+                Issue.record("A Boolean initializer must not satisfy an integer state declaration")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.contains("variables.count"))
+                #expect(diagnostic.sourceOffset == count.positionAfterSkippingLeadingTrivia.utf8Offset)
+                let emitted = modelCompilationDiagnostic(diagnostic, in: declaration)
+                #expect(emitted.node.positionAfterSkippingLeadingTrivia == count.positionAfterSkippingLeadingTrivia)
+            }
+        }
+    }
+
     @Test("Parser diagnostics prevent partial compilation")
     func parserDiagnosticPreventsPartialCompilation() throws {
         let closure = try #require(

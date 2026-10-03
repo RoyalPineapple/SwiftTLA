@@ -7,6 +7,22 @@ import Foundation
 
 final class ParserSession {
     var symmetryDeclarations: [SymmetrySetDecl] = []
+    var stateDeclarationOffsets: [String: [Int]] = [:]
+
+    func recordStateDeclaration(named name: String, at binding: PatternBindingSyntax) {
+        stateDeclarationOffsets[name, default: []].append(
+            binding.pattern.positionAfterSkippingLeadingTrivia.utf8Offset)
+    }
+
+    func stateDeclarationOffset(for diagnosticPath: String) -> Int? {
+        let prefix = diagnosticPath.hasPrefix("nativeMachine.variables.")
+            ? "nativeMachine.variables." : "variables."
+        guard diagnosticPath.hasPrefix(prefix) else { return nil }
+        let suffix = diagnosticPath.dropFirst(prefix.count)
+        let name = String(suffix.prefix { $0 != "." && $0 != " " && $0 != "→" })
+        guard let offsets = stateDeclarationOffsets[name], offsets.count == 1 else { return nil }
+        return offsets[0]
+    }
     enum FormalModuleProvider: Equatable {
         case folds
         case functions

@@ -8,6 +8,7 @@ extension ParserSession {
 
     func parseSpecClosure(named name: String, _ closure: ClosureExprSyntax) -> TLASpec {
         var components = TLASpec(name: name, variables: [], actions: [], invariants: [])
+        stateDeclarationOffsets = [:]
         let outerSymmetry = symmetryDeclarations
         symmetryDeclarations = []
         defer { symmetryDeclarations = outerSymmetry }
@@ -399,6 +400,7 @@ extension ParserSession {
         defer {
             if components.variables.count > existingVariableCount,
                let variable = components.variables.last {
+                recordStateDeclaration(named: variable.name, at: binding)
                 let domain = fc.arguments.first { $0.label?.text == "in" }
                 let initial = domain ?? fc.arguments.first { $0.label?.text == "initial" }
                     ?? fc.arguments.dropFirst().first
