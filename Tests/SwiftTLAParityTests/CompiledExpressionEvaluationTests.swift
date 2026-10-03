@@ -6,37 +6,6 @@ import Testing
 import UpstreamParity
 
 @Suite(.serialized) struct CompiledExpressionEvaluationTests {
-  @Test("parameterized function update enumerates correctly")
-  func chooseWithFunctionApply() throws {
-    let phases = Var<Function<FunctionProcess, FunctionPhase>>("phases")
-    let process = Expr<FunctionProcess>(.variable("process"))
-    let spec = TLASpec("ParameterizedFunctionUpdate") {
-      Variable(phases, Function<FunctionProcess, FunctionPhase>.literal(
-        (.first, .initial), (.second, .initial)))
-      Action(
-        "advance",
-        parameters: [ActionParameter("process", values: FunctionProcess.allCases)]
-      ) {
-        phases.becomes(phases.updating(process, to: .done))
-          .when(phases[process] == FunctionPhase.initial)
-      }
-    }
-    let compilation = try spec.compile()
-    let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-    let advance = try #require(compilation.layout.testActionID(named: "advance"))
-    let successors = try CompiledRuntime(compilation: compilation)
-      .successors(for: advance, from: initial)
-    #expect(successors.count == 2)
-    let observed = try Set(successors.map { successor in
-      try successor.state.value(for: #require(compilation.layout.testVariableID(named: "phases")))
-        .rendered(using: compilation.layout)
-    })
-    #expect(observed == Set<TLAValue>([
-      .function([.string("first"): .string("done"), .string("second"): .string("initial")]),
-      .function([.string("first"): .string("initial"), .string("second"): .string("done")])
-    ]))
-  }
-
   @Test("sequence-from-set evaluates correctly")
   func recursiveBuiltins() throws {
     let sequenceValue = try compiledValue(.sequenceFromSet(.value(.set([.int(3), .int(1), .int(2)]))))
@@ -103,27 +72,6 @@ import UpstreamParity
     #expect(
       phases.updating(.first, to: FunctionPhase.done).raw
         == .except(.variable("phases"), .value("first"), .value("done")))
-  }
-
-  @Test("Function-typed variable works end-to-end in ModelChecker")
-  func functionVariableEndToEnd() throws {
-    let phases = Var<Function<FunctionProcess, FunctionPhase>>("phases")
-    let process = Expr<FunctionProcess>(.variable("process"))
-    let spec = TLASpec("FuncEndToEnd") {
-      Variable(phases, Function<FunctionProcess, FunctionPhase>.literal(
-        (.first, .initial), (.second, .initial)))
-      Action(
-        "process",
-        parameters: [ActionParameter("process", values: FunctionProcess.allCases)]
-      ) {
-        phases.becomes(phases.updating(process, to: .done))
-          .when(phases[process] == FunctionPhase.initial)
-      }
-    }
-    let exploration = try ModelChecker(compilation: spec.compile(), configuration: .init(maximumStateLimit: 50, symmetryReduction: .disabled)).explore()
-    #expect(exploration.isComplete)
-    #expect(exploration.graph.states.count == 4)
-    #expect(exploration.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
   }
 
   @Test("compiled execution handles function-typed variables")

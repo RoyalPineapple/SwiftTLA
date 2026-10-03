@@ -309,6 +309,11 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       operations pass focused local checks; the formal value round-trip remains
       a separate serialization-boundary test. This does not credit AC-12 or
       independent TLC parity.
+      The duplicated formal function-update models have likewise been replaced
+      by one generated typed-dictionary model. Its initial action choices,
+      complete four-state/four-edge labeled graph, and deadlock pass locally;
+      the distinct formal expression-lowering suite still passes. No hosted
+      parity claim follows from these focused tests.
 - [ ] Close AC-13 by removing replaced spellings, duplicate configuration,
       obsolete callers, compatibility aliases, and stale documentation. The
       legacy `CollectionVarType` field had no effect on model behavior; it was
