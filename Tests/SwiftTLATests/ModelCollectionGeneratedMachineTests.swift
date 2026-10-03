@@ -413,48 +413,6 @@ struct ModelCollectionGeneratedMachineTests {
     #expect(SpecParser.parseSpecClosure(named: "Parsed", closure).diagnostics.isEmpty == false)
   }
 
-  @Test("Generated state binds the exact collection population to application IDs")
-  func bindsExactApplicationIDs() throws {
-    let deviceID = 42
-    var machine = try GeneratedSymmetricMachine.makeMachine(
-      .init(devices: [deviceID: 0]),
-      devices: [deviceID]
-    )
-
-    #expect(machine.state.devices == [deviceID: 0])
-    let transition = try machine.send(.begin(member: deviceID))
-
-    #expect(machine.state.devices == [deviceID: 1])
-    #expect(transition.before.devices == [deviceID: 0])
-    #expect(transition.after.devices == [deviceID: 1])
-    #expect(transition.action == .begin(member: deviceID))
-    #expect(throws: GeneratedMachineStateDiagnostic.self) {
-      try machine.send(.begin(member: 99))
-    }
-  }
-
-  @Test("Generated actors wrap the same exact collection population")
-  func actorBindsExactApplicationIDs() async throws {
-    let deviceID = 42
-    let actor = try GeneratedSymmetricMachine.Actor(devices: [deviceID])
-
-    let transition = try await actor.send(.begin(member: deviceID))
-
-    #expect(transition.before.devices == [deviceID: 0])
-    #expect(transition.after.devices == [deviceID: 1])
-    #expect(await actor.state.devices == [deviceID: 1])
-  }
-
-  @Test("Generated machines require one unique application ID per compiled member")
-  func requiresTheExactPopulation() {
-    #expect(throws: GeneratedMachineStateDiagnostic.self) {
-      _ = try GeneratedScopedSymmetricMachine.makeMachine(devices: ["only-one"])
-    }
-    #expect(throws: GeneratedMachineStateDiagnostic.self) {
-      _ = try GeneratedScopedSymmetricMachine.makeMachine(devices: ["same", "same"])
-    }
-  }
-
   @Test("Generated collection actions evaluate expression-backed updates")
   func evaluatesExpressionBackedUpdates() throws {
     let deviceID = 42

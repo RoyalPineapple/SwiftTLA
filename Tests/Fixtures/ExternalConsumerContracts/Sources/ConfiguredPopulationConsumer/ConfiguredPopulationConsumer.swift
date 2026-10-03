@@ -42,6 +42,21 @@ let transition = try machine.send(.advance(process: .east))
 guard transition.after.phase == [.east: 1, .west: 0], machine.state.phase == transition.after.phase else {
     throw FixtureError.invalidTransition
 }
+let actor = try DeviceContract.Actor(configuration: configuration)
+let actorTransition = try await actor.send(.advance(process: .east))
+guard actorTransition == transition, await actor.state == machine.state else {
+    throw FixtureError.invalidActorTransition
+}
+let singletonConfiguration = try DeviceContract.Configuration(devices: [.east])
+var singleton = try DeviceContract.makeMachine(configuration: singletonConfiguration)
+do {
+    _ = try singleton.send(.advance(process: .west))
+    throw FixtureError.acceptedAbsentMember
+} catch GeneratedMachineError.noMatchingSuccessor {
+    guard singleton.state.phase == [.east: 0] else {
+        throw FixtureError.invalidRejectedAction
+    }
+}
 let scenarios = try DeviceContract.validationScenarios()
 guard scenarios.count == 1,
       scenarios[0].checking.properties == [.NonnegativePhase],
@@ -52,5 +67,8 @@ guard scenarios.count == 1,
 private enum FixtureError: Error {
     case invalidInitialState
     case invalidTransition
+    case invalidActorTransition
+    case acceptedAbsentMember
+    case invalidRejectedAction
     case invalidScenario
 }
