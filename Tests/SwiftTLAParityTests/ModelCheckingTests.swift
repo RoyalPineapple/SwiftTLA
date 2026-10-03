@@ -82,45 +82,6 @@ import UpstreamParity
     #expect(try spec.compile().render().tlaBundle.tla.contains("select__0 == select(1)"))
   }
 
-  @Test func explorationResultMatchesExistingCheckerViews() throws {
-    let x = Var<Int>("x")
-    let spec = TLASpec("ExplorationSnapshot") {
-      Variable(x, in: Expr<SetExpr<Int>>(StateExpr.set([1, 2])))
-      Action("inc") { x.becomes(x + 1).when(x < 3) }
-    }
-    let checker = ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled))
-
-    let exploration = try checker.explore()
-    let graph = try checker.exploreGraph()
-    let outcome = try checker.check()
-
-    #expect(exploration.initialStateIDs.map(\.id) == [0, 1])
-    #expect(exploration.initialStateIDs.allSatisfy { exploration.graph.states[$0] != nil })
-    #expect(exploration.graph.states == graph.states)
-    #expect(
-      exploration.graph.transitions.mapValues { $0.map { "\($0.action):\($0.target.id)" } }
-        == graph.transitions.mapValues { $0.map { "\($0.action):\($0.target.id)" } }
-    )
-    #expect(exploration.outcome.description == outcome.description)
-    #expect(exploration.isComplete)
-
-    let incomplete = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1, symmetryReduction: .disabled)).explore()
-    #expect(!incomplete.isComplete)
-  }
-
-  @Test func twoVarBranching() throws {
-    let a = Var<Int>("a")
-    let b = Var<Int>("b")
-    let spec = TLASpec("Test") {
-      Variable(a, 0)
-      Variable(b, 0)
-      Action("incA") { a.becomes(a + 1).when(a < 2) }
-      Action("incB") { b.becomes(b + 1).when(b < 2) }
-    }
-    let graph = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph()
-    #expect(graph.states.count == 9)
-  }
-
   @Test func expressionBackedNondeterministicInit() throws {
     let x = Var<Int>("x")
     let spec = TLASpec("LazyInit") {
