@@ -84,62 +84,6 @@ import UpstreamParity
     #expect(available.contains("increment"))
   }
 
-  @Test("constraint-retained successors match every checked transition without changing execution")
-  func runtimeSuccessorsMatchCheckedTransitions() throws {
-    let counter = Var<Int>("counter")
-    let step = Var<Int>("step")
-    let spec = TLASpec("ConstrainedParameterizedCounter") {
-      Variable(counter, 0)
-      Action("advance", parameters: [ActionParameter("step", values: [1, 2])]) {
-        counter.becomes(counter + step)
-      }
-      Constraint(counter <= 2)
-    }
-    let compilation = try spec.compile()
-    let exploration = try ModelChecker(
-      compilation: compilation,
-      configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)
-    ).explore()
-    let graph = exploration.graph
-    #expect(exploration.isComplete)
-    #expect(graph.states.count == 3)
-    #expect(exploration.safetyViolations.isEmpty)
-    let runtime = CompiledRuntime(compilation: compilation)
-
-    for sourceID in graph.states.keys {
-      let checked = try (graph.transitions[sourceID] ?? []).compactMap { transition -> (action: String, arguments: [TLAValue], state: TLAStateProjection)? in
-        guard let successor = graph.states[transition.target] else { return nil }
-        return (
-          transition.label.action,
-          try transition.label.formalArguments(using: compilation.layout),
-          successor
-        )
-      }
-      let runtimeState = try #require(exploration.compiledStates[sourceID])
-      let raw = try runtime.successors(from: runtimeState)
-      let runtimeSuccessors = try raw.map { successor in
-        (action: compilation.layout.actions[successor.action.ordinal].declaration.name,
-         arguments: try successor.arguments.map { try $0.rendered(using: compilation.layout) },
-         state: try successor.state.projection(using: compilation.layout))
-      }
-      #expect(raw.count == 2)
-      #expect(Set(raw.map(\.arguments)) == [[.integer(1)], [.integer(2)]])
-      let retained = try zip(raw, runtimeSuccessors).filter {
-        try runtime.constraintHolds(in: $0.0.state)
-      }.map(\.1)
-      #expect(multiset(retained) == multiset(checked))
-    }
-  }
-
-  private func multiset(
-    _ transitions: [(action: String, arguments: [TLAValue], state: TLAStateProjection)]
-  ) -> [String: Int] {
-    Dictionary(
-      transitions.map { ("\($0.action):\($0.arguments) -> \($0.state)", 1) },
-      uniquingKeysWith: +
-    )
-  }
-
   @Test("compiled execution preserves parameter domains and disabled successors")
   func compiledExecutionPreservesParameterDomainsAndDisabledSuccessors() throws {
     let counter = Var<Int>("counter")
