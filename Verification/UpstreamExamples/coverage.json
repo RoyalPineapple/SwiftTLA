@@ -3607,7 +3607,7 @@
       "path": "specifications/byzpaxos",
       "name": "Byzantizing Paxos by Refinement",
       "audit": "reference inputs audited",
-      "gap": "VoteProof and Consensus replace upstream model values with strings and lack model-owned scenarios. Their configurations explicitly disable deadlock checking. Consensus selects LiveSpec, unlike the other three configurations. BPConProof and PConProof have no exact Swift cases. BPConProof has an unknown published outcome, not an assumed success.",
+      "gap": "VoteProof and Consensus replace upstream model values with strings and lack model-owned scenarios. Their configurations explicitly disable deadlock checking. The reduced Consensus Swift fixture's generated checker reaches three terminal deadlocks, so its local four-state count and temporal result do not establish upstream configuration parity. Consensus selects LiveSpec, unlike the other three configurations. BPConProof and PConProof have no exact Swift cases. BPConProof has an unknown published outcome, not an assumed success.",
       "legacyCleanupComplete": false,
       "modules": [
         {

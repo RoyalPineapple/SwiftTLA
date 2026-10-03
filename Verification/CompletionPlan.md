@@ -325,7 +325,15 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       machine now checks its sole typed initial state and exact formal value
       before exploring both transitions. Its focused and related projection
       tests pass locally. This removes one legacy checker caller without
-      claiming AC-12 completion.
+      claiming AC-12 completion. Lock's bounded graph and safety checks now
+      run on generated transitions, and Peterson's published state count is
+      checked by its existing native/formal graph contract; two redundant
+      formal-explorer probes are gone. The reduced Consensus fixture also now
+      uses native graph and temporal checking. It exposes three terminal
+      deadlocks that its previous state-count-only probe did not report; the
+      pinned upstream configuration disables deadlock checking, so no upstream
+      parity or family credit follows. Four focused generated checks pass
+      locally; the remaining formal-core checker and family gaps stay open.
 - [ ] Close AC-13 by removing replaced spellings, duplicate configuration,
       obsolete callers, compatibility aliases, and stale documentation. The
       legacy `CollectionVarType` field had no effect on model behavior; it was

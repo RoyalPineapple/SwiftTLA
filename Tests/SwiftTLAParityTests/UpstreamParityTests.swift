@@ -84,18 +84,11 @@ struct UpstreamParityTests {
         _ = try specification.compile()
     }
 
-    @Test("two-process Lock PlusCal port matches TLC")
-    func lockMatchesTLC() throws {
-        let exploration = try explore(Example.lockTwoProcess.spec, maximumStateLimit: 100)
-        #expect(exploration.graph.states.count == Example.lockTwoProcess.expectedDistinct)
-        #expect(isSuccessful(exploration))
-    }
-
-    @Test("two-process Peterson PlusCal port matches TLC")
-    func petersonMatchesTLC() throws {
-        let exploration = try explore(Example.petersonTwoProcess.spec, maximumStateLimit: 1_000)
-        #expect(exploration.graph.states.count == Example.petersonTwoProcess.expectedDistinct)
-        #expect(isSuccessful(exploration))
+    @Test("two-process Lock generated machine explores its complete bounded graph")
+    func lockGeneratedGraph() throws {
+        let graph = try ReachabilityGraph(initialMachines: LockModel.initialMachines(), maximumStates: 100)
+        #expect(graph.transitions.count == Example.lockTwoProcess.expectedDistinct)
+        #expect(graph.safetyViolations.isEmpty)
     }
 
     @Test("HourClock TLA+ module is TLC-shaped")
@@ -246,10 +239,13 @@ struct UpstreamParityTests {
         #expect(exploration.graph.states.count == Example.dijkstraMutex.expectedDistinct)
     }
 
-    @Test("Consensus PlusCal port matches its bounded TLC configuration")
-    func consensusParity() throws {
-        let exploration = try explore(ConsensusModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.consensus.expectedDistinct)
+    @Test("bounded Consensus fixture retains terminal deadlocks and temporal progress")
+    func consensusGeneratedChecking() throws {
+        let graph = try ReachabilityGraph(initialMachines: ConsensusModel.initialMachines(), maximumStates: 100)
+        #expect(graph.transitions.count == Example.consensus.expectedDistinct)
+        #expect(graph.safetyViolations.count == 3)
+        #expect(graph.safetyViolations.values.allSatisfy { $0 == [.deadlock] })
+        #expect(graph.temporalResults[.Success]?.status == .satisfied)
     }
 
     @Test("Paxos typed state preserves its bounded TLC graph")
