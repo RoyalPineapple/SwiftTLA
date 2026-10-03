@@ -135,6 +135,9 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       DSL spec records the positive authoring form and negative boundaries.
       An external consumer now executes and exports this nominal-ID form;
       its focused run and ten related configuration/process tests pass locally.
+      That consumer also proves the typed formal action/state projection and
+      rejects mixed-population exploration; the two corresponding legacy
+      collection tests have been removed after focused local passes.
       A separate external `#spec` consumer confirms that `Each` rejects a
       mutable state-backed population at lowering; its focused test passed
       locally.

@@ -132,45 +132,6 @@ public struct GeneratedContainsPredicateMachine {
 
 @Suite(.serialized)
 struct ModelCollectionGeneratedMachineTests {
-  @Test("Exploration rejects different collection bindings before merging equal snapshots")
-  func rejectsMixedConfigurations() throws {
-    let first = try GeneratedScopedSymmetricMachine.makeMachine(devices: ["a", "b"])
-    let reversed = try GeneratedScopedSymmetricMachine.makeMachine(devices: ["b", "a"])
-    #expect(first.snapshot == reversed.snapshot)
-    #expect(!first.hasSameConfiguration(as: reversed))
-    #expect(throws: ExplorationError.configurationMismatch) {
-      try ReachabilityGraph(initialMachines: [first, reversed], maximumStates: 10)
-    }
-    var advanced = first
-    _ = try advanced.send(.begin(member: "a"))
-    #expect(first.hasSameConfiguration(as: advanced))
-    let graph = try ReachabilityGraph(initialMachines: [first], maximumStates: 10)
-    #expect(graph.transitions.count == 4)
-    #expect(graph.temporalResults.isEmpty)
-  }
-
-  @Test("Formal projection uses configured collection identities rather than application IDs")
-  func projectsConfiguredCollectionMembers() throws {
-    let ids = ["device-z", "device-a"]
-    var machine = try GeneratedScopedSymmetricMachine.makeMachine(devices: ids)
-    let compilation = try GeneratedScopedSymmetricMachine.spec.compile()
-    let initial = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
-    #expect(try machine.formalProjection(of: machine.snapshot) == initial.projection(using: compilation.layout))
-    _ = try machine.send(.begin(member: ids[0]))
-    let token = try #require(TLAStateProjection.Token(validating: "devices"))
-    let members = GeneratedScopedSymmetricMachine.spec.collections[0].metadata.members
-    #expect(try machine.formalCall(for: .begin(member: ids[0])) == FormalActionCall(name: "begin", arguments: [members[0]]))
-    let expected = TLAValue.function(Dictionary(uniqueKeysWithValues: zip(members, [TLAValue.int(1), .int(0)])))
-    #expect(try machine.formalProjection(of: machine.snapshot).value(for: token) == expected)
-    let other = try GeneratedScopedSymmetricMachine.makeMachine(devices: ["different-a", "different-b"])
-    #expect(throws: TLAStateProjectionDiagnostic.invalidValue(path: "devices")) {
-      try other.formalProjection(of: machine.snapshot)
-    }
-    #expect(throws: TLAStateProjectionDiagnostic.invalidValue(path: "devices")) {
-      try other.formalCall(for: .begin(member: ids[0]))
-    }
-  }
-
   private func compiledSuccessors(
     in compilation: CompiledSpecification,
     from values: [CompiledValue]

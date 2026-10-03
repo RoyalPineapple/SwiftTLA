@@ -42,6 +42,16 @@ let transition = try machine.send(.advance(process: .east))
 guard transition.after.phase == [.east: 1, .west: 0], machine.state.phase == transition.after.phase else {
     throw FixtureError.invalidTransition
 }
+guard try machine.formalCall(for: .advance(process: .east)) ==
+        FormalActionCall(name: "advance", arguments: [DeviceContract.DeviceID.east.tlaValue]),
+      let phaseToken = TLAStateProjection.Token(validating: "phase"),
+      try machine.formalProjection(of: machine.snapshot).value(for: phaseToken) ==
+        TLAValue.function([
+            DeviceContract.DeviceID.east.tlaValue: .int(1),
+            DeviceContract.DeviceID.west.tlaValue: .int(0)
+        ]) else {
+    throw FixtureError.invalidFormalProjection
+}
 let actor = try DeviceContract.Actor(configuration: configuration)
 let actorTransition = try await actor.send(.advance(process: .east))
 guard actorTransition == transition, await actor.state == machine.state else {
@@ -49,6 +59,18 @@ guard actorTransition == transition, await actor.state == machine.state else {
 }
 let singletonConfiguration = try DeviceContract.Configuration(devices: [.east])
 var singleton = try DeviceContract.makeMachine(configuration: singletonConfiguration)
+let otherSingleton = try DeviceContract.makeMachine(
+    configuration: .init(devices: [.west]))
+guard singleton.state.phase != otherSingleton.state.phase,
+      !singleton.hasSameConfiguration(as: otherSingleton) else {
+    throw FixtureError.mergedDistinctPopulations
+}
+do {
+    _ = try ReachabilityGraph(
+        initialMachines: [singleton, otherSingleton], maximumStates: 10)
+    throw FixtureError.mergedDistinctPopulations
+} catch ExplorationError.configurationMismatch {
+}
 do {
     _ = try singleton.send(.advance(process: .west))
     throw FixtureError.acceptedAbsentMember
@@ -67,8 +89,10 @@ guard scenarios.count == 1,
 private enum FixtureError: Error {
     case invalidInitialState
     case invalidTransition
+    case invalidFormalProjection
     case invalidActorTransition
     case acceptedAbsentMember
     case invalidRejectedAction
+    case mergedDistinctPopulations
     case invalidScenario
 }
