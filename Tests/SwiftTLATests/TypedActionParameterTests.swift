@@ -1,61 +1,19 @@
 import Testing
 @testable import SwiftTLA
-import SwiftTLAMacros
-
-@TLAModel
-private struct TypedParameterSelection {
-    static var spec: TLASpec {
-        #spec("TypedParameterSelection") { scope in
-            let selected = scope.sharedVar(_name: "result", initial: 0)
-            let choice = ActionParameter("selection", values: [1, 2])
-            SwiftTLA.Action("choose", parameters: [choice]) {
-                selected.becomes(choice + 1)
-            }
-        }
-    }
-}
 
 struct TypedActionParameterTests {
-    @Test("A typed parameter declaration owns its domain, formal name and body reference")
+    @Test("A typed step argument retains its domain, formal call, and assigned result")
     func declaredParametersPreserveNativeAndFormalBindings() throws {
-        let compilation = try TypedParameterSelection.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let initial = try #require(try runtime.initialStates().first)
-        let selected = try #require(compilation.layout.testVariableID(named: "result"))
-        let formal = try runtime.successors(from: initial)
-        #expect(formal.map(\.arguments) == [[.integer(1)], [.integer(2)]])
-        #expect(try formal.map { try $0.state.value(for: selected) } == [.integer(2), .integer(3)])
         let machine = try TypedParameterSelection.makeMachine()
         #expect(try machine.enabledActions() == [.choose(selection: 1), .choose(selection: 2)])
+        let result = try #require(TLAStateProjection.Token(validating: "result"))
         for selection in [1, 2] {
             var next = machine
             _ = try next.send(.choose(selection: selection))
             #expect(next.state.result == selection + 1)
-        }
-    }
-}
-
-
-@TLAModel
-private struct CollectionParameterUpdates {
-    enum Key: String, CaseIterable, FiniteTLAValueDomain {
-        case first, second
-        static var defaultValue: Self { .first }
-        static let finiteValues = allCases
-    }
-
-    static var spec: TLASpec {
-        #spec("CollectionParameterUpdates") { scope in
-            let table = scope.sharedVar(_name: "table", initial: Function<Key, Int>.literal((.first, 0), (.second, 0)))
-            let partial = scope.sharedVar(_name: "partial", initial: PartialFunction<Key, Int>.empty)
-            let sequence = scope.sharedVar(_name: "sequence", initial: ZeroBasedSequence<Int>.literal(0, 0))
-            let key = ActionParameter("key", values: Key.finiteValues)
-            let value = ActionParameter("value", values: [1, 2])
-            SwiftTLA.Action("replace", parameters: [key, value]) {
-                table.becomes(table.updating(key, to: value))
-                partial.becomes(partial.overriding(key, with: value))
-                sequence.becomes(sequence.updating(0, to: value))
-            }
+            #expect(try machine.formalCall(for: .choose(selection: selection)) ==
+                FormalActionCall(name: "choose", arguments: [.int(selection)]))
+            #expect(try next.formalProjection(of: next.snapshot).value(for: result) == .int(selection + 1))
         }
     }
 }
@@ -63,32 +21,27 @@ private struct CollectionParameterUpdates {
 extension TypedActionParameterTests {
     @Test("collection updates accept typed keys and replacement parameters")
     func collectionUpdatesPreserveParameters() throws {
-        let compilation = try CollectionParameterUpdates.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let initial = try #require(try runtime.initialStates().first)
-        let table = try #require(compilation.layout.testVariableID(named: "table"))
-        let partial = try #require(compilation.layout.testVariableID(named: "partial"))
-        let sequence = try #require(compilation.layout.testVariableID(named: "sequence"))
-        let formal = try runtime.successors(from: initial)
-        #expect(formal.count == 4)
         let machine = try CollectionParameterUpdates.makeMachine()
         #expect(try machine.enabledActions().count == 4)
+        let table = try #require(TLAStateProjection.Token(validating: "table"))
+        let partial = try #require(TLAStateProjection.Token(validating: "partial"))
+        let sequence = try #require(TLAStateProjection.Token(validating: "sequence"))
         for key in CollectionParameterUpdates.Key.allCases {
             for value in [1, 2] {
-                let expected = try #require(formal.first {
-                    $0.arguments == [.string(key.rawValue), .integer(value)]
-                })
                 var next = machine
                 _ = try next.send(.replace(key: key, value: value))
                 #expect(next.state.table[key] == value)
                 #expect(next.state.partial == [key: value])
                 #expect(next.state.sequence == [0: value, 1: 0])
-                let entries = Dictionary(uniqueKeysWithValues: next.state.table.map {
-                    (CompiledValue.string($0.key.rawValue), CompiledValue.integer($0.value))
-                })
-                #expect(try expected.state.value(for: table) == .function(entries))
-                #expect(try expected.state.value(for: partial) == .function([.string(key.rawValue): .integer(value)]))
-                #expect(try expected.state.value(for: sequence) == .function([.integer(0): .integer(value), .integer(1): .integer(0)]))
+                #expect(try machine.formalCall(for: .replace(key: key, value: value)) ==
+                    FormalActionCall(name: "replace", arguments: [.string(key.rawValue), .int(value)]))
+                let projected = try next.formalProjection(of: next.snapshot)
+                #expect(projected.value(for: table) == .function([
+                    .string("first"): .int(key == .first ? value : 0),
+                    .string("second"): .int(key == .second ? value : 0)
+                ]))
+                #expect(projected.value(for: partial) == .function([.string(key.rawValue): .int(value)]))
+                #expect(projected.value(for: sequence) == .function([.int(0): .int(value), .int(1): .int(0)]))
             }
         }
     }
