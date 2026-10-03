@@ -1326,23 +1326,28 @@ struct CompilerPipelineCanonicalizationTests {
         }
     }
 
-    @Test("free references fail at the binding gate")
+    @Test("free action references fail at the binding gate")
     func freeReferenceBlocksCompilation() {
-        let spec = TLASpec(
-            name: "FreeReference",
-            variables: [.init(name: "counter", initial: .int(0))],
-            actions: [.init(name: "step", body: .assign(.named("counter"), .variable("missing")))],
-            invariants: []
-        )
-
-        do {
-            _ = try spec.compile()
-            Issue.record("Expected a binding diagnostic")
-        } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.code == .unknownReference)
-            #expect(diagnostic.stage == .binding)
-        } catch {
-            Issue.record("Expected CompilationDiagnostic, got \(error)")
+        let bodies: [ActionExpr] = [
+            .assign(.named("counter"), .variable("missing")),
+            .guard_(.variable("missing")) && .assign(.named("counter"), .int(1))
+        ]
+        for body in bodies {
+            let spec = TLASpec(
+                name: "FreeReference",
+                variables: [.init(name: "counter", initial: .int(0))],
+                actions: [.init(name: "step", body: body)],
+                invariants: []
+            )
+            do {
+                _ = try spec.compile()
+                Issue.record("Expected a binding diagnostic")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == .unknownReference)
+                #expect(diagnostic.stage == .binding)
+            } catch {
+                Issue.record("Expected CompilationDiagnostic, got \(error)")
+            }
         }
     }
 
