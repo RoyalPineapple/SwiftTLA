@@ -233,10 +233,22 @@ struct UpstreamParityTests {
         }
     }
 
-    @Test("partial three-process Dijkstra port has a complete generated graph without safety violations")
+    @Test("partial three-process Dijkstra port preserves upstream model values and its generated graph")
     func dijkstraPartialNativeGraph() throws {
+        let initial = try DijkstraMutexModel.initialMachines()
+        let owner = try #require(TLAStateProjection.Token(validating: "k"))
+        let temporary = try #require(TLAStateProjection.Token(validating: "temporary"))
+        let members: Set<TLAValue> = [.constant("p1"), .constant("p2"), .constant("p3")]
+        let initialTemporary = TLAValue.function(Dictionary(uniqueKeysWithValues: members.map {
+            ($0, TLAValue.constant("defaultInitValue"))
+        }))
+        for machine in initial {
+            let state = try machine.formalProjection(of: machine.snapshot)
+            try #require(state.value(for: owner).map(members.contains) == true)
+            try #require(state.value(for: temporary) == initialTemporary)
+        }
         let graph = try ReachabilityGraph(
-            initialMachines: DijkstraMutexModel.initialMachines(),
+            initialMachines: initial,
             maximumStates: Example.dijkstraMutex.maximumStateLimit
         )
         #expect(graph.transitions.count == Example.dijkstraMutex.expectedDistinct)

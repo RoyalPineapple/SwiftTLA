@@ -18,7 +18,7 @@ package struct DijkstraMutexModel: Sendable {
         package static var defaultValue: Self { .one }
         package static let finiteValues = allCases
 
-        package var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .constant(rawValue) }
     }
 
     private enum Label: String, CaseIterable {
@@ -43,6 +43,7 @@ package struct DijkstraMutexModel: Sendable {
         case notAssigned = "defaultInitValue"
 
         static var defaultValue: Self { .notAssigned }
+        var tlaValue: TLAValue { .constant(rawValue) }
     }
 
     private typealias ActiveTemporary = OneOf<Process, SetExpr<Process>>

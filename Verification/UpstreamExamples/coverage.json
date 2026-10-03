@@ -5047,7 +5047,7 @@
       "partialCases": [
         {
           "implementation": "Sources/UpstreamParity/Examples/DijkstraMutex.swift",
-          "reason": "DijkstraMutexModel uses three string-valued process identifiers, legacy Function and SetExpr values, and unqualified weak fairness. Its generated-machine diagnostic covers 90,882 states without safety violations. It does not compare complete graphs or property outcomes with either upstream configuration. No registered finite-graph case or model-owned scenario covers either configuration. No completion credit."
+          "reason": "DijkstraMutexModel uses three process identifiers and a defaultInitValue sentinel with the upstream model-value encoding; the focused generated-machine projection and 90,882-state safety diagnostic pass locally. It still uses fixed Function and SetExpr values and unqualified weak fairness. It does not compare complete graphs or property outcomes with either upstream configuration. No registered finite-graph case or model-owned scenario covers either configuration. No completion credit."
         }
       ]
     },
