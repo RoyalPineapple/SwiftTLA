@@ -302,7 +302,8 @@ jobs:
         id: upstream-cache
         with:
           path: .build/validation-evidence/upstream/${{ matrix.case }}
-          key: upstream-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/UpstreamTLCParity.swift', 'Sources/UpstreamParity/Conformance/AssumptionValidationEvidence.swift', 'Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Sources/UpstreamParity/Conformance/BinaryGraphEvidence.swift', 'Sources/UpstreamParity/Conformance/CanonicalBinaryState.swift', 'Sources/UpstreamParity/Conformance/CompactTLCGraphEvent.swift', 'Sources/UpstreamParity/Conformance/TLCGraphReader.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift', 'Sources/UpstreamParity/Conformance/TLCTraceParser.swift', 'Sources/SwiftTLA/SpecCompilation.swift', 'Tools/TLCGraphBridge/**/*.java') }}
+          # The input key already hashes rendered TLA/CFG, action names, and pinned TLC/bridge inputs.
+          key: upstream-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/UpstreamTLCParity.swift', 'Sources/UpstreamParity/Conformance/AssumptionValidationEvidence.swift', 'Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Sources/UpstreamParity/Conformance/BinaryGraphEvidence.swift', 'Sources/UpstreamParity/Conformance/CanonicalBinaryState.swift', 'Sources/UpstreamParity/Conformance/CompactTLCGraphEvent.swift', 'Sources/UpstreamParity/Conformance/TLCGraphReader.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift', 'Sources/UpstreamParity/Conformance/TLCTraceParser.swift', 'Tools/TLCGraphBridge/**/*.java') }}
       - name: Compare generated and upstream TLA through TLC
         if: steps.upstream-cache.outputs.cache-hit != 'true'
         timeout-minutes: 120
