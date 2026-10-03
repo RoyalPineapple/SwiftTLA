@@ -17,18 +17,13 @@ extension ParserSession {
         let outerBindings = specBindings
         specBindings = .init()
         defer { specBindings = outerBindings }
-        let collectionTypes = collectModelCollectionTypes(in: closure)
-        sourceScope = collectionTypes.reduce(.empty) { scope, collection in
-            let (name, declaration) = collection
-            return scope.extending(binding: name, to: .variable(declaration.formalName),
-                shape: typedFacadeValueType(declaration.value).map { .dictionary(.unknown, $0) })
-        }
+        sourceScope = .empty
         let declarationScope = closureParameterNames(in: closure).first
         if let declarationScope { sourceScope = sourceScope.extendingCheckingScope(declarationScope) }
         for statement in closure.statements {
             if case .expr(let expression) = statement.item,
                let fc = expression.as(FunctionCallExprSyntax.self) {
-                parseBuilderCall(fc, into: &components, collectionTypes: collectionTypes)
+                parseBuilderCall(fc, into: &components)
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let property = specBindings.properties[reference.baseName.sourceIdentifierName] {
@@ -73,7 +68,7 @@ extension ParserSession {
                 ))
             }
         }
-        components.symmetrySets = symmetryDeclarations.map { $0.resolved(in: components.collections) }
+        components.symmetrySets = symmetryDeclarations.map { $0.resolved() }
         components.extendsModules = canonicalStandardModules(components.extendsModules)
         components.algorithmPhase = components.sourceAlgorithms.isEmpty ? .lowered : .source
         return components
@@ -221,7 +216,7 @@ extension ParserSession {
                 if compilerGrammarName(in: call.calledExpression) == "Refinement" {
                     parseRefinement(call, named: sourceName, into: &parsed)
                 } else {
-                    parseBuilderCall(call, into: &parsed, collectionTypes: [:])
+                    parseBuilderCall(call, into: &parsed)
                 }
                 components.diagnostics.append(contentsOf: parsed.diagnostics)
                 if let property = parsed.invariants.first {
@@ -292,8 +287,6 @@ extension ParserSession {
                 if let algorithm = parseAlgorithm(call, into: &components, boundName: sourceName) {
                     specBindings.algorithms[sourceName] = algorithm
                 }
-            } else if typedFacadeType(call.calledExpression)?.name == "CollectionVar" {
-                continue
             } else if let constructor = resolveVarCall(call, in: declarationScope) {
                 if constructor.name == "SharedVar", declaration.bindingSpecifier.text != "let" {
                     components.diagnostics.append(.init(message: "A state handle must be an immutable named let binding. Use Assign to update its value.", source: binding))
@@ -823,8 +816,7 @@ extension ParserSession {
         _ call: FunctionCallExprSyntax,
         into components: inout TLASpec,
         loopVar: String? = nil,
-        loopValue: Int? = nil,
-        collectionTypes: [String: ModelCollectionSourceTypes] = [:]
+        loopValue: Int? = nil
     ) {
         if parseValidation(call, into: &components) { return }
         if isUnboundPropertyHandle(call) {
@@ -881,10 +873,6 @@ extension ParserSession {
             if let algorithm = parseAlgorithm(call, into: &components) {
                 components.sourceAlgorithms.append(algorithm)
             }
-        case "ModelCollection":
-            parseModelCollectionDecl(call, into: &components, collectionTypes: collectionTypes)
-        case "CollectionAction":
-            parseCollectionAction(call, into: &components, collectionTypes: collectionTypes)
         case "Variable":
             let existingVariable = call.arguments.first.flatMap { parsedVariableName($0.expression) }
             parseVariableDecl(call, into: &components)
@@ -1069,13 +1057,6 @@ extension ParserSession {
         _ call: FunctionCallExprSyntax,
         into components: inout TLASpec
     ) {
-        if call.arguments.count == 1,
-           let source = call.arguments.first?.expression,
-           let reference = source.as(DeclReferenceExprSyntax.self),
-           case .variable(let name) = sourceScope.value(for: reference) {
-            symmetryDeclarations.append(.init(collectionName: name))
-            return
-        }
         guard let variableName = extractStringArg(call, index: 0), !variableName.isEmpty,
               let valuesSyntax = call.arguments.dropFirst().first?.expression,
               let values = parseSymmetryValues(valuesSyntax)

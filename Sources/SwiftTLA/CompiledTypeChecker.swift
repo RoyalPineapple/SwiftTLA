@@ -372,7 +372,7 @@ package struct CompiledTypeChecker: Sendable {
                     try binding.map { try checkOperand($0, expected: .set(bindings[binding.binder] ?? .unknown)) }
                 }
                 actions.append(.init(id: action.id, bindings: actionBindings,
-                    body: try checkAction(action.body), collection: action.collection))
+                    body: try checkAction(action.body)))
             }
             catch let diagnostic as CompilationDiagnostic {
                 let name = inputs.layout.actions.first { $0.id == action.id }?.declaration.name ?? String(action.id.ordinal)
@@ -708,9 +708,7 @@ package struct CompiledTypeChecker: Sendable {
             return .record(try zip(a, b).map { .init(name: $0.name, type: try operandContext($0.type, $1.type)) })
         case (.oneOf, _), (.union, _): return lhs
         case (_, .oneOf), (_, .union): return rhs
-        case (.collectionMember, .collectionMember), (.named, .named): return try CompiledValueType.merge(lhs, rhs)
-        case (.collectionMember, _): return lhs
-        case (_, .collectionMember): return rhs
+        case (.named, .named): return try CompiledValueType.merge(lhs, rhs)
         case (.finite, _): return lhs
         case (_, .finite): return rhs
         case (.named, _): return lhs
@@ -872,12 +870,6 @@ package struct CompiledTypeChecker: Sendable {
         if let alternatives = expected.unionAlternatives {
             let matches = alternatives.filter { (try? literal(value, expected: $0)) != nil }
             guard matches.count == 1 else { throw CompiledValueType.diagnostic("union", "literal must belong to exactly one union alternative") }
-            return expected
-        }
-        if case .collectionMember(let variable, _) = expected {
-            guard inputs.collectionDomains[variable]?.contains(value) == true else {
-                throw CompiledValueType.diagnostic("collectionMember", "literal is outside the declared collection domain")
-            }
             return expected
         }
         if case .finite(let members) = expected {

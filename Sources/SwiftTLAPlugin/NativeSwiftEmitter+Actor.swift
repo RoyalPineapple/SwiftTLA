@@ -4,11 +4,11 @@ import SwiftTLA
 extension NativeSwiftEmitter {
     func actorMembers() -> [DeclSyntax] {
         let typeName = model.typeName
-        let collectionParameters = machineParameters
-        let appendedCollectionParameters = collectionParameters.isEmpty
+        let configurationParameters = machineParameters
+        let appendedConfigurationParameters = configurationParameters.isEmpty
             ? ""
-            : ", \(collectionParameters)"
-        let collectionArguments = machineArguments
+            : ", \(configurationParameters)"
+        let configurationArguments = machineArguments
         let actionMembers = model.api.actions.isEmpty ? "" : """
 
                 public func isEnabled(_ action: Action) throws -> Bool {
@@ -28,12 +28,12 @@ extension NativeSwiftEmitter {
             public actor Actor {
                 private var machine: \(typeName)
 
-                public init(\(collectionParameters)) throws {
-                    machine = try \(typeName).makeMachine(\(collectionArguments))
+                public init(\(configurationParameters)) throws {
+                    machine = try \(typeName).makeMachine(\(configurationArguments))
                 }
 
-                public init(_ initial: State\(appendedCollectionParameters)) throws {
-                    machine = try \(typeName).makeMachine(initial\(collectionArguments.isEmpty ? "" : ", \(collectionArguments)"))
+                public init(_ initial: State\(appendedConfigurationParameters)) throws {
+                    machine = try \(typeName).makeMachine(initial\(configurationArguments.isEmpty ? "" : ", \(configurationArguments)"))
                 }
 
                 public var state: State {

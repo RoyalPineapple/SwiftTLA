@@ -463,44 +463,6 @@ import SwiftTLAMacros
         #expect(try compilation.render().plusCalBundle().root.tla.contains("(*--algorithm _algorithm_1 {"))
     }
 
-    @Test("ModelCollection rejects unused arguments and closures")
-    func rejectsUnconsumedModelCollectionSyntax() throws {
-        let declarations = [
-            "ModelCollection(devices, verificationScope: 2, initial: 0, ignored: 1)",
-            "ModelCollection(devices, verificationScope: 2, verificationScope: 3, initial: 0)",
-            "ModelCollection(devices, verificationScope: 2, initial: 0, initial: 1)",
-            "ModelCollection(collection: devices, verificationScope: 2, initial: 0)",
-            "ModelCollection(devices, initial: 0, verificationScope: 2)",
-            "ModelCollection(devices, verificationScope: 2, initial: 0) { 1 }",
-            "ModelCollection(devices, verificationScope: 2, initial: 0) { 1 } otherwise: { 2 }"
-        ]
-        for declaration in declarations {
-            let closure = try parseSpecTestClosure("""
-            {
-                let devices = CollectionVar<Device, Int>("devices")
-                ModelCollection(devices, verificationScope: 2, initial: 0)
-                \(declaration)
-            }
-            """)
-            let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
-            #expect(parsed.collections.count == 1)
-            #expect(parsed.variables.count == 1)
-            #expect(parsed.diagnostics.count == 1, "\(declaration): \(parsed.diagnostics)")
-        }
-    }
-
-    @Test("CollectionAction reports an incomplete declaration")
-    func reportsIncompleteCollectionAction() throws {
-        let parsed = SpecParser.parseSpecClosure(named: "Parsed",
-            try parseSpecTestClosure("{ CollectionAction(\"update\") }")
-        )
-
-        #expect(parsed.actions.isEmpty)
-        #expect(parsed.diagnostics.map(\.message) == [
-            "CollectionAction requires a literal name, a declared collection binding, and a builder body."
-        ])
-    }
-
     @Test("Variable reports an unsupported initializer")
     func reportsUnsupportedVariableInitializer() throws {
         let parsed = SpecParser.parseSpecClosure(named: "Parsed",

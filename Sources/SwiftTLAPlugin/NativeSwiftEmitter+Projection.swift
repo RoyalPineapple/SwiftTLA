@@ -50,19 +50,6 @@ extension NativeSwiftEmitter {
             return switching(try (type.unionAlternatives ?? []).enumerated().map {
                 "case .\(unionCase(type, index: $0.offset))(let payload): return \(try formalValue("payload", type: $0.element))"
             })
-        case .collectionMember(let variable, _):
-            guard let collection = model.api.variables.first(where: { $0.id == variable })?.collection else {
-                throw unsupported("unresolved formal collection")
-            }
-            let members = try collection.members.map(formalLiteral).joined(separator: ", ")
-            return """
-            try { () throws -> TLAValue in
-                guard let index = \(collection.membersIdentifier).firstIndex(of: \(value)) else {
-                    throw TLAStateProjectionDiagnostic.invalidValue(path: \(String(reflecting: collection.swiftIdentifier)))
-                }
-                return [TLAValue]([\(members)])[index]
-            }()
-            """
         case .set(let element):
             return "TLAValue.set(try Set(\(value).map { (element) throws -> TLAValue in \(try formalValue("element", type: element)) }))"
         case .array(let element):

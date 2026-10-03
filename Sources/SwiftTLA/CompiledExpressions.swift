@@ -361,13 +361,12 @@ package struct CompiledAction: Sendable {
     package let id: ActionID
     package let bindings: [CompiledActionBinding]
     package let body: CompiledActionExpr
-    package let collection: VariableID?
 
     package func map(
         _ transform: (CompiledExpression) throws -> CompiledExpression
     ) rethrows -> CompiledAction {
         .init(id: id, bindings: try bindings.map { try $0.map(transform) },
-            body: try body.map(transform), collection: collection)
+            body: try body.map(transform))
     }
 }
 

@@ -1074,9 +1074,8 @@ reject `Each(activeDevices)` when `activeDevices` is mutable model state, and
 configuration construction must reject a member type whose distinct Swift IDs
 collapse to the same formal value. No parallel `CollectionVar` schema, opaque
 generated member constants, or fixed verification-scope declaration remains in
-the completed authoring API. Existing `ModelCollection` callers and fixtures
-must be migrated and that API deleted; the current implementation has not yet
-done this.
+the authoring API. The legacy `ModelCollection` callers, fixtures, and API have
+been removed locally; hosted parity on the cutover revision remains required.
 
 Generated scenarios support empty, singleton, and multi-member populations, including explicit weak and strong fairness.
 Independent validation remains required for every upstream configuration. Collection composition remains open.
@@ -1114,7 +1113,7 @@ values, not opaque closures that backends evaluate differently. State, parameter
 and operator dependencies in scenario bindings currently produce explicit diagnostics.
 Parameter-dependent process populations use the configured `Each` contract.
 Fixed `ModelCollection` replacement follows the member-ID parameter contract
-above; legacy callers remain to be migrated before that API can be deleted.
+above; the legacy API has been deleted locally and awaits hosted parity.
 
 Registered refinements have model-owned property handles and participate in every scenario by default.
 A `let` binding alone does not register a refinement. Its handle must also appear as a specification builder expression.

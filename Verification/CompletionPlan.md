@@ -141,8 +141,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       A separate external `#spec` consumer confirms that `Each` rejects a
       mutable state-backed population at lowering; its focused test passed
       locally.
-      Migrating all `ModelCollection` callers, deleting that API, and proving
-      complete hosted parity remain open.
+      The local cutover removed all `ModelCollection`, `CollectionVar`, and
+      `CollectionAction` callers and implementation paths. Focused typed
+      consumer, symmetry graph/export, and generated `Sendable` checks pass.
+      Hosted parity and the full DSL acceptance audit remain open.
 - [x] Settle B-02 identity for `Algorithm` and `Validation`: each requires an
       immutable `let` binding, registered by reference; a display label never
       supplies identity. The parser and `#spec` rewrite support this form.

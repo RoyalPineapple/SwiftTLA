@@ -1,36 +1,15 @@
 public struct SymmetrySetDecl: SpecComponent, Sendable {
-  enum Domain: Sendable {
-    case values(Set<TLAValue>)
-    case collection
-  }
-
   public let variableName: String
-  let domain: Domain
+  let values: Set<TLAValue>
 
   package init(_ variableName: String, _ values: Set<TLAValue>) {
     self.variableName = variableName
-    domain = .values(values)
+    self.values = values
   }
 
-  package init(collectionName: String) {
-    variableName = collectionName
-    domain = .collection
-  }
-
-  package func resolved(in collections: [ModelCollectionDecl]) -> SymmetrySet {
-    let values: Set<TLAValue>
-    switch domain {
-    case .values(let members): values = members
-    case .collection:
-      values = Set(collections.first { $0.name == variableName }?.metadata.members ?? [])
-    }
+  package func resolved() -> SymmetrySet {
     return SymmetrySet(variableName: variableName, values: values)
   }
-}
-
-/// Declares that consistently renaming these members preserves the model and its checked properties.
-public func Symmetry<Element, Value>(_ collection: CollectionVar<Element, Value>) -> SymmetrySetDecl {
-  SymmetrySetDecl(collectionName: collection.name)
 }
 
 public func Symmetry(_ variableName: String, _ values: Set<some TLAValueConvertible>) -> SymmetrySetDecl {
@@ -56,7 +35,6 @@ extension TLASpec {
 
   func validateSymmetryDeclarations() throws {
     var renderedSymbols = renderedDeclarationNames()
-    renderedSymbols.formUnion(collections.flatMap(\.metadata.generatedSymbols))
 
     var names = Set<String>()
     var domainOwner: [TLAValue: String] = [:]

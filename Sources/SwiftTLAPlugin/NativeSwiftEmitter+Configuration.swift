@@ -3,20 +3,15 @@ import SwiftTLA
 
 extension NativeSwiftEmitter {
     var machineParameters: String {
-        ((program.layout.parameters.isEmpty ? [] : ["configuration: Configuration"])
-            + model.api.collections.map { "\($0.swiftIdentifier) \($0.membersIdentifier): [\($0.elementType).ID]" })
-            .joined(separator: ", ")
+        program.layout.parameters.isEmpty ? "" : "configuration: Configuration"
     }
 
     var machineArguments: String {
-        ((program.layout.parameters.isEmpty ? [] : ["configuration: configuration"])
-            + model.api.collections.map { "\($0.swiftIdentifier): \($0.membersIdentifier)" })
-            .joined(separator: ", ")
+        program.layout.parameters.isEmpty ? "" : "configuration: configuration"
     }
 
     var machineCaptures: [String] {
-        (program.layout.parameters.isEmpty ? [] : ["configuration"])
-            + model.api.collections.map(\.membersIdentifier)
+        program.layout.parameters.isEmpty ? [] : ["configuration"]
     }
 
     mutating func configurationDeclarations(includeStoredConfiguration: Bool = true) throws -> [DeclSyntax] {

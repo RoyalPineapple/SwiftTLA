@@ -19,7 +19,7 @@ struct TemporalConjunctionCompilationTests {
         let property = try #require(program.behavior.temporalProperties.first)
         #expect(property.expression.predicates.count == 2)
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "Recurring", program: program))
-        let generated = try emitter.propertyDeclarations(collectionParameters: "").map(\.description).joined(separator: "\n")
+        let generated = try emitter.propertyDeclarations(configurationParameters: "").map(\.description).joined(separator: "\n")
         #expect(generated.contains(".all([.alwaysEventually("))
         #expect(generated.contains("_temporal0_0"))
         #expect(generated.contains("_temporal0_1"))
@@ -34,7 +34,7 @@ struct TemporalConjunctionCompilationTests {
         #expect(try compilation.render().tlaBundle.tla.contains("Empty == TRUE"))
         let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: compilation))
         var emitter = NativeSwiftEmitter(model: try MacroCompilation(typeName: "Empty", program: program))
-        let generated = try emitter.propertyDeclarations(collectionParameters: "").map(\.description).joined(separator: "\n")
+        let generated = try emitter.propertyDeclarations(configurationParameters: "").map(\.description).joined(separator: "\n")
         #expect(generated.contains(".all([])"))
         #expect(!generated.contains("private static func _temporal"))
     }

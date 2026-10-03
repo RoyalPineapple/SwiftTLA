@@ -16,7 +16,6 @@ package indirect enum CompiledValueType: Hashable, Sendable {
     case finite([CompiledValue])
     case union([CompiledValueType])
     case oneOf(CompiledValueType, CompiledValueType)
-    case collectionMember(VariableID, swiftType: String)
     case set(CompiledValueType)
     case array(CompiledValueType)
     case dictionary(CompiledValueType, CompiledValueType)
@@ -92,7 +91,6 @@ package indirect enum CompiledValueType: Hashable, Sendable {
         case .finite: "FiniteValue"
         case .union: "UnionValue"
         case .oneOf(let first, let second): "OneOf<\(first.swiftType), \(second.swiftType)>"
-        case .collectionMember(_, let name): name
         case .set(let element): "Set<\(element.swiftType)>"
         case .array(let element): "[\(element.swiftType)]"
         case .dictionary(let key, let value): "[\(key.swiftType): \(value.swiftType)]"

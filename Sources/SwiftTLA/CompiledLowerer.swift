@@ -88,7 +88,6 @@ struct CompiledLowerer {
         self.incomingModuleParameters = incomingModuleParameters
         authoredAlgorithm = spec.sourceAlgorithms.first?.model
         var renderedNames = spec.renderedDeclarationNames()
-        renderedNames.formUnion(spec.collections.flatMap(\.metadata.generatedSymbols))
         renderedNames.formUnion(spec.symmetrySets.map { "Symm\($0.variableName)" })
         renderedNames.formUnion(incomingModuleParameters.map(\.operatorName))
         reservedRenderedNames = renderedNames
@@ -177,8 +176,7 @@ struct CompiledLowerer {
         var initializations: [VariableID: CompiledVariableInitialization] = [:]
         for (declaration, variableLayout) in zip(spec.variables, layout.variables) {
             let path = "variables.\(declaration.name)"
-            if case .value(let value) = declaration.initialization,
-               spec.collections.contains(where: { $0.name == declaration.name }) == false {
+            if case .value(let value) = declaration.initialization {
                 try validateValue(value, at: "\(path).initialization")
             }
             initializations[variableLayout.id] = try lower(
@@ -1049,32 +1047,10 @@ struct CompiledLowerer {
         var scope = rootScope
         let bindings = try lowerBindings(action.bindings, at: "actions.\(action.name)", scope: &scope)
         let body = try lower(action.body, at: "actions.\(action.name).body", scope: scope)
-        if bindings.isEmpty,
-           case .existsAction(let sourceMember, _, _) = action.body,
-           case .existsAction(let member, let domain, let memberBody) = body,
-           case .domain = domain.operation,
-           case .stateVariable(let variable) = domain.children[0].operation,
-           layout.variables.indices.contains(variable.ordinal),
-           let collection = layout.variables[variable.ordinal].collection {
-            return CompiledAction(
-                id: id,
-                bindings: [CompiledActionBinding(
-                    binder: member,
-                    sourceName: sourceMember,
-                    domain: .init(operation: .setLiteral, children: collection.members.map {
-                        .init(operation: .value($0), children: [])
-                    }),
-                    generatedSwiftType: collection.elementType.map { "\($0).ID" }
-                )],
-                body: memberBody,
-                collection: variable
-            )
-        }
         return CompiledAction(
             id: id,
             bindings: bindings,
-            body: body,
-            collection: nil
+            body: body
         )
     }
 

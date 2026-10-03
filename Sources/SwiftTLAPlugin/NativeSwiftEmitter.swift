@@ -96,7 +96,6 @@ struct NativeSwiftEmitter {
         case .named(let name): return name
         case .oneOf(let first, let second): return "OneOf<\(try swiftType(first)), \(try swiftType(second))>"
         case .nominalRecord(let name, _): return name
-        case .collectionMember(_, let name): return name
         case .finite, .union, .record, .tuple:
             guard let name = typeDeclarations.names[type] else {
                 throw unsupported("missing resolved type declaration")
@@ -163,13 +162,6 @@ struct NativeSwiftEmitter {
                 }
             }
             throw unsupported("literal outside union")
-        }
-        if case .collectionMember(let variable, _) = type {
-            guard let collection = model.api.variables.first(where: { $0.id == variable })?.collection,
-                  let index = collection.members.firstIndex(of: value) else {
-                throw unsupported("literal outside collection domain")
-            }
-            return "\(collection.membersIdentifier)[\(index)]"
         }
         if case .finite(let members) = type {
             guard let index = members.firstIndex(of: value) else { throw unsupported("literal outside finite union") }
@@ -292,13 +284,6 @@ struct NativeSwiftEmitter {
                 let cases = members.enumerated().map { "case .`\($0.element.name)`: return \($0.offset)" }.joined(separator: "\n")
                 body = "func rank(_ value: \(name)) -> Int { switch value { \(cases) } }; return rank(lhs) < rank(rhs)"
             } else { throw unsupported("ordering opaque type \(name)") }
-        case .collectionMember(let variable, _):
-            guard let collection = model.api.variables.first(where: { $0.id == variable })?.collection else {
-                throw unsupported("collection ordering domain")
-            }
-            let indices = collection.members.indices.sorted { collection.members[$0] < collection.members[$1] }
-            let members = indices.map { "\(collection.membersIdentifier)[\($0)]" }.joined(separator: ", ")
-            body = "let ordered = [\(members)]; return (ordered.firstIndex(of: lhs) ?? Int.max) < (ordered.firstIndex(of: rhs) ?? Int.max)"
         case .array(let element):
             body = "return lhs.lexicographicallyPrecedes(rhs, by: \(try ordering(element)))"
         case .set(let element):

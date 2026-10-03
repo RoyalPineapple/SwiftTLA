@@ -23,7 +23,6 @@ package final class CompiledTypeInputs: Sendable {
     package let variableTypes: [VariableID: CompiledValueType]
     package let checkingRegisterTypes: [CheckingRegisterID: CompiledValueType]
     package let bindingTypes: [BinderID: CompiledValueType]
-    package let collectionDomains: [VariableID: Set<CompiledValue>]
     package let types: CompiledTypeContext
 
     package init(
@@ -51,32 +50,17 @@ package final class CompiledTypeInputs: Sendable {
             ($0.id, try resolveSourceType($0.swiftType))
         })
 
-        var variableTypes: [VariableID: CompiledValueType] = [:]
-        var collectionDomains: [VariableID: Set<CompiledValue>] = [:]
-        for variable in layout.variables {
-            if let collection = variable.collection, let element = collection.elementType, let value = collection.valueType {
-                collectionDomains[variable.id] = Set(collection.members)
-                variableTypes[variable.id] = .dictionary(
-                    .collectionMember(variable.id, swiftType: "\(element).ID"), try resolveSourceType(value))
-            } else {
-                variableTypes[variable.id] = try variable.resolvedValueType
-                    ?? variable.generatedSwiftType.map(resolveSourceType) ?? .unknown
-            }
-        }
-        self.variableTypes = variableTypes
-        self.collectionDomains = collectionDomains
+        variableTypes = try Dictionary(uniqueKeysWithValues: layout.variables.map { variable in
+            (variable.id, try variable.resolvedValueType
+                ?? variable.generatedSwiftType.map(resolveSourceType) ?? .unknown)
+        })
         var bindingTypes: [BinderID: CompiledValueType] = [:]
         for parameter in layout.parameters {
             bindingTypes[parameter.binder] = try resolveSourceType(parameter.swiftType)
         }
         for action in semantics.behavior.actions {
             for binding in action.bindings {
-                if let variable = action.collection,
-                   case .dictionary(let memberType, _)? = variableTypes[variable] {
-                    bindingTypes[binding.binder] = memberType
-                } else {
-                    bindingTypes[binding.binder] = try binding.generatedSwiftType.map(resolveSourceType) ?? .unknown
-                }
+                bindingTypes[binding.binder] = try binding.generatedSwiftType.map(resolveSourceType) ?? .unknown
             }
         }
         for property in semantics.behavior.temporalProperties {

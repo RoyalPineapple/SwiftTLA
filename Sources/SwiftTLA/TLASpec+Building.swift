@@ -27,9 +27,6 @@ extension TLASpec {
             name: v.name, initialization: v.initialization, collectionType: v.collectionType,
             displayLabel: v.displayLabel,
             generatedSwiftType: v.generatedSwiftType, origin: .source))
-      } else if let s = comp as? ModelCollectionDecl {
-        variables.append(s.variable)
-        collections.append(s)
       } else if let a = comp as? ActionDecl {
         actions.append(NamedAction(
           name: a.name,
@@ -77,7 +74,7 @@ extension TLASpec {
     }
 
     let symmetrySets = components.compactMap { $0 as? SymmetrySetDecl }
-      .map { $0.resolved(in: collections) }
+      .map { $0.resolved() }
 
     self.symmetrySets = symmetrySets
     self.extendsModules = canonicalStandardModules(extendsModules)
@@ -183,7 +180,6 @@ extension TLASpec {
       moduleInstances: moduleInstances,
       refinements: refinements,
       symmetrySets: symmetrySets,
-      collections: collections,
       sourceAlgorithms: sourceAlgorithms
     )
     lowered.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan

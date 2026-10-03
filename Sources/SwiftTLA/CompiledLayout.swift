@@ -82,13 +82,6 @@ package struct CompiledVariableLayout: Hashable, Sendable {
     package let displayLabel: String?
     package let generatedSwiftType: String?
     package let resolvedValueType: CompiledValueType?
-    package let collection: CompiledModelCollectionLayout?
-}
-
-package struct CompiledModelCollectionLayout: Hashable, Sendable {
-    package let members: [CompiledValue]
-    package let elementType: String?
-    package let valueType: String?
 }
 
 package struct CompiledActionLayout: Hashable, Sendable {
@@ -210,7 +203,6 @@ package struct CompiledLayout: Hashable, Sendable {
                 swiftType: $0.element.swiftType)
         }
         variables = spec.variables.enumerated().map { ordinal, variable in
-            let collection = spec.collections.first { $0.name == variable.name }
             return CompiledVariableLayout(
                 id: VariableID(ordinal: ordinal),
                 declaration: .init(
@@ -221,14 +213,7 @@ package struct CompiledLayout: Hashable, Sendable {
                 ),
                 displayLabel: variable.displayLabel,
                 generatedSwiftType: variable.generatedSwiftType,
-                resolvedValueType: variable.resolvedValueType,
-                collection: collection.map {
-                    .init(
-                        members: $0.metadata.members.map(CompiledValue.init(formal:)),
-                        elementType: $0.generatedElementType,
-                        valueType: $0.generatedValueType
-                    )
-                }
+                resolvedValueType: variable.resolvedValueType
             )
         }
         let controlLocations = Self.controlLocations(

@@ -299,7 +299,6 @@ public struct TLASpec: Sendable {
   package var moduleInstances: [FormalModuleInstance]
   package var refinements: [RefinementDecl]
   package var symmetrySets: [SymmetrySet]
-  package var collections: [ModelCollectionDecl]
   /// The authored Algorithm declaration that supplies the compiled PlusCal plan.
   package var sourceAlgorithms: [Algorithm]
   package var sourceAtomicSteps: [AtomicStep] = []
@@ -318,7 +317,6 @@ public struct TLASpec: Sendable {
     formalOperatorDefinitions: [FormalOperatorDefinition] = [], imports: [TLASpec] = [],
     importConfigurations: [FormalModuleConfiguration] = [],
     moduleInstances: [FormalModuleInstance] = [], refinements: [RefinementDecl] = [], symmetrySets: [SymmetrySet] = [],
-    collections: [ModelCollectionDecl] = [],
     sourceAlgorithms: [Algorithm] = []
   ) {
     self.name = name
@@ -341,7 +339,6 @@ public struct TLASpec: Sendable {
     self.moduleInstances = moduleInstances
     self.refinements = refinements
     self.symmetrySets = symmetrySets
-    self.collections = collections
     self.sourceAlgorithms = sourceAlgorithms
     self.authoredPlusCalAlgorithmPlan = nil
     self.algorithmPhase = sourceAlgorithms.isEmpty ? .lowered : .source
@@ -719,7 +716,6 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
-  public static func buildExpression(_ expr: ModelCollectionDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: Algorithm) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: AtomicStep) -> [SpecComponent] { [expr] }
   public static func buildExpression<T: TLAValueType>(_ expr: Var<T>) -> [SpecComponent] {

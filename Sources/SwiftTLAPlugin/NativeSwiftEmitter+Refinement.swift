@@ -4,7 +4,7 @@ import SwiftTLA
 extension NativeSwiftEmitter {
     func supportsNativeRefinement(_ refinement: CompiledRefinementProgram) -> Bool {
         let abstract = refinement.abstract
-        return abstract.layout.variables.allSatisfy { $0.declaration.origin == .source && $0.collection == nil }
+        return abstract.layout.variables.allSatisfy { $0.declaration.origin == .source }
             && abstract.layout.parameters.allSatisfy { parameter in
                 program.layout.parameters.contains { concrete in
                     concrete.reference == parameter.reference

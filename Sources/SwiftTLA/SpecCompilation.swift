@@ -193,7 +193,6 @@ struct CompiledModuleMetadata: Sendable {
     var modelValueNames: Set<String>
     let extendsModules: [StandardModule]
     var imports: [String]
-    let collections: [(domainSymbol: String, members: [TLAValue])]
     let symmetrySets: [SymmetrySet]
     let formalDefinitionCount: Int
     let recursiveFunctionCount: Int
@@ -205,14 +204,12 @@ struct CompiledModuleMetadata: Sendable {
     }
 
     init(source: TLASpec, modelValueNames: Set<String>) {
-        self.modelValueNames = modelValueNames.union(CompiledValue.modelValueNames(
-            in: source.collections.flatMap(\.metadata.members).map(CompiledValue.init(formal:))))
+        self.modelValueNames = modelValueNames
         name = source.name
         constants = source.constants
         formalParameters = source.formalParameters
         extendsModules = source.extendsModules
         imports = source.imports.map(\.name)
-        collections = source.collections.map { ($0.metadata.domainSymbol, $0.metadata.members) }
         symmetrySets = source.symmetrySets
         formalDefinitionCount = source.formalOperatorDefinitions.count
         recursiveFunctionCount = source.recursiveFuncs.count
@@ -600,7 +597,6 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case cyclicActionEnabledness
         case cyclicVariableInitialization
         case stateDependentAssumption
-        case invalidCollectionMember
         case emptySpecificationName
         case invalidSpecificationName
         case duplicateVariable
@@ -608,7 +604,6 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case duplicateInvariant
         case duplicateAlgorithm
         case invalidAuthoredPlusCalPlan
-        case invalidModelCollection
         case invalidSymmetryDeclaration
         case unsupportedSymmetryReduction
         case duplicateRecordField
@@ -722,9 +717,8 @@ private extension TLASpec {
             }
         }
 
-        let collectionNames = Set(collections.map(\.name))
         let declarationGroups: [([String], String, String)] = [
-            (variables.filter { collectionNames.contains($0.name) == false }.map(\.name), "variable", "variables"),
+            (variables.map(\.name), "variable", "variables"),
             (constants.map(\.name), "constant", "constants"),
             (invariants.map(\.name), "invariant", "invariants"),
             (reachabilityProperties.map(\.name), "reachability property", "reachabilityProperties"),
@@ -852,7 +846,6 @@ public extension TLASpec {
         try validateUnique(invariants.map(\.name), code: .duplicateInvariant, path: "invariants")
         try validateUnique((invariants + reachabilityProperties).map(\.name) + temporalProperties.map(\.name),
             code: .duplicateInvariant, path: "properties")
-        try validateModelCollectionDeclarations()
         try validateSymmetryDeclarations()
         try validateRefinements()
         let definitionOrder = try orderedDirectDefinitions()
@@ -878,20 +871,6 @@ public extension TLASpec {
             requiredStandardModules: lowerer.requiredStandardModules,
             definitionsBeforeInstances: definitionOrder.beforeInstances,
             definitionsAfterInstances: definitionOrder.afterInstances
-        )
-    }
-
-    private func validateModelCollectionDeclarations() throws {
-        guard let error = collectionValidationError() else {
-            return
-        }
-        throw CompilationDiagnostic(
-            code: .invalidModelCollection,
-            stage: .validation,
-            path: "collections",
-            expected: "a valid model collection declaration",
-            actual: error.description,
-            nextSafeAction: "Correct the model collection declaration, then compile again."
         )
     }
 
@@ -1396,14 +1375,6 @@ private struct CanonicalSpecificationEncoder {
             node("symmetry-set", [set.variableName, canonicalList(set.values.map(canonicalValue).sorted())])
         }
         list("symmetrySets", symmetrySets) { $0 }
-        let collections = spec.collections.map {
-            node("model-collection", [
-                $0.name,
-                String($0.verificationScope),
-                canonicalValue($0.initial)
-            ])
-        }
-        list("collections", collections) { $0 }
     }
 
     private func canonicalVariable(_ variable: NamedVar) -> String {
@@ -1548,10 +1519,7 @@ extension CompiledProgram {
             layout: layout, bindings: .init(binders: binderNames), operators: .init(),
             actions: behavior.actions, functions: functions)
         let constants = metadata.constants.sorted { $0.name < $1.name }.map { "ASSUME \($0.name) = \($0.value)" }
-        let collections = metadata.collections.map {
-            "\($0.domainSymbol) == {\($0.members.map(\.description).joined(separator: ", "))}"
-        }
-        let prelude = try constants + collections + renderer.resolvedFunctionDefinitions()
+        let prelude = try constants + renderer.resolvedFunctionDefinitions()
             + formalModuleReplacements.map(renderer.formalModuleReplacement) + renderer.assumptions(behavior)
         let module = try metadata.authoredPlusCalModule(algorithm: authoredAlgorithm,
             layout: layout, declarations: declarations,
@@ -1898,14 +1866,11 @@ private extension CompiledModuleMetadata {
             lines.append("")
         }
 
-        for collection in collections {
-            lines.append("\(collection.domainSymbol) == {\(collection.members.map(\.description).joined(separator: ", "))}")
-        }
         for symmetry in symmetrySets {
             let values = Array(symmetry.values).sorted()
             lines.append("Symm\(symmetry.variableName) == Permutations({\(values.map(\.description).joined(separator: ", "))})")
         }
-        if !collections.isEmpty || !symmetrySets.isEmpty { lines.append("") }
+        if !symmetrySets.isEmpty { lines.append("") }
 
         if !isLibraryModule || !formalVariableSymbols.isEmpty {
             lines.append("VARIABLES \((varNames + formalVariableSymbols).joined(separator: ", "))")

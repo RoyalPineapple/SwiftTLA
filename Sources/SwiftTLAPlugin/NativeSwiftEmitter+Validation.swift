@@ -29,9 +29,6 @@ extension NativeSwiftEmitter {
 
     mutating func validationDeclarations() throws -> [DeclSyntax] {
         guard !program.behavior.validationScenarios.isEmpty else { return [] }
-        guard model.api.collections.isEmpty else {
-            throw unsupported("validation scenarios require explicit collection bindings")
-        }
         let properties = program.layout.properties
         let identifiers = properties.map { propertyCases[$0.id]! }
         let hasConfiguration = !program.layout.parameters.isEmpty

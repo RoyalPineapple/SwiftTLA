@@ -17,7 +17,6 @@ func nativeTypeKey(_ type: CompiledValueType) -> String {
     case .finite(let values): return typeKeyNode("finite", values.map(typeValueKey))
     case .union(let types): return typeKeyNode("union", types.map(nativeTypeKey))
     case .oneOf(let first, let second): return typeKeyNode("oneOf", [nativeTypeKey(first), nativeTypeKey(second)])
-    case .collectionMember(let id, let name): return typeKeyNode("member", [String(id.ordinal), name])
     case .set(let element): return typeKeyNode("set", [nativeTypeKey(element)])
     case .array(let element): return typeKeyNode("array", [nativeTypeKey(element)])
     case .dictionary(let key, let value): return typeKeyNode("dictionary", [nativeTypeKey(key), nativeTypeKey(value)])

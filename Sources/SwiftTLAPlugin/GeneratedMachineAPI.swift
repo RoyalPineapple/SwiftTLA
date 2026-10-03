@@ -3,22 +3,15 @@ import Foundation
 import SwiftParser
 import SwiftSyntax
 
-/// Swift names, parameters, and collections exposed by the generated machine.
+/// Swift names and parameters exposed by the generated machine.
 package struct GeneratedMachineAPI: Sendable, Equatable {
     package struct Variable: Sendable, Equatable {
         package let swiftIdentifier: String
         package var argumentLabel: String { swiftIdentifier.replacingOccurrences(of: "`", with: "") }
         package let id: VariableID
-        package let collection: Collection?
-
-        init(
-            formalName: String,
-            id: VariableID,
-            collection: Collection?
-        ) throws {
-            self.swiftIdentifier = try collection?.swiftIdentifier ?? GeneratedMachineAPI.sourceIdentifier(formalName)
+        init(formalName: String, id: VariableID) throws {
+            self.swiftIdentifier = try GeneratedMachineAPI.sourceIdentifier(formalName)
             self.id = id
-            self.collection = collection
         }
     }
 
@@ -36,69 +29,18 @@ package struct GeneratedMachineAPI: Sendable, Equatable {
         package let compiledAction: ActionID
         package let swiftIdentifier: String
         package let bindings: [Binding]
-        package let collection: Collection?
-    }
-
-    package struct Collection: Sendable, Equatable {
-        package let membersIdentifier: String
-        package let formalName: String
-        package let swiftIdentifier: String
-        package let members: [CompiledValue]
-        package let elementType: String
-
-        init(
-            variableID: VariableID,
-            formalName: String,
-            members: [CompiledValue],
-            elementType: String
-        ) throws {
-            self.formalName = formalName
-            self.swiftIdentifier = try GeneratedMachineAPI.sourceIdentifier(formalName)
-            self.membersIdentifier = "_members\(variableID.ordinal)"
-            self.members = members
-            self.elementType = elementType
-        }
     }
 
     package let variables: [Variable]
     package let actions: [Action]
-    package let collections: [Collection]
 
     init(layout: CompiledLayout, actions: [CompiledAction]) throws {
-        let collectionsByVariableID: [VariableID: Collection] = try Dictionary(
-            uniqueKeysWithValues: layout.variables.compactMap { variable in
-                guard let declaration = variable.collection else { return nil }
-                guard let elementType = declaration.elementType,
-                      declaration.valueType != nil
-                else {
-                    throw CompilationDiagnostic(
-                        code: .unsupportedGeneratedValueShape,
-                        stage: .validation,
-                        path: "variables.\(variable.declaration.name)",
-                        expected: "declared Swift element and value types for the generated API",
-                        actual: "no Swift API types",
-                        nextSafeAction: "Declare the collection through typed Swift source, then compile again."
-                    )
-                }
-                return (
-                    variable.id,
-                    try Collection(
-                        variableID: variable.id,
-                        formalName: variable.declaration.name,
-                        members: declaration.members,
-                        elementType: elementType
-                    )
-                )
-            }
-        )
         let variables = try layout.variables.filter {
             $0.declaration.origin == .source
         }.map { variable in
-            let collection = collectionsByVariableID[variable.id]
             return try Variable(
                 formalName: variable.declaration.name,
-                id: variable.id,
-                collection: collection
+                id: variable.id
             )
         }
         let actionIdentifiers = Self.generatedIdentifiers(layout.actions.map(\.declaration.name), fallback: "action")
@@ -107,43 +49,19 @@ package struct GeneratedMachineAPI: Sendable, Equatable {
             guard let action = compiledActions[layoutAction.id] else {
                 throw Self.missingDeclaration("action", named: layoutAction.declaration.name)
             }
-            let collection = action.collection.flatMap {
-                collectionsByVariableID[$0]
-            }
-            if action.collection != nil, collection == nil {
-                throw Self.missingDeclaration(
-                    "model collection",
-                    named: layoutAction.declaration.name
-                )
-            }
-            if let collection {
-                guard action.bindings.count == 1,
-                      action.bindings[0].literalMembers == collection.members else {
-                    throw CompilationDiagnostic(
-                        code: .compilationIdentityMismatch,
-                        stage: .lowering,
-                        path: "machineSurfacePlan.actions.\(layoutAction.declaration.name)",
-                        expected: "one compiled member binding for model collection '\(collection.formalName)'",
-                        actual: "\(action.bindings.count) binding(s) with domains \(action.bindings.map { $0.domain.operation.diagnosticName })",
-                        nextSafeAction: "Compile the collection action from its declared model collection."
-                    )
-                }
-            }
             return Action(
                 compiledAction: layoutAction.id,
                 swiftIdentifier: identifier,
                 bindings: try action.bindings.map { binding in
                     try Binding(
-                        formalName: collection == nil ? binding.sourceName : "member",
+                        formalName: binding.sourceName,
                         isPublic: binding.literalMembers?.count != 1
                     )
-                },
-                collection: collection
+                }
             )
         }
 
         self.variables = variables
-        self.collections = variables.compactMap(\.collection)
         self.actions = actions
     }
 
