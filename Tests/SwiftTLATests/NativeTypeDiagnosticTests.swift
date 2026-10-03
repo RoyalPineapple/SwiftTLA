@@ -555,10 +555,10 @@ import Testing
         }
     }
 
-    @Test("Collection action parameters require complete element types before resolution")
-    func collectionActionParameterRequiresElementType() throws {
+    @Test("Empty-set action parameters require complete element types before resolution")
+    func emptySetActionParameterRequiresElementType() throws {
         func specification(type: String?) -> TLASpec {
-            TLASpec(name: "CollectionActionParameter", variables: [], actions: [
+            TLASpec(name: "EmptySetActionParameter", variables: [], actions: [
                 .init(name: "choose", body: .guard_(.value(.bool(true))), bindings: [
                     .init(name: "choice", values: [.set([])], generatedSwiftType: type)
                 ])
