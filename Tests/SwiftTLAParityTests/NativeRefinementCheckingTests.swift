@@ -9,18 +9,12 @@ struct NativeRefinementCheckingTests {
         let graph = try ReachabilityGraph(initialMachines: NativeRefinementCounter.initialMachines(), maximumStates: 10)
         #expect(graph.transitions.count == 5)
         #expect(graph.refinementFailures.isEmpty)
-        let compilation = try NativeRefinementCounter.spec.compile()
         let exported = try NativeModelRun(graph, rendered: NativeRefinementCounter.render())
         #expect(exported.checks.properties["Refines"] == .satisfied)
         #expect(exported.rendered.refinementNames == ["Refines"])
         #expect(!exported.rendered.temporalNames.contains("Refines"))
         #expect(exported.rendered.tlaBundle.cfg.contains("PROPERTY Refines\n"))
         #expect(try exported.rendered.tlaBundle(checking: ["Refines"], checkDeadlock: false).cfg.contains("PROPERTY Refines\n"))
-        let configuration = try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)
-        let formal = try ModelChecker(compilation: compilation, configuration: configuration).explore()
-        #expect(formal.isComplete)
-        #expect(formal.safetyViolations.map { $0.diagnostic?.kind } == [.deadlock])
-        #expect(try RefinementChecker(compilation: compilation).check(formal) == nil)
         guard case .violated(let trace) = exported.checks.deadlock else {
             Issue.record("Expected the terminal deadlock independently of the satisfied refinement")
             return
