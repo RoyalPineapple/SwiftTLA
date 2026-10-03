@@ -133,14 +133,18 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
-    @Test("A parameter type error points to its declaration")
-    func parameterTypeErrorPointsToDeclaration() throws {
-        let source = Parser.parse(source: """
+    @Test("Parameter and checking-register type errors point to their declarations")
+    func typedInputErrorsPointToDeclarations() throws {
+        for (input, name, path) in [
+            ("let enabled = scope.parameter(as: Bool.self, in: Set<Int>([1]))", "enabled", "parameters.enabled"),
+            ("let freeze = scope.checkingRegister(as: Int.self, initial: false)", "freeze", "checkingRegisters.freeze")
+        ] {
+            let source = Parser.parse(source: """
         struct InvalidModel {
             enum Step: String, CaseIterable, FiniteTLAValueDomain { case advance }
             static var spec: TLASpec {
                 #spec { scope in
-                    let enabled = scope.parameter(as: Bool.self, in: Set<Int>([1]))
+                    \(input)
                     let counter = Algorithm(scoped: { scope in
                         let count = scope.sharedVar(initial: 0)
                         Do(Step.advance) { Stop() }
@@ -150,17 +154,18 @@ struct CompilerBoundaryDiagnosticTests {
             }
         }
         """)
-        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
-        let enabled = try #require(source.tokens(viewMode: .sourceAccurate).first { $0.text == "enabled" })
+            let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+            let inputName = try #require(source.tokens(viewMode: .sourceAccurate).first { $0.text == name })
 
-        do {
-            _ = try TLASpecVerifier.parseAndVerify(declaration)
-            Issue.record("An integer domain must not satisfy a Boolean parameter declaration")
-        } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.path.contains("parameters.enabled"))
-            #expect(diagnostic.sourceOffset == enabled.positionAfterSkippingLeadingTrivia.utf8Offset)
-            let emitted = modelCompilationDiagnostic(diagnostic, in: declaration)
-            #expect(emitted.node.positionAfterSkippingLeadingTrivia == enabled.positionAfterSkippingLeadingTrivia)
+            do {
+                _ = try TLASpecVerifier.parseAndVerify(declaration)
+                Issue.record("An incompatible input value must fail at its declaration")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path.contains(path))
+                #expect(diagnostic.sourceOffset == inputName.positionAfterSkippingLeadingTrivia.utf8Offset)
+                let emitted = modelCompilationDiagnostic(diagnostic, in: declaration)
+                #expect(emitted.node.positionAfterSkippingLeadingTrivia == inputName.positionAfterSkippingLeadingTrivia)
+            }
         }
     }
 

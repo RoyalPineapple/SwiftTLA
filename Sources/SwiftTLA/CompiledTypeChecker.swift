@@ -287,7 +287,12 @@ package struct CompiledTypeChecker: Sendable {
                 throw CompiledValueType.unresolvedDiagnostic(inputs.checkingRegisterTypes[register.id] ?? .unknown,
                     at: "checkingRegisters.\(register.reference.name)")
             }
-            checkingRegisterInitializations[register.id] = try checkOperand(initial, expected: type)
+            do {
+                checkingRegisterInitializations[register.id] = try checkOperand(initial, expected: type)
+            } catch let diagnostic as CompilationDiagnostic {
+                throw Self.contextualDiagnostic("checkingRegisters.\(register.reference.name).initialization",
+                    causedBy: diagnostic, sourceSpan: register.reference.sourceSpan)
+            }
         }
         var parameterDomains: [BinderID: CompiledExpression] = [:]
         for parameter in inputs.layout.parameters {
@@ -299,11 +304,8 @@ package struct CompiledTypeChecker: Sendable {
             do {
                 parameterDomains[parameter.binder] = try checkOperand(domain, expected: .set(type))
             } catch let diagnostic as CompilationDiagnostic {
-                var located = Self.contextualDiagnostic("parameters.\(parameter.reference.name).domain", causedBy: diagnostic)
-                if case .utf8Offset(let offset) = parameter.reference.sourceSpan.location {
-                    located.sourceOffset = offset
-                }
-                throw located
+                throw Self.contextualDiagnostic("parameters.\(parameter.reference.name).domain",
+                    causedBy: diagnostic, sourceSpan: parameter.reference.sourceSpan)
             }
         }
         var initializations: [(variable: VariableID, initialization: CompiledVariableInitialization)] = []
@@ -806,10 +808,14 @@ package struct CompiledTypeChecker: Sendable {
         }
     }
 
-    private static func contextualDiagnostic(_ context: String, causedBy cause: CompilationDiagnostic) -> CompilationDiagnostic {
-        .init(code: cause.code, stage: cause.stage,
+    private static func contextualDiagnostic(_ context: String, causedBy cause: CompilationDiagnostic,
+        sourceSpan: CompilerSourceSpan? = nil) -> CompilationDiagnostic {
+        var located = CompilationDiagnostic(code: cause.code, stage: cause.stage,
               path: "nativeMachine.\(context) → \(cause.path)",
               expected: cause.expected, actual: cause.actual, nextSafeAction: cause.nextSafeAction)
+        located.sourceOffset = cause.sourceOffset
+        if case .utf8Offset(let offset) = sourceSpan?.location { located.sourceOffset = offset }
+        return located
     }
 
     private func element(_ type: CompiledValueType) throws -> CompiledValueType {
