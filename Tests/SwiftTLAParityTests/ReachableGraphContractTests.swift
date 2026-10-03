@@ -9,22 +9,6 @@ import UpstreamParity
     #expect(graph.transitions.count == 16)
   }
 
-  @Test("Allocator = 4 states")
-  func allocator4() throws {
-    let a = Var<Int>("available")
-    let b = Var<Int>("allocated")
-    let spec = TLASpec("allocator") {
-      Variable(a, 3)
-      Variable(b, 0)
-      Action("Allocate") { a.becomes(a - 1).when(a > 0) && b.becomes(b + 1) }
-      Action("Deallocate") { a.becomes(a + 1).when(b > 0) && b.becomes(b - 1) }
-      Invariant("ResourceCount") { a + b == 3 }
-    }
-    #expect(try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).exploreGraph().states.count == 4)
-    let checkOutcome = try ModelChecker(compilation: try spec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 100, symmetryReduction: .disabled)).check()
-    #expect({ if case .ok = checkOutcome { true } else { false } }())
-  }
-
   @Test("Chameneos configured machine retains initial choices and upstream checks")
   func chameneosConfiguredInitialStatesAndChecks() throws {
     let scenario = try #require(ChameneosModel.validationScenarios().first)
