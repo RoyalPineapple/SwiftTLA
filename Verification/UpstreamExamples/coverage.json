@@ -7423,8 +7423,8 @@
     {
       "path": "specifications/Moving_Cat_Puzzle",
       "name": "The Moving Cat Puzzle",
-      "audit": "Pinned direct-TLA module and annotation wrapper mapped to one typed configured model; local generated-machine graphs and selected checks passed for all three published configurations.",
-      "gap": "All three configurations still need hosted generated-TLA-versus-pinned-upstream and native-versus-generated-TLA evidence for complete initial states, labeled graphs, selected TypeOK and Victory outcomes, and default deadlock. The local state/edge counts do not establish exact parity.",
+      "audit": "Pinned module roles, all three published configurations, one typed implementation, legacy cleanup, and complete two-path hosted parity audited on 40b5752b.",
+      "gap": "No published TLC-configuration gap remains at verified SHA 40b5752b: generated TLA matches pinned upstream and generated Swift matches generated-TLA TLC on complete initial states, labeled graphs, selected properties, and default deadlock. APCat intentionally selects TypeOK but not Victory. The final pushed revision and the broader DSL/corpus still require separate admission.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -7451,7 +7451,8 @@
           "module": "specifications/Moving_Cat_Puzzle/APCat.tla",
           "configuration": "specifications/Moving_Cat_Puzzle/APCat.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "40b5752b733317ba306b98989c95e547e18f357f",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -7461,13 +7462,25 @@
               "caseID": "moving-cat-ap"
             }
           ],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "40b5752b733317ba306b98989c95e547e18f357f",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801/artifacts/11268821021",
+            "artifactSHA256": "8400bd62b20193700973aeb0c45b4fff3bb30f2658b362eb3bafc3442d567594",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801/artifacts/11267624448",
+            "nativeArtifactSHA256": "66a0ab87aa256b7372356c5b79aa9bf3b04019a41e3658369e4ce9efab5c9373",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Downloaded SHA-bound artifacts: generated-TLA versus pinned APCat and native generated Swift versus generated-TLA TLC both report exact complete initial-state and labeled-graph parity (16 initial states, 16 states, 24 edges). Generated, reference, and native checks satisfy TypeOK and default deadlock. Victory is deliberately omitted by the published APCat.cfg, and both comparison coverage records identify that omission; no unchecked property is credited. The upstream sourceInput is pinned to ceeaa904 with SHA-256 75964cb318385a742b662f3cb272088d0bc4313bf0608de9c483311646e7ff3d. Evidence origins name this source SHA and run ID."
+          }]
         },
         {
           "module": "specifications/Moving_Cat_Puzzle/Cat.tla",
           "configuration": "specifications/Moving_Cat_Puzzle/CatEvenBoxes.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "40b5752b733317ba306b98989c95e547e18f357f",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -7477,13 +7490,25 @@
               "caseID": "moving-cat-even"
             }
           ],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "40b5752b733317ba306b98989c95e547e18f357f",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801/artifacts/11267079735",
+            "artifactSHA256": "dd50b151a826907c458d89cdb0ca1caa5871b3d69154767c4947ae032d6a6ae1",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801/artifacts/11268227351",
+            "nativeArtifactSHA256": "b12fe8844e314649ff6197ba31c788d9abaab7b8e75012a6efe75ddcb2328470",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Downloaded SHA-bound artifacts: both independent comparisons are exact on 48 initial states, 48 complete states, and 80 labeled edges. Generated, pinned upstream, and native checks satisfy TypeOK, Victory, and default deadlock, with no omitted selected checks. Cat.tla sourceInput is pinned to ceeaa904 with SHA-256 407c41f11d1caf62911f383c521f80858bde0f0554036095308dedd2ebb6fb1d; evidence origins name this source SHA and run ID."
+          }]
         },
         {
           "module": "specifications/Moving_Cat_Puzzle/Cat.tla",
           "configuration": "specifications/Moving_Cat_Puzzle/CatOddBoxes.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "40b5752b733317ba306b98989c95e547e18f357f",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -7493,7 +7518,18 @@
               "caseID": "moving-cat-odd"
             }
           ],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "40b5752b733317ba306b98989c95e547e18f357f",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801/artifacts/11268291910",
+            "artifactSHA256": "9140b794b237dda576f8e7e9b28e211e3c145954a30d4b065da3e53eb9780a3a",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37104736801/artifacts/11268103943",
+            "nativeArtifactSHA256": "20bcbcedd78b239db588b2acdc67805254123719ca9ce0c55ac803f9c7f92f62",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Downloaded SHA-bound artifacts: both independent comparisons are exact on 30 initial states, 30 complete states, and 48 labeled edges. Generated, pinned upstream, and native checks satisfy TypeOK, Victory, and default deadlock, with no omitted selected checks. Cat.tla sourceInput is pinned to ceeaa904 with SHA-256 407c41f11d1caf62911f383c521f80858bde0f0554036095308dedd2ebb6fb1d; evidence origins name this source SHA and run ID."
+          }]
         }
       ],
       "partialCases": []
