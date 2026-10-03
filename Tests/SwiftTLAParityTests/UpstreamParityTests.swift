@@ -269,10 +269,14 @@ struct UpstreamParityTests {
         #expect(exploration.graph.states.count == Example.reachable.expectedDistinct)
     }
 
-    @Test("Parallel Reachable bounded source port verifies")
+    @Test("Parallel Reachable bounded source port checks its generated machine")
     func parallelReachableBoundedPort() throws {
-        let exploration = try explore(ParallelReachableModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.parallelReachable.expectedDistinct)
+        let graph = try ReachabilityGraph(
+            initialMachines: ParallelReachableModel.initialMachines(),
+            maximumStates: Example.parallelReachable.maximumStateLimit
+        )
+        #expect(graph.transitions.count == Example.parallelReachable.expectedDistinct)
+        #expect(graph.safetyViolations.isEmpty)
     }
 
     @Test("EWD998 uses typed finite functions and parameterized actions")
