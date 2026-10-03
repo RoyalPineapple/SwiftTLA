@@ -166,6 +166,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       Macro diagnostics now point to the offending symmetry handle rather than
       the model root; that regression failed before the source-map fix and
       passed with 36 related compiler-boundary and scenario tests.
+      A model-authored scenario selecting symmetry with a refinement now has a
+      focused source-location contract distinct from the formal checker's
+      reduction guards; it and 24 related symmetry/diagnostic checks pass
+      locally. Hosted B-04 acceptance remains open.
 - [x] Settle B-01's fixed-collection replacement design: a typed configuration
       parameter contains stable member IDs; `Each` and typed dictionary state
       use those IDs, while application objects stay outside model state. The

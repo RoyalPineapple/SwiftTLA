@@ -465,6 +465,49 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("A refinement selected with symmetry points to the scenario selection")
+    func refinementScenarioSymmetryPointsToSelection() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Member: String, CaseIterable, FiniteTLAValueDomain { case a, b }
+            enum Step: String, CaseIterable { case stay }
+            static var spec: TLASpec {
+                #spec { scope in
+                    let abstract = TLASpec("Abstract") {
+                        let value = Var<Int>("value")
+                        Variable(value, 0)
+                        SwiftTLA.Action("stay") { value.stays }
+                    }
+                    let value = scope.sharedVar(initial: 0)
+                    Do(Step.stay) { Assign(value, to: value) }
+                    let target = Instance("Abstract", of: abstract)
+                    target
+                    let Refines = Refinement(instance: target,
+                        mappings: [.init(Var<Int>("value"), from: value)])
+                    Refines
+                    let members = Symmetry(Set(Member.all))
+                    members
+                    let check = Validation {}.usingSymmetry(members)
+                    check
+                }
+            }
+        }
+        """)
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let selected = try #require(Array(source.tokens(viewMode: .sourceAccurate))
+            .last { $0.text == "members" })
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(declaration)
+            Issue.record("Refinement checking with selected symmetry must fail")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unsupportedSymmetryReduction)
+            #expect(diagnostic.path == "validation.check.symmetry")
+            #expect(diagnostic.actual == "Refines")
+            #expect(diagnostic.sourceOffset == selected.positionAfterSkippingLeadingTrivia.utf8Offset)
+        }
+    }
+
     @Test("Parser diagnostics prevent partial compilation")
     func parserDiagnosticPreventsPartialCompilation() throws {
         let closure = try #require(
