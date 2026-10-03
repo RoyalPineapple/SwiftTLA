@@ -102,4 +102,12 @@ struct NativeRefinementCheckingTests {
         let exported = try NativeModelRun(graph, rendered: EnablednessNativeRefinement.render())
         #expect(exported.checks.properties["Refines"] == .satisfied)
     }
+
+    @Test("native refinement rejects an abstract model with false assumptions")
+    func rejectsAbstractAssumptions() throws {
+        #expect(throws: ExplorationError.assumptionViolated) {
+            try ReachabilityGraph(
+                initialMachines: RejectedAbstractAssumptionRefinement.initialMachines(), maximumStates: 1)
+        }
+    }
 }

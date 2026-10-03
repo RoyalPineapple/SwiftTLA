@@ -323,35 +323,6 @@ struct RefinementDeclarationTests {
     }
   }
 
-  @Test("refinement requires the abstract model assumptions to hold")
-  func checksAbstractAssumptions() throws {
-    let abstractValue = Var<Int>("abstractValue", 0)
-    let concreteValue = Var<Int>("concreteValue", 0)
-    for assumption in [false, true] {
-      let abstract = TLASpec(
-        name: "AbstractAssumption", variables: [.init(name: abstractValue.name, initial: .int(0))],
-        actions: [], invariants: [], assume: .value(.bool(assumption))
-      )
-      let instance = Instance("C", of: abstract)
-      let concrete = TLASpec("ConcreteAssumption") {
-        Variable(concreteValue)
-        instance
-        Refinement(_name: "Refines", instance: instance, mappings: [.init(abstractValue, from: concreteValue)])
-      }
-      let compilation = try concrete.compile()
-      let checker = ModelChecker(compilation: compilation, configuration: try .init(maximumStateLimit: 10, symmetryReduction: .disabled))
-      let outcome = try checker.check()
-      if assumption {
-        #expect(outcome.diagnostic?.kind == .deadlock)
-        let exploration = try checker.explore()
-        #expect(exploration.isComplete)
-        #expect(try RefinementChecker(compilation: compilation).check(exploration) == nil)
-      } else {
-        #expect(outcome.diagnostic?.kind == .assumption)
-      }
-    }
-  }
-
   @Test("refinement owns instance substitutions")
   func rejectsDuplicateInstanceMapping() {
     let abstractValue = Var<Int>("abstractValue", 0)
