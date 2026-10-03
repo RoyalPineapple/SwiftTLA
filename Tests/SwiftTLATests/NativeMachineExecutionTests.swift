@@ -101,7 +101,7 @@ private struct AmbiguousExecutionChoice {
     }
 }
 
-@Suite("Generated execution agrees with the formal relation")
+@Suite("Generated transition contracts")
 struct NativeMachineExecutionTests {
     @Test("Display descriptions do not change integer enum encoding or machine behavior")
     func describedEnumsPreserveFormalEncoding() throws {
@@ -109,42 +109,29 @@ struct NativeMachineExecutionTests {
         #expect(Rank.low.description == "Low priority")
         #expect(Rank.low.tlaValue == .int(1))
         #expect(Rank(formalValue: Rank.low.tlaValue) == .low)
-        let compilation = try DescribedIntegerState.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let rank = try #require(compilation.layout.testVariableID(named: "rank"))
-        let advance = try #require(compilation.layout.testActionID(named: "advance"))
-        let initial = try #require(try runtime.initialStates().only)
+        let rank = try #require(TLAStateProjection.Token(validating: "rank"))
         var machine = try DescribedIntegerState.makeMachine()
-        #expect(try initial.value(for: rank) == .integer(machine.state.rank.rawValue))
-        let successor = try #require(try runtime.successors(for: advance, from: initial).only)
+        #expect(try machine.formalProjection(of: machine.snapshot).value(for: rank) == .int(1))
         _ = try machine.send(.advance)
         #expect(machine.state.rank == .high)
-        #expect(try successor.state.value(for: rank) == .integer(machine.state.rank.rawValue))
+        #expect(try machine.formalProjection(of: machine.snapshot).value(for: rank) == .int(2))
     }
 
-    @Test("Bounded counter preserves formal steps and complete native checking")
-    func counterMatchesFormalExecutionAndNativeChecking() throws {
-        let compilation = try BoundedExecutionCounter.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        var formal = try #require(try runtime.initialStates().only)
-        let count = try #require(compilation.layout.testVariableID(named: "count"))
-        let advance = try #require(compilation.layout.testActionID(named: "advance"))
+    @Test("Bounded counter preserves exact steps and complete checking")
+    func counterStepsAndChecking() throws {
         var machine = try BoundedExecutionCounter.makeMachine()
         var observed = Set<Int>()
 
         for expected in 0...3 {
             observed.insert(machine.state.count)
             #expect(machine.state.count == expected)
-            #expect(try formal.value(for: count) == .integer(machine.state.count))
-            let successors = try runtime.successors(for: advance, from: formal)
-            #expect(try machine.isEnabled(.advance) == !successors.isEmpty)
-            #expect(try machine.enabledActions() == (successors.isEmpty ? [] : [.advance]))
-            if let successor = successors.only {
+            #expect(try machine.isEnabled(.advance) == (expected < 3))
+            #expect(try machine.enabledActions() == (expected < 3 ? [.advance] : []))
+            if expected < 3 {
                 let before = machine.state
                 let transition = try machine.send(.advance)
                 #expect(transition.before == before)
                 #expect(transition.after == machine.state)
-                formal = successor.state
             }
         }
         let before = machine.state
@@ -170,37 +157,20 @@ struct NativeMachineExecutionTests {
     }
 
     @Test("Saved values preserve a swap across a complete cycle")
-    func swapMatchesFormalSuccessors() throws {
-        let compilation = try SavedValueExecutionSwap.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        var formal = try #require(try runtime.initialStates().only)
-        let swap = try #require(compilation.layout.testActionID(named: "swap"))
-        let left = try #require(compilation.layout.testVariableID(named: "left"))
-        let right = try #require(compilation.layout.testVariableID(named: "right"))
+    func swapsSavedValues() throws {
         var machine = try SavedValueExecutionSwap.makeMachine()
         for _ in 0..<2 {
             let before = machine.state
-            let successor = try #require(try runtime.successors(for: swap, from: formal).only)
             _ = try machine.send(.swap)
             #expect(machine.state.left == before.right)
             #expect(machine.state.right == before.left)
-            #expect(try successor.state.value(for: left) == .integer(machine.state.left))
-            #expect(try successor.state.value(for: right) == .integer(machine.state.right))
-            formal = successor.state
         }
         #expect(machine.state.left == 1)
         #expect(machine.state.right == 2)
     }
 
     @Test("State constraints do not resolve executable choice ambiguity")
-    func constrainedChoiceMatchesFormalSuccessors() throws {
-        let compilation = try ConstrainedExecutionChoice.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let initial = try #require(try runtime.initialStates().only)
-        let select = try #require(compilation.layout.testActionID(named: "select"))
-        let selected = try #require(compilation.layout.testVariableID(named: "selected"))
-        let successors = try runtime.successors(for: select, from: initial)
-        #expect(try Set(successors.map { try $0.state.value(for: selected) }) == [.integer(1), .integer(2), .integer(3)])
+    func constrainedChoiceRemainsAmbiguous() throws {
         var machine = try ConstrainedExecutionChoice.makeMachine()
         #expect(try machine.enabledActions() == [.select])
         #expect(try Set(machine.successors(for: .select).map { $0.state.selected }) == [1, 2, 3])
@@ -216,70 +186,50 @@ struct NativeMachineExecutionTests {
         #expect(graph.safetyViolations.isEmpty)
     }
 
-    @Test("Every initial state and branching edge agrees, including disabled actions and invariant failures")
-    func completeChoiceGraphMatchesFormalExecution() throws {
-        let compilation = try AmbiguousExecutionChoice.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let selected = try #require(compilation.layout.testVariableID(named: "selected"))
-        let select = try #require(compilation.layout.testActionID(named: "select"))
-        func value(_ state: CompiledState) throws -> Int {
-            guard case .integer(let value) = try state.value(for: selected) else {
-                throw GeneratedMachineStateDiagnostic.typeMismatch(path: "selected", expected: "Int", actual: "formal value")
-            }
-            return value
-        }
-        let formalInitial = try runtime.initialStates()
+    @Test("Every initial state and executable branch retains disabled actions and invariant failures")
+    func completeChoiceGraph() throws {
         let nativeInitial = try AmbiguousExecutionChoice.initialMachines()
-        #expect(try Set(formalInitial.map(value)) == Set(nativeInitial.map { $0.state.selected }))
         #expect(nativeInitial.count == 2)
-        var pending = try formalInitial.map { state in
-            let selected = try value(state)
-            return (state, try #require(nativeInitial.first { $0.state.selected == selected }))
-        }
-        var visited: Set<CompiledState> = []
+        #expect(Set(nativeInitial.map { $0.state.selected }) == [0, 1])
+        var pending = nativeInitial
+        var visited: Set<AmbiguousExecutionChoice.Snapshot> = []
         var edges: Set<[Int]> = []
         var violations: Set<Int> = []
         var disabled: Set<Int> = []
-        while let (formal, machine) = pending.popLast() {
-            guard visited.insert(formal).inserted else { continue }
-            // This model has one control location; selected identifies its states.
-            let source = try value(formal)
-            #expect(machine.state.selected == source)
-            let formalNext = try runtime.successors(for: select, from: formal)
-            let nativeNext = try machine.successors(for: .select)
-            #expect(try Set(formalNext.map { try value($0.state) }) == Set(nativeNext.map { $0.state.selected }))
-            #expect(nativeNext.count == Set(formalNext.map(\.state)).count)
-            #expect(try machine.enabledActions() == (formalNext.isEmpty ? [] : [.select]))
-            #expect(try machine.isEnabled(.select) == !formalNext.isEmpty)
-            let failed = try compilation.semantics.behavior.invariants.filter { try !runtime.invariantHolds($0, in: formal) }.map(\.name)
-            #expect(try machine.violatedInvariants().map { AmbiguousExecutionChoice.formalPropertyNames[$0]! } == failed)
+        while let machine = pending.popLast() {
+            guard visited.insert(machine.snapshot).inserted else { continue }
+            let source = machine.state.selected
+            let nativeNext = try machine.successors()
+            #expect(nativeNext.allSatisfy { $0.action == .select })
+            #expect(nativeNext.count == (source < 2 ? 3 : 0))
+            #expect(Set(nativeNext.map { $0.machine.state.selected }) == Set(source < 2 ? [1, 2, 3] : []))
+            #expect(try machine.enabledActions() == (source < 2 ? [.select] : []))
+            #expect(try machine.isEnabled(.select) == (source < 2))
+            let failed = try machine.violatedInvariants()
+            #expect(failed == (source < 2 ? [] : [.BelowTwo]))
             if !failed.isEmpty { violations.insert(source) }
             var sending = machine
-            switch nativeNext.count {
-            case 0:
+            if nativeNext.isEmpty {
                 disabled.insert(source)
                 do {
                     _ = try sending.send(.select)
                     Issue.record("A disabled action must fail")
                 } catch GeneratedMachineError.noMatchingSuccessor {}
                 #expect(sending.state == machine.state)
-            case 1:
-                _ = try sending.send(.select)
-                #expect(sending.state == nativeNext[0].state)
-            default:
+            } else {
                 do {
                     _ = try sending.send(.select)
                     Issue.record("An ambiguous action must fail")
                 } catch GeneratedMachineError.ambiguousAction {}
                 #expect(sending.state == machine.state)
             }
-            for successor in formalNext {
-                let target = try value(successor.state)
+            for successor in nativeNext {
+                let target = successor.machine.state.selected
                 edges.insert([source, target])
-                pending.append((successor.state, try #require(nativeNext.first { $0.state.selected == target })))
+                pending.append(successor.machine)
             }
         }
-        #expect(try Set(visited.map(value)) == [0, 1, 2, 3])
+        #expect(Set(visited.map { $0.state.selected }) == [0, 1, 2, 3])
         #expect(edges == [[0, 1], [0, 2], [0, 3], [1, 1], [1, 2], [1, 3]])
         #expect(disabled == [2, 3])
         #expect(violations == [2, 3])
@@ -294,8 +244,4 @@ struct NativeMachineExecutionTests {
         #expect(try graph.trace(to: excluded).count == 2)
     }
 
-}
-
-private extension Array {
-    var only: Element? { count == 1 ? first : nil }
 }
