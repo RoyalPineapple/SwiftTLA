@@ -1531,26 +1531,6 @@ struct AlgorithmBuilderTests {
         })
     }
 
-    @Test("Assert becomes a model-checker safety obligation")
-    func checksAssertAsAnInvariant() throws {
-        let algorithm = Algorithm("BrokenAssertion", scoped: { scope in
-            let count = scope.sharedVar(_name: "count", initial: 0)
-            Each(Node.all) { _ in
-                Do(TestControlLabel.check) {
-                    Assert(count == 1)
-                    Stop()
-                }
-            }
-        })
-
-        let outcome = try ModelChecker(compilation: try loweredSourceSpecification(algorithm).compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).check()
-        guard case .invariantViolated(let name, _, _) = outcome else {
-            Issue.record("Expected Assert to produce an invariant violation, got \(outcome)")
-            return
-        }
-        #expect(name == "__pcal_assert_0")
-    }
-
     @Test("SharedVar closed ranges supply every declared initial state")
     func lowersNondeterministicSharedInitialization() throws {
         let algorithm = Algorithm("NondeterministicSharedInitialization", scoped: { scope in

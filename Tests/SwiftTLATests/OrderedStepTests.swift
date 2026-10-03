@@ -49,6 +49,21 @@ import Testing
         #expect(graph.transitions.count == 2)
     }
 
+    @Test("a failing algorithm assertion is a generated safety violation")
+    func failingAssertionIsChecked() throws {
+        guard case .counterexample(let result) = try ReachabilityGraph.check(
+            initialMachines: FailingAssertionModel.initialMachines(), maximumStates: 2) else {
+            Issue.record("Expected an assertion counterexample")
+            return
+        }
+        guard case .invariant(let property) = try #require(result.violations.first) else {
+            Issue.record("Expected the assertion to be checked as an invariant")
+            return
+        }
+        #expect(FailingAssertionModel.formalPropertyNames[property] == "__pcal_assert_0")
+        #expect(result.trace.count == 1)
+    }
+
     @Test("Procedure arguments capture earlier writes in the caller")
     func callReadsUpdatedValue() throws {
         let scenario = try #require(OrderedCallModel.validationScenarios().first)

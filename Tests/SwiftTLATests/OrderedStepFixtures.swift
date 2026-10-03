@@ -85,6 +85,24 @@ struct OrderedAssertionModel {
 }
 
 @TLAModel
+struct FailingAssertionModel {
+    enum Step: String, CaseIterable { case check }
+
+    static var spec: TLASpec {
+        #spec("FailingAssertion") { scope in
+            let value = scope.sharedVar(_name: "value", initial: 0)
+            let algorithm = Algorithm(label: "Check") {
+                Do(Step.check) {
+                    Assert(value == 1)
+                    Stop()
+                }
+            }
+            algorithm
+        }
+    }
+}
+
+@TLAModel
 struct SavedStepValueModel {
     enum Step: String, CaseIterable { case advance }
 
