@@ -908,6 +908,8 @@ intersection, difference, insertion, and removal. These operations preserve the
 declared element type. `Where` accepts an ordinary Swift set and preserves its
 set type while filtering members. Compilation rejects distinct Swift members
 that collapse to one formal value. A set declaration does not imply symmetry.
+`NonEmptySubsets(of:)` accepts an ordinary Swift set and produces non-empty
+subsets with the same Swift element and set types.
 
 The next section defines configurable `Each` populations. Fixed
 `ModelCollection` declarations must be replaced by a typed set-valued

@@ -649,8 +649,13 @@ extension ParserSession {
         if let call = expression.as(FunctionCallExprSyntax.self),
            let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName,
            name == "Subsets" || name == "NonEmptySubsets",
-           let values = call.arguments.first(where: { $0.label?.text == "of" })?.expression,
-           let element = setExpressionElementTypeName(values) {
+           let values = call.arguments.first(where: { $0.label?.text == "of" })?.expression {
+            if let constructor = values.as(FunctionCallExprSyntax.self),
+               isSwiftCollectionConstructor(constructor, named: "Set"),
+               constructor.calledExpression.is(GenericSpecializationExprSyntax.self) {
+                return constructor.calledExpression.trimmedDescription
+            }
+            guard let element = setExpressionElementTypeName(values) else { return nil }
             return "SetExpr<\(element)>"
         }
         if let call = expression.as(FunctionCallExprSyntax.self),

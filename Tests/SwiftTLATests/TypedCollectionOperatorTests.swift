@@ -121,7 +121,7 @@ private struct NonEmptySubsetGeneratedModel {
         #spec("NonEmptySubsetGeneratedModel") {
             let nonEmptySubsetGeneratedModel = Algorithm(label: "NonEmptySubsetGeneratedModel", scoped: { scope in
                 let selectedKeys = scope.sharedVar(_name: "selectedKeys", in: NonEmptySubsets(
-                    of: SetExpr<Int>.literal(1, 2)
+                    of: Set<Int>([1, 2])
                 ))
                 Do(Step.keep) { Assign(selectedKeys, to: selectedKeys.expr) }
             })
@@ -674,30 +674,11 @@ private struct FoldGeneratedModel {
         #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().render().tlaBundle.tla.contains("0.."))
     }
 
-    @Test("non-empty subset domains parse and exclude the empty formal set")
-    func nonEmptySubsetDomainsSurviveThePipeline() throws {
-        let source = "NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))"
-        let syntax = try parseExpression(source)
-        let parsed = try #require(SpecParser.decodeStateExpr(syntax))
-        let subsets = NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))
-        let expectedMembers: Set<TLAValue> = [
-            .set([.int(1)]),
-            .set([.int(2)]),
-            .set([.int(1), .int(2)])
-        ]
-
-        #expect(parsed == subsets.raw)
-        #expect(try compiledValue(subsets.raw) == .set(expectedMembers))
-
-        let compilation = try NonEmptySubsetGeneratedModel.spec.compile()
-        let selectedKeys = try #require(compilation.layout.testVariableID(named: "selectedKeys"))
-        let initialStates = try CompiledRuntime(compilation: compilation).initialStates()
-        #expect(initialStates.count == 3)
-        let initialValues = try Set(initialStates.map {
-            try $0.value(for: selectedKeys).rendered(using: compilation.layout)
-        })
-        #expect(initialValues == expectedMembers)
-        #expect(try NonEmptySubsetGeneratedModel.spec.compile().render().tlaBundle.tla.contains("SUBSET"))
+    @Test("non-empty Swift-set subsets initialize generated machines without the empty set")
+    func nonEmptySwiftSetSubsetsInitializeGeneratedMachines() throws {
+        let initial = try NonEmptySubsetGeneratedModel.initialMachines()
+        #expect(Set(initial.map(\.state.selectedKeys)) == [Set([1]), Set([2]), Set([1, 2])])
+        #expect(try NonEmptySubsetGeneratedModel.render().tlaBundle.tla.contains("SUBSET"))
     }
 
     @Test("typed bounded quantifiers parse, evaluate, and generate")

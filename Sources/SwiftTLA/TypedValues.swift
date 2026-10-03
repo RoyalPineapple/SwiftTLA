@@ -233,9 +233,9 @@ public func Subsets<Domain: FormalSetValue>(
 ///
 /// The choice domain used by a PlusCal `with` statement such as
 /// `rk \in SUBSET Key \ { { } }`.
-public func NonEmptySubsets<Element: TLAValueType>(
-  of values: some TypedExpression<SetExpr<Element>>
-) -> Expr<SetExpr<SetExpr<Element>>> {
+public func NonEmptySubsets<Domain: FormalSetValue>(
+  of values: some TypedExpression<Domain>
+) -> Expr<SetExpr<Domain>> {
   let emptySet = StateExpr.setLiteral([])
   return Expr(.setDifference(.powerSet(values.stateExpr), .setLiteral([emptySet])))
 }

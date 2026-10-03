@@ -317,7 +317,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       by one generated typed-dictionary model. Its initial action choices,
       complete four-state/four-edge labeled graph, and deadlock pass locally;
       the distinct formal expression-lowering suite still passes. No hosted
-      parity claim follows from these focused tests.
+      parity claim follows from these focused tests. The non-empty-subset
+      authoring regression now checks generated initial states and export
+      instead of a duplicate compiled-runtime oracle; its focused and
+      neighboring tests pass locally.
 - [ ] Close AC-13 by removing replaced spellings, duplicate configuration,
       obsolete callers, compatibility aliases, and stale documentation. The
       legacy `CollectionVarType` field had no effect on model behavior; it was
@@ -339,7 +342,10 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       locally at `624b8aa1`. `Where` now accepts ordinary Swift sets without
       changing their type; the generated positive and empty initial-domain
       regressions failed to compile before the fix and nine related tests
-      pass locally. Hosted acceptance remains open.
+      pass locally. `NonEmptySubsets` now accepts ordinary Swift sets and
+      preserves their set type in generated state; its exact regression failed
+      to compile before the fix and 25 collection/KVsnap tests pass locally.
+      Hosted acceptance remains open.
 - [ ] Confirm the four required end-to-end model classes (Counter, mutual
       exclusion, puzzle, distributed protocol) each execute as an application,
       explore the same generated transitions, validate separately with TLC,
