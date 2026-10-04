@@ -151,7 +151,7 @@ final class SourceTypeResolver {
                 guard arguments == nil else {
                     throw CompiledValueType.diagnostic("types.\(name)", "declared nominal type does not accept generic arguments")
                 }
-                return try named(source, resolving: resolving)
+                return try named(type, resolving: resolving)
             }
         } else if let member = type.as(MemberTypeSyntax.self),
                   ["Swift", "SwiftTLA"].contains(member.baseType.trimmedDescription) {
@@ -162,7 +162,7 @@ final class SourceTypeResolver {
                 throw CompiledValueType.diagnostic("types.\(member.name.sourceIdentifierName)",
                     "generic arguments require a supported type constructor")
             }
-            return try named(source, resolving: resolving)
+            return try named(type, resolving: resolving)
         } else {
             throw CompiledValueType.diagnostic("type", "unsupported Swift type syntax: \(source)")
         }
@@ -216,17 +216,21 @@ final class SourceTypeResolver {
                 throw CompiledValueType.diagnostic("types.\(name)",
                     "generic arguments require a supported type constructor")
             }
-            return try named(source, resolving: resolving)
+            return try named(type, resolving: resolving)
         }
     }
 
-    private func named(_ source: String, resolving: Set<String>) throws -> ResolvedSourceType {
+    private func named(_ type: TypeSyntax, resolving: Set<String>) throws -> ResolvedSourceType {
+        let source = type.trimmedDescription
         let identity = TokenSyntax.identifier(source).sourceIdentifierName
         let declarations = nominalNames[identity, default: []]
         guard declarations.count <= 1 else {
             throw CompiledValueType.diagnostic("types.\(identity)", "multiple declarations have the same Swift identifier")
         }
-        let name = declarations.first ?? source
+        guard let name = declarations.first else {
+            throw located(CompiledValueType.diagnostic("types.\(identity)",
+                "unregistered Swift type \(source)"), at: type)
+        }
         if let declaration = metadata.structs[name] {
             let identity = "struct:\(name)"
             guard !resolving.contains(identity) else {

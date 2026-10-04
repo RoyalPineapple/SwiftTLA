@@ -411,6 +411,21 @@ import Testing
         #expect(throws: CompilationDiagnostic.self) { try resolver.resolve("[Int: Bool: String]") }
     }
 
+    @Test("Unregistered nominal types fail at their source reference")
+    func unregisteredNominalTypeIsLocated() throws {
+        let source = Parser.parse(source: "struct Model { let value: MissingType }")
+        let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let field = try #require(model.memberBlock.members.first?.decl.as(VariableDeclSyntax.self))
+        let type = try #require(field.bindings.first?.typeAnnotation?.type)
+        do {
+            _ = try SourceTypeResolver().resolve(type)
+            Issue.record("An unregistered nominal type must fail before Swift emission")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.sourceOffset == type.positionAfterSkippingLeadingTrivia.utf8Offset)
+            #expect(diagnostic.actual.contains("unregistered Swift type MissingType"))
+        }
+    }
+
     @Test("Generic type syntax requires a supported constructor and the declared arity", arguments: [
         "Set", "SetExpr<Int, Bool>", "Array<Int, Bool>", "Swift.Dictionary<Int>",
         "Function<Int>", "PartialFunction<Int>", "Pair<Int>", "Record<Int, Bool>",
