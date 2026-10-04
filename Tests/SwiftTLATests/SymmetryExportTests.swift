@@ -40,6 +40,20 @@ struct SymmetryExportTests {
         let reduced = try #require(scenarios.first(where: { $0.name == "reduced" }))
         #expect(try !ordinary.render().tlaBundle.cfg.contains("SYMMETRY"))
         #expect(try reduced.render().tlaBundle.cfg.contains("SYMMETRY Symmmembers"))
+        let full = try ordinary.explore(maximumStates: 3)
+        let selected = try reduced.explore(maximumStates: 3)
+        #expect(Set(full.initialStates.map { $0.state.value }) == [.a, .b])
+        #expect(full.initialStates == selected.initialStates)
+        #expect(Set(full.transitions.keys) == Set(selected.transitions.keys))
+        #expect(full.transitions.count == 2)
+        for (source, edges) in full.transitions {
+            let selectedEdges = try #require(selected.transitions[source])
+            #expect(edges.count == 2)
+            #expect(selectedEdges.count == edges.count)
+            for edge in edges {
+                #expect(selectedEdges.contains { $0.action == edge.action && $0.target == edge.target })
+            }
+        }
     }
 
     @Test("Scenario symmetry selection rejects foreign and duplicate handles")
@@ -108,7 +122,7 @@ struct SymmetryExportTests {
 
 @TLAModel
 private struct SymmetryScenarioModel {
-    enum Step: String, CaseIterable { case stay }
+    enum Step: String, CaseIterable { case choose }
     enum Member: String, FiniteTLAValueDomain {
         case a, b
         static var defaultValue: Self { .a }
@@ -117,10 +131,10 @@ private struct SymmetryScenarioModel {
 
     static var spec: TLASpec {
         #spec("SymmetryScenario") { scope in
-            let value = scope.sharedVar(initial: 1)
+            let value = scope.sharedVar(in: Member.all)
             let members = Symmetry(Set(Member.all))
             members
-            Do(Step.stay) { Assign(value, to: value) }
+            Do(Step.choose, over: Member.all) { member in Assign(value, to: member) }
             let ordinary = Validation {}
             ordinary
             let reduced = Validation {}.usingSymmetry(members)
