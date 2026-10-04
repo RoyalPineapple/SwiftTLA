@@ -173,6 +173,19 @@ struct ValidationEvidenceComparisonTests {
         #expect(try compare(root).result == "exact")
     }
 
+    @Test("edges from both source states remain part of the complete graph")
+    func multipleSourcesRemainDistinct() throws {
+        let matching = try fixture(reverseEdge: true)
+        defer { try? FileManager.default.removeItem(at: matching) }
+        #expect(try compare(matching).result == "exact")
+
+        let missing = try fixture(reverseEdge: true)
+        defer { try? FileManager.default.removeItem(at: missing) }
+        try writeGzip(tlcGraph(edgeCount: 1),
+            to: missing.appendingPathComponent("oracle/tlc-graph/graph-events.bin.gz"))
+        #expect(try compare(missing).difference == "complete labeled edge set")
+    }
+
     @Test("a changed initial state fails despite matching state and edge sets")
     func differentInitialFails() throws {
         let root = try fixture(nativeInitial: 1)
@@ -402,7 +415,8 @@ struct ValidationEvidenceComparisonTests {
     private func fixture(nativeTarget: Int = 1, nativeEdgeTarget: UInt64 = 1,
         nativeAction: String = "Next", tlcAction: String = "Next",
         nativeInitial: UInt64 = 0,
-        edgeCount: Int = 1, graphComplete: Bool = true, tlcExitStatus: Int = 0,
+        edgeCount: Int = 1, reverseEdge: Bool = false,
+        graphComplete: Bool = true, tlcExitStatus: Int = 0,
         scenarioName: String? = nil, omitSelectedVerdicts: Bool = false,
         skipCheckedPass: Bool = false, nativeFailureProperty: String = "InitiallyZero") throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -428,7 +442,7 @@ struct ValidationEvidenceComparisonTests {
         var nativeReport: [String: Any] = [
             "schema": "swifttla.native-validation-report", "scenario": name, "maximumStates": 100,
             "graphComplete": graphComplete, "initialStates": 1, "states": 2,
-            "edges": edgeCount, "properties": verdicts,
+            "edges": edgeCount + (reverseEdge ? 1 : 0), "properties": verdicts,
             "deadlockSelected": scenario.checking.checkDeadlock
         ]
         var oracleReport: [String: Any] = [
@@ -480,11 +494,13 @@ struct ValidationEvidenceComparisonTests {
         for _ in 0..<edgeCount {
             try writer.edge(source: 0, action: 0, target: nativeEdgeTarget)
         }
+        if reverseEdge { try writer.edge(source: 1, action: 0, target: 0) }
         if !graphComplete {
             try writer.invariantFailure(property: nativeFailureProperty, key: key(1), predecessor: 0, action: 0)
         }
         try writer.finish(completion: graphComplete ? 0 : 1)
-        try writeGzip(tlcGraph(edgeCount: edgeCount, actionName: tlcAction),
+        try writeGzip(tlcGraph(edgeCount: edgeCount, actionName: tlcAction,
+            reverseEdge: reverseEdge),
             to: tlc.appendingPathComponent("graph-events.bin.gz"))
         return root
     }
@@ -534,7 +550,7 @@ struct ValidationEvidenceComparisonTests {
     }
 
     private func tlcGraph(edgeCount: Int, source: UInt64 = 101, target: UInt64 = 202,
-        actionName: String = "Next") -> Data {
+        actionName: String = "Next", reverseEdge: Bool = false) -> Data {
         var body = Data("STLAGRF2".utf8)
         body.append(1)
         append("fixture", to: &body)
@@ -551,6 +567,12 @@ struct ValidationEvidenceComparisonTests {
         append(UInt32(0), to: &body)
         append(actionName, to: &body)
         append("", to: &body)
+        if reverseEdge {
+            body.append(3)
+            append(target, to: &body)
+            append(UInt32(0), to: &body)
+            append(source, to: &body)
+        }
         for _ in 0..<edgeCount {
             body.append(3)
             append(source, to: &body)
@@ -559,7 +581,9 @@ struct ValidationEvidenceComparisonTests {
         }
         let digest = Data(CryptoKit.SHA256.hash(data: body))
         body.append(255)
-        for count in [2, 1, edgeCount, 0, 0, 0, 0, 0] { append(UInt64(count), to: &body) }
+        for count in [2, 1, edgeCount + (reverseEdge ? 1 : 0), 0, 0, 0, 0, 0] {
+            append(UInt64(count), to: &body)
+        }
         body.append(0)
         body.append(digest)
         return body

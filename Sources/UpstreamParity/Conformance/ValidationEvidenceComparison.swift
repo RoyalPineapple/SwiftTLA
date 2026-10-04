@@ -24,6 +24,7 @@ package enum ValidationEvidenceComparisonError: Error, Equatable {
 /// common ranks; full edges are then compared as sorted rank/action/rank records.
 package enum ValidationEvidenceComparison {
     private static let stateBucketCount = 64
+    private static let edgeBucketCount = 64
 
     private static func measured<Result>(_ phase: String, _ body: () throws -> Result) rethrows -> Result {
         let started = DispatchTime.now().uptimeNanoseconds
@@ -668,56 +669,108 @@ package enum ValidationEvidenceComparison {
         let pairs: [UInt64]
     }
 
+    private struct RankedEdgeBuckets {
+        let files: [URL]
+        let counts: [Int]
+    }
+
     private static func compareBinaryEdges(_ left: URL, _ right: URL,
         stateCount: Int, leftEdgeCount: Int, rightEdgeCount: Int,
         leftRank: (UInt64) throws -> UInt32,
         rightRank: (UInt64) throws -> UInt32) throws -> Bool {
         let lhs = try measured("left edge ranking") {
-            try rankedAdjacency(left, stateCount: stateCount,
+            try rankEdgeBuckets(left, stateCount: stateCount,
                 edgeCount: leftEdgeCount, rank: leftRank)
         }
+        try FileManager.default.removeItem(at: left)
         let rhs = try measured("right edge ranking") {
-            try rankedAdjacency(right, stateCount: stateCount,
+            try rankEdgeBuckets(right, stateCount: stateCount,
                 edgeCount: rightEdgeCount, rank: rightRank)
         }
-        return measured("edge match") {
-            for source in 0..<stateCount {
-                var leftIndex = lhs.offsets[source]
-                var rightIndex = rhs.offsets[source]
-                let leftEnd = lhs.offsets[source + 1]
-                let rightEnd = rhs.offsets[source + 1]
-                while leftIndex < leftEnd && rightIndex < rightEnd {
-                    let pair = lhs.pairs[leftIndex]
-                    if pair != rhs.pairs[rightIndex] { return false }
-                    repeat { leftIndex += 1 } while leftIndex < leftEnd && lhs.pairs[leftIndex] == pair
-                    repeat { rightIndex += 1 } while rightIndex < rightEnd && rhs.pairs[rightIndex] == pair
+        try FileManager.default.removeItem(at: right)
+        return try measured("edge match") {
+            for bucket in 0..<edgeBucketCount {
+                let left = try rankedAdjacency(lhs.files[bucket], stateCount: stateCount,
+                    bucket: bucket, edgeCount: lhs.counts[bucket])
+                let right = try rankedAdjacency(rhs.files[bucket], stateCount: stateCount,
+                    bucket: bucket, edgeCount: rhs.counts[bucket])
+                for source in 0..<(left.offsets.count - 1) {
+                    var leftIndex = left.offsets[source]
+                    var rightIndex = right.offsets[source]
+                    let leftEnd = left.offsets[source + 1]
+                    let rightEnd = right.offsets[source + 1]
+                    while leftIndex < leftEnd && rightIndex < rightEnd {
+                        let pair = left.pairs[leftIndex]
+                        if pair != right.pairs[rightIndex] { return false }
+                        repeat { leftIndex += 1 } while leftIndex < leftEnd && left.pairs[leftIndex] == pair
+                        repeat { rightIndex += 1 } while rightIndex < rightEnd && right.pairs[rightIndex] == pair
+                    }
+                    if leftIndex != leftEnd || rightIndex != rightEnd { return false }
                 }
-                if leftIndex != leftEnd || rightIndex != rightEnd { return false }
             }
             return true
         }
     }
 
-    private static func rankedAdjacency(_ input: URL, stateCount: Int, edgeCount: Int,
-        rank: (UInt64) throws -> UInt32) throws -> RankedAdjacency {
+    private static func rankEdgeBuckets(_ input: URL, stateCount: Int, edgeCount: Int,
+        rank: (UInt64) throws -> UInt32) throws -> RankedEdgeBuckets {
         let bytes = try Data(contentsOf: input, options: .mappedIfSafe)
-        guard stateCount >= 0, stateCount < Int.max,
-              edgeCount >= 0, edgeCount <= Int.max / 20,
+        guard stateCount >= 0, edgeCount >= 0, edgeCount <= Int.max / 20,
               bytes.count == edgeCount * 20 else {
             throw ValidationEvidenceComparisonError.invalidEvidence("raw edge length")
         }
-        var offsets = [Int](repeating: 0, count: stateCount + 1)
-        var sources = [UInt32](repeating: 0, count: edgeCount)
+        let directory = input.deletingLastPathComponent().appendingPathComponent("ranked-edge-buckets")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        let files = (0..<edgeBucketCount).map {
+            directory.appendingPathComponent("bucket-\($0).bin")
+        }
+        var writers = try files.map(RankedEdgeBucketWriter.init)
+        var closed = false
+        defer {
+            if !closed {
+                for index in writers.indices { try? writers[index].close() }
+            }
+        }
+        var counts = [Int](repeating: 0, count: edgeBucketCount)
         try bytes.withUnsafeBytes { raw in
             for edge in 0..<edgeCount {
                 let base = edge * 20
-                let identity = UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base, as: UInt64.self))
-                let source = try rank(identity)
-                guard UInt64(source) < UInt64(stateCount) else {
+                let sourceID = UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base, as: UInt64.self))
+                let action = UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base + 8, as: UInt32.self))
+                let targetID = UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base + 12, as: UInt64.self))
+                let source = try rank(sourceID)
+                let target = try rank(targetID)
+                guard UInt64(source) < UInt64(stateCount), UInt64(target) < UInt64(stateCount) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("edge rank")
+                }
+                let bucket = Int(source) % edgeBucketCount
+                try writers[bucket].append(source: source, action: action, target: target)
+                counts[bucket] += 1
+            }
+        }
+        for index in writers.indices { try writers[index].close() }
+        closed = true
+        return RankedEdgeBuckets(files: files, counts: counts)
+    }
+
+    private static func rankedAdjacency(_ input: URL, stateCount: Int,
+        bucket: Int, edgeCount: Int) throws -> RankedAdjacency {
+        let bytes = try Data(contentsOf: input, options: .mappedIfSafe)
+        guard edgeCount >= 0, edgeCount <= Int.max / 12,
+              bytes.count == edgeCount * 12 else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("ranked edge length")
+        }
+        let localSources = stateCount / edgeBucketCount
+            + (bucket < stateCount % edgeBucketCount ? 1 : 0)
+        var offsets = [Int](repeating: 0, count: localSources + 1)
+        try bytes.withUnsafeBytes { raw in
+            for edge in 0..<edgeCount {
+                let base = edge * 12
+                let source = UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base, as: UInt32.self))
+                guard UInt64(source) < UInt64(stateCount), Int(source) % edgeBucketCount == bucket else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("source edge rank")
                 }
-                sources[edge] = source
-                offsets[Int(source) + 1] += 1
+                offsets[Int(source) / edgeBucketCount + 1] += 1
             }
         }
         for index in 1..<offsets.count { offsets[index] += offsets[index - 1] }
@@ -725,17 +778,20 @@ package enum ValidationEvidenceComparison {
         var pairs = [UInt64](repeating: 0, count: edgeCount)
         try bytes.withUnsafeBytes { raw in
             for edge in 0..<edgeCount {
-                let base = edge * 20
-                let action = UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base + 8, as: UInt32.self))
-                let identity = UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base + 12, as: UInt64.self))
-                let target = try rank(identity)
-                let source = Int(sources[edge])
-                pairs[cursors[source]] = (UInt64(action) << 32) | UInt64(target)
-                cursors[source] += 1
+                let base = edge * 12
+                let source = UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base, as: UInt32.self))
+                let action = UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base + 4, as: UInt32.self))
+                let target = UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base + 8, as: UInt32.self))
+                guard UInt64(target) < UInt64(stateCount) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("target edge rank")
+                }
+                let localSource = Int(source) / edgeBucketCount
+                pairs[cursors[localSource]] = (UInt64(action) << 32) | UInt64(target)
+                cursors[localSource] += 1
             }
         }
         pairs.withUnsafeMutableBufferPointer { buffer in
-            for source in 0..<stateCount {
+            for source in 0..<localSources {
                 let start = offsets[source]
                 let end = offsets[source + 1]
                 if end - start > 1 {
@@ -814,6 +870,40 @@ package enum ValidationEvidenceComparison {
             throw ValidationEvidenceComparisonError.invalidEvidence("TLC process outcome")
         }
         return status
+    }
+}
+
+private struct RankedEdgeBucketWriter {
+    private let handle: FileHandle
+    private var buffer = Data()
+
+    init(_ url: URL) throws {
+        try Data().write(to: url, options: .withoutOverwriting)
+        handle = try FileHandle(forWritingTo: url)
+        buffer.reserveCapacity(262_144)
+    }
+
+    mutating func append(source: UInt32, action: UInt32, target: UInt32) throws {
+        uint32(source)
+        uint32(action)
+        uint32(target)
+        if buffer.count >= 262_144 { try flush() }
+    }
+
+    mutating func close() throws {
+        try flush()
+        try handle.close()
+    }
+
+    private mutating func uint32(_ value: UInt32) {
+        var encoded = value.bigEndian
+        withUnsafeBytes(of: &encoded) { buffer.append(contentsOf: $0) }
+    }
+
+    private mutating func flush() throws {
+        guard !buffer.isEmpty else { return }
+        try handle.write(contentsOf: buffer)
+        buffer.removeAll(keepingCapacity: true)
     }
 }
 
