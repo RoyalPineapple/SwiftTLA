@@ -284,11 +284,14 @@ struct UpstreamParityTests {
         #expect(scenario.behavior == .specification)
         #expect(scenario.checking.properties == [.MutualExclusion])
         #expect(scenario.checking.checkDeadlock)
-        #expect(Set(DijkstraMutexModel.Property.allCases) == [.MutualExclusion, .DeadlockFreedom])
+        #expect(Set(DijkstraMutexModel.Property.allCases) ==
+            [.MutualExclusion, .DeadlockFree, .StarvationFree, .DeadlockFreedom])
 
         let rendered = try scenario.render()
         #expect(rendered.checkNames == ["MutualExclusion"])
         #expect(rendered.checksDeadlock)
+        #expect(rendered.tlaBundle.root.tla.contains("DeadlockFree == (\\A _process \\in Proc:"))
+        #expect(rendered.tlaBundle.root.tla.contains("StarvationFree == (\\A _process \\in Proc:"))
         #expect(rendered.tlaBundle.root.tla.contains("DeadlockFreedom == (\\A _process \\in Proc:"))
         let fairness = rendered.tlaBundle.root.tla.split(separator: "\n").filter { $0.contains("WF_") }
         #expect(fairness.count == 1)

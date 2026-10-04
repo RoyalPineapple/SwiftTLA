@@ -57,6 +57,8 @@ package struct DijkstraMutexModel: Sendable {
                 Set<Process>([.one, .two, .three, .four]),
             ]))
             let MutualExclusion = Invariant()
+            let DeadlockFree = LeadsTo()
+            let StarvationFree = LeadsTo()
             let DeadlockFreedom = LeadsTo()
             let Mutex = Algorithm(scoped: { scope in
                 let b = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
@@ -148,6 +150,11 @@ package struct DijkstraMutexModel: Sendable {
                     Do(Label.li5) { Assign(c, to: c.updating(selfID, to: true)) }
                     Do(Label.li6) { Assign(b, to: b.updating(selfID, to: true)) }
                     Do(Label.nonCritical) { Goto(Label.li0) }
+                    DeadlockFree(
+                        At(Label.li0, selfID),
+                        Exists(in: Proc) { member in At(Label.critical, member) }
+                    )
+                    StarvationFree(At(Label.li0, selfID), At(Label.critical, selfID))
                     DeadlockFreedom(
                         !At(Label.li5, selfID) && !At(Label.li6, selfID) && !At(Label.nonCritical, selfID),
                         Exists(in: Proc) { member in At(Label.critical, member) }
