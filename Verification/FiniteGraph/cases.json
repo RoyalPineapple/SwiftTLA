@@ -1383,7 +1383,7 @@
       },
       "exploration": {"maximumStateLimit": 1000000000, "symmetryReduction": "disabled"},
       "moduleSHA256": "592100b6baef4ec24cca79c97bdb5c7b83e7f7b7f2174b7a12a3591c69a6786c",
-      "cfgSHA256": "df4e16457ad388b790d1e4d93e7046e701f84a7e2979ba3d1aa07ad382d8000f",
+      "cfgSHA256": "63ab878b931a5e20e455805d08ea5e0e8acf54429041a6b3667713fba71237c4",
       "timeoutSeconds": 5400
     }
   ]

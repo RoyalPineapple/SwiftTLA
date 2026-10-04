@@ -72,6 +72,8 @@ jobs:
           fi
       - name: Verify pinned bridge sources before the matrix
         run: ./scripts/setup-finite-graph-tools.sh --verify-bridge-sources
+      - name: Verify pinned reference inputs before the matrix
+        run: bash scripts/verify-finite-graph-input-pins.sh
       - uses: actions/cache@v4
         id: binary-cache
         with:

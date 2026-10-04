@@ -166,6 +166,7 @@ run_guarded() {
     if [[ "$mode" == "static" ]]; then
         git diff --check
         "$(dirname "$0")/setup-finite-graph-tools.sh" --verify-bridge-sources
+        bash "$(dirname "$0")/verify-finite-graph-input-pins.sh"
         return
     fi
 
