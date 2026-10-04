@@ -1440,12 +1440,9 @@ struct AlgorithmBuilderTests {
         #expect(algorithm.validate().isEmpty)
         let spec = try loweredSourceSpecification(algorithm)
         #expect(spec.invariants.map(\.name) == ["__pcal_assert_0", "__pcal_assert_1"])
-        #expect(spec.fairness == [FairnessCondition.weakFairnessActionCall(.init(name: "choose", arguments: [.string("first")])),
-            .weakFairnessActionCall(.init(name: "choose", arguments: [.string("second")]))
-        ])
+        #expect(spec.fairness == [.weakFairnessEachActionGroup(["choose"])])
         let rendered = try spec.compile().render().tlaBundle.tla
-        #expect(rendered.contains("WF_<<pc, count, selected>>(choose__0)"))
-        #expect(rendered.contains("WF_<<pc, count, selected>>(choose__1)"))
+        #expect(rendered.contains("(\\A _process \\in {\"first\", \"second\"}: WF_<<pc, count, selected>>(choose(_process)))"))
 
         let (compilation, initial) = try initialState(of: spec)
         let states = try successors(named: "choose", arguments: [.string("first")], in: compilation, from: initial)

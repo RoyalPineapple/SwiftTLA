@@ -832,10 +832,7 @@ import SwiftTLAMacros
         #expect(parsed.diagnostics.isEmpty)
         let specification = try loweredSource(parsed, named: "Counter")
         #expect(specification.invariants.map(\.name) == ["__pcal_assert_0", "__pcal_assert_1"])
-        #expect(specification.fairness == [
-            .strongFairnessActionCall(.init(name: "increment", arguments: [.string("left")])),
-            .strongFairnessActionCall(.init(name: "increment", arguments: [.string("right")]))
-        ])
+        #expect(specification.fairness == [.strongFairnessEachActionGroup(["increment"])])
     }
 
     @Test("Algorithm parser decodes each temporal declaration")
