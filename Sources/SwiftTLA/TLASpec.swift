@@ -265,6 +265,7 @@ public struct TLASpec: Sendable {
   package var parameters: [ModelParameterDeclaration] = []
   package var checkingRegisters: [CheckingRegisterDeclaration] = []
   package var validationScenarios: [ValidationDeclaration] = []
+  package var fairnessProfiles: [FairnessProfileDecl] = []
   /// Parameters supplied by a named TLA+ `INSTANCE … WITH` declaration.
   package var formalParameters: [FormalModuleParameter]
   package var actions: [NamedAction]
@@ -689,6 +690,7 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: InitialStatesDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ReachableDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ValidationDeclaration) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: FairnessProfileDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: TemporalDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FairnessDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstantDecl) -> [SpecComponent] { [expr] }

@@ -99,8 +99,10 @@ package enum NativeValidationRunner {
         var temporalResults: [Scenario.Property: TemporalAnalysis<Scenario.Machine.Snapshot, Scenario.Machine.Action?>] = [:]
         var refinementFailures: [Scenario.Property: RefinementFailure<Scenario.Machine.Snapshot, Scenario.Machine.Action>] = [:]
         if needsGraph {
+            let fairness = scenario.behavior == .specification
+                ? try scenario.fairnessConditions(on: first) : []
             var complete = try MachineValidationGraph(machine: first, snapshots: snapshots,
-                initialIDs: initialIDs, edges: edges, behavior: scenario.behavior)
+                initialIDs: initialIDs, edges: edges, behavior: scenario.behavior, fairness: fairness)
             temporalResults = try complete.temporalResults(checking: scenario.checking.properties)
             refinementFailures = try first.validationRefinementFailures(
                 in: &complete, checking: scenario.checking.properties)

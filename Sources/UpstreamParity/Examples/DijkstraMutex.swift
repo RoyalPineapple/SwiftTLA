@@ -1,8 +1,7 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// This partial Dijkstra model has the upstream three- and four-process populations.
-/// It does not yet match either published TLC configuration.
+/// Dijkstra's algorithm with the published three- and four-process populations.
 ///
 /// `temporary` begins as the upstream model's opaque `defaultInitValue`.
 /// It then holds either the current owner or the set of peers still to
@@ -170,10 +169,16 @@ package struct DijkstraMutexModel: Sendable {
                 }
             })
             Mutex
+            let NonCriticalMayStutter = FairnessProfile(excluding: [Label.nonCritical])
+            NonCriticalMayStutter
             let Safety4Processors = Validation {
                 Bind(Proc, to: Set<Process>([.one, .two, .three, .four]))
             }.checking(only: [MutualExclusion])
             Safety4Processors
+            let Liveness3Processors = Validation {
+                Bind(Proc, to: Set<Process>([.one, .two, .three]))
+            }.usingFairness(NonCriticalMayStutter).checking(only: [MutualExclusion, DeadlockFreedom])
+            Liveness3Processors
         }
     }
 }

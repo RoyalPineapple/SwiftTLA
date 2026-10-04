@@ -264,6 +264,7 @@ final class ParserSession {
         var instances: [String: FormalModuleInstance] = [:]
         var algorithms: [String: Algorithm] = [:]
         var validations: [String: ValidationDeclaration] = [:]
+        var fairnessProfiles: [String: FairnessProfileDecl] = [:]
         var symmetries: [String: SymmetrySetDecl] = [:]
         var modules: [String: TLASpec] = [:]
     }

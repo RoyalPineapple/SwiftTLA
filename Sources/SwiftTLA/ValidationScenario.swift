@@ -53,6 +53,28 @@ public enum ValidationCheckingMode: String, Sendable, Codable {
     case decisiveCounterexample
 }
 
+public struct FairnessProfileReference: Hashable, Sendable {
+    private let identity = UUID()
+}
+
+public struct FairnessProfileDecl: SpecComponent, Sendable {
+    package let name: String
+    package let reference: FairnessProfileReference
+    package let excludedLabels: [AlgorithmLabelModel]
+
+    package init(name: String, excludedLabels: [AlgorithmLabelModel]) {
+        self.name = name
+        reference = .init()
+        self.excludedLabels = excludedLabels
+    }
+}
+
+public func FairnessProfile<Label: CaseIterable & RawRepresentable & Sendable>(
+    _name: String = "", excluding labels: [Label]
+) -> FairnessProfileDecl where Label.RawValue == String {
+    .init(name: _name, excludedLabels: labels.map { .init(name: $0.rawValue) })
+}
+
 public struct ModelChecks<Property: Hashable & Sendable>: Equatable, Sendable {
     public let properties: Set<Property>
     public let checkDeadlock: Bool
@@ -74,6 +96,7 @@ public protocol ModelValidationScenario: Sendable {
     var expectations: [Property: ValidationExpectation] { get }
     var deadlockExpectation: ValidationExpectation? { get }
     func initialMachines() throws -> [Machine]
+    func fairnessConditions(on machine: Machine) throws -> [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]
     func render() throws -> RenderedSpecification
     var formalPropertyNames: [Property: String] { get }
 }
@@ -100,13 +123,22 @@ public protocol AssumptionValidationScenario: Sendable {
 extension ModelValidationScenario {
     public var checkingMode: ValidationCheckingMode { .exhaustive }
 
+    public func fairnessConditions(on machine: Machine) throws -> [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] {
+        try machine.fairnessConditions()
+    }
+
     public func check(maximumStates: Int) throws -> NativeCheckResult<Machine> {
-        try ReachabilityGraph.check(initialMachines: initialMachines(), maximumStates: maximumStates,
-                                    checking: checking, behavior: behavior)
+        let initial = try initialMachines()
+        let fairness = behavior == .specification ? try initial.first.map { try fairnessConditions(on: $0) } : nil
+        return try ReachabilityGraph.check(initialMachines: initial, maximumStates: maximumStates,
+                                    checking: checking, behavior: behavior, fairness: fairness)
     }
 
     public func explore(maximumStates: Int) throws -> ReachabilityGraph<Machine> {
-        try ReachabilityGraph(initialMachines: initialMachines(), maximumStates: maximumStates, checking: checking, behavior: behavior)
+        let initial = try initialMachines()
+        let fairness = behavior == .specification ? try initial.first.map { try fairnessConditions(on: $0) } : nil
+        return try ReachabilityGraph(initialMachines: initial, maximumStates: maximumStates,
+            checking: checking, behavior: behavior, fairness: fairness)
     }
 }
 
@@ -137,6 +169,7 @@ public struct ValidationDeclaration: SpecComponent {
     package var propertySelections: [[PropertyReference]] = []
     package var deadlockSelections: [Bool] = []
     package var behaviorSelections: [ModelBehavior] = []
+    package var fairnessProfileSelections: [FairnessProfileReference] = []
     package var checkingModeSelections: [ValidationCheckingMode] = []
     package var symmetrySelections: [SymmetryReference] = []
 
@@ -173,6 +206,12 @@ public struct ValidationDeclaration: SpecComponent {
     public func behavior(_ behavior: ModelBehavior) -> Self {
         var copy = self
         copy.behaviorSelections.append(behavior)
+        return copy
+    }
+
+    public func usingFairness(_ profile: FairnessProfileDecl) -> Self {
+        var copy = self
+        copy.fairnessProfileSelections.append(profile.reference)
         return copy
     }
 

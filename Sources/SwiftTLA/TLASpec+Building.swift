@@ -39,6 +39,8 @@ extension TLASpec {
         sourceAtomicSteps.append(step)
       } else if let scenario = comp as? ValidationDeclaration {
         validationScenarios.append(scenario)
+      } else if let profile = comp as? FairnessProfileDecl {
+        fairnessProfiles.append(profile)
       } else if let i = comp as? InvDecl {
         invariants.append(NamedStatePredicate(name: i.name, body: i.body, reference: i.reference))
       } else if let initial = comp as? InitialStatesDecl {
@@ -186,6 +188,7 @@ extension TLASpec {
     lowered.parameters = parameters
     lowered.checkingRegisters = checkingRegisters
     lowered.validationScenarios = validationScenarios
+    lowered.fairnessProfiles = fairnessProfiles
     lowered.initialInvariantSelections = initialInvariantSelections
     lowered.algorithmPhase = .lowered
     return lowered

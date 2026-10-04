@@ -12,9 +12,9 @@ extension CompiledFormalModuleReplacement {
 }
 
 extension ModelBehavior {
-    var directives: [String] {
+    func directives(specificationName: String) -> [String] {
         switch self {
-        case .specification: ["SPECIFICATION Spec"]
+        case .specification: ["SPECIFICATION \(specificationName)"]
         case .initialAndNext: ["INIT Init", "NEXT Next"]
         }
     }
@@ -23,6 +23,7 @@ extension ModelBehavior {
 /// TLC directives retained separately so validation can select checks without reparsing output.
 package struct TLCConfiguration: Equatable, Sendable {
     package let behavior: ModelBehavior
+    package let specificationName: String
     package let assumptionsOnly: Bool
     package let declarations: [String]
     package let checkDeadlock: Bool
@@ -32,10 +33,12 @@ package struct TLCConfiguration: Equatable, Sendable {
     package let refinements: [String]
     package let symmetry: [String]
 
-    package init(behavior: ModelBehavior = .specification, assumptionsOnly: Bool = false,
+    package init(behavior: ModelBehavior = .specification, specificationName: String = "Spec",
+        assumptionsOnly: Bool = false,
         declarations: [String], checkDeadlock: Bool, invariants: [String],
         reachabilityProperties: [String] = [], properties: [String], refinements: [String] = [], symmetry: [String]) {
         self.behavior = behavior
+        self.specificationName = specificationName
         self.assumptionsOnly = assumptionsOnly
         self.declarations = declarations
         self.checkDeadlock = checkDeadlock
@@ -46,7 +49,8 @@ package struct TLCConfiguration: Equatable, Sendable {
         self.symmetry = symmetry
     }
 
-    func selecting(_ checks: Set<String>, checkDeadlock: Bool, behavior: ModelBehavior? = nil) throws -> Self {
+    func selecting(_ checks: Set<String>, checkDeadlock: Bool, behavior: ModelBehavior? = nil,
+        specificationName: String? = nil) throws -> Self {
         if assumptionsOnly && (!checks.isEmpty || checkDeadlock) {
             throw CompilationDiagnostic(
                 code: .unknownReference, stage: .rendering, path: "TLC configuration",
@@ -64,7 +68,8 @@ package struct TLCConfiguration: Equatable, Sendable {
                 nextSafeAction: "Select checks declared by this model."
             )
         }
-        return Self(behavior: behavior ?? self.behavior, assumptionsOnly: assumptionsOnly,
+        return Self(behavior: behavior ?? self.behavior,
+            specificationName: specificationName ?? self.specificationName, assumptionsOnly: assumptionsOnly,
             declarations: declarations, checkDeadlock: checkDeadlock,
             invariants: invariants.filter(checks.contains),
             reachabilityProperties: reachabilityProperties.filter(checks.contains),
@@ -82,7 +87,7 @@ package struct TLCConfiguration: Equatable, Sendable {
             }
             try validateSymmetryChecks()
         }
-        return Self(behavior: behavior, assumptionsOnly: assumptionsOnly,
+        return Self(behavior: behavior, specificationName: specificationName, assumptionsOnly: assumptionsOnly,
             declarations: declarations, checkDeadlock: checkDeadlock,
             invariants: invariants, reachabilityProperties: reachabilityProperties,
             properties: properties, refinements: refinements,
@@ -116,7 +121,8 @@ package struct TLCConfiguration: Equatable, Sendable {
 
     func render(usesSymmetryReduction: Bool) -> String {
         if assumptionsOnly { return declarations.joined(separator: "\n") + (declarations.isEmpty ? "" : "\n") }
-        let header = behavior.directives + [checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
+        let header = behavior.directives(specificationName: specificationName)
+            + [checkDeadlock ? "CHECK_DEADLOCK TRUE" : "CHECK_DEADLOCK FALSE"]
         let checks = (invariants + reachabilityProperties).map { "INVARIANT \($0)" } + (properties + refinements).map { "PROPERTY \($0)" }
         // TLC cannot soundly check liveness on a symmetry-reduced graph.
         let reduction = usesSymmetryReduction && properties.isEmpty && refinements.isEmpty ? symmetry.map { "SYMMETRY \($0)" } : []

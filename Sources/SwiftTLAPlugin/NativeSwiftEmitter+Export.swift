@@ -15,6 +15,17 @@ extension NativeSwiftEmitter {
             } catch let diagnostic as CompilationDiagnostic {
                 plusCal = ".failure(\(exportDiagnostic(diagnostic)))"
             }
+            var plusCalProfiles: [String] = []
+            for profile in program.behavior.fairnessProfiles {
+                do {
+                    if let source = try program.renderAuthoredPlusCal(
+                        declarations: module, fairnessProfile: profile) {
+                        plusCalProfiles.append("\(String(reflecting: profile.name)): .success(\(String(reflecting: source)))")
+                    }
+                } catch let diagnostic as CompilationDiagnostic {
+                    plusCalProfiles.append("\(String(reflecting: profile.name)): .failure(\(exportDiagnostic(diagnostic)))")
+                }
+            }
             let parameterBindings = try program.layout.parameters.map { parameter in
                 guard let type = program.bindingTypes[parameter.binder],
                       let name = program.binderNames[parameter.binder] else {
@@ -98,9 +109,13 @@ extension NativeSwiftEmitter {
                 refinements: \(String(reflecting: module.configuration.refinements)),
                 symmetry: \(String(reflecting: module.configuration.symmetry)),
                 actions: _actions, _generatedPlusCal: \(plusCal),
+                _generatedPlusCalProfiles: \(plusCalProfiles.isEmpty ? "[:]" : "[" + plusCalProfiles.joined(separator: ", ") + "]"),
                 _assumptionsOnly: \(module.configuration.assumptionsOnly),
                 _generatedParameters: [\(parameterBindings.joined(separator: ", "))],
                 _generatedImports: [\(imports)], _generatedDependencies: [\(dependencies)],
+                _generatedFairnessProfileOperators: \(program.behavior.fairnessProfiles.isEmpty ? "[:]" : "[" + program.behavior.fairnessProfiles.map {
+                    "\(String(reflecting: $0.name)): \(String(reflecting: $0.operatorName))"
+                }.joined(separator: ", ") + "]"),
                 _generatedTemporalObligations: _obligations)
             """
         } catch let diagnostic as CompilationDiagnostic {

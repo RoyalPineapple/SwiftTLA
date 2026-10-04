@@ -52,8 +52,10 @@ package struct NativeScenarioRun: Sendable {
         deadlockExpectation = scenario.deadlockExpectation
         coverage = checkCoverage
         let initial = try scenario.initialMachines()
+        let fairness = scenario.behavior == .specification
+            ? try initial.first.map { try scenario.fairnessConditions(on: $0) } : nil
         switch try ReachabilityGraph.check(initialMachines: initial, maximumStates: maximumStates,
-            checking: scenario.checking, behavior: scenario.behavior) {
+            checking: scenario.checking, behavior: scenario.behavior, fairness: fairness) {
         case .exhausted(let graph): native = .exhausted(try NativeModelRun(graph, rendered: rendered))
         case .counterexample(let result):
             native = .counterexample(try NativeCounterexampleRun(result, initialMachines: initial,

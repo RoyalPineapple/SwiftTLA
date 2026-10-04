@@ -130,9 +130,13 @@ private final class DSLRewriter: SyntaxRewriter {
             let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
                 ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SwiftTLA"
                     ? member?.declName.baseName.sourceIdentifierName : nil)
-            if constructor == "Symmetry" {
+            if constructor == "Symmetry" || constructor == "FairnessProfile" {
                 guard node.bindingSpecifier.text == "let" else {
-                    context.diagnose(Diagnostic(node: Syntax(source), message: SymmetryBindingDiagnostic()))
+                    if constructor == "Symmetry" {
+                        context.diagnose(Diagnostic(node: Syntax(source), message: SymmetryBindingDiagnostic()))
+                    } else {
+                        context.diagnose(Diagnostic(node: Syntax(source), message: FairnessProfileBindingDiagnostic()))
+                    }
                     return binding
                 }
                 let identity = LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
@@ -431,6 +435,12 @@ private struct SymmetryBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-symmetry-binding")
     let severity: DiagnosticSeverity = .error
     let message = "Symmetry requires an immutable named let binding inside #spec."
+}
+
+private struct FairnessProfileBindingDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-fairness-profile-binding")
+    let severity: DiagnosticSeverity = .error
+    let message = "FairnessProfile requires an immutable named let binding inside #spec."
 }
 
 private struct BuilderLabelDiagnostic: DiagnosticMessage {

@@ -5,9 +5,16 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
     public let initialStates: Set<Machine.Snapshot>
     public let transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]]
     public let behavior: ModelBehavior
+    private let selectedFairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?
 
     public init(initialMachines: [Machine], maximumStates: Int,
         behavior: ModelBehavior = .specification) throws {
+        try self.init(initialMachines: initialMachines, maximumStates: maximumStates,
+            behavior: behavior, fairness: nil)
+    }
+
+    package init(initialMachines: [Machine], maximumStates: Int, behavior: ModelBehavior,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?) throws {
         guard let machine = initialMachines.first else { throw ExplorationError.noInitialStates }
         var snapshots: [Machine.Snapshot] = []
         var initialIDs: [Int] = []
@@ -31,15 +38,17 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
             throw ExplorationError.configurationMismatch
         }
         try self.init(machine: machine, snapshots: snapshots, initialIDs: initialIDs,
-            edges: edges, behavior: behavior)
+            edges: edges, behavior: behavior, fairness: fairness)
     }
 
     package init(machine: Machine, snapshots: [Machine.Snapshot], initialIDs: [Int],
         edges: [(source: Int, action: Machine.Action, target: Int)],
-        behavior: ModelBehavior
+        behavior: ModelBehavior,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]? = nil
     ) throws {
         self.machine = machine
         self.behavior = behavior
+        selectedFairness = fairness
         guard initialIDs.allSatisfy({ snapshots.indices.contains($0) }) else {
             throw ExplorationError.configurationMismatch
         }
@@ -61,7 +70,7 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
         throws -> [Machine.Property: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] {
         let properties = try machine.temporalProperties(checking: checking)
         guard !properties.isEmpty else { return [:] }
-        let fairness = behavior == .specification ? try machine.fairnessConditions() : []
+        let fairness = behavior == .specification ? try (selectedFairness ?? machine.fairnessConditions()) : []
         let checker = try livenessChecker(fairness: fairness)
         return try properties.mapValues {
             try checker.analyze($0, initialStates: Array(initialStates),
@@ -115,7 +124,7 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
         if !fairness.isEmpty {
             for abstract in mapped.values { _ = try abstractSuccessors(abstract) }
             let projections = mapped.mapValues(\.snapshot)
-            let concreteFairness = behavior == .specification ? try machine.fairnessConditions() : []
+            let concreteFairness = behavior == .specification ? try (selectedFairness ?? machine.fairnessConditions()) : []
             let checker = try livenessChecker(fairness: concreteFairness)
             for condition in fairness {
                 try Task.checkCancellation()

@@ -356,6 +356,9 @@ public struct CompiledSpecification: Sendable {
             tlaBundle: renderedBundle,
             configuration: rootModule.configuration,
             actions: rootModule.renderedActions, renderedPlusCalModuleBundle: plusCalBundle.map { .success($0) },
+            fairnessProfileOperators: Dictionary(uniqueKeysWithValues: module.semantics.behavior.fairnessProfiles.map {
+                ($0.name, $0.operatorName)
+            }),
             temporalObligations: Dictionary(uniqueKeysWithValues: module.semantics.behavior.temporalProperties.compactMap { property in
                 guard property.bindings.isEmpty, let obligations = rootModule.temporalObligations[property.id] else { return nil }
                 return (property.name, obligations)
@@ -370,15 +373,21 @@ public struct RenderedSpecification: Sendable {
     fileprivate let configuration: TLCConfiguration
     public let actions: [RenderedAction]
     fileprivate let renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?
+    fileprivate let renderedPlusCalProfiles: [String: Result<TLAModuleBundle, CompilationDiagnostic>]
+    fileprivate let fairnessProfileOperators: [String: String]
     package let temporalObligations: [String: [_RenderedTemporalObligation]]
 
     init(tlaBundle: TLAModuleBundle, configuration: TLCConfiguration, actions: [RenderedAction],
         renderedPlusCalModuleBundle: Result<TLAModuleBundle, CompilationDiagnostic>?,
+        renderedPlusCalProfiles: [String: Result<TLAModuleBundle, CompilationDiagnostic>] = [:],
+        fairnessProfileOperators: [String: String] = [:],
         temporalObligations: [String: [_RenderedTemporalObligation]] = [:]) {
         self.tlaBundle = tlaBundle
         self.configuration = configuration
         self.actions = actions
         self.renderedPlusCalModuleBundle = renderedPlusCalModuleBundle
+        self.renderedPlusCalProfiles = renderedPlusCalProfiles
+        self.fairnessProfileOperators = fairnessProfileOperators
         self.temporalObligations = temporalObligations.mapValues { obligations in
             obligations.sorted {
                 ($0.initialCondition, $0.property) < ($1.initialCondition, $1.property)
@@ -391,10 +400,12 @@ public struct RenderedSpecification: Sendable {
     public init(_generatedModule name: String, source: String, compilationIdentity: String,
         declarations: [String], checkDeadlock: Bool, invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
         symmetry: [String], actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil,
+        _generatedPlusCalProfiles: [String: Result<String, CompilationDiagnostic>] = [:],
         _assumptionsOnly: Bool = false,
         _generatedParameters: [(name: String, value: TLAValue)] = [],
         _generatedImports: [(name: String, source: String, structuralPath: [String])] = [],
         _generatedDependencies: [(importingModule: String, importedModule: String, structuralPath: [String])] = [],
+        _generatedFairnessProfileOperators: [String: String] = [:],
         _generatedTemporalObligations: [String: [_RenderedTemporalObligation]] = [:]) throws {
         var declarations = declarations
         var definitions: [String] = []
@@ -439,7 +450,7 @@ public struct RenderedSpecification: Sendable {
                     .init(importingModule: $0.importingModule, importedModule: $0.importedModule, structuralPath: $0.structuralPath)
                 }))
         try bundle.validateDeclaredClosure()
-        let plusCal = try _generatedPlusCal.map { result -> Result<TLAModuleBundle, CompilationDiagnostic> in
+        func configuredPlusCal(_ result: Result<String, CompilationDiagnostic>) throws -> Result<TLAModuleBundle, CompilationDiagnostic> {
             switch result {
             case .failure(let diagnostic): return .failure(diagnostic)
             case .success(let source):
@@ -449,7 +460,11 @@ public struct RenderedSpecification: Sendable {
                 return .success(authored)
             }
         }
+        let plusCal = try _generatedPlusCal.map(configuredPlusCal)
+        let plusCalProfiles = try _generatedPlusCalProfiles.mapValues(configuredPlusCal)
         self.init(tlaBundle: bundle, configuration: configuration, actions: actions, renderedPlusCalModuleBundle: plusCal,
+            renderedPlusCalProfiles: plusCalProfiles,
+            fairnessProfileOperators: _generatedFairnessProfileOperators,
             temporalObligations: _generatedTemporalObligations)
     }
 
@@ -492,7 +507,7 @@ public struct RenderedSpecification: Sendable {
         return obligations.map { obligation in
             let behaviorName = prefix + "Behavior"
             let propertyName = prefix + "Property"
-            let behavior = configuration.behavior == .specification ? "Spec" : "Init"
+            let behavior = configuration.behavior == .specification ? configuration.specificationName : "Init"
             let definitions = "\(behaviorName) == \(behavior) /\\ (\(obligation.initialCondition))\n"
                 + "\(propertyName) == \(obligation.property)\n\n"
             let directives = configuration.behavior == .specification
@@ -507,7 +522,7 @@ public struct RenderedSpecification: Sendable {
 
     /// Converts model-owned check identities at the formal export boundary.
     public func selectingChecks<Property: Hashable & Sendable>(_ checks: ModelChecks<Property>, formalPropertyNames: [Property: String],
-        behavior: ModelBehavior? = nil, symmetry: String? = nil) throws -> Self {
+        behavior: ModelBehavior? = nil, symmetry: String? = nil, fairnessProfile: String? = nil) throws -> Self {
         let names = try Set(checks.properties.map { property in
             guard let name = formalPropertyNames[property] else {
                 throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "check selection",
@@ -521,14 +536,45 @@ public struct RenderedSpecification: Sendable {
                 expected: "distinct formal names for selected properties", actual: "duplicate property projection",
                 nextSafeAction: "Use the generated model's formal property names.")
         }
-        let selected = try configuration.selecting(names, checkDeadlock: checks.checkDeadlock, behavior: behavior)
-            .selectingSymmetry(symmetry)
-        func bundle(_ original: TLAModuleBundle) -> TLAModuleBundle {
-            .init(root: .init(name: original.root.name, tla: original.root.tla,
-                cfg: selected.render(usesSymmetryReduction: symmetry != nil)), imports: original.imports, provenance: original.provenance)
+        let profileOperator: String?
+        if let fairnessProfile {
+            guard (behavior ?? configuration.behavior) == .specification,
+                  let operatorName = fairnessProfileOperators[fairnessProfile] else {
+                throw CompilationDiagnostic(code: .unsupportedFairnessProfile, stage: .rendering,
+                    path: "fairnessProfile", expected: "a declared profile selected with specification behavior",
+                    actual: fairnessProfile, nextSafeAction: "Select a profile declared by this model.")
+            }
+            profileOperator = operatorName
+        } else {
+            profileOperator = nil
         }
-        return .init(tlaBundle: bundle(tlaBundle), configuration: selected, actions: actions,
-            renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map { $0.map(bundle) },
+        let selected = try configuration.selecting(names, checkDeadlock: checks.checkDeadlock,
+                behavior: behavior, specificationName: profileOperator)
+            .selectingSymmetry(symmetry)
+        func bundle(_ original: TLAModuleBundle, using configuration: TLCConfiguration) -> TLAModuleBundle {
+            .init(root: .init(name: original.root.name, tla: original.root.tla,
+                cfg: configuration.render(usesSymmetryReduction: symmetry != nil)), imports: original.imports, provenance: original.provenance)
+        }
+        let selectedPlusCal: Result<TLAModuleBundle, CompilationDiagnostic>?
+        if let fairnessProfile {
+            let profileConfiguration = try selected.selecting(names, checkDeadlock: checks.checkDeadlock,
+                specificationName: "Spec")
+            if let profile = renderedPlusCalProfiles[fairnessProfile] {
+                selectedPlusCal = profile.map { bundle($0, using: profileConfiguration) }
+            } else if renderedPlusCalModuleBundle != nil {
+                selectedPlusCal = .failure(.init(code: .unsupportedFairnessProfile, stage: .rendering,
+                    path: "plusCal.fairnessProfile", expected: "a compiled profile-specific PlusCal bundle",
+                    actual: fairnessProfile, nextSafeAction: "Export through the generated model's typed configuration."))
+            } else {
+                selectedPlusCal = nil
+            }
+        } else {
+            selectedPlusCal = renderedPlusCalModuleBundle.map { $0.map { bundle($0, using: selected) } }
+        }
+        return .init(tlaBundle: bundle(tlaBundle, using: selected), configuration: selected, actions: actions,
+            renderedPlusCalModuleBundle: selectedPlusCal,
+            renderedPlusCalProfiles: renderedPlusCalProfiles,
+            fairnessProfileOperators: fairnessProfileOperators,
             temporalObligations: temporalObligations.filter { names.contains($0.key) })
     }
 
@@ -605,6 +651,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case invalidAuthoredPlusCalPlan
         case invalidSymmetryDeclaration
         case unsupportedSymmetryReduction
+        case unsupportedFairnessProfile
         case duplicateRecordField
         case compilationIdentityMismatch
         case unsupportedGeneratedValueShape
@@ -1283,12 +1330,22 @@ private struct CanonicalSpecificationEncoder {
                     }),
                     canonicalList(scenario.deadlockSelections.map { String($0) }),
                     canonicalList(scenario.behaviorSelections.map(\.rawValue)),
+                    canonicalList(scenario.fairnessProfileSelections.map { reference in
+                        String(spec.fairnessProfiles.firstIndex(where: { $0.reference == reference }) ?? -1)
+                    }),
                     canonicalList(scenario.checkingModeSelections.map(\.rawValue)),
                     canonicalList(scenario.symmetrySelections.map { reference in
                         String(spec.symmetrySets.firstIndex(where: { $0.reference == reference }) ?? -1)
                     })])
             }
             list("validation", scenarios) { $0 }
+        }
+        if !spec.fairnessProfiles.isEmpty {
+            let profiles = spec.fairnessProfiles.map { profile in
+                node("fairnessProfile", [profile.name,
+                    canonicalList(profile.excludedLabels.map(\.name))])
+            }
+            list("fairnessProfiles", profiles) { $0 }
         }
         list("formalParameters", formalParameters) { $0 }
         list("actions", spec.actions, canonicalAction)
@@ -1494,7 +1551,9 @@ private struct CanonicalSpecificationEncoder {
 }
 
 extension CompiledProgram {
-    package func renderAuthoredPlusCal(declarations: RenderedModule) throws -> String? {
+    package func renderAuthoredPlusCal(
+        declarations: RenderedModule, fairnessProfile: CompiledFairnessProfile? = nil
+    ) throws -> String? {
         guard let authoredAlgorithm else { return nil }
         for function in functions {
             var pending = [function.body] + (function.domainGuard.map { [$0] } ?? [])
@@ -1517,7 +1576,9 @@ extension CompiledProgram {
         let constants = metadata.constants.sorted { $0.name < $1.name }.map { "ASSUME \($0.name) = \($0.value)" }
         let prelude = try constants + renderer.resolvedFunctionDefinitions()
             + formalModuleReplacements.map(renderer.formalModuleReplacement) + renderer.assumptions(behavior)
-        let module = try metadata.authoredPlusCalModule(algorithm: authoredAlgorithm,
+        let selectedAlgorithm = fairnessProfile.map { authoredAlgorithm.selecting($0, layout: layout) }
+            ?? authoredAlgorithm
+        let module = try metadata.authoredPlusCalModule(algorithm: selectedAlgorithm,
             layout: layout, declarations: declarations,
             prelude: prelude, define: [], postTranslation: declarations.instances,
             parameterNames: layout.parameters.map { binderNames[$0.binder]! }, requiredModules: requiredStandardModules)
@@ -2008,6 +2069,15 @@ private extension CompiledModuleMetadata {
             lines.append("  /\\ \(try renderer.fairness(condition, vars: varsTuple, actionCalls: emittedActionCallNames))")
         }
         lines.append("")
+        for profile in behavior.fairnessProfiles {
+            lines.append("\(profile.operatorName) ==")
+            lines.append("  /\\ Init")
+            lines.append("  /\\ [][Next]_\(varsTuple)")
+            for condition in profile.fairness {
+                lines.append("  /\\ \(try renderer.fairness(condition, vars: varsTuple, actionCalls: emittedActionCallNames))")
+            }
+            lines.append("")
+        }
         lines.append(contentsOf: renderedTemporalProperties)
         if !renderedTemporalProperties.isEmpty { lines.append("") }
         if instancesAfterBehavior { lines += instanceDeclarations }

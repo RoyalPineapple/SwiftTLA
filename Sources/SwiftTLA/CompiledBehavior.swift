@@ -15,6 +15,7 @@ package struct CompiledBehavior: Sendable {
     package let reachabilityProperties: [CompiledStatePredicate]
     package let temporalProperties: [CompiledTemporal<CompiledStateQuery>]
     package let fairness: [CompiledFairnessCondition]
+    package let fairnessProfiles: [CompiledFairnessProfile]
     package let constraint: CompiledStateQuery?
     package let assume: CompiledStateQuery?
 
@@ -30,7 +31,8 @@ package struct CompiledBehavior: Sendable {
                     bindings: $0.bindings.mapValues(transform),
                     expectations: $0.expectations, deadlockExpectation: $0.deadlockExpectation,
                     checks: $0.checks, checkDeadlock: $0.checkDeadlock, behavior: $0.behavior,
-                    checkingMode: $0.checkingMode, symmetry: $0.symmetry)
+                    checkingMode: $0.checkingMode, symmetry: $0.symmetry,
+                    fairnessProfileIndex: $0.fairnessProfileIndex)
             },
             initializations: initializations.map {
                 (variable: $0.variable, initialization: try $0.initialization.map(transform))
@@ -47,10 +49,22 @@ package struct CompiledBehavior: Sendable {
                     bindings: property.bindings.map { try $0.map(transform) })
             },
             fairness: fairness.map { try $0.map(transform) },
+            fairnessProfiles: try fairnessProfiles.map { profile in
+                .init(name: profile.name, operatorName: profile.operatorName,
+                    excludedActions: profile.excludedActions,
+                    fairness: try profile.fairness.map { try $0.map(transform) })
+            },
             constraint: constraint.map { try $0.map(transform) },
             assume: assume.map { try $0.map(transform) })
     }
 
+}
+
+package struct CompiledFairnessProfile: Sendable {
+    package let name: String
+    package let operatorName: String
+    package let excludedActions: Set<ActionID>
+    package let fairness: [CompiledFairnessCondition]
 }
 
 package struct CompiledValidationScenario: Sendable {
@@ -64,4 +78,5 @@ package struct CompiledValidationScenario: Sendable {
     package let behavior: ModelBehavior
     package let checkingMode: ValidationCheckingMode
     package let symmetry: SymmetrySet?
+    package let fairnessProfileIndex: Int?
 }

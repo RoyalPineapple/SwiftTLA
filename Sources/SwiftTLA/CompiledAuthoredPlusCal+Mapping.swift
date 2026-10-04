@@ -1,4 +1,21 @@
 extension CompiledAuthoredPlusCalAlgorithmPlan {
+    func selecting(_ profile: CompiledFairnessProfile, layout: CompiledLayout) -> Self {
+        let excludedNames = Set(profile.excludedActions.map { layout.actions[$0.ordinal].declaration.name })
+        let locationNames = Dictionary(uniqueKeysWithValues: layout.controlLocations.map { ($0.id, $0.sourceName) })
+        return .init(name: name, sequentialFairness: sequentialFairness, shared: shared,
+            procedures: procedures, processes: processes.map { process in
+                let excluded = Set(process.steps.compactMap { step -> ControlLocationID? in
+                    guard let name = locationNames[step.label], excludedNames.contains(name) else { return nil }
+                    return step.label
+                })
+                return .init(name: process.name, binder: process.binder, swiftType: process.swiftType,
+                    domain: process.domain, fairness: process.fairness,
+                    fairnessExcludedSteps: process.fairnessExcludedSteps.union(excluded),
+                    locals: process.locals, steps: process.steps)
+            }, sequentialSteps: sequentialSteps, properties: properties,
+            translatorOwnedPropertyNames: translatorOwnedPropertyNames)
+    }
+
     func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> Self {
         func state(_ declaration: CompiledAuthoredPlusCalState) throws -> CompiledAuthoredPlusCalState {
             let initialization: CompiledAuthoredPlusCalState.Initialization

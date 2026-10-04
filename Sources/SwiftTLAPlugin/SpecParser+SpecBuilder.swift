@@ -54,6 +54,10 @@ extension ParserSession {
                 components.validationScenarios.append(validation)
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
+                      let profile = specBindings.fairnessProfiles[reference.baseName.sourceIdentifierName] {
+                components.fairnessProfiles.append(profile)
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
                       let symmetry = specBindings.symmetries[reference.baseName.sourceIdentifierName] {
                 symmetryDeclarations.append(symmetry)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
@@ -287,6 +291,29 @@ extension ParserSession {
                 }
                 if let symmetry = parseSymmetry(call, named: sourceName, into: &components) {
                     specBindings.symmetries[sourceName] = symmetry
+                }
+            } else if compilerGrammarName(in: call.calledExpression) == "FairnessProfile" {
+                guard declaration.bindingSpecifier.text == "let", specBindings.fairnessProfiles[sourceName] == nil else {
+                    components.diagnostics.append(.init(message: "A fairness profile requires a unique immutable let binding.", source: binding))
+                    continue
+                }
+                guard call.arguments.count == 1,
+                      let argument = call.arguments.first, argument.label?.text == "excluding",
+                      let labels = argument.expression.as(ArrayExprSyntax.self) else {
+                    components.diagnostics.append(.init(message: "A fairness profile requires excluding: [Step.label].", source: call))
+                    continue
+                }
+                var excluded: [AlgorithmLabelModel] = []
+                for element in labels.elements {
+                    guard let name = registeredStringEnumCase(element.expression) else {
+                        components.diagnostics.append(.init(message: "Fairness exclusions require qualified cases of a registered String-backed step enum.", source: element))
+                        excluded = []
+                        break
+                    }
+                    excluded.append(.init(name: name))
+                }
+                if excluded.count == labels.elements.count {
+                    specBindings.fairnessProfiles[sourceName] = .init(name: sourceName, excludedLabels: excluded)
                 }
             } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm" {
                 guard declaration.bindingSpecifier.text == "let", specBindings.algorithms[sourceName] == nil else {

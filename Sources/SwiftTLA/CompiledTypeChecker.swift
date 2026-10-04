@@ -327,7 +327,8 @@ package struct CompiledTypeChecker: Sendable {
                 bindings: values,
                 expectations: scenario.expectations, deadlockExpectation: scenario.deadlockExpectation,
                 checks: scenario.checks, checkDeadlock: scenario.checkDeadlock, behavior: scenario.behavior,
-                checkingMode: scenario.checkingMode, symmetry: scenario.symmetry)
+                checkingMode: scenario.checkingMode, symmetry: scenario.symmetry,
+                fairnessProfileIndex: scenario.fairnessProfileIndex)
         }
         var actions: [CompiledAction] = []
         var invariants: [CompiledStatePredicate] = []
@@ -486,6 +487,13 @@ package struct CompiledTypeChecker: Sendable {
             temporalProperties: temporalProperties,
             fairness: try inputs.semantics.behavior.fairness.map { condition in
                 try condition.map { try checkOperand($0, expected: .unknown) }
+            },
+            fairnessProfiles: try inputs.semantics.behavior.fairnessProfiles.map { profile in
+                .init(name: profile.name, operatorName: profile.operatorName,
+                    excludedActions: profile.excludedActions,
+                    fairness: try profile.fairness.map { condition in
+                        try condition.map { try checkOperand($0, expected: .unknown) }
+                    })
             },
             constraint: constraint,
             assume: assume)

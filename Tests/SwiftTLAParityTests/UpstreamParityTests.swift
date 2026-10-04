@@ -293,7 +293,9 @@ struct UpstreamParityTests {
         #expect(rendered.tlaBundle.root.tla.contains("DeadlockFree == (\\A _process \\in Proc:"))
         #expect(rendered.tlaBundle.root.tla.contains("StarvationFree == (\\A _process \\in Proc:"))
         #expect(rendered.tlaBundle.root.tla.contains("DeadlockFreedom == (\\A _process \\in Proc:"))
-        let fairness = rendered.tlaBundle.root.tla.split(separator: "\n").filter { $0.contains("WF_") }
+        let module = rendered.tlaBundle.root.tla
+        let profileStart = try #require(module.range(of: "SwiftTLAProfile0 =="))
+        let fairness = module[..<profileStart.lowerBound].split(separator: "\n").filter { $0.contains("WF_") }
         #expect(fairness.count == 1)
         let obligation = try #require(fairness.first)
         #expect(obligation.contains("\\A _process \\in Proc: WF_"))
@@ -303,6 +305,35 @@ struct UpstreamParityTests {
         #expect(configuration.contains("SPECIFICATION Spec"))
         #expect(configuration.contains("INVARIANT MutualExclusion"))
         #expect(!configuration.contains("PROPERTY DeadlockFreedom"))
+    }
+
+    @Test("three-process Dijkstra liveness selects the published fairness profile and checks")
+    func dijkstraLivenessScenario() throws {
+        #expect(try modelValidationScenarios().contains {
+            $0.id == "dijkstra-mutex-1" && $0.scenario.name == "Liveness3Processors"
+        })
+        let scenario = try #require(DijkstraMutexModel.validationScenarios().first {
+            $0.name == "Liveness3Processors"
+        })
+        #expect(scenario.configuration.Proc == Set<DijkstraMutexModel.Process>([.one, .two, .three]))
+        #expect(scenario.behavior == .specification)
+        #expect(scenario.checking.properties == [.MutualExclusion, .DeadlockFreedom])
+        #expect(scenario.checking.checkDeadlock)
+
+        let rendered = try scenario.render()
+        #expect(Set(rendered.checkNames) == ["MutualExclusion", "DeadlockFreedom"])
+        let configuration = try #require(rendered.tlaBundle.root.cfg)
+        #expect(configuration.contains("SPECIFICATION SwiftTLAProfile0"))
+        #expect(configuration.contains("INVARIANT MutualExclusion"))
+        #expect(configuration.contains("PROPERTY DeadlockFreedom"))
+        let module = rendered.tlaBundle.root.tla
+        let profile = try #require(module.components(separatedBy: "SwiftTLAProfile0 ==").last)
+        let obligation = try #require(profile.split(separator: "\n").first { $0.contains("WF_") })
+        #expect(obligation.contains("Li0(_process)"))
+        #expect(!obligation.contains("ncs(_process)"))
+
+        let plusCal = try rendered.plusCalBundle()
+        #expect(plusCal.root.tla.contains("ncs:-"))
     }
 
     @Test("bounded Consensus fixture retains terminal deadlocks and temporal progress")

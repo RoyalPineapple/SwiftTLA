@@ -47,6 +47,9 @@ extension NativeSwiftEmitter {
             let deadlock = scenario.checkDeadlock
                 ? ".\((scenario.deadlockExpectation ?? .satisfied).rawValue)" : "nil"
             let symmetry = scenario.symmetry.map { String(reflecting: "Symm\($0.variableName)") } ?? "nil"
+            let profileName = scenario.fairnessProfileIndex.map {
+                String(reflecting: program.behavior.fairnessProfiles[$0].name)
+            } ?? "nil"
             scenarios.append("""
             ValidationScenario(name: \(String(reflecting: scenario.name)),
                 displayName: \(String(reflecting: scenario.displayLabel ?? scenario.name)),
@@ -55,6 +58,8 @@ extension NativeSwiftEmitter {
                 checkingMode: .\(scenario.checkingMode.rawValue),
                 behavior: .\(scenario.behavior.rawValue),
                 selectedSymmetry: \(symmetry),
+                selectedFairnessProfile: \(scenario.fairnessProfileIndex.map(String.init) ?? "nil"),
+                selectedFairnessProfileName: \(profileName),
                 expectations: [\(selected.isEmpty ? ":" : expectations)],
                 deadlockExpectation: \(deadlock))
             """)
@@ -71,6 +76,8 @@ extension NativeSwiftEmitter {
             public let checkingMode: ValidationCheckingMode
             public let behavior: ModelBehavior
             let selectedSymmetry: String?
+            let selectedFairnessProfile: Int?
+            let selectedFairnessProfileName: String?
             public let expectations: [Property: ValidationExpectation]
             public let deadlockExpectation: ValidationExpectation?
 
@@ -80,8 +87,19 @@ extension NativeSwiftEmitter {
             public var formalPropertyNames: [Property: String] {
                 Machine.formalPropertyNames
             }
+            public func fairnessConditions(on machine: Machine) throws -> [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] {
+                switch selectedFairnessProfile {
+                \(program.behavior.fairnessProfiles.indices.map { index in
+                    "case \(index): return try machine._fairnessProfile\(index)Conditions()"
+                }.joined(separator: "\n"))
+                case nil: return try machine.fairnessConditions()
+                default: throw ExplorationError.configurationMismatch
+                }
+            }
             public func render() throws -> RenderedSpecification {
-                try \(model.typeName).render(\(arguments)).selectingChecks(checking, formalPropertyNames: Machine.formalPropertyNames, behavior: behavior, symmetry: selectedSymmetry)
+                try \(model.typeName).render(\(arguments)).selectingChecks(checking,
+                    formalPropertyNames: Machine.formalPropertyNames, behavior: behavior,
+                    symmetry: selectedSymmetry, fairnessProfile: selectedFairnessProfileName)
             }
         }
         public static func validationScenarios() throws -> [ValidationScenario] {

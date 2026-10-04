@@ -5,7 +5,7 @@ extension ParserSession {
     func validationRoot(_ call: FunctionCallExprSyntax) -> FunctionCallExprSyntax? {
         var root = call
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
-              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "behavior", "usingSymmetry"].contains(member.declName.baseName.sourceIdentifierName),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "behavior", "usingSymmetry", "usingFairness"].contains(member.declName.baseName.sourceIdentifierName),
               let base = member.base?.as(FunctionCallExprSyntax.self) {
             root = base
         }
@@ -17,7 +17,7 @@ extension ParserSession {
         var root = call
         var overrides: [FunctionCallExprSyntax] = []
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
-              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "behavior", "usingSymmetry"].contains(member.declName.baseName.sourceIdentifierName),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "behavior", "usingSymmetry", "usingFairness"].contains(member.declName.baseName.sourceIdentifierName),
               let base = member.base?.as(FunctionCallExprSyntax.self) {
             overrides.append(root)
             root = base
@@ -67,6 +67,16 @@ extension ParserSession {
                         }
                         recordValidationSymmetry(named: scenario.name, at: argument.expression)
                         scenario.symmetrySelections.append(symmetry.reference)
+                        continue
+                    }
+                    if member.declName.baseName.sourceIdentifierName == "usingFairness" {
+                        guard override.arguments.count == 1,
+                              let argument = override.arguments.first,
+                              let reference = argument.expression.as(DeclReferenceExprSyntax.self),
+                              let profile = specBindings.fairnessProfiles[reference.baseName.sourceIdentifierName] else {
+                            throw SourceParseDiagnostic(message: "Fairness selection requires a registered model-owned profile binding.", source: override)
+                        }
+                        scenario.fairnessProfileSelections.append(profile.reference)
                         continue
                     }
                     if member.declName.baseName.sourceIdentifierName == "checkingMode" {

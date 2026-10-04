@@ -661,6 +661,29 @@ The compiler preserves resolved control-location identities through native check
 PlusCal export marks each exempt label with `:-`, including `While` labels.
 This contract supplies the fairness exemption required by upstream Boulanger's `ncs:-` declaration.
 
+A model can declare a named alternative fairness profile when published configurations
+select different fairness for the same algorithm. Inside `#spec`, an immutable Swift
+binding registers it, and `Validation.usingFairness(_:)` selects it for one scenario:
+
+```swift
+let NonCriticalMayStutter = FairnessProfile(excluding: [Step.ncs])
+NonCriticalMayStutter
+let liveness = Validation {}.usingFairness(NonCriticalMayStutter)
+liveness
+```
+
+Without a selection, the algorithm's declared process fairness is unchanged.
+The selected profile removes the named steps from their process fairness
+disjunctions; it changes neither initial states, actions, transition labels,
+property selection, nor deadlock policy. Duplicate or unknown step exclusions,
+an unregistered or repeated profile selection, and selection with
+`.behavior(.initialAndNext)` fail compilation. The compiler retains the resolved
+step identities. Direct TLA+ selects a profile-specific specification operator;
+authored PlusCal marks the same excluded steps with `:-` and selects its
+translated `Spec`. Both exports come from the compiled algorithm, not a
+post-render text rewrite. Dijkstra's three-process `LSpec` configuration uses
+this form, while its four-process safety configuration keeps the default `Spec`.
+
 ### Temporal claims for each process member
 
 A temporal declaration inside `Each` applies separately to every member of that

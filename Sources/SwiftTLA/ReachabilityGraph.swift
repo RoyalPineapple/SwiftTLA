@@ -1,3 +1,8 @@
+public typealias MachineFairnessCondition<State, Action> = (
+    name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool,
+    changes: (@Sendable (State, State) throws -> Bool)?
+)
+
 /// Generated transition semantics shared by application execution and exploration.
 public protocol StateMachine: Sendable {
     associatedtype Snapshot: Hashable, Sendable
@@ -17,7 +22,7 @@ public protocol StateMachine: Sendable {
     func assumptionsHold() throws -> Bool
     func satisfiesStateConstraint() throws -> Bool
     /// A nil change predicate selects equality of the complete snapshot.
-    func fairnessConditions() throws -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool, changes: (@Sendable (Snapshot, Snapshot) throws -> Bool)?)]
+    func fairnessConditions() throws -> [MachineFairnessCondition<Snapshot, Action>]
     func temporalProperties(checking: Set<Property>) throws -> [Property: TemporalCondition<@Sendable (Snapshot, Snapshot) throws -> Bool>]
     func violatedInvariants(checking: Set<Property>) throws -> [Property]
     static var invariantProperties: [Property] { get }
@@ -100,6 +105,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     public private(set) var refinementFailures: [Machine.Property: RefinementFailure<Machine.Snapshot, Machine.Action>] = [:]
     public private(set) var temporalResults: [Machine.Property: TemporalAnalysis<Machine.Snapshot, Machine.Action?>] = [:]
     private var checker: LivenessChecker<Machine.Snapshot, Machine.Action, Int>?
+    private let selectedFairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?
     public let initialStates: Set<Machine.Snapshot>
     public let transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]]
     public let checking: ModelChecks<Machine.Property>
@@ -107,16 +113,29 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
 
     public init(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Machine.Property>? = nil,
         behavior: ModelBehavior = .specification) throws {
+        try self.init(initialMachines: initialMachines, maximumStates: maximumStates,
+            checking: checking, behavior: behavior, fairness: nil)
+    }
+
+    package init(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Machine.Property>?,
+        behavior: ModelBehavior, fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?) throws {
         try self.init(initialMachines: initialMachines, maximumStates: maximumStates, checking: checking,
-                      behavior: behavior, stopOnViolation: false)
+            behavior: behavior, fairness: fairness, stopOnViolation: false)
     }
 
     /// Checks generated transitions in breadth-first order and stops at a safety violation.
     public static func check(initialMachines: [Machine], maximumStates: Int,
         checking: ModelChecks<Machine.Property>? = nil, behavior: ModelBehavior = .specification) throws -> NativeCheckResult<Machine> {
+        try check(initialMachines: initialMachines, maximumStates: maximumStates,
+            checking: checking, behavior: behavior, fairness: nil)
+    }
+
+    package static func check(initialMachines: [Machine], maximumStates: Int,
+        checking: ModelChecks<Machine.Property>?, behavior: ModelBehavior,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?) throws -> NativeCheckResult<Machine> {
         do {
             return .exhausted(try Self(initialMachines: initialMachines, maximumStates: maximumStates,
-                                      checking: checking, behavior: behavior, stopOnViolation: true))
+                                      checking: checking, behavior: behavior, fairness: fairness, stopOnViolation: true))
         } catch let stopped as NativeCheckStopped<Machine> {
             return .counterexample(stopped.counterexample)
         }
@@ -130,7 +149,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         do {
             _ = try Self(initialMachines: initialMachines, maximumStates: maximumStates,
                 checking: .init(properties: [property], checkDeadlock: false), behavior: .initialAndNext,
-                stopOnViolation: false, stopOnReachability: property)
+                fairness: nil, stopOnViolation: false, stopOnReachability: property)
             return nil
         } catch let found as NativeReachabilityFound<Machine> {
             return found.trace
@@ -138,13 +157,15 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
     }
 
     private init(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Machine.Property>?,
-        behavior: ModelBehavior, stopOnViolation: Bool, stopOnReachability: Machine.Property? = nil) throws {
+        behavior: ModelBehavior, fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?,
+        stopOnViolation: Bool, stopOnReachability: Machine.Property? = nil) throws {
         guard maximumStates > 0 else { throw ExplorationError.invalidStateLimit(maximumStates) }
         guard let initialMachine = initialMachines.first else { throw ExplorationError.noInitialStates }
         var context = CheckingContext(registers: try initialMachine.initialCheckingRegisters())
         let checking = checking ?? ModelChecks(properties: Set(Machine.Property.allCases), checkDeadlock: Machine.checksDeadlock)
         self.checking = checking
         self.behavior = behavior
+        selectedFairness = fairness
         let properties = try initialMachine.temporalProperties(checking: checking.properties)
         machine = initialMachine
         var transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]] = [:]
@@ -280,7 +301,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         })
         if !properties.isEmpty {
             let checker = try temporalChecker()
-            let fairness = behavior == .specification ? try initialMachine.fairnessConditions() : []
+            let fairness = behavior == .specification ? try (selectedFairness ?? initialMachine.fairnessConditions()) : []
             temporalResults = try properties.mapValues {
                 try checker.analyze($0, initialStates: Array(initialStates), renderScope: { fairness[$0].name })
             }
@@ -341,7 +362,7 @@ extension ReachabilityGraph {
         let actionNames = Dictionary(uniqueKeysWithValues: Set(transitions.values.flatMap { $0.map(\.action) }).map {
             ($0, String(describing: $0))
         })
-        let fairness = behavior == .specification ? try machine.fairnessConditions() : []
+        let fairness = behavior == .specification ? try (selectedFairness ?? machine.fairnessConditions()) : []
         let progress: [[Machine.Snapshot: Set<Machine.Snapshot>]?] = try fairness.map { condition in
             guard let changes = condition.changes else { return nil }
             return try Dictionary(uniqueKeysWithValues: transitions.map { source, successors in

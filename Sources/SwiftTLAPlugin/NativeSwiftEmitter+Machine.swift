@@ -680,14 +680,44 @@ extension NativeSwiftEmitter {
             \(propertyBody)
         }
         """)
+        declarations += try fairnessDeclarations(program.behavior.fairness,
+            methodName: "fairnessConditions", suffix: "Default",
+            configurationParameters: configurationParameters, arguments: arguments,
+            captureList: captureList)
+        for (index, profile) in program.behavior.fairnessProfiles.enumerated() {
+            declarations += try fairnessDeclarations(profile.fairness,
+                methodName: "_fairnessProfile\(index)Conditions", suffix: "Profile\(index)",
+                configurationParameters: configurationParameters, arguments: arguments,
+                captureList: captureList)
+        }
+        if let assume = program.behavior.assume {
+            declarations += try nativeDeclarations("""
+            private static func _assumptionsHold(in state: Snapshot\(configurationParameters)) throws -> Bool {
+                \(try expression(assume.expression))
+            }
+            public func assumptionsHold() throws -> Bool {
+                try Self._assumptionsHold(in: _execution\(arguments))
+            }
+            """)
+        } else {
+            declarations += try nativeDeclarations("public func assumptionsHold() throws -> Bool { true }")
+        }
+        return declarations
+    }
+
+    private mutating func fairnessDeclarations(
+        _ conditions: [CompiledFairnessCondition], methodName: String, suffix: String,
+        configurationParameters: String, arguments: String, captureList: String
+    ) throws -> [DeclSyntax] {
+        var declarations: [DeclSyntax] = []
         var fairness: [String] = []
         var configuredFairness: [String] = []
-        for (index, condition) in program.behavior.fairness.enumerated() {
+        for (index, condition) in conditions.enumerated() {
             let name: String
             let matcher: String
             let changes: String
             if let projection = condition.projection {
-                let function = "_fairnessChanges\(index)"
+                let function = "_fairnessChanges\(suffix)_\(index)"
                 declarations += try nativeDeclarations("""
                 private static func \(function)(in state: Snapshot, nextState: Snapshot\(configurationParameters)) throws -> Bool {
                     \(try expression(projection)) != \(try expression(projection, state: "nextState."))
@@ -765,24 +795,12 @@ extension NativeSwiftEmitter {
             fairness.append("(name: \(String(reflecting: name + (condition.projection == nil ? "" : " [projection \(index)]"))), isStrong: \(condition.isStrong), matches: \(matcher), changes: \(changes))")
         }
         declarations += try nativeDeclarations("""
-        public func fairnessConditions() throws -> [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool, changes: (@Sendable (Snapshot, Snapshot) throws -> Bool)?)] {
+        \(methodName == "fairnessConditions" ? "public" : "fileprivate") func \(methodName)() throws -> [MachineFairnessCondition<Snapshot, Action>] {
             \(configuredFairness.isEmpty ? "let" : "var") _fairness: [(name: String, isStrong: Bool, matches: @Sendable (Action) -> Bool, changes: (@Sendable (Snapshot, Snapshot) throws -> Bool)?)] = [\(fairness.joined(separator: ",\n"))]
             \(configuredFairness.joined(separator: "\n"))
             return _fairness.sorted { $0.name < $1.name }
         }
         """)
-        if let assume = program.behavior.assume {
-            declarations += try nativeDeclarations("""
-            private static func _assumptionsHold(in state: Snapshot\(configurationParameters)) throws -> Bool {
-                \(try expression(assume.expression))
-            }
-            public func assumptionsHold() throws -> Bool {
-                try Self._assumptionsHold(in: _execution\(arguments))
-            }
-            """)
-        } else {
-            declarations += try nativeDeclarations("public func assumptionsHold() throws -> Bool { true }")
-        }
         return declarations
     }
 

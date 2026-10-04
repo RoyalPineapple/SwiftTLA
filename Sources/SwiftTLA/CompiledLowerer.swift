@@ -363,6 +363,11 @@ struct CompiledLowerer {
             .init(expression: expression, operators: operators,
                 actionDependencies: enabledActions.dependencies)
         }
+        let compiledFairness: [CompiledFairnessCondition] = fairness.map { condition in
+            .init(scope: condition.scope, isStrong: condition.isStrong, projection: condition.projection,
+                enabledActions: condition.projection.map { predicate($0).enabledActions } ?? [])
+        }
+        let fairnessProfiles = try lowerFairnessProfiles(spec.fairnessProfiles, base: compiledFairness)
         let stateProperties = statePropertyBodies.map { property in
             CompiledStatePredicate(id: property.id, name: property.name, predicate: predicate(property.body))
         }
@@ -414,10 +419,8 @@ struct CompiledLowerer {
                 invariants: Array(stateProperties.prefix(spec.invariants.count)),
                 reachabilityProperties: Array(stateProperties.dropFirst(spec.invariants.count)),
                 temporalProperties: temporalProperties,
-                fairness: fairness.map { condition in
-                    .init(scope: condition.scope, isStrong: condition.isStrong, projection: condition.projection,
-                        enabledActions: condition.projection.map { predicate($0).enabledActions } ?? [])
-                },
+                fairness: compiledFairness,
+                fairnessProfiles: fairnessProfiles,
                 constraint: constraint,
                 assume: assume.map { .init(expression: $0, enabledActions: [],
                     clauseSourceOffsets: spec.assumptions.map(\.sourceOffset)) }),
@@ -440,6 +443,10 @@ struct CompiledLowerer {
         guard names.allSatisfy({ !$0.isEmpty }), Set(names).count == names.count else {
             throw invalid("declarations", "duplicate or empty scenario name")
         }
+        let profileNames = spec.fairnessProfiles.map(\.name)
+        guard profileNames.allSatisfy({ !$0.isEmpty }), Set(profileNames).count == profileNames.count else {
+            throw invalid("fairness", "duplicate or empty fairness profile name")
+        }
         let parameters = Set(spec.parameters.map(\.reference))
         let properties = layout.properties
         let propertyReferences = properties.compactMap(\.reference)
@@ -450,9 +457,19 @@ struct CompiledLowerer {
         for scenario in spec.validationScenarios {
             guard scenario.propertySelections.count <= 1, scenario.deadlockSelections.count <= 1,
                   scenario.behaviorSelections.count <= 1,
+                  scenario.fairnessProfileSelections.count <= 1,
                   scenario.checkingModeSelections.count <= 1,
                   scenario.symmetrySelections.count <= 1 else {
                 throw invalid(scenario.name, "duplicate check selection")
+            }
+            let fairnessProfileIndex = try scenario.fairnessProfileSelections.first.map { selected in
+                guard let index = spec.fairnessProfiles.firstIndex(where: { $0.reference == selected }) else {
+                    throw invalid(scenario.name, "foreign or unregistered fairness profile")
+                }
+                guard scenario.behaviorSelections.first != .initialAndNext else {
+                    throw invalid(scenario.name, "a fairness profile requires specification behavior")
+                }
+                return index
             }
             let selectedSymmetry: SymmetrySet?
             if let reference = scenario.symmetrySelections.first {
@@ -527,9 +544,48 @@ struct CompiledLowerer {
                 deadlockExpectation: scenario.deadlockExpectations.first, checks: checks, checkDeadlock: checkDeadlock,
                 behavior: scenario.behaviorSelections.first ?? .specification,
                 checkingMode: scenario.checkingModeSelections.first ?? .exhaustive,
-                symmetry: selectedSymmetry))
+                symmetry: selectedSymmetry, fairnessProfileIndex: fairnessProfileIndex))
         }
         return scenarios
+    }
+
+    private func lowerFairnessProfiles(
+        _ profiles: [FairnessProfileDecl], base: [CompiledFairnessCondition]
+    ) throws -> [CompiledFairnessProfile] {
+        let grouped = Set(base.flatMap { condition -> [ActionID] in
+            if case .eachActionGroup(let ids) = condition.scope { return ids }
+            return []
+        })
+        var usedNames = reservedRenderedNames
+        return try profiles.enumerated().map { index, profile in
+            let names = profile.excludedLabels.map(\.name)
+            guard Set(names).count == names.count else {
+                throw CompilationDiagnostic(code: .unsupportedFairnessProfile, stage: .binding,
+                    path: "fairnessProfiles.\(profile.name)", expected: "distinct eligible process labels",
+                    actual: "duplicate exclusions", nextSafeAction: "List each excluded step once.")
+            }
+            let excluded = try Set(names.map { name in
+                guard let id = layout.actions.first(where: { $0.declaration.name == name })?.id,
+                      grouped.contains(id) else {
+                    throw CompilationDiagnostic(code: .unsupportedFairnessProfile, stage: .binding,
+                        path: "fairnessProfiles.\(profile.name)", expected: "a step in a compiled process fairness group",
+                        actual: name, nextSafeAction: "Exclude a labeled step from a fair Each declaration.")
+                }
+                return id
+            })
+            let filtered = base.compactMap { condition -> CompiledFairnessCondition? in
+                guard case .eachActionGroup(let ids) = condition.scope else { return condition }
+                let retained = ids.filter { !excluded.contains($0) }
+                guard !retained.isEmpty else { return nil }
+                return .init(scope: .eachActionGroup(retained), isStrong: condition.isStrong,
+                    projection: condition.projection, enabledActions: condition.enabledActions)
+            }
+            var operatorName = "SwiftTLAProfile\(index)"
+            while usedNames.contains(operatorName) { operatorName += "_" }
+            usedNames.insert(operatorName)
+            return .init(name: profile.name, operatorName: operatorName,
+                excludedActions: excluded, fairness: filtered)
+        }
     }
 
     mutating func refinementExpression(_ expression: StateExpr, at path: String) throws -> CompiledExpression {

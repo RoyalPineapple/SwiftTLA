@@ -5,6 +5,34 @@ import SwiftTLAMacros
 @testable import SwiftTLAPlugin
 
 struct ProcessFairnessExemptionTests {
+    @Test("a validation scenario can select a narrower fairness obligation without changing actions")
+    func scenarioFairnessSelection() throws {
+        let scenarios = try ScenarioFairnessSelectionModel.validationScenarios()
+        #expect(scenarios.map(\.name) == ["strict", "relaxed"])
+        let strict = try scenarios[0].explore(maximumStates: 10)
+        let relaxed = try scenarios[1].explore(maximumStates: 10)
+        #expect(strict.temporalResults[.Entered]?.status == .satisfied)
+        #expect(relaxed.temporalResults[.Entered]?.status == .violated)
+        struct Edge: Hashable {
+            let source: ScenarioFairnessSelectionModel.Snapshot
+            let action: ScenarioFairnessSelectionModel.Action
+            let target: ScenarioFairnessSelectionModel.Snapshot
+        }
+        func edges(_ graph: ReachabilityGraph<ScenarioFairnessSelectionModel>) -> Set<Edge> {
+            Set(graph.transitions.flatMap { source, outgoing in
+                outgoing.map { Edge(source: source, action: $0.action, target: $0.target) }
+            })
+        }
+        #expect(strict.initialStates == relaxed.initialStates)
+        #expect(edges(strict) == edges(relaxed))
+        let strictRender = try scenarios[0].render()
+        let relaxedRender = try scenarios[1].render()
+        #expect(strictRender.tlaBundle.tla == relaxedRender.tlaBundle.tla)
+        #expect(strictRender.tlaBundle.cfg.contains("SPECIFICATION Spec"))
+        #expect(relaxedRender.tlaBundle.cfg.contains("SPECIFICATION SwiftTLAProfile0"))
+        #expect(relaxedRender.tlaBundle.tla.contains("SwiftTLAProfile0 =="))
+    }
+
     @Test("process fairness is one obligation over all eligible atomic steps")
     func groupedProcessFairness() throws {
         let machine = try ProcessFairnessGroupModel.makeMachine()
@@ -90,6 +118,32 @@ struct ProcessFairnessExemptionTests {
                 }
             }
             #expect(algorithm.validate().map(\.code) == [expected])
+        }
+    }
+
+    @Test("a fairness profile rejects duplicate and non-process step exclusions")
+    func invalidProfileExemptions() {
+        typealias Step = ProcessFairnessExemptionModel.Step
+        for (labels, reason) in [([Step.ncs, .ncs], "duplicate exclusions"),
+                                  ([Step.missing], "missing")] {
+            let profile = FairnessProfile(_name: "invalid", excluding: labels)
+            let specification = TLASpec("InvalidFairnessProfile") {
+                Algorithm("InvalidFairnessProfile") {
+                    Each(Set<Int>([0]), fairness: .weak) { _ in
+                        Do(Step.ncs) { Goto(Step.ncs) }
+                    }
+                }
+                profile
+            }
+            do {
+                _ = try specification.compile()
+                Issue.record("Invalid fairness profile was accepted")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == .unsupportedFairnessProfile)
+                #expect(diagnostic.actual == reason)
+            } catch {
+                Issue.record("Unexpected profile failure: \(error)")
+            }
         }
     }
 

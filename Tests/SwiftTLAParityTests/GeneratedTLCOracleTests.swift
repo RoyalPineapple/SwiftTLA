@@ -13,6 +13,8 @@ struct GeneratedTLCOracleTests {
             name: original.name, displayName: original.displayName, configuration: original.configuration,
             checking: original.checking, checkingMode: original.checkingMode, behavior: original.behavior,
             selectedSymmetry: original.selectedSymmetry,
+            selectedFairnessProfile: original.selectedFairnessProfile,
+            selectedFairnessProfileName: original.selectedFairnessProfileName,
             expectations: expectations, deadlockExpectation: original.deadlockExpectation)
         let pin = try testReferencePin()
         let originalKey = try GeneratedTLCOracle.cacheKey(
@@ -29,6 +31,8 @@ struct GeneratedTLCOracleTests {
             name: decisive.name, displayName: decisive.displayName, configuration: decisive.configuration,
             checking: decisive.checking, checkingMode: .exhaustive, behavior: decisive.behavior,
             selectedSymmetry: decisive.selectedSymmetry,
+            selectedFairnessProfile: decisive.selectedFairnessProfile,
+            selectedFairnessProfileName: decisive.selectedFairnessProfileName,
             expectations: decisive.expectations, deadlockExpectation: decisive.deadlockExpectation)
         let pin = try testReferencePin()
         let decisiveBundle = try decisive.render().tlaBundle

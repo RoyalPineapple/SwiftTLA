@@ -386,6 +386,7 @@ struct NativeCodeGenerationTests {
             initializations: [], initialInvariant: nil,
             actions: [], enabledActionIndices: [], enabledActionDependencies: [:],
             invariants: [], reachabilityProperties: [], temporalProperties: [], fairness: compilation.semantics.behavior.fairness,
+            fairnessProfiles: [],
             constraint: nil, assume: nil)
         let program = CompiledProgram(identity: compilation.identity, moduleMetadata: compilation.moduleMetadata,
             moduleImports: compilation.moduleImports, formalModuleReplacements: [],

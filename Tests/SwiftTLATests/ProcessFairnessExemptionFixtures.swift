@@ -44,3 +44,33 @@ struct ProcessFairnessGroupModel: Sendable {
         }
     }
 }
+
+@TLAModel
+struct ScenarioFairnessSelectionModel: Sendable {
+    enum Step: String, CaseIterable { case ncs, cs }
+
+    static var spec: TLASpec {
+        #spec("ScenarioFairnessSelection") { scope in
+            let entered = scope.sharedVar(initial: false)
+            let Entered = Temporal()
+            let algorithm = Algorithm(label: "ScenarioFairnessSelection") {
+                Each(Set<Int>([0]), fairness: .weak) { _ in
+                    Do(Step.ncs) { Goto(Step.cs) }
+                    Do(Step.cs) {
+                        Assign(entered, to: true)
+                        Goto(Step.ncs)
+                    }
+                }
+            }
+            algorithm
+            Entered(.eventually(entered))
+            let mayWait = FairnessProfile(excluding: [Step.ncs])
+            mayWait
+            let strict = Validation {}.checking(only: [Entered]).checkingDeadlock(false)
+            strict
+            let relaxed = Validation {}.usingFairness(mayWait).checking(only: [Entered])
+                .checkingDeadlock(false).expect(Entered, .violated)
+            relaxed
+        }
+    }
+}
