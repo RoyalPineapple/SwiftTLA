@@ -165,6 +165,7 @@ run_guarded() {
     local status=0
     if [[ "$mode" == "static" ]]; then
         git diff --check
+        "$(dirname "$0")/setup-finite-graph-tools.sh" --verify-bridge-sources
         return
     fi
 

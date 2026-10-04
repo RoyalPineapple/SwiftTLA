@@ -8,9 +8,10 @@ TOOL_ROOT="$PROJECT_ROOT/.build/finite-graph-tools"
 CASES_FILE="${FINITE_GRAPH_CASES:-$PROJECT_ROOT/Verification/FiniteGraph/cases.json}"
 STAGE_INPUTS_ONLY=false
 SKIP_INPUTS=false
+VERIFY_BRIDGE_ONLY=false
 
 usage() {
-    echo "Usage: $0 [--toolchain <path>] [--tool-root <path>] [--cases <path>] [--stage-inputs-only] [--skip-inputs]" >&2
+    echo "Usage: $0 [--toolchain <path>] [--tool-root <path>] [--cases <path>] [--stage-inputs-only] [--skip-inputs] [--verify-bridge-sources]" >&2
     exit 2
 }
 
@@ -21,6 +22,7 @@ while [ "$#" -gt 0 ]; do
         --cases) CASES_FILE="${2:-}"; shift 2 ;;
         --stage-inputs-only) STAGE_INPUTS_ONLY=true; shift ;;
         --skip-inputs) SKIP_INPUTS=true; shift ;;
+        --verify-bridge-sources) VERIFY_BRIDGE_ONLY=true; shift ;;
         *) usage ;;
     esac
 done
@@ -158,6 +160,29 @@ JAVA_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '5p')"
 TLC_ARCHIVE_SHA256="$(printf '%s\n' "$LOCK_VALUES" | sed -n '6p')"
 TLC_SOURCE_REVISION="$(printf '%s\n' "$LOCK_VALUES" | sed -n '7p')"
 
+if ! BRIDGE_SOURCE_PATHS="$(python3 - "$PROJECT_ROOT" "$TOOLCHAIN" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1]).resolve()
+sources = json.loads(Path(sys.argv[2]).read_text())["bridge"]["sources"]
+if not isinstance(sources, dict) or not sources:
+    raise SystemExit("bridge source inventory is empty")
+for relative, digest in sorted(sources.items()):
+    source = (root / relative).resolve()
+    if not source.is_relative_to(root) or "\n" in str(source) or source.suffix != ".java":
+        raise SystemExit("invalid bridge source path: " + relative)
+    if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+        raise SystemExit("bridge source digest mismatch: " + relative)
+    print(source)
+PY
+)"; then
+    fail "bridge source validation failed"
+fi
+[ "$VERIFY_BRIDGE_ONLY" = false ] || exit 0
+
 sha256() {
     shasum -a 256 "$1" | awk '{print $1}'
 }
@@ -226,27 +251,6 @@ with open(jar_path, "wb") as destination:
     destination.write(jar)
 PY
 download_locked "$JAVA_URL" "$JAVA_SHA256" "$JAVA_ARCHIVE"
-if ! BRIDGE_SOURCE_PATHS="$(python3 - "$PROJECT_ROOT" "$TOOLCHAIN" <<'PY'
-import hashlib
-import json
-from pathlib import Path
-import sys
-
-root = Path(sys.argv[1]).resolve()
-sources = json.loads(Path(sys.argv[2]).read_text())["bridge"]["sources"]
-if not isinstance(sources, dict) or not sources:
-    raise SystemExit("bridge source inventory is empty")
-for relative, digest in sorted(sources.items()):
-    source = (root / relative).resolve()
-    if not source.is_relative_to(root) or "\n" in str(source) or source.suffix != ".java":
-        raise SystemExit("invalid bridge source path: " + relative)
-    if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
-        raise SystemExit("bridge source digest mismatch: " + relative)
-    print(source)
-PY
-)"; then
-    fail "bridge source validation failed"
-fi
 BRIDGE_SOURCES=()
 while IFS= read -r source; do
     BRIDGE_SOURCES+=("$source")
