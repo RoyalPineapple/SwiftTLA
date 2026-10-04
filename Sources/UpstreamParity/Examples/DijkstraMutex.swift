@@ -1,7 +1,7 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// This partial Dijkstra model has three processes.
+/// This partial Dijkstra model has the upstream three- and four-process populations.
 /// It does not yet match either published TLC configuration.
 ///
 /// `temporary` begins as the upstream model's opaque `defaultInitValue`.
@@ -14,6 +14,7 @@ package struct DijkstraMutexModel: Sendable {
         case one = "p1"
         case two = "p2"
         case three = "p3"
+        case four = "p4"
 
         package static var defaultValue: Self { .one }
         package static let finiteValues = allCases
@@ -46,23 +47,22 @@ package struct DijkstraMutexModel: Sendable {
         var tlaValue: TLAValue { .constant(rawValue) }
     }
 
-    private typealias ActiveTemporary = OneOf<Process, SetExpr<Process>>
-    private typealias Temporary = OneOf<TemporaryInitial, ActiveTemporary>
+    private typealias ActiveTemporary = OneOf<Process, Set<Process>>
 
     package static var spec: TLASpec {
-        #spec("DijkstraMutex") {
+        #spec("DijkstraMutex") { (scope: SpecificationScope) in
             Extends(.integers)
+            let Proc = scope.parameter(as: Set<Process>.self, in: Set<Set<Process>>([
+                Set<Process>([.one, .two, .three]),
+                Set<Process>([.one, .two, .three, .four]),
+            ]))
             let Mutex = Algorithm(scoped: { scope in
-                let b = scope.sharedVar(initial: Function<Process, Bool>.literal(
-                    (.one, true), (.two, true), (.three, true)
-                ))
-                let c = scope.sharedVar(initial: Function<Process, Bool>.literal(
-                    (.one, true), (.two, true), (.three, true)
-                ))
-                let k = scope.sharedVar(in: SetExpr<Process>.literal(.one, .two, .three))
+                let b = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
+                let c = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
+                let k = scope.sharedVar(in: Proc)
 
-                Each(Process.all, fairness: .weak, scoped: { selfID, scope in
-                    let temporary = scope.localVar(initial: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.first(.notAssigned)
+                Each(Proc, fairness: .weak, scoped: { selfID, scope in
+                    let temporary = scope.localVar(initial: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.first(.notAssigned)
                     )
 
                     Do(Label.li0) {
@@ -84,8 +84,8 @@ package struct DijkstraMutexModel: Sendable {
                     Do(Label.li3a) {
                         Assign(
                             temporary,
-                            to: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.second(
-                                OneOf<Process, SetExpr<Process>>.first(k.expr)
+                            to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(
+                                OneOf<Process, Set<Process>>.first(k.expr)
                             )
                         )
                     }
@@ -112,8 +112,8 @@ package struct DijkstraMutexModel: Sendable {
                         Assign(c, to: c.updating(selfID, to: false))
                         Assign(
                             temporary,
-                            to: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.second(OneOf<Process, SetExpr<Process>>.second(
-                                SetExpr<Process>.literal(.one, .two, .three).removing(selfID)
+                            to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
+                                Proc.removing(selfID)
                             )
                         )
                         )
@@ -121,12 +121,12 @@ package struct DijkstraMutexModel: Sendable {
 
                     Do(Label.li4b) {
                         let active = temporary.expr.assuming(ActiveTemporary.self)
-                        let remaining = active.assuming(SetExpr<Process>.self)
+                        let remaining = active.assuming(Set<Process>.self)
                         If(!remaining.isEmpty) {
                             With(remaining) { process in
                                 Assign(
                                     temporary,
-                                    to: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.second(OneOf<Process, SetExpr<Process>>.second(
+                                    to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
                                         remaining.removing(process)
                                     )
                                 )
@@ -149,8 +149,8 @@ package struct DijkstraMutexModel: Sendable {
                 })
 
                 Invariant("MutualExclusion") {
-                    ForAll(Process.all) { first in
-                        ForAll(Process.all) { second in
+                    ForAll(in: Proc) { first in
+                        ForAll(in: Proc) { second in
                             first == second || !(At(Label.critical, first) && At(Label.critical, second))
                         }
                     }

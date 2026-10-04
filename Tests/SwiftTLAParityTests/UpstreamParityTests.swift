@@ -233,20 +233,37 @@ struct UpstreamParityTests {
         }
     }
 
-    @Test("partial three-process Dijkstra port preserves upstream model values and its generated graph")
-    func dijkstraPartialNativeGraph() throws {
-        let initial = try DijkstraMutexModel.initialMachines()
+    @Test("configured Dijkstra populations preserve complete initial domains and the three-process graph")
+    func dijkstraConfiguredPopulations() throws {
         let owner = try #require(TLAStateProjection.Token(validating: "k"))
+        let firstFlag = try #require(TLAStateProjection.Token(validating: "b"))
+        let secondFlag = try #require(TLAStateProjection.Token(validating: "c"))
+        let control = try #require(TLAStateProjection.Token(validating: "pc"))
         let temporary = try #require(TLAStateProjection.Token(validating: "temporary"))
-        let members: Set<TLAValue> = [.constant("p1"), .constant("p2"), .constant("p3")]
-        let initialTemporary = TLAValue.function(Dictionary(uniqueKeysWithValues: members.map {
-            ($0, TLAValue.constant("defaultInitValue"))
-        }))
-        for machine in initial {
-            let state = try machine.formalProjection(of: machine.snapshot)
-            try #require(state.value(for: owner).map(members.contains) == true)
-            try #require(state.value(for: temporary) == initialTemporary)
+        for population in [
+            Set<DijkstraMutexModel.Process>([.one, .two, .three]),
+            Set<DijkstraMutexModel.Process>([.one, .two, .three, .four]),
+        ] {
+            let initial = try DijkstraMutexModel.initialMachines(
+                configuration: DijkstraMutexModel.Configuration(Proc: population))
+            let members = Set(population.map(\.tlaValue))
+            let flags = TLAValue.function(Dictionary(uniqueKeysWithValues: members.map { ($0, TLAValue.bool(true)) }))
+            let controls = TLAValue.function(Dictionary(uniqueKeysWithValues: members.map { ($0, TLAValue.string("Li0")) }))
+            let initialTemporary = TLAValue.function(Dictionary(uniqueKeysWithValues: members.map {
+                ($0, TLAValue.constant("defaultInitValue"))
+            }))
+            #expect(initial.count == population.count)
+            for machine in initial {
+                let state = try machine.formalProjection(of: machine.snapshot)
+                try #require(state.value(for: owner).map(members.contains) == true)
+                #expect(state.value(for: firstFlag) == flags)
+                #expect(state.value(for: secondFlag) == flags)
+                #expect(state.value(for: control) == controls)
+                #expect(state.value(for: temporary) == initialTemporary)
+            }
         }
+        let initial = try DijkstraMutexModel.initialMachines(
+            configuration: DijkstraMutexModel.Configuration(Proc: [.one, .two, .three]))
         let graph = try ReachabilityGraph(
             initialMachines: initial,
             maximumStates: Example.dijkstraMutex.maximumStateLimit

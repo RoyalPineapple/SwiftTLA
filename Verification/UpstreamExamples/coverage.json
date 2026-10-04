@@ -4983,7 +4983,7 @@
       "path": "specifications/dijkstra-mutex",
       "name": "Dijkstra's Mutual Exclusion Algorithm",
       "audit": "reference inputs audited",
-      "gap": "The existing Swift model has three processes and ordinary per-process weak fairness. LSpec-model requires three processes, an ncs fairness exemption, MutualExclusion, and temporal DeadlockFreedom. Safety-4-processors requires four processes, Spec fairness, and MutualExclusion. Neither configuration has a model-owned scenario or an independent reference case. The generated-machine diagnostic covers its 90,882-state graph and reports no safety violations. It does not establish either upstream comparison. Both configurations remain missing, and legacy cleanup remains incomplete.",
+      "gap": "The Swift model now takes a typed Proc population and locally checks the complete initial domains for both published three- and four-process populations. Its three-process generated-machine diagnostic still covers 90,882 states with no safety violations. LSpec-model additionally requires an ncs fairness exemption and temporal DeadlockFreedom; Safety-4-processors requires complete four-process checking. Neither configuration has a model-owned upstream scenario, complete graph/property comparison, or hosted evidence. Both remain missing, and legacy cleanup is incomplete.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5017,7 +5017,7 @@
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/MC.tla",
           "role": "configured root",
-          "reason": "The wrapper selects Proc={p1,p2,p3,p4}, Spec, and MutualExclusion. The configuration uses opaque model values and defaultInitValue, selects no temporal property, and does not disable TLC deadlock checks. The Swift model has only three processes.",
+          "reason": "The wrapper selects Proc={p1,p2,p3,p4}, Spec, and MutualExclusion. The configuration uses opaque model values and defaultInitValue, selects no temporal property, and does not disable TLC deadlock checks. The Swift model accepts this population, but its complete graph and selected outcomes remain unchecked against upstream.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -5047,7 +5047,7 @@
       "partialCases": [
         {
           "implementation": "Sources/UpstreamParity/Examples/DijkstraMutex.swift",
-          "reason": "DijkstraMutexModel uses three process identifiers and a defaultInitValue sentinel with the upstream model-value encoding; the focused generated-machine projection and 90,882-state safety diagnostic pass locally. It still uses fixed Function and SetExpr values and unqualified weak fairness. It does not compare complete graphs or property outcomes with either upstream configuration. No registered finite-graph case or model-owned scenario covers either configuration. No completion credit."
+          "reason": "DijkstraMutexModel uses a typed Proc set parameter for both published populations. A focused local generated-machine test verifies exact b, c, pc, temporary, and k initial domains in each, then completes the three-process 90,882-state graph without safety violations; 36 neighboring parameter, process, fairness, and collection tests pass. Fairness remains unqualified, DeadlockFreedom is undeclared, and the four-process graph is not yet checked. Neither upstream configuration has a model-owned scenario, independent complete graph/property comparison, or hosted evidence. No completion credit."
         }
       ]
     },
