@@ -11,7 +11,7 @@ private enum UpstreamCommandError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            "Usage: tlc-validate upstream list | upstream run --case <id-or-all> --output <directory> | upstream cache-key --case <id> | upstream recompare --case <id> --evidence <directory> | upstream compare-retained-graphs --case <id> --evidence <directory> --output <directory> | upstream annotate --case <id> --evidence <directory>"
+            "Usage: tlc-validate upstream list | upstream run --case <id-or-all> --output <directory> [--oracle <completed-generated-oracle>] | upstream cache-key --case <id> | upstream recompare --case <id> --evidence <directory> | upstream compare-retained-graphs --case <id> --evidence <directory> --output <directory> | upstream annotate --case <id> --evidence <directory>"
         case .unknownCase(let id): "unknown upstream case: \(id)"
         case .invalidToolchain: "invalid pinned TLC toolchain"
         case .outputExists(let path): "output already exists: \(path)"
@@ -129,10 +129,17 @@ func runUpstream(arguments: [String]) -> Never {
             }
             exit(0)
         }
-        guard arguments.count == 5, arguments[0] == "run", arguments[1] == "--case",
-              arguments[3] == "--output" else { throw UpstreamCommandError.usage }
+        guard (arguments.count == 5 || arguments.count == 7),
+              arguments[0] == "run", arguments[1] == "--case",
+              arguments[3] == "--output",
+              arguments.count == 5 || arguments[5] == "--oracle" else {
+            throw UpstreamCommandError.usage
+        }
         let selected = manifest.cases.filter { arguments[2] == "all" || $0.id == arguments[2] }
         guard !selected.isEmpty else { throw UpstreamCommandError.unknownCase(arguments[2]) }
+        guard arguments.count == 5 || selected.count == 1 else { throw UpstreamCommandError.usage }
+        let generatedOracle = arguments.count == 7
+            ? URL(fileURLWithPath: arguments[6]).standardizedFileURL : nil
         let output = URL(fileURLWithPath: arguments[4]).standardizedFileURL
         guard !FileManager.default.fileExists(atPath: output.path) else {
             throw UpstreamCommandError.outputExists(output.path)
@@ -163,6 +170,7 @@ func runUpstream(arguments: [String]) -> Never {
                               structuralPath: [declaration.id, "dependencies", String(index)])
                     })
                 if let assumption = try declaration.resolveAssumptionScenario() {
+                    guard generatedOracle == nil else { throw UpstreamCommandError.usage }
                     guard let expected = declaration.assumptionExpectation else {
                         throw EvidenceFormatError.invalidField(record: declaration.id, field: "assumption expectation")
                     }
@@ -185,7 +193,8 @@ func runUpstream(arguments: [String]) -> Never {
                         timeout: declaration.timeoutSeconds,
                         decisive: declaration.comparisonMode == .decisiveCounterexample,
                         tools: tools, pin: pin, to: output.appendingPathComponent(declaration.id),
-                        spoolExecutable: validationExecutableURL())
+                        spoolExecutable: validationExecutableURL(),
+                        generatedOracle: generatedOracle)
                     print("upstream \(declaration.id): \(report.result)")
                     if report.result != "exact" { failures += 1 }
                 }

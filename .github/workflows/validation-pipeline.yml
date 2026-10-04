@@ -364,22 +364,63 @@ jobs:
             rmdir "$(dirname "$cached")"
           fi
           echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
+      - name: Identify reusable generated TLC oracle
+        if: steps.upstream-reuse.outputs.reuse != 'true'
+        id: oracle-key
+        run: |
+          maximum_states=$(jq -er --arg id "$CASE_ID" '
+            [.cases[] | select(.id == $id) | .exploration.maximumStateLimit]
+            | if length == 0 then 10000000
+              elif length == 1 then [10000000, .[0]] | max
+              else error("duplicate case ID") end
+            | select(type == "number" and . > 0 and floor == .)
+          ' Verification/FiniteGraph/cases.json)
+          key=$(.build/validation-bin/tlc-validate oracle cache-key \
+            --case "$CASE_ID" --maximum-states "$maximum_states")
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        if: steps.upstream-reuse.outputs.reuse != 'true'
+        id: oracle-cache
+        with:
+          path: .build/validation-evidence/oracle/${{ matrix.case }}
+          key: generated-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.oracle-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Sources/UpstreamParity/Conformance/AssumptionValidationEvidence.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift') }}
       - name: Compare generated and upstream TLA through TLC
         if: steps.upstream-reuse.outputs.reuse != 'true'
         timeout-minutes: 120
         run: |
-          set -o pipefail
+          set -euo pipefail
+          oracle_args=()
+          if [ "${{ steps.oracle-cache.outputs.cache-hit }}" = true ]; then
+            oracle=".build/validation-evidence/oracle/$CASE_ID"
+            jq -e --arg key '${{ steps.oracle-key.outputs.key }}' \
+              '.cacheKey == $key and (.sourceSHA | test("^[0-9a-f]{40}$")) and .originRunID != ""' \
+              "$oracle/evidence-origin.json"
+            if jq -e '.schema == "swifttla.generated-tlc-oracle" and .graphComplete == true' \
+                "$oracle/oracle.json" >/dev/null; then
+              oracle_args=(--oracle "$oracle")
+            fi
+          fi
           df -h .
           (
+            minutes=0
             while sleep 60; do
+              minutes=$((minutes + 1))
               df -Pk . | tail -1
               du -sk ".build/validation-evidence/upstream/$CASE_ID" 2>/dev/null || true
+              if [ "$minutes" -eq 30 ]; then
+                tlc_pid=$(pgrep -f 'tlc2.TLC' | head -n 1 || true)
+                if [ -n "$tlc_pid" ]; then
+                  mkdir -p .build/validation-evidence/upstream-profiles
+                  sample "$tlc_pid" 20 5 \
+                    -file ".build/validation-evidence/upstream-profiles/$CASE_ID.sample.txt" || true
+                fi
+              fi
             done
           ) &
           monitor_pid=$!
           trap 'kill "$monitor_pid" 2>/dev/null || true; df -h .; du -sh ".build/validation-evidence/upstream/$CASE_ID" 2>/dev/null || true' EXIT
           .build/validation-bin/tlc-validate upstream run --case "$CASE_ID" \
-            --output .build/validation-evidence/upstream
+            --output .build/validation-evidence/upstream "${oracle_args[@]}"
           jq -n --arg key '${{ steps.upstream-key.outputs.key }}' --arg sha "$SWIFT_TLA_SHA" \
             --arg run "$GITHUB_RUN_ID" '{cacheKey:$key,sourceSHA:$sha,originRunID:$run}' \
             > ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"

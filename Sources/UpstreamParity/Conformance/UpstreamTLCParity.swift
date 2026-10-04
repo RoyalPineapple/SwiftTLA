@@ -57,11 +57,15 @@ package enum UpstreamTLCParity {
         expectedModuleSHA256: String, expectedCFGSHA256: String,
         maximumStates: Int, timeout: TimeInterval, decisive: Bool,
         tools: ResolvedTLCToolchain, pin: TLCReferencePin, to directory: URL,
-        process: TLCProcessAdapter = TLCProcessAdapter(), spoolExecutable: URL? = nil
+        process: TLCProcessAdapter = TLCProcessAdapter(), spoolExecutable: URL? = nil,
+        generatedOracle: URL? = nil
     ) throws -> UpstreamTLCParityReport {
         guard SHA256.hex(Data(reference.tla.utf8)) == expectedModuleSHA256,
               SHA256.hex(Data(reference.cfg.utf8)) == expectedCFGSHA256 else {
             throw UpstreamTLCParityError.inputMismatch(id)
+        }
+        guard generatedOracle == nil || !decisive else {
+            throw UpstreamTLCParityError.invalidOutcome("decisive generated oracle: \(id)")
         }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let work = directory.appendingPathComponent("work")
@@ -164,10 +168,17 @@ package enum UpstreamTLCParity {
             declarations: configuration.declarations, in: reference)
         var generatedGraphOutput = directory.appendingPathComponent("generated-graph")
         var referenceGraphOutput = directory.appendingPathComponent("reference-graph")
-        let generatedCheckingOutcome = try GeneratedTLCOracle.run(
-            bundle: generatedGraphBundle, id: id, maximumStates: maximumStates, timeout: timeout,
-            tools: tools, pin: pin, workRoot: work, retained: generatedGraphOutput,
-            invocation: .finiteGraph, renderedActions: rendered.actions, process: process)
+        let generatedCheckingOutcome: TLCExecutionOutcome
+        if let generatedOracle, try reuseGeneratedGraph(
+                from: generatedOracle, to: generatedGraphOutput, id: id,
+                bundle: generatedGraphBundle, pin: pin) {
+            generatedCheckingOutcome = .completed
+        } else {
+            generatedCheckingOutcome = try GeneratedTLCOracle.run(
+                bundle: generatedGraphBundle, id: id, maximumStates: maximumStates, timeout: timeout,
+                tools: tools, pin: pin, workRoot: work, retained: generatedGraphOutput,
+                invocation: .finiteGraph, renderedActions: rendered.actions, process: process)
+        }
         let referenceCheckingOutcome = try GeneratedTLCOracle.run(
             bundle: referenceGraphBundle, id: id, maximumStates: maximumStates, timeout: timeout,
             tools: tools, pin: pin, workRoot: work, retained: referenceGraphOutput,
@@ -348,6 +359,76 @@ package enum UpstreamTLCParity {
             return graph
         }
         throw UpstreamTLCParityError.invalidOutcome("missing retained TLC graph: \(side)")
+    }
+
+    package static func reuseGeneratedGraph(
+        from oracle: URL, to output: URL, id: String,
+        bundle: TLAModuleBundle, pin: TLCReferencePin
+    ) throws -> Bool {
+        let report = try JSONDecoder().decode(GeneratedTLCOracleReport.self,
+            from: Data(contentsOf: oracle.appendingPathComponent("oracle.json")))
+        let identity = try GeneratedTLCOracle.inputIdentity(
+            bundle: bundle, pin: pin, arguments: ["-workers", "1", "-fp", "1"])
+        guard report.schema == "swifttla.generated-tlc-oracle",
+              report.caseID == id, report.graphComplete else {
+            throw UpstreamTLCParityError.invalidOutcome("cached generated oracle identity: \(id)")
+        }
+        guard report.graphInputSHA256 == identity else { return false }
+        let retained = oracle.appendingPathComponent("tlc-graph")
+        let receipt = try JSONSerialization.jsonObject(with:
+            Data(contentsOf: retained.appendingPathComponent("tlc-process.json"))) as? [String: Any]
+        let expectedInputs = Dictionary(uniqueKeysWithValues:
+            bundleInputJSON(bundle).map { ($0["file"]!, $0["sha256"]!) })
+        let inputs = receipt?["inputs"] as? [[String: String]]
+        let pairs = inputs?.compactMap { input -> (String, String)? in
+            guard input.count == 2, let file = input["file"], let hash = input["sha256"] else {
+                return nil
+            }
+            return (file, hash)
+        }
+        let invocation = receipt?["invocation"] as? [String: Any]
+        let arguments = invocation?["arguments"] as? [String]
+        let toolPin = receipt?["toolPin"] as? [String: Any]
+        let expectedPin: [String: Any] = [
+            "tag": pin.tag, "commit": pin.commit,
+            "jarSHA256": pin.jarSHA256, "javaDistribution": pin.javaDistribution,
+            "javaVersion": pin.javaVersion, "javaArchiveSHA256": pin.javaArchiveSHA256,
+            "bridgeClass": pin.bridgeClass, "bridgeSourceHashes": pin.bridgeSourceHashes,
+            "bridgeBinarySHA256": pin.bridgeBinarySHA256
+        ]
+        guard receipt?["caseID"] as? String == id,
+              receipt?["configuration"] as? String == bundle.cfg,
+              invocation?["exitStatus"] as? Int == 0,
+              let inputs, let pairs, pairs.count == inputs.count,
+              Set(pairs.map(\.0)).count == pairs.count,
+              Dictionary(uniqueKeysWithValues: pairs) == expectedInputs,
+              let arguments,
+              arguments.contains("class,\(pin.bridgeClass)"),
+              zip(arguments, arguments.dropFirst()).contains(where: {
+                  $0.0 == "-workers" && $0.1 == "1"
+              }),
+              zip(arguments, arguments.dropFirst()).contains(where: {
+                  $0.0 == "-fp" && $0.1 == "1"
+              }),
+              let toolPin,
+              try JSONSerialization.data(withJSONObject: toolPin, options: [.sortedKeys])
+                  == JSONSerialization.data(withJSONObject: expectedPin, options: [.sortedKeys]) else {
+            throw UpstreamTLCParityError.invalidOutcome("cached generated oracle receipt: \(id)")
+        }
+        let origin = try JSONSerialization.jsonObject(with:
+            Data(contentsOf: oracle.appendingPathComponent("evidence-origin.json"))) as? [String: Any]
+        guard let sourceSHA = origin?["sourceSHA"] as? String,
+              sourceSHA.range(of: "^[0-9a-f]{40}$", options: .regularExpression) != nil,
+              let runID = origin?["originRunID"] as? String, !runID.isEmpty,
+              let cacheKey = origin?["cacheKey"] as? String, !cacheKey.isEmpty else {
+            throw UpstreamTLCParityError.invalidOutcome("cached generated oracle origin: \(id)")
+        }
+        try FileManager.default.copyItem(at: retained, to: output)
+        try FileManager.default.copyItem(at: oracle.appendingPathComponent("oracle.json"),
+            to: output.appendingPathComponent("oracle.json"))
+        try FileManager.default.copyItem(at: oracle.appendingPathComponent("evidence-origin.json"),
+            to: output.appendingPathComponent("evidence-origin.json"))
+        return true
     }
 
     private static func write(_ report: UpstreamTLCParityReport, to directory: URL) throws {
