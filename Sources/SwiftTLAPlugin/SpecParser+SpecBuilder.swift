@@ -11,6 +11,7 @@ extension ParserSession {
         stateDeclarationOffsets = [:]
         actionDeclarationOffsets = [:]
         propertyDeclarationOffsets = [:]
+        symmetryDeclarationOffsets = []
         let outerSymmetry = symmetryDeclarations
         symmetryDeclarations = []
         defer { symmetryDeclarations = outerSymmetry }
@@ -60,6 +61,7 @@ extension ParserSession {
                       let reference = expression.as(DeclReferenceExprSyntax.self),
                       let symmetry = specBindings.symmetries[reference.baseName.sourceIdentifierName] {
                 symmetryDeclarations.append(symmetry)
+                symmetryDeclarationOffsets.append(reference.positionAfterSkippingLeadingTrivia.utf8Offset)
             } else if let forStmt = statement.item.as(ForStmtSyntax.self) {
                 parseForLoop(forStmt, into: &components)
             } else if case .decl(let decl) = statement.item,

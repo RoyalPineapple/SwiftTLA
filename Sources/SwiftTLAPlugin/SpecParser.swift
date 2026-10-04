@@ -7,6 +7,7 @@ import Foundation
 
 final class ParserSession {
     var symmetryDeclarations: [SymmetrySetDecl] = []
+    var symmetryDeclarationOffsets: [Int] = []
     var stateDeclarationOffsets: [String: [Int]] = [:]
     var actionDeclarationOffsets: [String: [Int]] = [:]
     var propertyDeclarationOffsets: [String: [Int]] = [:]
@@ -78,6 +79,14 @@ final class ParserSession {
             guard key.hasPrefix("refinements."), let dot = key.lastIndex(of: ".") else { return nil }
             key = String(key[..<dot])
         }
+    }
+
+    func symmetryDeclarationOffset(for diagnosticPath: String) -> Int? {
+        guard diagnosticPath.hasPrefix("symmetrySets["),
+              let close = diagnosticPath.firstIndex(of: "]"),
+              let index = Int(diagnosticPath[diagnosticPath.index(diagnosticPath.startIndex, offsetBy: "symmetrySets[".count)..<close]),
+              symmetryDeclarationOffsets.indices.contains(index) else { return nil }
+        return symmetryDeclarationOffsets[index]
     }
 
     func recordValidationBinding(named scenario: String, parameter: String, at value: ExprSyntax) {

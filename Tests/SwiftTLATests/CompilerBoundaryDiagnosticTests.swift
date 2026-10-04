@@ -465,6 +465,36 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("Overlapping symmetry domains point to the second registration")
+    func overlappingSymmetryDomainsPointToSecondRegistration() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Member: String, CaseIterable, FiniteTLAValueDomain { case a, b }
+            static var spec: TLASpec {
+                #spec { scope in
+                    let value = scope.sharedVar(initial: 0)
+                    let first = Symmetry(Set(Member.all))
+                    first
+                    let second = Symmetry(Set(Member.all))
+                    second
+                }
+            }
+        }
+        """)
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let registration = try #require(Array(source.tokens(viewMode: .sourceAccurate))
+            .last { $0.text == "second" })
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(declaration)
+            Issue.record("Overlapping symmetry domains must fail")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidSymmetryDeclaration)
+            #expect(diagnostic.path == "symmetrySets[1].values")
+            #expect(diagnostic.sourceOffset == registration.positionAfterSkippingLeadingTrivia.utf8Offset)
+        }
+    }
+
     @Test("A fairness profile with initial-and-next checking points to its selection")
     func fairnessProfileBehaviorPointsToSelection() throws {
         let source = Parser.parse(source: """
