@@ -461,6 +461,8 @@ package struct CompiledFairnessCondition: Sendable {
         case action(ActionID)
         case actionCall(CompiledActionCall)
         case eachAction(ActionID)
+        case actionCallGroup([CompiledActionCall])
+        case eachActionGroup([ActionID])
     }
 
     package let scope: Scope

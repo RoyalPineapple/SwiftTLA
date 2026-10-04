@@ -5,13 +5,14 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
     case weakFairnessNext
     case strongFairnessNext
     /// Fairness for one concrete finite parameterization of an action.
-    /// Algorithm lowering uses this form so each process receives its own
-    /// PlusCal-equivalent fairness obligation.
     case weakFairnessActionCall(FormalActionCall)
     case strongFairnessActionCall(FormalActionCall)
     /// One obligation for each argument tuple in the action's immutable domains.
     case weakFairnessEachAction(String)
     case strongFairnessEachAction(String)
+    /// One process-member obligation over the disjunction of its atomic steps.
+    case weakFairnessEachActionGroup([String])
+    case strongFairnessEachActionGroup([String])
 
     public var description: String {
         switch self {
@@ -24,14 +25,18 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
         case .strongFairnessActionCall(let action): return "SF(\(action))"
         case .weakFairnessEachAction(let action): return "Each(WF(\(action)))"
         case .strongFairnessEachAction(let action): return "Each(SF(\(action)))"
+        case .weakFairnessEachActionGroup(let actions): return "Each(WF(\(actions.joined(separator: " \\/ "))))"
+        case .strongFairnessEachActionGroup(let actions): return "Each(SF(\(actions.joined(separator: " \\/ "))))"
         }
     }
 
     internal var isStrong: Bool {
         switch self {
         case .projected(let condition, _): condition.isStrong
-        case .strongFairness, .strongFairnessNext, .strongFairnessActionCall, .strongFairnessEachAction: true
-        case .weakFairness, .weakFairnessNext, .weakFairnessActionCall, .weakFairnessEachAction: false
+        case .strongFairness, .strongFairnessNext, .strongFairnessActionCall, .strongFairnessEachAction,
+             .strongFairnessEachActionGroup: true
+        case .weakFairness, .weakFairnessNext, .weakFairnessActionCall, .weakFairnessEachAction,
+             .weakFairnessEachActionGroup: false
         }
     }
 }

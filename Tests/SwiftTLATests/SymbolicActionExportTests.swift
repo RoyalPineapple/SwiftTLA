@@ -74,4 +74,24 @@ struct SymbolicActionExportTests {
             }
         }
     }
+
+    @Test("grouped fairness rejects actions with different process populations")
+    func rejectsMismatchedFairnessPopulations() throws {
+        var spec = canonicalTestSpec(variables: [("value", .value(.int(0)))], actions: [
+            ("first", .assign(.named("value"), .variable("member")), [
+                ActionBinding(name: "member", domain: .setLiteral([.int(0)]), generatedSwiftType: "Int")
+            ]),
+            ("second", .assign(.named("value"), .variable("member")), [
+                ActionBinding(name: "member", domain: .setLiteral([.int(1)]), generatedSwiftType: "Int")
+            ])
+        ])
+        spec.fairness = [.weakFairnessEachActionGroup(["first", "second"])]
+        do {
+            _ = try spec.compile()
+            Issue.record("Mismatched fairness populations were accepted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.stage == .binding)
+            #expect(diagnostic.expected == "actions over the same process population")
+        }
+    }
 }

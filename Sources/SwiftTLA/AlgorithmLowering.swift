@@ -337,11 +337,17 @@ enum AlgorithmLowerer {
                     generatedAssertionInvariants += assertionInvariants(loweredStatements.assertions,
                         enabled: enabled, domain: process.domain)
                 }
-                if !process.fairnessExcludedLabels.contains(atomic.label) {
-                    fairness += fairnessConditions(for: generatedAction, domain: process.domain, policy: process.fairness)
-                }
                 return generatedAction
             }
+        }
+        var actionOffset = 0
+        for process in processes {
+            let processActions = actions[actionOffset..<(actionOffset + process.steps.count)]
+            let eligible = zip(process.steps, processActions).compactMap { step, action in
+                process.fairnessExcludedLabels.contains(step.label) ? nil : action
+            }
+            fairness += fairnessConditions(for: eligible, policy: process.fairness)
+            actionOffset += process.steps.count
         }
 
         let procedureActions = procedures.flatMap { procedure in
@@ -1039,26 +1045,13 @@ enum AlgorithmLowerer {
     }
 
 
-    private static func fairnessConditions(
-        for action: NamedAction,
-        domain: StateExpr,
-        policy: AlgorithmFairness
-    ) -> [FairnessCondition] {
-        if case .none = policy { return [] }
-        guard let members = domain.literalSetMembers else {
-            return [policy == .strong ? .strongFairnessEachAction(action.name) : .weakFairnessEachAction(action.name)]
-        }
+    private static func fairnessConditions(for actions: [NamedAction], policy: AlgorithmFairness) -> [FairnessCondition] {
+        guard !actions.isEmpty else { return [] }
+        let names = actions.map(\.name)
         return switch policy {
-        case .none:
-            []
-        case .weak:
-            members.map {
-                .weakFairnessActionCall(.init(name: action.name, arguments: [$0]))
-            }
-        case .strong:
-            members.map {
-                .strongFairnessActionCall(.init(name: action.name, arguments: [$0]))
-            }
+        case .none: []
+        case .weak: [.weakFairnessEachActionGroup(names)]
+        case .strong: [.strongFairnessEachActionGroup(names)]
         }
     }
 

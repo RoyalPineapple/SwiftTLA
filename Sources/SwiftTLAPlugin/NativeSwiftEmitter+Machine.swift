@@ -718,6 +718,8 @@ extension NativeSwiftEmitter {
                     arguments: try call.arguments.map { try $0.rendered(using: program.layout) }
                 ).description
                 matcher = "{ \(captureList)action in action == \(value) }"
+            case .actionCallGroup:
+                throw unsupported("unexpanded process fairness group")
             case .eachAction(let id):
                 let action = model.api.actions.first { $0.compiledAction == id }!
                 let bindings = program[id].bindings
@@ -735,6 +737,28 @@ extension NativeSwiftEmitter {
                 let _action: Action = \(value)
                 _fairness.append((name: try formalCall(for: _action).description,
                     isStrong: \(condition.isStrong), matches: { [ _action ] in $0 == _action }, changes: \(changes)))
+                """ + String(repeating: "\n}", count: loops.count))
+                continue
+            case .eachActionGroup(let ids):
+                guard let first = ids.first else { throw unsupported("empty process fairness group") }
+                let bindings = program[first].bindings
+                var loops: [String] = []
+                for binding in bindings {
+                    try program.requireImmutableDomain(binding.domain, path: "fairness.\(first.ordinal).domain")
+                    loops.append("for \(binder(binding.binder)) in \(try actionDomain(binding, state: "")) {")
+                }
+                let values = ids.map { id -> String in
+                    let action = model.api.actions.first { $0.compiledAction == id }!
+                    let arguments = zip(action.bindings, bindings).compactMap { binding, value -> String? in
+                        binding.isPublic ? "\(binding.swiftIdentifier): \(binder(value.binder))" : nil
+                    }
+                    return ".\(action.swiftIdentifier)" + (arguments.isEmpty ? "" : "(\(arguments.joined(separator: ", ")))")
+                }
+                configuredFairness.append(loops.joined(separator: "\n") + "\n" + """
+                \(bindings.map { "_ = \(binder($0.binder))" }.joined(separator: "\n"))
+                let _actions: [Action] = [\(values.joined(separator: ", "))]
+                _fairness.append((name: try _actions.map { try formalCall(for: $0).description }.joined(separator: " or "),
+                    isStrong: \(condition.isStrong), matches: { [ _actions ] in _actions.contains($0) }, changes: \(changes)))
                 """ + String(repeating: "\n}", count: loops.count))
                 continue
             }

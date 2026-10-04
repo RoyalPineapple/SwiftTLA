@@ -35,6 +35,16 @@ extension CompiledSpecification {
                         projection: condition.projection, enabledActions: condition.enabledActions)
                 }
             }
+            if case .eachActionGroup(let ids) = condition.scope {
+                let group = Set(ids)
+                let arguments = Set(calls.filter { group.contains($0.action) }.map(\.arguments))
+                    .sorted { $0.lexicographicallyPrecedes($1) }
+                return arguments.map { values in
+                    .init(scope: .actionCallGroup(ids.map { .init(action: $0, arguments: values) }),
+                        isStrong: condition.isStrong, projection: condition.projection,
+                        enabledActions: condition.enabledActions)
+                }
+            }
             return [condition]
         }
         let runtime = CompiledRuntime(compilation: self)
@@ -60,7 +70,8 @@ extension CompiledSpecification {
                 case .next: return true
                 case .action(let action): return call.action == action
                 case .actionCall(let expected): return call == expected
-                case .eachAction: preconditionFailure("Per-instance fairness must be expanded before analysis")
+                case .actionCallGroup(let group): return group.contains(call)
+                case .eachAction, .eachActionGroup: preconditionFailure("Per-instance fairness must be expanded before analysis")
                 }
             },
             changes: { source, target, scope in
@@ -138,7 +149,12 @@ extension CompiledSpecification {
                             named: layout.actions[call.action.ordinal].declaration.name,
                             arguments: try call.arguments.map { try $0.rendered(using: layout) }
                         ) + suffix
-                    case .eachAction: preconditionFailure("Per-instance fairness must be expanded before analysis")
+                    case .actionCallGroup(let group):
+                        return try group.map { call in
+                            formalActionCall(named: layout.actions[call.action.ordinal].declaration.name,
+                                arguments: try call.arguments.map { try $0.rendered(using: layout) })
+                        }.joined(separator: " \\/ ") + suffix
+                    case .eachAction, .eachActionGroup: preconditionFailure("Per-instance fairness must be expanded before analysis")
                     }
                 }
             ).map(state: { $0 }, action: { call in

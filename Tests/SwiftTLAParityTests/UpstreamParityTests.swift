@@ -290,6 +290,12 @@ struct UpstreamParityTests {
         #expect(rendered.checkNames == ["MutualExclusion"])
         #expect(rendered.checksDeadlock)
         #expect(rendered.tlaBundle.root.tla.contains("DeadlockFreedom == (\\A _process \\in Proc:"))
+        let fairness = rendered.tlaBundle.root.tla.split(separator: "\n").filter { $0.contains("WF_") }
+        #expect(fairness.count == 1)
+        let obligation = try #require(fairness.first)
+        #expect(obligation.contains("\\A _process \\in Proc: WF_"))
+        #expect(obligation.contains("Li0(_process)"))
+        #expect(obligation.contains("ncs(_process)"))
         let configuration = try #require(rendered.tlaBundle.root.cfg)
         #expect(configuration.contains("SPECIFICATION Spec"))
         #expect(configuration.contains("INVARIANT MutualExclusion"))

@@ -5,6 +5,23 @@ import SwiftTLAMacros
 @testable import SwiftTLAPlugin
 
 struct ProcessFairnessExemptionTests {
+    @Test("process fairness is one obligation over all eligible atomic steps")
+    func groupedProcessFairness() throws {
+        let machine = try ProcessFairnessGroupModel.makeMachine()
+        let conditions = try machine.fairnessConditions()
+        #expect(conditions.count == 1)
+        let first = try #require(machine.successors().first)
+        let second = try #require(first.machine.successors().first)
+        #expect(conditions[0].matches(first.action))
+        #expect(conditions[0].matches(second.action))
+        let rendered = try ProcessFairnessGroupModel.render()
+        let obligations = rendered.tlaBundle.root.tla.split(separator: "\n").filter { $0.contains("WF_") }
+        #expect(obligations.count == 1)
+        #expect(obligations[0].contains("first"))
+        #expect(obligations[0].contains("second"))
+        #expect(obligations[0].contains("\\/"))
+    }
+
     @Test("an exempt entry step permits a generated-machine stuttering counterexample")
     func exemptEntry() throws {
         let machine = try ProcessFairnessExemptionModel.makeMachine()
@@ -18,14 +35,15 @@ struct ProcessFairnessExemptionTests {
         #expect(try machine.fairnessConditions().count == 1)
         let rendered = try ProcessFairnessExemptionModel.render()
         let fairness = rendered.tlaBundle.tla.split(separator: "\n").filter { $0.contains("WF_") }.joined()
-        #expect(fairness.contains("WF_<<entered, pc>>(cs__0)"))
+        #expect(fairness.contains("WF_<<entered, pc>>"))
+        #expect(fairness.contains("cs(_process)"))
         #expect(!fairness.contains("ncs__0"))
         let plusCal = try rendered.plusCalBundle().root.tla
         #expect(plusCal.contains("fair process"))
         #expect(plusCal.contains("ncs:- while"))
     }
 
-    @Test("weak and strong exemptions retain every transition and only remove the named obligation")
+    @Test("weak and strong exemptions retain transitions and narrow the process obligation")
     func policyAndTransitions() throws {
         typealias Step = ProcessFairnessExemptionModel.Step
         let policies: [(ProcessFairness, ProcessFairness, ProcessFairness)] = [
@@ -48,9 +66,11 @@ struct ProcessFairnessExemptionTests {
             #expect(try specification(empty).loweredSourceModel().fairness == normal.fairness)
             #expect(normal.actions.map(\.body) == exempt.actions.map(\.body))
             #expect(normal.variables.map(\.initialization) == exempt.variables.map(\.initialization))
-            #expect(normal.fairness.count == 2)
+            #expect(normal.fairness.count == 1)
             #expect(exempt.fairness.count == 1)
-            #expect(normal.fairness.contains(try #require(exempt.fairness.first)))
+            #expect(try #require(normal.fairness.first).description.contains("ncs \\/ cs"))
+            #expect(try #require(exempt.fairness.first).description.contains("cs"))
+            #expect(!exempt.fairness[0].description.contains("ncs"))
             let plusCal = try specification(excluded).compile().render().plusCalBundle().root.tla
             #expect(plusCal.contains("ncs:-"))
             #expect(!plusCal.split(separator: "\n").contains {

@@ -364,8 +364,8 @@ public struct LocalVariable<Value: TLAValueType>: TypedExpression {
 
 /// Scheduling policy for one `Each` process family.
 ///
-/// `.weak` is the PlusCal `fair process` spelling. The lowerer applies it to
-/// every participating atomic action for every concrete process identifier.
+/// `.weak` is the PlusCal `fair process` spelling. The lowerer emits one
+/// obligation per process identifier over its eligible atomic-step disjunction.
 public struct ProcessFairness: Sendable {
     fileprivate let model: AlgorithmFairness
     fileprivate let excludedLabels: [AlgorithmLabelModel]

@@ -223,7 +223,7 @@ struct CompiledLowerer {
                 expression: try lower(property.expr, at: path, scope: scope), bindings: bindings)
         }
         let fairness = try spec.fairness.enumerated().map { offset, condition in
-            try lower(condition, actions: actionsByID, at: "fairness[\(offset)]")
+            try lower(condition, actions: actionsByID, sourceActions: spec.actions, at: "fairness[\(offset)]")
         }
         let formalOperators: [CompiledOperatorDefinition] = try spec.formalOperatorDefinitions.map { definition in
             let path = "formalOperators.\(definition.name)"
@@ -1000,13 +1000,14 @@ struct CompiledLowerer {
     private mutating func lower(
         _ condition: FairnessCondition,
         actions: [ActionID: CompiledAction],
+        sourceActions: [NamedAction],
         at path: String
     ) throws -> CompiledFairnessCondition {
         let action: ActionID
         let arguments: [CompiledValue]?
         switch condition {
         case .projected(let condition, let projection):
-            let base = try lower(condition, actions: actions, at: path)
+            let base = try lower(condition, actions: actions, sourceActions: sourceActions, at: path)
             let value = try lower(projection, at: "\(path).projection", scope: rootScope)
             return .init(scope: base.scope, isStrong: base.isStrong, projection: value)
         case .weakFairnessNext:
@@ -1026,6 +1027,40 @@ struct CompiledLowerer {
                 }
             }
             return .init(scope: .eachAction(id), isStrong: condition.isStrong)
+        case .weakFairnessEachActionGroup(let names), .strongFairnessEachActionGroup(let names):
+            guard !names.isEmpty, Set(names).count == names.count else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .binding, path: path,
+                    expected: "distinct actions in a process fairness group", actual: names.joined(separator: ", "),
+                    nextSafeAction: "Name each eligible process step once.")
+            }
+            let sourceBindings = names.compactMap { name in
+                sourceActions.first(where: { $0.name == name })?.bindings.first
+            }
+            guard sourceBindings.count == names.count,
+                  let firstBinding = sourceBindings.first,
+                  sourceBindings.allSatisfy({ $0.domain == firstBinding.domain &&
+                      $0.generatedSwiftType == firstBinding.generatedSwiftType }) else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .binding, path: path,
+                    expected: "actions over the same process population", actual: names.joined(separator: ", "),
+                    nextSafeAction: "Group only steps from the same Each declaration.")
+            }
+            let ids = try names.map { try self.action(named: $0, at: "\(path).action") }
+            guard let first = actions[ids[0]], first.bindings.count == 1 else { throw diagnostic(path: path) }
+            for id in ids {
+                guard let compiled = actions[id], compiled.bindings.count == 1 else {
+                    throw CompilationDiagnostic(code: .unknownReference, stage: .binding, path: path,
+                        expected: "actions over one process population", actual: names.joined(separator: ", "),
+                        nextSafeAction: "Group only steps from the same Each declaration.")
+                }
+                let requirements = compiled.bindings[0].domain.stateRequirements(operators: operators)
+                guard requirements.variables.isEmpty, !requirements.requiresCompleteState else {
+                    throw CompilationDiagnostic(code: .unsupportedGeneratedValueShape, stage: .lowering,
+                        path: "\(path).domain", expected: "an immutable process fairness population",
+                        actual: "a domain that reads state or action enabledness",
+                        nextSafeAction: "Declare the process population with immutable parameters or values.")
+                }
+            }
+            return .init(scope: .eachActionGroup(ids), isStrong: condition.isStrong)
         case .weakFairness(let name):
             action = try self.action(named: name, at: "\(path).action")
             arguments = nil
