@@ -199,11 +199,13 @@ struct SwiftRecordTypeTests {
     @Test("unsupported Swift record declarations fail at the offending source", arguments: [
         ("struct Record { let value = 1 }", "value"),
         ("struct Record { var value: Int { 1 } }", "value"),
-        ("struct Record { var children: [Record] }", "children"),
+        ("struct Record { var children: [Record] }", "Record"),
         ("struct Record { let missing: [Missing] }", "Missing"),
         ("struct Record { let optional: Optional<Int> }", "Optional"),
         ("struct Record { let members: Set<Int, Bool> }", "Set"),
         ("struct Record { let choice: OneOf<Int> }", "OneOf"),
+        ("struct Record { let raw: TLAValue }", "TLAValue"),
+        ("struct Record { let callback: (Int) -> Int }", "("),
         ("struct Record { let value: Int; init(value: Int) { self.value = value + 1 } }", "init"),
         ("struct Record { @Wrapper var value: Int }", "@"),
         ("struct Record<T> { let value: T }", "Record")
@@ -211,13 +213,25 @@ struct SwiftRecordTypeTests {
     func rejectsUnsupportedRecords(_ declaration: String, _ offendingToken: String) throws {
         let metadata = try swiftRecordMetadata(declaration)
         let record = try #require(metadata.structs["Record"])
-        let token = try #require(record.tokens(viewMode: .sourceAccurate).first { $0.text == offendingToken })
+        let token = try #require(Array(record.tokens(viewMode: .sourceAccurate)).last { $0.text == offendingToken })
         let resolver = SourceTypeResolver(metadata: metadata)
         do {
             _ = try resolver.resolve("Record")
             Issue.record("Unsupported record must fail during type resolution")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.sourceOffset == token.positionAfterSkippingLeadingTrivia.utf8Offset)
+        }
+    }
+
+    @Test("synthetic type spellings do not invent source locations")
+    func leavesSyntheticTypeErrorsUnlocated() {
+        do {
+            _ = try SourceTypeResolver().resolve("TLAValue")
+            Issue.record("Raw TLAValue must not resolve as a Swift state type")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.sourceOffset == nil)
+        } catch {
+            Issue.record("Expected a compilation diagnostic: \(error)")
         }
     }
 }

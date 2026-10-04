@@ -99,7 +99,8 @@ final class SourceTypeResolver {
 
     func resolve(_ type: TypeSyntax) throws -> CompiledValueType {
         guard !type.hasError else {
-            throw CompiledValueType.diagnostic("type", "invalid Swift type syntax: \(type.trimmedDescription)")
+            throw located(CompiledValueType.diagnostic("type",
+                "invalid Swift type syntax: \(type.trimmedDescription)"), at: type)
         }
         return try resolveType(type, resolving: []).type
     }
@@ -112,28 +113,36 @@ final class SourceTypeResolver {
               let declaration = syntax.statements.first?.item.as(TypeAliasDeclSyntax.self) else {
             throw CompiledValueType.diagnostic("type", "invalid Swift type syntax: \(source)")
         }
-        let resolved = try resolveType(declaration.initializer.value, resolving: [])
+        let resolved = try resolveType(declaration.initializer.value, resolving: [], sourceLocated: false)
         types[source] = resolved
         return resolved
     }
 
-    private func resolveType(_ type: TypeSyntax, resolving: Set<String>) throws -> ResolvedSourceType {
+    private func resolveType(_ type: TypeSyntax, resolving: Set<String>, sourceLocated: Bool = true) throws -> ResolvedSourceType {
         let source = type.trimmedDescription
         if let resolved = types[source] { return resolved }
-        let resolved = try resolveUncached(type, resolving: resolving)
-        types[source] = resolved
-        return resolved
+        do {
+            let resolved = try resolveUncached(type, resolving: resolving, sourceLocated: sourceLocated)
+            types[source] = resolved
+            return resolved
+        } catch var diagnostic as CompilationDiagnostic {
+            if sourceLocated {
+                diagnostic.sourceOffset = diagnostic.sourceOffset
+                    ?? type.positionAfterSkippingLeadingTrivia.utf8Offset
+            }
+            throw diagnostic
+        }
     }
 
-    private func resolveUncached(_ type: TypeSyntax, resolving: Set<String>) throws -> ResolvedSourceType {
+    private func resolveUncached(_ type: TypeSyntax, resolving: Set<String>, sourceLocated: Bool) throws -> ResolvedSourceType {
         let source = type.trimmedDescription
         if let array = type.as(ArrayTypeSyntax.self) {
-            let element = try resolveType(array.element, resolving: resolving)
+            let element = try resolveType(array.element, resolving: resolving, sourceLocated: sourceLocated)
             return .init(type: .array(element.type), view: .sequence(element.view))
         }
         if let dictionary = type.as(DictionaryTypeSyntax.self) {
-            let key = try resolveType(dictionary.key, resolving: resolving)
-            let value = try resolveType(dictionary.value, resolving: resolving)
+            let key = try resolveType(dictionary.key, resolving: resolving, sourceLocated: sourceLocated)
+            let value = try resolveType(dictionary.value, resolving: resolving, sourceLocated: sourceLocated)
             return .init(type: .dictionary(key.type, value.type), view: .function(key: key.view, value: value.view))
         }
         let name: String
@@ -143,14 +152,14 @@ final class SourceTypeResolver {
             arguments = reference.genericArgumentClause
             if arguments == nil, let alias = metadata.aliases[name] {
                 guard !resolving.contains(name) else {
-                    throw located(CompiledValueType.diagnostic("aliases.\(name)", "cyclic type alias"), at: type)
+                    throw CompiledValueType.diagnostic("aliases.\(name)", "cyclic type alias")
                 }
                 return try resolveType(alias, resolving: resolving.union([name]))
             }
             if nominalNames[name] != nil {
                 guard arguments == nil else {
-                    throw located(CompiledValueType.diagnostic("types.\(name)",
-                        "declared nominal type does not accept generic arguments"), at: type)
+                    throw CompiledValueType.diagnostic("types.\(name)",
+                        "declared nominal type does not accept generic arguments")
                 }
                 return try named(type, resolving: resolving)
             }
@@ -160,8 +169,8 @@ final class SourceTypeResolver {
             arguments = member.genericArgumentClause
         } else if let member = type.as(MemberTypeSyntax.self) {
             guard member.genericArgumentClause == nil else {
-                throw located(CompiledValueType.diagnostic("types.\(member.name.sourceIdentifierName)",
-                    "generic arguments require a supported type constructor"), at: type)
+                throw CompiledValueType.diagnostic("types.\(member.name.sourceIdentifierName)",
+                    "generic arguments require a supported type constructor")
             }
             return try named(type, resolving: resolving)
         } else {
@@ -170,15 +179,16 @@ final class SourceTypeResolver {
         func resolveArguments(expecting count: Int) throws -> [ResolvedSourceType] {
             let supplied = arguments?.arguments.count ?? 0
             guard supplied == count else {
-                throw located(CompiledValueType.diagnostic("types.\(name)",
-                    "expected \(count) generic arguments, received \(supplied)"), at: type)
+                throw CompiledValueType.diagnostic("types.\(name)",
+                    "expected \(count) generic arguments, received \(supplied)")
             }
             return try arguments?.arguments.map { argument in
                 guard let type = argument.argument.as(TypeSyntax.self) else {
-                    throw located(CompiledValueType.diagnostic("types.\(name)",
-                        "generic arguments must be types"), at: argument)
+                    let diagnostic = CompiledValueType.diagnostic("types.\(name)",
+                        "generic arguments must be types")
+                    throw sourceLocated ? located(diagnostic, at: argument) : diagnostic
                 }
-                return try resolveType(type, resolving: resolving)
+                return try resolveType(type, resolving: resolving, sourceLocated: sourceLocated)
             } ?? []
         }
         switch name {
@@ -215,8 +225,8 @@ final class SourceTypeResolver {
                 view: .union(parts[0].view, parts[1].view))
         default:
             guard arguments == nil else {
-                throw located(CompiledValueType.diagnostic("types.\(name)",
-                    "generic arguments require a supported type constructor"), at: type)
+                throw CompiledValueType.diagnostic("types.\(name)",
+                    "generic arguments require a supported type constructor")
             }
             return try named(type, resolving: resolving)
         }
@@ -230,8 +240,8 @@ final class SourceTypeResolver {
             throw CompiledValueType.diagnostic("types.\(identity)", "multiple declarations have the same Swift identifier")
         }
         guard let name = declarations.first else {
-            throw located(CompiledValueType.diagnostic("types.\(identity)",
-                "unregistered Swift type \(source)"), at: type)
+            throw CompiledValueType.diagnostic("types.\(identity)",
+                "unregistered Swift type \(source)")
         }
         if let declaration = metadata.structs[name] {
             let identity = "struct:\(name)"
