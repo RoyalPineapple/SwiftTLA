@@ -458,10 +458,14 @@ package struct TLCProcessAdapter: Sendable {
     if let failure {
       try RetainedFiles.writeText(redactingSecrets(in: failure.message), to: logs.appendingPathComponent("tlc.failure.log"))
     }
-    let graphName = switch request.graphEvents.pathExtension {
-    case "bin": "graph-events.bin"
-    case "gz": "graph-events.jsonl.gz"
-    default: "graph-events.jsonl"
+    let graphName = if request.graphEvents.lastPathComponent.hasSuffix(".bin.gz") {
+      "graph-events.bin.gz"
+    } else {
+      switch request.graphEvents.pathExtension {
+      case "bin": "graph-events.bin"
+      case "gz": "graph-events.jsonl.gz"
+      default: "graph-events.jsonl"
+      }
     }
     let graphFiles = request.invocation == .finiteGraph ? [(request.graphEvents, graphName)] : []
     let evaluationFiles = request.evaluationOutput.map { [($0, "tlc-evaluation.bin")] } ?? []

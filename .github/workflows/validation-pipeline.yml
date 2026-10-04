@@ -363,6 +363,15 @@ jobs:
         timeout-minutes: 120
         run: |
           set -o pipefail
+          df -h .
+          (
+            while sleep 60; do
+              df -Pk . | tail -1
+              du -sk ".build/validation-evidence/upstream/$CASE_ID" 2>/dev/null || true
+            done
+          ) &
+          monitor_pid=$!
+          trap 'kill "$monitor_pid" 2>/dev/null || true; df -h .; du -sh ".build/validation-evidence/upstream/$CASE_ID" 2>/dev/null || true' EXIT
           .build/validation-bin/tlc-validate upstream run --case "$CASE_ID" \
             --output .build/validation-evidence/upstream
           jq -n --arg key '${{ steps.upstream-key.outputs.key }}' --arg sha "$SWIFT_TLA_SHA" \
@@ -491,8 +500,8 @@ jobs:
       - name: Require exact retained evidence origin
         run: |
           test "$(cat .build/replay-evidence/source-sha.txt)" = "$REPLAY_SHA"
-          if [ -f ".build/replay-evidence/native/$CASE_ID/machine.bin" ]; then
-            test -f ".build/replay-evidence/oracle/$CASE_ID/tlc-graph/graph-events.bin"
+          if [ -f ".build/replay-evidence/native/$CASE_ID/machine.bin.gz" ]; then
+            test -f ".build/replay-evidence/oracle/$CASE_ID/tlc-graph/graph-events.bin.gz"
           else
             test -f ".build/replay-evidence/native/$CASE_ID/report.json"
             test -f ".build/replay-evidence/oracle/$CASE_ID/tlc/tlc-process.json"

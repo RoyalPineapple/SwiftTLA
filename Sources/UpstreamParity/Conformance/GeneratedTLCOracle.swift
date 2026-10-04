@@ -257,7 +257,7 @@ package enum GeneratedTLCOracle {
             renderedActions: renderedActions)
         let request = TLCProcessRequest(
             javaExecutable: tools.java, jar: tools.jar, bridgeJar: tools.bridgeJar,
-            bundle: bundle, graphEvents: work.appendingPathComponent("events.bin"),
+            bundle: bundle, graphEvents: work.appendingPathComponent("events.bin.gz"),
             traceOutput: work.appendingPathComponent("counterexample.json"),
             evaluationOutput: captureEvaluations ? work.appendingPathComponent("evaluations.bin") : nil,
             workingDirectory: work, finiteGraphCase: launch, runID: UUID(),

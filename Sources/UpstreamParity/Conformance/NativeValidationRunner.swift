@@ -86,7 +86,7 @@ package enum NativeValidationRunner {
             scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: decisive,
             stopOnReachability: decisive,
             checking: .init(properties: safety, checkDeadlock: scenario.checking.checkDeadlock),
-            to: directory.appendingPathComponent("machine.bin"), observe: observe)
+            to: directory.appendingPathComponent("machine.bin.gz"), observe: observe)
         switch (scenario.checkingMode, batch.completion) {
         case (.exhaustive, .exhausted),
              (.decisiveCounterexample, .decisiveViolation),

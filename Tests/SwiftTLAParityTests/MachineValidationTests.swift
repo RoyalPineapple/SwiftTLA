@@ -137,7 +137,7 @@ struct MachineValidationTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let report = try NativeValidationRunner.run(scenario: scenario, caseID: "counter-0",
             maximumStates: 100, to: directory)
-        var evidence = try BinaryGraphEvidenceReader(directory.appendingPathComponent("machine.bin"))
+        var evidence = try BinaryGraphEvidenceReader(directory.appendingPathComponent("machine.bin.gz"))
         #expect(try evidence.bytes(8) == Data("STLAGRF2".utf8))
         #expect(try evidence.byte() == 2)
         #expect(try evidence.string() == "counter-0")

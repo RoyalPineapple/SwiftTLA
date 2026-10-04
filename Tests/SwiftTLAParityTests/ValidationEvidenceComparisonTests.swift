@@ -168,8 +168,8 @@ struct ValidationEvidenceComparisonTests {
     func duplicateEdgesHaveSetSemantics() throws {
         let root = try fixture(edgeCount: 2)
         defer { try? FileManager.default.removeItem(at: root) }
-        try tlcGraph(edgeCount: 1).write(
-            to: root.appendingPathComponent("oracle/tlc-graph/graph-events.bin"))
+        try writeGzip(tlcGraph(edgeCount: 1),
+            to: root.appendingPathComponent("oracle/tlc-graph/graph-events.bin.gz"))
         #expect(try compare(root).result == "exact")
     }
 
@@ -184,10 +184,10 @@ struct ValidationEvidenceComparisonTests {
     func corruptFooterFails() throws {
         let root = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
-        let url = root.appendingPathComponent("oracle/tlc-graph/graph-events.bin")
-        var bytes = try Data(contentsOf: url)
+        let url = root.appendingPathComponent("oracle/tlc-graph/graph-events.bin.gz")
+        var bytes = try readGzip(url)
         bytes[bytes.count - 1] ^= 1
-        try bytes.write(to: url)
+        try writeGzip(bytes, to: url)
         #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
     }
 
@@ -195,14 +195,14 @@ struct ValidationEvidenceComparisonTests {
     func malformedStateFails() throws {
         let root = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
-        let url = root.appendingPathComponent("native/machine.bin")
-        var bytes = try Data(contentsOf: url)
+        let url = root.appendingPathComponent("native/machine.bin.gz")
+        var bytes = try readGzip(url)
         let key = try #require(bytes.range(of: Data("STLASV01".utf8)))
         bytes[key.lowerBound + 17] = 0xff
         let footer = bytes.count - (1 + 8 * 8 + 1 + 32)
         bytes.replaceSubrange((bytes.count - 32)..<bytes.count,
             with: Data(CryptoKit.SHA256.hash(data: bytes[..<footer])))
-        try bytes.write(to: url)
+        try writeGzip(bytes, to: url)
         #expect(throws: ValidationEvidenceComparisonError.self) { _ = try compare(root) }
     }
 
@@ -210,7 +210,7 @@ struct ValidationEvidenceComparisonTests {
     func truncatedEvidenceFails() throws {
         let root = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
-        let url = root.appendingPathComponent("oracle/tlc-graph/graph-events.bin")
+        let url = root.appendingPathComponent("oracle/tlc-graph/graph-events.bin.gz")
         var bytes = try Data(contentsOf: url)
         bytes.removeLast()
         try bytes.write(to: url)
@@ -329,7 +329,7 @@ struct ValidationEvidenceComparisonTests {
         let spool = root.appendingPathComponent("tlc-spool")
         try FileManager.default.createDirectory(at: spool, withIntermediateDirectories: false)
         try ValidationEvidenceComparison.writeTLCSpool(
-            root.appendingPathComponent("oracle/tlc-graph/graph-events.bin"),
+            root.appendingPathComponent("oracle/tlc-graph/graph-events.bin.gz"),
             caseID: "fixture", actions: actions, in: spool)
         let manifest = try #require(JSONSerialization.jsonObject(with:
             Data(contentsOf: spool.appendingPathComponent("spool.json"))) as? [String: Any])
@@ -355,14 +355,14 @@ struct ValidationEvidenceComparisonTests {
     func cachedUpstreamGraphIsRecompared() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let generated = root.appendingPathComponent("generated-graph/graph-events.bin")
-        let reference = root.appendingPathComponent("reference-graph/graph-events.bin")
+        let generated = root.appendingPathComponent("generated-graph/graph-events.bin.gz")
+        let reference = root.appendingPathComponent("reference-graph/graph-events.bin.gz")
         try FileManager.default.createDirectory(at: generated.deletingLastPathComponent(),
             withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: reference.deletingLastPathComponent(),
             withIntermediateDirectories: true)
-        try tlcGraph(edgeCount: 1).write(to: generated)
-        try tlcGraph(edgeCount: 1, source: 303, target: 404).write(to: reference)
+        try writeGzip(tlcGraph(edgeCount: 1), to: generated)
+        try writeGzip(tlcGraph(edgeCount: 1, source: 303, target: 404), to: reference)
         let prior = UpstreamTLCParityReport(
             schema: "swifttla.upstream-tlc-parity", caseID: "fixture", result: "exact",
             graphCompared: true, difference: nil,
@@ -373,7 +373,7 @@ struct ValidationEvidenceComparisonTests {
         #expect(try UpstreamTLCParity.recompareCached(
             id: "fixture", decisive: false, actions: actions, in: root).result == "exact")
 
-        try tlcGraph(edgeCount: 1, source: 303, target: 404, actionName: "Other").write(to: reference)
+        try writeGzip(tlcGraph(edgeCount: 1, source: 303, target: 404, actionName: "Other"), to: reference)
         #expect(try UpstreamTLCParity.recompareCached(
             id: "fixture", decisive: false, actions: actions, in: root).difference
             == "complete labeled edge set")
@@ -472,7 +472,7 @@ struct ValidationEvidenceComparisonTests {
             try Data(#"{"vars":["value","pc"],"counterexample":{"state":[[1,{"value":0,"pc":"advance"}],[2,{"value":1,"pc":"advance"}]],"action":[[[1,{"value":0,"pc":"advance"}],{"name":"advance"},[2,{"value":1,"pc":"advance"}]]]}}"#.utf8)
                 .write(to: tlc.appendingPathComponent("counterexample.json"))
         }
-        var writer = try BinaryGraphEvidenceWriter(to: native.appendingPathComponent("machine.bin"),
+        var writer = try BinaryGraphEvidenceWriter(to: native.appendingPathComponent("machine.bin.gz"),
             caseID: "fixture")
         try writer.action(id: 0, name: nativeAction)
         try writer.state(id: 0, key: key(0), initial: nativeInitial == 0)
@@ -484,9 +484,39 @@ struct ValidationEvidenceComparisonTests {
             try writer.invariantFailure(property: nativeFailureProperty, key: key(1), predecessor: 0, action: 0)
         }
         try writer.finish(completion: graphComplete ? 0 : 1)
-        try tlcGraph(edgeCount: edgeCount, actionName: tlcAction)
-            .write(to: tlc.appendingPathComponent("graph-events.bin"))
+        try writeGzip(tlcGraph(edgeCount: edgeCount, actionName: tlcAction),
+            to: tlc.appendingPathComponent("graph-events.bin.gz"))
         return root
+    }
+
+    private func writeGzip(_ bytes: Data, to url: URL) throws {
+        let raw = url.appendingPathExtension("raw")
+        try bytes.write(to: raw)
+        defer { try? FileManager.default.removeItem(at: raw) }
+        try runGzip(["-1", "-c", raw.path], output: url)
+    }
+
+    private func readGzip(_ url: URL) throws -> Data {
+        let raw = url.appendingPathExtension("decoded")
+        defer { try? FileManager.default.removeItem(at: raw) }
+        try runGzip(["-d", "-c", url.path], output: raw)
+        return try Data(contentsOf: raw)
+    }
+
+    private func runGzip(_ arguments: [String], output: URL) throws {
+        try Data().write(to: output)
+        let handle = try FileHandle(forWritingTo: output)
+        defer { try? handle.close() }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
+        process.arguments = arguments
+        process.standardOutput = handle
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw BinaryGraphEvidenceError.invalid("test gzip failed")
+        }
     }
 
     private func inputHashes(for bundle: TLAModuleBundle) -> [[String: String]] {

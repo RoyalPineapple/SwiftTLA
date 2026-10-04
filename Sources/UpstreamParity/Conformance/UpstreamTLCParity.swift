@@ -252,8 +252,8 @@ package enum UpstreamTLCParity {
         if difference == nil && graphCompared {
             difference = try ValidationEvidenceComparison.compareTLCGraphs(
                 caseID: id,
-                generated: generatedGraphOutput.appendingPathComponent("graph-events.bin"),
-                reference: referenceGraphOutput.appendingPathComponent("graph-events.bin"),
+                generated: generatedGraphOutput.appendingPathComponent("graph-events.bin.gz"),
+                reference: referenceGraphOutput.appendingPathComponent("graph-events.bin.gz"),
                 actions: rendered.actions, in: directory, spoolExecutable: spoolExecutable)
         }
         let report = UpstreamTLCParityReport(
@@ -307,7 +307,7 @@ package enum UpstreamTLCParity {
             let full = directory.appendingPathComponent("\(side)-full-graph")
             let retained = FileManager.default.fileExists(atPath: full.path)
                 ? full : directory.appendingPathComponent("\(side)-graph")
-            return retained.appendingPathComponent("graph-events.bin")
+            return retained.appendingPathComponent("graph-events.bin.gz")
         }
         let difference = try ValidationEvidenceComparison.compareTLCGraphs(
             caseID: id, generated: graph("generated"), reference: graph("reference"),

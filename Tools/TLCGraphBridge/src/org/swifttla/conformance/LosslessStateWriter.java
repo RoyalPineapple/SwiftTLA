@@ -60,12 +60,16 @@ public final class LosslessStateWriter implements IStateWriter {
             runId = required(RUN_ID_PROPERTY);
             caseId = required(CASE_ID_PROPERTY);
             compactGzip = Boolean.getBoolean(COMPACT_GZIP_PROPERTY);
-            binary = outputPath.toString().endsWith(".bin");
+            binary = outputPath.toString().endsWith(".bin") || outputPath.toString().endsWith(".bin.gz");
             Files.createDirectories(outputPath.getParent());
             bodyDigest = MessageDigest.getInstance("SHA-256");
             if (binary) {
+                var stream = Files.newOutputStream(outputPath);
+                if (outputPath.toString().endsWith(".bin.gz")) {
+                    stream = new GZIPOutputStream(stream, 65536);
+                }
                 digestOutput = new DigestOutputStream(
-                        new BufferedOutputStream(Files.newOutputStream(outputPath), 1 << 20), bodyDigest);
+                        new BufferedOutputStream(stream, 1 << 20), bodyDigest);
                 binaryOutput = new DataOutputStream(digestOutput);
                 output = null;
                 binaryOutput.write("STLAGRF2".getBytes(StandardCharsets.US_ASCII));

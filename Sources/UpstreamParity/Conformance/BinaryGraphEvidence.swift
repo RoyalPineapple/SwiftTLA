@@ -7,6 +7,8 @@ enum BinaryGraphEvidenceError: Error {
 
 struct BinaryGraphEvidenceWriter {
     private let handle: FileHandle
+    private let compressor: Process?
+    private let compressedOutput: FileHandle?
     private var buffer = Data()
     private var digest = CryptoKit.SHA256()
     private(set) var states = 0
@@ -18,7 +20,28 @@ struct BinaryGraphEvidenceWriter {
 
     init(to url: URL, caseID: String) throws {
         try Data().write(to: url, options: .withoutOverwriting)
-        handle = try FileHandle(forWritingTo: url)
+        if url.pathExtension == "gz" {
+            let output = try FileHandle(forWritingTo: url)
+            let pipe = Pipe()
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
+            process.arguments = ["-1", "-c"]
+            process.standardInput = pipe
+            process.standardOutput = output
+            process.standardError = FileHandle.nullDevice
+            do { try process.run() }
+            catch {
+                try? output.close()
+                throw error
+            }
+            handle = pipe.fileHandleForWriting
+            compressor = process
+            compressedOutput = output
+        } else {
+            handle = try FileHandle(forWritingTo: url)
+            compressor = nil
+            compressedOutput = nil
+        }
         buffer.reserveCapacity(1_048_576)
         append(Data("STLAGRF2".utf8))
         byte(2)
@@ -99,10 +122,21 @@ struct BinaryGraphEvidenceWriter {
         try handle.write(contentsOf: buffer)
         buffer.removeAll(keepingCapacity: true)
         try handle.close()
+        if let compressor {
+            compressor.waitUntilExit()
+            try compressedOutput?.close()
+            guard compressor.terminationStatus == 0 else {
+                throw BinaryGraphEvidenceError.invalid("gzip compression failed")
+            }
+        }
     }
 
     mutating func close() {
         try? handle.close()
+        if let compressor {
+            compressor.waitUntilExit()
+            try? compressedOutput?.close()
+        }
     }
 
     private mutating func byte(_ value: UInt8) { buffer.append(value) }
@@ -149,29 +183,59 @@ struct BinaryGraphEvidenceWriter {
 
 struct BinaryGraphEvidenceReader {
     private let handle: FileHandle
-    private let fileSize: UInt64
+    private let decompressor: Process?
+    private let fileSize: UInt64?
     private let digestPrefixLength: UInt64?
+    private let checksumFooterLength: UInt64?
     private var digest = CryptoKit.SHA256()
     private var digestedBytes: UInt64 = 0
+    private var digestTail = Data()
     private var buffer = Data()
     private var cursor = 0
     private(set) var offset: UInt64 = 0
 
     init(_ url: URL, checksumFooterLength: UInt64? = nil) throws {
-        handle = try FileHandle(forReadingFrom: url)
-        fileSize = UInt64(try handle.seekToEnd())
-        if let checksumFooterLength {
-            guard checksumFooterLength <= fileSize else {
-                throw BinaryGraphEvidenceError.invalid("truncated footer")
-            }
-            digestPrefixLength = fileSize - checksumFooterLength
-        } else {
+        self.checksumFooterLength = checksumFooterLength
+        if url.pathExtension == "gz" {
+            let pipe = Pipe()
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
+            process.arguments = ["-d", "-c", url.path]
+            process.standardOutput = pipe
+            process.standardError = FileHandle.nullDevice
+            try process.run()
+            handle = pipe.fileHandleForReading
+            decompressor = process
+            fileSize = nil
             digestPrefixLength = nil
+        } else {
+            handle = try FileHandle(forReadingFrom: url)
+            decompressor = nil
+            let length = UInt64(try handle.seekToEnd())
+            fileSize = length
+            if let checksumFooterLength {
+                guard checksumFooterLength <= length else {
+                    throw BinaryGraphEvidenceError.invalid("truncated footer")
+                }
+                digestPrefixLength = length - checksumFooterLength
+            } else {
+                digestPrefixLength = nil
+            }
+            try handle.seek(toOffset: 0)
         }
-        try handle.seek(toOffset: 0)
     }
 
-    var atEnd: Bool { offset == fileSize }
+    mutating func isAtEnd() throws -> Bool {
+        if let fileSize { return offset == fileSize }
+        guard buffer.count == cursor else { return false }
+        let extra = try handle.read(upToCount: 1) ?? Data()
+        guard extra.isEmpty else { return false }
+        decompressor?.waitUntilExit()
+        guard decompressor?.terminationStatus == 0 else {
+            throw BinaryGraphEvidenceError.invalid("gzip decompression failed")
+        }
+        return true
+    }
 
     mutating func byte() throws -> UInt8 {
         try ensure(1)
@@ -212,7 +276,8 @@ struct BinaryGraphEvidenceReader {
     }
 
     mutating func bytes(_ count: Int) throws -> Data {
-        guard count >= 0, UInt64(count) <= fileSize - offset else {
+        guard count >= 0,
+              fileSize.map({ UInt64(count) <= $0 - offset }) ?? true else {
             throw BinaryGraphEvidenceError.invalid("record length")
         }
         try ensure(count)
@@ -230,17 +295,26 @@ struct BinaryGraphEvidenceReader {
         return value
     }
 
-    mutating func close() { try? handle.close() }
+    mutating func close() {
+        try? handle.close()
+        if let decompressor {
+            if decompressor.isRunning { decompressor.terminate() }
+            decompressor.waitUntilExit()
+        }
+    }
 
     mutating func sha256Prefix(endingAt offset: UInt64) throws -> Data {
-        guard digestPrefixLength == offset, digestedBytes == offset else {
+        let prefixLength = digestPrefixLength ?? checksumFooterLength.flatMap { footer in
+            self.offset >= footer ? self.offset - footer : nil
+        }
+        guard prefixLength == offset, digestedBytes == offset else {
             throw BinaryGraphEvidenceError.invalid("checksum prefix")
         }
         return Data(digest.finalize())
     }
 
     private mutating func ensure(_ count: Int) throws {
-        guard UInt64(count) <= fileSize - offset else {
+        guard fileSize.map({ UInt64(count) <= $0 - offset }) ?? true else {
             throw BinaryGraphEvidenceError.invalid("truncated record")
         }
         while buffer.count - cursor < count {
@@ -254,6 +328,14 @@ struct BinaryGraphEvidenceReader {
                 let length = Int(min(UInt64(chunk.count), digestPrefixLength - digestedBytes))
                 digest.update(data: chunk.prefix(length))
                 digestedBytes += UInt64(length)
+            } else if fileSize == nil, let checksumFooterLength {
+                digestTail.append(chunk)
+                if digestTail.count > Int(checksumFooterLength) {
+                    let length = digestTail.count - Int(checksumFooterLength)
+                    digest.update(data: digestTail.prefix(length))
+                    digestedBytes += UInt64(length)
+                    digestTail.removeSubrange(0..<length)
+                }
             }
             buffer.append(chunk)
         }

@@ -37,7 +37,7 @@ struct AssumptionValidationEvidenceTests {
             id: "case", native: native, oracle: oracle, to: root.appendingPathComponent("equal"))
         #expect(equal.result == "exact")
         #expect(equal.assumptionCompared)
-        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("equal/machine.bin").path))
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("equal/machine.bin.gz").path))
 
         let mismatched = TLCAssumptionReport(
             schema: oracleReport.schema, caseID: oracleReport.caseID, scenario: oracleReport.scenario,

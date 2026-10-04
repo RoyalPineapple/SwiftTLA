@@ -123,7 +123,7 @@ package enum ValidationEvidenceComparison {
             try FileManager.default.createDirectory(at: swiftRoot, withIntermediateDirectories: false)
             spoolDirectories.append(swiftRoot)
             let swiftGraph = try measured("native spool") {
-                try spoolNative(native.appendingPathComponent("machine.bin"),
+                try spoolNative(native.appendingPathComponent("machine.bin.gz"),
                     caseID: caseID, expectedComplete: swift.graphComplete, actions: actions,
                     in: swiftRoot, executable: spoolExecutable)
             }
@@ -144,7 +144,7 @@ package enum ValidationEvidenceComparison {
                 spoolDirectories.append(tlcRoot)
                 let tlcGraph = try measured("TLC spool") {
                     try spoolTLC(
-                        oracle.appendingPathComponent("tlc-graph/graph-events.bin"),
+                        oracle.appendingPathComponent("tlc-graph/graph-events.bin.gz"),
                         caseID: caseID, actions: actions, in: tlcRoot,
                         executable: spoolExecutable, kind: "native")
                 }
@@ -253,7 +253,7 @@ package enum ValidationEvidenceComparison {
         var reader = try BinaryGraphEvidenceReader(input)
         defer { reader.close() }
         var records: [StateRecord] = []
-        while !reader.atEnd {
+        while try !reader.isAtEnd() {
             let key = try reader.bytes(Int(reader.uint32()))
             let id = try reader.uint64()
             let sortKey = try reader.uint64()
@@ -539,7 +539,7 @@ package enum ValidationEvidenceComparison {
                     : expectedComplete ? completion == 0 : completion == 1 || completion == 2
                 guard counts == [stateCount, initialCount, edgeCount, excludedCount,
                     unsupportedCount, violationCount, deadlockCount, reachabilityCount].map(UInt64.init),
-                    expectedCompletion, reader.atEnd,
+                    expectedCompletion, (try reader.isAtEnd()),
                     checksum == (try reader.sha256Prefix(endingAt: footerOffset)) else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("binary graph footer")
                 }
@@ -607,7 +607,7 @@ package enum ValidationEvidenceComparison {
 
     private static func readNative(_ url: URL, caseID: String, expectedComplete: Bool,
         actions: [RenderedAction], in directory: URL) throws -> Spool {
-        guard url.pathExtension == "bin" else {
+        guard url.pathExtension == "bin" || url.lastPathComponent.hasSuffix(".bin.gz") else {
             throw ValidationEvidenceComparisonError.invalidEvidence("native binary evidence required")
         }
         return try readBinary(url, caseID: caseID, actions: actions,
@@ -616,7 +616,7 @@ package enum ValidationEvidenceComparison {
 
     private static func readTLC(_ url: URL, caseID: String, actions: [RenderedAction],
         in directory: URL) throws -> Spool {
-        guard url.pathExtension == "bin" else {
+        guard url.pathExtension == "bin" || url.lastPathComponent.hasSuffix(".bin.gz") else {
             throw ValidationEvidenceComparisonError.invalidEvidence("TLC binary evidence required")
         }
         return try readBinary(url, caseID: caseID, actions: actions,
