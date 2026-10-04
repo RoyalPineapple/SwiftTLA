@@ -201,6 +201,9 @@ struct SwiftRecordTypeTests {
         ("struct Record { var value: Int { 1 } }", "value"),
         ("struct Record { var children: [Record] }", "children"),
         ("struct Record { let missing: [Missing] }", "Missing"),
+        ("struct Record { let optional: Optional<Int> }", "Optional"),
+        ("struct Record { let members: Set<Int, Bool> }", "Set"),
+        ("struct Record { let choice: OneOf<Int> }", "OneOf"),
         ("struct Record { let value: Int; init(value: Int) { self.value = value + 1 } }", "init"),
         ("struct Record { @Wrapper var value: Int }", "@"),
         ("struct Record<T> { let value: T }", "Record")

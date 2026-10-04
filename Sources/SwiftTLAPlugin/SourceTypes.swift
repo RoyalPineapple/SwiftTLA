@@ -149,7 +149,8 @@ final class SourceTypeResolver {
             }
             if nominalNames[name] != nil {
                 guard arguments == nil else {
-                    throw CompiledValueType.diagnostic("types.\(name)", "declared nominal type does not accept generic arguments")
+                    throw located(CompiledValueType.diagnostic("types.\(name)",
+                        "declared nominal type does not accept generic arguments"), at: type)
                 }
                 return try named(type, resolving: resolving)
             }
@@ -159,8 +160,8 @@ final class SourceTypeResolver {
             arguments = member.genericArgumentClause
         } else if let member = type.as(MemberTypeSyntax.self) {
             guard member.genericArgumentClause == nil else {
-                throw CompiledValueType.diagnostic("types.\(member.name.sourceIdentifierName)",
-                    "generic arguments require a supported type constructor")
+                throw located(CompiledValueType.diagnostic("types.\(member.name.sourceIdentifierName)",
+                    "generic arguments require a supported type constructor"), at: type)
             }
             return try named(type, resolving: resolving)
         } else {
@@ -169,12 +170,13 @@ final class SourceTypeResolver {
         func resolveArguments(expecting count: Int) throws -> [ResolvedSourceType] {
             let supplied = arguments?.arguments.count ?? 0
             guard supplied == count else {
-                throw CompiledValueType.diagnostic("types.\(name)",
-                    "expected \(count) generic arguments, received \(supplied)")
+                throw located(CompiledValueType.diagnostic("types.\(name)",
+                    "expected \(count) generic arguments, received \(supplied)"), at: type)
             }
             return try arguments?.arguments.map { argument in
                 guard let type = argument.argument.as(TypeSyntax.self) else {
-                    throw CompiledValueType.diagnostic("types.\(name)", "generic arguments must be types")
+                    throw located(CompiledValueType.diagnostic("types.\(name)",
+                        "generic arguments must be types"), at: argument)
                 }
                 return try resolveType(type, resolving: resolving)
             } ?? []
@@ -213,8 +215,8 @@ final class SourceTypeResolver {
                 view: .union(parts[0].view, parts[1].view))
         default:
             guard arguments == nil else {
-                throw CompiledValueType.diagnostic("types.\(name)",
-                    "generic arguments require a supported type constructor")
+                throw located(CompiledValueType.diagnostic("types.\(name)",
+                    "generic arguments require a supported type constructor"), at: type)
             }
             return try named(type, resolving: resolving)
         }
