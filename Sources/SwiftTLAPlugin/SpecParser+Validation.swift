@@ -76,6 +76,7 @@ extension ParserSession {
                               let profile = specBindings.fairnessProfiles[reference.baseName.sourceIdentifierName] else {
                             throw SourceParseDiagnostic(message: "Fairness selection requires a registered model-owned profile binding.", source: override)
                         }
+                        recordValidationFairness(named: scenario.name, at: argument.expression)
                         scenario.fairnessProfileSelections.append(profile.reference)
                         continue
                     }

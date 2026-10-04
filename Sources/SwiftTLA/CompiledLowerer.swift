@@ -467,7 +467,11 @@ struct CompiledLowerer {
                     throw invalid(scenario.name, "foreign or unregistered fairness profile")
                 }
                 guard scenario.behaviorSelections.first != .initialAndNext else {
-                    throw invalid(scenario.name, "a fairness profile requires specification behavior")
+                    throw CompilationDiagnostic(code: .unsupportedFairnessProfile, stage: .validation,
+                        path: "validation.\(scenario.name).fairness",
+                        expected: "specification behavior for a selected fairness profile",
+                        actual: "initialAndNext",
+                        nextSafeAction: "Remove the profile or use specification behavior.")
                 }
                 return index
             }

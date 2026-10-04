@@ -465,6 +465,42 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("A fairness profile with initial-and-next checking points to its selection")
+    func fairnessProfileBehaviorPointsToSelection() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Step: String, CaseIterable { case ncs }
+            static var spec: TLASpec {
+                #spec { scope in
+                    let algorithm = Algorithm(scoped: { scope in
+                        Each(Set<Int>([0]), fairness: .weak) { _ in
+                            Do(Step.ncs) { Goto(Step.ncs) }
+                        }
+                    })
+                    algorithm
+                    let profile = FairnessProfile(excluding: [Step.ncs])
+                    profile
+                    let check = Validation {}.usingFairness(profile).behavior(.initialAndNext)
+                    check
+                }
+            }
+        }
+        """)
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let selected = try #require(Array(source.tokens(viewMode: .sourceAccurate))
+            .last { $0.text == "profile" })
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(declaration)
+            Issue.record("A fairness profile requires specification behavior")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "validation.check.fairness")
+            #expect(diagnostic.sourceOffset == selected.positionAfterSkippingLeadingTrivia.utf8Offset)
+            let emitted = modelCompilationDiagnostic(diagnostic, in: declaration)
+            #expect(emitted.node.positionAfterSkippingLeadingTrivia == selected.positionAfterSkippingLeadingTrivia)
+        }
+    }
+
     @Test("A refinement selected with symmetry points to the scenario selection")
     func refinementScenarioSymmetryPointsToSelection() throws {
         let source = Parser.parse(source: """
