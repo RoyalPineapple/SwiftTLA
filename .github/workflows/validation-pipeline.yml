@@ -70,6 +70,8 @@ jobs:
           if [ "$ADMISSION_MODE" = admission ]; then
             git merge-base --is-ancestor "$SWIFT_TLA_SHA" refs/remotes/origin/main
           fi
+      - name: Verify pinned bridge sources before the matrix
+        run: ./scripts/setup-finite-graph-tools.sh --verify-bridge-sources
       - uses: actions/cache@v4
         id: binary-cache
         with:
