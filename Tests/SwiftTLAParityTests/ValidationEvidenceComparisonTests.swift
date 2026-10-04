@@ -186,6 +186,18 @@ struct ValidationEvidenceComparisonTests {
         #expect(try compare(missing).difference == "complete labeled edge set")
     }
 
+    @Test("distant edge sources remain part of the complete graph")
+    func distantSourceEdgeRemainsDistinct() throws {
+        let root = try fixture(stateCount: 65)
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(try compare(root).result == "exact")
+
+        try writeGzip(tlcGraph(edgeCount: 1, stateCount: 65, lastEdgeTarget: 63),
+            to: root.appendingPathComponent("oracle/tlc-graph/graph-events.bin.gz"))
+        try FileManager.default.removeItem(at: root.appendingPathComponent("comparison"))
+        #expect(try compare(root).difference == "complete labeled edge set")
+    }
+
     @Test("a changed initial state fails despite matching state and edge sets")
     func differentInitialFails() throws {
         let root = try fixture(nativeInitial: 1)
@@ -415,7 +427,7 @@ struct ValidationEvidenceComparisonTests {
     private func fixture(nativeTarget: Int = 1, nativeEdgeTarget: UInt64 = 1,
         nativeAction: String = "Next", tlcAction: String = "Next",
         nativeInitial: UInt64 = 0,
-        edgeCount: Int = 1, reverseEdge: Bool = false,
+        edgeCount: Int = 1, reverseEdge: Bool = false, stateCount: Int = 2,
         graphComplete: Bool = true, tlcExitStatus: Int = 0,
         scenarioName: String? = nil, omitSelectedVerdicts: Bool = false,
         skipCheckedPass: Bool = false, nativeFailureProperty: String = "InitiallyZero") throws -> URL {
@@ -441,8 +453,8 @@ struct ValidationEvidenceComparisonTests {
         let verdicts = omitSelectedVerdicts ? [:] : allVerdicts.filter { selected.contains($0.key) }
         var nativeReport: [String: Any] = [
             "schema": "swifttla.native-validation-report", "scenario": name, "maximumStates": 100,
-            "graphComplete": graphComplete, "initialStates": 1, "states": 2,
-            "edges": edgeCount + (reverseEdge ? 1 : 0), "properties": verdicts,
+            "graphComplete": graphComplete, "initialStates": 1, "states": stateCount,
+            "edges": edgeCount + (reverseEdge ? 1 : 0) + (stateCount > 2 ? 1 : 0), "properties": verdicts,
             "deadlockSelected": scenario.checking.checkDeadlock
         ]
         var oracleReport: [String: Any] = [
@@ -491,6 +503,13 @@ struct ValidationEvidenceComparisonTests {
         try writer.action(id: 0, name: nativeAction)
         try writer.state(id: 0, key: key(0), initial: nativeInitial == 0)
         try writer.state(id: 1, key: key(nativeTarget), initial: nativeInitial == 1)
+        if stateCount > 2 {
+            for id in 2..<stateCount {
+                try writer.state(id: UInt64(id), key: key(id), initial: false)
+            }
+            let last = UInt64(stateCount - 1)
+            try writer.edge(source: last, action: 0, target: last)
+        }
         for _ in 0..<edgeCount {
             try writer.edge(source: 0, action: 0, target: nativeEdgeTarget)
         }
@@ -500,7 +519,7 @@ struct ValidationEvidenceComparisonTests {
         }
         try writer.finish(completion: graphComplete ? 0 : 1)
         try writeGzip(tlcGraph(edgeCount: edgeCount, actionName: tlcAction,
-            reverseEdge: reverseEdge),
+            reverseEdge: reverseEdge, stateCount: stateCount),
             to: tlc.appendingPathComponent("graph-events.bin.gz"))
         return root
     }
@@ -550,7 +569,8 @@ struct ValidationEvidenceComparisonTests {
     }
 
     private func tlcGraph(edgeCount: Int, source: UInt64 = 101, target: UInt64 = 202,
-        actionName: String = "Next", reverseEdge: Bool = false) -> Data {
+        actionName: String = "Next", reverseEdge: Bool = false,
+        stateCount: Int = 2, lastEdgeTarget: Int? = nil) -> Data {
         var body = Data("STLAGRF2".utf8)
         body.append(1)
         append("fixture", to: &body)
@@ -563,6 +583,16 @@ struct ValidationEvidenceComparisonTests {
             append(UInt32(key.count), to: &body)
             body.append(key)
         }
+        if stateCount > 2 {
+            for id in 2..<stateCount {
+                body.append(2)
+                append(UInt64(1_000 + id), to: &body)
+                body.append(0)
+                let key = tlcKey(id)
+                append(UInt32(key.count), to: &body)
+                body.append(key)
+            }
+        }
         body.append(1)
         append(UInt32(0), to: &body)
         append(actionName, to: &body)
@@ -573,6 +603,12 @@ struct ValidationEvidenceComparisonTests {
             append(UInt32(0), to: &body)
             append(source, to: &body)
         }
+        if stateCount > 2 {
+            body.append(3)
+            append(UInt64(1_000 + stateCount - 1), to: &body)
+            append(UInt32(0), to: &body)
+            append(UInt64(1_000 + (lastEdgeTarget ?? stateCount - 1)), to: &body)
+        }
         for _ in 0..<edgeCount {
             body.append(3)
             append(source, to: &body)
@@ -581,7 +617,7 @@ struct ValidationEvidenceComparisonTests {
         }
         let digest = Data(CryptoKit.SHA256.hash(data: body))
         body.append(255)
-        for count in [2, 1, edgeCount + (reverseEdge ? 1 : 0), 0, 0, 0, 0, 0] {
+        for count in [stateCount, 1, edgeCount + (reverseEdge ? 1 : 0) + (stateCount > 2 ? 1 : 0), 0, 0, 0, 0, 0] {
             append(UInt64(count), to: &body)
         }
         body.append(0)
