@@ -232,8 +232,8 @@ jobs:
             /usr/bin/time -l .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
               --output .build/validation-evidence/native --maximum-states "$MAXIMUM_STATES"
           fi
-          if [ -f ".build/validation-evidence/native/$CASE_ID/machine.profile.json" ]; then
-            jq -c . ".build/validation-evidence/native/$CASE_ID/machine.profile.json"
+          if [ -f ".build/validation-evidence/native/$CASE_ID/machine.bin.profile.json" ]; then
+            jq -c . ".build/validation-evidence/native/$CASE_ID/machine.bin.profile.json"
           else
             jq -c . ".build/validation-evidence/native/$CASE_ID/report.json"
           fi
