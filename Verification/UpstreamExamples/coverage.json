@@ -4993,7 +4993,7 @@
       "path": "specifications/dijkstra-mutex",
       "name": "Dijkstra's Mutual Exclusion Algorithm",
       "audit": "reference inputs audited",
-      "gap": "Both published configurations have typed model-owned scenarios and pinned cases. At hosted SHA 470ffc07, ordinary CI passed and Safety4Processors completed exact native/generated-TLA graph and selected-check parity at 33,288,512 states and 146,157,712 labeled edges. Its generated-TLA/upstream-TLA comparison rejected the complete state set: the Swift binding rendered temporary, but upstream uses temp. The local binding now matches; full parity remains unproven. Liveness3Processors native exploration finished in 5.30 seconds but temporal analysis timed out after 95 minutes; a local trigger-reachable leads-to repair completes its exact native check in 125.289 seconds. The upstream liveness comparison failed on a stale configuration digest, corrected locally. Both paths and both configurations need a green hosted revision. Legacy cleanup and family completion remain open.",
+      "gap": "On frozen SHA 04a38db6, Liveness3Processors has complete exact native/generated-TLA and generated-TLA/pinned-upstream graph and selected-check parity. Safety4Processors has complete exact native/generated-TLA parity at 33,288,512 states and 146,157,712 labeled edges; its generated-TLA/pinned-upstream job is still running. The earlier temp-name and liveness diagnostic failures do not describe the current source. Do not credit the four-processor configuration or the family until its remaining hosted path and module/legacy disposition are reconciled.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5037,11 +5037,23 @@
           "module": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/MC.tla",
           "configuration": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/MC.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "04a38db61b14fdbf51ab5a07a4a55606aff393fc",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{"file": "Sources/UpstreamParity/Examples/DijkstraMutex.swift", "scenario": "Liveness3Processors", "caseID": "dijkstra-mutex-1"}],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "04a38db61b14fdbf51ab5a07a4a55606aff393fc",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37204817453",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37204817453/artifacts/11304971669",
+            "artifactDigest": "sha256:35bf90533266d2dbf5283990e23c03c53686eab1e03335283009f165c3268b4e",
+            "pairedArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37204817453/artifacts/11304972739",
+            "pairedArtifactDigest": "sha256:57249d1bc192996b22d8e2fa84b302a4edf80bccbf1af3bd441893ecb1c775d0",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Both retained comparison reports are exact and graphCompared on this source SHA. The complete native graph has 3 initial states, 90,882 states, and 282,807 labeled edges. Native/generated-TLC and generated-TLA/pinned-upstream comparisons agree on MutualExclusion, DeadlockFreedom, and selected deadlock satisfaction. The generated-TLC oracle was content-keyed evidence from 7dde1c2d; the upstream comparison ran on 04a38db6. DeadlockFree and StarvationFree are declared but not selected by this published configuration. This credits one configuration, not the family or the still-running four-processor upstream path."
+          }]
         },
         {
           "module": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/MC.tla",
@@ -5057,7 +5069,7 @@
       "partialCases": [
         {
           "implementation": "Sources/UpstreamParity/Examples/DijkstraMutex.swift",
-          "reason": "DijkstraMutexModel uses one typed Proc set parameter for both published populations. Frozen SHA 470ffc07 established complete native/generated-TLA parity only for Safety4Processors; generated-TLA/upstream-TLA state values differed because the authored local name was temporary instead of temp. The local rename preserves generated transition semantics and fixes that source identity. The Liveness3Processors generated checker now completes locally with 90,882 states, 282,807 edges, MutualExclusion and DeadlockFreedom satisfied, and no deadlock after restricting leads-to cycle analysis to states reachable after its trigger without reaching the target. Its upstream configuration digest is corrected locally. Neither configuration has complete hosted credit; both paths must pass together on one green revision."
+          "reason": "The three-processor configuration is hosted-matched on 04a38db6. The four-processor native/generated-TLC path is exact with complete graph, MutualExclusion, and deadlock parity on that SHA, but generated-TLA/pinned-upstream TLC is still running. Keep family and four-processor completion open until that path and source-module disposition are audited."
         }
       ]
     },
