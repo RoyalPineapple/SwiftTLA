@@ -28,6 +28,10 @@ package enum UpstreamTLCParity {
         expectedModuleSHA256: String, expectedCFGSHA256: String,
         maximumStates: Int, decisive: Bool, pin: TLCReferencePin
     ) throws -> String {
+        guard SHA256.hex(Data(reference.tla.utf8)) == expectedModuleSHA256,
+              SHA256.hex(Data(reference.cfg.utf8)) == expectedCFGSHA256 else {
+            throw UpstreamTLCParityError.inputMismatch(id)
+        }
         let generated = try rendered.tlaBundle(
             checking: rendered.checkNames, checkDeadlock: rendered.checksDeadlock)
         let identity: [String: Any] = [
