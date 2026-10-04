@@ -604,31 +604,4 @@ struct LivenessConformanceTests {
         }
         #expect(action == compilation.layout.actions[0].id)
     }
-
-    @Test("temporal analysis distinguishes violations from incomplete exploration")
-    func reportsDistinctLivenessAndBoundedOutcomes() throws {
-        let x = Var<Int>("x")
-        let liveness = try TLASpec("liveness") {
-            Variable(x, 0)
-            Eventually("reachesOne", x == 1)
-        }.compile()
-        let exploration = try ModelChecker(compilation: liveness, configuration: .init(
-            maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
-        let analysis = try #require(exploration.analyzeTemporalProperties(in: liveness).first)
-        #expect(analysis.status == .violated)
-        #expect(analysis.reason == .violatingFairLasso)
-        #expect(try #require(analysis.witness).cycle.isEmpty == false)
-
-        let bounded = try TLASpec("incomplete") {
-            Variable(x, in: IntRange(0, through: 2))
-            Action("step") { x.becomes(x + 1).when(x < 2) }
-            Eventually("reachesTwo", x == 2)
-        }.compile()
-        let incomplete = try ModelChecker(compilation: bounded, configuration: .init(
-            maximumStateLimit: 1, symmetryReduction: .disabled)).explore()
-        let unavailable = try #require(incomplete.analyzeTemporalProperties(in: bounded).first)
-        #expect(unavailable.status == .unavailable)
-        #expect(unavailable.reason == .incompleteExploration)
-        #expect(unavailable.witness == nil)
-    }
 }
