@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 @testable import UpstreamParity
@@ -239,7 +240,7 @@ struct UpstreamParityTests {
         let firstFlag = try #require(TLAStateProjection.Token(validating: "b"))
         let secondFlag = try #require(TLAStateProjection.Token(validating: "c"))
         let control = try #require(TLAStateProjection.Token(validating: "pc"))
-        let temporary = try #require(TLAStateProjection.Token(validating: "temporary"))
+        let temporary = try #require(TLAStateProjection.Token(validating: "temp"))
         for population in [
             Set<DijkstraMutexModel.Process>([.one, .two, .three]),
             Set<DijkstraMutexModel.Process>([.one, .two, .three, .four]),
@@ -334,6 +335,24 @@ struct UpstreamParityTests {
 
         let plusCal = try rendered.plusCalBundle()
         #expect(plusCal.root.tla.contains("ncs:-"))
+    }
+
+    @Test("three-process Dijkstra generated checker completes its selected liveness")
+    func dijkstraGeneratedLivenessCompletes() throws {
+        let scenario = try #require(DijkstraMutexModel.validationScenarios().first {
+            $0.name == "Liveness3Processors"
+        })
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let report = try NativeValidationRunner.run(
+            scenario: scenario, caseID: "dijkstra-mutex-1", maximumStates: 100_000, to: directory)
+        #expect(report.graphComplete)
+        #expect(report.initialStates == 3)
+        #expect(report.states == 90_882)
+        #expect(report.edges == 282_807)
+        #expect(report.properties["MutualExclusion"] == .satisfied)
+        #expect(report.properties["DeadlockFreedom"] == .satisfied)
+        #expect(report.deadlock == .satisfied)
     }
 
     @Test("bounded Consensus fixture retains terminal deadlocks and temporal progress")

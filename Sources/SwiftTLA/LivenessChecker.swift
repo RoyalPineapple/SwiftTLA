@@ -214,7 +214,16 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
             let triggers = Set(try states.compactMap { state in
                 try trigger(state, state) ? state : nil
             }).intersection(negative)
-            search = .init(cycleStates: negative, prefixStates: triggers, prefixContinuationStates: negative)
+            var cycleStates = triggers
+            var pending = Array(triggers)
+            while let state = pending.popLast() {
+                for edge in transitions[state] ?? []
+                    where negative.contains(edge.target) && cycleStates.insert(edge.target).inserted {
+                    pending.append(edge.target)
+                }
+            }
+            search = .init(cycleStates: cycleStates, prefixStates: triggers,
+                prefixContinuationStates: negative)
         case .always, .all, .conditional: preconditionFailure("Transition and compound conditions are checked before state liveness conditions")
         }
 

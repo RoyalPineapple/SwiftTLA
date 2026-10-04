@@ -7,6 +7,32 @@ struct LivenessConformanceTests {
     private let middle = StateGraph.StateID(1)
     private let terminal = StateGraph.StateID(2)
 
+    @Test("leads-to excludes fair cycles unreachable after its trigger")
+    func leadsToSkipsUnreachableFairCycles() throws {
+        let cycle = 3..<1003
+        var transitions: [Int: [GraphEdge<Int, Int>]] = [
+            0: [.init(source: 0, action: 0, target: 1), .init(source: 0, action: 0, target: 3)],
+            1: [.init(source: 1, action: 1, target: 2)],
+            2: [.init(source: 2, action: 0, target: 2)],
+        ]
+        for state in cycle {
+            transitions[state] = [.init(source: state, action: 1,
+                                        target: state == cycle.last! ? cycle.first! : state + 1)]
+        }
+        let checker = LivenessChecker<Int, Int, Int>(
+            states: Set(0..<1003), transitions: transitions,
+            fairness: [(scope: 1, isStrong: false)],
+            matches: { action, scope in action == scope },
+            actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+        let started = ContinuousClock.now
+        let result = try checker.analyze(
+            .leadsTo({ source, _ in source == 1 }, { source, _ in source == 2 }),
+            initialStates: [0], renderScope: { String($0) })
+        #expect(result.status == .satisfied)
+        #expect(result.witness == nil)
+        #expect(ContinuousClock.now - started < .seconds(10))
+    }
+
     private func action(_ name: String) -> NamedAction {
         NamedAction(name: name, body: .guard_(true))
     }

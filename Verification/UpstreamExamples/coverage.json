@@ -1236,6 +1236,16 @@
     "toolchainGap": "Command Line Tools 16.4 supports focused SwiftPM diagnostics with the same SDK build shown in hosted Apple logs. Full Xcode 16.4 is absent locally. Earlier beta-toolchain passes remain uncredited."
   },
   "hostedComparisonFailures": {
+    "dijkstra470": {
+      "sourceSHA": "470ffc07bc6297eb057022bb71c2a2927890039c",
+      "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37183726602",
+      "validationRun": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37183726658",
+      "conclusion": "failure",
+      "fourProcessNativeArtifact": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37183726658/artifacts/11299995557",
+      "fourProcessUpstreamArtifact": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37183726658/artifacts/11299380137",
+      "threeProcessNativeArtifact": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37183726658/artifacts/11299170998",
+      "scope": "Ordinary CI passed. Safety4Processors native/generated-TLA parity retained an exact complete graph of 4 initial states, 33,288,512 states, and 146,157,712 labeled edges, with MutualExclusion and default deadlock satisfied; native exploration took 3,714.62 seconds. Generated-TLA/upstream-TLA comparison found the same counts and verdicts but rejected the complete state set. Retained binary states show generated variable temporary versus upstream temp; the local DSL binding now uses temp, but this is not yet hosted proof of full parity. Liveness3Processors native exploration completed 90,882 states and 282,807 edges in 5.30 seconds, then timed out after 95 minutes during temporal analysis. The local trigger-reachable leads-to search completes the exact generated native check in 125.289 seconds, without hosted credit. Its upstream comparison failed before TLC on a stale configuration digest, corrected locally. Both configurations remain incomplete until both independent paths pass on one green hosted SHA."
+    },
     "chameneosActionGranularity": {
       "sourceSHA": "89c78da2ac7b5d3d524038f8a005716f450917c2",
       "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36508347335",
@@ -4983,7 +4993,7 @@
       "path": "specifications/dijkstra-mutex",
       "name": "Dijkstra's Mutual Exclusion Algorithm",
       "audit": "reference inputs audited",
-      "gap": "Both published configurations now have typed model-owned scenarios and pinned cases. Safety4Processors selects default Spec, MutualExclusion, and deadlock; Liveness3Processors selects a named fairness profile excluding ncs, MutualExclusion, DeadlockFreedom, and deadlock. Focused local tests prove the selection leaves generated initial states and transitions unchanged, renders the selected fairness in direct TLA and authored PlusCal, and completes the three-process 90,882-state safety graph. The prior pushed SHA 9369a138 failed ordinary fairness assertions and Dijkstra native exploration at a hardcoded 10-million-state workflow cap. Its upstream TLC job exhausted the macOS runner disk before retaining logs; the 10-million-state native partial graph alone occupies 4.1 GB uncompressed. The ordinary assertions and workflow limits are fixed locally, but evidence storage and complete hosted graph/property parity remain open. Both configurations remain unverified; legacy cleanup and final hosted admission remain open.",
+      "gap": "Both published configurations have typed model-owned scenarios and pinned cases. At hosted SHA 470ffc07, ordinary CI passed and Safety4Processors completed exact native/generated-TLA graph and selected-check parity at 33,288,512 states and 146,157,712 labeled edges. Its generated-TLA/upstream-TLA comparison rejected the complete state set: the Swift binding rendered temporary, but upstream uses temp. The local binding now matches; full parity remains unproven. Liveness3Processors native exploration finished in 5.30 seconds but temporal analysis timed out after 95 minutes; a local trigger-reachable leads-to repair completes its exact native check in 125.289 seconds. The upstream liveness comparison failed on a stale configuration digest, corrected locally. Both paths and both configurations need a green hosted revision. Legacy cleanup and family completion remain open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5047,7 +5057,7 @@
       "partialCases": [
         {
           "implementation": "Sources/UpstreamParity/Examples/DijkstraMutex.swift",
-          "reason": "DijkstraMutexModel uses a typed Proc set parameter for both published populations. Local generated-machine checks verify exact initial domains, the three-process 90,882-state safety graph, default versus ncs-exempt fairness selection, both scenario configurations, authored PlusCal export, and manifest registration. The selected profile changes the liveness verdict without changing initial states or labeled transitions. Both pinned cases await complete native/generated-TLA and generated-TLA/upstream-TLA graph and property matches on one green hosted revision. Neither configuration has completion credit."
+          "reason": "DijkstraMutexModel uses one typed Proc set parameter for both published populations. Frozen SHA 470ffc07 established complete native/generated-TLA parity only for Safety4Processors; generated-TLA/upstream-TLA state values differed because the authored local name was temporary instead of temp. The local rename preserves generated transition semantics and fixes that source identity. The Liveness3Processors generated checker now completes locally with 90,882 states, 282,807 edges, MutualExclusion and DeadlockFreedom satisfied, and no deadlock after restricting leads-to cycle analysis to states reachable after its trigger without reaching the target. Its upstream configuration digest is corrected locally. Neither configuration has complete hosted credit; both paths must pass together on one green revision."
         }
       ]
     },

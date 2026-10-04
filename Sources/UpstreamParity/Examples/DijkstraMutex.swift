@@ -3,7 +3,7 @@ import SwiftTLAMacros
 
 /// Dijkstra's algorithm with the published three- and four-process populations.
 ///
-/// `temporary` begins as the upstream model's opaque `defaultInitValue`.
+/// `temp` begins as the upstream model's opaque `defaultInitValue`.
 /// It then holds either the current owner or the set of peers still to
 /// inspect. `OneOf` keeps that source-level TLA+ union explicit in Swift and
 /// preserves its formal representation.
@@ -65,7 +65,7 @@ package struct DijkstraMutexModel: Sendable {
                 let k = scope.sharedVar(in: Proc)
 
                 Each(Proc, fairness: .weak, scoped: { selfID, scope in
-                    let temporary = scope.localVar(initial: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.first(.notAssigned)
+                    let temp = scope.localVar(initial: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.first(.notAssigned)
                     )
 
                     Do(Label.li0) {
@@ -86,7 +86,7 @@ package struct DijkstraMutexModel: Sendable {
 
                     Do(Label.li3a) {
                         Assign(
-                            temporary,
+                            temp,
                             to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(
                                 OneOf<Process, Set<Process>>.first(k.expr)
                             )
@@ -94,7 +94,7 @@ package struct DijkstraMutexModel: Sendable {
                     }
 
                     Do(Label.li3b) {
-                        let active = temporary.expr.assuming(ActiveTemporary.self)
+                        let active = temp.expr.assuming(ActiveTemporary.self)
                         let owner = active.assuming(Process.self)
                         If(b[owner]) {
                             Goto(Label.li3c)
@@ -114,7 +114,7 @@ package struct DijkstraMutexModel: Sendable {
                     Do(Label.li4a) {
                         Assign(c, to: c.updating(selfID, to: false))
                         Assign(
-                            temporary,
+                            temp,
                             to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
                                 Proc.removing(selfID)
                             )
@@ -123,12 +123,12 @@ package struct DijkstraMutexModel: Sendable {
                     }
 
                     Do(Label.li4b) {
-                        let active = temporary.expr.assuming(ActiveTemporary.self)
+                        let active = temp.expr.assuming(ActiveTemporary.self)
                         let remaining = active.assuming(Set<Process>.self)
                         If(!remaining.isEmpty) {
                             With(remaining) { process in
                                 Assign(
-                                    temporary,
+                                    temp,
                                     to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
                                         remaining.removing(process)
                                     )
