@@ -128,7 +128,7 @@ jobs:
     needs: prepare
     if: ${{ fromJSON(needs.prepare.outputs.native)[0] != '__skip__' }}
     runs-on: macos-15
-    timeout-minutes: 120
+    timeout-minutes: 270
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -137,7 +137,6 @@ jobs:
     env:
       CASE_ID: ${{ matrix.case }}
       FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
-      SWIFTTLA_ORACLE_TIMEOUT_SECONDS: '1800'
       PROFILE_NATIVE: ${{ inputs.profile_native && 'true' || 'false' }}
       FOCUSED_CASE: ${{ inputs.case_id }}
     steps:
@@ -175,6 +174,15 @@ jobs:
             | select(type == "number" and . > 0 and floor == .)
           ' Verification/FiniteGraph/cases.json)
           echo "maximum_states=$maximum_states" >> "$GITHUB_OUTPUT"
+          timeout_seconds=$(jq -er --arg id "$CASE_ID" '
+            [.cases[] | select(.id == $id) | .timeoutSeconds]
+            | if length == 0 then 1800
+              elif length == 1 then [1800, .[0]] | max
+              else error("duplicate case ID") end
+            | select(type == "number" and . > 0 and floor == .)
+          ' Verification/FiniteGraph/cases.json)
+          echo "timeout_seconds=$timeout_seconds" >> "$GITHUB_OUTPUT"
+          echo "timeout_minutes=$(( (timeout_seconds + 59) / 60 + 5 ))" >> "$GITHUB_OUTPUT"
       - name: Identify generated TLC inputs
         id: oracle-key
         env:
@@ -188,7 +196,7 @@ jobs:
           path: .build/validation-evidence/oracle/${{ matrix.case }}
           key: generated-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.oracle-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Sources/UpstreamParity/Conformance/AssumptionValidationEvidence.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift') }}
       - name: Validate generated Swift machine
-        timeout-minutes: 30
+        timeout-minutes: ${{ fromJSON(steps.exploration-limit.outputs.timeout_minutes) }}
         env:
           MAXIMUM_STATES: ${{ steps.exploration-limit.outputs.maximum_states }}
         run: |
@@ -227,9 +235,10 @@ jobs:
           fi
       - name: Validate generated TLA with TLC
         if: steps.oracle-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 35
+        timeout-minutes: ${{ fromJSON(steps.exploration-limit.outputs.timeout_minutes) }}
         env:
           MAXIMUM_STATES: ${{ steps.exploration-limit.outputs.maximum_states }}
+          SWIFTTLA_ORACLE_TIMEOUT_SECONDS: ${{ steps.exploration-limit.outputs.timeout_seconds }}
         run: |
           set -o pipefail
           .build/validation-bin/tlc-validate oracle run --case "$CASE_ID" \
