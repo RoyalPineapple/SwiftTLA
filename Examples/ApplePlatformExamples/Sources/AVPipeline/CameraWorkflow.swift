@@ -8,48 +8,39 @@ public struct CameraWorkflow {
 
         public static var defaultValue: Self { .starting }
         public static let finiteValues = allCases
-        public var tlaValue: TLAValue { .string(rawValue) }
     }
 
     private enum ReadyProcess: String, FiniteTLAValueDomain { case readyEvent
         static var defaultValue: Self { .readyEvent }
         static let finiteValues: [Self] = [.readyEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum RecordProcess: String, FiniteTLAValueDomain { case recordEvent
         static var defaultValue: Self { .recordEvent }
         static let finiteValues: [Self] = [.recordEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum StopRecordingProcess: String, FiniteTLAValueDomain { case stopRecordingEvent
         static var defaultValue: Self { .stopRecordingEvent }
         static let finiteValues: [Self] = [.stopRecordingEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum RecordingSucceededProcess: String, FiniteTLAValueDomain { case recordingSucceededEvent
         static var defaultValue: Self { .recordingSucceededEvent }
         static let finiteValues: [Self] = [.recordingSucceededEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum RecordingFailedProcess: String, FiniteTLAValueDomain { case recordingFailedEvent
         static var defaultValue: Self { .recordingFailedEvent }
         static let finiteValues: [Self] = [.recordingFailedEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum RecordingCancelledProcess: String, FiniteTLAValueDomain { case recordingCancelledEvent
         static var defaultValue: Self { .recordingCancelledEvent }
         static let finiteValues: [Self] = [.recordingCancelledEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum PlayProcess: String, FiniteTLAValueDomain { case playEvent
         static var defaultValue: Self { .playEvent }
         static let finiteValues: [Self] = [.playEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum LiveProcess: String, FiniteTLAValueDomain { case liveEvent
         static var defaultValue: Self { .liveEvent }
         static let finiteValues: [Self] = [.liveEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum Step: String, CaseIterable { case ready, record, stopRecording, recordingSucceeded, recordingFailed, recordingCancelled, play, live }
 

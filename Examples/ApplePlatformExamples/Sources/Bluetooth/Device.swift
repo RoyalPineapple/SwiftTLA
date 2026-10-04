@@ -9,32 +9,26 @@ public struct PeripheralModel {
         case disconnected, connected, discovering, ready
         public static var defaultValue: Self { .disconnected }
         public static let finiteValues = allCases
-        public var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum ConnectProcess: String, FiniteTLAValueDomain { case connectEvent
         static var defaultValue: Self { .connectEvent }
         static let finiteValues: [Self] = [.connectEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum BeginDiscoveryProcess: String, FiniteTLAValueDomain { case beginDiscoveryEvent
         static var defaultValue: Self { .beginDiscoveryEvent }
         static let finiteValues: [Self] = [.beginDiscoveryEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum FinishDiscoveryProcess: String, FiniteTLAValueDomain { case finishDiscoveryEvent
         static var defaultValue: Self { .finishDiscoveryEvent }
         static let finiteValues: [Self] = [.finishDiscoveryEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum DiscoveryFailedProcess: String, FiniteTLAValueDomain { case discoveryFailedEvent
         static var defaultValue: Self { .discoveryFailedEvent }
         static let finiteValues: [Self] = [.discoveryFailedEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum DisconnectProcess: String, FiniteTLAValueDomain { case disconnectEvent
         static var defaultValue: Self { .disconnectEvent }
         static let finiteValues: [Self] = [.disconnectEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum Step: String, CaseIterable { case connected, beginDiscovery, finishDiscovery, discoveryFailed, disconnect }
 
