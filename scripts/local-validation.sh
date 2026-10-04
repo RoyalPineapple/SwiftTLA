@@ -172,11 +172,12 @@ run_guarded() {
     export SWIFTTLA_VALIDATION_SCRATCH_PATH="$scratch_dir"
     if [[ "$mode" == "swiftpm-test" ]]; then
         local cache_root="$common_git_dir/swifttla-local-validation-cache"
-        local cache_key cache_key_file toolchain_key toolchain_key_file
+        local cache_key cache_key_file toolchain_key toolchain_key_file macro_key macro_key_file
         [[ ! -L "$cache_root" ]] || fail "cache root must not be a symlink"
         mkdir -p "$cache_root"
         cache_key_file="$cache_root/source-key"
         toolchain_key_file="$cache_root/toolchain-key"
+        macro_key_file="$cache_root/macro-source-key"
         toolchain_key="$({
             printf '%s\n' \
                 'swiftpm-local-validation-toolchain-v1' \
@@ -216,22 +217,38 @@ run_guarded() {
                     fi
                 done
         } | shasum -a 256 | awk '{print $1}')"
+        macro_key="$({
+            printf '%s\n' 'swiftpm-local-validation-macro-sources-v1'
+            git ls-files --cached --others --exclude-standard -z -- \
+                Sources/SwiftTLA Sources/SwiftTLAPlugin Sources/SwiftTLAMacros |
+                while IFS= read -r -d '' input_path; do
+                    if [[ -f "$input_path" && ! -L "$input_path" ]]; then
+                        shasum -a 256 -- "$input_path"
+                    elif [[ -L "$input_path" ]]; then
+                        printf 'symlink:%s:%s\n' "$input_path" "$(readlink "$input_path")"
+                    fi
+                done
+        } | shasum -a 256 | awk '{print $1}')"
         [[ "$cache_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute source cache key"
         [[ "$toolchain_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute toolchain cache key"
+        [[ "$macro_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute macro source cache key"
         build_dir="$cache_root/.build"
         [[ ! -L "$build_dir" ]] || fail "cache build directory must not be a symlink"
         [[ ! -L "$cache_key_file" ]] || fail "cache key file must not be a symlink"
         [[ ! -L "$toolchain_key_file" ]] || fail "toolchain key file must not be a symlink"
+        [[ ! -L "$macro_key_file" ]] || fail "macro key file must not be a symlink"
         if [[ -e "$build_dir" ]]; then
             [[ -d "$build_dir" ]] || fail "cache build path is not a directory"
-            # SwiftPM tracks source dependencies within one toolchain. Retain
-            # its incremental objects across source edits; the source key is
-            # recorded for audit, while toolchain/package changes invalidate.
-            if [[ ! -r "$toolchain_key_file" || "$(<"$toolchain_key_file")" != "$toolchain_key" ]]; then
+            # SwiftPM does not always re-expand unchanged model files when the
+            # compiler or macro implementation changes. Keep incremental test
+            # edits, but invalidate generated consumers with their producer.
+            if [[ ! -r "$toolchain_key_file" || "$(<"$toolchain_key_file")" != "$toolchain_key" ||
+                  ! -r "$macro_key_file" || "$(<"$macro_key_file")" != "$macro_key" ]]; then
                 rm -rf -- "$build_dir"
             fi
         fi
         printf '%s\n' "$toolchain_key" > "$toolchain_key_file"
+        printf '%s\n' "$macro_key" > "$macro_key_file"
         printf '%s\n' "$cache_key" > "$cache_key_file"
     fi
     set -m
