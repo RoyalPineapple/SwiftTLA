@@ -272,6 +272,23 @@ struct UpstreamParityTests {
         #expect(graph.safetyViolations.isEmpty)
     }
 
+    @Test("four-process Dijkstra scenario selects upstream Spec, MutualExclusion, and deadlock")
+    func dijkstraSafetyScenario() throws {
+        let scenario = try #require(DijkstraMutexModel.validationScenarios().first)
+        #expect(scenario.name == "Safety4Processors")
+        #expect(scenario.configuration.Proc == Set<DijkstraMutexModel.Process>([.one, .two, .three, .four]))
+        #expect(scenario.behavior == .specification)
+        #expect(scenario.checking.properties == [.MutualExclusion])
+        #expect(scenario.checking.checkDeadlock)
+
+        let rendered = try scenario.render()
+        #expect(rendered.checkNames == ["MutualExclusion"])
+        #expect(rendered.checksDeadlock)
+        let configuration = try #require(rendered.tlaBundle.root.cfg)
+        #expect(configuration.contains("SPECIFICATION Spec"))
+        #expect(configuration.contains("INVARIANT MutualExclusion"))
+    }
+
     @Test("bounded Consensus fixture retains terminal deadlocks and temporal progress")
     func consensusGeneratedChecking() throws {
         let graph = try ReachabilityGraph(initialMachines: ConsensusModel.initialMachines(), maximumStates: 100)

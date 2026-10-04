@@ -56,6 +56,7 @@ package struct DijkstraMutexModel: Sendable {
                 Set<Process>([.one, .two, .three]),
                 Set<Process>([.one, .two, .three, .four]),
             ]))
+            let MutualExclusion = Invariant()
             let Mutex = Algorithm(scoped: { scope in
                 let b = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
                 let c = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
@@ -148,7 +149,7 @@ package struct DijkstraMutexModel: Sendable {
                     Do(Label.nonCritical) { Goto(Label.li0) }
                 })
 
-                Invariant("MutualExclusion") {
+                MutualExclusion {
                     ForAll(in: Proc) { first in
                         ForAll(in: Proc) { second in
                             first == second || !(At(Label.critical, first) && At(Label.critical, second))
@@ -157,6 +158,10 @@ package struct DijkstraMutexModel: Sendable {
                 }
             })
             Mutex
+            let Safety4Processors = Validation {
+                Bind(Proc, to: Set<Process>([.one, .two, .three, .four]))
+            }
+            Safety4Processors
         }
     }
 }

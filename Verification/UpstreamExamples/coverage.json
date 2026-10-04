@@ -4983,7 +4983,7 @@
       "path": "specifications/dijkstra-mutex",
       "name": "Dijkstra's Mutual Exclusion Algorithm",
       "audit": "reference inputs audited",
-      "gap": "The Swift model now takes a typed Proc population and locally checks the complete initial domains for both published three- and four-process populations. Its three-process generated-machine diagnostic still covers 90,882 states with no safety violations. LSpec-model additionally requires an ncs fairness exemption and temporal DeadlockFreedom; Safety-4-processors requires complete four-process checking. Neither configuration has a model-owned upstream scenario, complete graph/property comparison, or hosted evidence. Both remain missing, and legacy cleanup is incomplete.",
+      "gap": "The Swift model now takes a typed Proc population and locally checks the complete initial domains for both published three- and four-process populations. Its three-process generated-machine diagnostic still covers 90,882 states with no safety violations. Safety-4-processors now has a model-owned scenario selecting Spec, MutualExclusion, and default deadlock, but it is not yet registered for independent comparison or exhaustively checked. LSpec-model still needs the ncs fairness exemption, temporal DeadlockFreedom, and its scenario. Neither configuration has complete graph/property parity or hosted evidence. Both remain missing, and legacy cleanup is incomplete.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5047,7 +5047,7 @@
       "partialCases": [
         {
           "implementation": "Sources/UpstreamParity/Examples/DijkstraMutex.swift",
-          "reason": "DijkstraMutexModel uses a typed Proc set parameter for both published populations. A focused local generated-machine test verifies exact b, c, pc, temporary, and k initial domains in each, then completes the three-process 90,882-state graph without safety violations; 36 neighboring parameter, process, fairness, and collection tests pass. Fairness remains unqualified, DeadlockFreedom is undeclared, and the four-process graph is not yet checked. Neither upstream configuration has a model-owned scenario, independent complete graph/property comparison, or hosted evidence. No completion credit."
+          "reason": "DijkstraMutexModel uses a typed Proc set parameter for both published populations. A focused local generated-machine test verifies exact b, c, pc, temporary, and k initial domains in each, then completes the three-process 90,882-state graph without safety violations; 36 neighboring parameter, process, fairness, and collection tests pass. The Safety4Processors scenario locally selects the published Spec behavior, MutualExclusion, and default deadlock, but is not yet registered for independent comparison or exhaustively checked. LSpec fairness and DeadlockFreedom remain absent. Neither upstream configuration has complete graph/property parity or hosted evidence. No completion credit."
         }
       ]
     },
