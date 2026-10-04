@@ -1351,6 +1351,23 @@
       "moduleSHA256": "75964cb318385a742b662f3cb272088d0bc4313bf0608de9c483311646e7ff3d",
       "cfgSHA256": "3355df100b4f4681bd1f18b1cc3e00d59739cf45691ff591e8237b2da95f18e3",
       "timeoutSeconds": 120
+    },
+    {
+      "id": "dijkstra-mutex-0",
+      "sourceModel": "dijkstra-mutex",
+      "scenario": "Safety4Processors",
+      "module": "dijkstra-mutex/MC.tla",
+      "configuration": "dijkstra-mutex/MC.cfg",
+      "imports": ["dijkstra-mutex/DijkstraMutex.tla"],
+      "dependencies": [{"importingModule": "MC", "importedModule": "DijkstraMutex"}],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/MC.tla",
+        "sha256": "ed5b3aaaf9ffacc4f2821d646472f35e73faf5fed2148a31c468787a558046c4"
+      },
+      "exploration": {"maximumStateLimit": 1000000000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "ed5b3aaaf9ffacc4f2821d646472f35e73faf5fed2148a31c468787a558046c4",
+      "cfgSHA256": "79ddb5aa21a423288c73c129cbb8a4b74e6582f462e959a9a2927a0a43adb788",
+      "timeoutSeconds": 5400
     }
   ]
 }

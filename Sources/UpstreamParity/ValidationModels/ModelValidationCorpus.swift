@@ -34,6 +34,7 @@ private let fixtureModelRegistrations: [ModelRegistration] = [
 
 private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "dining-philosophers", scenarios: { try DiningPhilosophersModel.validationScenarios() }),
+    .init(id: "dijkstra-mutex", scenarios: { try DijkstraMutexModel.validationScenarios() }),
     .init(id: "bakery", scenarios: { try BakeryModel.validationScenarios() }),
     .init(id: "boulanger", scenarios: { try BoulangerModel.validationScenarios() }),
     .init(id: "multicar-elevator", scenarios: { try MultiCarElevator.validationScenarios() }),

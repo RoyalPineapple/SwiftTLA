@@ -266,7 +266,8 @@ struct UpstreamParityTests {
             configuration: DijkstraMutexModel.Configuration(Proc: [.one, .two, .three]))
         let graph = try ReachabilityGraph(
             initialMachines: initial,
-            maximumStates: Example.dijkstraMutex.maximumStateLimit
+            maximumStates: Example.dijkstraMutex.maximumStateLimit,
+            checking: ModelChecks(properties: [.MutualExclusion])
         )
         #expect(graph.transitions.count == Example.dijkstraMutex.expectedDistinct)
         #expect(graph.safetyViolations.isEmpty)
@@ -274,19 +275,25 @@ struct UpstreamParityTests {
 
     @Test("four-process Dijkstra scenario selects upstream Spec, MutualExclusion, and deadlock")
     func dijkstraSafetyScenario() throws {
+        #expect(try modelValidationScenarios().contains {
+            $0.id == "dijkstra-mutex-0" && $0.scenario.name == "Safety4Processors"
+        })
         let scenario = try #require(DijkstraMutexModel.validationScenarios().first)
         #expect(scenario.name == "Safety4Processors")
         #expect(scenario.configuration.Proc == Set<DijkstraMutexModel.Process>([.one, .two, .three, .four]))
         #expect(scenario.behavior == .specification)
         #expect(scenario.checking.properties == [.MutualExclusion])
         #expect(scenario.checking.checkDeadlock)
+        #expect(Set(DijkstraMutexModel.Property.allCases) == [.MutualExclusion, .DeadlockFreedom])
 
         let rendered = try scenario.render()
         #expect(rendered.checkNames == ["MutualExclusion"])
         #expect(rendered.checksDeadlock)
+        #expect(rendered.tlaBundle.root.tla.contains("DeadlockFreedom == (\\A _process \\in Proc:"))
         let configuration = try #require(rendered.tlaBundle.root.cfg)
         #expect(configuration.contains("SPECIFICATION Spec"))
         #expect(configuration.contains("INVARIANT MutualExclusion"))
+        #expect(!configuration.contains("PROPERTY DeadlockFreedom"))
     }
 
     @Test("bounded Consensus fixture retains terminal deadlocks and temporal progress")
