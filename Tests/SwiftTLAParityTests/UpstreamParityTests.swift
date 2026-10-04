@@ -273,7 +273,7 @@ struct UpstreamParityTests {
         #expect(graph.safetyViolations.isEmpty)
     }
 
-    @Test("four-process Dijkstra scenario selects upstream Spec, MutualExclusion, and deadlock")
+    @Test("four-process Dijkstra scenario selects generated Spec, MutualExclusion, and deadlock")
     func dijkstraSafetyScenario() throws {
         #expect(try modelValidationScenarios().contains {
             $0.id == "dijkstra-mutex-0" && $0.scenario.name == "Safety4Processors"

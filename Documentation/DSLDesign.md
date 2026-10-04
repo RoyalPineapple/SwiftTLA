@@ -649,6 +649,10 @@ Process fairness can exempt named steps. The forms are
 where `Step` is a `Sendable`, `CaseIterable`, string-backed enum.
 For example, `Each(members, fairness: .weak(excluding: [Step.ncs]))` permits indefinite waiting at `ncs`.
 Other steps retain the process fairness policy. Exemptions do not change guards, transitions, initialization, or selected properties.
+For each process member, the fairness obligation applies to the disjunction of
+its eligible atomic steps, not to a separate obligation for each step. An
+exemption removes that step from the disjunction. This matches PlusCal process
+fairness and the published Dijkstra `Spec` and `LSpec` formulas.
 
 Each exemption must name a step in the same `Each` declaration. Duplicate and unknown exemptions produce compiler diagnostics.
 For example, `.weak(excluding: [Step.ncs, Step.ncs])` is invalid.
