@@ -520,6 +520,7 @@ jobs:
         run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
       - name: Compare retained complete evidence
         run: |
+          set -o pipefail
           test -x .build/release/tlc-validate
           mkdir -p .build/replay-result
           jq -n --arg source "$SWIFT_TLA_SHA" --arg evidence "$REPLAY_SHA" --arg run "$REPLAY_RUN_ID" \
@@ -527,7 +528,11 @@ jobs:
             > .build/replay-result/origin.json
           /usr/bin/time -l .build/release/tlc-validate compare run --case "$CASE_ID" \
             --native .build/replay-evidence/native --oracle .build/replay-evidence/oracle \
-            --output .build/replay-result/comparison
+            --output .build/replay-result/comparison 2>&1 | tee .build/replay-result/comparator.log
+          du -sk ".build/replay-evidence/native/$CASE_ID" \
+            ".build/replay-evidence/oracle/$CASE_ID" \
+            ".build/replay-result/comparison/$CASE_ID" \
+            > .build/replay-result/artifact-sizes-kib.txt
           jq -e '.result == "exact" and (.graphCompared == true or .assumptionCompared == true)' \
             ".build/replay-result/comparison/$CASE_ID/comparison.json"
       - uses: actions/upload-artifact@v6
