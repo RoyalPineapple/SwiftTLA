@@ -267,10 +267,10 @@ struct UpstreamParityTests {
             configuration: DijkstraMutexModel.Configuration(Proc: [.one, .two, .three]))
         let graph = try ReachabilityGraph(
             initialMachines: initial,
-            maximumStates: Example.dijkstraMutex.maximumStateLimit,
+            maximumStates: 100_000,
             checking: ModelChecks(properties: [.MutualExclusion])
         )
-        #expect(graph.transitions.count == Example.dijkstraMutex.expectedDistinct)
+        #expect(graph.transitions.count == 90_882)
         #expect(graph.safetyViolations.isEmpty)
     }
 

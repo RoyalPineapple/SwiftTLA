@@ -182,11 +182,3 @@ package struct DijkstraMutexModel: Sendable {
         }
     }
 }
-
-extension Example {
-    package static let dijkstraMutex = FiniteModelFixture(
-        expectedDistinct: 90_882,
-        maximumStateLimit: 100_000,
-        spec: DijkstraMutexModel.spec,
-    )
-}
