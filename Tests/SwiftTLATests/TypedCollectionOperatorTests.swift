@@ -315,8 +315,8 @@ private struct FoldGeneratedModel {
         #expect(ZeroBasedSequence<DecodedLiteral>(formalValue: .function([:])) != nil)
     }
 
-    @Test("Swift set deduplication cannot erase a modeled value's validation failure")
-    func deduplicationPreservesValidationFailures() throws {
+    @Test("Swift sets reject invalid members and colliding formal identities")
+    func rejectsInvalidAndCollidingSetMembers() throws {
         func check<Value: TLAValueType & Hashable>(_ valid: Value, _ invalid: Value) throws {
             #expect(valid.tlaValue == invalid.tlaValue)
             #expect(valid.sourceIssue == nil)
@@ -335,6 +335,19 @@ private struct FoldGeneratedModel {
         try check(SetExpr(DecodedLiteral(1)), SetExpr(DecodedLiteral(1, invalid: true)))
         try check(Pair(first: DecodedLiteral(1), second: 2),
                   Pair(first: DecodedLiteral(1, invalid: true), second: 2))
+
+        let members: Set<CollidingFunctionKey> = [.first, .second]
+        #expect(members.count == 2)
+        let specification = TLASpec(name: "CollidingMembers", variables: [
+            .init(name: "members", initialization: .expression(members.stateExpr), origin: .source)
+        ], actions: [], invariants: [])
+        do {
+            _ = try specification.compile()
+            Issue.record("Distinct Swift members with one formal value must fail compilation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidFormalDeclaration)
+            #expect(diagnostic.actual.contains("distinct Swift members have the same formal value"))
+        }
     }
 
     @Test("Native collection access uses contextual enum keys and values")
