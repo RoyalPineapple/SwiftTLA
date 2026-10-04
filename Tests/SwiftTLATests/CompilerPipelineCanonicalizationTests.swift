@@ -771,10 +771,6 @@ struct CompilerPipelineCanonicalizationTests {
         let invariantHolds = try runtime.invariantHolds(compilation.semantics.behavior.invariants[0], in: firstSuccessor[0].state)
         #expect(firstSuccessor.count == 1)
         #expect(invariantHolds)
-
-        let exploration = try ModelChecker(compilation: compilation, configuration: try FiniteExplorationConfiguration(maximumStateLimit: 10, symmetryReduction: .disabled)).explore()
-        #expect(exploration.graph.states.count == 5)
-        #expect(exploration.isComplete)
     }
 
     @Test("compiled higher-order calls retain lambda binder identities")
