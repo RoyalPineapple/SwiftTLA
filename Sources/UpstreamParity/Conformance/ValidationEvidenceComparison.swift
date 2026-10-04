@@ -732,13 +732,22 @@ package enum ValidationEvidenceComparison {
             }
         }
         var counts = [Int](repeating: 0, count: edgeBucketCount)
+        var previousSourceID: UInt64?
+        var previousSourceRank: UInt32 = 0
         try bytes.withUnsafeBytes { raw in
             for edge in 0..<edgeCount {
                 let base = edge * 20
                 let sourceID = UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base, as: UInt64.self))
                 let action = UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base + 8, as: UInt32.self))
                 let targetID = UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base + 12, as: UInt64.self))
-                let source = try rank(sourceID)
+                let source: UInt32
+                if previousSourceID == sourceID {
+                    source = previousSourceRank
+                } else {
+                    source = try rank(sourceID)
+                    previousSourceID = sourceID
+                    previousSourceRank = source
+                }
                 let target = try rank(targetID)
                 guard UInt64(source) < UInt64(stateCount), UInt64(target) < UInt64(stateCount) else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("edge rank")
