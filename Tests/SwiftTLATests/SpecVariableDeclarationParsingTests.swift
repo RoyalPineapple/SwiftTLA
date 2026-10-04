@@ -160,7 +160,8 @@ import SwiftTLAMacros
         """
         let closure = try parseSpecTestClosure(source)
 
-        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure,
+            sourceTypes: .init(enums: [parserTestEnum("Model.Node")]))
 
         #expect(parsed.diagnostics.isEmpty)
         #expect(parsed.variables.map(\.generatedSwiftType) == ["SwiftTLA.Function<Model.Node, SwiftTLA.SetExpr<Swift.Int>>"])
