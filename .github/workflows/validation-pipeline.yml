@@ -164,10 +164,23 @@ jobs:
         run: |
           chmod +x .build/validation-bin/tlc-validate
           ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT" --skip-inputs
+      - name: Resolve validation exploration limit
+        id: exploration-limit
+        run: |
+          maximum_states=$(jq -er --arg id "$CASE_ID" '
+            [.cases[] | select(.id == $id) | .exploration.maximumStateLimit]
+            | if length == 0 then 10000000
+              elif length == 1 then [10000000, .[0]] | max
+              else error("duplicate case ID") end
+            | select(type == "number" and . > 0 and floor == .)
+          ' Verification/FiniteGraph/cases.json)
+          echo "maximum_states=$maximum_states" >> "$GITHUB_OUTPUT"
       - name: Identify generated TLC inputs
         id: oracle-key
+        env:
+          MAXIMUM_STATES: ${{ steps.exploration-limit.outputs.maximum_states }}
         run: |
-          key=$(.build/validation-bin/tlc-validate oracle cache-key --case "$CASE_ID" --maximum-states 10000000)
+          key=$(.build/validation-bin/tlc-validate oracle cache-key --case "$CASE_ID" --maximum-states "$MAXIMUM_STATES")
           echo "key=$key" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v4
         id: oracle-cache
@@ -176,6 +189,8 @@ jobs:
           key: generated-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.oracle-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Sources/UpstreamParity/Conformance/AssumptionValidationEvidence.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift') }}
       - name: Validate generated Swift machine
         timeout-minutes: 30
+        env:
+          MAXIMUM_STATES: ${{ steps.exploration-limit.outputs.maximum_states }}
         run: |
           set -o pipefail
           mkdir -p .build/validation-evidence
@@ -184,7 +199,7 @@ jobs:
             test "$ADMISSION_MODE" = candidate
             test "$FOCUSED_CASE" = "$CASE_ID"
             /usr/bin/time -l .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
-              --output .build/validation-evidence/native --maximum-states 10000000 &
+              --output .build/validation-evidence/native --maximum-states "$MAXIMUM_STATES" &
             timed_pid=$!
             sleep 90
             native_pid=$(pgrep -P "$timed_pid" -f 'tlc-validate native run' | head -n 1 || true)
@@ -203,7 +218,7 @@ jobs:
             test "$native_status" -eq 0
           else
             /usr/bin/time -l .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
-              --output .build/validation-evidence/native --maximum-states 10000000
+              --output .build/validation-evidence/native --maximum-states "$MAXIMUM_STATES"
           fi
           if [ -f ".build/validation-evidence/native/$CASE_ID/machine.profile.json" ]; then
             jq -c . ".build/validation-evidence/native/$CASE_ID/machine.profile.json"
@@ -213,10 +228,12 @@ jobs:
       - name: Validate generated TLA with TLC
         if: steps.oracle-cache.outputs.cache-hit != 'true'
         timeout-minutes: 35
+        env:
+          MAXIMUM_STATES: ${{ steps.exploration-limit.outputs.maximum_states }}
         run: |
           set -o pipefail
           .build/validation-bin/tlc-validate oracle run --case "$CASE_ID" \
-            --output .build/validation-evidence/oracle --maximum-states 10000000
+            --output .build/validation-evidence/oracle --maximum-states "$MAXIMUM_STATES"
           jq -n --arg key '${{ steps.oracle-key.outputs.key }}' --arg sha "$SWIFT_TLA_SHA" \
             --arg run "$GITHUB_RUN_ID" '{cacheKey:$key,sourceSHA:$sha,originRunID:$run}' \
             > ".build/validation-evidence/oracle/$CASE_ID/evidence-origin.json"
