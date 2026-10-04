@@ -489,10 +489,12 @@ jobs:
           [[ "$REPLAY_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$REPLAY_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           test -n "$CASE_ID"
+          [[ "$CASE_ID" =~ ^[a-z0-9_-]+$ ]]
           test -n "$REPLAY_ARTIFACT_NAME"
           git cat-file -e "$REPLAY_SHA^{commit}"
           case "$REPLAY_ARTIFACT_NAME" in
             "dsl-native-$REPLAY_SHA-$REPLAY_RUN_ID-"*"-$CASE_ID") ;;
+            "upstream-parity-$REPLAY_SHA-$REPLAY_RUN_ID-"*"-$CASE_ID") ;;
             *) echo "Replay artifact does not match evidence revision and case" >&2; exit 1 ;;
           esac
       - uses: actions/download-artifact@v5
@@ -504,12 +506,25 @@ jobs:
       - name: Require exact retained evidence origin
         run: |
           test "$(cat .build/replay-evidence/source-sha.txt)" = "$REPLAY_SHA"
-          if [ -f ".build/replay-evidence/native/$CASE_ID/machine.bin.gz" ]; then
-            test -f ".build/replay-evidence/oracle/$CASE_ID/tlc-graph/graph-events.bin.gz"
-          else
-            test -f ".build/replay-evidence/native/$CASE_ID/report.json"
-            test -f ".build/replay-evidence/oracle/$CASE_ID/tlc/tlc-process.json"
-          fi
+          case "$REPLAY_ARTIFACT_NAME" in
+            dsl-native-*)
+              if [ -f ".build/replay-evidence/native/$CASE_ID/machine.bin.gz" ]; then
+                test -f ".build/replay-evidence/oracle/$CASE_ID/tlc-graph/graph-events.bin.gz"
+              else
+                test -f ".build/replay-evidence/native/$CASE_ID/report.json"
+                test -f ".build/replay-evidence/oracle/$CASE_ID/tlc/tlc-process.json"
+              fi
+              ;;
+            upstream-parity-*)
+              for side in generated reference; do
+                graph=".build/replay-evidence/upstream/$CASE_ID/$side-graph"
+                full=".build/replay-evidence/upstream/$CASE_ID/$side-full-graph"
+                test -f "$graph/graph-events.bin.gz" || test -f "$full/graph-events.bin.gz"
+                spool=".build/replay-evidence/upstream/$CASE_ID/$side-graph-spool"
+                if [ -d "$spool" ]; then rm -r -- "$spool"; fi
+              done
+              ;;
+          esac
       - uses: actions/cache@v4
         id: binary-cache
         with:
@@ -523,18 +538,33 @@ jobs:
           set -o pipefail
           test -x .build/release/tlc-validate
           mkdir -p .build/replay-result
+          mkdir -p ".build/replay-result/comparison/$CASE_ID" .build/replay-work
           jq -n --arg source "$SWIFT_TLA_SHA" --arg evidence "$REPLAY_SHA" --arg run "$REPLAY_RUN_ID" \
             '{sourceSHA:$source,evidenceSHA:$evidence,evidenceRunID:$run,admission:false}' \
             > .build/replay-result/origin.json
-          /usr/bin/time -l .build/release/tlc-validate compare run --case "$CASE_ID" \
-            --native .build/replay-evidence/native --oracle .build/replay-evidence/oracle \
-            --output .build/replay-result/comparison 2>&1 | tee .build/replay-result/comparator.log
-          du -sk ".build/replay-evidence/native/$CASE_ID" \
-            ".build/replay-evidence/oracle/$CASE_ID" \
-            ".build/replay-result/comparison/$CASE_ID" \
-            > .build/replay-result/artifact-sizes-kib.txt
-          jq -e '.result == "exact" and (.graphCompared == true or .assumptionCompared == true)' \
-            ".build/replay-result/comparison/$CASE_ID/comparison.json"
+          if [[ "$REPLAY_ARTIFACT_NAME" == upstream-parity-* ]]; then
+            /usr/bin/time -l .build/release/tlc-validate upstream compare-retained-graphs \
+              --case "$CASE_ID" --evidence .build/replay-evidence/upstream \
+              --output .build/replay-work 2>&1 | tee .build/replay-result/comparator.log
+            cp .build/replay-work/comparison.json \
+              ".build/replay-result/comparison/$CASE_ID/comparison.json"
+            du -sk ".build/replay-evidence/upstream/$CASE_ID" \
+              .build/replay-work > .build/replay-result/artifact-sizes-kib.txt
+            jq -e '.result == "exact" and .graphCompared == true' \
+              ".build/replay-result/comparison/$CASE_ID/comparison.json"
+          else
+            /usr/bin/time -l .build/release/tlc-validate compare run --case "$CASE_ID" \
+              --native .build/replay-evidence/native --oracle .build/replay-evidence/oracle \
+              --output .build/replay-work 2>&1 | tee .build/replay-result/comparator.log
+            cp ".build/replay-work/$CASE_ID/comparison.json" \
+              ".build/replay-result/comparison/$CASE_ID/comparison.json"
+            du -sk ".build/replay-evidence/native/$CASE_ID" \
+              ".build/replay-evidence/oracle/$CASE_ID" \
+              .build/replay-work \
+              > .build/replay-result/artifact-sizes-kib.txt
+            jq -e '.result == "exact" and (.graphCompared == true or .assumptionCompared == true)' \
+              ".build/replay-result/comparison/$CASE_ID/comparison.json"
+          fi
       - uses: actions/upload-artifact@v6
         if: always()
         with:

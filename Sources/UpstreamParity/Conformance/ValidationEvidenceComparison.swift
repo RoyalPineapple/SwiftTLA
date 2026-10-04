@@ -20,6 +20,52 @@ package enum ValidationEvidenceComparisonError: Error, Equatable {
     case spoolingFailed(Int32)
 }
 
+/// TLC fingerprints are lookup keys only; matching complete state bytes assigns the ranks.
+private struct TLCRankIndex {
+    private let mask: Int
+    private var keys: [UInt64]
+    private var ranks: [UInt32]
+
+    init(stateCount: Int) throws {
+        guard stateCount >= 0, stateCount <= Int(UInt32.max),
+              stateCount <= Int.max / 2 else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("TLC state count")
+        }
+        var capacity = 2
+        while capacity < stateCount * 2 { capacity *= 2 }
+        mask = capacity - 1
+        keys = [UInt64](repeating: 0, count: capacity)
+        ranks = [UInt32](repeating: .max, count: capacity)
+    }
+
+    mutating func insert(_ fingerprint: UInt64, rank: Int) -> Bool {
+        guard let value = UInt32(exactly: rank), value != .max else { return false }
+        var slot = firstSlot(for: fingerprint)
+        while ranks[slot] != .max {
+            if keys[slot] == fingerprint { return false }
+            slot = (slot + 1) & mask
+        }
+        keys[slot] = fingerprint
+        ranks[slot] = value
+        return true
+    }
+
+    func rank(for fingerprint: UInt64) -> UInt32? {
+        var slot = firstSlot(for: fingerprint)
+        while ranks[slot] != .max {
+            if keys[slot] == fingerprint { return ranks[slot] }
+            slot = (slot + 1) & mask
+        }
+        return nil
+    }
+
+    private func firstSlot(for fingerprint: UInt64) -> Int {
+        var hasher = Hasher()
+        hasher.combine(fingerprint)
+        return hasher.finalize() & mask
+    }
+}
+
 /// Exact, bounded-memory comparison. State keys are sorted once and assigned
 /// common ranks; full edges are then compared as sorted rank/action/rank records.
 package enum ValidationEvidenceComparison {
@@ -59,22 +105,21 @@ package enum ValidationEvidenceComparison {
             try spoolTLC(reference, caseID: caseID, actions: actions,
                 in: referenceRoot, executable: spoolExecutable, kind: "upstream")
         }
-        var generatedRanks: [UInt64: Int] = [:]
-        var referenceRanks: [UInt64: Int] = [:]
-        generatedRanks.reserveCapacity(generatedGraph.stateCount)
-        referenceRanks.reserveCapacity(referenceGraph.stateCount)
+        var generatedRanks = try TLCRankIndex(stateCount: generatedGraph.stateCount)
+        var referenceRanks = try TLCRankIndex(stateCount: referenceGraph.stateCount)
         let equalStates = try matchStates(
             generatedGraph.states, referenceGraph.states,
             expectedCount: generatedGraph.stateCount
         ) { generatedID, referenceID, rank in
-            guard generatedRanks.updateValue(rank, forKey: generatedID) == nil,
-                  referenceRanks.updateValue(rank, forKey: referenceID) == nil else {
+            guard generatedRanks.insert(generatedID, rank: rank),
+                  referenceRanks.insert(referenceID, rank: rank) else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("duplicate TLC fingerprint")
             }
         }
         guard equalStates, generatedGraph.stateCount == referenceGraph.stateCount else {
             return "complete state set"
         }
+        try removeMatchedStateBuckets(generatedGraph.states, referenceGraph.states)
         let generatedInitial = try rankInitials(generatedGraph.initial, ranks: generatedRanks, in: generatedRoot)
         let referenceInitial = try rankInitials(referenceGraph.initial, ranks: referenceRanks, in: referenceRoot)
         if try firstDifference(generatedInitial, referenceInitial) != nil { return "initial state set" }
@@ -185,14 +230,13 @@ package enum ValidationEvidenceComparison {
     private static func compareGraph(swiftGraph: Spool, tlcGraph: Spool,
         swiftRoot: URL, tlcRoot: URL) throws -> String? {
         var swiftRanks = [Int](repeating: -1, count: swiftGraph.stateCount)
-        var tlcRanks: [UInt64: Int] = [:]
-        tlcRanks.reserveCapacity(tlcGraph.stateCount)
+        var tlcRanks = try TLCRankIndex(stateCount: tlcGraph.stateCount)
         let equalStates = try matchStates(
             swiftGraph.states, tlcGraph.states,
             expectedCount: swiftGraph.stateCount
         ) { nativeID, fingerprint, rank in
             guard nativeID < UInt64(swiftRanks.count), swiftRanks[Int(nativeID)] == -1,
-                  tlcRanks.updateValue(rank, forKey: fingerprint) == nil else {
+                  tlcRanks.insert(fingerprint, rank: rank) else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("duplicate state identity")
             }
             swiftRanks[Int(nativeID)] = rank
@@ -200,6 +244,7 @@ package enum ValidationEvidenceComparison {
         guard equalStates, swiftGraph.stateCount == tlcGraph.stateCount else {
             return "complete state set"
         }
+        try removeMatchedStateBuckets(swiftGraph.states, tlcGraph.states)
         let swiftInitial = try rankInitials(swiftGraph.initial, ranks: swiftRanks, in: swiftRoot)
         let tlcInitial = try rankInitials(tlcGraph.initial, ranks: tlcRanks, in: tlcRoot)
         if try firstDifference(swiftInitial, tlcInitial) != nil { return "initial state set" }
@@ -241,6 +286,12 @@ package enum ValidationEvidenceComparison {
                 }
             }
             return rank == expectedCount
+        }
+    }
+
+    private static func removeMatchedStateBuckets(_ left: [URL], _ right: [URL]) throws {
+        for file in left + right {
+            try FileManager.default.removeItem(at: file)
         }
     }
 
@@ -657,8 +708,8 @@ package enum ValidationEvidenceComparison {
         return result
     }
 
-    private static func rank(_ id: UInt64, in ranks: [UInt64: Int]) throws -> UInt32 {
-        guard let value = ranks[id], let result = UInt32(exactly: value) else {
+    private static func rank(_ id: UInt64, in ranks: TLCRankIndex) throws -> UInt32 {
+        guard let result = ranks.rank(for: id) else {
             throw ValidationEvidenceComparisonError.invalidEvidence("TLC edge rank")
         }
         return result
@@ -812,9 +863,10 @@ package enum ValidationEvidenceComparison {
         return RankedAdjacency(offsets: offsets, pairs: pairs)
     }
 
-    private static func rankInitials(_ raw: URL, ranks: [UInt64: Int], in directory: URL) throws -> URL {
+    private static func rankInitials(_ raw: URL, ranks: TLCRankIndex, in directory: URL) throws -> URL {
         try rewrite(raw, in: directory) { fields in
-            guard fields.count == 1, let fingerprint = UInt64(fields[0]), let rank = ranks[fingerprint] else {
+            guard fields.count == 1, let fingerprint = UInt64(fields[0]),
+                  let rank = ranks.rank(for: fingerprint) else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("TLC initial fingerprint")
             }
             return String(rank)

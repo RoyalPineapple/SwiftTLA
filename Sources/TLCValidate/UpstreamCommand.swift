@@ -11,7 +11,7 @@ private enum UpstreamCommandError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            "Usage: tlc-validate upstream list | upstream run --case <id-or-all> --output <directory> | upstream cache-key --case <id> | upstream recompare --case <id> --evidence <directory> | upstream annotate --case <id> --evidence <directory>"
+            "Usage: tlc-validate upstream list | upstream run --case <id-or-all> --output <directory> | upstream cache-key --case <id> | upstream recompare --case <id> --evidence <directory> | upstream compare-retained-graphs --case <id> --evidence <directory> --output <directory> | upstream annotate --case <id> --evidence <directory>"
         case .unknownCase(let id): "unknown upstream case: \(id)"
         case .invalidToolchain: "invalid pinned TLC toolchain"
         case .outputExists(let path): "output already exists: \(path)"
@@ -27,6 +27,35 @@ func runUpstream(arguments: [String]) -> Never {
         if arguments == ["list"] {
             print(String(decoding: try JSONEncoder().encode(manifest.cases.map(\.id)), as: UTF8.self))
             exit(0)
+        }
+        if arguments.count == 7, arguments[0] == "compare-retained-graphs",
+           arguments[1] == "--case", arguments[3] == "--evidence",
+           arguments[5] == "--output" {
+            guard let declaration = manifest.cases.first(where: { $0.id == arguments[2] }) else {
+                throw UpstreamCommandError.unknownCase(arguments[2])
+            }
+            guard declaration.comparisonMode != .decisiveCounterexample,
+                  try declaration.resolveAssumptionScenario() == nil else {
+                throw UpstreamTLCParityError.invalidOutcome("complete graph replay: \(declaration.id)")
+            }
+            let evidence = URL(fileURLWithPath: arguments[4]).standardizedFileURL
+                .appendingPathComponent(declaration.id)
+            let output = URL(fileURLWithPath: arguments[6]).standardizedFileURL
+            try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+            let difference = try UpstreamTLCParity.compareRetainedGraphs(
+                id: declaration.id, actions: try declaration.renderModel().actions,
+                in: evidence, to: output,
+                spoolExecutable: validationExecutableURL())
+            let result = difference == nil ? "exact" : "different"
+            let report: [String: Any] = [
+                "schema": "swifttla.retained-tlc-graph-replay",
+                "caseID": declaration.id, "result": result,
+                "graphCompared": true, "difference": (difference as Any?) ?? NSNull()
+            ]
+            try JSONSerialization.data(withJSONObject: report, options: [.sortedKeys])
+                .write(to: output.appendingPathComponent("comparison.json"), options: .atomic)
+            print("upstream graph \(declaration.id): \(result)")
+            exit(difference == nil ? 0 : 2)
         }
         if arguments.count == 5, arguments[0] == "annotate", arguments[1] == "--case",
            arguments[3] == "--evidence" {

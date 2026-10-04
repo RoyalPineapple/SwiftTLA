@@ -376,6 +376,34 @@ struct ValidationEvidenceComparisonTests {
             generated: generated, reference: reference, actions: actions, in: root) == nil)
     }
 
+    @Test("retained TLC graph replay requires completed runs")
+    func retainedGraphReplayRequiresCompletion() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        for (side, source, target) in [("generated", UInt64(101), UInt64(202)),
+                                        ("reference", UInt64(303), UInt64(404))] {
+            let directory = root.appendingPathComponent("\(side)-graph")
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try writeGzip(tlcGraph(edgeCount: 1, source: source, target: target),
+                to: directory.appendingPathComponent("graph-events.bin.gz"))
+            let process: [String: Any] = ["caseID": "fixture", "invocation": ["exitStatus": 0]]
+            try JSONSerialization.data(withJSONObject: process)
+                .write(to: directory.appendingPathComponent("tlc-process.json"))
+        }
+        let output = root.appendingPathComponent("replay")
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false)
+        #expect(try UpstreamTLCParity.compareRetainedGraphs(
+            id: "fixture", actions: actions, in: root, to: output) == nil)
+
+        let referenceProcess = root.appendingPathComponent("reference-graph/tlc-process.json")
+        let incomplete: [String: Any] = ["caseID": "fixture", "invocation": ["exitStatus": 12]]
+        try JSONSerialization.data(withJSONObject: incomplete).write(to: referenceProcess)
+        #expect(throws: UpstreamTLCParityError.invalidOutcome("retained TLC graph: reference-graph")) {
+            try UpstreamTLCParity.compareRetainedGraphs(
+                id: "fixture", actions: actions, in: root, to: root.appendingPathComponent("rejected"))
+        }
+    }
+
     @Test("a cached exact verdict is replaced when retained TLC edges no longer match")
     func cachedUpstreamGraphIsRecompared() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

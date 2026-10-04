@@ -321,6 +321,35 @@ package enum UpstreamTLCParity {
         return refreshed
     }
 
+    /// Diagnostic replay of two completed TLC graphs; selected verdicts remain separate.
+    package static func compareRetainedGraphs(
+        id: String, actions: [RenderedAction], in directory: URL, to output: URL,
+        spoolExecutable: URL? = nil
+    ) throws -> String? {
+        try ValidationEvidenceComparison.compareTLCGraphs(
+            caseID: id,
+            generated: try completedRetainedGraph("generated", id: id, in: directory),
+            reference: try completedRetainedGraph("reference", id: id, in: directory),
+            actions: actions, in: output, spoolExecutable: spoolExecutable)
+    }
+
+    private static func completedRetainedGraph(_ side: String, id: String, in directory: URL) throws -> URL {
+        for name in ["\(side)-full-graph", "\(side)-graph"] {
+            let root = directory.appendingPathComponent(name)
+            let graph = root.appendingPathComponent("graph-events.bin.gz")
+            guard FileManager.default.fileExists(atPath: graph.path) else { continue }
+            let process = try JSONSerialization.jsonObject(with:
+                Data(contentsOf: root.appendingPathComponent("tlc-process.json"))) as? [String: Any]
+            guard let invocation = process?["invocation"] as? [String: Any],
+                  invocation["exitStatus"] as? Int == 0,
+                  process?["caseID"] as? String == id else {
+                throw UpstreamTLCParityError.invalidOutcome("retained TLC graph: \(name)")
+            }
+            return graph
+        }
+        throw UpstreamTLCParityError.invalidOutcome("missing retained TLC graph: \(side)")
+    }
+
     private static func write(_ report: UpstreamTLCParityReport, to directory: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
