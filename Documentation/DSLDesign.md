@@ -904,9 +904,8 @@ different constant bindings. An invalid limit fails `Configuration` construction
 before export. Unsupported module closures must fail explicitly, without partial
 output or a fallback to an earlier compiler representation.
 
-This contract settles scalar parameter declarations and scenario bindings for Counter.
-Parameter-dependent collection domains still require the remaining B-01 decisions.
-They must use these same identities and configuration values.
+This contract also applies to parameter-dependent collection domains below.
+They use the same identities and configuration values.
 
 #### Set-valued parameters
 
@@ -1471,13 +1470,12 @@ agreement separately. Do not redefine membership from the implementation registr
 
 Close each open item with exact signatures, semantics, and one positive and one
 negative acceptance example. Implementers must not resolve these silently by
-inventing a second API or preserving an accidental existing behavior. B-02 and
-B-03 are settled below. B-01's fixed-collection replacement is settled, but
-its remaining domain decisions and B-04 through B-06 are open.
+inventing a second API or preserving an accidental existing behavior. B-01
+through B-03 are settled below. B-04 through B-06 remain open.
 
 | ID | Decision |
 | --- | --- |
-| B-01 | Settle remaining parameter-dependent domain syntax, finite scenario bindings, and runner-limit separation. Fixed `ModelCollection` replacement is settled: typed configuration parameters contain stable member IDs used by `Each` and dictionary state; application objects stay outside model state |
+| B-01 | Settled: typed parameter-dependent domains and model-owned finite scenario bindings use the same resolved parameter identities and generated `Configuration`; `Each` and dictionary state use stable member IDs, not application objects. Runner limits stop validation and never constrain the model. The fixed `ModelCollection` authoring API is removed. Acceptance still requires source-aligned tests and hosted parity for applicable configurations |
 | B-02 | Settled: name-bearing declarations use their specified immutable Swift binding or typed enum identity; `Algorithm` and `Validation` require explicit registration by bound reference. Inline control statements need no extra identity. Optional `label:` is presentation-only |
 | B-03 | Settled: typed `.expect(property, .violated)` and `.expectDeadlock(.violated)` change scenario admission only; checking retains its default selections and typed result shapes |
 | B-04 | Temporal and symmetry syntax: settle explicit fairness and interchangeability declarations, scope references, validation rules, and permitted reductions; neither fairness nor symmetry is automatic |
