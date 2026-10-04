@@ -34,14 +34,33 @@ struct SymmetryParserFidelityTests {
     }
 
     @Test("Symmetry participates in generated parser-builder fidelity")
-    func macroExpansionPreservesSymmetry() throws {
+    func macroExpansionPreservesSymmetry() {
         #expect(GeneratedSymmetryModel.spec.symmetrySets == [
             SymmetrySet(variableName: "TxId", values: [.string("t1"), .string("t2")])
         ])
-        let compilation = try GeneratedSymmetryModel.spec.compile()
-        #expect(compilation.semantics.symmetrySets.map(\.values) == [
-            [.string("t1"), .string("t2")]
-        ])
+    }
+
+    @Test("Configured symmetry retains the parameter through native compilation and TLA export")
+    func parameterBoundSymmetry() throws {
+        let specification = GeneratedParameterSymmetryModel.spec
+        let parameter = try #require(specification.parameters.first)
+        #expect(specification.symmetrySets.map(\.domain) == [.parameter(parameter.reference)])
+
+        let scenarios = try GeneratedParameterSymmetryModel.validationScenarios()
+        #expect(scenarios.count == 2)
+        let exported = try scenarios.map {
+            try GeneratedParameterSymmetryModel.render(configuration: $0.configuration).tlaBundle
+        }
+        #expect(exported[0].tla == exported[1].tla)
+        #expect(exported[0].tla.contains("SymmmembersSymmetry == Permutations(members)"))
+        #expect(exported.allSatisfy { !$0.cfg.contains("SYMMETRY") })
+        #expect(exported[0].cfg.contains("CONSTANT members = {1, 2}"))
+        #expect(exported[1].cfg.contains("CONSTANT members = {3, 4}"))
+        for scenario in scenarios {
+            let selected = try scenario.render()
+            #expect(selected.tlaBundle.cfg.contains("SYMMETRY SymmmembersSymmetry"))
+            #expect(try selected.plusCalBundle().tla.contains("SymmmembersSymmetry == Permutations(members)"))
+        }
     }
 
     @Test("Symmetry requires a bound registration in #spec")
@@ -104,6 +123,32 @@ private struct GeneratedSymmetryModel {
             let TxId = Symmetry(Set(Transaction.all))
             TxId
             Invariant("TypeOK") { value >= 0 }
+        }
+    }
+}
+
+@TLAModel
+private struct GeneratedParameterSymmetryModel {
+    enum Step: String, CaseIterable { case stay }
+
+    static var spec: TLASpec {
+        #spec("GeneratedParameterSymmetry") { scope in
+            let members = scope.parameter(as: Set<Int>.self,
+                in: Set<Set<Int>>([Set<Int>([1, 2]), Set<Int>([3, 4])]))
+            let value = scope.sharedVar(initial: 0)
+            let membersSymmetry = Symmetry(members)
+            membersSymmetry
+            let algorithm = Algorithm(label: "Stay") {
+                Do(Step.stay) { Assign(value, to: value) }
+            }
+            algorithm
+            Invariant("TypeOK") { value >= 0 }
+            let first = Validation { Bind(members, to: Set<Int>([1, 2])) }
+                .usingSymmetry(membersSymmetry)
+            first
+            let second = Validation { Bind(members, to: Set<Int>([3, 4])) }
+                .usingSymmetry(membersSymmetry)
+            second
         }
     }
 }

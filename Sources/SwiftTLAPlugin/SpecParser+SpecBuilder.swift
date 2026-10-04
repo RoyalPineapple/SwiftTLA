@@ -1108,17 +1108,29 @@ extension ParserSession {
         into components: inout TLASpec
     ) -> SymmetrySetDecl? {
         guard call.arguments.filter({ $0.label == nil }).count == 1,
-              let valuesSyntax = call.arguments.first(where: { $0.label == nil })?.expression,
-              let values = parseSymmetryValues(valuesSyntax)
+              let valuesSyntax = call.arguments.first(where: { $0.label == nil })?.expression
         else {
             components.diagnostics.append(.init(
-                message: "Symmetry requires a finite domain.",
+                message: "Symmetry requires a finite domain or a typed set parameter.",
                 source: call,
-                expected: "let TxId = Symmetry(Set(Transaction.all)); TxId"
+                expected: "let TxId = Symmetry(Set(Transaction.all)); TxId, or Symmetry(typedSetParameter)"
             ))
             return nil
         }
-        return .init(bindingName, Set(values))
+        if let values = parseSymmetryValues(valuesSyntax) {
+            return .init(bindingName, Set(values))
+        }
+        if let parameter = valuesSyntax.as(DeclReferenceExprSyntax.self),
+           case .parameter(let reference)? = sourceScope.value(for: parameter),
+           case .set(let member)? = sourceScope.shape(for: parameter), member.resolved {
+            return .init(bindingName, domain: .parameter(reference))
+        }
+        components.diagnostics.append(.init(
+            message: "Symmetry requires a finite domain or a typed set parameter.",
+            source: valuesSyntax,
+            expected: "Symmetry(Set(Transaction.all)) or Symmetry(typedSetParameter)"
+        ))
+        return nil
     }
 
     private func parseRefinement(

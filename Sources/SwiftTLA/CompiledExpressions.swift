@@ -523,10 +523,6 @@ struct CompiledModuleInstance: Sendable {
     let arguments: [CompiledModuleArgument]
 }
 
-struct CompiledSymmetrySet: Sendable {
-    let values: Set<CompiledValue>
-}
-
 /// Transitive lexical requirements, independent of a particular checking scope.
 struct CompiledOperatorDependencies: Equatable, Sendable {
     let bindings: Set<BinderID>
@@ -589,5 +585,4 @@ package struct CompiledSemantics: Sendable {
     package var operators: CompiledOperators
     let formalModuleReplacements: [CompiledFormalModuleReplacement]
     let moduleInstances: [CompiledModuleInstance]
-    let symmetrySets: [CompiledSymmetrySet]
 }

@@ -426,10 +426,7 @@ struct CompiledLowerer {
                     clauseSourceOffsets: spec.assumptions.map(\.sourceOffset)) }),
             operators: operators,
             formalModuleReplacements: formalModuleReplacements,
-            moduleInstances: moduleInstances,
-            symmetrySets: spec.symmetrySets.map { symmetry in
-                .init(values: Set(symmetry.values.map(CompiledValue.init(formal:))))
-            }
+            moduleInstances: moduleInstances
         )
     }
 

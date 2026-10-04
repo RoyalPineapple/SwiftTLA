@@ -619,6 +619,23 @@ let reduced = Validation {}.usingSymmetry(memberSymmetry)
 reduced
 ```
 
+A typed set parameter can supply the members for different configurations:
+
+```swift
+let members = scope.parameter(as: Set<Member>.self, in: allowedMemberSets)
+let memberSymmetry = Symmetry(members)
+memberSymmetry
+```
+
+The current finite-domain implementation accepts explicitly enumerated,
+nonempty sets of atomic members. Other finite parameter-domain expressions
+remain B-04 work; their rejection is not a TLC or PlusCal restriction.
+The compiler retains the parameter identity; TLA+ export defines the
+permutation operator over the rendered parameter, not a sample or default set.
+Every configured value therefore selects its own members without changing the
+model's state or action types. Potential members of distinct symmetry
+declarations must remain disjoint.
+
 The Swift binding supplies the declaration's stable name and the generated
 TLA+ permutation operator name. An inline declaration, mutable binding, empty
 set, overlapping domains, composite member, or duplicate registration fails

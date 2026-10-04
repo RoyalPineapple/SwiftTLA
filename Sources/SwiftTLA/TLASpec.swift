@@ -917,24 +917,24 @@ public func StrongFairnessNext() -> FairnessDecl {
 }
 public struct SymmetrySet: Hashable, Sendable, CustomStringConvertible {
   public let variableName: String
-  public let values: Set<TLAValue>
+  public let domain: SymmetryDomain
   package let reference: SymmetryReference?
   public init(variableName: String, values: Set<TLAValue>) {
     self.variableName = variableName
-    self.values = values
+    domain = .finite(values)
     reference = nil
   }
-  package init(variableName: String, values: Set<TLAValue>, reference: SymmetryReference) {
+  package init(variableName: String, domain: SymmetryDomain, reference: SymmetryReference) {
     self.variableName = variableName
-    self.values = values
+    self.domain = domain
     self.reference = reference
   }
   public static func == (lhs: Self, rhs: Self) -> Bool {
-    lhs.variableName == rhs.variableName && lhs.values == rhs.values
+    lhs.variableName == rhs.variableName && lhs.domain == rhs.domain
   }
   public func hash(into hasher: inout Hasher) {
     hasher.combine(variableName)
-    hasher.combine(values)
+    hasher.combine(domain)
   }
   public var description: String { "SYMMETRY \(variableName)" }
 }

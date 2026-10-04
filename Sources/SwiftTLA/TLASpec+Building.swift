@@ -234,12 +234,13 @@ extension CompiledModuleMetadata {
     algorithm plusCalAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan,
     declarationOrder: AuthoredPlusCalDeclarationOrder,
     layout: CompiledLayout,
-    declarations: RenderedModule
+    declarations: RenderedModule,
+    parameterNames: [String] = []
   ) throws -> AuthoredPlusCalModule {
     let declarationSections = authoredPlusCalDeclarationSections(order: declarationOrder, declarations: declarations)
     return try authoredPlusCalModule(algorithm: plusCalAlgorithm, layout: layout, declarations: declarations,
       prelude: declarationSections.prelude, define: declarationSections.define,
-      postTranslation: declarationSections.postTranslation)
+      postTranslation: declarationSections.postTranslation, parameterNames: parameterNames)
   }
 
   func authoredPlusCalModule(
@@ -263,7 +264,7 @@ extension CompiledModuleMetadata {
     let postTranslationDeclarations = postTranslation
       + (declarations.constraint.map { [$0] } ?? [])
       + renderedProperties
-      + authoredPlusCalSymmetry
+      + (try authoredPlusCalSymmetry(layout: layout, parameterNames: parameterNames))
     let module = AuthoredPlusCalModule(
       name: name,
       extendsModules: authoredPlusCalExtends + requiredModules.map(\.rawValue).sorted().filter { !authoredPlusCalExtends.contains($0) },
@@ -304,12 +305,15 @@ extension CompiledModuleMetadata {
                  postTranslation: order.postTranslation.map(text))
   }
 
-  private var authoredPlusCalSymmetry: [String] {
-    symmetrySets.map { symmetry in
-      let values = symmetry.values.sorted()
-        .map(\.description)
-        .joined(separator: ", ")
-      return "Symm\(symmetry.variableName) == Permutations({\(values)})"
+  private func authoredPlusCalSymmetry(layout: CompiledLayout, parameterNames: [String]) throws -> [String] {
+    let names = Dictionary(uniqueKeysWithValues: zip(layout.parameters.map(\.reference), parameterNames))
+    return try symmetrySets.map { symmetry in
+      guard let domain = symmetry.domain.renderedSet(parameterNames: names) else {
+        throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
+          path: "symmetrySets.\(symmetry.variableName)", expected: "a rendered model parameter",
+          actual: "a missing parameter", nextSafeAction: "Use a model-owned parameter.")
+      }
+      return "Symm\(symmetry.variableName) == Permutations(\(domain))"
     }
   }
 }

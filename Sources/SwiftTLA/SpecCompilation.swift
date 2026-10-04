@@ -339,7 +339,8 @@ public struct CompiledSpecification: Sendable {
         let algorithm = try module.authoredAlgorithm.map { authored in
             try metadata.authoredPlusCalModule(
                 algorithm: authored.plan, declarationOrder: authored.declarations,
-                layout: module.layout, declarations: rootModule
+                layout: module.layout, declarations: rootModule,
+                parameterNames: try module.layout.parameters.map { try renderer.binderName($0.binder) }
             )
         }
         let plusCalBundle = try algorithm.map { algorithm in
@@ -1431,7 +1432,12 @@ private struct CanonicalSpecificationEncoder {
         }
         list("refinements", refinements) { $0 }
         let symmetrySets = spec.symmetrySets.map { set in
-            node("symmetry-set", [set.variableName, canonicalList(set.values.map(canonicalValue).sorted())])
+            let domain: String
+            switch set.domain {
+            case .finite(let values): domain = node("finite", [canonicalList(values.map(canonicalValue).sorted())])
+            case .parameter(let reference): domain = node("parameter", [reference.name])
+            }
+            return node("symmetry-set", [set.variableName, domain])
         }
         list("symmetrySets", symmetrySets) { $0 }
     }
@@ -1923,9 +1929,16 @@ private extension CompiledModuleMetadata {
             lines.append("")
         }
 
+        let symmetryParameterNames = try Dictionary(uniqueKeysWithValues: layout.parameters.map {
+            ($0.reference, try renderer.binderName($0.binder))
+        })
         for symmetry in symmetrySets {
-            let values = Array(symmetry.values).sorted()
-            lines.append("Symm\(symmetry.variableName) == Permutations({\(values.map(\.description).joined(separator: ", "))})")
+            guard let domain = symmetry.domain.renderedSet(parameterNames: symmetryParameterNames) else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .rendering,
+                    path: "symmetrySets.\(symmetry.variableName)", expected: "a rendered model parameter",
+                    actual: "a missing parameter", nextSafeAction: "Use a model-owned parameter.")
+            }
+            lines.append("Symm\(symmetry.variableName) == Permutations(\(domain))")
         }
         if !symmetrySets.isEmpty { lines.append("") }
 
