@@ -173,12 +173,19 @@ run_guarded() {
     export SWIFTTLA_VALIDATION_SCRATCH_PATH="$scratch_dir"
     if [[ "$mode" == "swiftpm-test" ]]; then
         local cache_root="$common_git_dir/swifttla-local-validation-cache"
+        local worktree_key worktree_cache
         local cache_key cache_key_file toolchain_key toolchain_key_file macro_key macro_key_file
         [[ ! -L "$cache_root" ]] || fail "cache root must not be a symlink"
         mkdir -p "$cache_root"
-        cache_key_file="$cache_root/source-key"
-        toolchain_key_file="$cache_root/toolchain-key"
-        macro_key_file="$cache_root/macro-source-key"
+        # SwiftPM build records include checkout paths, so isolate worktree builds.
+        worktree_key="$(git rev-parse --show-toplevel | shasum -a 256 | awk '{print $1}')"
+        [[ "$worktree_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute worktree cache key"
+        worktree_cache="$cache_root/$worktree_key"
+        [[ ! -L "$worktree_cache" ]] || fail "worktree cache directory must not be a symlink"
+        mkdir -p "$worktree_cache"
+        cache_key_file="$worktree_cache/source-key"
+        toolchain_key_file="$worktree_cache/toolchain-key"
+        macro_key_file="$worktree_cache/macro-source-key"
         toolchain_key="$({
             printf '%s\n' \
                 'swiftpm-local-validation-toolchain-v1' \
@@ -233,7 +240,7 @@ run_guarded() {
         [[ "$cache_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute source cache key"
         [[ "$toolchain_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute toolchain cache key"
         [[ "$macro_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute macro source cache key"
-        build_dir="$cache_root/.build"
+        build_dir="$worktree_cache/.build"
         [[ ! -L "$build_dir" ]] || fail "cache build directory must not be a symlink"
         [[ ! -L "$cache_key_file" ]] || fail "cache key file must not be a symlink"
         [[ ! -L "$toolchain_key_file" ]] || fail "toolchain key file must not be a symlink"
