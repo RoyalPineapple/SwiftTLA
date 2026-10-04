@@ -21,6 +21,13 @@ package struct EWD840Model: Sendable {
         package static var defaultValue: Self { .white }
     }
 
+    private enum Step: String, CaseIterable {
+        case InitiateProbe, PassToken_1, PassToken_2
+        case SendMsg_0_to_1, SendMsg_0_to_2, SendMsg_1_to_0
+        case SendMsg_1_to_2, SendMsg_2_to_0, SendMsg_2_to_1
+        case Deactivate_0, Deactivate_1, Deactivate_2
+    }
+
     package static var spec: TLASpec {
         #spec("EWD840") { scope in
             Extends(.integers)
@@ -47,66 +54,60 @@ package struct EWD840Model: Sendable {
             let tpos = scope.sharedVar(in: 0...2)
             let tcolor = scope.sharedVar(initial: Color.black)
 
-            SwiftTLA.Action("InitiateProbe") {
-                tpos == 0 && (tcolor == Color.black || color[.zero] == Color.black)
-                    && tpos.becomes(2) && tcolor.becomes(.white)
-                    && color.becomes(color.updating(.zero, to: .white)) && active.stays
+            Do(Step.InitiateProbe, when: tpos == 0
+                && (tcolor == Color.black || color[.zero] == Color.black)) {
+                Assign(tpos, to: 2)
+                Assign(tcolor, to: Color.white)
+                Assign(color, to: color.updating(.zero, to: .white))
             }
 
-            SwiftTLA.Action("PassToken_1") {
-                tpos == 1 && (active[.one] == false || color[.one] == Color.black || tcolor == Color.black)
-                    && tpos.becomes(0)
-                    && ((color[.one] == Color.black && tcolor.becomes(.black))
-                        || (color[.one] != Color.black && tcolor.stays))
-                    && color.becomes(color.updating(.one, to: .white)) && active.stays
+            Do(Step.PassToken_1, when: tpos == 1
+                && (active[.one] == false || color[.one] == Color.black || tcolor == Color.black)) {
+                Assign(tpos, to: 0)
+                Assign(tcolor, to: If(color[.one] == Color.black, then: Color.black, else: tcolor))
+                Assign(color, to: color.updating(.one, to: .white))
             }
-            SwiftTLA.Action("PassToken_2") {
-                tpos == 2 && (active[.two] == false || color[.two] == Color.black || tcolor == Color.black)
-                    && tpos.becomes(1)
-                    && ((color[.two] == Color.black && tcolor.becomes(.black))
-                        || (color[.two] != Color.black && tcolor.stays))
-                    && color.becomes(color.updating(.two, to: .white)) && active.stays
+            Do(Step.PassToken_2, when: tpos == 2
+                && (active[.two] == false || color[.two] == Color.black || tcolor == Color.black)) {
+                Assign(tpos, to: 1)
+                Assign(tcolor, to: If(color[.two] == Color.black, then: Color.black, else: tcolor))
+                Assign(color, to: color.updating(.two, to: .white))
             }
 
-            SwiftTLA.Action("SendMsg_0_to_1") {
-                active[.zero] == true && active.becomes(active.updating(.one, to: true))
-                    && color.becomes(color.updating(.zero, to: .black)) && tpos.stays && tcolor.stays
+            Do(Step.SendMsg_0_to_1, when: active[.zero]) {
+                Assign(active, to: active.updating(.one, to: true))
+                Assign(color, to: color.updating(.zero, to: .black))
             }
-            SwiftTLA.Action("SendMsg_0_to_2") {
-                active[.zero] == true && active.becomes(active.updating(.two, to: true))
-                    && color.becomes(color.updating(.zero, to: .black)) && tpos.stays && tcolor.stays
+            Do(Step.SendMsg_0_to_2, when: active[.zero]) {
+                Assign(active, to: active.updating(.two, to: true))
+                Assign(color, to: color.updating(.zero, to: .black))
             }
-            SwiftTLA.Action("SendMsg_1_to_0") {
-                active[.one] == true && active.becomes(active.updating(.zero, to: true))
-                    && color.stays && tpos.stays && tcolor.stays
+            Do(Step.SendMsg_1_to_0, when: active[.one]) {
+                Assign(active, to: active.updating(.zero, to: true))
             }
-            SwiftTLA.Action("SendMsg_1_to_2") {
-                active[.one] == true && active.becomes(active.updating(.two, to: true))
-                    && color.becomes(color.updating(.one, to: .black)) && tpos.stays && tcolor.stays
+            Do(Step.SendMsg_1_to_2, when: active[.one]) {
+                Assign(active, to: active.updating(.two, to: true))
+                Assign(color, to: color.updating(.one, to: .black))
             }
-            SwiftTLA.Action("SendMsg_2_to_0") {
-                active[.two] == true && active.becomes(active.updating(.zero, to: true))
-                    && color.stays && tpos.stays && tcolor.stays
+            Do(Step.SendMsg_2_to_0, when: active[.two]) {
+                Assign(active, to: active.updating(.zero, to: true))
             }
-            SwiftTLA.Action("SendMsg_2_to_1") {
-                active[.two] == true && active.becomes(active.updating(.one, to: true))
-                    && color.stays && tpos.stays && tcolor.stays
+            Do(Step.SendMsg_2_to_1, when: active[.two]) {
+                Assign(active, to: active.updating(.one, to: true))
             }
 
-            SwiftTLA.Action("Deactivate_0") {
-                active[.zero] == true && active.becomes(active.updating(.zero, to: false))
-                    && color.stays && tpos.stays && tcolor.stays
+            Do(Step.Deactivate_0, when: active[.zero]) {
+                Assign(active, to: active.updating(.zero, to: false))
             }
-            SwiftTLA.Action("Deactivate_1") {
-                active[.one] == true && active.becomes(active.updating(.one, to: false))
-                    && color.stays && tpos.stays && tcolor.stays
+            Do(Step.Deactivate_1, when: active[.one]) {
+                Assign(active, to: active.updating(.one, to: false))
             }
-            SwiftTLA.Action("Deactivate_2") {
-                active[.two] == true && active.becomes(active.updating(.two, to: false))
-                    && color.stays && tpos.stays && tcolor.stays
+            Do(Step.Deactivate_2, when: active[.two]) {
+                Assign(active, to: active.updating(.two, to: false))
             }
 
-            Invariant("TypeOK") {
+            let TypeOK = Invariant()
+            TypeOK {
                 tpos >= 0 && tpos < 3 && (tcolor == Color.white || tcolor == Color.black)
             }
         }
