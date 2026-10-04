@@ -4993,8 +4993,8 @@
       "path": "specifications/dijkstra-mutex",
       "name": "Dijkstra's Mutual Exclusion Algorithm",
       "audit": "reference inputs audited",
-      "gap": "On frozen SHA 04a38db6, Liveness3Processors has complete exact native/generated-TLA and generated-TLA/pinned-upstream graph and selected-check parity. Safety4Processors has complete exact native/generated-TLA parity at 33,288,512 states and 146,157,712 labeled edges; its generated-TLA/pinned-upstream job is still running. The earlier temp-name and liveness diagnostic failures do not describe the current source. Do not credit the four-processor configuration or the family until its remaining hosted path and module/legacy disposition are reconciled.",
-      "legacyCleanupComplete": false,
+      "gap": "On frozen SHA 04a38db6, Liveness3Processors has complete exact native/generated-TLA and generated-TLA/pinned-upstream graph and selected-check parity. Safety4Processors has complete exact native/generated-TLA parity at 33,288,512 states and 146,157,712 labeled edges; its generated-TLA/pinned-upstream job is still running. The pinned standalone source differs from the configured dependencies only in comments, and no superseded Dijkstra caller remains. Do not credit the four-processor configuration or the family until its remaining hosted path and module dispositions are reconciled.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.tla",
@@ -5006,16 +5006,16 @@
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/DijkstraMutex.tla",
           "role": "behavior dependency",
-          "reason": "Pinned snapshot d25e4aa00a765366f20b0281441599c09e4e9460 supplies LSpec and DeadlockFreedom to the adjacent MC wrapper. Liveness3Processors now selects the ncs-exempt fairness profile and the per-process property; hosted parity remains open.",
+          "reason": "Pinned snapshot d25e4aa00a765366f20b0281441599c09e4e9460 supplies LSpec and DeadlockFreedom to the adjacent MC wrapper. Liveness3Processors selects the ncs-exempt weak-fairness profile and DeadlockFreedom; both independent hosted paths match complete graphs and selected verdicts on 04a38db6.",
           "implementations": ["Sources/UpstreamParity/Examples/DijkstraMutex.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/MC.tla",
           "role": "configured root",
           "reason": "The wrapper selects Proc={p1,p2,p3}, LSpec, MutualExclusion, and DeadlockFreedom. The configuration uses opaque model values and defaultInitValue. It does not disable TLC deadlock checks. Temporal DeadlockFreedom is a separate check.",
           "implementations": ["Sources/UpstreamParity/Examples/DijkstraMutex.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/DijkstraMutex.tla",
