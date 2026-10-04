@@ -38,8 +38,20 @@ struct SymmetryDomainAdmissionTests {
                 in: Set<Set<[Int]>>([Set<[Int]>([[1], [2]])]))
             Symmetry(_name: "Members", members)
         }
+        let subsetsIncludingEmpty = TLASpec("EmptySubsetSymmetry") { scope in
+            let members = scope.parameter(as: Set<Int>.self,
+                in: Subsets(of: Set<Int>([1, 2])))
+            Symmetry(_name: "Members", members)
+        }
+        let compositeSubsets = TLASpec("CompositeSubsetSymmetry") { scope in
+            let members = scope.parameter(as: Set<[Int]>.self,
+                in: NonEmptySubsets(of: Set<[Int]>([[1], [2]])))
+            Symmetry(_name: "Members", members)
+        }
         for (spec, reason) in [(empty, "an empty domain"),
-                               (composite, "composite symmetry member")] {
+                               (composite, "composite symmetry member"),
+                               (subsetsIncludingEmpty, "an unsupported parameter domain"),
+                               (compositeSubsets, "composite symmetry member")] {
             do {
                 _ = try spec.compile()
                 Issue.record("Invalid configured symmetry domain compiled")

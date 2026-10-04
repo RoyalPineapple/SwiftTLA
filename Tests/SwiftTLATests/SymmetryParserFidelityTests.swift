@@ -134,7 +134,7 @@ private struct GeneratedParameterSymmetryModel {
     static var spec: TLASpec {
         #spec("GeneratedParameterSymmetry") { scope in
             let members = scope.parameter(as: Set<Int>.self,
-                in: Set<Set<Int>>([Set<Int>([1, 2]), Set<Int>([3, 4])]))
+                in: NonEmptySubsets(of: Set<Int>([1, 2, 3, 4])))
             let value = scope.sharedVar(initial: 0)
             let membersSymmetry = Symmetry(members)
             membersSymmetry

@@ -622,14 +622,15 @@ reduced
 A typed set parameter can supply the members for different configurations:
 
 ```swift
-let members = scope.parameter(as: Set<Member>.self, in: allowedMemberSets)
+let members = scope.parameter(as: Set<Member>.self,
+    in: NonEmptySubsets(of: Set(Member.all)))
 let memberSymmetry = Symmetry(members)
 memberSymmetry
 ```
 
-The current finite-domain implementation accepts explicitly enumerated,
-nonempty sets of atomic members. Other finite parameter-domain expressions
-remain B-04 work; their rejection is not a TLC or PlusCal restriction.
+The current finite-domain implementation accepts enumerated nonempty member
+sets and `NonEmptySubsets` of a literal finite set. Other finite parameter-domain
+expressions remain B-04 work; their rejection is not a TLC or PlusCal restriction.
 The compiler retains the parameter identity; TLA+ export defines the
 permutation operator over the rendered parameter, not a sample or default set.
 Every configured value therefore selects its own members without changing the

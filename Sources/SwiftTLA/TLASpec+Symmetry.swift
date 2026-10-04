@@ -88,23 +88,23 @@ extension TLASpec {
           actual: "a duplicate declaration"
         )
       }
-      let candidates: [Set<TLAValue>]
+      let possibleValues: Set<TLAValue>
       switch symmetry.domain {
       case .finite(let values):
-        candidates = [values]
+        possibleValues = values
       case .parameter(let reference):
         guard let parameter = parameters.first(where: { $0.reference == reference }) else {
           throw symmetryDiagnostic(path: "\(path).values",
             expected: "a model-owned set parameter", actual: "a foreign parameter")
         }
-        guard let values = finiteSymmetryCandidates(parameter.domain) else {
+        guard let values = possibleSymmetryValues(in: parameter.domain) else {
           throw symmetryDiagnostic(path: "\(path).values",
-            expected: "a finite, explicitly enumerated domain of atomic member sets",
+            expected: "a finite domain of nonempty atomic member sets",
             actual: "an unsupported parameter domain")
         }
-        candidates = values
+        possibleValues = values
       }
-      guard candidates.allSatisfy({ !$0.isEmpty }) && !candidates.isEmpty else {
+      guard !possibleValues.isEmpty else {
         throw symmetryDiagnostic(
           path: "\(path).values",
           expected: "at least one symmetric value",
@@ -112,7 +112,6 @@ extension TLASpec {
         )
       }
 
-      let possibleValues = Set(candidates.flatMap { $0 })
       for value in possibleValues.sorted() {
         switch value {
         case .int, .bool, .string, .constant:
@@ -149,27 +148,34 @@ extension TLASpec {
     }
   }
 
-  private func finiteSymmetryCandidates(_ domain: StateExpr) -> [Set<TLAValue>]? {
+  private func possibleSymmetryValues(in domain: StateExpr) -> Set<TLAValue>? {
     let alternatives: [StateExpr]
     switch domain {
     case .setLiteral(let values): alternatives = values
     case .value(.set(let values)): alternatives = values.map(StateExpr.value)
+    case .setDifference(.powerSet(let members), .setLiteral(let excluded))
+      where excluded.count == 1 && literalSymmetrySet(excluded[0])?.isEmpty == true:
+      return literalSymmetrySet(members)
     default: return nil
     }
-    let candidates: [Set<TLAValue>?] = alternatives.map { alternative in
-      switch alternative {
-      case .value(.set(let values)): return values
-      case .setLiteral(let values):
-        let members = values.compactMap { value -> TLAValue? in
-          if case .value(let literal) = value { return literal }
-          return nil
-        }
-        return members.count == values.count ? Set(members) : nil
-      default: return nil
-      }
-    }
+    let candidates = alternatives.map(literalSymmetrySet)
     guard candidates.allSatisfy({ $0 != nil }) else { return nil }
-    return candidates.compactMap { $0 }
+    let values = candidates.compactMap { $0 }
+    guard values.allSatisfy({ !$0.isEmpty }) else { return [] }
+    return Set(values.flatMap { $0 })
+  }
+
+  private func literalSymmetrySet(_ expression: StateExpr) -> Set<TLAValue>? {
+    switch expression {
+    case .value(.set(let values)): return values
+    case .setLiteral(let values):
+      let members = values.compactMap { value -> TLAValue? in
+        if case .value(let literal) = value { return literal }
+        return nil
+      }
+      return members.count == values.count ? Set(members) : nil
+    default: return nil
+    }
   }
 
   private func symmetryDiagnostic(
