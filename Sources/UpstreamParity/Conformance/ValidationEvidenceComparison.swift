@@ -90,12 +90,9 @@ package enum ValidationEvidenceComparison {
         let referenceRoot = directory.appendingPathComponent("reference-graph-spool")
         try FileManager.default.createDirectory(at: generatedRoot, withIntermediateDirectories: false)
         try FileManager.default.createDirectory(at: referenceRoot, withIntermediateDirectories: false)
-        var exact = false
         defer {
-            if exact {
-                try? FileManager.default.removeItem(at: generatedRoot)
-                try? FileManager.default.removeItem(at: referenceRoot)
-            }
+            try? FileManager.default.removeItem(at: generatedRoot)
+            try? FileManager.default.removeItem(at: referenceRoot)
         }
         let generatedGraph = try measured("generated TLC spool") {
             try spoolTLC(generated, caseID: caseID, actions: actions,
@@ -129,7 +126,6 @@ package enum ValidationEvidenceComparison {
             leftRank: { try Self.rank($0, in: generatedRanks) },
             rightRank: { try Self.rank($0, in: referenceRanks) })
         if !same { return "complete labeled edge set" }
-        exact = true
         return nil
     }
 
@@ -150,12 +146,9 @@ package enum ValidationEvidenceComparison {
             throw ValidationEvidenceComparisonError.invalidEvidence("report identity")
         }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        var exact = false
         var spoolDirectories: [URL] = []
         defer {
-            if exact {
-                for spool in spoolDirectories { try? FileManager.default.removeItem(at: spool) }
-            }
+            for spool in spoolDirectories { try? FileManager.default.removeItem(at: spool) }
         }
         var difference: String?
         if swift.graphComplete != tlc.graphComplete {
@@ -223,7 +216,6 @@ package enum ValidationEvidenceComparison {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("comparison.json"), options: .atomic)
-        exact = difference == nil
         return report
     }
 

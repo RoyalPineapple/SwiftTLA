@@ -277,6 +277,8 @@ jobs:
           path: |
             .build/validation-evidence
             !.build/validation-evidence/**/work/**
+            !.build/validation-evidence/comparison/*/swift/**
+            !.build/validation-evidence/comparison/*/tlc/**
           include-hidden-files: true
           if-no-files-found: error
 
@@ -400,6 +402,8 @@ jobs:
           path: |
             .build/validation-evidence
             !.build/validation-evidence/**/work/**
+            !.build/validation-evidence/upstream/*/generated-graph-spool/**
+            !.build/validation-evidence/upstream/*/reference-graph-spool/**
           include-hidden-files: true
           if-no-files-found: error
 
