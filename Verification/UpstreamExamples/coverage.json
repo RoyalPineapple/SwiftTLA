@@ -5528,7 +5528,7 @@
       "path": "specifications/ewd840",
       "name": "EWD840: Termination Detection in a Ring",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "The SyncTerminationDetection N=7 configuration has a full typed model and locally checked generated scenario but no hosted two-path parity. The other five published configurations, including the EWD840 System action-group fairness and model-checker modes, remain missing; proof and unconfigured module dispositions and family cleanup are open.",
+      "gap": "The SyncTerminationDetection N=7 configuration has a full typed model and locally checked generated scenario but no hosted two-path parity. The typed EWD840 model has locally checked System action-group fairness and Liveness, but its published configuration has no model-owned scenario or checked TDSpec refinement. The other five published configurations remain missing; proof and unconfigured module dispositions and family cleanup are open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5570,7 +5570,7 @@
           "path": "specifications/ewd840/EWD840.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": ["Sources/UpstreamParity/Examples/EWD840.swift"],
           "dispositionComplete": false
         },
         {

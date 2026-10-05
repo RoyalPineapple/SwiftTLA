@@ -65,6 +65,7 @@ package struct EWD840Model: Sendable {
             let TypeOK = Invariant()
             let TerminationDetection = Invariant()
             let Inv = Invariant()
+            let Liveness = Temporal()
             let terminated = ForAll(in: Node) { i in !active[i] }
             let terminationDetected = tpos == 0 && tcolor == Color.white
                 && color[0] == Color.white && !active[0]
@@ -79,6 +80,7 @@ package struct EWD840Model: Sendable {
                     || Exists(in: IntRange(0, through: tpos)) { i in color[i] == Color.black }
                     || tcolor == Color.black
             }
+            Liveness(.leadsTo(terminated, terminationDetected))
         }
     }
 }

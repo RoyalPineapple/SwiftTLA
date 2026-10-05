@@ -44,13 +44,15 @@ struct EWD840CorpusExecutionTests {
         }
     }
 
-    @Test("EWD840 generates the complete three-node graph and preserves default deadlocks")
+    @Test("EWD840 checks liveness and deadlocks on its complete three-node graph")
     func completeConfiguredNativeGraph() throws {
         let configuration = try EWD840Model.Configuration(N: 3)
         let initial = try EWD840Model.initialMachines(configuration: configuration)
         #expect(initial.count == 192)
         let native = try ReachabilityGraph(initialMachines: initial, maximumStates: 1_000)
         #expect(native.transitions.count == 302)
+        #expect(native.temporalResults[.Liveness]?.status == .satisfied)
+        #expect(try EWD840Model.render(configuration: configuration).checkNames.contains("Liveness"))
         let sender = try #require(initial.first {
             $0.state.active[0] == true && $0.state.active[1] == false && $0.state.active[2] == false
         })
