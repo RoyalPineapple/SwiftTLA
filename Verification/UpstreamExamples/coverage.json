@@ -5528,7 +5528,7 @@
       "path": "specifications/ewd840",
       "name": "EWD840: Termination Detection in a Ring",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "The SyncTerminationDetection N=7 configuration has a full typed model and locally checked generated scenario but no hosted two-path parity. The typed EWD840 model has locally checked System action-group fairness and Liveness, but its published configuration has no model-owned scenario or checked TDSpec refinement. The other five published configurations remain missing; proof and unconfigured module dispositions and family cleanup are open.",
+      "gap": "The SyncTerminationDetection N=7 configuration has a typed model and locally checked generated scenario but no hosted two-path parity. The typed EWD840 model has locally checked System action-group fairness, Liveness, and its published N=3 model-owned scenario with deadlock checking disabled. Its configured TDSpec is still missing: upstream defines it as an INSTANCE refinement of SyncTerminationDetection, so complete parity requires cross-model composition without duplicating the abstract model. The other four published configurations remain missing; proof and unconfigured module dispositions and family cleanup are open. No EWD840 configuration has hosted parity credit.",
       "legacyCleanupComplete": false,
       "modules": [
         {
