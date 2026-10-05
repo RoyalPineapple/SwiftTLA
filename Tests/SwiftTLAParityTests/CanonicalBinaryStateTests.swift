@@ -17,6 +17,11 @@ struct CanonicalBinaryStateTests {
         try CanonicalBinaryState.validate(expected)
         #expect(try CanonicalBinaryState.encode(state([("x", .bool(true))])) != expected)
 
+        var reused = Data()
+        try CanonicalBinaryState.encode(state([("x", .string("a longer value"))]), into: &reused)
+        try CanonicalBinaryState.encode(projection, into: &reused)
+        #expect(reused == expected)
+
         let nested = Data([
             0x53, 0x54, 0x4c, 0x41, 0x53, 0x56, 0x30, 0x31,
             0, 0, 0, 1,

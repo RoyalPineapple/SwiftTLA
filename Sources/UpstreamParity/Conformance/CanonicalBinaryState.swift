@@ -11,8 +11,15 @@ enum CanonicalBinaryState {
     }
 
     static func encode(_ projection: TLAStateProjection) throws -> Data {
-        var output = Data("STLASV01".utf8)
+        var output = Data()
+        try encode(projection, into: &output)
+        return output
+    }
+
+    static func encode(_ projection: TLAStateProjection, into output: inout Data) throws {
+        output.removeAll(keepingCapacity: true)
         output.reserveCapacity(512)
+        output.append(contentsOf: "STLASV01".utf8)
         var lengthPatches: [LengthPatch] = []
         let entries = projection.entries.sorted {
             $0.token.description.utf8.lexicographicallyPrecedes($1.token.description.utf8)
@@ -23,7 +30,6 @@ enum CanonicalBinaryState {
             try encode(entry.value, to: &output, lengthPatches: &lengthPatches)
         }
         apply(lengthPatches, to: &output)
-        return output
     }
 
     static func validate(_ data: Data) throws {
