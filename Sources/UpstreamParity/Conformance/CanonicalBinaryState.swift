@@ -10,17 +10,29 @@ enum CanonicalBinaryState {
         case duplicateFunctionKey
     }
 
-    static func encode(_ projection: TLAStateProjection) throws -> Data {
-        var output = Data()
-        try encode(projection, into: &output)
-        return output
+    struct Encoder {
+        private(set) var bytes = Data()
+        private var lengthPatches: [LengthPatch] = []
+
+        mutating func encode(_ projection: TLAStateProjection) throws {
+            try CanonicalBinaryState.encode(projection, into: &bytes, lengthPatches: &lengthPatches)
+        }
     }
 
-    static func encode(_ projection: TLAStateProjection, into output: inout Data) throws {
+    static func encode(_ projection: TLAStateProjection) throws -> Data {
+        var encoder = Encoder()
+        try encoder.encode(projection)
+        return encoder.bytes
+    }
+
+    private static func encode(
+        _ projection: TLAStateProjection, into output: inout Data,
+        lengthPatches: inout [LengthPatch]
+    ) throws {
         output.removeAll(keepingCapacity: true)
         output.reserveCapacity(512)
         output.append(contentsOf: "STLASV01".utf8)
-        var lengthPatches: [LengthPatch] = []
+        lengthPatches.removeAll(keepingCapacity: true)
         let entries = projection.entries.sorted {
             $0.token.description.utf8.lexicographicallyPrecedes($1.token.description.utf8)
         }
