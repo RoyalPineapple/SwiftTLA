@@ -5527,8 +5527,8 @@
     {
       "path": "specifications/ewd840",
       "name": "EWD840: Termination Detection in a Ring",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "partial source and pinned-configuration audit",
+      "gap": "The SyncTerminationDetection N=7 configuration has a full typed model and locally checked generated scenario but no hosted two-path parity. The other five published configurations, including the EWD840 System action-group fairness and model-checker modes, remain missing; proof and unconfigured module dispositions and family cleanup are open.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5584,7 +5584,7 @@
           "path": "specifications/ewd840/SyncTerminationDetection.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": ["Sources/UpstreamParity/Examples/SyncTerminationDetection.swift"],
           "dispositionComplete": false
         }
       ],
@@ -5647,10 +5647,16 @@
           "module": "specifications/ewd840/SyncTerminationDetection.tla",
           "configuration": "specifications/ewd840/SyncTerminationDetection.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/SyncTerminationDetection.swift",
+              "scenario": "SyncTerminationDetection",
+              "caseID": "sync-termination-detection-0"
+            }
+          ],
           "evidence": []
         }
       ],

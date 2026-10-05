@@ -1353,6 +1353,23 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "sync-termination-detection-0",
+      "sourceModel": "sync-termination-detection",
+      "scenario": "SyncTerminationDetection",
+      "module": "sync-termination-detection/SyncTerminationDetection.tla",
+      "configuration": "sync-termination-detection/SyncTerminationDetection.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd840/SyncTerminationDetection.tla",
+        "sha256": "3626ab87e7431a7c07cf0f92b442fdf38363e6d7a9928f2391476c54a1e4fb2e"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "3626ab87e7431a7c07cf0f92b442fdf38363e6d7a9928f2391476c54a1e4fb2e",
+      "cfgSHA256": "0104252f7449f44816f49557acd98183f054642c95987f56a07ab64a95623ce7",
+      "timeoutSeconds": 300
+    },
+    {
       "id": "dijkstra-mutex-0",
       "sourceModel": "dijkstra-mutex",
       "scenario": "Safety4Processors",
