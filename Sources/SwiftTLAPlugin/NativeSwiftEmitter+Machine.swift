@@ -269,7 +269,7 @@ extension NativeSwiftEmitter {
         if let selected = program.behavior.initialInvariant {
             let arguments = arguments.isEmpty ? "" : ", " + arguments
             code += "let candidate = \(executionState(values: variable))\n"
-            code += "if try Self._invariant\(selected.ordinal)(in: candidate\(arguments)) { result.append(candidate) }\n"
+            code += "if try Self._invariant\(selected.ordinal)(in: candidate, atLevel: 0\(arguments)) { result.append(candidate) }\n"
         } else {
             code += "result.append(\(executionState(values: variable)))\n"
         }
@@ -590,16 +590,19 @@ extension NativeSwiftEmitter {
             declarations += try nativeDeclarations("public func satisfiesStateConstraint() throws -> Bool { true }")
         }
         for invariant in program.behavior.invariants {
+            let previousCheckingLevelName = checkingLevelName
+            checkingLevelName = "level"
+            defer { checkingLevelName = previousCheckingLevelName }
             declarations += try nativeDeclarations("""
-            private static func _invariant\(invariant.id.ordinal)(in state: Snapshot\(configurationParameters)) throws -> Bool {
+            private static func _invariant\(invariant.id.ordinal)(in state: Snapshot, atLevel level: Int\(configurationParameters)) throws -> Bool {
                 \(try expression(invariant.predicate.expression))
             }
             """)
-            checks.append("if checking.contains(.\(propertyCases[invariant.id]!)), try !Self._invariant\(invariant.id.ordinal)(in: _execution\(arguments)) { result.append(.\(propertyCases[invariant.id]!)) }")
+            checks.append("if checking.contains(.\(propertyCases[invariant.id]!)), try !Self._invariant\(invariant.id.ordinal)(in: _execution, atLevel: level\(arguments)) { result.append(.\(propertyCases[invariant.id]!)) }")
         }
         declarations += try nativeDeclarations("""
         public static var invariantProperties: [Property] { [\(program.behavior.invariants.map { ".\(propertyCases[$0.id]!)" }.joined(separator: ", "))] }
-        public func violatedInvariants(checking: Set<Property> = Set(Property.allCases)) throws -> [Property] {
+        public func violatedInvariants(checking: Set<Property> = Set(Property.allCases), atLevel level: Int) throws -> [Property] {
             \(checks.isEmpty ? "return []" : "var result: [Property] = []\n" + checks.joined(separator: "\n") + "\nreturn result")
         }
         """)

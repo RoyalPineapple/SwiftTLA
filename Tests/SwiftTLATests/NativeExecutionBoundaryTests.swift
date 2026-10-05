@@ -211,9 +211,9 @@ private struct ReachableInvariantFailure {
     @Test("invariant violations remain executable and observable")
     func invariantsAreObservations() throws {
         var machine = try ReachableInvariantFailure.makeMachine()
-        #expect(try machine.violatedInvariants().isEmpty)
+        #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
         #expect(try machine.send(.advance).after.count == 1)
-        #expect(try machine.violatedInvariants() == [.Zero])
+        #expect(try machine.violatedInvariants(atLevel: 2) == [.Zero])
     }
 }
 

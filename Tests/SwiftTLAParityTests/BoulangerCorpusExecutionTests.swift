@@ -11,7 +11,7 @@ struct BoulangerCorpusExecutionTests {
         var machine = try #require(initial.first)
         #expect(machine.state.num == [1: 0, 2: 0, 3: 0])
         #expect(machine.state.flag == [1: false, 2: false, 3: false])
-        #expect(try machine.violatedInvariants().isEmpty)
+        #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
         #expect(Set(BoulangerModel.Property.allCases) == [.TypeOK, .Inv, .MutualExclusion])
         #expect(try Set(machine.enabledActions()) == [
             .ncs(process: 1), .ncs(process: 2), .ncs(process: 3)
@@ -21,7 +21,7 @@ struct BoulangerCorpusExecutionTests {
         #expect(successors.count == 1)
         _ = try machine.send(.ncs(process: 1))
         #expect(machine.snapshot == successors.first?.machine.snapshot)
-        #expect(try machine.violatedInvariants().isEmpty)
+        #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
         #expect(try Set(machine.enabledActions()) == [
             .ncs(process: 2), .ncs(process: 3), .e1(process: 1)
         ])
@@ -37,7 +37,7 @@ struct BoulangerCorpusExecutionTests {
         #expect(found)
         #expect(streamed == choices.map { $0.machine.snapshot })
         for choice in choices {
-            #expect(try choice.machine.violatedInvariants().isEmpty)
+            #expect(try choice.machine.violatedInvariants(atLevel: 1).isEmpty)
         }
         let before = machine.snapshot
         do {

@@ -175,9 +175,9 @@ public enum MachineValidator {
             return (hash, result)
         }
 
-        func checkInvariants(_ machine: Machine, predecessor: Int?, action: Machine.Action?) throws -> Bool {
+        func checkInvariants(_ machine: Machine, atLevel level: Int, predecessor: Int?, action: Machine.Action?) throws -> Bool {
             let started = DispatchTime.now().uptimeNanoseconds
-            let failures = try machine.violatedInvariants(checking: checking.properties)
+            let failures = try machine.violatedInvariants(checking: checking.properties, atLevel: level)
             invariantNanoseconds += DispatchTime.now().uptimeNanoseconds - started
             for property in failures {
                 violated.insert(property)
@@ -221,7 +221,7 @@ public enum MachineValidator {
             guard sameConfiguration(machine) else { throw ExplorationError.configurationMismatch }
             guard try machine.assumptionsHold() else { throw ExplorationError.assumptionViolated }
             let reached = try checkReachability(machine, predecessor: nil, action: nil)
-            let failed = try checkInvariants(machine, predecessor: nil, action: nil)
+            let failed = try checkInvariants(machine, atLevel: 1, predecessor: nil, action: nil)
             if failed && stopOnViolation { return summary(.decisiveViolation) }
             if reached && stopOnReachability { return summary(.decisiveReachability) }
             guard try constraintHolds(machine) else { continue }
@@ -236,6 +236,8 @@ public enum MachineValidator {
 
         while head < pending.count {
             try context.advanceBreadthFirstLevel()
+            let (successorLevel, overflow) = context.level.addingReportingOverflow(1)
+            guard !overflow else { throw ExplorationError.levelOverflow }
             let layerEnd = pending.count
             while head < layerEnd {
                 try Task.checkCancellation()
@@ -265,7 +267,7 @@ public enum MachineValidator {
                         return true
                     }
                     let reached = try checkReachability(successor, predecessor: source, action: action)
-                    let failed = try checkInvariants(successor, predecessor: source, action: action)
+                    let failed = try checkInvariants(successor, atLevel: successorLevel, predecessor: source, action: action)
                     if failed && stopOnViolation {
                         decision = .decisiveViolation
                         return false

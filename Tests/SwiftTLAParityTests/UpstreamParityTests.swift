@@ -141,7 +141,7 @@ struct UpstreamParityTests {
             while let machine = pending.popLast() {
                 guard states.insert(machine.snapshot).inserted else { continue }
                 try #require(states.count <= 4 * count)
-                #expect(try machine.violatedInvariants().isEmpty)
+                #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
                 let enabled = try Set(machine.enabledActions())
                 for action in actions {
                     let successors = try machine.successors(for: action)
@@ -201,7 +201,7 @@ struct UpstreamParityTests {
             while let machine = pending.popLast() {
                 guard states.insert(machine.snapshot).inserted else { continue }
                 try #require(states.count <= 4 * count)
-                #expect(try machine.violatedInvariants().isEmpty)
+                #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
                 let enabled = try Set(machine.enabledActions())
                 for action in actions {
                     let candidates = try machine.successors(for: action)

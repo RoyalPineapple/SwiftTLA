@@ -331,7 +331,9 @@ The inline specification is authoritative. Its getter must contain one direct
 `#spec` declaration (or return that declaration), with statically admitted model
 structure. Unsupported native operations produce build-time diagnostics.
 
-`violatedInvariants()` returns typed `Property` values for false invariants in the current state.
+`violatedInvariants(atLevel:)` returns typed `Property` values for false invariants in the current state.
+Pass the behavior length (1 for an initial state, plus one per transition) for
+invariants using `scope.checkingLevel`.
 `assumptionsHold()` evaluates the declared assumptions. These checks do not remove
 invariant violations from the transition relation.
 

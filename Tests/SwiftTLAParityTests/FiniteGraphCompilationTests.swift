@@ -29,7 +29,7 @@ struct FiniteGraphCompilationTests {
     #expect(typedCar == MultiCarElevator.Car(floor: .ground, doorsOpen: false, rider: "none"))
     #expect(machine.state.calls.isEmpty)
     #expect(machine.state.lastMoveDoorClosed)
-    #expect(try machine.violatedInvariants().isEmpty)
+    #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
     #expect(try machine.isEnabled(.request(person: .alice, floor: .ground, direction: .up)))
     #expect(try !machine.isEnabled(.assign(person: .alice, car: .carA, direction: .up)))
   }

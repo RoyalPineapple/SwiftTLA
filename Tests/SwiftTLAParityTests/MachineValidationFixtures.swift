@@ -28,8 +28,8 @@ struct CollidingReachabilityMachine: StateMachine {
         changes: (@Sendable (Snapshot, Snapshot) throws -> Bool)?)] { [] }
     func temporalProperties(checking: Set<Property>) throws
         -> [Property: TemporalCondition<@Sendable (Snapshot, Snapshot) throws -> Bool>] { [:] }
-    func violatedInvariants(checking: Set<Property>) throws -> [Property] {
-        try base.violatedInvariants(checking: checking)
+    func violatedInvariants(checking: Set<Property>, atLevel level: Int) throws -> [Property] {
+        try base.violatedInvariants(checking: checking, atLevel: level)
     }
     static var invariantProperties: [Property] { ReachabilityExportModel.invariantProperties }
     static var reachabilityProperties: [Property] { ReachabilityExportModel.reachabilityProperties }

@@ -24,7 +24,8 @@ public protocol StateMachine: Sendable {
     /// A nil change predicate selects equality of the complete snapshot.
     func fairnessConditions() throws -> [MachineFairnessCondition<Snapshot, Action>]
     func temporalProperties(checking: Set<Property>) throws -> [Property: TemporalCondition<@Sendable (Snapshot, Snapshot) throws -> Bool>]
-    func violatedInvariants(checking: Set<Property>) throws -> [Property]
+    /// `level` is the behavior length: 1 for an initial state, then one per transition.
+    func violatedInvariants(checking: Set<Property>, atLevel level: Int) throws -> [Property]
     static var invariantProperties: [Property] { get }
     static var reachabilityProperties: [Property] { get }
     static var refinementProperties: [Property] { get }
@@ -201,7 +202,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             throw NativeCheckStopped(counterexample: SafetyCounterexample<Machine>(
                 violations: failures, trace: path(to: snapshot, from: predecessor), checking: checking))
         }
-        func checkDiscoveredState(_ machine: Machine,
+        func checkDiscoveredState(_ machine: Machine, atLevel level: Int,
                                   from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
             guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
             if let property = stopOnReachability,
@@ -210,7 +211,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             }
             guard stopOnViolation else { return }
             try stop(machine.snapshot,
-                     failures: machine.violatedInvariants(checking: checking.properties).map(SafetyViolation.invariant),
+                     failures: machine.violatedInvariants(checking: checking.properties, atLevel: level).map(SafetyViolation.invariant),
                      from: predecessor)
         }
         func recordReachability(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
@@ -226,10 +227,10 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
                 }
             }
         }
-        func recordBoundaryViolations(_ machine: Machine, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
+        func recordBoundaryViolations(_ machine: Machine, atLevel level: Int, from predecessor: (source: Machine.Snapshot, action: Machine.Action)? = nil) throws {
             guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
             try recordReachability(machine, from: predecessor)
-            let failures = try machine.violatedInvariants(checking: checking.properties).map(SafetyViolation.invariant)
+            let failures = try machine.violatedInvariants(checking: checking.properties, atLevel: level).map(SafetyViolation.invariant)
             guard !failures.isEmpty, violations[machine.snapshot] == nil else { return }
             violations[machine.snapshot] = failures
             if !initialRoots.contains(machine.snapshot), predecessors[machine.snapshot] == nil { predecessors[machine.snapshot] = predecessor }
@@ -250,9 +251,9 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         for machine in initialMachines {
             guard machine.hasSameConfiguration(as: initialMachine) else { throw ExplorationError.configurationMismatch }
             guard try machine.assumptionsHold() else { throw ExplorationError.assumptionViolated }
-            try checkDiscoveredState(machine)
+            try checkDiscoveredState(machine, atLevel: 1)
             guard try machine.satisfiesStateConstraint() else {
-                try recordBoundaryViolations(machine)
+                try recordBoundaryViolations(machine, atLevel: 1)
                 continue
             }
             _ = try discover(machine)
@@ -270,17 +271,19 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
             let machine = currentLayer.removeLast()
             try Task.checkCancellation()
             let successors = try machine.successors(checking: &context)
-            var failures = try machine.violatedInvariants(checking: checking.properties).map(SafetyViolation.invariant)
+            var failures = try machine.violatedInvariants(checking: checking.properties, atLevel: context.level).map(SafetyViolation.invariant)
             if successors.isEmpty {
                 deadlockedStates.insert(machine.snapshot)
                 if checking.checkDeadlock { failures.append(.deadlock) }
             }
             if !failures.isEmpty { violations[machine.snapshot] = failures }
             try stop(machine.snapshot, failures: failures)
+            let (successorLevel, overflow) = context.level.addingReportingOverflow(1)
+            guard !overflow else { throw ExplorationError.levelOverflow }
             let retained = try successors.filter { successor in
-                try checkDiscoveredState(successor.machine, from: (machine.snapshot, successor.action))
+                try checkDiscoveredState(successor.machine, atLevel: successorLevel, from: (machine.snapshot, successor.action))
                 guard try successor.machine.satisfiesStateConstraint() else {
-                    try recordBoundaryViolations(successor.machine, from: (machine.snapshot, successor.action))
+                    try recordBoundaryViolations(successor.machine, atLevel: successorLevel, from: (machine.snapshot, successor.action))
                     return false
                 }
                 return true

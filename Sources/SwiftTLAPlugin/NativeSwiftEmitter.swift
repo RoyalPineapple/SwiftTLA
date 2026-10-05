@@ -23,6 +23,7 @@ struct NativeSwiftEmitter {
     private var hasDepthScope = false
     private var nextMembershipPredicate = 0
     var checkingContextName: String?
+    var checkingLevelName: String?
     var printTOutputName: String?
 
     init(model: MacroCompilation, sharedTypes: NativeTypeDeclarations? = nil) {
@@ -612,6 +613,7 @@ struct NativeSwiftEmitter {
             return "(try { () throws -> \(try swiftType(id.resultType)) in\nguard \(context) != nil else { throw NativeMachineEvaluationError.checkingContextRequired }\n\(body)\n}())"
         case .integerSet: return "(try _NativeMachineOperations.integerSet())"
         case .checkingLevel:
+            if let checkingLevelName { return checkingLevelName }
             guard let context = checkingContextName else {
                 return "(try { () throws -> Int in throw NativeMachineEvaluationError.checkingContextRequired }())"
             }

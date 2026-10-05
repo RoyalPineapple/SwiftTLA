@@ -38,7 +38,7 @@ struct GameOfLifeCorpusConfigurationTests {
         let scenario = try #require(GameOfLifeModel.validationScenarios().first)
         var machine = try GameOfLifeModel.makeMachine(
             .init(grid: grid(vertical)), configuration: scenario.configuration)
-        #expect(try machine.violatedInvariants().isEmpty)
+        #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
         #expect(try machine.send(.Next).after.grid == grid(horizontal))
         #expect(try machine.send(.Next).after.grid == grid(vertical))
     }

@@ -28,7 +28,7 @@ struct KVsnapCorpusExecutionTests {
         #expect(Set(native.state.store.keys) == [.k1, .k2])
         #expect(native.state.store.values.allSatisfy { $0 == .second(.noVal) })
         #expect(native.state.missed.values.allSatisfy { $0.isEmpty })
-        #expect(try native.violatedInvariants().isEmpty)
+        #expect(try native.violatedInvariants(atLevel: 1).isEmpty)
         #expect(try Set(native.enabledActions()) == [
             .START(process: .t1), .START(process: .t2), .START(process: .t3)
         ])
@@ -54,7 +54,7 @@ struct KVsnapCorpusExecutionTests {
                 try machine.successors().filter { $0.action == action }.map(\.machine)
             }
             #expect(!nativeFrontier.isEmpty)
-            #expect(try nativeFrontier.allSatisfy { try $0.violatedInvariants().isEmpty })
+            #expect(try nativeFrontier.allSatisfy { try $0.violatedInvariants(atLevel: 1).isEmpty })
             if action == .COMMIT(process: .t1) {
                 #expect(nativeFrontier.allSatisfy { $0.state.tx.isEmpty })
                 #expect(nativeFrontier.allSatisfy {

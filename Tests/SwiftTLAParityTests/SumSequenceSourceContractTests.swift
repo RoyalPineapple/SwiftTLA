@@ -9,10 +9,10 @@ struct SumSequenceSourceContractTests {
         for input in [[], [1, -2, 1], [-2, -2, 1]] {
             var machine = try SumSequenceModel.makeMachine(
                 .init(seq: input, sum: 0, n: 1), configuration: configuration)
-            #expect(try machine.violatedInvariants().isEmpty)
+            #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
             for _ in 0...input.count {
                 _ = try machine.send(.a)
-                #expect(try machine.violatedInvariants().isEmpty)
+                #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
             }
             #expect(machine.state.seq == input)
             #expect(machine.state.sum == input.reduce(0, +))

@@ -205,7 +205,7 @@ struct NativeMachineExecutionTests {
             #expect(Set(nativeNext.map { $0.machine.state.selected }) == Set(source < 2 ? [1, 2, 3] : []))
             #expect(try machine.enabledActions() == (source < 2 ? [.select] : []))
             #expect(try machine.isEnabled(.select) == (source < 2))
-            let failed = try machine.violatedInvariants()
+            let failed = try machine.violatedInvariants(atLevel: 1)
             #expect(failed == (source < 2 ? [] : [.BelowTwo]))
             if !failed.isEmpty { violations.insert(source) }
             var sending = machine

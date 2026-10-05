@@ -101,7 +101,7 @@ package enum TLCWitnessVerification {
             }
         } else {
             guard report.properties[name] == .violated,
-                  try replay.final.violatedInvariants(checking: [property]).contains(property) else {
+                  try replay.final.violatedInvariants(checking: [property], atLevel: replay.trace.steps.count).contains(property) else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("false TLC invariant witness")
             }
         }

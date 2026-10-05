@@ -8,10 +8,10 @@ struct ConfiguredLocalFamilyTests {
             let members = scenario.configuration.members
             var machine = try #require(scenario.initialMachines().first)
             #expect(ConfiguredLocalFamilyModel.Property.allCases == [.Family])
-            #expect(try machine.violatedInvariants().isEmpty)
+            #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
             for action in try machine.enabledActions() {
                 _ = try machine.send(action)
-                #expect(try machine.violatedInvariants() == (members.isEmpty ? [] : [.Family]))
+                #expect(try machine.violatedInvariants(atLevel: 1) == (members.isEmpty ? [] : [.Family]))
             }
             let graph = try scenario.explore(maximumStates: 10)
             #expect(graph.transitions.count == 1 << members.count)

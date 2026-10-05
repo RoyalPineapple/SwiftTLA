@@ -31,7 +31,7 @@ struct NativeEnablednessTests {
         let configuration = try BoundStepEnabledness.Configuration(choices: [])
         let empty = try BoundStepEnabledness.makeMachine(configuration: configuration)
         #expect(try empty.enabledActions().isEmpty)
-        #expect(try empty.violatedInvariants().isEmpty)
+        #expect(try empty.violatedInvariants(atLevel: 1).isEmpty)
     }
 
     @Test("Native action guards evaluate enabledness only when demanded")
@@ -48,9 +48,9 @@ struct NativeEnablednessTests {
     func statePredicates() throws {
         let machine = try GuardedEnabledness.makeMachine()
         #expect(try machine.satisfiesStateConstraint())
-        #expect(try machine.violatedInvariants(checking: [.guardedInvariant]).isEmpty)
+        #expect(try machine.violatedInvariants(checking: [.guardedInvariant], atLevel: 1).isEmpty)
         #expect(try machine.matchedReachabilityProperties(checking: [.guardedReachable]) == [.guardedReachable])
-        #expect(throws: (any Error).self) { try machine.violatedInvariants(checking: [.demandedInvariant]) }
+        #expect(throws: (any Error).self) { try machine.violatedInvariants(checking: [.demandedInvariant], atLevel: 1) }
         #expect(throws: (any Error).self) { try machine.matchedReachabilityProperties(checking: [.demandedReachable]) }
     }
 }

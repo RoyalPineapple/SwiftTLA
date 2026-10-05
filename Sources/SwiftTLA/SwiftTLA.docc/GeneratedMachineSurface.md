@@ -48,8 +48,9 @@ initial states.
 
 ## Property checks
 
-`violatedInvariants()` reports the `Property` values of false invariants without changing
-state. `assumptionsHold()` checks assumptions. State constraints select states
+`violatedInvariants(atLevel:)` reports the `Property` values of false invariants without changing
+state. Pass the behavior length (1 for an initial state, plus one per transition) so
+invariants using `scope.checkingLevel` agree with native checking. `assumptionsHold()` checks assumptions. State constraints select states
 for exploration. They do not change application transitions or action enabledness.
 Invariant checks include excluded initial states and successor candidates.
 

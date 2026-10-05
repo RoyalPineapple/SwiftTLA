@@ -88,7 +88,8 @@ package struct NativeCounterexampleRun: Sendable {
                     return PropertyComparison(caseID: rendered.tlaBundle.root.name, check: .property(name), status: .exact,
                         swiftResult: .reached(try canonicalTrace(steps)), tlcResult: .reached(replay.trace))
                 }
-                guard try replay.final.violatedInvariants(checking: result.checking.properties)
+                guard try replay.final.violatedInvariants(checking: result.checking.properties,
+                    atLevel: replay.trace.steps.count)
                         .contains(where: { names[$0] == name }) else {
                     throw EvidenceFormatError.invalidField(record: "counterexample", field: "unconfirmed invariant")
                 }

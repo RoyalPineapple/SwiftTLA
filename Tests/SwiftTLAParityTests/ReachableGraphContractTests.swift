@@ -28,7 +28,7 @@ import UpstreamParity
       1: .init(first: .first(.blue), second: 0), 2: .init(first: .first(.red), second: 0),
       3: .init(first: .first(.yellow), second: 0), 4: .init(first: .first(.blue), second: 0)
     ], meetingPlace: .second(.empty), numMeetings: 0), configuration: configuration)
-    #expect(try native.violatedInvariants().isEmpty)
+    #expect(try native.violatedInvariants(atLevel: 1).isEmpty)
     #expect(try native.enabledActions().count == 1)
     #expect(try native.successors().count == 4)
   }

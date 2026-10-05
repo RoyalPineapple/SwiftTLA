@@ -29,7 +29,9 @@ struct CheckingContextProbe: StateMachine {
     func temporalProperties(checking: Set<Property>) throws -> [Property: TemporalCondition<@Sendable (Snapshot, Snapshot) throws -> Bool>] {
         try machine.temporalProperties(checking: checking)
     }
-    func violatedInvariants(checking: Set<Property>) throws -> [Property] { try machine.violatedInvariants(checking: checking) }
+    func violatedInvariants(checking: Set<Property>, atLevel level: Int) throws -> [Property] {
+        try machine.violatedInvariants(checking: checking, atLevel: level)
+    }
     static var invariantProperties: [Property] { ConvergingFrontiers.invariantProperties }
     static var reachabilityProperties: [Property] { ConvergingFrontiers.reachabilityProperties }
     static var refinementProperties: [Property] { ConvergingFrontiers.refinementProperties }

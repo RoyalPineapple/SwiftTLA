@@ -11,7 +11,7 @@ struct VoteProofCorpusExecutionTests {
         #expect(native.state.votes.values.allSatisfy { $0.isEmpty })
         #expect(Set(native.state.maxBal.keys) == Set(VoteProofModel.Acceptor.allCases))
         #expect(native.state.maxBal.values.allSatisfy { $0 == -1 })
-        #expect(try native.violatedInvariants().isEmpty)
+        #expect(try native.violatedInvariants(atLevel: 1).isEmpty)
         #expect(try Set(native.enabledActions()) == [
             .pcalProcess1(process: .a1), .pcalProcess1(process: .a2), .pcalProcess1(process: .a3)
         ])
