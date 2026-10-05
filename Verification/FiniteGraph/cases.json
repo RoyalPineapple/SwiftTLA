@@ -1370,6 +1370,25 @@
       "timeoutSeconds": 300
     },
     {
+      "id": "sync-termination-detection-ap",
+      "sourceModel": "sync-termination-detection",
+      "scenario": "APSyncTerminationDetection",
+      "module": "sync-termination-detection/APSyncTerminationDetection.tla",
+      "configuration": "sync-termination-detection/APSyncTerminationDetection.cfg",
+      "imports": ["sync-termination-detection/SyncTerminationDetection.tla"],
+      "dependencies": [
+        {"importingModule": "APSyncTerminationDetection", "importedModule": "SyncTerminationDetection"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd840/APSyncTerminationDetection.tla",
+        "sha256": "08cee0501a38644345ca7d61ec7e7b7b20c445d3c6251a94834c2818890f24ae"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "08cee0501a38644345ca7d61ec7e7b7b20c445d3c6251a94834c2818890f24ae",
+      "cfgSHA256": "879310a1345b8a14ecf78d7c5ddd2523b5b183a23bac3555be374514f175b5dd",
+      "timeoutSeconds": 300
+    },
+    {
       "id": "dijkstra-mutex-0",
       "sourceModel": "dijkstra-mutex",
       "scenario": "Safety4Processors",

@@ -55,6 +55,11 @@ package struct SyncTerminationDetectionModel: Sendable {
                 Bind(N, to: 7)
             }
             SyncTerminationDetection
+
+            let APSyncTerminationDetection = Validation {
+                Bind(N, to: 7)
+            }.checking(only: [TypeOK, TDCorrect])
+            APSyncTerminationDetection
         }
     }
 }
