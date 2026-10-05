@@ -140,6 +140,13 @@ extension ModelValidationScenario {
         return try ReachabilityGraph(initialMachines: initial, maximumStates: maximumStates,
             checking: checking, behavior: behavior, fairness: fairness)
     }
+
+    public func simulate<Generator: RandomNumberGenerator>(
+        maximumDepth: Int, using generator: inout Generator
+    ) throws -> NativeSimulationResult<Machine> {
+        try MachineSimulator.run(initialMachines: initialMachines(), maximumDepth: maximumDepth,
+                                 checking: checking, using: &generator)
+    }
 }
 
 public struct ValidationBinding: Sendable {
