@@ -14,9 +14,20 @@ extension NativeSwiftEmitter {
         declarations += try configurationDeclarations()
         declarations += try propertyIdentityDeclarations()
         declarations += try validationDeclarations()
-        let fields = try program.layout.variables.filter { stateMemberNames[$0.id] == nil }.map { variable in
+        let hiddenVariables = program.layout.variables.filter { stateMemberNames[$0.id] == nil }
+        let fields = try hiddenVariables.map { variable in
             "let \(self.variable(variable.id)): \(try swiftType(program.variableTypes[variable.id]!))"
         }.joined(separator: "\n")
+        let snapshotIdentity = hiddenVariables.isEmpty ? "" : """
+            public static func == (lhs: Self, rhs: Self) -> Bool {
+                \(hiddenVariables.map { "lhs.\(self.variable($0.id)) == rhs.\(self.variable($0.id))" }.joined(separator: " && "))
+                    && lhs.state == rhs.state
+            }
+            public func hash(into hasher: inout Hasher) {
+                \(hiddenVariables.map { "hasher.combine(\(self.variable($0.id)))" }.joined(separator: "\n"))
+                hasher.combine(state)
+            }
+            """
         let registers = program.layout.checkingRegisters
         let registerNames = GeneratedMachineAPI.generatedIdentifiers(registers.map { $0.reference.name }, fallback: "register")
         let registerFields = try zip(registers, registerNames).map { register, name in
@@ -46,6 +57,7 @@ extension NativeSwiftEmitter {
         public struct Snapshot: Hashable, Sendable {
             public let state: State
             \(fields)
+            \(snapshotIdentity)
         }
         private var _execution: Snapshot
         """)
