@@ -284,6 +284,13 @@ Only an `exhausted` summary establishes complete exploration; an early
 counterexample has a valid verdict but only a partial graph. This checker needs
 neither TLC nor the parity harness.
 
+`MachineSimulator.run(initialMachines:maximumDepth:checking:using:)` samples
+one generated-machine behavior with a caller-supplied random generator. It
+checks selected invariants at every step, even when a complete state repeats.
+A violation includes the typed trace. Reaching the depth limit, an excluded
+state, or an unchecked dead end is inconclusive, never a proof of safety or
+graph completion. The simulator rejects checks it cannot establish.
+
 `ReachabilityGraph(initialMachines: Model.initialMachines(), maximumStates: limit)`
 explores those native successors without compiling or interpreting expressions
 and without invoking TLC. Supply initial machines from one finite configuration.

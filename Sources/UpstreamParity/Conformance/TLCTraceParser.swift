@@ -57,7 +57,7 @@ package struct TLCTraceParser: Sendable {
                 successorsToDiscover.removeAll(keepingCapacity: true)
                 if layer.isEmpty {
                     guard !pending.isEmpty else { throw ExplorationError.traceTargetNotReachable }
-                    try context.advanceBreadthFirstLevel()
+                    try context.advanceLevel()
                     swap(&layer, &pending)
                     layer.reverse()
                 }

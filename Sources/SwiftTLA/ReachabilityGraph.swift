@@ -45,6 +45,7 @@ public protocol StateMachine: Sendable {
 
 public enum ExplorationError: Error, Equatable, Sendable {
     case invalidStateLimit(Int)
+    case invalidSimulationDepth(Int)
     case stateLimitExceeded(Int)
     case levelOverflow
     case noInitialStates
@@ -264,7 +265,7 @@ public struct ReachabilityGraph<Machine: StateMachine>: Sendable {
         initialOrder = initialMachines.map(\.snapshot).filter(initialStates.contains)
         while !currentLayer.isEmpty || !pending.isEmpty {
             if currentLayer.isEmpty {
-                try context.advanceBreadthFirstLevel()
+                try context.advanceLevel()
                 swap(&currentLayer, &pending)
                 currentLayer.reverse()
             }

@@ -7,7 +7,7 @@ struct CheckingEffectsTests {
     func preservesImmediateWrites() throws {
         let machine = try OrderedCheckingEffects.makeMachine()
         var context = CheckingContext(registers: try machine.initialCheckingRegisters())
-        try context.advanceBreadthFirstLevel()
+        try context.advanceLevel()
         let successors = try machine.successors(checking: &context)
         #expect(successors.count == 1)
         #expect(successors.first?.machine.state.value == 12)
@@ -15,7 +15,7 @@ struct CheckingEffectsTests {
         #expect(context.registers.observedLevel == 1)
         #expect(machine.state.value == 0)
         #expect(try machine.initialCheckingRegisters().visits == 0)
-        try context.advanceBreadthFirstLevel()
+        try context.advanceLevel()
         #expect(try machine.successors(checking: &context).first?.machine.state.value == 1212)
         #expect(context.registers.observedLevel == 2)
     }

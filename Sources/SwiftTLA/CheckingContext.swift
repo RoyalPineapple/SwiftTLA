@@ -7,7 +7,7 @@ public struct CheckingContext<Registers: Sendable>: Sendable {
         self.registers = registers
     }
 
-    package mutating func advanceBreadthFirstLevel() throws {
+    package mutating func advanceLevel() throws {
         let (next, overflow) = level.addingReportingOverflow(1)
         guard !overflow else { throw ExplorationError.levelOverflow }
         level = next

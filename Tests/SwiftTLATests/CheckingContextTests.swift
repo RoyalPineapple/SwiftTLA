@@ -11,10 +11,10 @@ struct CheckingContextTests {
     func preservesRunRegisters() throws {
         var context = CheckingContext(registers: Registers())
         #expect(context.level == 0)
-        try context.advanceBreadthFirstLevel()
+        try context.advanceLevel()
         #expect(context.level == 1)
         context.registers.firstFreeze = context.level + 1
-        try context.advanceBreadthFirstLevel()
+        try context.advanceLevel()
         #expect(context.level == 2)
         #expect(context.registers.firstFreeze == 2)
         #expect(context.registers.secondFreeze == 999)
@@ -27,11 +27,11 @@ struct CheckingContextTests {
     func sharesGeneratedTransitions() throws {
         let machine = try ConvergingFrontiers.makeMachine(.init(node: 1))
         var context = CheckingContext(registers: try machine.initialCheckingRegisters())
-        try context.advanceBreadthFirstLevel()
+        try context.advanceLevel()
         let application = try machine.successors()
         let checking = try machine.successors(checking: &context)
         var streamContext = CheckingContext(registers: try machine.initialCheckingRegisters())
-        try streamContext.advanceBreadthFirstLevel()
+        try streamContext.advanceLevel()
         var streamed: [(action: ConvergingFrontiers.Action, snapshot: ConvergingFrontiers.Snapshot)] = []
         let found = try machine.visitSuccessors(checking: &streamContext) { action, successor in
             streamed.append((action, successor.snapshot))
@@ -43,7 +43,7 @@ struct CheckingContextTests {
         #expect(streamed.map(\.action) == checking.map(\.action))
         #expect(streamed.map(\.snapshot) == checking.map { $0.machine.snapshot })
         var stoppedContext = CheckingContext(registers: try machine.initialCheckingRegisters())
-        try stoppedContext.advanceBreadthFirstLevel()
+        try stoppedContext.advanceLevel()
         var stoppedAfter: [ConvergingFrontiers.Snapshot] = []
         let stoppedWithSuccessor = try machine.visitSuccessors(checking: &stoppedContext) { _, successor in
             stoppedAfter.append(successor.snapshot)

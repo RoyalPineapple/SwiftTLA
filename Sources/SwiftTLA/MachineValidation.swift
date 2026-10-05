@@ -235,7 +235,7 @@ public enum MachineValidator {
         guard initialCount > 0 else { throw ExplorationError.noInitialStates }
 
         while head < pending.count {
-            try context.advanceBreadthFirstLevel()
+            try context.advanceLevel()
             let (successorLevel, overflow) = context.level.addingReportingOverflow(1)
             guard !overflow else { throw ExplorationError.levelOverflow }
             let layerEnd = pending.count
