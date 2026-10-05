@@ -941,9 +941,20 @@ extension ParserSession {
 
         let declaredType = binding.typeAnnotation?.type.as(IdentifierTypeSyntax.self)
         let expectedDeclarationType = kind == .shared ? "SharedVariable" : "LocalVariable"
-        let declaredValueType = declaredType?.name.text == expectedDeclarationType
-            ? declaredType?.genericArgumentClause?.arguments.first?.argument.as(TypeSyntax.self).flatMap(Self.sourceTypeSpelling)
+        let declaredValueTypeSyntax = declaredType?.name.text == expectedDeclarationType
+            ? declaredType?.genericArgumentClause?.arguments.first?.argument.as(TypeSyntax.self)
             : nil
+        let declaredValueType = declaredValueTypeSyntax.flatMap(Self.sourceTypeSpelling)
+        if let declaredValueTypeSyntax {
+            do {
+                _ = try sourceTypeResolver.resolve(declaredValueTypeSyntax)
+            } catch {
+                algorithmSourceDiagnostic = .init(
+                    message: "State '\(declaredName)' has an invalid value type: \(error)",
+                    source: declaredValueTypeSyntax)
+                return nil
+            }
+        }
         let state: AlgorithmStateModel
         let inferredType: CompiledValueType?
         if let initialSyntax = initializer.arguments.first(where: { $0.label?.text == "initial" })?.expression,

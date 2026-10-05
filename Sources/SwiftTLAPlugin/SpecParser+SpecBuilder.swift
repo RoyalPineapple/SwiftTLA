@@ -470,8 +470,20 @@ extension ParserSession {
             }
         }
 
-        let varTypeName = swiftValueType(from: binding.typeAnnotation) ?? constructor.valueType
+        let annotatedValueType = swiftValueTypeSyntax(from: binding.typeAnnotation)
+        let varTypeName = annotatedValueType.flatMap(Self.sourceTypeSpelling) ?? constructor.valueType
         let callName = constructor.name
+
+        if callName == "SharedVar", let annotatedValueType {
+            do {
+                _ = try sourceTypeResolver.resolve(annotatedValueType)
+            } catch {
+                components.diagnostics.append(.init(
+                    message: "State '\(patternName)' has an invalid value type: \(error)",
+                    source: annotatedValueType))
+                return
+            }
+        }
 
         let args = Array(fc.arguments)
 
@@ -611,19 +623,19 @@ extension ParserSession {
     /// Extracts the value type structurally from a variable declaration
     /// annotation. `SharedVariable<Mode>` contributes
     /// `Mode`; an explicit value annotation contributes itself.
-    func swiftValueType(from annotation: TypeAnnotationSyntax?) -> String? {
+    func swiftValueTypeSyntax(from annotation: TypeAnnotationSyntax?) -> TypeSyntax? {
         guard let type = annotation?.type else { return nil }
         if let generic = type.as(IdentifierTypeSyntax.self),
            ["Var", "SharedVariable", "LocalVariable"].contains(generic.name.text),
            let argument = generic.genericArgumentClause?.arguments.first?.argument.as(TypeSyntax.self) {
-            return Self.sourceTypeSpelling(argument)
+            return argument
         }
         if let generic = type.as(MemberTypeSyntax.self),
            ["Var", "SharedVariable", "LocalVariable"].contains(generic.name.text),
            let argument = generic.genericArgumentClause?.arguments.first?.argument.as(TypeSyntax.self) {
-            return Self.sourceTypeSpelling(argument)
+            return argument
         }
-        return Self.sourceTypeSpelling(type)
+        return type
     }
 
     func parseIntegerClosedRange(_ expression: ExprSyntax) -> ClosedRange<Int>? {

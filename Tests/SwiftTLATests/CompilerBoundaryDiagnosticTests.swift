@@ -8,6 +8,43 @@ import SwiftSyntax
 
 @Suite("Compiler boundary diagnostics")
 struct CompilerBoundaryDiagnosticTests {
+    @Test("Raw formal values cannot become generated Swift state")
+    func rawFormalStateTypePointsToDeclaration() throws {
+        for body in [
+            """
+            #spec { scope in
+                let value: SharedVariable<TLAValue> = scope.sharedVar(initial: 0)
+            }
+            """,
+            """
+            #spec {
+                let algorithm = Algorithm(scoped: { scope in
+                    let value: SharedVariable<TLAValue> = scope.sharedVar(initial: 0)
+                    Do(Control.advance) { Stop() }
+                })
+                algorithm
+            }
+            """
+        ] {
+            let source = Parser.parse(source: """
+            struct InvalidModel {
+                enum Control: String, CaseIterable, FiniteTLAValueDomain { case advance }
+                static var spec: TLASpec { \(body) }
+            }
+            """)
+            let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+            let rawType = try #require(source.tokens(viewMode: .sourceAccurate).first { $0.text == "TLAValue" })
+
+            do {
+                _ = try TLASpecVerifier.parseAndVerify(model)
+                Issue.record("A raw formal value must not become generated Swift state")
+            } catch let diagnostic as SourceParseDiagnostic {
+                #expect(diagnostic.sourceSpan.location == .utf8Offset(
+                    rawType.positionAfterSkippingLeadingTrivia.utf8Offset), "\(diagnostic)")
+            }
+        }
+    }
+
     @Test("Explicit unsupported enum raw values are rejected")
     func explicitUnsupportedEnumRawValueIsRejected() throws {
         let source = Parser.parse(source: """
