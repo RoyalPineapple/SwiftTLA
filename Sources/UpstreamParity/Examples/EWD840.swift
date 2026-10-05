@@ -81,6 +81,9 @@ package struct EWD840Model: Sendable {
                     || tcolor == Color.black
             }
             Liveness(.leadsTo(terminated, terminationDetected))
+
+            let EWD840 = Validation { Bind(N, to: 3) }.checkingDeadlock(false)
+            EWD840
         }
     }
 }

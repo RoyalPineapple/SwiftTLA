@@ -3,6 +3,15 @@ import SwiftTLA
 import UpstreamParity
 
 struct EWD840CorpusExecutionTests {
+    @Test("the published EWD840 scenario binds three nodes and disables deadlock checking")
+    func publishedConfiguration() throws {
+        let scenario = try #require(EWD840Model.validationScenarios().first)
+        #expect(scenario.name == "EWD840")
+        let rendered = try scenario.render()
+        #expect(rendered.tlaBundle.cfg.contains("N = 3"))
+        #expect(!rendered.checksDeadlock)
+    }
+
     @Test("EWD840 preserves one System fairness obligation across native and TLA outputs")
     func systemActionFairness() throws {
         let configuration = try EWD840Model.Configuration(N: 3)
