@@ -365,7 +365,7 @@ jobs:
           fi
           echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
       - name: Identify reusable generated TLC oracle
-        if: steps.upstream-reuse.outputs.reuse != 'true'
+        if: steps.upstream-reuse.outputs.reuse != 'true' && contains(fromJSON(needs.prepare.outputs.native), matrix.case)
         id: oracle-key
         run: |
           maximum_states=$(jq -er --arg id "$CASE_ID" '
@@ -379,7 +379,7 @@ jobs:
             --case "$CASE_ID" --maximum-states "$maximum_states")
           echo "key=$key" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v4
-        if: steps.upstream-reuse.outputs.reuse != 'true'
+        if: steps.upstream-reuse.outputs.reuse != 'true' && contains(fromJSON(needs.prepare.outputs.native), matrix.case)
         id: oracle-cache
         with:
           path: .build/validation-evidence/oracle/${{ matrix.case }}
