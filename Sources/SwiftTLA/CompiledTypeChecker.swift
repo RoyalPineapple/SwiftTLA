@@ -372,8 +372,13 @@ package struct CompiledTypeChecker: Sendable {
                 let actionBindings = try action.bindings.map { binding in
                     try binding.map { try checkOperand($0, expected: .set(bindings[binding.binder] ?? .unknown)) }
                 }
+                let body = try checkAction(action.body)
+                _ = try body.map { expression in
+                    try Self.requireResolvedTypes(in: expression)
+                    return expression
+                }
                 actions.append(.init(id: action.id, bindings: actionBindings,
-                    body: try checkAction(action.body)))
+                    body: body))
             }
             catch let diagnostic as CompilationDiagnostic {
                 let name = inputs.layout.actions.first { $0.id == action.id }?.declaration.name ?? String(action.id.ordinal)
@@ -864,6 +869,16 @@ package struct CompiledTypeChecker: Sendable {
         located.sourceOffset = cause.sourceOffset
         if case .utf8Offset(let offset) = sourceSpan?.location { located.sourceOffset = offset }
         return located
+    }
+
+    private static func requireResolvedTypes(in expression: CompiledExpression) throws {
+        var pending = [expression]
+        while let current = pending.popLast() {
+            for type in [current.resultType, current.computationType] where !type.resolved {
+                throw CompiledValueType.unresolvedDiagnostic(type, at: "expression.\(current.operation.diagnosticName)")
+            }
+            pending.append(contentsOf: current.children)
+        }
     }
 
     private func element(_ type: CompiledValueType) throws -> CompiledValueType {

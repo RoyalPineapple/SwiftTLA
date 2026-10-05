@@ -144,7 +144,7 @@ extension CompiledValueType {
         .init(code: .unresolvedGeneratedValueShape, stage: .lowering,
               path: "nativeMachine.\(path)", expected: "concrete Swift types for every value",
               actual: "type inference could not determine \(type.missingTypePaths().joined(separator: ", "))",
-              nextSafeAction: "Inspect compiler type propagation for this expression; this diagnostic does not establish that the model is unsupported.")
+              nextSafeAction: "Supply a typed value or an expression with a concrete expected type. If one is already present, report a compiler inference bug.")
     }
 
 

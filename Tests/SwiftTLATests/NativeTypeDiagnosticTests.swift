@@ -641,6 +641,22 @@ import Testing
         #expect(program.variableTypes.values.contains(.set(.int)))
     }
 
+    @Test("An untyped collection comparison cannot enter a generated action")
+    func untypedActionComparisonFailsCompilation() throws {
+        let specification = TLASpec(name: "UntypedComparison", variables: [], actions: [
+            .init(name: "compare", body: .guard_(.equal(.value(.set([])), .value(.set([])))))
+        ], invariants: [])
+        do {
+            _ = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: specification.compile()))
+            Issue.record("An unresolved set element type must not reach Swift emission")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unresolvedGeneratedValueShape)
+            #expect(diagnostic.path.contains("actions.compare"))
+            #expect(diagnostic.actual.contains("value.element"))
+            #expect(diagnostic.nextSafeAction.contains("typed value"))
+        }
+    }
+
     @Test("deep filter and choice predicates preserve their domains without recursive checking")
     func nestedSetPredicates() throws {
         let specification = TLASpec(name: "SetPredicates", variables: [], actions: [], invariants: [])
