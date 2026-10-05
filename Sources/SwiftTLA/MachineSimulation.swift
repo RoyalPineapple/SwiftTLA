@@ -42,7 +42,7 @@ public enum MachineSimulator {
             guard try machine.satisfiesStateConstraint() else {
                 return .inconclusive(trace: trace, reason: .stateConstraint)
             }
-            guard trace.count < maximumDepth else {
+            guard trace.count - 1 < maximumDepth else {
                 return .inconclusive(trace: trace, reason: .maximumDepth)
             }
             let successors = try machine.successors(checking: &context)

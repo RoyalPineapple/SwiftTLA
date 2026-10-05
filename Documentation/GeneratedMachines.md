@@ -285,7 +285,8 @@ counterexample has a valid verdict but only a partial graph. This checker needs
 neither TLC nor the parity harness.
 
 `scenario.simulate(maximumDepth:using:)` samples one configured generated-machine
-behavior with a caller-supplied random generator. It
+behavior with a caller-supplied random generator. `maximumDepth` counts transitions
+after the initial state, matching TLC's `-depth`. It
 checks selected invariants at every step, even when a complete state repeats.
 A violation includes the typed trace. Reaching the depth limit, an excluded
 state, or an unchecked dead end is inconclusive, never a proof of safety or

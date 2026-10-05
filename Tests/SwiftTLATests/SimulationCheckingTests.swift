@@ -10,7 +10,7 @@ struct SimulationCheckingTests {
         var generator = SystemRandomNumberGenerator()
 
         let bounded = try MachineSimulator.run(
-            initialMachines: [initial], maximumDepth: 2, checking: checking, using: &generator)
+            initialMachines: [initial], maximumDepth: 1, checking: checking, using: &generator)
         guard case .inconclusive(let prefix, let reason) = bounded else {
             Issue.record("A depth cutoff cannot establish satisfaction")
             return
@@ -20,7 +20,7 @@ struct SimulationCheckingTests {
         #expect(prefix[0].state == prefix[1].state)
 
         let violating = try MachineSimulator.run(
-            initialMachines: [initial], maximumDepth: 3, checking: checking, using: &generator)
+            initialMachines: [initial], maximumDepth: 2, checking: checking, using: &generator)
         guard case .counterexample(let witness) = violating else {
             Issue.record("The third visit must violate the level-dependent invariant")
             return
