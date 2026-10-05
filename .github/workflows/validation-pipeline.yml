@@ -389,15 +389,15 @@ jobs:
         timeout-minutes: 120
         run: |
           set -euo pipefail
-          oracle_args=()
+          oracle=""
           if [ "${{ steps.oracle-cache.outputs.cache-hit }}" = true ]; then
-            oracle=".build/validation-evidence/oracle/$CASE_ID"
+            oracle_candidate=".build/validation-evidence/oracle/$CASE_ID"
             jq -e --arg key '${{ steps.oracle-key.outputs.key }}' \
               '.cacheKey == $key and (.sourceSHA | test("^[0-9a-f]{40}$")) and .originRunID != ""' \
-              "$oracle/evidence-origin.json"
+              "$oracle_candidate/evidence-origin.json"
             if jq -e '.schema == "swifttla.generated-tlc-oracle" and .graphComplete == true' \
-                "$oracle/oracle.json" >/dev/null; then
-              oracle_args=(--oracle "$oracle")
+                "$oracle_candidate/oracle.json" >/dev/null; then
+              oracle="$oracle_candidate"
             fi
           fi
           df -h .
@@ -419,8 +419,13 @@ jobs:
           ) &
           monitor_pid=$!
           trap 'kill "$monitor_pid" 2>/dev/null || true; df -h .; du -sh ".build/validation-evidence/upstream/$CASE_ID" 2>/dev/null || true' EXIT
-          .build/validation-bin/tlc-validate upstream run --case "$CASE_ID" \
-            --output .build/validation-evidence/upstream "${oracle_args[@]}"
+          if [ -n "$oracle" ]; then
+            .build/validation-bin/tlc-validate upstream run --case "$CASE_ID" \
+              --output .build/validation-evidence/upstream --oracle "$oracle"
+          else
+            .build/validation-bin/tlc-validate upstream run --case "$CASE_ID" \
+              --output .build/validation-evidence/upstream
+          fi
           jq -n --arg key '${{ steps.upstream-key.outputs.key }}' --arg sha "$SWIFT_TLA_SHA" \
             --arg run "$GITHUB_RUN_ID" '{cacheKey:$key,sourceSHA:$sha,originRunID:$run}' \
             > ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"
