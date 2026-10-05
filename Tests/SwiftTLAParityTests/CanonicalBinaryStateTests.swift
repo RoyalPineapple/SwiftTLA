@@ -73,6 +73,30 @@ struct CanonicalBinaryStateTests {
         let record = try state([("x", .record(["field": .bool(true)]))])
         let keyed = try state([("x", .function([.string("field"): .bool(true)]))])
         #expect(try CanonicalBinaryState.encode(record) == CanonicalBinaryState.encode(keyed))
+
+        let modelKeyed = try state([("x", .function([.constant("p1"): .bool(true)]))])
+        let expectedModelKeyed = Data([
+            0x53, 0x54, 0x4c, 0x41, 0x53, 0x56, 0x30, 0x31,
+            0, 0, 0, 1, 0, 0, 0, 1, 0x78,
+            8, 0, 0, 0, 17, 0, 0, 0, 1,
+            4, 0, 0, 0, 2, 0x70, 0x31,
+            2, 0, 0, 0, 1, 1
+        ])
+        #expect(try CanonicalBinaryState.encode(modelKeyed) == expectedModelKeyed)
+
+        let first = try state([("x", .function([
+            .constant("p2"): .bool(false), .constant("p1"): .bool(true)
+        ]))])
+        let reordered = try state([("x", .function([
+            .constant("p1"): .bool(true), .constant("p2"): .bool(false)
+        ]))])
+        let changed = try state([("x", .function([
+            .constant("p1"): .bool(true), .constant("p2"): .bool(true)
+        ]))])
+        let encoded = try CanonicalBinaryState.encode(first)
+        #expect(encoded == (try CanonicalBinaryState.encode(reordered)))
+        #expect(encoded != (try CanonicalBinaryState.encode(changed)))
+        try CanonicalBinaryState.validate(encoded)
     }
 
     private func state(_ bindings: [(String, TLAValue)]) throws -> TLAStateProjection {

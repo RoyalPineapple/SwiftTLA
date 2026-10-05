@@ -195,26 +195,34 @@ enum CanonicalBinaryState {
                 try encode(.tuple([]), to: &output, lengthPatches: &lengthPatches)
                 return
             }
-            let indexed = mapping.compactMap { key, value -> (Int, TLAValue)? in
-                guard case .int(let index) = key else { return nil }
-                return (index, value)
-            }.sorted { $0.0 < $1.0 }
-            if indexed.count == mapping.count,
-               indexed.enumerated().allSatisfy({ $0.offset + 1 == $0.element.0 }) {
-                try encode(.tuple(indexed.map(\.1)), to: &output,
-                           lengthPatches: &lengthPatches)
-                return
-            }
-            let fields = mapping.compactMap { key, value -> (String, TLAValue)? in
-                guard case .string(let name) = key else { return nil }
-                return (name, value)
-            }
-            if fields.count == mapping.count {
-                try encodeRecord(fields, to: &output, lengthPatches: &lengthPatches)
-                return
+            if let firstKey = mapping.first?.key {
+                switch firstKey {
+                case .int:
+                    let indexed = mapping.compactMap { key, value -> (Int, TLAValue)? in
+                        guard case .int(let index) = key else { return nil }
+                        return (index, value)
+                    }.sorted { $0.0 < $1.0 }
+                    if indexed.count == mapping.count,
+                       indexed.enumerated().allSatisfy({ $0.offset + 1 == $0.element.0 }) {
+                        try encode(.tuple(indexed.map(\.1)), to: &output,
+                                   lengthPatches: &lengthPatches)
+                        return
+                    }
+                case .string:
+                    let fields = mapping.compactMap { key, value -> (String, TLAValue)? in
+                        guard case .string(let name) = key else { return nil }
+                        return (name, value)
+                    }
+                    if fields.count == mapping.count {
+                        try encodeRecord(fields, to: &output, lengthPatches: &lengthPatches)
+                        return
+                    }
+                default:
+                    break
+                }
             }
             let lengthOffset = beginValue(tag: 8, to: &output)
-            let entries = try mapping.map { (try encode($0.key), try encode($0.value)) }
+            let entries = try mapping.map { (try encode($0.key), $0.value) }
                 .sorted { $0.0.lexicographicallyPrecedes($1.0) }
             for index in 1..<entries.count where entries[index - 1].0 == entries[index].0 {
                 throw CodingError.duplicateFunctionKey
@@ -222,7 +230,7 @@ enum CanonicalBinaryState {
             try appendCount(entries.count, to: &output)
             for (key, value) in entries {
                 output.append(key)
-                output.append(value)
+                try encode(value, to: &output, lengthPatches: &lengthPatches)
             }
             try finishValue(lengthOffset: lengthOffset, in: output, patches: &lengthPatches)
         }
