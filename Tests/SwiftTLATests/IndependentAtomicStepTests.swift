@@ -30,6 +30,69 @@ struct IndependentAtomicStepTests {
         #expect(module.contains(": SF_"))
     }
 
+    @Test("anyOf fairness is one obligation over independent actions with different bindings")
+    func actionDisjunctionFairness() throws {
+        let spec = SpecParser.parseSpecClosure(named: "FairActionDisjunction", try parseSpecTestClosure("""
+        { scope in
+            let value = scope.sharedVar(initial: 0)
+            let next = Do(Step.next) { Assign(value, to: 1) }
+            let other = Do(Step.other, over: Set<Int>([1, 2])) { member in
+                Assign(value, to: member)
+            }
+            next
+            other
+            WeakFairness(anyOf: [next, other])
+        }
+        """), sourceTypes: sourceTypes)
+        #expect(spec.diagnostics.isEmpty)
+        #expect(spec.fairness == [.weakFairnessActionGroup(["next", "other"])])
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: spec.compile()))
+        let module = try program.renderModule().renderedModuleSource
+        let obligations = module.split(separator: "\n").filter { $0.contains("WF_") }
+        #expect(obligations.count == 1)
+        #expect(obligations[0].contains("next \\/ "))
+        #expect(obligations[0].contains("other"))
+        #expect(!obligations[0].contains("\\A "))
+    }
+
+    @Test("strong anyOf fairness exports one strong disjunction obligation")
+    func strongActionDisjunctionFairness() throws {
+        let spec = SpecParser.parseSpecClosure(named: "StrongActionDisjunction", try parseSpecTestClosure("""
+        { scope in
+            let value = scope.sharedVar(initial: 0)
+            let next = Do(Step.next) { Assign(value, to: 1) }
+            let other = Do(Step.other) { Assign(value, to: 2) }
+            next
+            other
+            StrongFairness(anyOf: [next, other])
+        }
+        """), sourceTypes: sourceTypes)
+        #expect(spec.diagnostics.isEmpty)
+        #expect(spec.fairness == [.strongFairnessActionGroup(["next", "other"])])
+        let program = try CompiledProgram(inputs: SourceTypeResolver().resolve(in: spec.compile()))
+        let obligations = try program.renderModule().renderedModuleSource
+            .split(separator: "\n").filter { $0.contains("SF_") }
+        #expect(obligations.count == 1)
+        #expect(obligations[0].contains("next \\/ other"))
+    }
+
+    @Test("anyOf fairness rejects empty, repeated, and unbound independent steps", arguments: [
+        "[]", "[next, next]", "[next, missing]"
+    ])
+    func rejectsInvalidActionDisjunction(_ members: String) throws {
+        let spec = SpecParser.parseSpecClosure(named: "InvalidFairActionDisjunction", try parseSpecTestClosure("""
+        { scope in
+            let value = scope.sharedVar(initial: 0)
+            let next = Do(Step.next) { Assign(value, to: 1) }
+            next
+            WeakFairness(anyOf: \(members))
+        }
+        """), sourceTypes: sourceTypes)
+        #expect(spec.fairness.isEmpty)
+        #expect(spec.diagnostics.contains { $0.message ==
+            "Fairness anyOf requires a nonempty list of distinct locally bound Do steps." })
+    }
+
     @Test("per-instance fairness rejects a bound legacy action that is not an independent step")
     func rejectsNonStepFairness() throws {
         let spec = SpecParser.parseSpecClosure(named: "NotAnIndependentStep", try parseSpecTestClosure("""

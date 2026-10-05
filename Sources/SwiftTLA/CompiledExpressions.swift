@@ -459,6 +459,7 @@ package struct CompiledFairnessCondition: Sendable {
     package enum Scope: Hashable, Sendable {
         case next
         case action(ActionID)
+        case actionGroup([ActionID])
         case actionCall(CompiledActionCall)
         case eachAction(ActionID)
         case actionCallGroup([CompiledActionCall])

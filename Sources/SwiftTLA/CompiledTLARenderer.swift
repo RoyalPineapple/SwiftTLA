@@ -214,6 +214,8 @@ struct CompiledTLARenderer {
             action = "Next"
         case .action(let id):
             action = try actionReference(id)
+        case .actionGroup(let ids):
+            action = "(" + (try ids.map { try actionReference($0) }).joined(separator: " \\/ ") + ")"
         case .actionCall(let call):
             guard let name = actionCalls[call] else { throw missing("action", call.action.ordinal) }
             action = name

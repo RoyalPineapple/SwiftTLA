@@ -1521,6 +1521,8 @@ private struct CanonicalSpecificationEncoder {
         case .strongFairnessActionCall(let action): return node("strongFairnessActionCall", [canonicalActionCall(action)])
         case .weakFairnessEachAction(let action): return node("weakFairnessEachAction", [action])
         case .strongFairnessEachAction(let action): return node("strongFairnessEachAction", [action])
+        case .weakFairnessActionGroup(let actions): return node("weakFairnessActionGroup", actions)
+        case .strongFairnessActionGroup(let actions): return node("strongFairnessActionGroup", actions)
         case .weakFairnessEachActionGroup(let actions): return node("weakFairnessEachActionGroup", actions)
         case .strongFairnessEachActionGroup(let actions): return node("strongFairnessEachActionGroup", actions)
         }

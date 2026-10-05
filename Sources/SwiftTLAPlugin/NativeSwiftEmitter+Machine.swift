@@ -735,6 +735,13 @@ extension NativeSwiftEmitter {
                 let action = model.api.actions.first { $0.compiledAction == id }!
                 name = program.layout.actions[id.ordinal].renderedName
                 matcher = "{ action in if case .\(action.swiftIdentifier) = action { return true }; return false }"
+            case .actionGroup(let ids):
+                name = ids.map { program.layout.actions[$0.ordinal].renderedName }.joined(separator: " or ")
+                let cases = ids.map { id -> String in
+                    let action = model.api.actions.first { $0.compiledAction == id }!
+                    return "if case .\(action.swiftIdentifier) = action { return true }"
+                }.joined(separator: "; ")
+                matcher = "{ action in \(cases); return false }"
             case .actionCall(let call):
                 let action = model.api.actions.first { $0.compiledAction == call.action }!
                 let bindings = program[call.action].bindings

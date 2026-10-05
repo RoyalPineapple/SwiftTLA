@@ -28,20 +28,23 @@ package struct EWD840Model: Sendable {
             let tpos = scope.sharedVar(in: Node)
             let tcolor = scope.sharedVar(initial: Color.black)
 
-            Do(Step.InitiateProbe, when: tpos == 0
+            let initiate = Do(Step.InitiateProbe, when: tpos == 0
                 && (tcolor == Color.black || color[0] == Color.black)) {
                 Assign(tpos, to: N - 1)
                 Assign(tcolor, to: Color.white)
                 Assign(color[0], to: Color.white)
             }
+            initiate
 
-            Do(Step.PassToken, over: Node) { i in
+            let pass = Do(Step.PassToken, over: Node) { i in
                 When(i != 0 && tpos == i
                     && (!active[i] || color[i] == Color.black || tcolor == Color.black))
                 Assign(tpos, to: i - 1)
                 Assign(tcolor, to: If(color[i] == Color.black, then: Color.black, else: tcolor))
                 Assign(color[i], to: Color.white)
             }
+            pass
+            WeakFairness(anyOf: [initiate, pass])
 
             Do(Step.SendMsg, over: Node) { i in
                 When(active[i])

@@ -602,6 +602,15 @@ is distinct and must also be explicit. Independent steps and `Next` use the decl
 Other scope references still require the remaining B-04 decisions. Declared fairness must be preserved in temporal checking
 and TLA+ export; it is not a runtime scheduling mechanism.
 
+For a disjunction of independent steps, bind each `Do` to a Swift `let` and
+write `WeakFairness(anyOf: [initiate, pass])` (or `StrongFairness(anyOf: ...)`).
+This declares **one** obligation over either step, including any configured
+invocation of a parameterized step. It is not one obligation per step or per
+member. An empty list, repeated step, or reference without a local `Do` binding
+is invalid. The native checker and TLA+ export must retain this same scope;
+EWD840's `WF_vars(System)` is the corpus example. No fairness is inferred from
+the presence of the steps.
+
 Fairness belongs to behavior because it changes allowed executions.
 
 ### Explicit finite symmetry

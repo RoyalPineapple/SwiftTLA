@@ -1071,6 +1071,14 @@ struct CompiledLowerer {
             return .init(scope: .next, isStrong: false)
         case .strongFairnessNext:
             return .init(scope: .next, isStrong: true)
+        case .weakFairnessActionGroup(let names), .strongFairnessActionGroup(let names):
+            guard !names.isEmpty, Set(names).count == names.count else {
+                throw CompilationDiagnostic(code: .unknownReference, stage: .binding, path: path,
+                    expected: "distinct actions in a fairness disjunction", actual: names.joined(separator: ", "),
+                    nextSafeAction: "Bind each Do step once and list each binding once in anyOf.")
+            }
+            let ids = try names.map { try self.action(named: $0, at: "\(path).action") }
+            return .init(scope: .actionGroup(ids), isStrong: condition.isStrong)
         case .weakFairnessEachAction(let name), .strongFairnessEachAction(let name):
             let id = try self.action(named: name, at: "\(path).action")
             guard let compiled = actions[id] else { throw diagnostic(path: path) }

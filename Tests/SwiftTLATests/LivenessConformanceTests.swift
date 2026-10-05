@@ -116,6 +116,33 @@ struct LivenessConformanceTests {
         ).first)
     }
 
+    @Test("fairness of a disjunction permits one action to starve another")
+    func disjunctionIsOneObligation() throws {
+        let graph = try graph(transitions: [
+            initial: [
+                .init(label: .init(.init(name: "A")), target: terminal),
+                .init(label: .init(.init(name: "B")), target: middle)
+            ],
+            middle: [.init(label: .init(.init(name: "B")), target: middle)],
+            terminal: [
+                .init(label: .init(.init(name: "A")), target: initial),
+                .init(label: .init(.init(name: "B")), target: middle)
+            ]
+        ], values: [initial: 0, middle: 1, terminal: 2])
+        let property = TemporalCondition<StateExpr>.eventually(predicate(1))
+        let actions = [action("A"), action("B")]
+
+        let grouped = try analyze(graph, property: property,
+            fairness: [.weakFairnessActionGroup(["A", "B"])], actions: actions,
+            initialStateIDs: [initial])
+        let separate = try analyze(graph, property: property,
+            fairness: [.weakFairness("A"), .weakFairness("B")], actions: actions,
+            initialStateIDs: [initial])
+
+        #expect(grouped.status == .violated)
+        #expect(separate.status == .satisfied)
+    }
+
     @Test("reachable nonterminal avoiding subcycle has a canonical fair-lasso witness")
     func findsReachableNonterminalAvoidingSubcycle() throws {
         let initial = StateGraph.StateID(0)

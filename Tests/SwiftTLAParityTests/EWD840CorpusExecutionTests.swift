@@ -3,6 +3,24 @@ import SwiftTLA
 import UpstreamParity
 
 struct EWD840CorpusExecutionTests {
+    @Test("EWD840 preserves one System fairness obligation across native and TLA outputs")
+    func systemActionFairness() throws {
+        let configuration = try EWD840Model.Configuration(N: 3)
+        let machine = try #require(EWD840Model.initialMachines(configuration: configuration).first)
+        let conditions = try machine.fairnessConditions()
+        #expect(conditions.count == 1)
+        #expect(conditions[0].matches(.InitiateProbe))
+        #expect(conditions[0].matches(.PassToken(i: 1)))
+        #expect(!conditions[0].matches(.SendMsg(i: 1)))
+        #expect(!conditions[0].matches(.Deactivate(i: 1)))
+        let rendered = try EWD840Model.render(configuration: configuration)
+        let obligations = rendered.tlaBundle.root.tla.split(separator: "\n").filter { $0.contains("WF_") }
+        #expect(obligations.count == 1)
+        #expect(obligations[0].contains("InitiateProbe"))
+        #expect(obligations[0].contains("PassToken"))
+        #expect(obligations[0].contains("\\/"))
+    }
+
     @Test("each configured EWD840 node can deactivate without changing the token or colors")
     func deactivationPreservesOtherState() throws {
         let configuration = try EWD840Model.Configuration(N: 3)

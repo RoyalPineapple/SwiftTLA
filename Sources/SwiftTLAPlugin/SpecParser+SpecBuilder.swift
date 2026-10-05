@@ -1026,6 +1026,14 @@ extension ParserSession {
             if let fc = decodeFairness(call, scope: sourceScope) {
                 components.fairness.append(fc)
             } else {
+                if call.arguments.first?.label?.text == "anyOf" {
+                    components.diagnostics.append(.init(
+                        message: "Fairness anyOf requires a nonempty list of distinct locally bound Do steps.",
+                        source: call,
+                        expected: "WeakFairness(anyOf: [firstStep, secondStep]) with each step bound by let"
+                    ))
+                    return
+                }
                 let action = call.arguments.first?.expression
                     .as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
                 let each = call.arguments.first?.label?.text == "each"
@@ -1035,7 +1043,7 @@ extension ParserSession {
                         : "Fairness action reference '\($0)' is not bound by a local Action declaration." }
                         ?? "Fairness declaration requires a structural action reference.",
                     source: call,
-                    expected: "WeakFairness(action), WeakFairness(each: step), StrongFairness(action), StrongFairness(each: step), WeakFairnessNext(), or StrongFairnessNext()"
+                    expected: "WeakFairness(action), WeakFairness(anyOf: [steps]), WeakFairness(each: step), StrongFairness(action), StrongFairness(anyOf: [steps]), StrongFairness(each: step), WeakFairnessNext(), or StrongFairnessNext()"
                 ))
             }
         case "Import":

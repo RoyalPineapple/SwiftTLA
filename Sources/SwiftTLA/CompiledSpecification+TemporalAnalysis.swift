@@ -69,6 +69,7 @@ extension CompiledSpecification {
                 switch fairness[scope].scope {
                 case .next: return true
                 case .action(let action): return call.action == action
+                case .actionGroup(let actions): return actions.contains(call.action)
                 case .actionCall(let expected): return call == expected
                 case .actionCallGroup(let group): return group.contains(call)
                 case .eachAction, .eachActionGroup: preconditionFailure("Per-instance fairness must be expanded before analysis")
@@ -144,6 +145,9 @@ extension CompiledSpecification {
                     switch fairness[index].scope {
                     case .next: return "Next" + suffix
                     case .action(let action): return layout.actions[action.ordinal].declaration.name + suffix
+                    case .actionGroup(let actions):
+                        return actions.map { layout.actions[$0.ordinal].declaration.name }
+                            .joined(separator: " \\/ ") + suffix
                     case .actionCall(let call):
                         return formalActionCall(
                             named: layout.actions[call.action.ordinal].declaration.name,

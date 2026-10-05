@@ -10,6 +10,9 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
     /// One obligation for each argument tuple in the action's immutable domains.
     case weakFairnessEachAction(String)
     case strongFairnessEachAction(String)
+    /// One obligation over any invocation of the listed actions.
+    case weakFairnessActionGroup([String])
+    case strongFairnessActionGroup([String])
     /// One process-member obligation over the disjunction of its atomic steps.
     case weakFairnessEachActionGroup([String])
     case strongFairnessEachActionGroup([String])
@@ -25,6 +28,8 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
         case .strongFairnessActionCall(let action): return "SF(\(action))"
         case .weakFairnessEachAction(let action): return "Each(WF(\(action)))"
         case .strongFairnessEachAction(let action): return "Each(SF(\(action)))"
+        case .weakFairnessActionGroup(let actions): return "WF(\(actions.joined(separator: " \\/ ")))"
+        case .strongFairnessActionGroup(let actions): return "SF(\(actions.joined(separator: " \\/ ")))"
         case .weakFairnessEachActionGroup(let actions): return "Each(WF(\(actions.joined(separator: " \\/ "))))"
         case .strongFairnessEachActionGroup(let actions): return "Each(SF(\(actions.joined(separator: " \\/ "))))"
         }
@@ -34,9 +39,9 @@ public enum FairnessCondition: Hashable, Sendable, CustomStringConvertible {
         switch self {
         case .projected(let condition, _): condition.isStrong
         case .strongFairness, .strongFairnessNext, .strongFairnessActionCall, .strongFairnessEachAction,
-             .strongFairnessEachActionGroup: true
+             .strongFairnessActionGroup, .strongFairnessEachActionGroup: true
         case .weakFairness, .weakFairnessNext, .weakFairnessActionCall, .weakFairnessEachAction,
-             .weakFairnessEachActionGroup: false
+             .weakFairnessActionGroup, .weakFairnessEachActionGroup: false
         }
     }
 }
