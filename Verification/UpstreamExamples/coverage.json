@@ -5528,7 +5528,7 @@
       "path": "specifications/ewd840",
       "name": "EWD840: Termination Detection in a Ring",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "The SyncTerminationDetection and APSyncTerminationDetection N=7 configurations share one typed model and have locally checked generated scenarios but no hosted two-path parity. The AP wrapper selects only TypeOK and TDCorrect, as its pinned CFG does. The typed EWD840 model has locally checked System action-group fairness, Liveness, and its published N=3 model-owned scenario with deadlock checking disabled. Its configured TDSpec is still missing: upstream defines it as an INSTANCE refinement of SyncTerminationDetection, so complete parity requires cross-model composition without duplicating the abstract model. Three other published configurations remain missing; proof and unconfigured module dispositions and family cleanup are open. No EWD840 configuration has hosted parity credit.",
+      "gap": "The SyncTerminationDetection and APSyncTerminationDetection N=7 configurations share one typed model and have locally checked generated scenarios but no hosted two-path parity. The AP wrapper selects only TypeOK and TDCorrect, as its pinned CFG does. The typed EWD840 model has locally checked System action-group fairness, Liveness, and its published N=3 model-owned scenario with deadlock checking disabled. Its configured TDSpec is still missing: upstream defines it as an INSTANCE refinement of SyncTerminationDetection, so complete parity requires cross-model composition without duplicating the abstract model. Three other published configurations remain missing, and family cleanup is open. The two TLAPS-only proof companions are classified without a proof-validation claim. No EWD840 configuration has hosted parity credit.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5561,10 +5561,10 @@
         },
         {
           "path": "specifications/ewd840/EWD840_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "The pinned manifest declares TLAPS proof work and no model configuration. This module extends EWD840, NaturalsInduction, and TLAPS; its safety, liveness, and TD!Spec refinement theorems add no separate transition system. Preserve it as a pinned reference without claiming TLAPS proof validation.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd840/EWD840.tla",
@@ -5575,10 +5575,10 @@
         },
         {
           "path": "specifications/ewd840/SyncTerminationDetection_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof companion",
+          "reason": "The pinned manifest declares TLAPS proof work and no model configuration. This module extends SyncTerminationDetection and TLAPS to prove TypeOK, TDCorrect, Quiescence, and Liveness; it defines no separate transition system. Preserve it as a pinned reference without claiming TLAPS proof validation.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd840/SyncTerminationDetection.tla",
