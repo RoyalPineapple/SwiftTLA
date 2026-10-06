@@ -11116,7 +11116,7 @@
       "id": "AC-16",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "CompiledLowerer selects every registered property by identity unless a scenario explicitly selects a subset; expectations do not alter that set. The generated scenario carries the same typed selection into native checking and TLA export. On hosted cc1e191e, selected-checks-0 independently evaluated all four selected properties in native Swift and TLC, including two expected violations, and compared their verdicts exactly. A decisive invariant counterexample left the selected deadlock check without a verdict and the graph incomplete on both sides; neither is credited as checked. Default selection, explicit omissions, expectation validation, and complete-scenario evidence still need a source-aligned acceptance audit before this criterion is verified.",
+      "reason": "CompiledLowerer selects every registered property by identity unless a scenario explicitly selects a subset; expectations do not alter that set. The generated scenario carries the same typed selection into native checking and TLA export. At hosted 033c3c42, both ConstantStateClaims configurations select all five declared properties without a repeated check list; expected violations leave the other selected checks and default deadlock enabled. Retained native/generated-TLC comparisons have complete exact initial states, labeled graphs, five property verdicts, and deadlock verdicts for both configurations. Hosted ordinary tests also pass the owner-boundary checks for explicit omissions, disabled-check expectations, and rejection of missing comparison checks. The earlier selected-checks-0 decisive witness remains valid but is not used to claim full-graph or deadlock completion. AC-16 is accepted for this source revision; final-head admission and full corpus coverage remain separate.",
       "evidence": [
         {
           "sourceSHA": "cc1e191e23da17489b13430b3721af07af1a5430",
@@ -11126,6 +11126,17 @@
           "artifactSHA256": "cef2f0dbe601530e6f06a57e1e8a717a826f15687294473c19c5f8bd955c5268",
           "acceptanceComplete": false,
           "scope": "The full hosted selected-checks-0 job matched native and generated-TLC verdicts for InitiallyZero=violated, Reached=reached, Safe=satisfied, and StaysZero=violated. Both reports selected deadlock checking but recorded no deadlock verdict after a decisive invariant counterexample; graph comparison was not claimed. All five ordinary CI jobs and the independent-validation run passed on the same SHA. This verifies multi-property expected-failure selection, not complete AC-16 acceptance or a deadlock outcome."
+        },
+        {
+          "sourceSHA": "033c3c4225f0b9d88582aebb11806ea15a009bd5",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37528759113",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37528759113/artifacts/11445372944",
+          "artifactSHA256": "c7ad379983fb995ac6bf2233bdbc7cecd2778494d8a3e2945007890231fbf605",
+          "pairedArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37528759113/artifacts/11446100486",
+          "pairedArtifactSHA256": "228d9351a76c844c3d2f46d605146b0e2e07d3ce87d82cfb4d1e65fde957d97e",
+          "acceptanceComplete": true,
+          "scope": "Downloaded and inspected both retained ConstantStateClaims artifacts. Enabled and Disabled each select all five declared properties with no omissions, a complete one-initial/one-state/one-edge graph, exact native/generated-TLC comparison, and selected deadlock satisfaction. Enabled verdicts are falseInvariant=violated, trueInvariant=satisfied, initialWitness=reached, absentWitness=unreachable, configuredWitness=reached; Disabled changes only configuredWitness to unreachable. The model expresses expectation overrides without checking(only:), and the other properties remain checked. Ordinary CI on the same SHA passed the complete-validation, explicit-selection, and omitted-check rejection tests. The aggregate validation run failed in unrelated EWD840 upstream input closure, so this is AC-16 evidence, not final-corpus admission."
         }
       ]
     },
