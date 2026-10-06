@@ -362,6 +362,7 @@ jobs:
           path: |
             .build/validation-evidence
             !.build/validation-evidence/**/work/**
+            !.build/validation-evidence/oracle/**
             !.build/validation-evidence/comparison/*/swift/**
             !.build/validation-evidence/comparison/*/tlc/**
           include-hidden-files: true
@@ -625,6 +626,7 @@ jobs:
           fetch-depth: 0
           submodules: false
       - name: Require immutable diagnostic and evidence revisions
+        id: replay-origin
         run: |
           test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
           test -z "$BATCH_CASES"
@@ -635,7 +637,12 @@ jobs:
           test -n "$REPLAY_ARTIFACT_NAME"
           git cat-file -e "$REPLAY_SHA^{commit}"
           case "$REPLAY_ARTIFACT_NAME" in
-            "dsl-native-$REPLAY_SHA-$REPLAY_RUN_ID-"*"-$CASE_ID") ;;
+            "dsl-native-$REPLAY_SHA-$REPLAY_RUN_ID-"*"-$CASE_ID")
+              attempt="${REPLAY_ARTIFACT_NAME#dsl-native-$REPLAY_SHA-$REPLAY_RUN_ID-}"
+              attempt="${attempt%-$CASE_ID}"
+              [[ "$attempt" =~ ^[1-9][0-9]*$ ]]
+              echo "oracle_name=generated-oracle-$REPLAY_SHA-$REPLAY_RUN_ID-$attempt-$CASE_ID" >> "$GITHUB_OUTPUT"
+              ;;
             "upstream-parity-$REPLAY_SHA-$REPLAY_RUN_ID-"*"-$CASE_ID") ;;
             *) echo "Replay artifact does not match evidence revision and case" >&2; exit 1 ;;
           esac
@@ -645,6 +652,20 @@ jobs:
           name: ${{ inputs.replay_artifact_name }}
           github-token: ${{ github.token }}
           path: .build/replay-evidence
+      - name: Locate retained oracle for replay
+        id: replay-oracle
+        run: |
+          if [[ "$REPLAY_ARTIFACT_NAME" == dsl-native-* ]] &&
+              [ ! -f ".build/replay-evidence/oracle/$CASE_ID/oracle.json" ]; then
+            echo 'download=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/download-artifact@v5
+        if: ${{ steps.replay-oracle.outputs.download == 'true' }}
+        with:
+          run-id: ${{ inputs.replay_run_id }}
+          name: ${{ steps.replay-origin.outputs.oracle_name }}
+          github-token: ${{ github.token }}
+          path: .build/replay-evidence/oracle/${{ inputs.case_id }}
       - name: Require exact retained evidence origin
         run: |
           test "$(cat .build/replay-evidence/source-sha.txt)" = "$REPLAY_SHA"
