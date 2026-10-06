@@ -10,6 +10,9 @@ struct EchoCorpusStateGraphTests {
         let assumptions = try #require(exported.root.tla.components(separatedBy: "(*--algorithm").first)
         #expect(assumptions.contains("RECURSIVE"))
         #expect(assumptions.contains("\\A from \\in Node : (\\A to \\in Node"))
+        #expect(exported.cfg.contains("CONSTANT NoNode = NoNode"))
+        #expect(exported.cfg.contains("INVARIANT TypeOK"))
+        #expect(exported.cfg.contains("INVARIANT AncestorProperties"))
         #expect(exported.cfg.contains("CHECK_DEADLOCK TRUE"))
     }
 
