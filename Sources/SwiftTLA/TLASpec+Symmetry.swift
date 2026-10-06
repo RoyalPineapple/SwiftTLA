@@ -153,6 +153,7 @@ extension TLASpec {
     switch domain {
     case .setLiteral(let values): alternatives = values
     case .value(.set(let values)): alternatives = values.map(StateExpr.value)
+    case .powerSet: return []
     case .setDifference(.powerSet(let members), .setLiteral(let excluded))
       where excluded.count == 1 && literalSymmetrySet(excluded[0])?.isEmpty == true:
       return literalSymmetrySet(members)

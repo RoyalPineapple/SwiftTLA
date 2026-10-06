@@ -50,7 +50,7 @@ struct SymmetryDomainAdmissionTests {
         }
         for (spec, reason) in [(empty, "an empty domain"),
                                (composite, "composite symmetry member"),
-                               (subsetsIncludingEmpty, "an unsupported parameter domain"),
+                               (subsetsIncludingEmpty, "an empty domain"),
                                (compositeSubsets, "composite symmetry member")] {
             do {
                 _ = try spec.compile()
