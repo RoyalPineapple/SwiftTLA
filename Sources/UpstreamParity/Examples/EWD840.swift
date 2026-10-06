@@ -84,6 +84,10 @@ package struct EWD840Model: Sendable {
 
             let EWD840 = Validation { Bind(N, to: 3) }.checkingDeadlock(false)
             EWD840
+            let APEWD840 = Validation { Bind(N, to: 3) }
+                .checking(only: [TypeOK, TerminationDetection])
+                .checkingDeadlock(false)
+            APEWD840
         }
     }
 }

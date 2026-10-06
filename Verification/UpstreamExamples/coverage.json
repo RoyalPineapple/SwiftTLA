@@ -5528,14 +5528,14 @@
       "path": "specifications/ewd840",
       "name": "EWD840: Termination Detection in a Ring",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "The SyncTerminationDetection and APSyncTerminationDetection N=7 configurations share one typed model and have locally checked generated scenarios but no hosted two-path parity. The AP wrapper selects only TypeOK and TDCorrect, as its pinned CFG does. The typed EWD840 model has locally checked System action-group fairness, Liveness, and its published N=3 model-owned scenario with deadlock checking disabled. Its configured TDSpec is still missing: upstream defines it as an INSTANCE refinement of SyncTerminationDetection, so complete parity requires cross-model composition without duplicating the abstract model. APEWD840 still needs its N=3 selected-check binding; EWD840_anim adds history state, a constrained N=9 initial condition, and a simulated expected failure; EWD840_json selects a trace-exporting TLC diagnostic invariant at N=4. Those three configurations and family cleanup remain open. The two TLAPS-only proof companions are classified without a proof-validation claim. No EWD840 configuration has hosted parity credit.",
+      "gap": "The SyncTerminationDetection and APSyncTerminationDetection N=7 configurations share one typed model and have locally checked generated scenarios but no hosted two-path parity. The AP wrapper selects only TypeOK and TDCorrect, as its pinned CFG does. The typed EWD840 model has locally checked System action-group fairness, Liveness, and its published N=3 model-owned scenario with deadlock checking disabled. Its configured TDSpec is still missing: upstream defines it as an INSTANCE refinement of SyncTerminationDetection, so complete parity requires cross-model composition without duplicating the abstract model. APEWD840 now has its N=3 selected-check binding and pinned case, pending hosted two-path parity; EWD840_anim adds history state, a constrained N=9 initial condition, and a simulated expected failure; EWD840_json selects a trace-exporting TLC diagnostic invariant at N=4. Those configurations and family cleanup remain open. The two TLAPS-only proof companions are classified without a proof-validation claim. No EWD840 configuration has hosted parity credit.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/ewd840/APEWD840.tla",
           "role": "configured root",
-          "reason": "The pinned Apalache annotation wrapper instances EWD840 without changing its transitions. Its N=3 configuration selects TypeOK and TerminationDetection and disables deadlock; the corresponding model-owned scenario and hosted comparisons remain missing.",
-          "implementations": [],
+          "reason": "The pinned Apalache annotation wrapper instances EWD840 without changing its transitions. Its N=3 model-owned scenario selects TypeOK and TerminationDetection and disables deadlock; hosted comparisons remain missing.",
+          "implementations": ["Sources/UpstreamParity/Examples/EWD840.swift"],
           "dispositionComplete": false
         },
         {
@@ -5593,10 +5593,16 @@
           "module": "specifications/ewd840/APEWD840.tla",
           "configuration": "specifications/ewd840/APEWD840.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/EWD840.swift",
+              "scenario": "APEWD840",
+              "caseID": "ewd840-ap"
+            }
+          ],
           "evidence": []
         },
         {

@@ -1353,6 +1353,26 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "ewd840-ap",
+      "sourceModel": "ewd840",
+      "scenario": "APEWD840",
+      "module": "ewd840/APEWD840.tla",
+      "configuration": "ewd840/APEWD840.cfg",
+      "imports": ["ewd840/EWD840.tla", "sync-termination-detection/SyncTerminationDetection.tla"],
+      "dependencies": [
+        {"importingModule": "APEWD840", "importedModule": "EWD840"},
+        {"importingModule": "EWD840", "importedModule": "SyncTerminationDetection"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd840/APEWD840.tla",
+        "sha256": "821ef5e07819ebf6d923c99112a3a5b75ebc6cb36f7b8e1f1be51ea09e29e90b"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "821ef5e07819ebf6d923c99112a3a5b75ebc6cb36f7b8e1f1be51ea09e29e90b",
+      "cfgSHA256": "873b1fd00d46d200063b3d8b08e11ada4b5c162bf9ad7282065e205e419d7bef",
+      "timeoutSeconds": 300
+    },
+    {
       "id": "sync-termination-detection-0",
       "sourceModel": "sync-termination-detection",
       "scenario": "SyncTerminationDetection",
