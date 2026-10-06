@@ -20,28 +20,40 @@ public struct SymmetrySetDecl: SpecComponent, Sendable {
   public let variableName: String
   package let reference: SymmetryReference
   let domain: SymmetryDomain
+  let sourceIssue: SourceModelIssue?
 
-  package init(_ variableName: String, _ values: Set<TLAValue>) {
-    self.init(variableName, domain: .finite(values))
+  package init(_ variableName: String, _ values: Set<TLAValue>, sourceIssue: SourceModelIssue? = nil) {
+    self.init(variableName, domain: .finite(values), sourceIssue: sourceIssue)
   }
 
-  package init(_ variableName: String, domain: SymmetryDomain) {
+  package init(_ variableName: String, domain: SymmetryDomain, sourceIssue: SourceModelIssue? = nil) {
     self.variableName = variableName
     reference = .init()
     self.domain = domain
+    self.sourceIssue = sourceIssue
   }
 
   package func resolved() -> SymmetrySet {
-    return SymmetrySet(variableName: variableName, domain: domain, reference: reference)
+    return SymmetrySet(variableName: variableName, domain: domain, reference: reference, sourceIssue: sourceIssue)
   }
 }
 
 public func Symmetry(_ variableName: String, _ values: Set<some TLAValueConvertible>) -> SymmetrySetDecl {
-  SymmetrySetDecl(variableName, Set(values.map(\.tlaValue)))
+  finiteSymmetryDeclaration(variableName, values)
 }
 
 public func Symmetry(_name: String = "", _ values: Set<some TLAValueConvertible>) -> SymmetrySetDecl {
-  SymmetrySetDecl(_name, Set(values.map(\.tlaValue)))
+  finiteSymmetryDeclaration(_name, values)
+}
+
+private func finiteSymmetryDeclaration<Member: TLAValueConvertible & Hashable>(
+  _ name: String, _ values: Set<Member>
+) -> SymmetrySetDecl {
+  let converted = Set(values.map(\.tlaValue))
+  let issue = values.compactMap(\.sourceIssue).first
+    ?? (converted.count == values.count ? nil : .formalDeclaration(
+      kind: "symmetry", name: name, problem: "distinct Swift members have the same formal value"))
+  return SymmetrySetDecl(name, converted, sourceIssue: issue)
 }
 
 public func Symmetry<Member: TLAValueType>(_name: String = "", _ members: ModelParameter<Set<Member>>) -> SymmetrySetDecl {
@@ -73,6 +85,10 @@ extension TLASpec {
 
     for (index, symmetry) in symmetrySets.enumerated() {
       let path = "symmetrySets[\(index)]"
+      if let issue = symmetry.sourceIssue {
+        throw symmetryDiagnostic(path: "\(path).values",
+          expected: "distinct valid formal members", actual: issue.description)
+      }
       guard symmetry.variableName.isEmpty == false,
             case .some = TLAStateProjection.Token(validating: symmetry.variableName) else {
         throw symmetryDiagnostic(

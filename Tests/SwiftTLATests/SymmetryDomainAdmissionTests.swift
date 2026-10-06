@@ -2,6 +2,26 @@
 import Testing
 
 struct SymmetryDomainAdmissionTests {
+    private struct CollidingMember: Hashable, TLAValueConvertible {
+        let id: Int
+        var tlaValue: TLAValue { .string("same") }
+    }
+
+    @Test("Distinct Swift symmetry members cannot collapse to one formal value")
+    func distinctSwiftMembersKeepTheirIdentity() {
+        let members: Set<CollidingMember> = [.init(id: 1), .init(id: 2)]
+        let spec = TLASpec("CollidingSymmetry") { Symmetry("Members", members) }
+        do {
+            _ = try spec.compile()
+            Issue.record("Distinct Swift symmetry members collapsed")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidSymmetryDeclaration)
+            #expect(diagnostic.actual.contains("distinct Swift members have the same formal value"))
+        } catch {
+            Issue.record("Unexpected compilation error: \(error)")
+        }
+    }
+
     @Test("Symmetry accepts nonempty subsets of a finite set parameter")
     func parameterDependentMembersRemainFinite() throws {
         let spec = TLASpec("DependentSymmetry") { scope in

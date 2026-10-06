@@ -925,15 +925,19 @@ public struct SymmetrySet: Hashable, Sendable, CustomStringConvertible {
   public let variableName: String
   public let domain: SymmetryDomain
   package let reference: SymmetryReference?
+  package let sourceIssue: SourceModelIssue?
   public init(variableName: String, values: Set<TLAValue>) {
     self.variableName = variableName
     domain = .finite(values)
     reference = nil
+    sourceIssue = nil
   }
-  package init(variableName: String, domain: SymmetryDomain, reference: SymmetryReference) {
+  package init(variableName: String, domain: SymmetryDomain, reference: SymmetryReference,
+    sourceIssue: SourceModelIssue? = nil) {
     self.variableName = variableName
     self.domain = domain
     self.reference = reference
+    self.sourceIssue = sourceIssue
   }
   public static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.variableName == rhs.variableName && lhs.domain == rhs.domain
