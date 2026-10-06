@@ -297,6 +297,20 @@ private struct FunctionArgumentOrder {
     }
 }
 
+@TLAModel
+private struct MissingFunctionKey {
+    enum Step: String, CaseIterable { case read }
+
+    static var spec: TLASpec {
+        #spec("MissingFunctionKey") { scope in
+            let table: SharedVariable<[Int: Int]> = scope.sharedVar(initial: [0: 42])
+            let key = scope.sharedVar(initial: 1)
+            let result = scope.sharedVar(initial: 0)
+            Do(Step.read) { Assign(result, to: table[key]) }
+        }
+    }
+}
+
 @Suite struct NativeOperatorEvaluationTests {
     @Test("Recursive callbacks retain the previous call's parameter value")
     func recursiveCallbackKeepsLexicalCapture() throws {
@@ -325,6 +339,16 @@ private struct FunctionArgumentOrder {
         var machine = try FunctionArgumentOrder.makeMachine()
         let before = machine.state
         #expect(throws: NativeMachineEvaluationError.integerOverflow(.addition, operands: [Int.max, 1])) {
+            try machine.send(.read)
+        }
+        #expect(machine.state == before)
+    }
+
+    @Test("a generated function read outside its domain fails without changing state")
+    func missingFunctionKeyFails() throws {
+        var machine = try MissingFunctionKey.makeMachine()
+        let before = machine.state
+        #expect(throws: NativeMachineEvaluationError.functionArgumentOutsideDomain) {
             try machine.send(.read)
         }
         #expect(machine.state == before)
