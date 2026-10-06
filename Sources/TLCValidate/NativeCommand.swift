@@ -45,7 +45,15 @@ func runNative(arguments: [String]) -> Never {
             do {
                 let result = try writeNativeEvidence(scenario: scenario, caseID: id, maximumStates: maximumStates,
                                                      to: output.appendingPathComponent(id))
-                print("native \(id): \(result.graphComplete ? "complete graph" : "decisive result")")
+                let summary: String
+                switch scenario.checkingMode {
+                case .exhaustive: summary = "complete graph"
+                case .decisiveCounterexample: summary = "decisive result"
+                case .simulation:
+                    summary = result.properties.values.contains(.violated)
+                        ? "sampled counterexample" : "inconclusive simulation"
+                }
+                print("native \(id): \(summary)")
             } catch {
                 failures += 1
                 fputs("native \(id): \(error)\n", stderr)

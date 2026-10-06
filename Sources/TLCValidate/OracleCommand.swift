@@ -84,7 +84,15 @@ func runOracle(arguments: [String]) -> Never {
                 let outcome = try captureOracle(scenario: scenario, id: id, maximumStates: maximumStates,
                                                 timeout: timeout, tools: tools, pin: pin,
                                                 to: output.appendingPathComponent(id))
-                print("oracle \(id): \(outcome.graphComplete ? "complete graph" : "decisive result")")
+                let summary: String
+                switch scenario.checkingMode {
+                case .exhaustive: summary = "complete graph"
+                case .decisiveCounterexample: summary = "decisive result"
+                case .simulation:
+                    summary = outcome.properties.values.contains(.violated)
+                        ? "sampled counterexample" : "inconclusive simulation"
+                }
+                print("oracle \(id): \(summary)")
             } catch {
                 failures += 1
                 fputs("oracle \(id): \(error)\n", stderr)
