@@ -6,6 +6,7 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
     public let transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]]
     public let behavior: ModelBehavior
     private let selectedFairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?
+    private let selectedEnabledness: [Int: [Machine.Snapshot: Bool]]?
 
     public init(initialMachines: [Machine], maximumStates: Int,
         behavior: ModelBehavior = .specification) throws {
@@ -44,13 +45,22 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
     package init(machine: Machine, snapshots: [Machine.Snapshot], initialIDs: [Int],
         edges: [(source: Int, action: Machine.Action, target: Int)],
         behavior: ModelBehavior,
-        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]? = nil
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]? = nil,
+        enabledness: [Int: [Machine.Snapshot: Bool]]? = nil
     ) throws {
         self.machine = machine
         self.behavior = behavior
         selectedFairness = fairness
+        selectedEnabledness = enabledness
         guard initialIDs.allSatisfy({ snapshots.indices.contains($0) }) else {
             throw ExplorationError.configurationMismatch
+        }
+        if let enabledness {
+            guard let fairness,
+                Set(enabledness.keys) == Set(fairness.indices),
+                enabledness.values.allSatisfy({ Set($0.keys) == Set(snapshots) }) else {
+                throw ExplorationError.configurationMismatch
+            }
         }
         initialStates = Set(initialIDs.map { snapshots[$0] })
         var adjacency = Dictionary(uniqueKeysWithValues: snapshots.map {
@@ -181,6 +191,7 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
                 return projected[source]?.contains(target) == true
             },
             actionOrder: { actions[$0]! < actions[$1]! },
-            stateOrder: { order[$0]! < order[$1]! })
+            stateOrder: { order[$0]! < order[$1]! },
+            enabledness: selectedEnabledness)
     }
 }

@@ -17,14 +17,23 @@ public enum NativeSimulationResult<Machine: StateMachine>: Sendable {
 public enum MachineSimulator {
     public static func run<Machine: StateMachine, Generator: RandomNumberGenerator>(
         initialMachines: [Machine], maximumDepth: Int, traceCount: Int = 1,
-        checking: ModelChecks<Machine.Property>,
-        behavior: ModelBehavior = .specification,
-        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]? = nil,
+        checking: ModelChecks<Machine.Property>, using generator: inout Generator
+    ) throws -> NativeSimulationResult<Machine> {
+        try runConfigured(initialMachines: initialMachines, maximumDepth: maximumDepth,
+            traceCount: traceCount, checking: checking, behavior: .specification,
+            fairness: nil, using: &generator)
+    }
+
+    static func runConfigured<Machine: StateMachine, Generator: RandomNumberGenerator>(
+        initialMachines: [Machine], maximumDepth: Int, traceCount: Int = 1,
+        checking: ModelChecks<Machine.Property>, behavior: ModelBehavior,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?,
         using generator: inout Generator
     ) throws -> NativeSimulationResult<Machine> {
         guard traceCount > 0 else { throw ExplorationError.invalidSimulationTraceCount(traceCount) }
         guard maximumDepth > 0 else { throw ExplorationError.invalidSimulationDepth(maximumDepth) }
         guard let first = initialMachines.first else { throw ExplorationError.noInitialStates }
+        let selectedFairness = behavior == .specification ? try (fairness ?? first.fairnessConditions()) : []
         let temporal = Set(try first.temporalProperties(checking: checking.properties).keys)
         if let unsupported = checking.properties.subtracting(Machine.invariantProperties).subtracting(temporal)
             .map({ Machine.formalPropertyNames[$0] ?? String(reflecting: $0) }).sorted().first {
@@ -46,11 +55,11 @@ public enum MachineSimulator {
         guard !eligibleInitial.isEmpty else { throw ExplorationError.noInitialStates }
 
         var result = try runTrace(initialMachines: eligibleInitial, first: first, maximumDepth: maximumDepth,
-            checking: checking, behavior: behavior, fairness: fairness, using: &generator)
+            checking: checking, behavior: behavior, fairness: selectedFairness, using: &generator)
         for _ in 1..<traceCount {
             if case .inconclusive = result {} else { return result }
             result = try runTrace(initialMachines: eligibleInitial, first: first, maximumDepth: maximumDepth,
-                checking: checking, behavior: behavior, fairness: fairness, using: &generator)
+                checking: checking, behavior: behavior, fairness: selectedFairness, using: &generator)
         }
         return result
     }
@@ -58,13 +67,15 @@ public enum MachineSimulator {
     private static func runTrace<Machine: StateMachine, Generator: RandomNumberGenerator>(
         initialMachines: [Machine], first: Machine, maximumDepth: Int, checking: ModelChecks<Machine.Property>,
         behavior: ModelBehavior,
-        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
         using generator: inout Generator
     ) throws -> NativeSimulationResult<Machine> {
         var context = CheckingContext(registers: try first.initialCheckingRegisters())
         try context.advanceLevel()
         var machine = initialMachines[Int.random(in: 0..<initialMachines.count, using: &generator)]
         var trace: [(action: Machine.Action?, state: Machine.Snapshot)] = [(nil, machine.snapshot)]
+        var traceMachines = [machine]
+        var traceContexts = [context]
         for _ in 0..<maximumDepth {
             try Task.checkCancellation()
             let (nextLevel, overflow) = context.level.addingReportingOverflow(1)
@@ -100,24 +111,34 @@ public enum MachineSimulator {
                     return .counterexample(.init(violations: [.deadlock], trace: trace, checking: checking))
                 }
                 return try finishTrace(trace, reason: .deadEnd, first: first,
-                    checking: checking, behavior: behavior, fairness: fairness)
+                    checking: checking, behavior: behavior, fairness: fairness,
+                    machines: traceMachines, contexts: traceContexts)
             }
             machine = selected.successors[Int.random(in: 0..<selected.successors.count, using: &generator)]
             trace.append((selected.action, machine.snapshot))
             try context.advanceLevel()
+            traceMachines.append(machine)
+            traceContexts.append(context)
         }
         return try finishTrace(trace, reason: .maximumDepth, first: first,
-            checking: checking, behavior: behavior, fairness: fairness)
+            checking: checking, behavior: behavior, fairness: fairness,
+            machines: traceMachines, contexts: traceContexts)
     }
 
     private static func finishTrace<Machine: StateMachine>(
         _ trace: [(action: Machine.Action?, state: Machine.Snapshot)], reason: SimulationStopReason,
         first: Machine, checking: ModelChecks<Machine.Property>, behavior: ModelBehavior,
-        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>],
+        machines: [Machine], contexts: [CheckingContext<Machine.CheckingRegisters>]
     ) throws -> NativeSimulationResult<Machine> {
         let selected = try first.temporalProperties(checking: checking.properties)
         guard !selected.isEmpty else { return .inconclusive(trace: trace, reason: reason) }
-        guard behavior == .specification, (fairness ?? []).isEmpty else {
+        guard behavior == .specification else {
+            return .inconclusive(trace: trace, reason: reason)
+        }
+        let enabledness = try fairness.isEmpty ? nil : fairEnabledness(
+            machines: machines, contexts: contexts, fairness: fairness, first: first)
+        if !fairness.isEmpty && enabledness == nil {
             return .inconclusive(trace: trace, reason: reason)
         }
         var snapshots: [Machine.Snapshot] = []
@@ -136,7 +157,8 @@ public enum MachineSimulator {
             edges.append((id(for: trace[index - 1].state), action, id(for: trace[index].state)))
         }
         let graph = try MachineValidationGraph(machine: first, snapshots: snapshots,
-            initialIDs: [initialID], edges: edges, behavior: behavior, fairness: fairness)
+            initialIDs: [initialID], edges: edges, behavior: behavior,
+            fairness: fairness, enabledness: enabledness)
         let results = try graph.temporalResults(checking: checking.properties)
         for property in selected.keys.sorted(by: {
             (Machine.formalPropertyNames[$0] ?? String(reflecting: $0))
@@ -148,10 +170,45 @@ public enum MachineSimulator {
             }
             if result.status == .violated {
                 guard let witness = result.witness else { throw ExplorationError.configurationMismatch }
-                guard witness.cycleActions.allSatisfy({ $0 == nil }) else { continue }
                 return .temporalCounterexample(property: property, witness: witness, trace: trace)
             }
         }
         return .inconclusive(trace: trace, reason: reason)
+    }
+
+    private static func fairEnabledness<Machine: StateMachine>(
+        machines: [Machine], contexts: [CheckingContext<Machine.CheckingRegisters>],
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>], first: Machine
+    ) throws -> [Int: [Machine.Snapshot: Bool]]? {
+        guard machines.count == contexts.count else { throw ExplorationError.configurationMismatch }
+        var enabledness = Dictionary(uniqueKeysWithValues: fairness.indices.map {
+            ($0, [Machine.Snapshot: Bool]())
+        })
+        for (machine, context) in zip(machines, contexts) {
+            var enabled = Array(repeating: false, count: fairness.count)
+            for action in try machine.actionCandidates() {
+                guard fairness.contains(where: { $0.matches(action) }) else { continue }
+                var probe = context
+                _ = try machine.visitSuccessors(for: action, checking: &probe) { successor in
+                    guard successor.hasSameConfiguration(as: first) else {
+                        throw ExplorationError.configurationMismatch
+                    }
+                    for (index, condition) in fairness.enumerated()
+                        where !enabled[index] && condition.matches(action) {
+                        enabled[index] = try condition.changes?(machine.snapshot, successor.snapshot)
+                            ?? (machine.snapshot != successor.snapshot)
+                    }
+                    return !enabled.allSatisfy { $0 }
+                }
+                if enabled.allSatisfy({ $0 }) { break }
+            }
+            for index in fairness.indices {
+                if let previous = enabledness[index]?[machine.snapshot], previous != enabled[index] {
+                    return nil
+                }
+                enabledness[index, default: [:]][machine.snapshot] = enabled[index]
+            }
+        }
+        return enabledness
     }
 }

@@ -155,7 +155,7 @@ extension ModelValidationScenario {
     ) throws -> NativeSimulationResult<Machine> {
         let initial = try initialMachines()
         let fairness = behavior == .specification ? try initial.first.map { try fairnessConditions(on: $0) } : nil
-        return try MachineSimulator.run(initialMachines: initial, maximumDepth: maximumDepth,
+        return try MachineSimulator.runConfigured(initialMachines: initial, maximumDepth: maximumDepth,
             traceCount: traceCount, checking: checking, behavior: behavior, fairness: fairness, using: &generator)
     }
 

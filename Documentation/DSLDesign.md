@@ -1241,8 +1241,10 @@ For bounded sampling, a scenario declares
 Both bounds must be positive. Sampling uses the generated machine and selected
 invariants, temporal properties, or deadlock check; selected reachability or
 refinement checks and satisfied expectations are invalid. Temporal simulation
-currently reports only fairness-free stuttering lassos under specification
-behavior; all other temporal samples are inconclusive. A sampled counterexample is a
+checks the sampled trace graph under specification behavior. Fairness enabledness
+is evaluated from generated-machine transitions at each sampled state, not
+inferred from sampled edges. Inconsistent enabledness for a revisited state is
+inconclusive. A sampled counterexample is a
 violation with a witness; finishing
 the traces without one is inconclusive, not satisfaction or complete-graph
 evidence. Simulation does not change the generated TLA+ model. The TLC adapter

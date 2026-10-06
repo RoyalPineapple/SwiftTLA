@@ -100,7 +100,8 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
         matches: @escaping @Sendable (Action, Scope) -> Bool,
         changes: @escaping @Sendable (State, State, Scope) -> Bool = { before, after, _ in before != after },
         actionOrder: @escaping @Sendable (Action, Action) -> Bool,
-        stateOrder: @escaping @Sendable (State, State) -> Bool
+        stateOrder: @escaping @Sendable (State, State) -> Bool,
+        enabledness: [Scope: [State: Bool]]? = nil
     ) {
         self.states = states
         self.transitions = transitions
@@ -109,7 +110,7 @@ package struct LivenessChecker<State: Hashable & Sendable, Action: Hashable & Se
         self.changes = changes
         self.actionOrder = actionOrder
         self.stateOrder = stateOrder
-        enabled = Dictionary(uniqueKeysWithValues: Set(fairness.map(\.scope)).map { scope in
+        enabled = enabledness ?? Dictionary(uniqueKeysWithValues: Set(fairness.map(\.scope)).map { scope in
             let values = Dictionary(uniqueKeysWithValues: states.map { state in
                 let isEnabled = (transitions[state] ?? []).contains { edge in
                     guard let action = edge.action else { return false }

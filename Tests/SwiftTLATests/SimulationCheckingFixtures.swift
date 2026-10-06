@@ -136,3 +136,23 @@ struct SampledFairTemporalModel {
         }
     }
 }
+
+@TLAModel
+struct SampledFairTemporalViolationModel {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("SampledFairTemporalViolation") { scope in
+            let value = scope.sharedVar(initial: 0)
+            let advance = Do(Step.advance, when: value == 0) { Assign(value, to: 1) }
+            advance
+            WeakFairness(advance)
+            let EventuallyTwo = Temporal()
+            EventuallyTwo(.eventually(value == 2))
+            let sampled = Validation {}.checking(only: [EventuallyTwo])
+                .checkingDeadlock(false).simulating(traces: 1, maximumDepth: 1)
+                .expect(EventuallyTwo, .violated)
+            sampled
+        }
+    }
+}

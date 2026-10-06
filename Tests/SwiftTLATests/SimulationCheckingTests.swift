@@ -141,11 +141,26 @@ struct SimulationCheckingTests {
     func sampledFairnessDoesNotInventCounterexample() throws {
         let scenario = try #require(SampledFairTemporalModel.validationScenarios().first)
         var generator = LastCandidateGenerator()
-        let result = try scenario.simulate(using: &generator)
+        let result = try MachineSimulator.run(initialMachines: scenario.initialMachines(),
+            maximumDepth: 1, checking: scenario.checking, using: &generator)
         guard case .inconclusive(let trace, _) = result else {
             Issue.record("An unvisited fair action cannot be treated as disabled")
             return
         }
         #expect(trace.map { $0.state.state.value } == [0, 0])
+    }
+
+    @Test("a sampled trace reports a fair counterexample when the fair action becomes disabled")
+    func sampledFairTemporalWitness() throws {
+        let scenario = try #require(SampledFairTemporalViolationModel.validationScenarios().first)
+        var generator = FirstCandidateGenerator()
+        let result = try scenario.simulate(using: &generator)
+        guard case .temporalCounterexample(let property, let witness, let trace) = result else {
+            Issue.record("The final stutter is fair because advance is disabled")
+            return
+        }
+        #expect(property == .EventuallyTwo)
+        #expect(trace.map { $0.state.state.value } == [0, 1])
+        #expect(!witness.cycle.isEmpty && witness.cycle.allSatisfy { $0.state.value == 1 })
     }
 }
