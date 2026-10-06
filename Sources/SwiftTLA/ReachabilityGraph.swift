@@ -33,7 +33,12 @@ public protocol StateMachine: Sendable {
     func refinementFailures(in graph: inout ReachabilityGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>]
     func validationRefinementFailures(in graph: inout MachineValidationGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>]
     func successors() throws -> [(action: Action, machine: Self)]
+    /// Grounded action invocations, including disabled ones, in generated order.
+    func actionCandidates() throws -> [Action]
     func initialCheckingRegisters() throws -> CheckingRegisters
+    /// Streams generated candidates of one action; false stops after that candidate.
+    func visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>,
+                         _ visit: (Self) throws -> Bool) throws -> Bool
     func successors(checking context: inout CheckingContext<CheckingRegisters>) throws -> [(action: Action, machine: Self)]
     /// Visits generated transitions in order. Returning false stops after that transition.
     /// The result reports whether any transition was enabled.
@@ -41,6 +46,13 @@ public protocol StateMachine: Sendable {
         checking context: inout CheckingContext<CheckingRegisters>,
         _ visit: (Action, Self) throws -> Bool
     ) throws -> Bool
+}
+
+extension StateMachine {
+    public func visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>,
+                                _ visit: (Self) throws -> Bool) throws -> Bool {
+        throw ExplorationError.unsupportedActionSampling
+    }
 }
 
 public enum ExplorationError: Error, Equatable, Sendable {
@@ -55,6 +67,7 @@ public enum ExplorationError: Error, Equatable, Sendable {
     case unsupportedRefinement(String)
     case undeclaredReachabilityProperty(String)
     case unsupportedValidationProperty(String)
+    case unsupportedActionSampling
 }
 
 public enum ReachabilityOutcome<Snapshot: Hashable & Sendable>: Equatable, Sendable {

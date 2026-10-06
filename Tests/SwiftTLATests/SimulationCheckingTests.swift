@@ -30,4 +30,21 @@ struct SimulationCheckingTests {
         #expect(witness.trace.allSatisfy { $0.state == initial.snapshot })
         #expect(witness.trace.compactMap { $0.action } == [.loop, .loop])
     }
+
+    @Test("Simulation checks every successor of its chosen action before sampling")
+    func checksUnchosenCandidate() throws {
+        let initial = try CandidateSafetySimulationModel.makeMachine()
+        let candidates = try initial.successors(for: .choose)
+        #expect(Set(candidates.map { $0.state.value }) == [0, 1])
+        var generator = LastCandidateGenerator()
+
+        let result = try MachineSimulator.run(initialMachines: [initial], maximumDepth: 1,
+            checking: .init(properties: [.NonZero], checkDeadlock: false), using: &generator)
+        guard case .counterexample(let witness) = result else {
+            Issue.record("The invalid candidate must fail before a safe successor is sampled")
+            return
+        }
+        #expect(witness.violations == [.invariant(.NonZero)])
+        #expect(witness.trace.map { $0.state.state.value } == [2, 0])
+    }
 }

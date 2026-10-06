@@ -45,6 +45,13 @@ struct CollidingReachabilityMachine: StateMachine {
         try base.successors().map { ($0.action, Self(base: $0.machine)) }
     }
     func initialCheckingRegisters() throws -> CheckingRegisters { try base.initialCheckingRegisters() }
+    func actionCandidates() throws -> [Action] { try base.actionCandidates() }
+    func visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>,
+                         _ visit: (Self) throws -> Bool) throws -> Bool {
+        try base.visitSuccessors(for: action, checking: &context) { machine in
+            try visit(Self(base: machine))
+        }
+    }
     func successors(checking context: inout CheckingContext<CheckingRegisters>) throws
         -> [(action: Action, machine: Self)] {
         try base.successors(checking: &context).map { ($0.action, Self(base: $0.machine)) }

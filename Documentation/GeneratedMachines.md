@@ -287,9 +287,9 @@ neither TLC nor the parity harness.
 `scenario.simulate(maximumDepth:using:)` samples one configured generated-machine
 behavior with a caller-supplied random generator. `maximumDepth` counts transitions
 after the initial state, matching TLC's `-depth`. It
-checks selected invariants at every step, even when a complete state repeats.
-A violation includes the typed trace. Reaching the depth limit, an excluded
-state, or an unchecked dead end is inconclusive, never a proof of safety or
+checks selected invariants on every generated successor of the sampled action,
+even when a complete state repeats. A violation includes the typed trace.
+Reaching the depth limit or an unchecked dead end is inconclusive, never a proof of safety or
 graph completion. The simulator rejects checks it cannot establish.
 
 `ReachabilityGraph(initialMachines: Model.initialMachines(), maximumStates: limit)`

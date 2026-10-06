@@ -434,6 +434,7 @@ extension NativeSwiftEmitter {
     mutating func dispatchDeclarations(configurationArguments: String) throws -> [DeclSyntax] {
         guard !model.api.actions.isEmpty else {
             return try nativeDeclarations("""
+            public func actionCandidates() throws -> [Action] { [] }
             public func enabledActions() throws -> [Action] { [] }
             public func successors() throws -> [(action: Action, machine: Self)] { [] }
             private func _successors(checking context: inout CheckingContext<CheckingRegisters>?) throws -> [(action: Action, machine: Self)] { [] }
@@ -495,6 +496,22 @@ extension NativeSwiftEmitter {
             visitorEnumeration.append("do {\n" + loops + "try _visitAction(\(actionValue))\n" + closing + "}\n")
         }
         return try nativeDeclarations("""
+        public func visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>,
+                                    _ visit: (Self) throws -> Bool) throws -> Bool {
+            var run: CheckingContext<CheckingRegisters>? = context
+            defer { context = run! }
+            var found = false
+            do {
+                try _visitSuccessors(for: action, checking: &run) { execution in
+                    found = true
+                    if try !visit(Self(execution: execution\(configurationArguments))) {
+                        throw _StopSuccessorTraversal()
+                    }
+                }
+            } catch is _StopSuccessorTraversal {
+            }
+            return found
+        }
         public func formalCall(for action: Action) throws -> FormalActionCall {
             switch action {
                 \(formalCases.joined(separator: "\n"))
@@ -528,6 +545,7 @@ extension NativeSwiftEmitter {
             \(enumeration.joined(separator: "\n"))
             return result
         }
+        public func actionCandidates() throws -> [Action] { try _actions() }
         public func successors() throws -> [(action: Action, machine: Self)] {
             var context: CheckingContext<CheckingRegisters>?
             return try _successors(checking: &context)

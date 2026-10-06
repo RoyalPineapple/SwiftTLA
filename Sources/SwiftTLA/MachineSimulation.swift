@@ -2,7 +2,6 @@
 public enum SimulationStopReason: Equatable, Sendable {
     case maximumDepth
     case deadEnd
-    case stateConstraint
 }
 
 /// A sampled behavior is never a proof that its unexplored branches satisfy a property.
@@ -23,42 +22,63 @@ public enum MachineSimulator {
             .map({ Machine.formalPropertyNames[$0] ?? String(reflecting: $0) }).sorted().first {
             throw ExplorationError.unsupportedValidationProperty(unsupported)
         }
+        var context = CheckingContext(registers: try first.initialCheckingRegisters())
+        try context.advanceLevel()
+        var eligibleInitial: [Machine] = []
         for machine in initialMachines {
             guard machine.hasSameConfiguration(as: first) else { throw ExplorationError.configurationMismatch }
             guard try machine.assumptionsHold() else { throw ExplorationError.assumptionViolated }
-        }
-
-        var machine = initialMachines[Int.random(in: 0..<initialMachines.count, using: &generator)]
-        var context = CheckingContext(registers: try machine.initialCheckingRegisters())
-        var trace: [(action: Machine.Action?, state: Machine.Snapshot)] = [(nil, machine.snapshot)]
-        try context.advanceLevel()
-        while true {
-            try Task.checkCancellation()
             let failures = try machine.violatedInvariants(checking: checking.properties, atLevel: context.level)
                 .map(SafetyViolation.invariant)
             if !failures.isEmpty {
-                return .counterexample(.init(violations: failures, trace: trace, checking: checking))
+                return .counterexample(.init(violations: failures, trace: [(nil, machine.snapshot)], checking: checking))
             }
-            guard try machine.satisfiesStateConstraint() else {
-                return .inconclusive(trace: trace, reason: .stateConstraint)
+            if try machine.satisfiesStateConstraint() { eligibleInitial.append(machine) }
+        }
+        guard !eligibleInitial.isEmpty else { throw ExplorationError.noInitialStates }
+
+        var machine = eligibleInitial[Int.random(in: 0..<eligibleInitial.count, using: &generator)]
+        var trace: [(action: Machine.Action?, state: Machine.Snapshot)] = [(nil, machine.snapshot)]
+        for _ in 0..<maximumDepth {
+            try Task.checkCancellation()
+            let (nextLevel, overflow) = context.level.addingReportingOverflow(1)
+            guard !overflow else { throw ExplorationError.levelOverflow }
+            var actions = try machine.actionCandidates()
+            actions.shuffle(using: &generator)
+            var selected: (action: Machine.Action, successors: [Machine])?
+            for action in actions {
+                var eligible: [Machine] = []
+                var witness: SafetyCounterexample<Machine>?
+                _ = try machine.visitSuccessors(for: action, checking: &context) { successor in
+                    guard successor.hasSameConfiguration(as: first) else {
+                        throw ExplorationError.configurationMismatch
+                    }
+                    let failures = try successor.violatedInvariants(checking: checking.properties, atLevel: nextLevel)
+                        .map(SafetyViolation.invariant)
+                    if !failures.isEmpty {
+                        witness = .init(violations: failures,
+                            trace: trace + [(action, successor.snapshot)], checking: checking)
+                        return false
+                    }
+                    if try successor.satisfiesStateConstraint() { eligible.append(successor) }
+                    return true
+                }
+                if let witness { return .counterexample(witness) }
+                if !eligible.isEmpty {
+                    selected = (action, eligible)
+                    break
+                }
             }
-            guard trace.count - 1 < maximumDepth else {
-                return .inconclusive(trace: trace, reason: .maximumDepth)
-            }
-            let successors = try machine.successors(checking: &context)
-            guard !successors.isEmpty else {
+            guard let selected else {
                 if checking.checkDeadlock {
                     return .counterexample(.init(violations: [.deadlock], trace: trace, checking: checking))
                 }
                 return .inconclusive(trace: trace, reason: .deadEnd)
             }
-            let successor = successors[Int.random(in: 0..<successors.count, using: &generator)]
-            guard successor.machine.hasSameConfiguration(as: first) else {
-                throw ExplorationError.configurationMismatch
-            }
-            machine = successor.machine
-            trace.append((successor.action, machine.snapshot))
+            machine = selected.successors[Int.random(in: 0..<selected.successors.count, using: &generator)]
+            trace.append((selected.action, machine.snapshot))
             try context.advanceLevel()
         }
+        return .inconclusive(trace: trace, reason: .maximumDepth)
     }
 }

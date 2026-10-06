@@ -40,6 +40,17 @@ struct CheckingContextProbe: StateMachine {
     func validationRefinementFailures(in graph: inout MachineValidationGraph<Self>, checking: Set<Property>) throws -> [Property: RefinementFailure<Snapshot, Action>] { [:] }
     func initialCheckingRegisters() throws -> CheckingRegisters { CheckingRegisters() }
     func successors() throws -> [(action: Action, machine: Self)] { throw Failure.bypassedContext }
+    func actionCandidates() throws -> [Action] { try machine.actionCandidates() }
+
+    func visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>,
+                         _ visit: (Self) throws -> Bool) throws -> Bool {
+        var found = false
+        for successor in try successors(checking: &context) where successor.action == action {
+            found = true
+            if try !visit(successor.machine) { break }
+        }
+        return found
+    }
 
     func successors(checking context: inout CheckingContext<CheckingRegisters>) throws -> [(action: Action, machine: Self)] {
         let node = machine.state.node
