@@ -52,6 +52,7 @@ enum TLASpecVerifier {
                 ?? parser.stateDeclarationOffset(for: located.path)
                 ?? parser.actionDeclarationOffset(for: located.path)
                 ?? parser.propertyDeclarationOffset(for: located.path)
+                ?? parser.formalDependencyOffset(for: located.path)
                 ?? parser.symmetryDeclarationOffset(for: located.path)
             throw located
         }

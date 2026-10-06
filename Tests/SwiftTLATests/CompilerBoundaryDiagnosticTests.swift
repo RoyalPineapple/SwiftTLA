@@ -358,6 +358,34 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("An unknown formal dependency points to its name")
+    func unknownFormalDependencyPointsToName() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            static var spec: TLASpec {
+                #spec { scope in
+                    let count = scope.sharedVar(initial: 0)
+                    FormalDefinition("Refines", parameters: [], body: true, dependsOn: ["Missing"])
+                }
+            }
+        }
+        """)
+        let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let missing = try #require(source.description.range(of: "\"Missing\""))
+        let missingOffset = source.description[..<missing.lowerBound].utf8.count
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(model)
+            Issue.record("An undeclared formal dependency must fail compilation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unresolvedDirectModuleDependency)
+            #expect(diagnostic.path == "definitions.Refines.dependencies.Missing")
+            #expect(diagnostic.sourceOffset == missingOffset)
+            let emitted = modelCompilationDiagnostic(diagnostic, in: model)
+            #expect(emitted.node.positionAfterSkippingLeadingTrivia.utf8Offset == missingOffset)
+        }
+    }
+
     @Test("Parameter and checking-register type errors point to their declarations")
     func typedInputErrorsPointToDeclarations() throws {
         for (input, name, path) in [

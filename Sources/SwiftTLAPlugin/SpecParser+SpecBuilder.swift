@@ -1295,6 +1295,12 @@ extension ParserSession {
             return
         }
         components.formalOperatorDefinitions.append(definition)
+        if let dependencies = call.arguments.first(where: { $0.label?.text == "dependsOn" })?.expression.as(ArrayExprSyntax.self) {
+            for element in dependencies.elements {
+                guard let target = element.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else { continue }
+                recordFormalDependency(named: name, target: target, at: element.expression)
+            }
+        }
     }
 
     func decodeFormalDefinition(

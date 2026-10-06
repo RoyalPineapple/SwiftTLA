@@ -11,6 +11,7 @@ final class ParserSession {
     var stateDeclarationOffsets: [String: [Int]] = [:]
     var actionDeclarationOffsets: [String: [Int]] = [:]
     var propertyDeclarationOffsets: [String: [Int]] = [:]
+    var formalDependencyOffsets: [String: [Int]] = [:]
 
     func recordStateDeclaration(named name: String, at binding: PatternBindingSyntax) {
         stateDeclarationOffsets[name, default: []].append(
@@ -79,6 +80,16 @@ final class ParserSession {
             guard key.hasPrefix("refinements."), let dot = key.lastIndex(of: ".") else { return nil }
             key = String(key[..<dot])
         }
+    }
+
+    func recordFormalDependency(named definition: String, target: String, at expression: ExprSyntax) {
+        formalDependencyOffsets["definitions.\(definition).dependencies.\(target)", default: []].append(
+            expression.positionAfterSkippingLeadingTrivia.utf8Offset)
+    }
+
+    func formalDependencyOffset(for diagnosticPath: String) -> Int? {
+        guard let offsets = formalDependencyOffsets[diagnosticPath], offsets.count == 1 else { return nil }
+        return offsets[0]
     }
 
     func symmetryDeclarationOffset(for diagnosticPath: String) -> Int? {
