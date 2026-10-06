@@ -97,6 +97,27 @@ struct EchoCorpusStateGraphTests {
         #expect(graph.safetyViolations.isEmpty)
     }
 
+    @Test("Echo rejects self-loop, asymmetric, and disconnected relations")
+    func rejectsInvalidRelations() throws {
+        let scenario = try #require(EchoModel.validationScenarios().first)
+        let complete = scenario.configuration.R
+        let selfLoop = complete.union([Pair<EchoModel.NodeID, EchoModel.NodeID>(first: .a, second: .a)])
+        let asymmetric = complete.subtracting([Pair<EchoModel.NodeID, EchoModel.NodeID>(first: .b, second: .a)])
+        let disconnected: Set<Pair<EchoModel.NodeID, EchoModel.NodeID>> = [
+            .init(first: .a, second: .b), .init(first: .b, second: .a)
+        ]
+        for relation in [selfLoop, asymmetric, disconnected] {
+            let configuration = try EchoModel.Configuration(
+                Node: scenario.configuration.Node, initiator: .a, R: relation
+            )
+            #expect(throws: ExplorationError.assumptionViolated) {
+                try ReachabilityGraph(
+                    initialMachines: EchoModel.initialMachines(configuration: configuration), maximumStates: 100
+                )
+            }
+        }
+    }
+
     @Test("Echo message projection preserves field names and enum wire values")
     func messageProjection() {
         let message = EchoModel.Message(kind: .acknowledgement, sndr: .b)
