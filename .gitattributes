@@ -14,3 +14,4 @@ Verification/FiniteGraph/fixtures/single-lane-bridge/* whitespace=-blank-at-eol,
 Verification/FiniteGraph/fixtures/cigarette-smokers/* whitespace=-blank-at-eol,-blank-at-eof
 Verification/FiniteGraph/fixtures/ewd840/EWD840.tla whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/ewd840/SequencesExt.tla whitespace=-blank-at-eol
+Verification/FiniteGraph/fixtures/echo/* whitespace=-blank-at-eol,-blank-at-eof

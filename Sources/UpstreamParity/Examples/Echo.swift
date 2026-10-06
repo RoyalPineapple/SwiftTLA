@@ -37,6 +37,8 @@ package struct EchoModel: Sendable {
     package static var spec: TLASpec {
         #spec("Echo") {
             Extends(.finiteSets)
+            let TypeOK = Invariant()
+            let AncestorProperties = Invariant()
             let Echo = Algorithm(scoped: { (scope: AlgorithmScope) in
                 let inbox: SharedVariable<[Node: Set<Message>]> = scope.sharedVar(initial: [
                     .a: Set<Message>(), .b: Set<Message>(), .c: Set<Message>()
@@ -93,9 +95,55 @@ package struct EchoModel: Sendable {
                             )))
                         }
                     }
+
+                    TypeOK {
+                        parent == OneOf<Node, NoNode>.second(NoNode.value)
+                            || Exists(in: Node.all) { node in
+                                parent == OneOf<Node, NoNode>.first(node)
+                            }
+                        children.isSubset(of: Node.all)
+                        rcvd >= 0 && rcvd <= nbrs.cardinality
+                        nbrs == Node.all.removing(selfID).assuming(Set<Node>.self)
+                        inbox.keys == Node.all.assuming(Set<Node>.self)
+                        ForAll(in: inbox[selfID]) { message in
+                            (message.kind == .message || message.kind == .acknowledgement)
+                                && Node.all.contains(message.sndr)
+                                && nbrs.contains(message.sndr)
+                        }
+                    }
+
+                    let parents = parent.family(for: Node.self)
+                    AncestorProperties {
+                        !ForAll(in: Node.all) { node in Finished(node) }
+                            || LetRec("ancestor", taking: Triple<Node, Node, Int>.self,
+                                { (ancestor: LocalRecursion<Triple<Node, Node, Int>, Bool>,
+                                   path: WithValue<Triple<Node, Node, Int>>) in
+                                    If(path.third() == 0, then: false, else:
+                                        parents[path.first()] == OneOf<Node, NoNode>.first(path.second())
+                                            || Exists(in: Node.all) { next in
+                                                parents[path.first()] == OneOf<Node, NoNode>.first(next)
+                                                    && ancestor(Triple<Node, Node, Int>.literal(
+                                                        next, path.second(), path.third() - 1))
+                                            })
+                                }, in: { ancestor in
+                                    ForAll(in: Node.all) { node in
+                                        node == Node.a || ancestor(Triple<Node, Node, Int>.literal(
+                                            node, Node.a, Node.all.cardinality))
+                                    }
+                                        && ForAll(in: Node.all) { node in
+                                            !ancestor(Triple<Node, Node, Int>.literal(
+                                                node, node, Node.all.cardinality))
+                                        }
+                                })
+                    }
                 })
             })
             Echo
+            let MCEcho = Validation {}
+                .expect(TypeOK, .satisfied)
+                .expect(AncestorProperties, .satisfied)
+                .expectDeadlock(.satisfied)
+            MCEcho
         }
     }
 }

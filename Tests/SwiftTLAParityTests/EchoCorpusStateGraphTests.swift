@@ -3,6 +3,20 @@ import Testing
 @testable import UpstreamParity
 
 struct EchoCorpusStateGraphTests {
+    @Test("MCEcho checks both published invariants and default deadlock over a complete graph")
+    func configuredChecking() throws {
+        let scenario = try #require(EchoModel.validationScenarios().first)
+        #expect(scenario.name == "MCEcho")
+        let run = try NativeScenarioRun(scenario, maximumStates: 1_000)
+        try run.validateExpectations()
+        #expect(run.coverage.coversCompleteScenario)
+        #expect(run.native.checks.properties["TypeOK"] == .satisfied)
+        #expect(run.native.checks.properties["AncestorProperties"] == .satisfied)
+        #expect(run.native.checks.properties.keys.contains { $0.hasPrefix("__pcal_assert_") })
+        #expect(run.native.checks.properties.values.allSatisfy { $0 == .satisfied })
+        #expect(run.native.checks.deadlock == .satisfied)
+    }
+
     @Test("Echo initial state preserves the upstream parent sentinel and neighbor domains")
     func initialStateMatchesUpstreamShape() throws {
         let machine = try #require(EchoModel.initialMachines().first)

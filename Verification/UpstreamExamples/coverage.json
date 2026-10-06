@@ -5392,27 +5392,27 @@
       "path": "specifications/echo",
       "name": "The Echo Algorithm",
       "audit": "partial source and configuration audit",
-      "gap": "The existing EchoModel is a bounded three-node source port, not a verified MCEcho configuration. The pinned MCEcho.cfg selects Node=N1, initiator=I1, R=R1, NoNode as a model value, TestSpec, TypeOK, and AncestorProperties. The Swift port substitutes parent=a for NoNode, sender for sndr, and received for rcvd; it computes neighbors instead of retaining nbrs and does not declare either configured invariant. Exact state/action projection, default deadlock behavior, the Relation dependency, model-owned validation, pinned reference inputs, and hosted complete graph/property evidence remain missing. A 75-state local count alone cannot establish upstream equivalence. The ordinary-message migration preserves this existing bounded port and adds no configuration credit.",
+      "gap": "Echo now has a bounded three-node MCEcho scenario with the upstream state shape, model-value NoNode, TypeOK, AncestorProperties, generated PlusCal assertions, and default deadlock checking. Its 75-state native/formal graph and configured native verdicts pass focused local diagnostics. The pinned MCEcho, Echo, and Relation inputs are registered for hosted comparison, but no generated-TLA/pinned-upstream or native/generated-TLA hosted graph and property evidence exists yet. The concrete initiator and relation bindings, action labels, exact state projection, and transitive-closure export remain subject to that independent comparison; do not count the configuration or family as verified.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/echo/Echo.tla",
           "role": "algorithm dependency",
-          "reason": "MCEcho extends this module. It owns the PlusCal algorithm, translated state, and the configured TypeOK and AncestorProperties invariants. The Swift source is only a partial port.",
-          "implementations": [],
+          "reason": "MCEcho extends this module. Echo owns the PlusCal algorithm, translated state, and the configured TypeOK and AncestorProperties invariants. The bounded Swift port is implemented locally but not hosted-verified.",
+          "implementations": ["Sources/UpstreamParity/Examples/Echo.swift"],
           "dispositionComplete": false
         },
         {
           "path": "specifications/echo/MCEcho.tla",
           "role": "configured root",
           "reason": "Published configuration binding.",
-          "implementations": [],
+          "implementations": ["Sources/UpstreamParity/Examples/Echo.swift"],
           "dispositionComplete": false
         },
         {
           "path": "specifications/echo/Relation.tla",
           "role": "helper dependency",
-          "reason": "Echo extends Relation and uses its relation predicates and transitive closure in assumptions and AncestorProperties. It is not an excluded model; its required semantics and export closure remain to be implemented and verified.",
+          "reason": "Echo extends Relation and uses its relation predicates and transitive closure in assumptions and AncestorProperties. The finite three-node relation and bounded reachability predicate are represented in the Swift scenario but require hosted semantic comparison; this helper is not an excluded model.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -5422,14 +5422,17 @@
           "module": "specifications/echo/MCEcho.tla",
           "configuration": "specifications/echo/MCEcho.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/Echo.swift", "scenario": "MCEcho", "caseID": "echo-mc"}],
           "evidence": []
         }
       ],
-      "partialCases": []
+      "partialCases": [{
+        "implementation": "Sources/UpstreamParity/Examples/Echo.swift",
+        "reason": "MCEcho is locally checked and registered with exact pinned inputs. Both hosted parity paths and a complete source-module audit remain open."
+      }]
     },
     {
       "path": "specifications/ewd426",
