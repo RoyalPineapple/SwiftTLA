@@ -121,6 +121,8 @@ extension ParserSession {
                 components.diagnostics.append(contentsOf: parsed.diagnostics)
                 if let validation = parsed.validationScenarios.first {
                     specBindings.validations[sourceName] = validation
+                    propertyDeclarationOffsets["validation.\(sourceName)", default: []].append(
+                        binding.pattern.positionAfterSkippingLeadingTrivia.utf8Offset)
                 }
             } else if compilerGrammarName(in: call.calledExpression) == "Macro" {
                 guard declaration.bindingSpecifier.text == "let",

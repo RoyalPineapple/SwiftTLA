@@ -496,6 +496,33 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("A missing scenario binding points to its Validation declaration")
+    func missingScenarioBindingPointsToDeclaration() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            static var spec: TLASpec {
+                #spec { scope in
+                    let limit = scope.parameter(as: Int.self, in: 0...3)
+                    let count = scope.sharedVar(initial: 0)
+                    let incomplete = Validation {}
+                    incomplete
+                }
+            }
+        }
+        """)
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let binding = try #require(Array(source.tokens(viewMode: .sourceAccurate))
+            .first { $0.text == "incomplete" })
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(declaration)
+            Issue.record("A required parameter binding must not be omitted")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path == "validation.incomplete")
+            #expect(diagnostic.sourceOffset == binding.positionAfterSkippingLeadingTrivia.utf8Offset)
+        }
+    }
+
     @Test("Unsupported scenario symmetry points to the selected handle")
     func temporalScenarioSymmetryPointsToSelection() throws {
         let source = Parser.parse(source: """
