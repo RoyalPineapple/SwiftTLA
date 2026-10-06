@@ -3,11 +3,24 @@ import Testing
 @testable import UpstreamParity
 
 struct EchoCorpusStateGraphTests {
+    @Test("Echo exports the connected-relation assumption with its generated machine")
+    func connectedRelationExport() throws {
+        let scenario = try #require(EchoModel.validationScenarios().first)
+        let exported = try EchoModel.render(configuration: scenario.configuration).plusCalBundle()
+        let assumptions = try #require(exported.root.tla.components(separatedBy: "(*--algorithm").first)
+        #expect(assumptions.contains("RECURSIVE"))
+        #expect(assumptions.contains("\\A from \\in Node : (\\A to \\in Node"))
+        #expect(exported.cfg.contains("CHECK_DEADLOCK TRUE"))
+    }
+
     @Test("MCEcho binds its initiator and checks every generated claim over a complete graph")
     func configuredChecking() throws {
         let scenario = try #require(EchoModel.validationScenarios().first)
         #expect(scenario.name == "MCEcho")
+        #expect(scenario.configuration.Node == Set<EchoModel.NodeID>([.a, .b, .c]))
         #expect(scenario.configuration.initiator == .a)
+        #expect(scenario.configuration.R.contains(.init(first: .a, second: .b)))
+        #expect(!scenario.configuration.R.contains(.init(first: .a, second: .a)))
         let run = try NativeScenarioRun(scenario, maximumStates: 1_000)
         try run.validateExpectations()
         #expect(run.coverage.coversCompleteScenario)
@@ -19,11 +32,23 @@ struct EchoCorpusStateGraphTests {
         let configuredGraph = try #require(run.native.graph?.graph)
         #expect(configuredGraph.states.count == 75)
         let alternate = try ReachabilityGraph(
-            initialMachines: EchoModel.initialMachines(configuration: .init(initiator: .b)),
+            initialMachines: EchoModel.initialMachines(configuration: .init(
+                Node: scenario.configuration.Node, initiator: .b, R: scenario.configuration.R)),
             maximumStates: 1_000
         )
         #expect(alternate.safetyViolations.isEmpty)
         #expect(try CanonicalGraph(alternate) != configuredGraph)
+        let chain: Set<Pair<EchoModel.NodeID, EchoModel.NodeID>> = [
+            .init(first: .a, second: .b), .init(first: .b, second: .a),
+            .init(first: .b, second: .c), .init(first: .c, second: .b)
+        ]
+        let alternateRelation = try ReachabilityGraph(
+            initialMachines: EchoModel.initialMachines(configuration: .init(
+                Node: scenario.configuration.Node, initiator: .a, R: chain)),
+            maximumStates: 1_000
+        )
+        #expect(alternateRelation.safetyViolations.isEmpty)
+        #expect(try CanonicalGraph(alternateRelation) != configuredGraph)
     }
 
     @Test("Echo initial state preserves the upstream parent sentinel and neighbor domains")
