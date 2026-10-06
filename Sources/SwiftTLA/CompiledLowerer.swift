@@ -459,6 +459,11 @@ struct CompiledLowerer {
                   scenario.symmetrySelections.count <= 1 else {
                 throw invalid(scenario.name, "duplicate check selection")
             }
+            if let mode = scenario.checkingModeSelections.first,
+               case .simulation(let traces, let maximumDepth) = mode,
+               (traces <= 0 || maximumDepth <= 0) {
+                throw invalid(scenario.name, "simulation traces and maximumDepth must be positive")
+            }
             let fairnessProfileIndex = try scenario.fairnessProfileSelections.first.map { selected in
                 guard let index = spec.fairnessProfiles.firstIndex(where: { $0.reference == selected }) else {
                     throw invalid(scenario.name, "foreign or unregistered fairness profile")
@@ -491,6 +496,18 @@ struct CompiledLowerer {
             let checks = Set(properties.filter { property in
                 selectedReferences.map { selected in property.reference.map(selected.contains) ?? false } ?? true
             }.map(\.id))
+            if let mode = scenario.checkingModeSelections.first, case .simulation = mode {
+                let unsupported = properties.filter {
+                    checks.contains($0.id) && $0.declaration.kind != .invariant
+                }.map(\.declaration.name)
+                guard unsupported.isEmpty else {
+                    throw invalid(scenario.name, "simulation supports selected invariants only: \(unsupported.sorted().joined(separator: ", "))")
+                }
+                guard scenario.expectations.allSatisfy({ $0.expected == .violated }),
+                      scenario.deadlockExpectations.allSatisfy({ $0 == .violated }) else {
+                    throw invalid(scenario.name, "simulation cannot establish a satisfied expectation")
+                }
+            }
             if selectedSymmetry != nil {
                 let unsupported = properties.filter {
                     checks.contains($0.id) && ($0.declaration.kind == .temporalProperty || $0.declaration.kind == .refinement)

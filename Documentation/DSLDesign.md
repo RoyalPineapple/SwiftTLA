@@ -1236,6 +1236,17 @@ upstream check stops at its first safety counterexample declares
 `.checkingMode(.decisiveCounterexample)`. This changes the checking run, not
 the generated machine or TLA+ model. A decisive result requires a selected
 witness and never claims complete graph or unresolved deadlock parity.
+For bounded sampling, a scenario declares
+`.simulating(traces: 100, maximumDepth: 100)`; `maximumDepth` defaults to 100.
+Both bounds must be positive. Sampling uses the generated machine and selected
+invariants or deadlock check; selected temporal, reachability, or refinement
+checks and satisfied expectations are invalid. A sampled counterexample is a
+violation with a witness; finishing
+the traces without one is inconclusive, not satisfaction or complete-graph
+evidence. Simulation does not change the generated TLA+ model. The TLC adapter
+must request the same bounds independently, and validation infrastructure must
+verify each reported witness before claiming parity. Until that evidence path
+exists, simulation cases are excluded from admission, not run as exhaustive checks.
 The native validator runs against the generated machine and records its states,
 transitions, and selected check outcomes without invoking TLC or rendering TLA+.
 Separately, TLC checks the generated TLA+ bundle. The two reports must agree on

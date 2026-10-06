@@ -40,6 +40,9 @@ package enum NativeValidationRunner {
     package static func run<Scenario: ModelValidationScenario>(
         scenario: Scenario, caseID: String, maximumStates: Int, to directory: URL
     ) throws -> NativeValidationReport {
+        if case .simulation = scenario.checkingMode {
+            throw NativeValidationRunnerError.unavailable("simulation evidence mode")
+        }
         let names = scenario.formalPropertyNames
         guard names == Scenario.Machine.formalPropertyNames,
               Set(names.keys) == Set(Scenario.Property.allCases),

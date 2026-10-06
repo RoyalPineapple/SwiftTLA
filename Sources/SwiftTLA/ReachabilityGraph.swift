@@ -59,6 +59,7 @@ public enum ExplorationError: Error, Equatable, Sendable {
     case invalidStateLimit(Int)
     case invalidSimulationDepth(Int)
     case invalidSimulationTraceCount(Int)
+    case simulationNotConfigured
     case stateLimitExceeded(Int)
     case levelOverflow
     case noInitialStates

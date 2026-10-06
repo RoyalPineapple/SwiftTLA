@@ -70,6 +70,13 @@ package struct EWD840AnimationModel: Sendable {
             let terminationDetected = tpos == 0 && tcolor == Color.white
                 && color[0] == Color.white && !active[0]
             AnimInv { !terminationDetected || scope.checkingLevel < 20 }
+
+            let EWD840_anim = Validation { Bind(N, to: 9) }
+                .checking(only: [AnimInv])
+                .checkingDeadlock(false)
+                .simulating(traces: 100)
+                .expect(AnimInv, .violated)
+            EWD840_anim
         }
     }
 }

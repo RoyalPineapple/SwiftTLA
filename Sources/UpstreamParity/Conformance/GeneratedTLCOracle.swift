@@ -26,6 +26,7 @@ package enum GeneratedTLCOracle {
     package static func cacheKey<Scenario: ModelValidationScenario>(
         scenario: Scenario, id: String, maximumStates: Int, pin: TLCReferencePin
     ) throws -> String {
+        if case .simulation = scenario.checkingMode { throw Error.invalidOutcome("simulation evidence mode") }
         let rendered = try scenario.render()
         let names = scenario.formalPropertyNames
         let selected = try Set(scenario.checking.properties.map { property -> String in
@@ -91,6 +92,7 @@ package enum GeneratedTLCOracle {
         tools: ResolvedTLCToolchain, pin: TLCReferencePin, to directory: URL,
         process: TLCProcessAdapter = TLCProcessAdapter()
     ) throws -> GeneratedTLCOracleReport {
+        if case .simulation = scenario.checkingMode { throw Error.invalidOutcome("simulation evidence mode") }
         let rendered = try scenario.render()
         let names = scenario.formalPropertyNames
         let selected = try Set(scenario.checking.properties.map { property -> String in

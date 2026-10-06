@@ -50,12 +50,18 @@ extension NativeSwiftEmitter {
             let profileName = scenario.fairnessProfileIndex.map {
                 String(reflecting: program.behavior.fairnessProfiles[$0].name)
             } ?? "nil"
+            let checkingMode = switch scenario.checkingMode {
+            case .exhaustive: ".exhaustive"
+            case .decisiveCounterexample: ".decisiveCounterexample"
+            case .simulation(let traces, let maximumDepth):
+                ".simulation(traces: \(traces), maximumDepth: \(maximumDepth))"
+            }
             scenarios.append("""
             ValidationScenario(name: \(String(reflecting: scenario.name)),
                 displayName: \(String(reflecting: scenario.displayLabel ?? scenario.name)),
                 \(hasConfiguration ? "configuration: try Configuration(\(bindings))," : "")
                 checking: ModelChecks(properties: [\(selected.map { ".\($0.1)" }.joined(separator: ", "))], checkDeadlock: \(scenario.checkDeadlock)),
-                checkingMode: .\(scenario.checkingMode.rawValue),
+                checkingMode: \(checkingMode),
                 behavior: .\(scenario.behavior.rawValue),
                 selectedSymmetry: \(symmetry),
                 selectedFairnessProfile: \(scenario.fairnessProfileIndex.map(String.init) ?? "nil"),

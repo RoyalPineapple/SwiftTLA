@@ -3,6 +3,20 @@ import SwiftTLA
 import UpstreamParity
 
 struct EWD840AnimationCorpusExecutionTests {
+    @Test("animated upstream configuration remains model-owned and bounded")
+    func simulationConfiguration() throws {
+        let scenario = try #require(EWD840AnimationModel.validationScenarios().first)
+        #expect(scenario.name == "EWD840_anim")
+        #expect(scenario.configuration.N == 9)
+        #expect(scenario.checkingMode == .simulation(traces: 100, maximumDepth: 100))
+        #expect(scenario.checking.properties == [.AnimInv])
+        #expect(!scenario.checking.checkDeadlock)
+        let rendered = try scenario.render()
+        #expect(rendered.tlaBundle.cfg.contains("N = 9"))
+        #expect(rendered.checkNames == ["AnimInv"])
+        #expect(!rendered.checksDeadlock)
+    }
+
     @Test("animated steps preserve typed history and render the level check")
     func generatedHistoryAndCheck() throws {
         let configuration = try EWD840AnimationModel.Configuration(N: 2)

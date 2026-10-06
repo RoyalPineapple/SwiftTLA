@@ -95,4 +95,18 @@ struct SimulationCheckingTests {
                 traceCount: 0, checking: checking, using: &generator)
         }
     }
+
+    @Test("model-owned simulation settings drive generated-machine sampling")
+    func configuredScenarioSamplesRequestedTraces() throws {
+        let scenario = try #require(LaterTraceSafetySimulationModel.validationScenarios().first)
+        #expect(scenario.checkingMode == .simulation(traces: 2, maximumDepth: 2))
+        var generator = LaterTraceCandidateGenerator()
+        let result = try scenario.simulate(using: &generator)
+        guard case .counterexample(let witness) = result else {
+            Issue.record("The configured second trace must expose its counterexample")
+            return
+        }
+        #expect(witness.violations == [.invariant(.NonNegative)])
+        #expect(witness.trace.map { $0.state.state.value } == [2, 1, -1])
+    }
 }

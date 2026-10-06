@@ -63,7 +63,11 @@ struct LaterTraceSafetySimulationModel {
                     Assign(value, to: If(value == 2, then: choice, else: -1))
                 }
             }
-            Invariant("NonNegative") { value >= 0 && scope.checkingLevel <= 3 }
+            let NonNegative = Invariant()
+            NonNegative { value >= 0 && scope.checkingLevel <= 3 }
+            let sampled = Validation {}.checking(only: [NonNegative])
+                .checkingDeadlock(false).simulating(traces: 2, maximumDepth: 2)
+            sampled
         }
     }
 }

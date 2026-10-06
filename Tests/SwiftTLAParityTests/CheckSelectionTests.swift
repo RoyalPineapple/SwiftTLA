@@ -66,7 +66,7 @@ struct CheckSelectionTests {
         }
     }
 
-    @Test("invalid selection, mode, and expectations for disabled checks fail compilation", arguments: 0..<7)
+    @Test("invalid selection, mode, and expectations for disabled checks fail compilation", arguments: 0..<10)
     func rejectsInvalidSelection(variant: Int) throws {
         var spec = SelectedChecksModel.spec
         var scenario = try #require(spec.validationScenarios[1...].first)
@@ -78,7 +78,13 @@ struct CheckSelectionTests {
         case 3: scenario.propertySelections = [[.init(name: "Safe")]]
         case 4: scenario.deadlockExpectations = [.violated]
         case 5: scenario.checkingModeSelections = [.exhaustive, .decisiveCounterexample]
-        default: scenario.expectations = [(try #require(spec.invariants[1].reference), .violated)]
+        case 6: scenario.expectations = [(try #require(spec.invariants[1].reference), .violated)]
+        case 7: scenario.checkingModeSelections = [.simulation(traces: 0, maximumDepth: 100)]
+        case 8: scenario.checkingModeSelections = [.simulation(traces: 1, maximumDepth: 1)]
+        default:
+            scenario.propertySelections = [[try #require(spec.invariants[0].reference)]]
+            scenario.checkingModeSelections = [.simulation(traces: 1, maximumDepth: 1)]
+            scenario.expectations = [(try #require(spec.invariants[0].reference), .satisfied)]
         }
         spec.validationScenarios = [scenario]
         #expect(throws: CompilationDiagnostic.self) { try spec.compile() }

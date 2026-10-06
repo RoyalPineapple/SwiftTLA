@@ -48,9 +48,18 @@ public enum ValidationExpectation: String, Sendable, Codable {
     case violated
 }
 
-public enum ValidationCheckingMode: String, Sendable, Codable {
+public enum ValidationCheckingMode: Equatable, Sendable, Codable {
     case exhaustive
     case decisiveCounterexample
+    case simulation(traces: Int, maximumDepth: Int)
+
+    public var rawValue: String {
+        switch self {
+        case .exhaustive: "exhaustive"
+        case .decisiveCounterexample: "decisiveCounterexample"
+        case .simulation(let traces, let maximumDepth): "simulation:\(traces):\(maximumDepth)"
+        }
+    }
 }
 
 public struct FairnessProfileReference: Hashable, Sendable {
@@ -147,6 +156,15 @@ extension ModelValidationScenario {
         try MachineSimulator.run(initialMachines: initialMachines(), maximumDepth: maximumDepth, traceCount: traceCount,
                                  checking: checking, using: &generator)
     }
+
+    public func simulate<Generator: RandomNumberGenerator>(
+        using generator: inout Generator
+    ) throws -> NativeSimulationResult<Machine> {
+        guard case .simulation(let traces, let maximumDepth) = checkingMode else {
+            throw ExplorationError.simulationNotConfigured
+        }
+        return try simulate(maximumDepth: maximumDepth, traceCount: traces, using: &generator)
+    }
 }
 
 public struct ValidationBinding: Sendable {
@@ -226,6 +244,10 @@ public struct ValidationDeclaration: SpecComponent {
         var copy = self
         copy.checkingModeSelections.append(mode)
         return copy
+    }
+
+    public func simulating(traces: Int, maximumDepth: Int = 100) -> Self {
+        checkingMode(.simulation(traces: traces, maximumDepth: maximumDepth))
     }
 
     public func usingSymmetry(_ symmetry: SymmetrySetDecl) -> Self {

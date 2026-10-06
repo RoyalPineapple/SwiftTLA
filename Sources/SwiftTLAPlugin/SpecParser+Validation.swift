@@ -5,7 +5,7 @@ extension ParserSession {
     func validationRoot(_ call: FunctionCallExprSyntax) -> FunctionCallExprSyntax? {
         var root = call
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
-              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "behavior", "usingSymmetry", "usingFairness"].contains(member.declName.baseName.sourceIdentifierName),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "simulating", "behavior", "usingSymmetry", "usingFairness"].contains(member.declName.baseName.sourceIdentifierName),
               let base = member.base?.as(FunctionCallExprSyntax.self) {
             root = base
         }
@@ -17,7 +17,7 @@ extension ParserSession {
         var root = call
         var overrides: [FunctionCallExprSyntax] = []
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
-              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "behavior", "usingSymmetry", "usingFairness"].contains(member.declName.baseName.sourceIdentifierName),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "simulating", "behavior", "usingSymmetry", "usingFairness"].contains(member.declName.baseName.sourceIdentifierName),
               let base = member.base?.as(FunctionCallExprSyntax.self) {
             overrides.append(root)
             root = base
@@ -82,11 +82,33 @@ extension ParserSession {
                     }
                     if member.declName.baseName.sourceIdentifierName == "checkingMode" {
                         guard override.arguments.count == 1,
-                              let value = override.arguments.first?.expression.as(MemberAccessExprSyntax.self),
-                              let mode = ValidationCheckingMode(rawValue: value.declName.baseName.sourceIdentifierName) else {
+                              let value = override.arguments.first?.expression.as(MemberAccessExprSyntax.self) else {
                             throw SourceParseDiagnostic(message: "Checking mode requires .exhaustive or .decisiveCounterexample.", source: override)
                         }
+                        let mode: ValidationCheckingMode
+                        switch value.declName.baseName.sourceIdentifierName {
+                        case "exhaustive": mode = .exhaustive
+                        case "decisiveCounterexample": mode = .decisiveCounterexample
+                        default: throw SourceParseDiagnostic(message: "Checking mode requires .exhaustive or .decisiveCounterexample.", source: override)
+                        }
                         scenario.checkingModeSelections.append(mode)
+                        continue
+                    }
+                    if member.declName.baseName.sourceIdentifierName == "simulating" {
+                        let arguments = Array(override.arguments)
+                        guard (1...2).contains(arguments.count),
+                              arguments[0].label?.text == "traces",
+                              let traces = SourceIntegerLiteral.value(arguments[0].expression),
+                              arguments.count == 1 || arguments[1].label?.text == "maximumDepth" else {
+                            throw SourceParseDiagnostic(message: "Simulation requires simulating(traces: positiveInt, maximumDepth: positiveInt).", source: override)
+                        }
+                        let maximumDepth = arguments.count == 2
+                            ? SourceIntegerLiteral.value(arguments[1].expression) : 100
+                        guard let maximumDepth, traces > 0, maximumDepth > 0 else {
+                            throw SourceParseDiagnostic(message: "Simulation trace count and maximum depth must be positive integer literals.", source: override)
+                        }
+                        scenario.checkingModeSelections.append(.simulation(
+                            traces: traces, maximumDepth: maximumDepth))
                         continue
                     }
                     if member.declName.baseName.sourceIdentifierName == "checking" {
