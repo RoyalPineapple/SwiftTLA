@@ -4993,15 +4993,15 @@
       "path": "specifications/dijkstra-mutex",
       "name": "Dijkstra's Mutual Exclusion Algorithm",
       "audit": "reference inputs audited",
-      "gap": "On frozen SHA 04a38db6, Liveness3Processors has complete exact native/generated-TLA and generated-TLA/pinned-upstream graph and selected-check parity. Safety4Processors has complete exact native/generated-TLA parity at 33,288,512 states and 146,157,712 labeled edges; its generated-TLA/pinned-upstream job is still running. The pinned standalone source differs from the configured dependencies only in comments, and no superseded Dijkstra caller remains. Do not credit the four-processor configuration or the family until its remaining hosted path and module dispositions are reconciled.",
+      "gap": "None for this family at 033c3c42. Both published configurations have complete exact native/generated-TLA and generated-TLA/pinned-upstream graph and selected-check parity. The pinned standalone source differs from the configured dependencies only in comments, and no superseded Dijkstra caller remains. The full validation run failed in unrelated EWD840 animation; it is not an admitted full-corpus revision.",
       "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.tla",
           "role": "algorithm source",
-          "reason": "Defines the 13 labeled actions, Spec, LSpec, MutualExclusion, DeadlockFree, StarvationFree, and DeadlockFreedom. The Toolbox copies differ only in comments. Both fairness behaviors and all three temporal property declarations render locally; hosted parity remains unresolved.",
+          "reason": "Defines the 13 labeled actions, Spec, LSpec, MutualExclusion, DeadlockFree, StarvationFree, and DeadlockFreedom. The Toolbox copies differ only in comments. Both configured fairness profiles have hosted complete graph and selected-verdict parity; the other declared temporal properties are not selected by the published configurations.",
           "implementations": ["Sources/UpstreamParity/Examples/DijkstraMutex.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/LSpec-model/DijkstraMutex.tla",
@@ -5020,16 +5020,16 @@
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/DijkstraMutex.tla",
           "role": "behavior dependency",
-          "reason": "This snapshot has the same blob as the LSpec-model dependency. Its adjacent MC wrapper selects Spec, which retains weak fairness at ncs.",
+          "reason": "This snapshot has the same blob as the LSpec-model dependency. Its adjacent MC wrapper selects Spec, which retains weak fairness at ncs. Both independent hosted parity paths are exact for that configuration on 033c3c42.",
           "implementations": ["Sources/UpstreamParity/Examples/DijkstraMutex.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/MC.tla",
           "role": "configured root",
-          "reason": "The wrapper selects Proc={p1,p2,p3,p4}, Spec, and MutualExclusion. The configuration uses opaque model values and defaultInitValue, selects no temporal property, and does not disable TLC deadlock checks. The Swift model accepts this population, but its complete graph and selected outcomes remain unchecked against upstream.",
+          "reason": "The wrapper selects Proc={p1,p2,p3,p4}, Spec, and MutualExclusion. The configuration uses opaque model values and defaultInitValue, selects no temporal property, and does not disable TLC deadlock checks. Both independent hosted parity paths match its complete graph, MutualExclusion, and default deadlock verdict on 033c3c42.",
           "implementations": ["Sources/UpstreamParity/Examples/DijkstraMutex.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -5059,19 +5059,26 @@
           "module": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/MC.tla",
           "configuration": "specifications/dijkstra-mutex/DijkstraMutex.toolbox/Safety-4-processors/MC.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "033c3c4225f0b9d88582aebb11806ea15a009bd5",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{"file": "Sources/UpstreamParity/Examples/DijkstraMutex.swift", "scenario": "Safety4Processors", "caseID": "dijkstra-mutex-0"}],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "033c3c4225f0b9d88582aebb11806ea15a009bd5",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37528759113",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37528759113/artifacts/11451013014",
+            "artifactDigest": "sha256:c7e18fb6dbc60ffa567deb3507d135e493180eab673518140a4c770629f53040",
+            "pairedArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37528759113/artifacts/11450141535",
+            "pairedArtifactDigest": "sha256:de298d2f56e9d12994cf72aa0d4bdafbdb55d7682225ab5263cb14307e37197b",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Both hosted case jobs succeeded with exact complete graph comparison on the same source SHA. The native graph has 33,288,512 states and 146,157,712 labeled edges. Native/generated-TLC and generated-TLA/pinned-upstream comparisons agree on the selected MutualExclusion property and default TLC deadlock check; this published safety configuration selects no temporal property. Ordinary CI passed on the same SHA. The aggregate validation admission failed in unrelated EWD840 animation, so this is family-specific evidence, not a green full-corpus claim."
+          }]
         }
       ],
-      "partialCases": [
-        {
-          "implementation": "Sources/UpstreamParity/Examples/DijkstraMutex.swift",
-          "reason": "The three-processor configuration is hosted-matched on 04a38db6. The four-processor native/generated-TLC path is exact with complete graph, MutualExclusion, and deadlock parity on that SHA, but generated-TLA/pinned-upstream TLC is still running. Keep family and four-processor completion open until that path and source-module disposition are audited."
-        }
-      ]
+      "partialCases": []
     },
     {
       "path": "specifications/DiningPhilosophers",
