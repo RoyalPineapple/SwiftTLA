@@ -3,10 +3,11 @@ import Testing
 @testable import UpstreamParity
 
 struct EchoCorpusStateGraphTests {
-    @Test("MCEcho checks both published invariants and default deadlock over a complete graph")
+    @Test("MCEcho binds its initiator and checks every generated claim over a complete graph")
     func configuredChecking() throws {
         let scenario = try #require(EchoModel.validationScenarios().first)
         #expect(scenario.name == "MCEcho")
+        #expect(scenario.configuration.initiator == .a)
         let run = try NativeScenarioRun(scenario, maximumStates: 1_000)
         try run.validateExpectations()
         #expect(run.coverage.coversCompleteScenario)
@@ -15,11 +16,20 @@ struct EchoCorpusStateGraphTests {
         #expect(run.native.checks.properties.keys.contains { $0.hasPrefix("__pcal_assert_") })
         #expect(run.native.checks.properties.values.allSatisfy { $0 == .satisfied })
         #expect(run.native.checks.deadlock == .satisfied)
+        let configuredGraph = try #require(run.native.graph?.graph)
+        #expect(configuredGraph.states.count == 75)
+        let alternate = try ReachabilityGraph(
+            initialMachines: EchoModel.initialMachines(configuration: .init(initiator: .b)),
+            maximumStates: 1_000
+        )
+        #expect(alternate.safetyViolations.isEmpty)
+        #expect(try CanonicalGraph(alternate) != configuredGraph)
     }
 
     @Test("Echo initial state preserves the upstream parent sentinel and neighbor domains")
     func initialStateMatchesUpstreamShape() throws {
-        let machine = try #require(EchoModel.initialMachines().first)
+        let scenario = try #require(EchoModel.validationScenarios().first)
+        let machine = try #require(EchoModel.initialMachines(configuration: scenario.configuration).first)
         let state = try machine.formalProjection(of: machine.snapshot)
         let parent = try #require(TLAStateProjection.Token(validating: "parent"))
         let rcvd = try #require(TLAStateProjection.Token(validating: "rcvd"))
@@ -37,24 +47,6 @@ struct EchoCorpusStateGraphTests {
             .string("b"): .set([.string("a"), .string("c")]),
             .string("c"): .set([.string("a"), .string("b")])
         ]))
-    }
-
-    @Test("Echo ordinary messages preserve the complete three-node formal graph")
-    func nativeGraphMatchesFormalGraph() throws {
-        let compilation = try EchoModel.spec.compile()
-        let exploration = try ModelChecker(
-            compilation: compilation,
-            configuration: .init(maximumStateLimit: 1_000, symmetryReduction: .disabled)
-        ).explore()
-        try #require(exploration.isComplete)
-        #expect(exploration.graph.states.count == 75)
-        let native = try ReachabilityGraph(
-            initialMachines: EchoModel.initialMachines(), maximumStates: 1_000
-        )
-        #expect(native.safetyViolations.isEmpty)
-        let exported = try CanonicalGraph(native)
-        let formal = try FormalGraphExporter().export(exploration)
-        #expect(exported == formal.graph)
     }
 
     @Test("Echo message projection preserves field names and enum wire values")

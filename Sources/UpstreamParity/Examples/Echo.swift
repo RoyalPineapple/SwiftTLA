@@ -35,8 +35,9 @@ package struct EchoModel: Sendable {
     }
 
     package static var spec: TLASpec {
-        #spec("Echo") {
+        #spec("Echo") { (spec: SpecificationScope) in
             Extends(.finiteSets)
+            let initiator = spec.parameter(as: Node.self, in: Node.all)
             let TypeOK = Invariant()
             let AncestorProperties = Invariant()
             let Echo = Algorithm(scoped: { (scope: AlgorithmScope) in
@@ -55,7 +56,7 @@ package struct EchoModel: Sendable {
                     )
 
                     Do(Step.n0) {
-                        If(selfID == .a) {
+                        If(selfID == initiator) {
                             Assign(inbox, to: Dictionary<Node, Set<Message>>.mapping(over: Node.all) { (destination: WithValue<Node>) -> Expr<Set<Message>> in
                                 If(nbrs.expr.contains(destination),
                                    then: inbox[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
@@ -67,7 +68,7 @@ package struct EchoModel: Sendable {
                     While(Step.n1, rcvd.expr < nbrs.expr.cardinality) {
                         With(inbox[selfID]) { (message: WithValue<Message>) in
                             Let(inbox.updating(selfID, to: inbox[selfID].removing(message))) { (networkAfterReceive: WithValue<[Node: Set<Message>]>) in
-                                If(selfID != .a && rcvd.expr == 0) {
+                                If(selfID != initiator && rcvd.expr == 0) {
                                     Assert(message.kind == .message)
                                     Assign(parent, to: OneOf<Node, NoNode>.first(message.sndr))
                                     Assign(inbox, to: Dictionary<Node, Set<Message>>.mapping(over: Node.all) { (destination: WithValue<Node>) -> Expr<Set<Message>> in
@@ -87,7 +88,7 @@ package struct EchoModel: Sendable {
                     }
 
                     Do(Step.n2) {
-                        If(selfID != .a) {
+                        If(selfID != initiator) {
                             let destination = parent.expr.assuming(Node.self)
                             Assert(nbrs.expr.contains(destination))
                             Assign(inbox, to: inbox.updating(destination, to: inbox[destination].inserting(
@@ -127,8 +128,8 @@ package struct EchoModel: Sendable {
                                             })
                                 }, in: { ancestor in
                                     ForAll(in: Node.all) { node in
-                                        node == Node.a || ancestor(Triple<Node, Node, Int>.literal(
-                                            node, Node.a, Node.all.cardinality))
+                                        node == initiator || ancestor(Triple<Node, Node, Int>.literal(
+                                            node, initiator, Node.all.cardinality))
                                     }
                                         && ForAll(in: Node.all) { node in
                                             !ancestor(Triple<Node, Node, Int>.literal(
@@ -139,7 +140,7 @@ package struct EchoModel: Sendable {
                 })
             })
             Echo
-            let MCEcho = Validation {}
+            let MCEcho = Validation { Bind(initiator, to: Node.a) }
                 .expect(TypeOK, .satisfied)
                 .expect(AncestorProperties, .satisfied)
                 .expectDeadlock(.satisfied)
