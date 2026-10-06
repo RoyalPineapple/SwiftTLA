@@ -816,7 +816,7 @@ extension ParserSession {
            let base = member.base,
            let type = typedFacadeType(base) {
             switch (type.name, member.declName.baseName.sourceIdentifierName) {
-            case ("SetExpr", "literal"), ("TupleExpr", "literal"), ("Pair", "literal"),
+            case ("SetExpr", "literal"), ("TupleExpr", "literal"), ("Pair", "literal"), ("Triple", "literal"),
                  ("Record", "literal"), ("Function", "literal"), ("PartialFunction", "literal"),
                  ("ZeroBasedSequence", "literal"), ("ZeroBasedSequence", "filled"), ("Function", "mapping"),
                  ("Dictionary", "mapping"):

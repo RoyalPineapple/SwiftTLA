@@ -443,6 +443,67 @@ public struct Pair<First: TLAValueType, Second: TLAValueType>: TLAValueType, Has
 
 extension Pair: FormalTupleValue {}
 
+/// A typed three-member TLA+ tuple with independently typed positions.
+public struct Triple<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>: TLAValueType, Hashable, Sendable {
+  public static var formalValueShape: FormalValueShape {
+    .tuple([First.formalValueShape, Second.formalValueShape, Third.formalValueShape])
+  }
+  public let first: First
+  public let second: Second
+  public let third: Third
+
+  public init(first: First = .defaultValue, second: Second = .defaultValue, third: Third = .defaultValue) {
+    self.first = first
+    self.second = second
+    self.third = third
+  }
+
+  public init?(formalValue: TLAValue) {
+    guard case .tuple(let values) = formalValue,
+          values.count == 3,
+          let first = First(formalValue: values[0]),
+          let second = Second(formalValue: values[1]),
+          let third = Third(formalValue: values[2]),
+          first.sourceIssue == nil, second.sourceIssue == nil, third.sourceIssue == nil
+    else { return nil }
+    self.first = first
+    self.second = second
+    self.third = third
+  }
+
+  public var sourceIssue: SourceModelIssue? { first.sourceIssue ?? second.sourceIssue ?? third.sourceIssue }
+  public var tlaValue: TLAValue { .tuple([first.tlaValue, second.tlaValue, third.tlaValue]) }
+  public static var defaultValue: Self { Self() }
+
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.sourceIssue == rhs.sourceIssue && lhs.tlaValue == rhs.tlaValue
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(sourceIssue)
+    hasher.combine(tlaValue)
+  }
+
+  public static func literal(_ first: First, _ second: Second, _ third: Third) -> Expr<Self> {
+    Expr(.tupleLiteral([first.stateExpr, second.stateExpr, third.stateExpr]))
+  }
+
+  public static func literal(
+    _ first: some TypedExpression<First>, _ second: some TypedExpression<Second>,
+    _ third: some TypedExpression<Third>
+  ) -> Expr<Self> {
+    Expr(.tupleLiteral([first.stateExpr, second.stateExpr, third.stateExpr]))
+  }
+
+  public static func literal(
+    _ first: some TypedExpression<First>, _ second: some TypedExpression<Second>, _ third: Third
+  ) -> Expr<Self> {
+    Expr(.tupleLiteral([first.stateExpr, second.stateExpr, third.stateExpr]))
+  }
+}
+
+extension Triple: FormalTupleValue {}
+
 /// A finite formal sequence whose first element is at index zero.
 ///
 /// TLA+ represents this value as a function with domain `0..<(count)` for
@@ -915,6 +976,21 @@ extension TypedExpression where ExpressionValue: FormalTupleValue {
   public func second<First: TLAValueType, Second: TLAValueType>() -> Expr<Second>
   where ExpressionValue == Pair<First, Second> {
     Expr<Second>(.tupleAccess(stateExpr, 2))
+  }
+
+  public func first<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>() -> Expr<First>
+  where ExpressionValue == Triple<First, Second, Third> {
+    Expr<First>(.tupleAccess(stateExpr, 1))
+  }
+
+  public func second<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>() -> Expr<Second>
+  where ExpressionValue == Triple<First, Second, Third> {
+    Expr<Second>(.tupleAccess(stateExpr, 2))
+  }
+
+  public func third<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>() -> Expr<Third>
+  where ExpressionValue == Triple<First, Second, Third> {
+    Expr<Third>(.tupleAccess(stateExpr, 3))
   }
 
   public var count: Expr<Int> {

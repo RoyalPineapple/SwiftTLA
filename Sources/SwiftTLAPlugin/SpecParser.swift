@@ -938,6 +938,7 @@ final class ParserSession {
             switch access.declName.baseName.sourceIdentifierName {
             case "first": return .tupleAccess(base, 1)
             case "second": return .tupleAccess(base, 2)
+            case "third": return .tupleAccess(base, 3)
             case "head": return .tupleHead(base)
             case "tail": return .tupleTail(base)
             default: break
@@ -1080,25 +1081,24 @@ final class ParserSession {
                 arguments.map(FormalCallArgument.value)
             ), call: call)
         }
-        // `Pair(first:second:)` and `Pair.literal(_, _)` are normally
-        // inferred from an enclosing `SetExpr<Pair<...>>`, so SwiftSyntax
+        // Heterogeneous tuple constructors are normally inferred from an enclosing set, so SwiftSyntax
         // sees neither spelling with its generic arguments.
         if let call = expression.as(FunctionCallExprSyntax.self),
-           let pairCall = pairCallKind(call),
-           call.arguments.count == 2,
-           let firstSyntax = pairCall == .initializer
-                ? call.arguments.first(where: { $0.label?.text == "first" })?.expression
-                : call.arguments.first?.expression,
-           let secondSyntax = pairCall == .initializer
-                ? call.arguments.first(where: { $0.label?.text == "second" })?.expression
-                : call.arguments.dropFirst().first?.expression,
-           let first = decodeTypedFacadeValue(firstSyntax, scope: scope),
-           let second = decodeTypedFacadeValue(secondSyntax, scope: scope) {
-            if case .value(let firstValue) = first,
-               case .value(let secondValue) = second {
-                return .value(.tuple([firstValue, secondValue]))
+           let tupleCall = tupleCallKind(call),
+           call.arguments.count == tupleCall.labels.count {
+            let expressions = tupleCall.initializer
+                ? tupleCall.labels.compactMap { label in
+                    call.arguments.first(where: { $0.label?.text == label })?.expression
+                }
+                : call.arguments.map(\.expression)
+            guard expressions.count == tupleCall.labels.count else { return nil }
+            let values = expressions.compactMap { decodeTypedFacadeValue($0, scope: scope) }
+            guard values.count == expressions.count else { return nil }
+            let literals = values.compactMap { value -> TLAValue? in
+                if case .value(let literal) = value { return literal }
+                return nil
             }
-            return .tupleLiteral([first, second])
+            return literals.count == values.count ? .value(.tuple(literals)) : .tupleLiteral(values)
         }
         // `If` is a freestanding Swift-shaped formal value constructor. Parse
         // it here, before falling back to the untyped decoder, so a value
@@ -1275,24 +1275,18 @@ final class ParserSession {
                     elements.append(element)
                 }
                 return literalType.name == "TupleExpr" ? .tupleLiteral(elements) : formalZeroBasedSequence(elements)
-            case "Pair":
-                guard call.arguments.count == 2,
-                      let first = decodeTypedFacadeValue(
-                        call.arguments[call.arguments.startIndex].expression,
-                        scope: scope
-                      ),
-                      let second = decodeTypedFacadeValue(
-                        call.arguments[call.arguments.index(after: call.arguments.startIndex)].expression,
-                        scope: scope
-                      )
-                else { return nil }
-                let pair = StateExpr.tupleLiteral([first, second])
+            case "Pair", "Triple":
+                let count = literalType.name == "Pair" ? 2 : 3
+                guard call.arguments.count == count else { return nil }
+                let elements = call.arguments.compactMap { decodeTypedFacadeValue($0.expression, scope: scope) }
+                guard elements.count == count else { return nil }
+                let tuple = StateExpr.tupleLiteral(elements)
                 if let typeName = literalType.renderedSourceName,
                    let shape = try? sourceTypeResolver.formalShape(for: typeName),
                    shape.isSupported {
-                    return .assertView(pair, shape)
+                    return .assertView(tuple, shape)
                 }
-                return pair
+                return tuple
             case "Function", "PartialFunction":
                 return decodeTypedFunctionLiteral(
                     call,
@@ -1823,6 +1817,7 @@ final class ParserSession {
             switch member.declName.baseName.sourceIdentifierName {
             case "first": return elements.first
             case "second": return elements.count > 1 ? elements[1] : nil
+            case "third": return elements.count > 2 ? elements[2] : nil
             default: break
             }
         }
@@ -2026,20 +2021,23 @@ final class ParserSession {
         return nil
     }
 
-    private enum PairCallKind: Equatable {
-        case initializer
-        case literal
-    }
-
-    private func pairCallKind(_ call: FunctionCallExprSyntax) -> PairCallKind? {
-        if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Pair" {
-            return .initializer
+    private func tupleCallKind(_ call: FunctionCallExprSyntax) -> (labels: [String], initializer: Bool)? {
+        let name: String
+        let initializer: Bool
+        if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
+            name = reference.baseName.sourceIdentifierName
+            initializer = true
+        } else if let access = call.calledExpression.as(MemberAccessExprSyntax.self),
+                  access.declName.baseName.sourceIdentifierName == "literal",
+                  let reference = access.base?.as(DeclReferenceExprSyntax.self) {
+            name = reference.baseName.sourceIdentifierName
+            initializer = false
+        } else { return nil }
+        switch name {
+        case "Pair": return (["first", "second"], initializer)
+        case "Triple": return (["first", "second", "third"], initializer)
+        default: return nil
         }
-        guard let access = call.calledExpression.as(MemberAccessExprSyntax.self),
-              access.declName.baseName.sourceIdentifierName == "literal",
-              access.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Pair"
-        else { return nil }
-        return .literal
     }
 
     /// Decodes a typed value whose Swift spelling omits its generic arguments
