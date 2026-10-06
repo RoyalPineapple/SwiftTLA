@@ -74,6 +74,26 @@ struct EchoCorpusStateGraphTests {
         ]))
     }
 
+    @Test("Echo node membership controls its process and communication domains")
+    func configuredNodeDomain() throws {
+        let configuration = try EchoModel.Configuration(
+            Node: [.a, .b], initiator: .a,
+            R: [.init(first: .a, second: .b), .init(first: .b, second: .a)]
+        )
+        let machine = try #require(EchoModel.initialMachines(configuration: configuration).first)
+        let state = try machine.formalProjection(of: machine.snapshot)
+        let pc = try #require(TLAStateProjection.Token(validating: "pc"))
+        let inbox = try #require(TLAStateProjection.Token(validating: "inbox"))
+        let nbrs = try #require(TLAStateProjection.Token(validating: "nbrs"))
+        #expect(state.value(for: pc) == .function([.string("a"): .string("n0"), .string("b"): .string("n0")]))
+        #expect(state.value(for: inbox) == .function([.string("a"): .set([]), .string("b"): .set([])]))
+        #expect(state.value(for: nbrs) == .function([
+            .string("a"): .set([.string("b")]), .string("b"): .set([.string("a")])
+        ]))
+        let graph = try ReachabilityGraph(initialMachines: [machine], maximumStates: 1_000)
+        #expect(graph.safetyViolations.isEmpty)
+    }
+
     @Test("Echo message projection preserves field names and enum wire values")
     func messageProjection() {
         let message = EchoModel.Message(kind: .acknowledgement, sndr: .b)
