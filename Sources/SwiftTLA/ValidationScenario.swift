@@ -162,10 +162,20 @@ extension ModelValidationScenario {
     public func simulate<Generator: RandomNumberGenerator>(
         using generator: inout Generator
     ) throws -> NativeSimulationResult<Machine> {
+        try simulate(initialMachines: initialMachines(), using: &generator)
+    }
+
+    package func simulate<Generator: RandomNumberGenerator>(
+        initialMachines: [Machine], using generator: inout Generator
+    ) throws -> NativeSimulationResult<Machine> {
         guard case .simulation(let traces, let maximumDepth) = checkingMode else {
             throw ExplorationError.simulationNotConfigured
         }
-        return try simulate(maximumDepth: maximumDepth, traceCount: traces, using: &generator)
+        let fairness = behavior == .specification
+            ? try initialMachines.first.map { try fairnessConditions(on: $0) } : nil
+        return try MachineSimulator.runConfigured(initialMachines: initialMachines,
+            maximumDepth: maximumDepth, traceCount: traces, checking: checking,
+            behavior: behavior, fairness: fairness, using: &generator)
     }
 }
 

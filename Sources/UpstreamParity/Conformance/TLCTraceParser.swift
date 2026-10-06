@@ -113,6 +113,62 @@ package struct TLCTraceParser: Sendable {
         return (trace, final, finalIsDeadlocked)
     }
 
+    /// Simulation evidence is one sampled path, not a breadth-first search prefix.
+    package func replaySampledCounterexample<Machine: StateMachine>(
+        _ data: Data, initialMachines: [Machine], renderedActions: [RenderedAction],
+        maximumDepth: Int, checkingDeadlock: Bool
+    ) throws -> (trace: GraphTrace, final: Machine, finalIsDeadlocked: Bool?) {
+        guard maximumDepth > 0 else { throw ExplorationError.invalidSimulationDepth(maximumDepth) }
+        guard let initial = initialMachines.first else { throw ExplorationError.noInitialStates }
+        var context = CheckingContext(registers: try initial.initialCheckingRegisters())
+        try context.advanceLevel()
+        var machines: [Machine] = []
+        var allowedActions: [Set<String>] = []
+        let actionNames = Dictionary(uniqueKeysWithValues: renderedActions.map {
+            ($0.sourceInvocationName, $0.renderedName)
+        })
+        let trace = try parseCounterexample(data, renderedActions: renderedActions) { bindings, index in
+            let candidates: [(action: Machine.Action?, machine: Machine)]
+            if let previous = machines.last {
+                candidates = try previous.successors(checking: &context).map { ($0.action, $0.machine) }
+            } else {
+                candidates = initialMachines.map { (nil, $0) }
+            }
+            var matches: [Machine.Snapshot: (Machine, CanonicalState)] = [:]
+            var actions = Set<String>()
+            for candidate in candidates {
+                guard candidate.machine.hasSameConfiguration(as: initial) else {
+                    throw ExplorationError.configurationMismatch
+                }
+                guard try candidate.machine.satisfiesStateConstraint() else { continue }
+                let state = try CanonicalState(candidate.machine.formalProjection(of: candidate.machine.snapshot))
+                guard matchesBindings(bindings, state: state) else { continue }
+                matches[candidate.machine.snapshot] = (candidate.machine, state)
+                if let action = candidate.action {
+                    let name = try candidate.machine.formalCall(for: action).description
+                    actions.insert(actionNames[name] ?? name)
+                }
+            }
+            guard let match = matches.values.first else { throw TLCTraceError.invalidState(index) }
+            guard matches.count == 1 else { throw TLCTraceError.ambiguousState(index) }
+            guard try match.0.assumptionsHold() else { throw ExplorationError.assumptionViolated }
+            machines.append(match.0)
+            allowedActions.append(actions)
+            if index > 0 { try context.advanceLevel() }
+            return match.1
+        }
+        guard trace.cycleStartIndex == nil, trace.steps.count == machines.count,
+              trace.steps.count - 1 <= maximumDepth,
+              let final = machines.last else { throw TLCTraceError.missingStates }
+        for index in trace.steps.indices.dropFirst() {
+            guard let action = trace.steps[index].action, allowedActions[index].contains(action) else {
+                throw TLCTraceError.invalidAction(index - 1)
+            }
+        }
+        let finalIsDeadlocked = checkingDeadlock ? try final.successors(checking: &context).isEmpty : nil
+        return (trace, final, finalIsDeadlocked)
+    }
+
     private func matchesBindings(_ bindings: [String: Any], state: CanonicalState) -> Bool {
         state.bindings.count == bindings.count && state.bindings.allSatisfy { name, value in
             bindings[name].map { matchesJSON($0, value: value) } ?? false

@@ -33,6 +33,10 @@ struct UpstreamCorpusInventoryTests {
                     return completion == .decisiveCounterexample
                         && completeCounterexampleMatch == true && completeGraph == false
                         && allPropertiesMatch != true
+                case .simulation:
+                    return completion == .simulation
+                        && completeCounterexampleMatch == true && completeGraph == false
+                        && allPropertiesMatch != true
                 case .assumptionsOnly:
                     return completion == .assumptionsOnly
                         && assumptionCompared == true && completeGraph != true
@@ -340,5 +344,21 @@ struct UpstreamCorpusInventoryTests {
         #expect(evidence.provesConfiguration(.assumptionsOnly))
         #expect(!evidence.provesConfiguration(.exhaustive))
         #expect(!evidence.provesConfiguration(.decisiveCounterexample))
+    }
+
+    @Test("sampled failure evidence never counts as complete graph parity")
+    func distinguishesSampledEvidence() {
+        let evidence = Coverage.Evidence(sourceSHA: "source", developerToolsVersion: "16.4",
+            runURL: "", artifactURL: "", completeGraph: false, allPropertiesMatch: nil,
+            completion: .simulation, completeCounterexampleMatch: true,
+            assumptionCompared: nil, acceptanceComplete: nil, environment: nil)
+        #expect(evidence.provesConfiguration(.simulation))
+        #expect(!evidence.provesConfiguration(.exhaustive))
+        #expect(!evidence.provesConfiguration(.decisiveCounterexample))
+        let claimedGraph = Coverage.Evidence(sourceSHA: "source", developerToolsVersion: "16.4",
+            runURL: "", artifactURL: "", completeGraph: true, allPropertiesMatch: true,
+            completion: .simulation, completeCounterexampleMatch: true,
+            assumptionCompared: nil, acceptanceComplete: nil, environment: nil)
+        #expect(!claimedGraph.provesConfiguration(.simulation))
     }
 }

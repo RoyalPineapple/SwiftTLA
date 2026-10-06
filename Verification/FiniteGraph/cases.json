@@ -1353,6 +1353,28 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "ewd840-anim-0",
+      "sourceModel": "ewd840-anim",
+      "scenario": "EWD840_anim",
+      "module": "ewd840/EWD840_anim.tla",
+      "configuration": "ewd840/EWD840_anim.cfg",
+      "imports": ["ewd840/EWD840.tla", "ewd840/SVG.tla", "sync-termination-detection/SyncTerminationDetection.tla"],
+      "dependencies": [
+        {"importingModule": "EWD840_anim", "importedModule": "EWD840"},
+        {"importingModule": "EWD840_anim", "importedModule": "SVG"},
+        {"importingModule": "EWD840", "importedModule": "SyncTerminationDetection"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd840/EWD840_anim.tla",
+        "sha256": "d95cc641e5ff12bdc815b6e7dad5ff47748b0c9f309d805f243b3669b748c636"
+      },
+      "exploration": {"maximumStateLimit": 10000000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "d95cc641e5ff12bdc815b6e7dad5ff47748b0c9f309d805f243b3669b748c636",
+      "cfgSHA256": "f3fdd8e673386fb90b1979e86a36fa5eb9bd194e8568b0468bab5551d34b63bb",
+      "timeoutSeconds": 1200,
+      "comparisonMode": "simulation"
+    },
+    {
       "id": "ewd840-ap",
       "sourceModel": "ewd840",
       "scenario": "APEWD840",

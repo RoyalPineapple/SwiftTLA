@@ -4,6 +4,28 @@ import SwiftTLA
 import UpstreamParity
 
 struct UpstreamTLCParityCacheTests {
+    @Test("sampled upstream evidence changes identity with simulation bounds and source")
+    func sampledInputsHaveDistinctKeys() throws {
+        let scenario = try #require(EWD840AnimationModel.validationScenarios().first)
+        let rendered = try scenario.render()
+        let pin = try testReferencePin()
+        func key(module: String, traces: Int, depth: Int) throws -> String {
+            let reference = TLAModuleBundle.external(root: .init(name: "Reference",
+                tla: "---- MODULE Reference ----\nX == \(module)\n====",
+                cfg: "SPECIFICATION Spec\nCHECK_DEADLOCK FALSE\n"))
+            return try UpstreamTLCParity.sampledCacheKey(
+                id: "sampled", rendered: rendered, reference: reference,
+                expectedModuleSHA256: SHA256.hex(Data(reference.tla.utf8)),
+                expectedCFGSHA256: SHA256.hex(Data(reference.cfg.utf8)),
+                maximumStates: 100, traces: traces, maximumDepth: depth, pin: pin)
+        }
+        let baseline = try key(module: "1", traces: 100, depth: 100)
+        #expect(baseline == (try key(module: "1", traces: 100, depth: 100)))
+        #expect(baseline != (try key(module: "1", traces: 101, depth: 100)))
+        #expect(baseline != (try key(module: "1", traces: 100, depth: 101)))
+        #expect(baseline != (try key(module: "2", traces: 100, depth: 100)))
+    }
+
     @Test("upstream parity reuses only a complete generated graph with matching inputs and tool pin")
     func reusesMatchingGeneratedOracle() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

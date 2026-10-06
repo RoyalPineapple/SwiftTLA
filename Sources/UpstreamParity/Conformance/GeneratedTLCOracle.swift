@@ -26,7 +26,6 @@ package enum GeneratedTLCOracle {
     package static func cacheKey<Scenario: ModelValidationScenario>(
         scenario: Scenario, id: String, maximumStates: Int, pin: TLCReferencePin
     ) throws -> String {
-        if case .simulation = scenario.checkingMode { throw Error.invalidOutcome("simulation evidence mode") }
         let rendered = try scenario.render()
         let names = scenario.formalPropertyNames
         let selected = try Set(scenario.checking.properties.map { property -> String in
@@ -43,6 +42,26 @@ package enum GeneratedTLCOracle {
               (scenario.deadlockExpectation != nil) == rendered.checksDeadlock,
               scenario.behavior == rendered.behavior else {
             throw Error.checkingMismatch
+        }
+        if case .simulation(let traces, let maximumDepth) = scenario.checkingMode {
+            guard selected.count == 1, selected.isSubset(of: rendered.invariantNames) else {
+                throw Error.checkingMismatch
+            }
+            let identity: [String: Any] = [
+                "schema": "swifttla.simulation-oracle-cache-key-v1",
+                "caseID": id,
+                "scenario": scenario.name,
+                "maximumStates": maximumStates,
+                "input": try inputIdentity(
+                    bundle: rendered.tlaBundle(checking: selected,
+                        checkDeadlock: rendered.checksDeadlock),
+                    pin: pin, arguments: simulationArguments(traces: traces, maximumDepth: maximumDepth),
+                    invocation: .propertyCheck),
+                "actions": rendered.actions.sorted {
+                    ($0.sourceInvocationName, $0.renderedName) < ($1.sourceInvocationName, $1.renderedName)
+                }.map { ["invocation": $0.sourceInvocationName, "rendered": $0.renderedName] }
+            ]
+            return SHA256.hex(try JSONSerialization.data(withJSONObject: identity, options: [.sortedKeys]))
         }
         let graphChecks = selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
         if scenario.checkingMode == .decisiveCounterexample,
@@ -92,7 +111,6 @@ package enum GeneratedTLCOracle {
         tools: ResolvedTLCToolchain, pin: TLCReferencePin, to directory: URL,
         process: TLCProcessAdapter = TLCProcessAdapter()
     ) throws -> GeneratedTLCOracleReport {
-        if case .simulation = scenario.checkingMode { throw Error.invalidOutcome("simulation evidence mode") }
         let rendered = try scenario.render()
         let names = scenario.formalPropertyNames
         let selected = try Set(scenario.checking.properties.map { property -> String in
@@ -108,6 +126,48 @@ package enum GeneratedTLCOracle {
               scenario.checking.checkDeadlock == rendered.checksDeadlock,
               (scenario.deadlockExpectation != nil) == rendered.checksDeadlock,
               scenario.behavior == rendered.behavior else { throw Error.checkingMismatch }
+
+        if case .simulation(let traces, let maximumDepth) = scenario.checkingMode {
+            guard selected.count == 1, let name = selected.first,
+                  rendered.invariantNames.contains(name) else { throw Error.checkingMismatch }
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+            let bundle = try rendered.tlaBundle(checking: selected,
+                checkDeadlock: rendered.checksDeadlock)
+            try retainGeneratedInputs(bundle, in: directory.appendingPathComponent("generated"))
+            let work = directory.appendingPathComponent("work")
+            try FileManager.default.createDirectory(at: work, withIntermediateDirectories: false)
+            let arguments = simulationArguments(traces: traces, maximumDepth: maximumDepth)
+            let retained = directory.appendingPathComponent("tlc-graph")
+            let outcome = try run(bundle: bundle, id: id, maximumStates: maximumStates,
+                timeout: timeout, tools: tools, pin: pin, workRoot: work, retained: retained,
+                invocation: .propertyCheck, renderedActions: rendered.actions, process: process,
+                arguments: arguments)
+            let verdict: ValidationVerdict
+            switch outcome {
+            case .completed: verdict = .unavailable
+            case .safetyViolation:
+                let stdout = try String(contentsOf: retained.appendingPathComponent("logs/tlc.stdout.log"),
+                    encoding: .utf8)
+                guard stdout.split(whereSeparator: \.isNewline).contains(where: {
+                    $0 == "Error: Invariant \(name) is violated."
+                        || $0 == "Error: Invariant \(name) is violated by the initial state:"
+                }) else { throw Error.invalidOutcome("unidentified simulated invariant violation") }
+                verdict = try Self.verdict(for: name, outcome: outcome,
+                    rendered: rendered, retained: retained)
+            default: throw Error.invalidOutcome("simulation pass: \(outcome)")
+            }
+            let report = GeneratedTLCOracleReport(
+                schema: "swifttla.generated-tlc-oracle", caseID: id, scenario: scenario.name,
+                maximumStates: maximumStates, graphComplete: false,
+                graphInputSHA256: try inputIdentity(bundle: bundle, pin: pin,
+                    arguments: arguments, invocation: .propertyCheck),
+                properties: [name: verdict], deadlock: rendered.checksDeadlock ? .unavailable : nil,
+                deadlockSelected: rendered.checksDeadlock)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+            try encoder.encode(report).write(to: directory.appendingPathComponent("oracle.json"), options: .atomic)
+            return report
+        }
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let graphChecks = selected.intersection(rendered.invariantNames.union(rendered.reachabilityNames))
@@ -246,7 +306,8 @@ package enum GeneratedTLCOracle {
         bundle: TLAModuleBundle, id: String, maximumStates: Int, timeout: TimeInterval,
         tools: ResolvedTLCToolchain, pin: TLCReferencePin, workRoot: URL,
         retained: URL, invocation: TLCInvocationKind, renderedActions: [RenderedAction],
-        process: TLCProcessAdapter, captureEvaluations: Bool = false
+        process: TLCProcessAdapter, captureEvaluations: Bool = false,
+        arguments: [String] = ["-workers", "1", "-fp", "1"]
     ) throws -> TLCExecutionOutcome {
         let work = workRoot.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: false)
@@ -255,7 +316,7 @@ package enum GeneratedTLCOracle {
             id: id, exploration: .init(maximumStateLimit: maximumStates, symmetryReduction: .disabled),
             moduleSHA256: SHA256.hex(Data(bundle.tla.utf8)),
             cfgSHA256: SHA256.hex(Data(bundle.cfg.utf8)),
-            arguments: ["-workers", "1", "-fp", "1"], environment: [:], pin: pin,
+            arguments: arguments, environment: [:], pin: pin,
             renderedActions: renderedActions)
         let request = TLCProcessRequest(
             javaExecutable: tools.java, jar: tools.jar, bridgeJar: tools.bridgeJar,
@@ -265,6 +326,10 @@ package enum GeneratedTLCOracle {
             workingDirectory: work, finiteGraphCase: launch, runID: UUID(),
             timeout: timeout, invocation: invocation, referenceArtifacts: tools.artifacts)
         return try process.run(request, retainingIn: retained)
+    }
+
+    package static func simulationArguments(traces: Int, maximumDepth: Int) -> [String] {
+        ["-simulate", "num=\(traces)", "-depth", "\(maximumDepth)", "-seed", "1"]
     }
 
     package static func verdict(for name: String, outcome: TLCExecutionOutcome,

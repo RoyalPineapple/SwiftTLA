@@ -225,6 +225,7 @@ package struct FiniteGraphManifest: Decodable, Sendable {
         package enum ComparisonMode: String, Decodable, Sendable {
             case exhaustive
             case decisiveCounterexample = "decisive-counterexample"
+            case simulation
             case assumptionsOnly = "assumptions-only"
         }
         package let comparisonMode: ComparisonMode

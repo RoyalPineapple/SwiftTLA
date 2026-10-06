@@ -36,6 +36,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "dining-philosophers", scenarios: { try DiningPhilosophersModel.validationScenarios() }),
     .init(id: "dijkstra-mutex", scenarios: { try DijkstraMutexModel.validationScenarios() }),
     .init(id: "ewd840", scenarios: { try EWD840Model.validationScenarios() }),
+    .init(id: "ewd840-anim", scenarios: { try EWD840AnimationModel.validationScenarios() }),
     .init(id: "sync-termination-detection", scenarios: { try SyncTerminationDetectionModel.validationScenarios() }),
     .init(id: "bakery", scenarios: { try BakeryModel.validationScenarios() }),
     .init(id: "boulanger", scenarios: { try BoulangerModel.validationScenarios() }),

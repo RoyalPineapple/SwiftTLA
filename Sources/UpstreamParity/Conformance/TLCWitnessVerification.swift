@@ -4,6 +4,41 @@ import SwiftTLA
 /// Replays a TLC counterexample against the generated machine only at the
 /// comparison boundary; neither evidence producer reads the other engine.
 package enum TLCWitnessVerification {
+    package static func verifySampled<Scenario: ModelValidationScenario>(
+        scenario: Scenario, report: GeneratedTLCOracleReport, caseID: String,
+        oracle: URL, rendered: RenderedSpecification
+    ) throws {
+        guard case .simulation(_, let maximumDepth) = scenario.checkingMode,
+              !report.graphComplete, report.caseID == caseID,
+              report.scenario == scenario.name, report.properties.values.contains(.violated),
+              let name = rendered.checkNames.first, rendered.checkNames.count == 1,
+              rendered.invariantNames.contains(name), report.properties[name] == .violated,
+              let property = scenario.formalPropertyNames.first(where: { $0.value == name })?.key else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("sampled TLC selection")
+        }
+        let root = oracle.appendingPathComponent("tlc-graph")
+        let process = try JSONSerialization.jsonObject(with:
+            Data(contentsOf: root.appendingPathComponent("tlc-process.json"))) as? [String: Any]
+        guard process?["caseID"] as? String == caseID,
+              let invocation = process?["invocation"] as? [String: Any],
+              invocation["exitStatus"] as? Int == 12 else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("sampled TLC process outcome")
+        }
+        let trace = try Data(contentsOf: root.appendingPathComponent("counterexample.json"))
+        let replay = try TLCTraceParser().replaySampledCounterexample(
+            trace, initialMachines: scenario.initialMachines(), renderedActions: rendered.actions,
+            maximumDepth: maximumDepth, checkingDeadlock: false)
+        let stdout = try String(contentsOf: root.appendingPathComponent("logs/tlc.stdout.log"), encoding: .utf8)
+        guard stdout.split(whereSeparator: \.isNewline).contains(where: {
+            $0 == "Error: Invariant \(name) is violated."
+                || (replay.trace.steps.count == 1
+                    && $0 == "Error: Invariant \(name) is violated by the initial state:")
+        }), try replay.final.violatedInvariants(checking: [property],
+            atLevel: replay.trace.steps.count).contains(property) else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("false sampled TLC invariant witness")
+        }
+    }
+
     @discardableResult
     package static func verifyPartial<Scenario: ModelValidationScenario>(
         scenario: Scenario, report: GeneratedTLCOracleReport, exitStatus: Int,

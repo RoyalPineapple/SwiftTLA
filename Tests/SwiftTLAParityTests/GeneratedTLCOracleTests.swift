@@ -45,6 +45,34 @@ struct GeneratedTLCOracleTests {
                 scenario: exhaustive, id: "die-hardest-0", maximumStates: 100_000, pin: pin))
     }
 
+    @Test("sampled TLC evidence keys include trace count and maximum depth")
+    func simulationLimitsChangeCacheIdentity() throws {
+        let configured = try #require(EWD840AnimationModel.validationScenarios().first)
+        let pin = try testReferencePin()
+        let base = try GeneratedTLCOracle.cacheKey(
+            scenario: configured, id: "ewd840-anim-0", maximumStates: 1_000_000, pin: pin)
+        let moreTraces = EWD840AnimationModel.ValidationScenario(
+            name: configured.name, displayName: configured.displayName,
+            configuration: configured.configuration, checking: configured.checking,
+            checkingMode: .simulation(traces: 101, maximumDepth: 100),
+            behavior: configured.behavior, selectedSymmetry: configured.selectedSymmetry,
+            selectedFairnessProfile: configured.selectedFairnessProfile,
+            selectedFairnessProfileName: configured.selectedFairnessProfileName,
+            expectations: configured.expectations, deadlockExpectation: configured.deadlockExpectation)
+        let deeper = EWD840AnimationModel.ValidationScenario(
+            name: configured.name, displayName: configured.displayName,
+            configuration: configured.configuration, checking: configured.checking,
+            checkingMode: .simulation(traces: 100, maximumDepth: 101),
+            behavior: configured.behavior, selectedSymmetry: configured.selectedSymmetry,
+            selectedFairnessProfile: configured.selectedFairnessProfile,
+            selectedFairnessProfileName: configured.selectedFairnessProfileName,
+            expectations: configured.expectations, deadlockExpectation: configured.deadlockExpectation)
+        #expect(base != (try GeneratedTLCOracle.cacheKey(
+            scenario: moreTraces, id: "ewd840-anim-0", maximumStates: 1_000_000, pin: pin)))
+        #expect(base != (try GeneratedTLCOracle.cacheKey(
+            scenario: deeper, id: "ewd840-anim-0", maximumStates: 1_000_000, pin: pin)))
+    }
+
     @Test("cached TLC evidence is bound to its scenario, exploration limit, and bridge producer")
     func cacheKeyRejectsDifferentScenarioLimitOrProducer() throws {
         let selected = try #require(modelValidationScenarios().first)

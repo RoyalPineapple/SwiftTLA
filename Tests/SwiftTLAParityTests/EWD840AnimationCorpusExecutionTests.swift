@@ -1,8 +1,33 @@
+import Foundation
 import Testing
 import SwiftTLA
 import UpstreamParity
 
 struct EWD840AnimationCorpusExecutionTests {
+    @Test("animated TLC case declares its full dependency closure and pins SVG")
+    func pinnedSimulationInputs() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
+            from: Data(contentsOf: root.appendingPathComponent("Verification/FiniteGraph/cases.json")))
+        let declaration = try #require(manifest.cases.first { $0.id == "ewd840-anim-0" })
+        #expect(declaration.comparisonMode == .simulation)
+        let fixtures = root.appendingPathComponent("Verification/FiniteGraph/fixtures")
+        let svg = try Data(contentsOf: fixtures.appendingPathComponent("ewd840/SVG.tla"))
+        #expect(SHA256.hex(svg) == "a4d127c92ebc756b9f5c4bee354fd474f83a612e188915989212d197ab17747a")
+        let bundle = try TLCProcessRequest.declaredBundle(
+            root: fixtures.appendingPathComponent(declaration.module),
+            configuration: fixtures.appendingPathComponent(declaration.configuration),
+            imports: declaration.imports.map { fixtures.appendingPathComponent($0) },
+            dependencies: declaration.dependencies.enumerated().map { index, edge in
+                .init(importingModule: edge.importingModule,
+                    importedModule: edge.importedModule,
+                    structuralPath: [declaration.id, "dependencies", String(index)])
+            })
+        try bundle.validateDeclaredClosure()
+        #expect(try declaration.resolveScenario()?.name == "EWD840_anim")
+    }
+
     @Test("animated upstream configuration remains model-owned and bounded")
     func simulationConfiguration() throws {
         let scenario = try #require(EWD840AnimationModel.validationScenarios().first)

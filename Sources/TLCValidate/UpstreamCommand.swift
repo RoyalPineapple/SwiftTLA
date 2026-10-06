@@ -34,7 +34,7 @@ func runUpstream(arguments: [String]) -> Never {
             guard let declaration = manifest.cases.first(where: { $0.id == arguments[2] }) else {
                 throw UpstreamCommandError.unknownCase(arguments[2])
             }
-            guard declaration.comparisonMode != .decisiveCounterexample,
+            guard declaration.comparisonMode == .exhaustive,
                   try declaration.resolveAssumptionScenario() == nil else {
                 throw UpstreamTLCParityError.invalidOutcome("complete graph replay: \(declaration.id)")
             }
@@ -77,6 +77,41 @@ func runUpstream(arguments: [String]) -> Never {
             if try declaration.resolveAssumptionScenario() == nil {
                 let directory = URL(fileURLWithPath: arguments[4]).standardizedFileURL
                     .appendingPathComponent(declaration.id)
+                if declaration.comparisonMode == .simulation {
+                    guard let scenario = try declaration.resolveScenario(),
+                          case .simulation(let traces, let maximumDepth) = scenario.checkingMode else {
+                        throw UpstreamTLCParityError.configurationMismatch(declaration.id)
+                    }
+                    let environment = ProcessInfo.processInfo.environment
+                    let toolRoot = URL(fileURLWithPath: try requiredEnvironment("FINITE_GRAPH_TOOL_ROOT", environment))
+                    let inputRoot = try requiredEnvironment("FINITE_GRAPH_INPUT_ROOT", environment)
+                    let lock = try decode(PinnedTLCToolchain.self,
+                        at: root.appendingPathComponent("Verification/FiniteGraph/toolchain.json"))
+                    guard lock.schema == "TLCReferencePin",
+                          let archive = lock.java.archives[try normalizedArchitecture()] else {
+                        throw UpstreamCommandError.invalidToolchain
+                    }
+                    let pin = try referencePin(from: lock, javaArchive: archive, toolRoot: toolRoot)
+                    let tools = try ResolvedTLCToolchain(toolRoot: toolRoot, projectRoot: root, pin: pin)
+                    let reference = try TLCProcessRequest.declaredBundle(
+                        root: inputPath(declaration.module, within: inputRoot),
+                        configuration: inputPath(declaration.configuration, within: inputRoot),
+                        imports: try declaration.imports.map { try inputPath($0, within: inputRoot) },
+                        dependencies: declaration.dependencies.enumerated().map { index, edge in
+                            .init(importingModule: edge.importingModule,
+                                  importedModule: edge.importedModule,
+                                  structuralPath: [declaration.id, "dependencies", String(index)])
+                        })
+                    let report = try UpstreamTLCParity.recompareCachedSampled(
+                        id: declaration.id, rendered: declaration.renderModel(), reference: reference,
+                        expectedModuleSHA256: declaration.moduleSHA256,
+                        expectedCFGSHA256: declaration.cfgSHA256,
+                        maximumStates: declaration.exploration.maximumStateLimit,
+                        timeout: declaration.timeoutSeconds, traces: traces,
+                        maximumDepth: maximumDepth, tools: tools, pin: pin, in: directory)
+                    print("upstream \(declaration.id): \(report.result)")
+                    exit(report.result == "exact" ? 0 : 2)
+                }
                 let report = try UpstreamTLCParity.recompareCached(
                     id: declaration.id, decisive: declaration.comparisonMode == .decisiveCounterexample,
                     actions: declaration.renderModel().actions, in: directory,
@@ -121,11 +156,24 @@ func runUpstream(arguments: [String]) -> Never {
                     expectedVerdict: expected,
                     maximumStates: declaration.exploration.maximumStateLimit, pin: pin))
             } else {
-                print(try UpstreamTLCParity.cacheKey(id: declaration.id, rendered: rendered,
-                    reference: reference, expectedModuleSHA256: declaration.moduleSHA256,
-                    expectedCFGSHA256: declaration.cfgSHA256,
-                    maximumStates: declaration.exploration.maximumStateLimit,
-                    decisive: declaration.comparisonMode == .decisiveCounterexample, pin: pin))
+                if declaration.comparisonMode == .simulation {
+                    guard let scenario = try declaration.resolveScenario(),
+                          case .simulation(let traces, let maximumDepth) = scenario.checkingMode else {
+                        throw UpstreamTLCParityError.configurationMismatch(declaration.id)
+                    }
+                    print(try UpstreamTLCParity.sampledCacheKey(
+                        id: declaration.id, rendered: rendered, reference: reference,
+                        expectedModuleSHA256: declaration.moduleSHA256,
+                        expectedCFGSHA256: declaration.cfgSHA256,
+                        maximumStates: declaration.exploration.maximumStateLimit,
+                        traces: traces, maximumDepth: maximumDepth, pin: pin))
+                } else {
+                    print(try UpstreamTLCParity.cacheKey(id: declaration.id, rendered: rendered,
+                        reference: reference, expectedModuleSHA256: declaration.moduleSHA256,
+                        expectedCFGSHA256: declaration.cfgSHA256,
+                        maximumStates: declaration.exploration.maximumStateLimit,
+                        decisive: declaration.comparisonMode == .decisiveCounterexample, pin: pin))
+                }
             }
             exit(0)
         }
@@ -181,6 +229,22 @@ func runUpstream(arguments: [String]) -> Never {
                         expectedVerdict: expected,
                         maximumStates: declaration.exploration.maximumStateLimit,
                         timeout: declaration.timeoutSeconds, tools: tools, pin: pin,
+                        to: output.appendingPathComponent(declaration.id))
+                    print("upstream \(declaration.id): \(report.result)")
+                    if report.result != "exact" { failures += 1 }
+                } else if declaration.comparisonMode == .simulation {
+                    guard generatedOracle == nil,
+                          let scenario = try declaration.resolveScenario(),
+                          case .simulation(let traces, let maximumDepth) = scenario.checkingMode else {
+                        throw UpstreamTLCParityError.configurationMismatch(declaration.id)
+                    }
+                    let report = try UpstreamTLCParity.runSampled(
+                        id: declaration.id, rendered: rendered, reference: reference,
+                        expectedModuleSHA256: declaration.moduleSHA256,
+                        expectedCFGSHA256: declaration.cfgSHA256,
+                        maximumStates: declaration.exploration.maximumStateLimit,
+                        timeout: declaration.timeoutSeconds, traces: traces,
+                        maximumDepth: maximumDepth, tools: tools, pin: pin,
                         to: output.appendingPathComponent(declaration.id))
                     print("upstream \(declaration.id): \(report.result)")
                     if report.result != "exact" { failures += 1 }

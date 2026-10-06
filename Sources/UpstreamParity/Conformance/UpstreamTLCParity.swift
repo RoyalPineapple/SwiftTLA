@@ -23,6 +23,217 @@ package enum UpstreamTLCParityError: Error, Equatable {
 /// The upstream comparison runs TLC on both module bundles. It never invokes
 /// the Swift machine or native checker.
 package enum UpstreamTLCParity {
+    package static func sampledCacheKey(
+        id: String, rendered: RenderedSpecification, reference: TLAModuleBundle,
+        expectedModuleSHA256: String, expectedCFGSHA256: String,
+        maximumStates: Int, traces: Int, maximumDepth: Int, pin: TLCReferencePin
+    ) throws -> String {
+        guard SHA256.hex(Data(reference.tla.utf8)) == expectedModuleSHA256,
+              SHA256.hex(Data(reference.cfg.utf8)) == expectedCFGSHA256,
+              rendered.checkNames.count == 1,
+              rendered.checkNames.isSubset(of: rendered.invariantNames),
+              !rendered.checksDeadlock else {
+            throw UpstreamTLCParityError.inputMismatch(id)
+        }
+        let arguments = GeneratedTLCOracle.simulationArguments(
+            traces: traces, maximumDepth: maximumDepth)
+        let identity: [String: Any] = [
+            "schema": "swifttla.sampled-upstream-cache-key-v1",
+            "caseID": id,
+            "maximumStates": maximumStates,
+            "expectedModuleSHA256": expectedModuleSHA256,
+            "expectedCFGSHA256": expectedCFGSHA256,
+            "generated": try GeneratedTLCOracle.inputIdentity(
+                bundle: rendered.tlaBundle(checking: rendered.checkNames, checkDeadlock: false),
+                pin: pin, arguments: arguments, invocation: .propertyCheck),
+            "reference": try GeneratedTLCOracle.inputIdentity(
+                bundle: reference, pin: pin, arguments: arguments, invocation: .propertyCheck),
+            "actions": rendered.actions.map {
+                ["invocation": $0.sourceInvocationName, "rendered": $0.renderedName]
+            }
+        ]
+        return SHA256.hex(try JSONSerialization.data(withJSONObject: identity, options: [.sortedKeys]))
+    }
+
+    package static func runSampled(
+        id: String, rendered: RenderedSpecification, reference: TLAModuleBundle,
+        expectedModuleSHA256: String, expectedCFGSHA256: String,
+        maximumStates: Int, timeout: TimeInterval, traces: Int, maximumDepth: Int,
+        tools: ResolvedTLCToolchain, pin: TLCReferencePin, to directory: URL,
+        process: TLCProcessAdapter = TLCProcessAdapter()
+    ) throws -> UpstreamTLCParityReport {
+        guard SHA256.hex(Data(reference.tla.utf8)) == expectedModuleSHA256,
+              SHA256.hex(Data(reference.cfg.utf8)) == expectedCFGSHA256 else {
+            throw UpstreamTLCParityError.inputMismatch(id)
+        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        let work = directory.appendingPathComponent("work")
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: false)
+        let bundles = try sampledBundles(id: id, rendered: rendered, reference: reference,
+            maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin, work: work)
+        let arguments = GeneratedTLCOracle.simulationArguments(
+            traces: traces, maximumDepth: maximumDepth)
+        let generatedOutput = directory.appendingPathComponent("generated-sampled")
+        let referenceOutput = directory.appendingPathComponent("reference-sampled")
+        _ = try GeneratedTLCOracle.run(bundle: bundles.generated, id: id,
+            maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
+            workRoot: work, retained: generatedOutput, invocation: .propertyCheck,
+            renderedActions: rendered.actions, process: process, arguments: arguments)
+        _ = try GeneratedTLCOracle.run(bundle: bundles.reference, id: id,
+            maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin,
+            workRoot: work, retained: referenceOutput, invocation: .propertyCheck,
+            renderedActions: rendered.actions, process: process, arguments: arguments)
+        return try compareSampled(id: id, name: bundles.name, generated: bundles.generated,
+            reference: bundles.reference, pin: pin, arguments: arguments, in: directory)
+    }
+
+    package static func recompareCachedSampled(
+        id: String, rendered: RenderedSpecification, reference: TLAModuleBundle,
+        expectedModuleSHA256: String, expectedCFGSHA256: String,
+        maximumStates: Int, timeout: TimeInterval, traces: Int, maximumDepth: Int,
+        tools: ResolvedTLCToolchain, pin: TLCReferencePin, in directory: URL
+    ) throws -> UpstreamTLCParityReport {
+        guard SHA256.hex(Data(reference.tla.utf8)) == expectedModuleSHA256,
+              SHA256.hex(Data(reference.cfg.utf8)) == expectedCFGSHA256 else {
+            throw UpstreamTLCParityError.inputMismatch(id)
+        }
+        let previous = try JSONDecoder().decode(UpstreamTLCParityReport.self,
+            from: Data(contentsOf: directory.appendingPathComponent("comparison.json")))
+        guard previous.schema == "swifttla.upstream-tlc-parity", previous.caseID == id,
+              previous.result == "exact", !previous.graphCompared,
+              !previous.deadlockSelected, previous.generatedDeadlock == nil,
+              previous.referenceDeadlock == nil else {
+            throw UpstreamTLCParityError.invalidOutcome("cached sampled comparison: \(id)")
+        }
+        let work = directory.appendingPathComponent("recompare-work")
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: work) }
+        let bundles = try sampledBundles(id: id, rendered: rendered, reference: reference,
+            maximumStates: maximumStates, timeout: timeout, tools: tools, pin: pin, work: work)
+        let arguments = GeneratedTLCOracle.simulationArguments(
+            traces: traces, maximumDepth: maximumDepth)
+        let report = try compareSampled(id: id, name: bundles.name, generated: bundles.generated,
+            reference: bundles.reference, pin: pin, arguments: arguments, in: directory)
+        guard report.generatedProperties == previous.generatedProperties,
+              report.referenceProperties == previous.referenceProperties else {
+            throw UpstreamTLCParityError.invalidOutcome("changed cached sampled verdict: \(id)")
+        }
+        return report
+    }
+
+    private static func sampledBundles(
+        id: String, rendered: RenderedSpecification, reference: TLAModuleBundle,
+        maximumStates: Int, timeout: TimeInterval,
+        tools: ResolvedTLCToolchain, pin: TLCReferencePin, work: URL
+    ) throws -> (name: String, generated: TLAModuleBundle, reference: TLAModuleBundle) {
+        guard rendered.checkNames.count == 1, let name = rendered.checkNames.first,
+              rendered.invariantNames.contains(name), !rendered.checksDeadlock else {
+            throw UpstreamTLCParityError.configurationMismatch(id)
+        }
+        let parseWork = work.appendingPathComponent("parse")
+        try FileManager.default.createDirectory(at: parseWork, withIntermediateDirectories: false)
+        let referenceCase = try FiniteGraphCase(
+            id: id, exploration: .init(maximumStateLimit: maximumStates, symmetryReduction: .disabled),
+            moduleSHA256: SHA256.hex(Data(reference.tla.utf8)),
+            cfgSHA256: SHA256.hex(Data(reference.cfg.utf8)),
+            arguments: ["-workers", "1", "-fp", "1"], environment: [:], pin: pin,
+            renderedActions: rendered.actions)
+        let parseRequest = TLCProcessRequest(
+            javaExecutable: tools.java, jar: tools.jar, bridgeJar: tools.bridgeJar,
+            bundle: reference, graphEvents: parseWork.appendingPathComponent("events.jsonl"),
+            traceOutput: parseWork.appendingPathComponent("counterexample.json"),
+            workingDirectory: parseWork, finiteGraphCase: referenceCase, runID: UUID(),
+            timeout: timeout, invocation: .propertyCheck, referenceArtifacts: tools.artifacts)
+        let configuration = try TLCReferenceConfiguration.parse(
+            parseRequest, checking: rendered.checkNames)
+        guard configuration.invariants == [name], configuration.properties.isEmpty,
+              !configuration.checksDeadlock else {
+            throw UpstreamTLCParityError.configurationMismatch(id)
+        }
+        return (name,
+            try rendered.tlaBundle(checking: [name], checkDeadlock: false),
+            try rendered.referenceBundle(checking: [name], checkDeadlock: false,
+                declarations: configuration.declarations, in: reference))
+    }
+
+    private static func compareSampled(
+        id: String, name: String, generated: TLAModuleBundle,
+        reference: TLAModuleBundle, pin: TLCReferencePin,
+        arguments: [String], in directory: URL
+    ) throws -> UpstreamTLCParityReport {
+        let generatedVerdict = try sampledVerdict(id: id, name: name, bundle: generated,
+            pin: pin, arguments: arguments, in: directory.appendingPathComponent("generated-sampled"))
+        let referenceVerdict = try sampledVerdict(id: id, name: name, bundle: reference,
+            pin: pin, arguments: arguments, in: directory.appendingPathComponent("reference-sampled"))
+        let difference: String? = generatedVerdict == .violated && referenceVerdict == .violated
+            ? nil : "sampled counterexample absent or verdict differs"
+        let report = UpstreamTLCParityReport(
+            schema: "swifttla.upstream-tlc-parity", caseID: id,
+            result: difference == nil ? "exact" : "different", graphCompared: false,
+            difference: difference,
+            generatedProperties: [name: generatedVerdict],
+            referenceProperties: [name: referenceVerdict],
+            generatedDeadlock: nil, referenceDeadlock: nil, deadlockSelected: false)
+        try write(report, to: directory)
+        return report
+    }
+
+    private static func sampledVerdict(
+        id: String, name: String, bundle: TLAModuleBundle, pin: TLCReferencePin,
+        arguments: [String], in directory: URL
+    ) throws -> ValidationVerdict {
+        let receipt = try JSONSerialization.jsonObject(with:
+            Data(contentsOf: directory.appendingPathComponent("tlc-process.json"))) as? [String: Any]
+        let inputs = receipt?["inputs"] as? [[String: String]]
+        let pairs = inputs?.compactMap { item -> (String, String)? in
+            guard item.count == 2, let file = item["file"], let hash = item["sha256"] else { return nil }
+            return (file, hash)
+        }
+        let expectedInputs = Dictionary(uniqueKeysWithValues: bundleInputJSON(bundle).map {
+            ($0["file"]!, $0["sha256"]!)
+        })
+        let expectedPin: [String: Any] = [
+            "tag": pin.tag, "commit": pin.commit, "jarSHA256": pin.jarSHA256,
+            "javaDistribution": pin.javaDistribution, "javaVersion": pin.javaVersion,
+            "javaArchiveSHA256": pin.javaArchiveSHA256, "bridgeClass": pin.bridgeClass,
+            "bridgeSourceHashes": pin.bridgeSourceHashes,
+            "bridgeBinarySHA256": pin.bridgeBinarySHA256
+        ]
+        let invocation = receipt?["invocation"] as? [String: Any]
+        let command = invocation?["arguments"] as? [String]
+        let toolPin = receipt?["toolPin"] as? [String: Any]
+        guard receipt?["caseID"] as? String == id,
+              receipt?["configuration"] as? String == bundle.cfg,
+              let inputs, let pairs, pairs.count == inputs.count,
+              Set(pairs.map(\.0)).count == pairs.count,
+              Dictionary(uniqueKeysWithValues: pairs) == expectedInputs,
+              let command, let start = command.firstIndex(of: "-simulate"),
+              let end = command.firstIndex(of: "-config"), start < end,
+              Array(command[start..<end]) == arguments,
+              let toolPin,
+              try JSONSerialization.data(withJSONObject: toolPin, options: [.sortedKeys])
+                  == JSONSerialization.data(withJSONObject: expectedPin, options: [.sortedKeys]),
+              let status = invocation?["exitStatus"] as? Int else {
+            throw UpstreamTLCParityError.invalidOutcome("sampled TLC receipt: \(id)")
+        }
+        if status == 0 { return .unavailable }
+        guard status == 12 else {
+            throw UpstreamTLCParityError.invalidOutcome("sampled TLC status: \(id): \(status)")
+        }
+        let stdout = try String(contentsOf: directory.appendingPathComponent("logs/tlc.stdout.log"),
+            encoding: .utf8)
+        let trace = try JSONSerialization.jsonObject(with:
+            Data(contentsOf: directory.appendingPathComponent("counterexample.json"))) as? [String: Any]
+        let counterexample = trace?["counterexample"] as? [String: Any]
+        guard stdout.split(whereSeparator: \.isNewline).contains(where: {
+            $0 == "Error: Invariant \(name) is violated."
+                || $0 == "Error: Invariant \(name) is violated by the initial state:"
+        }), let states = counterexample?["state"] as? [Any], !states.isEmpty else {
+            throw UpstreamTLCParityError.invalidOutcome("sampled TLC witness: \(id)")
+        }
+        return .violated
+    }
+
     package static func cacheKey(
         id: String, rendered: RenderedSpecification, reference: TLAModuleBundle,
         expectedModuleSHA256: String, expectedCFGSHA256: String,
