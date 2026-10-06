@@ -239,7 +239,7 @@ jobs:
               attempt="${REPLAY_ARTIFACT_NAME#dsl-native-$REPLAY_SHA-$REPLAY_RUN_ID-}"
               attempt="${attempt%-$CASE_ID}"
               [[ "$attempt" =~ ^[1-9][0-9]*$ ]]
-              echo "oracle_name=generated-oracle-$REPLAY_SHA-$REPLAY_RUN_ID-$attempt-$CASE_ID" >> "$GITHUB_OUTPUT"
+              echo "oracle_name=generated-oracle-$REPLAY_SHA-$REPLAY_RUN_ID-$CASE_ID" >> "$GITHUB_OUTPUT"
               ;;
             "upstream-parity-$REPLAY_SHA-$REPLAY_RUN_ID-"*"-$CASE_ID") ;;
             *) echo "Replay artifact does not match evidence revision and case" >&2; exit 1 ;;

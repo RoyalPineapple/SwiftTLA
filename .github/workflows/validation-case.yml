@@ -125,13 +125,14 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: generated-oracle-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.case_id }}
+          name: generated-oracle-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ inputs.case_id }}
           path: |
             .build/validation-evidence/oracle/${{ inputs.case_id }}
             !.build/validation-evidence/oracle/${{ inputs.case_id }}/work/**
           compression-level: 0
           include-hidden-files: true
           if-no-files-found: warn
+          overwrite: true
 
   dsl-native-parity:
     name: DSL/native parity ${{ inputs.case_id }}
@@ -197,7 +198,7 @@ jobs:
           echo "key=$key" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v5
         with:
-          name: generated-oracle-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.case_id }}
+          name: generated-oracle-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ inputs.case_id }}
           path: .build/validation-evidence/oracle/${{ inputs.case_id }}
       - name: Validate generated Swift machine
         timeout-minutes: ${{ fromJSON(steps.exploration-limit.outputs.timeout_minutes) }}
@@ -360,7 +361,7 @@ jobs:
         if: steps.upstream-reuse.outputs.reuse != 'true' && inputs.native_enabled
         id: oracle-download
         with:
-          name: generated-oracle-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.case_id }}
+          name: generated-oracle-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ inputs.case_id }}
           path: .build/validation-evidence/oracle/${{ inputs.case_id }}
       - name: Compare generated and upstream TLA through TLC
         if: steps.upstream-reuse.outputs.reuse != 'true'
