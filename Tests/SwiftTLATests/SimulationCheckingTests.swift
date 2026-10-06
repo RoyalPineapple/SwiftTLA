@@ -65,4 +65,34 @@ struct SimulationCheckingTests {
         #expect(witness.violations == [.invariant(.OnlyZero)])
         #expect(witness.trace.map { $0.state.state.value } == [1])
     }
+
+    @Test("Simulation checks later traces before reporting inconclusive")
+    func checksRequestedTraceCount() throws {
+        let initial = try LaterTraceSafetySimulationModel.initialMachines()
+        let checking = ModelChecks<LaterTraceSafetySimulationModel.Property>(
+            properties: [.NonNegative], checkDeadlock: false)
+        var firstOnly = LaterTraceCandidateGenerator()
+        let one = try MachineSimulator.run(initialMachines: initial, maximumDepth: 2,
+            checking: checking, using: &firstOnly)
+        guard case .inconclusive(_, .deadEnd) = one else {
+            Issue.record("The first safe trace must end without proving the invariant")
+            return
+        }
+
+        var both = LaterTraceCandidateGenerator()
+        let two = try MachineSimulator.run(initialMachines: initial, maximumDepth: 2,
+            traceCount: 2, checking: checking, using: &both)
+        guard case .counterexample(let witness) = two else {
+            Issue.record("A later sampled trace must expose its counterexample")
+            return
+        }
+        #expect(witness.violations == [.invariant(.NonNegative)])
+        #expect(witness.trace.map { $0.state.state.value } == [2, 1, -1])
+
+        #expect(throws: ExplorationError.invalidSimulationTraceCount(0)) {
+            var generator = LaterTraceCandidateGenerator()
+            _ = try MachineSimulator.run(initialMachines: initial, maximumDepth: 2,
+                traceCount: 0, checking: checking, using: &generator)
+        }
+    }
 }

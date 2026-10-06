@@ -13,6 +13,22 @@ public enum NativeSimulationResult<Machine: StateMachine>: Sendable {
 /// Samples generated-machine transitions without deduplicating revisited states.
 public enum MachineSimulator {
     public static func run<Machine: StateMachine, Generator: RandomNumberGenerator>(
+        initialMachines: [Machine], maximumDepth: Int, traceCount: Int = 1,
+        checking: ModelChecks<Machine.Property>,
+        using generator: inout Generator
+    ) throws -> NativeSimulationResult<Machine> {
+        guard traceCount > 0 else { throw ExplorationError.invalidSimulationTraceCount(traceCount) }
+        var result = try runTrace(initialMachines: initialMachines, maximumDepth: maximumDepth,
+            checking: checking, using: &generator)
+        for _ in 1..<traceCount {
+            if case .counterexample = result { return result }
+            result = try runTrace(initialMachines: initialMachines, maximumDepth: maximumDepth,
+                checking: checking, using: &generator)
+        }
+        return result
+    }
+
+    private static func runTrace<Machine: StateMachine, Generator: RandomNumberGenerator>(
         initialMachines: [Machine], maximumDepth: Int, checking: ModelChecks<Machine.Property>,
         using generator: inout Generator
     ) throws -> NativeSimulationResult<Machine> {
