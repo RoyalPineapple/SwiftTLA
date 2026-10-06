@@ -99,6 +99,9 @@ struct NativeSwiftEmitter {
         case .named(let name): return name
         case .oneOf(let first, let second): return "OneOf<\(try swiftType(first)), \(try swiftType(second))>"
         case .nominalRecord(let name, _): return name
+        case .tuple(let elements) where NativeTypeDeclarations.usesPublicTuple(type):
+            let name = elements.count == 2 ? "Pair" : "Triple"
+            return "\(name)<\(try elements.map(swiftType).joined(separator: ", "))>"
         case .finite, .union, .record, .tuple:
             guard let name = typeDeclarations.names[type] else {
                 throw unsupported("missing resolved type declaration")
@@ -135,7 +138,11 @@ struct NativeSwiftEmitter {
     func fieldName(_ type: CompiledValueType, index: Int, escaped: Bool = true) -> String {
         switch type {
         case .record(let fields), .nominalRecord(_, let fields): return escaped ? "`\(fields[index].name)`" : fields[index].name
-        case .tuple(let elements): return elements.count == 2 ? (index == 0 ? "first" : "second") : "element\(index + 1)"
+        case .tuple(let elements):
+            if NativeTypeDeclarations.usesPublicTuple(type) {
+                return ["first", "second", "third"][index]
+            }
+            return elements.count == 2 ? (index == 0 ? "first" : "second") : "element\(index + 1)"
         default: preconditionFailure("Field naming requires resolved record or tuple types")
         }
     }

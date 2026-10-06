@@ -10,6 +10,22 @@ struct NativeTypeDeclarations: Sendable {
     let finiteValues: [[CompiledValue]]
     let modelValueCases: [String: String]
 
+    static func usesPublicTuple(_ type: CompiledValueType) -> Bool {
+        guard case .tuple(let elements) = type, (2...3).contains(elements.count) else { return false }
+        return elements.allSatisfy(supportsPublicValueType)
+    }
+
+    private static func supportsPublicValueType(_ type: CompiledValueType) -> Bool {
+        switch type {
+        case .int, .bool, .string, .named, .nominalRecord: return true
+        case .oneOf(let first, let second), .dictionary(let first, let second):
+            return supportsPublicValueType(first) && supportsPublicValueType(second)
+        case .set(let element), .array(let element): return supportsPublicValueType(element)
+        case .tuple: return usesPublicTuple(type)
+        default: return false
+        }
+    }
+
     init(program: CompiledProgram) {
         var types: [CompiledValueType] = []
         var values: [CompiledValue] = []
@@ -88,6 +104,7 @@ struct NativeTypeDeclarations: Sendable {
             switch type {
             case .nominalRecord:
                 nominalRecords.append(type)
+            case .tuple where Self.usesPublicTuple(type): break
             case .record, .tuple:
                 names[type] = "NativeRecord\(records.count)"
                 records.append(type)

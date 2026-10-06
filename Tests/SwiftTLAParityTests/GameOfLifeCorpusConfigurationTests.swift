@@ -22,7 +22,7 @@ struct GameOfLifeCorpusConfigurationTests {
 
     @Test("Generated Game of Life machine updates every cell synchronously")
     func blinkerTransition() throws {
-        typealias Position = GameOfLifeModel.NativeRecord0
+        typealias Position = GameOfLifeModel.Position
         let positions = (1...4).flatMap { column in
             (1...4).map { row in Position(first: column, second: row) }
         }
