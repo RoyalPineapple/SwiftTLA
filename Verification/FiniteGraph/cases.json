@@ -1358,10 +1358,18 @@
       "scenario": "EWD840_anim",
       "module": "ewd840/EWD840_anim.tla",
       "configuration": "ewd840/EWD840_anim.cfg",
-      "imports": ["ewd840/EWD840.tla", "ewd840/SVG.tla", "sync-termination-detection/SyncTerminationDetection.tla"],
+      "imports": ["ewd840/EWD840.tla", "ewd840/SVG.tla", "ewd840/IOUtils.tla", "ewd840/SequencesExt.tla", "die-hardest/FiniteSetsExt.tla", "kvsnap/Folds.tla", "kvsnap/Functions.tla", "sync-termination-detection/SyncTerminationDetection.tla"],
       "dependencies": [
         {"importingModule": "EWD840_anim", "importedModule": "EWD840"},
         {"importingModule": "EWD840_anim", "importedModule": "SVG"},
+        {"importingModule": "SVG", "importedModule": "IOUtils"},
+        {"importingModule": "IOUtils", "importedModule": "SequencesExt"},
+        {"importingModule": "SequencesExt", "importedModule": "FiniteSetsExt"},
+        {"importingModule": "SequencesExt", "importedModule": "Folds"},
+        {"importingModule": "SequencesExt", "importedModule": "Functions"},
+        {"importingModule": "FiniteSetsExt", "importedModule": "Folds"},
+        {"importingModule": "FiniteSetsExt", "importedModule": "Functions"},
+        {"importingModule": "Functions", "importedModule": "Folds"},
         {"importingModule": "EWD840", "importedModule": "SyncTerminationDetection"}
       ],
       "sourceInput": {

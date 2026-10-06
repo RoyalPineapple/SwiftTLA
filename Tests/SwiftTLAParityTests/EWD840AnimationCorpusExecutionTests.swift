@@ -4,7 +4,7 @@ import SwiftTLA
 import UpstreamParity
 
 struct EWD840AnimationCorpusExecutionTests {
-    @Test("animated TLC case declares its full dependency closure and pins SVG")
+    @Test("animated TLC case declares and pins its community-module closure")
     func pinnedSimulationInputs() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -12,9 +12,23 @@ struct EWD840AnimationCorpusExecutionTests {
             from: Data(contentsOf: root.appendingPathComponent("Verification/FiniteGraph/cases.json")))
         let declaration = try #require(manifest.cases.first { $0.id == "ewd840-anim-0" })
         #expect(declaration.comparisonMode == .simulation)
+        #expect(declaration.imports.contains("ewd840/IOUtils.tla"))
+        #expect(declaration.dependencies.contains {
+            $0.importingModule == "SVG" && $0.importedModule == "IOUtils"
+        })
         let fixtures = root.appendingPathComponent("Verification/FiniteGraph/fixtures")
-        let svg = try Data(contentsOf: fixtures.appendingPathComponent("ewd840/SVG.tla"))
-        #expect(SHA256.hex(svg) == "a4d127c92ebc756b9f5c4bee354fd474f83a612e188915989212d197ab17747a")
+        let pinnedHelpers = [
+            "ewd840/SVG.tla": "a4d127c92ebc756b9f5c4bee354fd474f83a612e188915989212d197ab17747a",
+            "ewd840/IOUtils.tla": "c107b97b6fa302f0c84855eaa8b6b6cd536710302e7e2e5ebbbbbd47accad4ad",
+            "ewd840/SequencesExt.tla": "c1917953561b54bc70b0d4d9580e3357df2df03e9cbceb22fa4de221166c1333",
+            "die-hardest/FiniteSetsExt.tla": "dc5d6944395dd18e2f8acf696296808a9460cbbf1b9888f88c5ac4c83a5237f9",
+            "kvsnap/Folds.tla": "aa59063fd600bb640b2ae24dc85ef770277ef5bf7955092b76b8b471790086da",
+            "kvsnap/Functions.tla": "b54ff63b7c76c327525c17c188d5f9f5e53d92f3fd701f5e2ba54f0f54391063"
+        ]
+        for (path, digest) in pinnedHelpers {
+            let source = try Data(contentsOf: fixtures.appendingPathComponent(path))
+            #expect(SHA256.hex(source) == digest)
+        }
         let bundle = try TLCProcessRequest.declaredBundle(
             root: fixtures.appendingPathComponent(declaration.module),
             configuration: fixtures.appendingPathComponent(declaration.configuration),
