@@ -448,6 +448,7 @@ jobs:
           path: |
             .build/validation-evidence
             !.build/validation-evidence/**/work/**
+            !.build/validation-evidence/oracle/**
             !.build/validation-evidence/upstream/*/generated-graph-spool/**
             !.build/validation-evidence/upstream/*/reference-graph-spool/**
           include-hidden-files: true
