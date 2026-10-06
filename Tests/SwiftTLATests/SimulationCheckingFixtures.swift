@@ -80,3 +80,38 @@ struct LaterTraceCandidateGenerator: RandomNumberGenerator {
         return draws < 2 ? 0 : .max
     }
 }
+
+@TLAModel
+struct SampledTemporalViolationModel {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("SampledTemporalViolation") { scope in
+            let value = scope.sharedVar(initial: 0)
+            Do(Step.advance, when: value < 2) { Assign(value, to: value + 1) }
+            let EventuallyThree = Temporal()
+            EventuallyThree(.eventually(value == 3))
+            let sampled = Validation {}.checking(only: [EventuallyThree])
+                .checkingDeadlock(false).simulating(traces: 1, maximumDepth: 2)
+                .expect(EventuallyThree, .violated)
+            sampled
+        }
+    }
+}
+
+@TLAModel
+struct SampledTemporalNonproofModel {
+    enum Step: String, CaseIterable { case advance }
+
+    static var spec: TLASpec {
+        #spec("SampledTemporalNonproof") { scope in
+            let value = scope.sharedVar(initial: 0)
+            Do(Step.advance, when: value == 0) { Assign(value, to: 1) }
+            let EventuallyZero = Temporal()
+            EventuallyZero(.eventually(value == 0))
+            let sampled = Validation {}.checking(only: [EventuallyZero])
+                .checkingDeadlock(false).simulating(traces: 1, maximumDepth: 1)
+            sampled
+        }
+    }
+}

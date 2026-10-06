@@ -499,9 +499,10 @@ struct CompiledLowerer {
             if let mode = scenario.checkingModeSelections.first, case .simulation = mode {
                 let unsupported = properties.filter {
                     checks.contains($0.id) && $0.declaration.kind != .invariant
+                        && $0.declaration.kind != .temporalProperty
                 }.map(\.declaration.name)
                 guard unsupported.isEmpty else {
-                    throw invalid(scenario.name, "simulation supports selected invariants only: \(unsupported.sorted().joined(separator: ", "))")
+                    throw invalid(scenario.name, "simulation cannot sample selected checks: \(unsupported.sorted().joined(separator: ", "))")
                 }
                 guard scenario.expectations.allSatisfy({ $0.expected == .violated }),
                       scenario.deadlockExpectations.allSatisfy({ $0 == .violated }) else {

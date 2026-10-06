@@ -1239,8 +1239,9 @@ witness and never claims complete graph or unresolved deadlock parity.
 For bounded sampling, a scenario declares
 `.simulating(traces: 100, maximumDepth: 100)`; `maximumDepth` defaults to 100.
 Both bounds must be positive. Sampling uses the generated machine and selected
-invariants or deadlock check; selected temporal, reachability, or refinement
-checks and satisfied expectations are invalid. A sampled counterexample is a
+invariants, temporal properties, or deadlock check; selected reachability or
+refinement checks and satisfied expectations are invalid. A temporal violation
+requires a lasso in the sampled trace graph. A sampled counterexample is a
 violation with a witness; finishing
 the traces without one is inconclusive, not satisfaction or complete-graph
 evidence. Simulation does not change the generated TLA+ model. The TLC adapter

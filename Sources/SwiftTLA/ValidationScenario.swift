@@ -153,8 +153,10 @@ extension ModelValidationScenario {
     public func simulate<Generator: RandomNumberGenerator>(
         maximumDepth: Int, traceCount: Int = 1, using generator: inout Generator
     ) throws -> NativeSimulationResult<Machine> {
-        try MachineSimulator.run(initialMachines: initialMachines(), maximumDepth: maximumDepth, traceCount: traceCount,
-                                 checking: checking, using: &generator)
+        let initial = try initialMachines()
+        let fairness = behavior == .specification ? try initial.first.map { try fairnessConditions(on: $0) } : nil
+        return try MachineSimulator.run(initialMachines: initial, maximumDepth: maximumDepth,
+            traceCount: traceCount, checking: checking, behavior: behavior, fairness: fairness, using: &generator)
     }
 
     public func simulate<Generator: RandomNumberGenerator>(

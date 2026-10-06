@@ -109,4 +109,31 @@ struct SimulationCheckingTests {
         #expect(witness.violations == [.invariant(.NonNegative)])
         #expect(witness.trace.map { $0.state.state.value } == [2, 1, -1])
     }
+
+    @Test("a sampled trace reports a temporal counterexample with a lasso")
+    func sampledTemporalWitness() throws {
+        let scenario = try #require(SampledTemporalViolationModel.validationScenarios().first)
+        var generator = FirstCandidateGenerator()
+        let result = try scenario.simulate(using: &generator)
+        guard case .temporalCounterexample(let property, let witness, let trace) = result else {
+            Issue.record("The sampled trace must expose a violating lasso")
+            return
+        }
+        #expect(property == .EventuallyThree)
+        #expect(trace.map { $0.state.state.value } == [0, 1, 2])
+        #expect(!witness.cycle.isEmpty)
+    }
+
+    @Test("a sampled trace without a temporal violation is inconclusive")
+    func sampledTemporalNonproof() throws {
+        let scenario = try #require(SampledTemporalNonproofModel.validationScenarios().first)
+        var generator = FirstCandidateGenerator()
+        let result = try scenario.simulate(using: &generator)
+        guard case .inconclusive(let trace, let reason) = result else {
+            Issue.record("The sampled trace must not establish temporal satisfaction")
+            return
+        }
+        #expect(trace.map { $0.state.state.value } == [0, 1])
+        #expect(reason == .maximumDepth)
+    }
 }
