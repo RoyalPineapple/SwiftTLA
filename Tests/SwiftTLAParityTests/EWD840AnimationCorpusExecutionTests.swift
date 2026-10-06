@@ -42,6 +42,20 @@ struct EWD840AnimationCorpusExecutionTests {
         #expect(!rendered.checksDeadlock)
     }
 
+    @Test("the published nine-node simulation finds its selected safety witness")
+    func sampledExpectedFailure() throws {
+        let scenario = try #require(EWD840AnimationModel.validationScenarios().first)
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: output) }
+        let result = try NativeValidationRunner.run(scenario: scenario,
+            caseID: "ewd840-anim-0", maximumStates: 10_000_000, to: output)
+        #expect(!result.graphComplete)
+        #expect(result.properties == ["AnimInv": .violated])
+        #expect(result.deadlock == nil)
+        try NativeValidationRunner.verifySampledWitness(scenario: scenario,
+            caseID: "ewd840-anim-0", report: result, in: output)
+    }
+
     @Test("animated steps preserve typed history and render the level check")
     func generatedHistoryAndCheck() throws {
         let configuration = try EWD840AnimationModel.Configuration(N: 2)
