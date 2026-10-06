@@ -318,6 +318,8 @@ extension ParserSession {
                 }
                 if excluded.count == labels.elements.count {
                     specBindings.fairnessProfiles[sourceName] = .init(name: sourceName, excludedLabels: excluded)
+                    propertyDeclarationOffsets["fairnessProfiles.\(sourceName)", default: []].append(
+                        binding.pattern.positionAfterSkippingLeadingTrivia.utf8Offset)
                 }
             } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Algorithm" {
                 guard declaration.bindingSpecifier.text == "let", specBindings.algorithms[sourceName] == nil else {

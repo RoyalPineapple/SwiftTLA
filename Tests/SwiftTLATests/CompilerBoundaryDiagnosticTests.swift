@@ -623,6 +623,40 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("An invalid fairness profile points to its declaration")
+    func invalidFairnessProfilePointsToDeclaration() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Step: String, CaseIterable { case ncs, other }
+            static var spec: TLASpec {
+                #spec {
+                    let algorithm = Algorithm(scoped: { scope in
+                        Each(Set<Int>([0]), fairness: .weak) { _ in
+                            Do(Step.ncs) { Goto(Step.ncs) }
+                        }
+                    })
+                    algorithm
+                    let profile = FairnessProfile(excluding: [Step.other])
+                    profile
+                }
+            }
+        }
+        """)
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let profile = try #require(Array(source.tokens(viewMode: .sourceAccurate))
+            .first { $0.text == "profile" })
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(declaration)
+            Issue.record("An exclusion outside the process fairness group must fail")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .unsupportedFairnessProfile)
+            #expect(diagnostic.path == "fairnessProfiles.profile")
+            #expect(diagnostic.actual == "other")
+            #expect(diagnostic.sourceOffset == profile.positionAfterSkippingLeadingTrivia.utf8Offset)
+        }
+    }
+
     @Test("A refinement selected with symmetry points to the scenario selection")
     func refinementScenarioSymmetryPointsToSelection() throws {
         let source = Parser.parse(source: """

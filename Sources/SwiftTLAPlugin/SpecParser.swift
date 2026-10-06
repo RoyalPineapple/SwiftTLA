@@ -72,7 +72,7 @@ final class ParserSession {
         var key = String(path[..<end])
         guard key.hasPrefix("invariants.") || key.hasPrefix("reachabilityProperties.")
             || key.hasPrefix("temporalProperties.") || key.hasPrefix("refinements.")
-            || key.hasPrefix("validation.") else { return nil }
+            || key.hasPrefix("validation.") || key.hasPrefix("fairnessProfiles.") else { return nil }
         while true {
             if let offsets = propertyDeclarationOffsets[key] {
                 return offsets.count == 1 ? offsets[0] : nil
