@@ -10663,8 +10663,19 @@
     {
       "path": "specifications/TransitiveClosure",
       "name": "Transitive Closure",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned source, empty configuration, and published zero-state manifest inspected; implementation and hosted assumption parity pending",
+      "gap": "The sole TLC configuration is empty and checks two ASSUME claims without Init, Next, or a state graph. The first compares TC1, TC2, TC3, and TC4 for every relation over 0..3 nodes; the second compares operator-parameter TC5 with TC1. An equivalent SwiftTLA port must preserve bounded sequence enumeration, relation composition, recursive operator definitions, and the operator-valued TC5 parameter. No Swift implementation or independent native/generated-TLC/upstream-TLC assumption evidence exists; do not substitute a finite transition graph or credit the mathematical definitions from a smaller sample.",
+      "sourceAudit": {
+        "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
+        "configurationEmpty": true,
+        "expectedDistinctStates": 0,
+        "expectedTotalStates": 0,
+        "expectedStateDepth": 0,
+        "assumptions": [
+          "TC1(R) = TC2(R) = TC3(R) = TC4(R) for every R subset of (1..N) x (1..N), N in 0..3",
+          "TC5(RR, Support(R), s, t) iff <<s, t>> in TC1(R) for every such R and s,t in Support(R)"
+        ]
+      },
       "legacyCleanupComplete": false,
       "modules": [
         {
