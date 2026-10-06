@@ -100,6 +100,9 @@ struct UpstreamTLCParityCacheTests {
                 from: oracle, to: root.appendingPathComponent("incomplete"),
                 id: "fixture", bundle: bundle, pin: pin)
         }
+        try FileManager.default.removeItem(at: oracle)
+        #expect(try Data(contentsOf: output.appendingPathComponent("graph-events.bin.gz"))
+            == Data([0x1f, 0x8b]))
     }
 
     @Test("upstream evidence is bound to both module inputs and the exploration limit")

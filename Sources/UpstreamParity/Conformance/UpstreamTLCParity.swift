@@ -634,7 +634,22 @@ package enum UpstreamTLCParity {
               let cacheKey = origin?["cacheKey"] as? String, !cacheKey.isEmpty else {
             throw UpstreamTLCParityError.invalidOutcome("cached generated oracle origin: \(id)")
         }
-        try FileManager.default.copyItem(at: retained, to: output)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false)
+        for source in try FileManager.default.contentsOfDirectory(
+            at: retained, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]
+        ) {
+            let destination = output.appendingPathComponent(source.lastPathComponent)
+            if source.lastPathComponent == "graph-events.bin.gz" {
+                let values = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                guard values.isRegularFile == true, values.isSymbolicLink != true else {
+                    throw UpstreamTLCParityError.invalidOutcome("cached generated oracle graph: \(id)")
+                }
+                do { try FileManager.default.linkItem(at: source, to: destination) }
+                catch { try FileManager.default.copyItem(at: source, to: destination) }
+            } else {
+                try FileManager.default.copyItem(at: source, to: destination)
+            }
+        }
         try FileManager.default.copyItem(at: oracle.appendingPathComponent("oracle.json"),
             to: output.appendingPathComponent("oracle.json"))
         try FileManager.default.copyItem(at: oracle.appendingPathComponent("evidence-origin.json"),
