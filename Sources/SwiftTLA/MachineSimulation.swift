@@ -18,33 +18,19 @@ public enum MachineSimulator {
         using generator: inout Generator
     ) throws -> NativeSimulationResult<Machine> {
         guard traceCount > 0 else { throw ExplorationError.invalidSimulationTraceCount(traceCount) }
-        var result = try runTrace(initialMachines: initialMachines, maximumDepth: maximumDepth,
-            checking: checking, using: &generator)
-        for _ in 1..<traceCount {
-            if case .counterexample = result { return result }
-            result = try runTrace(initialMachines: initialMachines, maximumDepth: maximumDepth,
-                checking: checking, using: &generator)
-        }
-        return result
-    }
-
-    private static func runTrace<Machine: StateMachine, Generator: RandomNumberGenerator>(
-        initialMachines: [Machine], maximumDepth: Int, checking: ModelChecks<Machine.Property>,
-        using generator: inout Generator
-    ) throws -> NativeSimulationResult<Machine> {
         guard maximumDepth > 0 else { throw ExplorationError.invalidSimulationDepth(maximumDepth) }
         guard let first = initialMachines.first else { throw ExplorationError.noInitialStates }
         if let unsupported = checking.properties.subtracting(Machine.invariantProperties)
             .map({ Machine.formalPropertyNames[$0] ?? String(reflecting: $0) }).sorted().first {
             throw ExplorationError.unsupportedValidationProperty(unsupported)
         }
-        var context = CheckingContext(registers: try first.initialCheckingRegisters())
-        try context.advanceLevel()
+        var initialContext = CheckingContext(registers: try first.initialCheckingRegisters())
+        try initialContext.advanceLevel()
         var eligibleInitial: [Machine] = []
         for machine in initialMachines {
             guard machine.hasSameConfiguration(as: first) else { throw ExplorationError.configurationMismatch }
             guard try machine.assumptionsHold() else { throw ExplorationError.assumptionViolated }
-            let failures = try machine.violatedInvariants(checking: checking.properties, atLevel: context.level)
+            let failures = try machine.violatedInvariants(checking: checking.properties, atLevel: initialContext.level)
                 .map(SafetyViolation.invariant)
             if !failures.isEmpty {
                 return .counterexample(.init(violations: failures, trace: [(nil, machine.snapshot)], checking: checking))
@@ -53,7 +39,23 @@ public enum MachineSimulator {
         }
         guard !eligibleInitial.isEmpty else { throw ExplorationError.noInitialStates }
 
-        var machine = eligibleInitial[Int.random(in: 0..<eligibleInitial.count, using: &generator)]
+        var result = try runTrace(initialMachines: eligibleInitial, first: first, maximumDepth: maximumDepth,
+            checking: checking, using: &generator)
+        for _ in 1..<traceCount {
+            if case .counterexample = result { return result }
+            result = try runTrace(initialMachines: eligibleInitial, first: first, maximumDepth: maximumDepth,
+                checking: checking, using: &generator)
+        }
+        return result
+    }
+
+    private static func runTrace<Machine: StateMachine, Generator: RandomNumberGenerator>(
+        initialMachines: [Machine], first: Machine, maximumDepth: Int, checking: ModelChecks<Machine.Property>,
+        using generator: inout Generator
+    ) throws -> NativeSimulationResult<Machine> {
+        var context = CheckingContext(registers: try first.initialCheckingRegisters())
+        try context.advanceLevel()
+        var machine = initialMachines[Int.random(in: 0..<initialMachines.count, using: &generator)]
         var trace: [(action: Machine.Action?, state: Machine.Snapshot)] = [(nil, machine.snapshot)]
         for _ in 0..<maximumDepth {
             try Task.checkCancellation()
