@@ -2,28 +2,55 @@ import Dispatch
 
 /// Hashes select candidate snapshots; only complete snapshot equality identifies a state.
 private struct SeenSnapshots<Snapshot: Hashable> {
-    private struct Key: Hashable {
+    private static var pageSize: Int { 16_384 }
+
+    private struct Entry {
         let hash: Int
-        let snapshot: Snapshot
+        let id: Int
+    }
 
-        func hash(into hasher: inout Hasher) { hasher.combine(hash) }
+    private var entries = Array(repeating: Entry(hash: 0, id: -1), count: 16_384)
+    private var pages: [[Snapshot]] = []
+    private(set) var count = 0
 
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            lhs.hash == rhs.hash && lhs.snapshot == rhs.snapshot
+    func id(for snapshot: Snapshot, hash: Int) -> Int? {
+        let mask = entries.count - 1
+        var slot = hash & mask
+        while true {
+            let entry = entries[slot]
+            if entry.id < 0 { return nil }
+            if entry.hash == hash && pages[entry.id / Self.pageSize][entry.id % Self.pageSize] == snapshot {
+                return entry.id
+            }
+            slot = (slot + 1) & mask
         }
     }
 
-    private var ids: [Key: Int] = [:]
-    var count: Int { ids.count }
-
-    func id(for snapshot: Snapshot, hash: Int) -> Int? {
-        ids[Key(hash: hash, snapshot: snapshot)]
+    mutating func insert(_ snapshot: Snapshot, hash: Int) -> Int {
+        if count >= entries.count - entries.count / 4 { grow() }
+        let id = count
+        if pages.isEmpty || pages[pages.count - 1].count == Self.pageSize {
+            var page: [Snapshot] = []
+            page.reserveCapacity(Self.pageSize)
+            pages.append(page)
+        }
+        pages[pages.count - 1].append(snapshot)
+        count += 1
+        place(hash: hash, id: id)
+        return id
     }
 
-    mutating func insert(_ snapshot: Snapshot, hash: Int) -> Int {
-        let id = ids.count
-        ids[Key(hash: hash, snapshot: snapshot)] = id
-        return id
+    private mutating func grow() {
+        let previous = entries
+        entries = Array(repeating: Entry(hash: 0, id: -1), count: previous.count * 2)
+        for entry in previous where entry.id >= 0 { place(hash: entry.hash, id: entry.id) }
+    }
+
+    private mutating func place(hash: Int, id: Int) {
+        let mask = entries.count - 1
+        var slot = hash & mask
+        while entries[slot].id >= 0 { slot = (slot + 1) & mask }
+        entries[slot] = Entry(hash: hash, id: id)
     }
 }
 
