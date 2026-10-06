@@ -34,3 +34,18 @@ struct CandidateSafetySimulationModel {
 struct LastCandidateGenerator: RandomNumberGenerator {
     mutating func next() -> UInt64 { .max }
 }
+
+@TLAModel
+struct ConstrainedInitialSafetySimulationModel {
+    static var spec: TLASpec {
+        #spec("ConstrainedInitialSafetySimulation") { scope in
+            let value = scope.sharedVar(in: IntRange(0, through: 1))
+            Constraint(value == 0)
+            Invariant("OnlyZero") { value == 0 }
+        }
+    }
+}
+
+struct FirstCandidateGenerator: RandomNumberGenerator {
+    mutating func next() -> UInt64 { 0 }
+}

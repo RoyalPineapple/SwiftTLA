@@ -47,4 +47,22 @@ struct SimulationCheckingTests {
         #expect(witness.violations == [.invariant(.NonZero)])
         #expect(witness.trace.map { $0.state.state.value } == [2, 0])
     }
+
+    @Test("Simulation checks initial invariants before excluding constrained states")
+    func checksConstrainedInitialCandidate() throws {
+        let initial = try ConstrainedInitialSafetySimulationModel.initialMachines()
+        #expect(initial.map { $0.state.value } == [0, 1])
+        var selectedIndex = FirstCandidateGenerator()
+        #expect(Int.random(in: 0..<initial.count, using: &selectedIndex) == 0)
+        var generator = FirstCandidateGenerator()
+
+        let result = try MachineSimulator.run(initialMachines: initial, maximumDepth: 1,
+            checking: .init(properties: [.OnlyZero], checkDeadlock: false), using: &generator)
+        guard case .counterexample(let witness) = result else {
+            Issue.record("A constrained-out initial state still has to satisfy invariants")
+            return
+        }
+        #expect(witness.violations == [.invariant(.OnlyZero)])
+        #expect(witness.trace.map { $0.state.state.value } == [1])
+    }
 }
