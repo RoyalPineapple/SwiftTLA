@@ -2,40 +2,28 @@ import Dispatch
 
 /// Hashes select candidate snapshots; only complete snapshot equality identifies a state.
 private struct SeenSnapshots<Snapshot: Hashable> {
-    private static var pageSize: Int { 16_384 }
+    private struct Key: Hashable {
+        let hash: Int
+        let snapshot: Snapshot
 
-    private var firstByHash: [Int: Int] = [:]
-    private var collisions: [Int: [Int]] = [:]
-    // Fixed pages keep a growing state index from copying every retained snapshot.
-    private var pages: [[Snapshot]] = []
-    private(set) var count = 0
+        func hash(into hasher: inout Hasher) { hasher.combine(hash) }
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.hash == rhs.hash && lhs.snapshot == rhs.snapshot
+        }
+    }
+
+    private var ids: [Key: Int] = [:]
+    var count: Int { ids.count }
 
     func id(for snapshot: Snapshot, hash: Int) -> Int? {
-        guard let first = firstByHash[hash] else { return nil }
-        if value(at: first) == snapshot { return first }
-        for id in collisions[hash] ?? [] where value(at: id) == snapshot { return id }
-        return nil
+        ids[Key(hash: hash, snapshot: snapshot)]
     }
 
     mutating func insert(_ snapshot: Snapshot, hash: Int) -> Int {
-        let id = count
-        if pages.isEmpty || pages[pages.count - 1].count == Self.pageSize {
-            var page: [Snapshot] = []
-            page.reserveCapacity(Self.pageSize)
-            pages.append(page)
-        }
-        pages[pages.count - 1].append(snapshot)
-        count += 1
-        if firstByHash[hash] == nil {
-            firstByHash[hash] = id
-        } else {
-            collisions[hash, default: []].append(id)
-        }
+        let id = ids.count
+        ids[Key(hash: hash, snapshot: snapshot)] = id
         return id
-    }
-
-    private func value(at id: Int) -> Snapshot {
-        pages[id / Self.pageSize][id % Self.pageSize]
     }
 }
 
