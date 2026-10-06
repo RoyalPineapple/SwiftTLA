@@ -65,6 +65,7 @@ package struct EWD840Model: Sendable {
             let TypeOK = Invariant()
             let TerminationDetection = Invariant()
             let Inv = Invariant()
+            let JsonInv = Invariant()
             let Liveness = Temporal()
             let terminated = ForAll(in: Node) { i in !active[i] }
             let terminationDetected = tpos == 0 && tcolor == Color.white
@@ -75,19 +76,26 @@ package struct EWD840Model: Sendable {
                     && Node.contains(tpos) && colors.contains(tcolor)
             }
             TerminationDetection { !terminationDetected || terminated }
-            Inv {
-                ForAll(in: Node) { i in tpos >= i || !active[i] }
-                    || Exists(in: IntRange(0, through: tpos)) { i in color[i] == Color.black }
-                    || tcolor == Color.black
-            }
+            let inductiveInvariant = ForAll(in: Node) { i in tpos >= i || !active[i] }
+                || Exists(in: IntRange(0, through: tpos)) { i in color[i] == Color.black }
+                || tcolor == Color.black
+            Inv { inductiveInvariant }
+            // The upstream JSON trace/exit effect belongs to validation, not the state predicate.
+            JsonInv { inductiveInvariant }
             Liveness(.leadsTo(terminated, terminationDetected))
 
-            let EWD840 = Validation { Bind(N, to: 3) }.checkingDeadlock(false)
+            let EWD840 = Validation { Bind(N, to: 3) }
+                .checking(only: [TypeOK, TerminationDetection, Inv, Liveness])
+                .checkingDeadlock(false)
             EWD840
             let APEWD840 = Validation { Bind(N, to: 3) }
                 .checking(only: [TypeOK, TerminationDetection])
                 .checkingDeadlock(false)
             APEWD840
+            let EWD840_json = Validation { Bind(N, to: 4) }
+                .checking(only: [JsonInv])
+                .checkingDeadlock(false)
+            EWD840_json
         }
     }
 }

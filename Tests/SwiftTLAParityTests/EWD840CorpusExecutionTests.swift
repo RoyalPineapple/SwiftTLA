@@ -9,6 +9,7 @@ struct EWD840CorpusExecutionTests {
         let scenario = try #require(scenarios.first { $0.name == "EWD840" })
         let rendered = try scenario.render()
         #expect(rendered.tlaBundle.cfg.contains("N = 3"))
+        #expect(rendered.checkNames == ["TypeOK", "TerminationDetection", "Inv", "Liveness"])
         #expect(!rendered.checksDeadlock)
 
         let ap = try #require(scenarios.first { $0.name == "APEWD840" })
@@ -17,6 +18,13 @@ struct EWD840CorpusExecutionTests {
         #expect(apRendered.tlaBundle.cfg.contains("N = 3"))
         #expect(apRendered.checkNames == ["TypeOK", "TerminationDetection"])
         #expect(!apRendered.checksDeadlock)
+
+        let json = try #require(scenarios.first { $0.name == "EWD840_json" })
+        #expect(json.checking.properties == [.JsonInv])
+        let jsonRendered = try json.render()
+        #expect(jsonRendered.tlaBundle.cfg.contains("N = 4"))
+        #expect(jsonRendered.checkNames == ["JsonInv"])
+        #expect(!jsonRendered.checksDeadlock)
     }
 
     @Test("EWD840 preserves one System fairness obligation across native and TLA outputs")
@@ -93,5 +101,13 @@ struct EWD840CorpusExecutionTests {
             $0.state.active.count == 4 && $0.state.active.keys.contains(3)
                 && $0.state.color.count == 4 && $0.state.color.keys.contains(3)
         })
+    }
+
+    @Test("the JSON wrapper's selected predicate holds on the complete four-node native graph")
+    func jsonSelectedPredicate() throws {
+        let scenario = try #require(EWD840Model.validationScenarios().first { $0.name == "EWD840_json" })
+        let graph = try scenario.explore(maximumStates: 100_000)
+        #expect(graph.initialStates.count == 1_024)
+        #expect(graph.safetyViolations.isEmpty)
     }
 }
