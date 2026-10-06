@@ -376,6 +376,23 @@ struct ValidationEvidenceComparisonTests {
             generated: generated, reference: reference, actions: actions, in: root) == nil)
     }
 
+    @Test("an undeclared TLC action identifies the observed invocation")
+    func undeclaredTLCActionIdentifiesInvocation() throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let generated = root.appendingPathComponent("generated.bin")
+        let reference = root.appendingPathComponent("reference.bin")
+        try tlcGraph(edgeCount: 1).write(to: generated)
+        try tlcGraph(edgeCount: 1, actionName: "Wakeup",
+            actionLocation: "<Wakeup(0,1) line 2, col 1 to line 2, col 10 of module Example>")
+            .write(to: reference)
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence(
+            "undeclared TLC action Wakeup(0,1)")) {
+            _ = try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+                generated: generated, reference: reference, actions: actions, in: root)
+        }
+    }
+
     @Test("retained TLC graph replay requires completed runs")
     func retainedGraphReplayRequiresCompletion() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -597,7 +614,7 @@ struct ValidationEvidenceComparisonTests {
     }
 
     private func tlcGraph(edgeCount: Int, source: UInt64 = 101, target: UInt64 = 202,
-        actionName: String = "Next", reverseEdge: Bool = false,
+        actionName: String = "Next", actionLocation: String = "", reverseEdge: Bool = false,
         stateCount: Int = 2, lastEdgeTarget: Int? = nil) -> Data {
         var body = Data("STLAGRF2".utf8)
         body.append(1)
@@ -624,7 +641,7 @@ struct ValidationEvidenceComparisonTests {
         body.append(1)
         append(UInt32(0), to: &body)
         append(actionName, to: &body)
-        append("", to: &body)
+        append(actionLocation, to: &body)
         if reverseEdge {
             body.append(3)
             append(target, to: &body)

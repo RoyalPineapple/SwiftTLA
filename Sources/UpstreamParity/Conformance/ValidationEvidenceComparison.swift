@@ -679,7 +679,7 @@ package enum ValidationEvidenceComparison {
         let identity = tlaInvocationLocationIdentity(action: name,
             arguments: try TLCValueParser.components(arguments))
         guard let label = declared[identity] else {
-            throw ValidationEvidenceComparisonError.invalidEvidence("undeclared TLC action")
+            throw ValidationEvidenceComparisonError.invalidEvidence("undeclared TLC action \(identity)")
         }
         return label
     }
