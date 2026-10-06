@@ -92,6 +92,27 @@ struct EWD840CorpusExecutionTests {
         #expect(native.safetyViolations.values.allSatisfy { $0 == [.deadlock] })
     }
 
+    @Test("EWD840's generated machine refines synchronous termination detection, including fairness")
+    func synchronousTerminationRefinement() throws {
+        let concrete = try MachineValidationGraph(
+            initialMachines: EWD840Model.initialMachines(configuration: .init(N: 3)),
+            maximumStates: 1_000)
+        let abstractConfiguration = try SyncTerminationDetectionModel.Configuration(N: 3)
+        let abstract = try SyncTerminationDetectionModel.initialMachines(
+            configuration: abstractConfiguration)
+        let abstractStart = try #require(abstract.first)
+        #expect(try abstractStart.fairnessConditions().count == 1)
+        let failure = try concrete.refinementFailure(initialMachines: abstract) { snapshot in
+            let state = snapshot.state
+            return try SyncTerminationDetectionModel.makeMachine(
+                .init(active: state.active,
+                    terminationDetected: state.tpos == 0 && state.tcolor == .white
+                        && state.color[0] == .white && state.active[0] == false),
+                configuration: abstractConfiguration)
+        }
+        #expect(failure == nil)
+    }
+
     @Test("EWD840's configured domain supplies all four-node initial functions")
     func fourNodeInitialFunctions() throws {
         let configuration = try EWD840Model.Configuration(N: 4)
