@@ -30,11 +30,9 @@ package struct SyncTerminationDetectionModel: Sendable {
                     Assign(terminationDetected, to: detected)
                 }
             }
-            Do(Step.Wakeup, over: Node) { node in
+            Do(Step.Wakeup, over: Node, Node) { node, destination in
                 When(active[node])
-                With(Node) { destination in
-                    Assign(active[destination], to: true)
-                }
+                Assign(active[destination], to: true)
             }
             let detectTermination = Do(Step.DetectTermination) {
                 When(terminated)

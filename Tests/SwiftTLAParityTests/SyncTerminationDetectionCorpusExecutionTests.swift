@@ -22,6 +22,22 @@ struct SyncTerminationDetectionCorpusExecutionTests {
         #expect(graph.safetyViolations.isEmpty)
     }
 
+    @Test("wakeup retains both source and destination as action parameters")
+    func wakeupActionIdentity() throws {
+        let initial = try SyncTerminationDetectionModel.initialMachines(configuration: .init(N: 2))
+        let source = try #require(initial.first {
+            $0.state.active[0] == true && $0.state.active[1] == false
+        })
+        let graph = try ReachabilityGraph(initialMachines: initial, maximumStates: 100)
+        let outcomes = try #require(graph.transitions[source.snapshot])
+            .filter { $0.action == .Wakeup(node: 0, destination: 1) }
+        #expect(outcomes.count == 1)
+        #expect(outcomes[0].target.state.active[1] == true)
+
+        let rendered = try SyncTerminationDetectionModel.render(configuration: .init(N: 2))
+        #expect(rendered.tlaBundle.root.tla.contains("Wakeup(node, destination) =="))
+    }
+
     @Test("the published seven-node scenario checks the complete graph and all selected properties")
     func publishedScenario() throws {
         let scenario = try #require(SyncTerminationDetectionModel.validationScenarios().first)
