@@ -20,7 +20,14 @@ package struct EchoModel: Sendable {
 
     package struct Message: Hashable, Sendable {
         package let kind: MessageKind
-        package let sender: Node
+        package let sndr: Node
+    }
+
+    package enum NoNode: String, TLAValueType {
+        case value = "NoNode"
+
+        package static var defaultValue: Self { .value }
+        package var tlaValue: TLAValue { .constant(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
@@ -36,38 +43,42 @@ package struct EchoModel: Sendable {
                 ])
 
                 Each(Node.all, scoped: { (selfID: ProcessIdentifier<Node>, scope: ProcessScope) in
-                    // This bounded port uses a concrete parent default; upstream uses NoNode.
-                    let parent: LocalVariable<Node> = scope.localVar(initial: .a)
+                    let parent: LocalVariable<OneOf<Node, NoNode>> = scope.localVar(
+                        initial: OneOf<Node, NoNode>.second(NoNode.value)
+                    )
                     let children: LocalVariable<Set<Node>> = scope.localVar(initial: Set<Node>())
-                    let received: LocalVariable<Int> = scope.localVar(initial: 0)
+                    let rcvd: LocalVariable<Int> = scope.localVar(initial: 0)
+                    let nbrs: LocalVariable<Set<Node>> = scope.localVar(
+                        initial: Node.all.removing(selfID).assuming(Set<Node>.self)
+                    )
 
                     Do(Step.n0) {
                         If(selfID == .a) {
                             Assign(inbox, to: Dictionary<Node, Set<Message>>.mapping(over: Node.all) { (destination: WithValue<Node>) -> Expr<Set<Message>> in
-                                If(Node.all.removing(selfID).contains(destination),
-                                   then: inbox[destination].inserting(Message.expression(kind: MessageKind.message, sender: selfID)),
+                                If(nbrs.expr.contains(destination),
+                                   then: inbox[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
                                    else: inbox[destination])
                             })
                         }
                     }
 
-                    While(Step.n1, received.expr < Node.all.removing(selfID).cardinality) {
+                    While(Step.n1, rcvd.expr < nbrs.expr.cardinality) {
                         With(inbox[selfID]) { (message: WithValue<Message>) in
                             Let(inbox.updating(selfID, to: inbox[selfID].removing(message))) { (networkAfterReceive: WithValue<[Node: Set<Message>]>) in
-                                If(selfID != .a && received.expr == 0) {
+                                If(selfID != .a && rcvd.expr == 0) {
                                     Assert(message.kind == .message)
-                                    Assign(parent, to: message.sender)
+                                    Assign(parent, to: OneOf<Node, NoNode>.first(message.sndr))
                                     Assign(inbox, to: Dictionary<Node, Set<Message>>.mapping(over: Node.all) { (destination: WithValue<Node>) -> Expr<Set<Message>> in
-                                        If(Node.all.removing(selfID).removing(message.sender).contains(destination),
-                                           then: networkAfterReceive[destination].inserting(Message.expression(kind: MessageKind.message, sender: selfID)),
+                                        If(nbrs.expr.removing(message.sndr).contains(destination),
+                                           then: networkAfterReceive[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
                                            else: networkAfterReceive[destination])
                                     })
                                 } else: {
                                     Assign(inbox, to: networkAfterReceive.expr)
                                 }
-                                Assign(received, to: received.expr + 1)
+                                Assign(rcvd, to: rcvd.expr + 1)
                                 If(message.kind == .acknowledgement) {
-                                    Assign(children, to: children.expr.inserting(message.sender))
+                                    Assign(children, to: children.expr.inserting(message.sndr))
                                 }
                             }
                         }
@@ -75,9 +86,10 @@ package struct EchoModel: Sendable {
 
                     Do(Step.n2) {
                         If(selfID != .a) {
-                            Assert(Node.all.removing(selfID).contains(parent.expr))
-                            Assign(inbox, to: inbox.updating(parent, to: inbox[parent].inserting(
-                                Message.expression(kind: MessageKind.acknowledgement, sender: selfID)
+                            let destination = parent.expr.assuming(Node.self)
+                            Assert(nbrs.expr.contains(destination))
+                            Assign(inbox, to: inbox.updating(destination, to: inbox[destination].inserting(
+                                Message.expression(kind: MessageKind.acknowledgement, sndr: selfID)
                             )))
                         }
                     }
