@@ -638,7 +638,8 @@ memberSymmetry
 ```
 
 The current finite-domain implementation accepts enumerated nonempty member
-sets and `NonEmptySubsets` of a literal finite set. Other finite parameter-domain
+sets and `NonEmptySubsets` of a literal finite set or a typed set parameter whose
+domain recursively proves nonempty atomic members. Other finite parameter-domain
 expressions remain B-04 work; their rejection is not a TLC or PlusCal restriction.
 The compiler retains the parameter identity; TLA+ export defines the
 permutation operator over the rendered parameter, not a sample or default set.

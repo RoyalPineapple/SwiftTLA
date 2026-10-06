@@ -148,7 +148,9 @@ extension TLASpec {
     }
   }
 
-  private func possibleSymmetryValues(in domain: StateExpr) -> Set<TLAValue>? {
+  private func possibleSymmetryValues(
+    in domain: StateExpr, visited: Set<ParameterReference> = []
+  ) -> Set<TLAValue>? {
     let alternatives: [StateExpr]
     switch domain {
     case .setLiteral(let values): alternatives = values
@@ -156,7 +158,11 @@ extension TLASpec {
     case .powerSet: return []
     case .setDifference(.powerSet(let members), .setLiteral(let excluded))
       where excluded.count == 1 && literalSymmetrySet(excluded[0])?.isEmpty == true:
-      return literalSymmetrySet(members)
+      if let values = literalSymmetrySet(members) { return values }
+      guard case .parameter(let reference) = members,
+            !visited.contains(reference),
+            let parameter = parameters.first(where: { $0.reference == reference }) else { return nil }
+      return possibleSymmetryValues(in: parameter.domain, visited: visited.union([reference]))
     default: return nil
     }
     let candidates = alternatives.map(literalSymmetrySet)

@@ -2,6 +2,18 @@
 import Testing
 
 struct SymmetryDomainAdmissionTests {
+    @Test("Symmetry accepts nonempty subsets of a finite set parameter")
+    func parameterDependentMembersRemainFinite() throws {
+        let spec = TLASpec("DependentSymmetry") { scope in
+            let candidates = scope.parameter(as: Set<Int>.self,
+                in: NonEmptySubsets(of: Set<Int>([1, 2])), _name: "candidates")
+            let members = scope.parameter(as: Set<Int>.self,
+                in: NonEmptySubsets(of: candidates), _name: "members")
+            Symmetry(_name: "Members", members)
+        }
+        _ = try spec.compile()
+    }
+
     @Test("Composite domains are rejected before distinct function keys can collide")
     func compositeMembersCannotCollapseDistinctFunctionKeys() {
         let atom = TLAValue.int(1)
@@ -48,9 +60,17 @@ struct SymmetryDomainAdmissionTests {
                 in: NonEmptySubsets(of: Set<[Int]>([[1], [2]])))
             Symmetry(_name: "Members", members)
         }
+        let possiblyEmptySource = TLASpec("EmptyDependentSymmetry") { scope in
+            let candidates = scope.parameter(as: Set<Int>.self,
+                in: Subsets(of: Set<Int>([1, 2])), _name: "candidates")
+            let members = scope.parameter(as: Set<Int>.self,
+                in: NonEmptySubsets(of: candidates), _name: "members")
+            Symmetry(_name: "Members", members)
+        }
         for (spec, reason) in [(empty, "an empty domain"),
                                (composite, "composite symmetry member"),
                                (subsetsIncludingEmpty, "an empty domain"),
+                               (possiblyEmptySource, "an empty domain"),
                                (compositeSubsets, "composite symmetry member")] {
             do {
                 _ = try spec.compile()
