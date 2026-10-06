@@ -136,4 +136,16 @@ struct SimulationCheckingTests {
         #expect(trace.map { $0.state.state.value } == [0, 1])
         #expect(reason == .maximumDepth)
     }
+
+    @Test("a sampled graph cannot decide fairness from missing actions")
+    func sampledFairnessDoesNotInventCounterexample() throws {
+        let scenario = try #require(SampledFairTemporalModel.validationScenarios().first)
+        var generator = LastCandidateGenerator()
+        let result = try scenario.simulate(using: &generator)
+        guard case .inconclusive(let trace, _) = result else {
+            Issue.record("An unvisited fair action cannot be treated as disabled")
+            return
+        }
+        #expect(trace.map { $0.state.state.value } == [0, 0])
+    }
 }

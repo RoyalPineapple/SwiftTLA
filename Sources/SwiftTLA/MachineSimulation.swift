@@ -117,6 +117,9 @@ public enum MachineSimulator {
     ) throws -> NativeSimulationResult<Machine> {
         let selected = try first.temporalProperties(checking: checking.properties)
         guard !selected.isEmpty else { return .inconclusive(trace: trace, reason: reason) }
+        guard behavior == .specification, (fairness ?? []).isEmpty else {
+            return .inconclusive(trace: trace, reason: reason)
+        }
         var snapshots: [Machine.Snapshot] = []
         var identifiers: [Machine.Snapshot: Int] = [:]
         func id(for snapshot: Machine.Snapshot) -> Int {
@@ -145,6 +148,7 @@ public enum MachineSimulator {
             }
             if result.status == .violated {
                 guard let witness = result.witness else { throw ExplorationError.configurationMismatch }
+                guard witness.cycleActions.allSatisfy({ $0 == nil }) else { continue }
                 return .temporalCounterexample(property: property, witness: witness, trace: trace)
             }
         }
