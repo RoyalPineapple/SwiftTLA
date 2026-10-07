@@ -34,6 +34,8 @@ extension ParserSession {
                     source: statement))
                 return nil
             }
+            propertyDeclarationOffsets["generatedModelInstances.\(name).bindings.\(field)", default: []].append(
+                value.expression.positionAfterSkippingLeadingTrivia.utf8Offset)
             bindings.append(.init(fieldName: field, source: source))
         }
         return .init(name: name, targetModelType: typePath.joined(separator: "."), fieldBindings: bindings)
@@ -73,8 +75,12 @@ extension ParserSession {
                     source: statement))
                 return nil
             }
+            propertyDeclarationOffsets["generatedRefinements.\(name).mappings.\(field)", default: []].append(
+                value.expression.positionAfterSkippingLeadingTrivia.utf8Offset)
             mappings.append(.init(fieldName: field, source: source))
         }
+        propertyDeclarationOffsets["generatedRefinements.\(name)", default: []].append(
+            call.positionAfterSkippingLeadingTrivia.utf8Offset)
         return .init(name: name, reference: .init(name: name, displayLabel: label),
             instanceName: instanceName, fieldMappings: mappings)
     }

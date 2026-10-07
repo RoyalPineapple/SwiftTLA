@@ -400,6 +400,44 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("Generated refinement parameter errors point to their binding value")
+    func generatedRefinementParameterErrorPointsToBinding() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Step: String, CaseIterable, FiniteTLAValueDomain { case stay }
+            static var spec: TLASpec {
+                #spec { scope in
+                    let N = scope.parameter(as: Int.self, in: Int.all)
+                    let tpos = scope.sharedVar(initial: 0)
+                    Do(Step.stay) { Assign(tpos, to: tpos) }
+                    let TD = Instance(of: AbstractModel.self) {
+                        Bind(\\.N, to: tpos)
+                    }
+                    TD
+                    let TDSpec = Refinement(instance: TD) {
+                        Map(\\.value, from: tpos)
+                    }
+                    TDSpec
+                }
+            }
+        }
+        """)
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let value = try #require(Array(source.tokens(viewMode: .sourceAccurate))
+            .filter { $0.text == "tpos" }.dropLast().last)
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(declaration)
+            Issue.record("A generated abstract parameter cannot read concrete state")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .stateDependentRefinementParameter)
+            #expect(diagnostic.path == "generatedModelInstances.TD.bindings.N")
+            #expect(diagnostic.sourceOffset == value.positionAfterSkippingLeadingTrivia.utf8Offset)
+            let emitted = modelCompilationDiagnostic(diagnostic, in: declaration)
+            #expect(emitted.node.positionAfterSkippingLeadingTrivia == value.positionAfterSkippingLeadingTrivia)
+        }
+    }
+
     @Test("Invalid Instance arguments point to the supplied expression")
     func invalidInstanceArgumentPointsToExpression() throws {
         let source = Parser.parse(source: """

@@ -84,12 +84,14 @@ final class ParserSession {
         var key = String(path[..<end])
         guard key.hasPrefix("invariants.") || key.hasPrefix("reachabilityProperties.")
             || key.hasPrefix("temporalProperties.") || key.hasPrefix("refinements.")
+            || key.hasPrefix("generatedModelInstances.") || key.hasPrefix("generatedRefinements.")
             || key.hasPrefix("validation.") || key.hasPrefix("fairnessProfiles.") else { return nil }
         while true {
             if let offsets = propertyDeclarationOffsets[key] {
                 return offsets.count == 1 ? offsets[0] : nil
             }
-            guard key.hasPrefix("refinements."), let dot = key.lastIndex(of: ".") else { return nil }
+            guard key.hasPrefix("refinements.") || key.hasPrefix("generatedRefinements."),
+                  let dot = key.lastIndex(of: ".") else { return nil }
             key = String(key[..<dot])
         }
     }
