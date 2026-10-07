@@ -108,6 +108,8 @@ struct RecordUnionOrderingTests {
         for var machine in machines {
             let before = machine.state.value
             #expect(Model.Value(formalValue: before.tlaValue) == before)
+            #expect(machine.state.ledger == ["hash": .second(.value)])
+            #expect(machine.state.pending == [.second(.value)])
             #expect(try machine.send(.finish).after.value == before)
         }
         #expect(Model.Value(formalValue: .record(["block": .record(["type": .string("genesis")])])) == nil)

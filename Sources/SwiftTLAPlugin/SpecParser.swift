@@ -269,7 +269,7 @@ final class ParserSession {
         for argument in call.arguments {
             guard let name = argument.label?.sourceIdentifierName,
                   let value = decodeTypedFacadeValue(argument.expression, scope: scope,
-                    expectedEnumType: declared.first { $0.name == name }?.type.enumerationType) else { return nil }
+                    expectedType: declared.first { $0.name == name }?.type) else { return nil }
             fields.append(.init(name: name, value: value))
         }
         return .recordLiteral(.init(orderedFields: fields, nativeType: type))
@@ -1526,20 +1526,40 @@ final class ParserSession {
     func decodeTypedFacadeValue(
         _ expression: ExprSyntax,
         scope: TypedFacadeScope,
-        expectedEnumType: String? = nil
+        expectedEnumType: String? = nil,
+        expectedType: CompiledValueType? = nil
     ) -> StateExpr? {
+        let expectedType = expectedType ?? expectedEnumType.flatMap { try? sourceTypeResolver.resolve($0) }
+        let expectedEnumType = expectedType?.enumerationType ?? expectedEnumType
+        if let tuple = expression.as(TupleExprSyntax.self), tuple.elements.count == 1,
+           let element = tuple.elements.first, element.label == nil {
+            return decodeTypedFacadeValue(element.expression, scope: scope,
+                expectedEnumType: expectedEnumType, expectedType: expectedType)
+        }
+        if case .oneOf(let first, let second) = expectedType,
+           let call = expression.as(FunctionCallExprSyntax.self),
+           let member = call.calledExpression.as(MemberAccessExprSyntax.self), member.base == nil,
+           call.arguments.count == 1, call.arguments.first?.label == nil,
+           call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+           let argument = call.arguments.first?.expression {
+            switch member.declName.baseName.sourceIdentifierName {
+            case "first": return decodeTypedFacadeValue(argument, scope: scope, expectedType: first)
+            case "second": return decodeTypedFacadeValue(argument, scope: scope, expectedType: second)
+            default: break
+            }
+        }
         if let checking = decodeCheckingExpression(expression, scope: scope) { return checking }
         if let enabled = decodeStepEnabledness(expression, scope: scope) { return enabled }
         if let array = expression.as(ArrayExprSyntax.self) {
             let elements = array.elements.compactMap {
-                decodeTypedFacadeValue($0.expression, scope: scope, expectedEnumType: expectedEnumType)
+                decodeTypedFacadeValue($0.expression, scope: scope,
+                    expectedEnumType: expectedEnumType, expectedType: expectedType?.selectedElement)
             }
             guard elements.count == array.elements.count else { return nil }
             return .tupleLiteral(elements)
         }
         if let dictionary = expression.as(DictionaryExprSyntax.self) {
-            return decodeDictionaryLiteral(dictionary, scope: scope,
-                expectedType: expectedEnumType.flatMap { try? sourceTypeResolver.resolve($0) })
+            return decodeDictionaryLiteral(dictionary, scope: scope, expectedType: expectedType)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
            typedFacadeType(call.calledExpression)?.name == "Dictionary" {
@@ -1559,7 +1579,8 @@ final class ParserSession {
             guard call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil,
                   argument.expression.is(ArrayExprSyntax.self) else { return nil }
             let element = typedFacadeValueType(expression, scope: scope)?.selectedElement
-            return decodeTypedFacadeValue(argument.expression, scope: scope, expectedEnumType: element?.enumerationType)
+            return decodeTypedFacadeValue(argument.expression, scope: scope,
+                expectedType: element.map(CompiledValueType.array))
         }
         if let call = expression.as(FunctionCallExprSyntax.self), isSwiftCollectionConstructor(call, named: "Set") {
             guard call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty else { return nil }
@@ -1568,7 +1589,7 @@ final class ParserSession {
                   let array = argument.expression.as(ArrayExprSyntax.self) else { return nil }
             let elementType = typedFacadeValueType(expression, scope: scope)?.selectedElement
             let elements = array.elements.compactMap {
-                decodeTypedFacadeValue($0.expression, scope: scope, expectedEnumType: elementType?.enumerationType)
+                decodeTypedFacadeValue($0.expression, scope: scope, expectedType: elementType)
             }
             guard elements.count == array.elements.count else { return nil }
             var seen: Set<StateExpr> = []
@@ -1651,8 +1672,8 @@ final class ParserSession {
         var values: [StateExpr] = []
         var seen: Set<StateExpr> = []
         for entry in entries {
-            guard let key = decodeTypedFacadeValue(entry.key, scope: scope, expectedEnumType: keyType?.swiftType),
-                  let value = decodeTypedFacadeValue(entry.value, scope: scope, expectedEnumType: valueType?.swiftType),
+            guard let key = decodeTypedFacadeValue(entry.key, scope: scope, expectedType: keyType),
+                  let value = decodeTypedFacadeValue(entry.value, scope: scope, expectedType: valueType),
                   seen.insert(key).inserted else { return nil }
             keys.append(key)
             values.append(value)
