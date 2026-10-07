@@ -241,7 +241,9 @@ jobs:
               [[ "$attempt" =~ ^[1-9][0-9]*$ ]]
               echo "oracle_name=generated-oracle-$REPLAY_SHA-$REPLAY_RUN_ID-$CASE_ID" >> "$GITHUB_OUTPUT"
               ;;
-            "upstream-parity-$REPLAY_SHA-$REPLAY_RUN_ID-"*"-$CASE_ID") ;;
+            "upstream-parity-$REPLAY_SHA-$REPLAY_RUN_ID-"*"-$CASE_ID")
+              echo "oracle_name=generated-oracle-$REPLAY_SHA-$REPLAY_RUN_ID-$CASE_ID" >> "$GITHUB_OUTPUT"
+              ;;
             *) echo "Replay artifact does not match evidence revision and case" >&2; exit 1 ;;
           esac
       - uses: actions/download-artifact@v5
@@ -255,6 +257,10 @@ jobs:
         run: |
           if [[ "$REPLAY_ARTIFACT_NAME" == dsl-native-* ]] &&
               [ ! -f ".build/replay-evidence/oracle/$CASE_ID/oracle.json" ]; then
+            echo 'download=true' >> "$GITHUB_OUTPUT"
+          elif [[ "$REPLAY_ARTIFACT_NAME" == upstream-parity-* ]] &&
+              [ ! -f ".build/replay-evidence/upstream/$CASE_ID/generated-graph/graph-events.bin.gz" ] &&
+              [ ! -f ".build/replay-evidence/upstream/$CASE_ID/generated-full-graph/graph-events.bin.gz" ]; then
             echo 'download=true' >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/download-artifact@v5
@@ -277,6 +283,18 @@ jobs:
               fi
               ;;
             upstream-parity-*)
+              generated=".build/replay-evidence/upstream/$CASE_ID/generated-graph"
+              oracle=".build/replay-evidence/oracle/$CASE_ID"
+              if [ ! -f "$generated/graph-events.bin.gz" ] &&
+                  [ ! -f ".build/replay-evidence/upstream/$CASE_ID/generated-full-graph/graph-events.bin.gz" ]; then
+                test -f "$oracle/tlc-graph/graph-events.bin.gz"
+                test -f "$generated/oracle.json"
+                cmp -s "$generated/oracle.json" "$oracle/oracle.json"
+                cmp -s "$generated/tlc-process.json" "$oracle/tlc-graph/tlc-process.json"
+                test ! -L "$oracle/tlc-graph/graph-events.bin.gz"
+                ln "$oracle/tlc-graph/graph-events.bin.gz" "$generated/graph-events.bin.gz" ||
+                  cp "$oracle/tlc-graph/graph-events.bin.gz" "$generated/graph-events.bin.gz"
+              fi
               for side in generated reference; do
                 graph=".build/replay-evidence/upstream/$CASE_ID/$side-graph"
                 full=".build/replay-evidence/upstream/$CASE_ID/$side-full-graph"

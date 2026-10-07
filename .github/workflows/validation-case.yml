@@ -420,6 +420,19 @@ jobs:
           jq -e '(.schema == "swifttla.upstream-tlc-parity" or .schema == "swifttla.assumption-upstream-comparison") and .caseID == env.CASE_ID and .result == "exact"' ".build/validation-evidence/upstream/$CASE_ID/comparison.json"
           jq -e 'if .schema == "swifttla.upstream-tlc-parity" then (.coverage.selectedProperties | type == "array") and (.coverage.omittedProperties | type == "array") and .coverage.checksDeadlock == .deadlockSelected else true end' ".build/validation-evidence/upstream/$CASE_ID/comparison.json"
           jq -e --arg key "$UPSTREAM_INPUT_KEY" '.cacheKey == $key and .sourceSHA != "" and .originRunID != ""' ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"
+      - name: Omit the retained copy of a reused complete oracle graph
+        id: graph-retention
+        run: |
+          oracle=".build/validation-evidence/oracle/$CASE_ID"
+          generated=".build/validation-evidence/upstream/$CASE_ID/generated-graph"
+          if [ -f "$oracle/tlc-graph/graph-events.bin.gz" ] &&
+              [ -f "$generated/graph-events.bin.gz" ] &&
+              [ -f "$generated/oracle.json" ] &&
+              [ ! -d ".build/validation-evidence/upstream/$CASE_ID/generated-full-graph" ] &&
+              cmp -s "$oracle/oracle.json" "$generated/oracle.json" &&
+              cmp -s "$oracle/tlc-graph/tlc-process.json" "$generated/tlc-process.json"; then
+            echo "exclude=!.build/validation-evidence/upstream/$CASE_ID/generated-graph/graph-events.bin.gz" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/upload-artifact@v6
         if: always()
         with:
@@ -430,6 +443,7 @@ jobs:
             !.build/validation-evidence/oracle/**
             !.build/validation-evidence/upstream/*/generated-graph-spool/**
             !.build/validation-evidence/upstream/*/reference-graph-spool/**
+            ${{ steps.graph-retention.outputs.exclude }}
           include-hidden-files: true
           if-no-files-found: error
 
