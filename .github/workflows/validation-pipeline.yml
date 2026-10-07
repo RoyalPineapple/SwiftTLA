@@ -116,6 +116,11 @@ jobs:
           else
             test "$(jq 'length' <<< "$native")" -gt 0
             test "$(jq 'length' <<< "$upstream")" -gt 0
+            jq -ne --argjson native "$native" --argjson upstream "$upstream" '
+              ($upstream - $native) as $missing
+              | if $missing == [] then true
+                else error("upstream cases without native scenarios: \($missing | join(", "))") end
+            '
           fi
           cases=$(jq -cn --argjson native "$native" --argjson upstream "$upstream" '
             ($native + $upstream | unique | map(select(. != "__skip__"))) as $ids

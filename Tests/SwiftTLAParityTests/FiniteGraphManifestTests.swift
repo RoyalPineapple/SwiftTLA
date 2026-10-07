@@ -3,6 +3,16 @@ import Testing
 import UpstreamParity
 
 struct FiniteGraphManifestTests {
+  @Test("every declared upstream case has a generated Swift validation path")
+  func requiresNativeScenarioForEveryReferenceCase() throws {
+    let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
+      from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
+    let nativeIDs = Set(try modelValidationScenarios().map(\.id)
+      + assumptionValidationScenarios().map(\.id))
+    let missing = Set(manifest.cases.map(\.id)).subtracting(nativeIDs)
+    #expect(missing.isEmpty, "Missing native cases: \(missing.sorted())")
+  }
+
   @Test("reference cases reject unknown comparison modes")
   func rejectsUnknownComparisonMode() throws {
     let source = try Data(contentsOf: URL(fileURLWithPath: #filePath)
