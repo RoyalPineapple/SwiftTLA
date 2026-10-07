@@ -57,6 +57,7 @@ package enum MachineValidationEvidence {
         var writer = try BinaryGraphEvidenceWriter(to: output, caseID: caseID)
         defer { writer.close() }
         var actionIDs: [Scenario.Machine.Action: UInt32] = [:]
+        var previousAction: (action: Scenario.Machine.Action, id: UInt32)?
         var stateEvents = 0
         var edgeEvents = 0
         var sampledStates = 0
@@ -68,12 +69,17 @@ package enum MachineValidationEvidence {
         var stateKeyEncoder = CanonicalBinaryState.Encoder()
 
         func actionID(_ action: Scenario.Machine.Action) throws -> UInt32 {
-            if let id = actionIDs[action] { return id }
+            if let previousAction, previousAction.action == action { return previousAction.id }
+            if let id = actionIDs[action] {
+                previousAction = (action, id)
+                return id
+            }
             guard let id = UInt32(exactly: actionIDs.count) else {
                 throw BinaryGraphEvidenceError.invalid("action count")
             }
             actionIDs[action] = id
             try writer.action(id: id, name: machine.formalCall(for: action).description)
+            previousAction = (action, id)
             return id
         }
 
