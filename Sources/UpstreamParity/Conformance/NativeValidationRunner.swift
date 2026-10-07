@@ -112,7 +112,7 @@ package enum NativeValidationRunner {
         if needsGraph {
             let fairness = scenario.behavior == .specification
                 ? try scenario.fairnessConditions(on: first) : []
-            var complete = MachineValidationGraph(machine: first, initialStates: initialStates,
+            var complete = try MachineValidationGraph(machine: first, initialStates: initialStates,
                 transitions: transitions, behavior: scenario.behavior, fairness: fairness)
             temporalResults = try complete.temporalResults(checking: scenario.checking.properties)
             refinementFailures = try first.validationRefinementFailures(

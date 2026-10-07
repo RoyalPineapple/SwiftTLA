@@ -44,54 +44,28 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
         guard case .exhausted = summary.completion else {
             throw ExplorationError.configurationMismatch
         }
-        self.init(machine: machine, initialStates: initialStates,
+        try self.init(machine: machine, initialStates: initialStates,
             transitions: transitions, behavior: behavior, fairness: fairness)
     }
 
     package init(machine: Machine, initialStates: Set<Machine.Snapshot>,
         transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]],
         behavior: ModelBehavior,
-        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?) {
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?,
+        enabledness: [Int: [Machine.Snapshot: Bool]]? = nil) throws {
+        if let enabledness {
+            guard let fairness,
+                  Set(enabledness.keys) == Set(fairness.indices),
+                  enabledness.values.allSatisfy({ Set($0.keys) == Set(transitions.keys) }) else {
+                throw ExplorationError.configurationMismatch
+            }
+        }
         self.machine = machine
         self.initialStates = initialStates
         self.transitions = transitions
         self.behavior = behavior
         selectedFairness = fairness
-        selectedEnabledness = nil
-    }
-
-    package init(machine: Machine, snapshots: [Machine.Snapshot], initialIDs: [Int],
-        edges: [(source: Int, action: Machine.Action, target: Int)],
-        behavior: ModelBehavior,
-        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]? = nil,
-        enabledness: [Int: [Machine.Snapshot: Bool]]? = nil
-    ) throws {
-        self.machine = machine
-        self.behavior = behavior
-        selectedFairness = fairness
         selectedEnabledness = enabledness
-        guard initialIDs.allSatisfy({ snapshots.indices.contains($0) }) else {
-            throw ExplorationError.configurationMismatch
-        }
-        if let enabledness {
-            guard let fairness,
-                Set(enabledness.keys) == Set(fairness.indices),
-                enabledness.values.allSatisfy({ Set($0.keys) == Set(snapshots) }) else {
-                throw ExplorationError.configurationMismatch
-            }
-        }
-        initialStates = Set(initialIDs.map { snapshots[$0] })
-        var adjacency = Dictionary(uniqueKeysWithValues: snapshots.map {
-            ($0, [(action: Machine.Action, target: Machine.Snapshot)]())
-        })
-        for edge in edges {
-            guard snapshots.indices.contains(edge.source), snapshots.indices.contains(edge.target) else {
-                throw ExplorationError.configurationMismatch
-            }
-            adjacency[snapshots[edge.source], default: []].append(
-                (edge.action, snapshots[edge.target]))
-        }
-        transitions = adjacency
     }
 
     public func temporalResults(checking: Set<Machine.Property>)

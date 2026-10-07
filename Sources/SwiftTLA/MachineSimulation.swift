@@ -141,23 +141,15 @@ public enum MachineSimulator {
         if !fairness.isEmpty && enabledness == nil {
             return .inconclusive(trace: trace, reason: reason)
         }
-        var snapshots: [Machine.Snapshot] = []
-        var identifiers: [Machine.Snapshot: Int] = [:]
-        func id(for snapshot: Machine.Snapshot) -> Int {
-            if let existing = identifiers[snapshot] { return existing }
-            let next = snapshots.count
-            snapshots.append(snapshot)
-            identifiers[snapshot] = next
-            return next
-        }
-        let initialID = id(for: trace[0].state)
-        var edges: [(source: Int, action: Machine.Action, target: Int)] = []
+        var transitions = Dictionary(uniqueKeysWithValues: Set(trace.map(\.state)).map {
+            ($0, [(action: Machine.Action, target: Machine.Snapshot)]())
+        })
         for index in trace.indices.dropFirst() {
             guard let action = trace[index].action else { throw ExplorationError.configurationMismatch }
-            edges.append((id(for: trace[index - 1].state), action, id(for: trace[index].state)))
+            transitions[trace[index - 1].state, default: []].append((action, trace[index].state))
         }
-        let graph = try MachineValidationGraph(machine: first, snapshots: snapshots,
-            initialIDs: [initialID], edges: edges, behavior: behavior,
+        let graph = try MachineValidationGraph(machine: first, initialStates: [trace[0].state],
+            transitions: transitions, behavior: behavior,
             fairness: fairness, enabledness: enabledness)
         let results = try graph.temporalResults(checking: checking.properties)
         for property in selected.keys.sorted(by: {
