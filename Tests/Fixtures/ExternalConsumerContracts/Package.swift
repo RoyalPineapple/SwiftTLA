@@ -66,6 +66,10 @@ let package = Package(
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
+      name: "InvalidGeneratedRefinementMapping",
+      dependencies: generatedMachineDependencies
+    ),
+    .executableTarget(
       name: "InvalidStateDisplayLabel",
       dependencies: generatedMachineDependencies
     ),
