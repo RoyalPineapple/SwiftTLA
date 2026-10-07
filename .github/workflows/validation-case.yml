@@ -344,7 +344,7 @@ jobs:
           fi
           echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
       - name: Identify reusable generated TLC oracle
-        if: steps.upstream-reuse.outputs.reuse != 'true' && inputs.native_enabled
+        if: inputs.native_enabled
         id: oracle-key
         run: |
           maximum_states=$(jq -er --arg id "$CASE_ID" '
@@ -358,11 +358,28 @@ jobs:
             --case "$CASE_ID" --maximum-states "$maximum_states")
           echo "key=$key" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v5
-        if: steps.upstream-reuse.outputs.reuse != 'true' && inputs.native_enabled
+        if: inputs.native_enabled
         id: oracle-download
         with:
           name: generated-oracle-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ inputs.case_id }}
           path: .build/validation-evidence/oracle/${{ inputs.case_id }}
+      - name: Restore a cached comparison's generated graph from its oracle
+        if: steps.upstream-reuse.outputs.reuse == 'true' && inputs.native_enabled
+        env:
+          ORACLE_INPUT_KEY: ${{ steps.oracle-key.outputs.key }}
+        run: |
+          generated=".build/validation-evidence/upstream/$CASE_ID/generated-graph"
+          oracle=".build/validation-evidence/oracle/$CASE_ID"
+          if [ ! -f "$generated/graph-events.bin.gz" ] &&
+              [ ! -f ".build/validation-evidence/upstream/$CASE_ID/generated-full-graph/graph-events.bin.gz" ]; then
+            test -f "$generated/oracle.json"
+            test -f "$oracle/tlc-graph/graph-events.bin.gz"
+            test ! -L "$oracle/tlc-graph/graph-events.bin.gz"
+            cmp -s "$generated/oracle.json" "$oracle/oracle.json"
+            jq -e --arg key "$ORACLE_INPUT_KEY" '.cacheKey == $key' "$oracle/evidence-origin.json"
+            ln "$oracle/tlc-graph/graph-events.bin.gz" "$generated/graph-events.bin.gz" ||
+              cp "$oracle/tlc-graph/graph-events.bin.gz" "$generated/graph-events.bin.gz"
+          fi
       - name: Compare generated and upstream TLA through TLC
         if: steps.upstream-reuse.outputs.reuse != 'true'
         timeout-minutes: 120
@@ -420,8 +437,7 @@ jobs:
           jq -e '(.schema == "swifttla.upstream-tlc-parity" or .schema == "swifttla.assumption-upstream-comparison") and .caseID == env.CASE_ID and .result == "exact"' ".build/validation-evidence/upstream/$CASE_ID/comparison.json"
           jq -e 'if .schema == "swifttla.upstream-tlc-parity" then (.coverage.selectedProperties | type == "array") and (.coverage.omittedProperties | type == "array") and .coverage.checksDeadlock == .deadlockSelected else true end' ".build/validation-evidence/upstream/$CASE_ID/comparison.json"
           jq -e --arg key "$UPSTREAM_INPUT_KEY" '.cacheKey == $key and .sourceSHA != "" and .originRunID != ""' ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"
-      - name: Omit the retained copy of a reused complete oracle graph
-        id: graph-retention
+      - name: Retain one copy of a reused complete oracle graph
         run: |
           oracle=".build/validation-evidence/oracle/$CASE_ID"
           generated=".build/validation-evidence/upstream/$CASE_ID/generated-graph"
@@ -430,8 +446,8 @@ jobs:
               [ -f "$generated/oracle.json" ] &&
               [ ! -d ".build/validation-evidence/upstream/$CASE_ID/generated-full-graph" ] &&
               cmp -s "$oracle/oracle.json" "$generated/oracle.json" &&
-              cmp -s "$oracle/tlc-graph/tlc-process.json" "$generated/tlc-process.json"; then
-            echo "exclude=!.build/validation-evidence/upstream/$CASE_ID/generated-graph/graph-events.bin.gz" >> "$GITHUB_OUTPUT"
+              [ "$(stat -f '%d:%i' "$oracle/tlc-graph/graph-events.bin.gz")" = "$(stat -f '%d:%i' "$generated/graph-events.bin.gz")" ]; then
+            rm -- "$generated/graph-events.bin.gz"
           fi
       - uses: actions/upload-artifact@v6
         if: always()
@@ -443,7 +459,6 @@ jobs:
             !.build/validation-evidence/oracle/**
             !.build/validation-evidence/upstream/*/generated-graph-spool/**
             !.build/validation-evidence/upstream/*/reference-graph-spool/**
-            ${{ steps.graph-retention.outputs.exclude }}
           include-hidden-files: true
           if-no-files-found: error
 
