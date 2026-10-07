@@ -67,6 +67,16 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
 public enum _NativeMachineOperations: Sendable {
     public static let maximumRecursiveDepth = 4_096
 
+    public static func checkedProjection<Source: TLAValueType, Target: TLAValueType>(
+        _ source: Source
+    ) throws -> Target {
+        let formal = source.tlaValue
+        guard let target = Target(formalValue: formal), target.preservesFormalValue(formal) else {
+            throw TLAStateProjectionDiagnostic.invalidValue(path: String(reflecting: Target.self))
+        }
+        return target
+    }
+
     public static func integerSet() throws -> Set<Int> {
         throw NativeMachineEvaluationError.nonEnumerableIntegerDomain
     }

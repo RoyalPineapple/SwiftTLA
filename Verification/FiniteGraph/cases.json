@@ -1521,6 +1521,34 @@
       "timeoutSeconds": 3600
     },
     {
+      "id": "ewd998-chan-0",
+      "sourceModel": "ewd998-chan",
+      "scenario": "EWD998Chan",
+      "module": "ewd998/EWD998Chan.tla",
+      "configuration": "ewd998/EWD998Chan.cfg",
+      "imports": ["ewd998/Utils.tla", "ewd840/SequencesExt.tla", "ewd998/EWD998.tla", "ewd998/AsyncTerminationDetection.tla", "kvsnap/Functions.tla", "ewd998/Folds.tla", "die-hardest/FiniteSetsExt.tla"],
+      "dependencies": [
+        {"importingModule": "EWD998Chan", "importedModule": "Utils"},
+        {"importingModule": "EWD998Chan", "importedModule": "SequencesExt"},
+        {"importingModule": "EWD998Chan", "importedModule": "EWD998"},
+        {"importingModule": "Utils", "importedModule": "Functions"},
+        {"importingModule": "SequencesExt", "importedModule": "FiniteSetsExt"},
+        {"importingModule": "SequencesExt", "importedModule": "Folds"},
+        {"importingModule": "SequencesExt", "importedModule": "Functions"},
+        {"importingModule": "EWD998", "importedModule": "AsyncTerminationDetection"},
+        {"importingModule": "EWD998", "importedModule": "Functions"},
+        {"importingModule": "Functions", "importedModule": "Folds"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/EWD998Chan.tla",
+        "sha256": "ebdb5e9c6469fb1afc3b12198e1e2159b3ff3fa76d7bd15e5e11dce92b72313c"
+      },
+      "exploration": {"maximumStateLimit": 300000000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "ebdb5e9c6469fb1afc3b12198e1e2159b3ff3fa76d7bd15e5e11dce92b72313c",
+      "cfgSHA256": "259100c5161cf1e04dce4c9898957c5ff7ba81f790c840396a2a7b5e618eb044",
+      "timeoutSeconds": 10800
+    },
+    {
       "id": "sync-termination-detection-0",
       "sourceModel": "sync-termination-detection",
       "scenario": "SyncTerminationDetection",

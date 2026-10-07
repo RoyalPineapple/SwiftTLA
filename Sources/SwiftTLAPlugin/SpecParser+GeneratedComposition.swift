@@ -50,7 +50,7 @@ extension ParserSession {
               labels.isEmpty || (labels.count == 1 && label?.isEmpty == false),
               let instanceArgument = call.arguments.first(where: { $0.label?.text == "instance" }),
               let reference = instanceArgument.expression.as(DeclReferenceExprSyntax.self),
-              let instanceName = specBindings.generatedInstances[reference.baseName.sourceIdentifierName]?.name,
+              let instance = specBindings.generatedInstances[reference.baseName.sourceIdentifierName],
               let body = call.trailingClosure, call.additionalTrailingClosures.isEmpty else {
             components.diagnostics.append(.init(
                 message: "A generated-model Refinement requires a declared Instance and Map key paths.",
@@ -63,12 +63,23 @@ extension ParserSession {
             guard case .expr(let expression) = statement.item,
                   let mapping = expression.as(FunctionCallExprSyntax.self),
                   compilerGrammarName(in: mapping.calledExpression) == "Map",
-                  mapping.arguments.count == 2,
+                  mapping.arguments.count == 2 || mapping.arguments.count == 3,
                   let target = mapping.arguments.first,
                   let field = generatedFieldName(target.expression),
-                  let value = mapping.arguments.last,
+                  let value = mapping.arguments.first(where: { $0.label?.text == "from" }),
                   value.label?.text == "from",
-                  let source = decodeTypedFacadeValue(value.expression, scope: sourceScope),
+                  let source = decodeTypedFacadeValue(value.expression, scope: sourceScope) else {
+                components.diagnostics.append(.init(
+                    message: "Refinement mappings require distinct Map(\\.field, from: typedValue) entries.",
+                    source: statement))
+                return nil
+            }
+            let projection = mapping.arguments.first(where: { $0.label?.text == "projecting" })
+            guard
+                  (projection == nil && mapping.arguments.count == 2)
+                    || (projection != nil && mapping.arguments.count == 3),
+                  projection == nil || projection?.expression.as(MemberAccessExprSyntax.self)?
+                    .declName.baseName.sourceIdentifierName == "self",
                   seen.insert(field).inserted else {
                 components.diagnostics.append(.init(
                     message: "Refinement mappings require distinct Map(\\.field, from: typedValue) entries.",
@@ -77,12 +88,12 @@ extension ParserSession {
             }
             propertyDeclarationOffsets["generatedRefinements.\(name).mappings.\(field)", default: []].append(
                 value.expression.positionAfterSkippingLeadingTrivia.utf8Offset)
-            mappings.append(.init(fieldName: field, source: source))
+            mappings.append(.init(fieldName: field, source: source, projected: projection != nil))
         }
         propertyDeclarationOffsets["generatedRefinements.\(name)", default: []].append(
             call.positionAfterSkippingLeadingTrivia.utf8Offset)
         return .init(name: name, reference: .init(name: name, displayLabel: label),
-            instanceName: instanceName, fieldMappings: mappings)
+            instanceName: instance.name, fieldMappings: mappings)
     }
 
     private func generatedFieldName(_ expression: ExprSyntax) -> String? {

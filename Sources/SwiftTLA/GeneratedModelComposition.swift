@@ -30,10 +30,12 @@ package protocol GeneratedModelInstanceSource: SpecComponent {
 package struct GeneratedModelFieldBinding: Hashable, Sendable {
     package let fieldName: String
     package let source: StateExpr
+    package let projected: Bool
 
-    package init(fieldName: String, source: StateExpr) {
+    package init(fieldName: String, source: StateExpr, projected: Bool = false) {
         self.fieldName = fieldName
         self.source = source
+        self.projected = projected
     }
 }
 
@@ -77,13 +79,24 @@ public func Instance<Model: ConfiguredGeneratedModel>(
 public struct GeneratedModelStateMapping<State: GeneratedModelFields>: Sendable {
     package let fieldName: String
     package let source: StateExpr
+    package let projected: Bool
 }
 
 public func Map<State: GeneratedModelFields, Value: TLAValueType>(
     _ target: KeyPath<State, Value>, from source: some TypedExpression<Value>, _fieldName: String = ""
 ) -> GeneratedModelStateMapping<State> {
     let identity = State.fieldIdentities[target]
-    return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr)
+    return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr, projected: false)
+}
+
+/// Projects a structurally equivalent formal value into the abstract model's
+/// distinct Swift type. The generated checker verifies the complete value.
+public func Map<State: GeneratedModelFields, Target: TLAValueType, Source: TLAValueType>(
+    _ target: KeyPath<State, Target>, from source: some TypedExpression<Source>,
+    projecting _: Target.Type, _fieldName: String = ""
+) -> GeneratedModelStateMapping<State> {
+    let identity = State.fieldIdentities[target]
+    return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr, projected: true)
 }
 
 @resultBuilder
@@ -123,7 +136,7 @@ public struct GeneratedModelRefinement<Model: ConfiguredGeneratedModel>: Generat
     package let mappings: [GeneratedModelStateMapping<Model.State>]
     package var instanceName: String { instance.name }
     package var fieldMappings: [GeneratedModelFieldBinding] {
-        mappings.map { .init(fieldName: $0.fieldName, source: $0.source) }
+        mappings.map { .init(fieldName: $0.fieldName, source: $0.source, projected: $0.projected) }
     }
 
     package init(name: String, label: String?, instance: GeneratedModelInstance<Model>,

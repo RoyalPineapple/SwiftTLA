@@ -188,9 +188,16 @@ struct CompiledRefinement: Sendable {
 package struct CompiledGeneratedModelBinding: Sendable {
     package let fieldName: String
     package let value: CompiledStateQuery
+    package let projected: Bool
+
+    package init(fieldName: String, value: CompiledStateQuery, projected: Bool = false) {
+        self.fieldName = fieldName
+        self.value = value
+        self.projected = projected
+    }
 
     func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> Self {
-        .init(fieldName: fieldName, value: try value.map(transform))
+        .init(fieldName: fieldName, value: try value.map(transform), projected: projected)
     }
 }
 
@@ -1332,7 +1339,8 @@ public extension TLASpec {
                     at: "generatedRefinements.\(refinement.name).mappings.\(mapping.fieldName)")
                 return CompiledGeneratedModelBinding(fieldName: mapping.fieldName,
                     value: .init(expression: expression, operators: lowerer.operators,
-                        actionDependencies: semantics.behavior.enabledActionDependencies))
+                        actionDependencies: semantics.behavior.enabledActionDependencies),
+                    projected: mapping.projected)
             }
             return .init(id: property.id, name: refinement.name,
                 instanceName: instance.name, targetModelType: instance.targetModelType,
@@ -1666,7 +1674,7 @@ private struct CanonicalSpecificationEncoder {
         let generatedRefinements = spec.generatedRefinements.map { refinement in
             node("generated-refinement", [refinement.name, refinement.instanceName,
                 canonicalList(refinement.fieldMappings.map {
-                    node("map", [$0.fieldName, canonicalExpression($0.source)])
+                    node("map", [$0.fieldName, canonicalExpression($0.source), $0.projected ? "projected" : "exact"])
                 })])
         }
         list("generatedRefinements", generatedRefinements) { $0 }

@@ -1274,6 +1274,12 @@ model. `Bind` requires a state-independent expression of the target parameter's
 type; `Map` requires an expression of the target state member's type. A missing,
 duplicate, or type-mismatched binding fails compilation. The `let` bindings,
 not display labels or inline declarations, identify the instance and refinement.
+When two generated models use distinct Swift value types with the same complete
+formal value, `Map(\.field, from: expression, projecting: Target.self)` is an
+explicit boundary conversion. The native checker decodes the entire formal value
+as `Target` and rejects a failed or lossy projection. The TLA+ mapping uses the
+source expression's unchanged formal value. This does not relax typing for
+ordinary state, transitions, or exact `Map` bindings.
 The abstract model's compiled generated transitions supply native refinement
 checking; its compiled TLA+ module supplies export. The concrete model's one
 resolved mapping supplies both paths. Neither path compiles the abstract model
