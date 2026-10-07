@@ -325,7 +325,7 @@ struct NativeSwiftEmitter {
         case .union, .oneOf: body = try unionOrdering(type)
         case .unknown: throw unsupported("unresolved structural order")
         }
-        return "{ (lhs: \(name), rhs: \(name)) -> Bool in \(body) }"
+        return "{ (lhs: \(name), rhs: \(name)) -> Bool in\n\(body)\n}"
     }
 
     private mutating func resolvedCall(

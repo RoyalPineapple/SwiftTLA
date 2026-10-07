@@ -104,7 +104,7 @@ extension NativeSwiftEmitter {
     private func crossOrdering(_ left: CompiledValueType, _ right: CompiledValueType) throws -> String {
         if left == right { return try ordering(left) }
         func closure(_ body: String) throws -> String {
-            "{ (lhs: \(try swiftType(left)), rhs: \(try swiftType(right))) -> Bool in \(body) }"
+            "{ (lhs: \(try swiftType(left)), rhs: \(try swiftType(right))) -> Bool in\n\(body)\n}"
         }
         func compare(_ lhs: String, _ left: CompiledValueType, _ rhs: String, _ right: CompiledValueType) throws -> String {
             "if (\(try crossOrdering(left, right)))(\(lhs), \(rhs)) { return true }; if (\(try crossOrdering(right, left)))(\(rhs), \(lhs)) { return false }"
