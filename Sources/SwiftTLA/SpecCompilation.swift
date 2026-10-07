@@ -206,11 +206,13 @@ package struct CompiledGeneratedModelRefinement: Sendable {
     package let name: String
     package let instanceName: String
     package let targetModelType: String
+    package let behavior: ModelBehavior
     package let parameters: [CompiledGeneratedModelBinding]
     package let state: [CompiledGeneratedModelBinding]
 
     func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> Self {
         .init(id: id, name: name, instanceName: instanceName, targetModelType: targetModelType,
+            behavior: behavior,
             parameters: try parameters.map { try $0.map(transform) },
             state: try state.map { try $0.map(transform) })
     }
@@ -513,6 +515,7 @@ public struct RenderedSpecification: Sendable {
     public func addingGeneratedRefinement<Abstract: ConfiguredGeneratedModel>(
         _ name: String, instance: String, of abstract: Abstract.Type,
         configuration abstractConfiguration: Abstract.Configuration,
+        behavior: ModelBehavior = .specification,
         parameters: [(PartialKeyPath<Abstract.Configuration>, String)],
         state: [(PartialKeyPath<Abstract.State>, String)]
     ) throws -> Self {
@@ -554,9 +557,12 @@ public struct RenderedSpecification: Sendable {
         }
         let replacement = bindings.sorted { $0.0 < $1.0 }
             .map { "\($0.0) <- (\($0.1))" }.joined(separator: ", ")
+        let property = behavior == .specification
+            ? "\(instance)!Spec"
+            : "\(instance)!Init /\\ [][\(instance)!Next]_\(instance)!vars"
         let definitions = "\(instance) == INSTANCE \(target.root.name)"
             + (replacement.isEmpty ? "" : " WITH " + replacement)
-            + "\n\(name) == \(instance)!Spec\n"
+            + "\n\(name) == \(property)\n"
         let selected = TLCConfiguration(behavior: configuration.behavior,
             specificationName: configuration.specificationName, assumptionsOnly: configuration.assumptionsOnly,
             declarations: configuration.declarations, checkDeadlock: configuration.checkDeadlock,
@@ -1344,6 +1350,7 @@ public extension TLASpec {
             }
             return .init(id: property.id, name: refinement.name,
                 instanceName: instance.name, targetModelType: instance.targetModelType,
+                behavior: refinement.behavior,
                 parameters: parameters, state: state)
         }
     }
@@ -1672,7 +1679,7 @@ private struct CanonicalSpecificationEncoder {
         }
         list("generatedInstances", generatedInstances) { $0 }
         let generatedRefinements = spec.generatedRefinements.map { refinement in
-            node("generated-refinement", [refinement.name, refinement.instanceName,
+            node("generated-refinement", [refinement.name, refinement.instanceName, refinement.behavior.rawValue,
                 canonicalList(refinement.fieldMappings.map {
                     node("map", [$0.fieldName, canonicalExpression($0.source), $0.projected ? "projected" : "exact"])
                 })])

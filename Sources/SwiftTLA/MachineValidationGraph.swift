@@ -147,10 +147,11 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
 
     /// Checks a native abstraction with stuttering, including its fairness.
     public func refinementFailure<Abstract: StateMachine>(
-        initialMachines: [Abstract], mapping: (Machine.Snapshot) throws -> Abstract
+        initialMachines: [Abstract], abstractBehavior: ModelBehavior = .specification,
+        mapping: (Machine.Snapshot) throws -> Abstract
     ) throws -> RefinementFailure<Machine.Snapshot, Machine.Action>? {
         guard let initial = initialMachines.first else { throw ExplorationError.noInitialStates }
-        let fairness = try initial.fairnessConditions()
+        let fairness = abstractBehavior == .specification ? try initial.fairnessConditions() : []
         for machine in initialMachines {
             guard machine.hasSameConfiguration(as: initial) else {
                 throw ExplorationError.configurationMismatch

@@ -111,6 +111,7 @@ public enum GeneratedModelStateMappingBuilder<State: GeneratedModelFields> {
 package protocol GeneratedModelRefinementSource: SpecComponent, ModelProperty {
     var name: String { get }
     var instanceName: String { get }
+    var behavior: ModelBehavior { get }
     var fieldMappings: [GeneratedModelFieldBinding] { get }
 }
 
@@ -118,13 +119,15 @@ package struct ParsedGeneratedModelRefinement: GeneratedModelRefinementSource {
     package let name: String
     package let reference: PropertyReference
     package let instanceName: String
+    package let behavior: ModelBehavior
     package let fieldMappings: [GeneratedModelFieldBinding]
 
-    package init(name: String, reference: PropertyReference, instanceName: String,
+    package init(name: String, reference: PropertyReference, instanceName: String, behavior: ModelBehavior,
         fieldMappings: [GeneratedModelFieldBinding]) {
         self.name = name
         self.reference = reference
         self.instanceName = instanceName
+        self.behavior = behavior
         self.fieldMappings = fieldMappings
     }
 }
@@ -132,6 +135,7 @@ package struct ParsedGeneratedModelRefinement: GeneratedModelRefinementSource {
 public struct GeneratedModelRefinement<Model: ConfiguredGeneratedModel>: GeneratedModelRefinementSource {
     public let name: String
     public let reference: PropertyReference
+    public let behavior: ModelBehavior
     package let instance: GeneratedModelInstance<Model>
     package let mappings: [GeneratedModelStateMapping<Model.State>]
     package var instanceName: String { instance.name }
@@ -139,18 +143,20 @@ public struct GeneratedModelRefinement<Model: ConfiguredGeneratedModel>: Generat
         mappings.map { .init(fieldName: $0.fieldName, source: $0.source, projected: $0.projected) }
     }
 
-    package init(name: String, label: String?, instance: GeneratedModelInstance<Model>,
+    package init(name: String, label: String?, instance: GeneratedModelInstance<Model>, behavior: ModelBehavior,
         mappings: [GeneratedModelStateMapping<Model.State>]) {
         self.name = name
         reference = .init(name: name, displayLabel: label)
+        self.behavior = behavior
         self.instance = instance
         self.mappings = mappings
     }
 }
 
 public func Refinement<Model: ConfiguredGeneratedModel>(
-    _name: String = "", instance: GeneratedModelInstance<Model>, label: String? = nil,
+    _name: String = "", instance: GeneratedModelInstance<Model>, behavior: ModelBehavior = .specification,
+    label: String? = nil,
     @GeneratedModelStateMappingBuilder<Model.State> _ mappings: () -> [GeneratedModelStateMapping<Model.State>]
 ) -> GeneratedModelRefinement<Model> {
-    .init(name: _name, label: label, instance: instance, mappings: mappings())
+    .init(name: _name, label: label, instance: instance, behavior: behavior, mappings: mappings())
 }

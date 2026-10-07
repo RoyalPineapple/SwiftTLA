@@ -74,7 +74,8 @@ extension NativeSwiftEmitter {
                 if checking.contains(.\(property)) {
                     let abstractConfiguration = try \(target).Configuration(\(parameters))
                     let failure = try graph.refinementFailure(
-                        initialMachines: \(target).initialMachines(configuration: abstractConfiguration)
+                        initialMachines: \(target).initialMachines(configuration: abstractConfiguration),
+                        abstractBehavior: .\(refinement.behavior.rawValue)
                     ) { state in
                         let abstractState = \(target).State(\(state))
                         return try \(target).makeMachine(abstractState, configuration: abstractConfiguration)

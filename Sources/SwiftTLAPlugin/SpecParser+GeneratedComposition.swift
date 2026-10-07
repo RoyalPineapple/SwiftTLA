@@ -46,8 +46,12 @@ extension ParserSession {
     ) -> ParsedGeneratedModelRefinement? {
         let labels = call.arguments.filter { $0.label?.text == "label" }
         let label = labels.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
-        guard call.arguments.count == 1 + labels.count,
+        let behaviors = call.arguments.filter { $0.label?.text == "behavior" }
+        let behavior = behaviors.first?.expression.as(MemberAccessExprSyntax.self)
+            .flatMap { ModelBehavior(rawValue: $0.declName.baseName.sourceIdentifierName) }
+        guard call.arguments.count == 1 + labels.count + behaviors.count,
               labels.isEmpty || (labels.count == 1 && label?.isEmpty == false),
+              behaviors.isEmpty || (behaviors.count == 1 && behavior != nil),
               let instanceArgument = call.arguments.first(where: { $0.label?.text == "instance" }),
               let reference = instanceArgument.expression.as(DeclReferenceExprSyntax.self),
               let instance = specBindings.generatedInstances[reference.baseName.sourceIdentifierName],
@@ -93,7 +97,7 @@ extension ParserSession {
         propertyDeclarationOffsets["generatedRefinements.\(name)", default: []].append(
             call.positionAfterSkippingLeadingTrivia.utf8Offset)
         return .init(name: name, reference: .init(name: name, displayLabel: label),
-            instanceName: instance.name, fieldMappings: mappings)
+            instanceName: instance.name, behavior: behavior ?? .specification, fieldMappings: mappings)
     }
 
     private func generatedFieldName(_ expression: ExprSyntax) -> String? {

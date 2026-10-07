@@ -1285,6 +1285,11 @@ checking; its compiled TLA+ module supplies export. The concrete model's one
 resolved mapping supplies both paths. Neither path compiles the abstract model
 again at runtime, copies its declarations, or evaluates it through an interpreter.
 EWD840's selected `TDSpec` must include the abstract model's fairness obligation.
+`Refinement(instance: TD, behavior: .initialAndNext)` instead checks the
+abstract initial predicate and next-state relation without its fairness; this
+is explicit and applies to both generated native checking and TLA+ export.
+The default remains `.specification`, including abstract fairness. EWD998PCal's
+published `EWD998Spec` requires the initial-and-next form.
 An instance alone does not add a check; the registered refinement is selected
 by default in each validation scenario unless an explicit selection omits it.
 For example, omitting `Map(\.terminationDetected, from: ...)` or writing

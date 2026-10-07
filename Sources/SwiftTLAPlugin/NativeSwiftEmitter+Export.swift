@@ -111,6 +111,7 @@ extension NativeSwiftEmitter {
                     \(String(reflecting: refinement.name)),
                     instance: \(String(reflecting: refinement.instanceName)), of: \(target).self,
                     configuration: try \(target).Configuration(\(configuration)),
+                    behavior: .\(refinement.behavior.rawValue),
                     parameters: [\(try renderedBindings(refinement.parameters))],
                     state: [\(try renderedBindings(refinement.state))])
                 """
