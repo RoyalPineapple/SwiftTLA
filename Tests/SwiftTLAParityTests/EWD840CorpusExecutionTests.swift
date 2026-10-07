@@ -110,6 +110,21 @@ struct EWD840CorpusExecutionTests {
         #expect(failures[.TDSpec] == nil)
     }
 
+    @Test("the direct EWD840 scenario completes every selected native check")
+    func directScenarioCheckResults() throws {
+        let scenario = try #require(EWD840Model.validationScenarios().first { $0.name == "EWD840" })
+        let run = try NativeScenarioRun(scenario, maximumStates: 1_000)
+        try run.validateExpectations()
+        let graph = try #require(run.native.graph)
+        #expect(graph.isComplete)
+        #expect(graph.graph.initialStateKeys.count == 192)
+        #expect(graph.graph.states.count == 302)
+        #expect(Set(run.native.checks.properties.keys)
+            == Set(["TypeOK", "TerminationDetection", "Inv", "Liveness", "TDSpec"]))
+        #expect(run.native.checks.properties.values.allSatisfy { $0 == .satisfied })
+        #expect(run.native.checks.deadlock == nil)
+    }
+
     @Test("the model-owned refinement exports the generated abstract module and check")
     func refinementExportsGeneratedAbstractModel() throws {
         let scenario = try #require(EWD840Model.validationScenarios().first { $0.name == "EWD840" })
