@@ -40,6 +40,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "ewd840-anim", scenarios: { try EWD840AnimationModel.validationScenarios() }),
     .init(id: "echo", scenarios: { try EchoModel.validationScenarios() }),
     .init(id: "ewd998", scenarios: { try EWD998TerminationModel.validationScenarios() }),
+    .init(id: "ewd998-safra", scenarios: { try EWD998Model.validationScenarios() }),
     .init(id: "sync-termination-detection", scenarios: { try SyncTerminationDetectionModel.validationScenarios() }),
     .init(id: "bakery", scenarios: { try BakeryModel.validationScenarios() }),
     .init(id: "boulanger", scenarios: { try BoulangerModel.validationScenarios() }),

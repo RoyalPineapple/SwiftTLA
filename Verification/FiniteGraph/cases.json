@@ -1479,6 +1479,48 @@
       "timeoutSeconds": 1200
     },
     {
+      "id": "ewd998-0",
+      "sourceModel": "ewd998-safra",
+      "scenario": "EWD998",
+      "module": "ewd998/EWD998.tla",
+      "configuration": "ewd998/EWD998.cfg",
+      "imports": ["ewd998/AsyncTerminationDetection.tla", "kvsnap/Functions.tla", "ewd998/Folds.tla"],
+      "dependencies": [
+        {"importingModule": "EWD998", "importedModule": "AsyncTerminationDetection"},
+        {"importingModule": "EWD998", "importedModule": "Functions"},
+        {"importingModule": "Functions", "importedModule": "Folds"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/EWD998.tla",
+        "sha256": "b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8"
+      },
+      "exploration": {"maximumStateLimit": 300000000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8",
+      "cfgSHA256": "4e47f078297118a6e31953eddf6a8a6d469d32464ec1d22b902c041c587e5d59",
+      "timeoutSeconds": 10800
+    },
+    {
+      "id": "ewd998-small-0",
+      "sourceModel": "ewd998-safra",
+      "scenario": "EWD998Small",
+      "module": "ewd998/EWD998.tla",
+      "configuration": "ewd998/EWD998Small.cfg",
+      "imports": ["ewd998/AsyncTerminationDetection.tla", "kvsnap/Functions.tla", "ewd998/Folds.tla"],
+      "dependencies": [
+        {"importingModule": "EWD998", "importedModule": "AsyncTerminationDetection"},
+        {"importingModule": "EWD998", "importedModule": "Functions"},
+        {"importingModule": "Functions", "importedModule": "Folds"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/EWD998.tla",
+        "sha256": "b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8"
+      },
+      "exploration": {"maximumStateLimit": 3000000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "b51ba3587e0d1b88a38cc15cd667b7a50ccb72e7f5f79f7260c97e473f9392e8",
+      "cfgSHA256": "f0869ebeddcdec5b0208014218a946532c01fdb34130579acff081ed6e883f2a",
+      "timeoutSeconds": 3600
+    },
+    {
       "id": "sync-termination-detection-0",
       "sourceModel": "sync-termination-detection",
       "scenario": "SyncTerminationDetection",

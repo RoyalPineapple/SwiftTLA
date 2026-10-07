@@ -5772,8 +5772,8 @@
     {
       "path": "specifications/ewd998",
       "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
-      "audit": "Pinned AsyncTerminationDetection module and configuration audited; other EWD998 modules and configurations remain unaudited",
-      "gap": "The published AsyncTerminationDetection configuration now has a typed model-owned #spec scenario, exact pinned TLA/CFG fixtures, 17 initial states, a locally complete 4097-state native graph, and locally satisfied TypeOK, Safe, Quiescence, Live, and deadlock outcomes. Both hosted comparison paths remain pending. The other published EWD998 configurations, environment variants, and module dispositions are still missing; this is not a completed family.",
+      "audit": "Pinned AsyncTerminationDetection and EWD998 modules and their three published configurations audited; other EWD998 variants remain unaudited",
+      "gap": "AsyncTerminationDetection has a typed model-owned #spec scenario, exact pinned fixtures, and a locally complete 4097-state native graph. Safra's EWD998 N=4 and N=3 configurations now have typed model-owned scenarios and byte-identical pinned TLA/CFG inputs; their selected checks, state constraint, and deadlock settings are registered, and focused transition/rendering tests pass. Both hosted comparison paths remain pending for all three. Upstream reports roughly 219 million states for N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5821,8 +5821,8 @@
         {
           "path": "specifications/ewd998/EWD998.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
+          "reason": "Published N=4 and N=3 configurations have typed model-owned scenarios and pinned inputs; hosted parity remains pending.",
+          "implementations": ["Sources/UpstreamParity/Examples/EWD998.swift"],
           "dispositionComplete": false
         },
         {
@@ -5925,20 +5925,20 @@
           "module": "specifications/ewd998/EWD998.tla",
           "configuration": "specifications/ewd998/EWD998.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998.swift", "scenario": "EWD998", "caseID": "ewd998-0"}],
           "evidence": []
         },
         {
           "module": "specifications/ewd998/EWD998.tla",
           "configuration": "specifications/ewd998/EWD998Small.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998.swift", "scenario": "EWD998Small", "caseID": "ewd998-small-0"}],
           "evidence": []
         },
         {
@@ -6028,7 +6028,10 @@
       ],
       "partialCases": [{
         "implementation": "Sources/UpstreamParity/Examples/EWD998Termination.swift",
-        "reason": "AsyncTerminationDetection is locally checked and registered against byte-identical pinned inputs. Both hosted parity paths and the other EWD998 configurations remain open."
+        "reason": "AsyncTerminationDetection is locally checked and registered against byte-identical pinned inputs. Both hosted parity paths remain open."
+      }, {
+        "implementation": "Sources/UpstreamParity/Examples/EWD998.swift",
+        "reason": "Safra's N=4 and N=3 direct-TLA configurations are typed, registered, and locally checked for generated transition effects and check selection. Upstream's N=4 graph is roughly 219 million states; complete native/generated and generated/pinned graph parity, selected verdicts, resource capacity, and other family configurations remain open."
       }]
     },
     {
@@ -11155,7 +11158,7 @@
       "id": "AC-13",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "The duplicate public record-schema API and its source-parser support have been removed; generated ordinary Swift records provide the projection shape. Macro-model getters are limited to #spec. The separate FiniteGraphSourceModel enum and fixture-name aliases are removed; manifest IDs validate against the upstream registration group while rejecting fixture-only IDs. Each case renders its named model-owned scenario, and assumption-only models have one registration list. The current source audit found no surviving Await, ModelCollection, CollectionVar, or duplicate record-schema authoring API, no raw Var/Variable/Action authoring in application examples, and no hand-maintained TLA/CFG file under Examples; user-facing documentation describes #spec and names removed spellings only as migration history. The remaining TLARecord construction in the macro target is generated formal projection, not an application-facing record schema; direct Var/Variable/Action calls in the two refinement-counter validation models define formal abstract fixtures. ModelValidationCorpus enumerates Swift model types but obtains bindings and checks from generated validationScenarios(), so it does not duplicate configuration. EWD998Termination now uses a typed model-owned #spec for AsyncTerminationDetection, with the old raw fixture and test-only helpers removed; its other upstream configurations remain missing. SimpleAllocator and NanoBlockchain in Sources/UpstreamParity/Examples still use raw formal authoring and are incomplete ports. Do not accept AC-13 globally or count any of these families as complete. Focused manifest registration checks and prior Queens, rendering, SumsEven, and Stones diagnostics pass locally. Final-head source, documentation, and hosted admission audits are also required.",
+      "reason": "The duplicate public record-schema API and its source-parser support have been removed; generated ordinary Swift records provide the projection shape. Macro-model getters are limited to #spec. The separate FiniteGraphSourceModel enum and fixture-name aliases are removed; manifest IDs validate against the upstream registration group while rejecting fixture-only IDs. Each case renders its named model-owned scenario, and assumption-only models have one registration list. The current source audit found no surviving Await, ModelCollection, CollectionVar, or duplicate record-schema authoring API, no raw Var/Variable/Action authoring in application examples, and no hand-maintained TLA/CFG file under Examples; user-facing documentation describes #spec and names removed spellings only as migration history. The remaining TLARecord construction in the macro target is generated formal projection, not an application-facing record schema; direct Var/Variable/Action calls in the two refinement-counter validation models define formal abstract fixtures. ModelValidationCorpus enumerates Swift model types but obtains bindings and checks from generated validationScenarios(), so it does not duplicate configuration. EWD998Termination uses a typed model-owned #spec for AsyncTerminationDetection, with the old raw fixture and test-only helpers removed. Safra's EWD998 N=4 and N=3 configurations are also typed and locally registered, but their hosted parity and the remaining EWD998 variants remain open. SimpleAllocator and NanoBlockchain in Sources/UpstreamParity/Examples still use raw formal authoring and are incomplete ports. Do not accept AC-13 globally or count any of these families as complete. Focused manifest registration checks and prior Queens, rendering, SumsEven, and Stones diagnostics pass locally. Final-head source, documentation, and hosted admission audits are also required.",
       "evidence": []
     },
     {
