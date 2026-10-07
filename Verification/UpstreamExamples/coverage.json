@@ -5553,7 +5553,7 @@
       "path": "specifications/ewd840",
       "name": "EWD840: Termination Detection in a Ring",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "The SyncTerminationDetection and APSyncTerminationDetection N=7 configurations share one typed model and have locally checked generated scenarios but no hosted two-path parity. The AP wrapper selects only TypeOK and TDCorrect, as its pinned CFG does. The typed EWD840 model has locally checked System action-group fairness, Liveness, and its published N=3 model-owned scenario with deadlock checking disabled. Its pinned EWD840.cfg also selects TDSpec, an INSTANCE refinement of SyncTerminationDetection.Spec including weak fairness of DetectTermination. A focused N=3 generated-machine check passes the exact active/terminationDetected state mapping, transition simulation, and abstract fairness obligation. That direct check is not a selected model-owned property or hosted parity: complete parity still requires cross-model #spec composition without duplicating the abstract model, generated refinement-property wiring, and independent TLC comparisons. The native refinement graph checker already tests abstract initial states, step simulation, and fairness with lasso witnesses; selected refinements are checked through validationRefinementFailures rather than temporalProperties. That capability has focused generated-machine tests, but it is not yet wired to EWD840's cross-model TDSpec or supported by hosted parity. APEWD840 has its N=3 selected-check binding and pinned case, pending hosted two-path parity. EWD840_anim has a model-owned N=9 simulation scenario and exact pinned upstream TLA/CFG. At pushed SHA 033c3c42, hosted run 37528759113 retained an exact sampled native-versus-generated-TLC AnimInv violation (21 native states, 20 edges; graph intentionally incomplete; artifact 11446132360). The upstream job failed before checking because SVG could not find IOUtils (TLC exit 150, artifact 11446653967). The queued closure stages pinned IOUtils and SequencesExt plus their transitive helpers; the local closure test passes, but generated-versus-upstream sampled witness parity remains pending. Its sampled failure never establishes complete graph parity. EWD840_json now has the N=4 JsonInv scenario and exact pinned wrapper/configuration registered for parity; its TLC trace export and exit side effects are diagnostics rather than model transitions, and hosted parity is pending. Family cleanup remains open. The two TLAPS-only proof companions are classified without a proof-validation claim. No EWD840 configuration has hosted parity credit.",
+      "gap": "Hosted run 37548075042 on a736e947 establishes complete two-path parity for SyncTerminationDetection N=7: 129 initial/reachable states, 3,593 labeled edges, TypeOK, TDCorrect, Quiescence, Liveness, and default deadlock. The same run reports exact generated-TLA versus pinned-upstream parity for APSyncTerminationDetection, APEWD840, and EWD840_json, but their named native jobs were skipped because native enumeration used positional IDs. Local commit 581a4045 joins declared case IDs to model-owned scenario names without positional duplicates; it is not pushed or hosted-validated. EWD840_anim has exact native-versus-generated and generated-versus-upstream sampled AnimInv violations with retained witnesses; neither partial sampled graph is a complete-graph claim. The pinned EWD840.cfg still selects TDSpec, an INSTANCE refinement of SyncTerminationDetection.Spec including weak fairness of DetectTermination. A focused N=3 generated-machine check passes the active/terminationDetected state mapping, transition simulation, and abstract fairness obligation, but that direct check is not a selected model-owned property or hosted parity. Complete parity still requires cross-model #spec composition without duplicating the abstract model, generated refinement-property wiring, and independent TLC comparisons. Family cleanup remains open. The two TLAPS-only proof companions are classified without a proof-validation claim.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5696,7 +5696,7 @@
           "module": "specifications/ewd840/SyncTerminationDetection.tla",
           "configuration": "specifications/ewd840/SyncTerminationDetection.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
@@ -5706,7 +5706,22 @@
               "caseID": "sync-termination-detection-0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "a736e9477ae196059d05c91775fb48fc6e4e4148",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37548075042",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37548075042/artifacts/11454892411",
+              "artifactDigest": "sha256:70b4fd31ec5c34d49e0a134b8d8c500b1a70ce688e92b468fb347f1090f0631d",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37548075042/artifacts/11455072182",
+              "nativeArtifactDigest": "sha256:c59ec76d8b988029686ce9866798238e6d86adcec0f44da39bfed9526b23e9c5",
+              "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37548075042/artifacts/11455426861",
+              "generatedOracleArtifactDigest": "sha256:8ba6956cd9ecb1a4296596f1c1a33c9b9f77ee0341287875a8f976f2041d45c2",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "Completed hosted case jobs on a736e947: native versus generated-TLA TLC and generated TLA versus pinned upstream TLC both report exact complete initial states and labeled graphs (129 initial states, 129 reachable states, 3,593 edges). TypeOK, TDCorrect, Quiescence, Liveness, and default deadlock are satisfied on every selected path, with no omitted property. The reference module input SHA-256 3626ab87e7431a7c07cf0f92b442fdf38363e6d7a9928f2391476c54a1e4fb2e matches the pinned source. Artifact origins and source-sha records bind both paths to a736e947. The full admission run was still in progress when this configuration was audited; this is not final-revision admission."
+            }
+          ]
         }
       ],
       "partialCases": []
