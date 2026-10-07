@@ -3430,14 +3430,32 @@
     {
       "path": "specifications/braf",
       "name": "Buffered Random Access File",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned source, embedded module closure, configuration, and published graph counts inspected; implementation and hosted parity pending",
+      "gap": "The configured BufferedRandomAccessFile module shares one TLA file with its RandomAccessFile refinement target and Common array definitions. No typed Swift model or hosted evidence exists. The port must retain the 0-indexed [elems: Seq] array representation, nondeterministic SetLength pointer, all eight state variables and action parameters, the RAF substitution mapping, five selected invariants, nine selected temporal/refinement properties, symmetry, alias, and default deadlock checking. A smaller graph or invariant-only check is not configuration parity.",
+      "sourceAudit": {
+        "upstreamCommit": "ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10",
+        "embeddedModules": ["BufferedRandomAccessFile", "RandomAccessFile", "Common"],
+        "constants": {
+          "Symbols": ["A", "B"],
+          "ArbitrarySymbol": "model value",
+          "MaxOffset": 3,
+          "BuffSz": 2
+        },
+        "selectedInvariants": ["TypeOK", "Inv1", "Inv3", "Inv4", "Inv5"],
+        "selectedProperties": ["Inv2CanAlwaysBeRestored", "Safety", "FlushBufferCorrect", "SeekCorrect", "SeekEstablishesInv2", "Write1Correct", "Read1Correct", "WriteAtMostCorrect", "ReadCorrect"],
+        "symmetry": "Symmetry",
+        "alias": "Alias",
+        "checksDeadlock": true,
+        "expectedDistinctStates": 3316,
+        "expectedTotalStates": 128581,
+        "expectedStateDepth": 11
+      },
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/braf/BufferedRandomAccessFile.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Configured root; the same file also defines the RandomAccessFile refinement target and Common helper module, both required by the root's module closure.",
           "implementations": [],
           "dispositionComplete": false
         }
