@@ -5772,8 +5772,8 @@
     {
       "path": "specifications/ewd998",
       "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Pinned AsyncTerminationDetection module and configuration audited; other EWD998 modules and configurations remain unaudited",
+      "gap": "The published AsyncTerminationDetection configuration now has a typed model-owned #spec scenario, exact pinned TLA/CFG fixtures, 17 initial states, a locally complete 4097-state native graph, and locally satisfied TypeOK, Safe, Quiescence, Live, and deadlock outcomes. Both hosted comparison paths remain pending. The other published EWD998 configurations, environment variants, and module dispositions are still missing; this is not a completed family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5786,8 +5786,8 @@
         {
           "path": "specifications/ewd998/AsyncTerminationDetection.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
+          "reason": "Published N = 4 configuration is implemented as a typed model-owned scenario; hosted parity remains pending.",
+          "implementations": ["Sources/UpstreamParity/Examples/EWD998Termination.swift"],
           "dispositionComplete": false
         },
         {
@@ -5915,10 +5915,10 @@
           "module": "specifications/ewd998/AsyncTerminationDetection.tla",
           "configuration": "specifications/ewd998/AsyncTerminationDetection.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998Termination.swift", "scenario": "AsyncTerminationDetection", "caseID": "ewd998-async"}],
           "evidence": []
         },
         {
@@ -6026,7 +6026,10 @@
           "evidence": []
         }
       ],
-      "partialCases": []
+      "partialCases": [{
+        "implementation": "Sources/UpstreamParity/Examples/EWD998Termination.swift",
+        "reason": "AsyncTerminationDetection is locally checked and registered against byte-identical pinned inputs. Both hosted parity paths and the other EWD998 configurations remain open."
+      }]
     },
     {
       "path": "specifications/FiniteMonotonic",
@@ -11152,7 +11155,7 @@
       "id": "AC-13",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "The duplicate public record-schema API and its source-parser support have been removed; generated ordinary Swift records provide the projection shape. Macro-model getters are limited to #spec. The separate FiniteGraphSourceModel enum and fixture-name aliases are removed; manifest IDs validate against the upstream registration group while rejecting fixture-only IDs. Each case renders its named model-owned scenario, and assumption-only models have one registration list. The current source audit found no surviving Await, ModelCollection, CollectionVar, or duplicate record-schema authoring API, no raw Var/Variable/Action authoring in application examples, and no hand-maintained TLA/CFG file under Examples; user-facing documentation describes #spec and names removed spellings only as migration history. The remaining TLARecord construction in the macro target is generated formal projection, not an application-facing record schema; direct Var/Variable/Action calls in the two refinement-counter validation models define formal abstract fixtures. ModelValidationCorpus enumerates Swift model types but obtains bindings and checks from generated validationScenarios(), so it does not duplicate configuration. However, EWD998Termination, SimpleAllocator, and NanoBlockchain in Sources/UpstreamParity/Examples still use raw formal authoring and are incomplete upstream-family ports. Their replacement/deletion work remains open under the full migration goal; do not accept AC-13 globally or count those families from these fixtures. Focused manifest registration checks and prior Queens, rendering, SumsEven, and Stones diagnostics pass locally. Final-head source, documentation, and hosted admission audits are also required.",
+      "reason": "The duplicate public record-schema API and its source-parser support have been removed; generated ordinary Swift records provide the projection shape. Macro-model getters are limited to #spec. The separate FiniteGraphSourceModel enum and fixture-name aliases are removed; manifest IDs validate against the upstream registration group while rejecting fixture-only IDs. Each case renders its named model-owned scenario, and assumption-only models have one registration list. The current source audit found no surviving Await, ModelCollection, CollectionVar, or duplicate record-schema authoring API, no raw Var/Variable/Action authoring in application examples, and no hand-maintained TLA/CFG file under Examples; user-facing documentation describes #spec and names removed spellings only as migration history. The remaining TLARecord construction in the macro target is generated formal projection, not an application-facing record schema; direct Var/Variable/Action calls in the two refinement-counter validation models define formal abstract fixtures. ModelValidationCorpus enumerates Swift model types but obtains bindings and checks from generated validationScenarios(), so it does not duplicate configuration. EWD998Termination now uses a typed model-owned #spec for AsyncTerminationDetection, with the old raw fixture and test-only helpers removed; its other upstream configurations remain missing. SimpleAllocator and NanoBlockchain in Sources/UpstreamParity/Examples still use raw formal authoring and are incomplete ports. Do not accept AC-13 globally or count any of these families as complete. Focused manifest registration checks and prior Queens, rendering, SumsEven, and Stones diagnostics pass locally. Final-head source, documentation, and hosted admission audits are also required.",
       "evidence": []
     },
     {

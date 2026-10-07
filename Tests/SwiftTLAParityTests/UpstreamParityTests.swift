@@ -384,23 +384,4 @@ struct UpstreamParityTests {
         #expect(graph.safetyViolations.isEmpty)
     }
 
-    @Test("EWD998 uses typed finite functions and parameterized actions")
-    func ewd998TypedFunctionParity() throws {
-        let exploration = try explore(EWD998TerminationModel.spec, maximumStateLimit: 50_000)
-        #expect(exploration.graph.states.count == Example.ewd998.expectedDistinct)
-        #expect(isSuccessful(exploration))
-    }
-}
-
-private func explore(_ spec: TLASpec, maximumStateLimit: Int) throws -> FiniteExploration {
-    let compilation = try spec.compile()
-    return try ModelChecker(
-        compilation: compilation,
-        configuration: try FiniteExplorationConfiguration(maximumStateLimit: maximumStateLimit, symmetryReduction: .disabled)
-    ).explore()
-}
-
-private func isSuccessful(_ exploration: FiniteExploration) -> Bool {
-    if case .ok = exploration.outcome { return true }
-    return false
 }

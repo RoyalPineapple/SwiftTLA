@@ -1462,6 +1462,23 @@
       "timeoutSeconds": 1200
     },
     {
+      "id": "ewd998-async",
+      "sourceModel": "ewd998",
+      "scenario": "AsyncTerminationDetection",
+      "module": "ewd998/AsyncTerminationDetection.tla",
+      "configuration": "ewd998/AsyncTerminationDetection.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/AsyncTerminationDetection.tla",
+        "sha256": "c1b15be68a73c6e5f69c5c09f2736870182a9b0765ad9860452240119911b030"
+      },
+      "exploration": {"maximumStateLimit": 50000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "c1b15be68a73c6e5f69c5c09f2736870182a9b0765ad9860452240119911b030",
+      "cfgSHA256": "6affac15002d814a67775f16affa001d9e01c2a758a9d35dbfbaccdd1fc9f5c6",
+      "timeoutSeconds": 1200
+    },
+    {
       "id": "sync-termination-detection-0",
       "sourceModel": "sync-termination-detection",
       "scenario": "SyncTerminationDetection",
