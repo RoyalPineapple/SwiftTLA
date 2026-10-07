@@ -45,6 +45,33 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("Unsupported associated-value enum state points to its initializer")
+    func associatedValueEnumStatePointsToInitializer() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Message { case payload(Int) }
+            static var spec: TLASpec {
+                #spec { scope in
+                    let message = scope.sharedVar(initial: Message.payload(1))
+                }
+            }
+        }
+        """)
+        let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let initializer = try #require(Array(source.tokens(viewMode: .sourceAccurate))
+            .last { $0.text == "Message" })
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(model)
+            Issue.record("An associated-value enum without a model-value contract must not become generated state")
+        } catch let diagnostic as SourceParseDiagnostic {
+            #expect(diagnostic.sourceSpan.location == .utf8Offset(
+                initializer.positionAfterSkippingLeadingTrivia.utf8Offset), "\(diagnostic)")
+            #expect(diagnostic.source == "Message.payload(1)")
+            #expect(diagnostic.nextSafeAction == "Use a supported typed model value or domain; arbitrary Swift expressions are not translated into generated state or TLA+.")
+        }
+    }
+
     @Test("Explicit unsupported enum raw values are rejected")
     func explicitUnsupportedEnumRawValueIsRejected() throws {
         let source = Parser.parse(source: """

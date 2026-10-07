@@ -560,7 +560,19 @@ extension ParserSession {
                 components.variables.append(.init(name: name, initialization: .expression(initial),
                     displayLabel: displayLabel, generatedSwiftType: varTypeName ?? initialValueTypeName(from: value), origin: .source))
             } else {
-                components.diagnostics.append(.init(message: "A shared variable requires a supported initial expression or finite domain.", source: fc))
+                if let input = args.first(where: { $0.label?.text == "initial" || $0.label?.text == "in" }) {
+                    let kind = input.label?.text == "in" ? "domain" : "initializer"
+                    components.diagnostics.append(.init(
+                        message: "State '\(patternName)' has an unsupported \(kind) expression.",
+                        source: input.expression,
+                        expected: "a supported typed model expression",
+                        nextSafeAction: "Use a supported typed model value or domain; arbitrary Swift expressions are not translated into generated state or TLA+."
+                    ))
+                } else {
+                    components.diagnostics.append(.init(
+                        message: "A shared variable requires a supported initial expression or finite domain.",
+                        source: fc))
+                }
             }
             return
         }
