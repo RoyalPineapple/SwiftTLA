@@ -5661,6 +5661,7 @@
           "configuration": "specifications/ewd840/EWD840_anim.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "a736e9477ae196059d05c91775fb48fc6e4e4148",
           "upstreamMode": {
             "simulate": {
               "traceCount": 100
@@ -5686,7 +5687,8 @@
               "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37548075042/artifacts/11454415468",
               "generatedOracleArtifactDigest": "sha256:bce9d2324852ab9705e47b831b21249c4150954d48c3d14e572473349990e294",
               "completeGraph": false,
-              "allPropertiesMatch": true,
+              "completion": "simulation",
+              "completeCounterexampleMatch": true,
               "scope": "The pinned configuration requests 100 simulated traces and expects AnimInv to fail. Completed hosted native-versus-generated-TLC and generated-versus-pinned-upstream jobs both report the selected AnimInv violation and retain replayable or TLC-produced counterexample witnesses. Native evidence stops after a 49-state, 48-edge witness; pinned upstream TLC retains an 88-state witness. These are legitimate decisive sampled results, not equal traces, exhaustive checking, or complete-graph parity. Deadlock is disabled by the published configuration, and no other model property is selected. Artifact origins and source-sha records bind the checks to a736e947; the full admission run remained in progress during this audit."
             }
           ]
@@ -5712,6 +5714,7 @@
           "configuration": "specifications/ewd840/SyncTerminationDetection.cfg",
           "required": true,
           "status": "hosted match",
+          "verifiedSourceSHA": "a736e9477ae196059d05c91775fb48fc6e4e4148",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [
