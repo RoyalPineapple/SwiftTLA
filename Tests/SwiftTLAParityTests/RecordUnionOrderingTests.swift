@@ -95,4 +95,21 @@ struct RecordUnionOrderingTests {
         #expect(Value(formalValue: .record(["a": .bool(true), "z": .int(2)])) == nil)
         #expect(Value(formalValue: .record(["a": .tuple([]), "c": .int(1)])) == nil)
     }
+
+    @Test("five signed-block record shapes and model-value sentinel retain exact values")
+    func preservesSignedBlockAlternatives() throws {
+        typealias Model = SignedBlockAlternativesModel
+        let machines = try Model.initialMachines()
+        let values = machines.map(\.state.value)
+        #expect(values.count == 6)
+        #expect(Set(values).count == 6)
+        let formal = values.map { CompiledValue(formal: $0.tlaValue) }
+        #expect(formal == formal.sorted())
+        for var machine in machines {
+            let before = machine.state.value
+            #expect(Model.Value(formalValue: before.tlaValue) == before)
+            #expect(try machine.send(.finish).after.value == before)
+        }
+        #expect(Model.Value(formalValue: .record(["block": .record(["type": .string("genesis")])])) == nil)
+    }
 }

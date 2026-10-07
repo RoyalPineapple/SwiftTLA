@@ -93,3 +93,69 @@ package struct RecordUnionFieldDomainModel {
         }
     }
 }
+
+@TLAModel
+package struct SignedBlockAlternativesModel {
+    package enum NoBlock: String, CaseIterable, FiniteTLAValueDomain {
+        case value = "NoBlock"
+        package static var defaultValue: Self { .value }
+        package static let finiteValues = allCases
+        package var tlaValue: TLAValue { .constant(rawValue) }
+    }
+    package struct Genesis: Hashable, Sendable {
+        package let type: String; package let account: String; package let balance: Int
+    }
+    package struct Send: Hashable, Sendable {
+        package let previous: String; package let balance: Int; package let destination: String; package let type: String
+    }
+    package struct Open: Hashable, Sendable {
+        package let account: String; package let source: String; package let rep: String; package let type: String
+    }
+    package struct Receive: Hashable, Sendable {
+        package let previous: String; package let source: String; package let type: String
+    }
+    package struct ChangeRep: Hashable, Sendable {
+        package let previous: String; package let rep: String; package let type: String
+    }
+    package typealias Remaining = OneOf<Receive, ChangeRep>
+    package typealias OtherBlocks = OneOf<Open, Remaining>
+    package typealias NonGenesis = OneOf<Send, OtherBlocks>
+    package typealias Block = OneOf<Genesis, NonGenesis>
+    package struct Signature: Hashable, Sendable { package let data: String; package let signedWith: String }
+    package struct SignedBlock: Hashable, Sendable { package let block: Block; package let signature: Signature }
+    package typealias Value = OneOf<SignedBlock, NoBlock>
+    enum Step: String, CaseIterable { case finish }
+
+    package static var spec: TLASpec {
+        #spec("SignedBlockAlternatives") { scope in
+            let value = scope.sharedVar(in: Set<Value>([
+                Value.first(SignedBlock(
+                    block: Block.first(Genesis(type: "genesis", account: "public", balance: 2)),
+                    signature: Signature(data: "hash", signedWith: "private"))),
+                Value.first(SignedBlock(
+                    block: Block.second(NonGenesis.first(Send(
+                        previous: "hash", balance: 1, destination: "public", type: "send"))),
+                    signature: Signature(data: "hash", signedWith: "private"))),
+                Value.first(SignedBlock(
+                    block: Block.second(NonGenesis.second(OtherBlocks.first(Open(
+                        account: "public", source: "hash", rep: "public", type: "open")))),
+                    signature: Signature(data: "hash", signedWith: "private"))),
+                Value.first(SignedBlock(
+                    block: Block.second(NonGenesis.second(OtherBlocks.second(Remaining.first(Receive(
+                        previous: "hash", source: "hash", type: "receive"))))),
+                    signature: Signature(data: "hash", signedWith: "private"))),
+                Value.first(SignedBlock(
+                    block: Block.second(NonGenesis.second(OtherBlocks.second(Remaining.second(ChangeRep(
+                        previous: "hash", rep: "public", type: "change"))))),
+                    signature: Signature(data: "hash", signedWith: "private"))),
+                Value.second(NoBlock.value)
+            ]))
+            let CheckBlock = Algorithm {
+                Do(Step.finish) { Assign(value, to: value); Stop() }
+            }
+            CheckBlock
+            let allAlternatives = Validation(label: "All signed-block alternatives") {}
+            allAlternatives
+        }
+    }
+}
