@@ -49,6 +49,22 @@ struct MachineValidationTests {
         #expect(result.reachedProperties == [.Positive])
     }
 
+    @Test("a generated-machine graph retains labeled edges and terminal states")
+    func exposesCompleteLabeledGraph() throws {
+        let graph = try MachineValidationGraph(
+            initialMachines: ReachabilityExportModel.initialMachines(), maximumStates: 3)
+        let transitions = graph.transitions
+        #expect(Set(graph.initialStates.map(\.state.value)) == [0])
+        #expect(Set(transitions.keys.map(\.state.value)) == [0, 1, 2])
+        for value in 0..<2 {
+            let edges = try #require(transitions.first { $0.key.state.value == value }?.value)
+            #expect(edges.count == 1)
+            #expect(edges[0].action == .advance)
+            #expect(edges[0].target.state.value == value + 1)
+        }
+        #expect(transitions.first { $0.key.state.value == 2 }?.value.isEmpty == true)
+    }
+
     @Test("a decisive invariant failure retains the generated successor outside the completed graph")
     func stopsAtGeneratedViolation() throws {
         var failure: (value: Int, predecessor: Int?)?
