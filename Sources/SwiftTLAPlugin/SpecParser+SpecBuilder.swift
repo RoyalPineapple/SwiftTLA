@@ -283,6 +283,8 @@ extension ParserSession {
                 }
                 if let instance = parseGeneratedModelInstance(call, named: sourceName, into: &components) {
                     specBindings.generatedInstances[sourceName] = instance
+                    propertyDeclarationOffsets["generatedModelInstances.\(sourceName)", default: []].append(
+                        binding.pattern.positionAfterSkippingLeadingTrivia.utf8Offset)
                 }
             } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Instance" {
                 let count = components.moduleInstances.count

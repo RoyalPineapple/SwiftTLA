@@ -438,6 +438,40 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("Generated instance identity conflicts point to its declaration")
+    func generatedInstanceIdentityConflictPointsToDeclaration() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Step: String, CaseIterable, FiniteTLAValueDomain { case TD }
+            static var spec: TLASpec {
+                #spec { scope in
+                    let count = scope.sharedVar(initial: 0)
+                    let advance = Do(Step.TD) { Assign(count, to: count + 1) }
+                    advance
+                    let TD = Instance(of: AbstractModel.self) {
+                        Bind(\\.N, to: 1)
+                    }
+                    TD
+                }
+            }
+        }
+        """)
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let instanceBinding = try #require(Array(source.tokens(viewMode: .sourceAccurate))
+            .filter { $0.text == "TD" }.dropFirst(2).first)
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(declaration)
+            Issue.record("A generated instance must not reuse an action identity")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .duplicateRefinement)
+            #expect(diagnostic.path == "generatedModelInstances.TD")
+            #expect(diagnostic.sourceOffset == instanceBinding.positionAfterSkippingLeadingTrivia.utf8Offset)
+            let emitted = modelCompilationDiagnostic(diagnostic, in: declaration)
+            #expect(emitted.node.positionAfterSkippingLeadingTrivia == instanceBinding.positionAfterSkippingLeadingTrivia)
+        }
+    }
+
     @Test("Invalid Instance arguments point to the supplied expression")
     func invalidInstanceArgumentPointsToExpression() throws {
         let source = Parser.parse(source: """
