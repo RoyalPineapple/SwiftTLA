@@ -446,7 +446,8 @@ jobs:
               [ -f "$generated/oracle.json" ] &&
               [ ! -d ".build/validation-evidence/upstream/$CASE_ID/generated-full-graph" ] &&
               cmp -s "$oracle/oracle.json" "$generated/oracle.json" &&
-              cmp -s "$oracle/tlc-graph/graph-events.bin.gz" "$generated/graph-events.bin.gz"; then
+              { [ "$oracle/tlc-graph/graph-events.bin.gz" -ef "$generated/graph-events.bin.gz" ] ||
+                cmp -s "$oracle/tlc-graph/graph-events.bin.gz" "$generated/graph-events.bin.gz"; }; then
             rm -- "$generated/graph-events.bin.gz"
           fi
       - uses: actions/upload-artifact@v6
