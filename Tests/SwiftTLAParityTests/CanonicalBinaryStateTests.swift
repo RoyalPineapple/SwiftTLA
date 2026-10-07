@@ -69,6 +69,16 @@ struct CanonicalBinaryStateTests {
         #expect(try CanonicalBinaryState.encode(equivalentMembers) == CanonicalBinaryState.encode(oneMember))
     }
 
+    @Test("Unicode state names use byte order in both projection and evidence")
+    func stateNameByteOrder() throws {
+        let first = try state([("é", .int(1)), ("e\u{301}a", .int(2))])
+        let reversed = try state([("e\u{301}a", .int(2)), ("é", .int(1))])
+        #expect(first.entries.map(\.token.description) == ["e\u{301}a", "é"])
+        let encoded = try CanonicalBinaryState.encode(first)
+        #expect(encoded == (try CanonicalBinaryState.encode(reversed)))
+        try CanonicalBinaryState.validate(encoded)
+    }
+
     @Test("TLC-compatible function shapes share their full value identity")
     func functionIdentity() throws {
         let tuple = try state([("x", .tuple([.int(3), .int(4)]))])

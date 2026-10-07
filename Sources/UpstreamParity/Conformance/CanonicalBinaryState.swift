@@ -33,9 +33,7 @@ enum CanonicalBinaryState {
         output.reserveCapacity(512)
         output.append(contentsOf: "STLASV01".utf8)
         lengthPatches.removeAll(keepingCapacity: true)
-        let entries = projection.entries.sorted {
-            $0.token.description.utf8.lexicographicallyPrecedes($1.token.description.utf8)
-        }
+        let entries = projection.entries
         try appendCount(entries.count, to: &output)
         for entry in entries {
             try appendString(entry.token.description, to: &output)

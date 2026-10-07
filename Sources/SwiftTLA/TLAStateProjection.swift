@@ -57,7 +57,9 @@ public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
             }
             try Self.validate(entry.value, at: entry.token.identifier)
         }
-        storedEntries = entries.sorted { $0.token.identifier < $1.token.identifier }
+        storedEntries = entries.sorted {
+            $0.token.identifier.utf8.lexicographicallyPrecedes($1.token.identifier.utf8)
+        }
     }
 
     public func value(for token: Token) -> TLAValue? {
