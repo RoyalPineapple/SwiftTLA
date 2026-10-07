@@ -2807,6 +2807,22 @@
       "testsPassed": 8,
       "result": "The comparison rejects different initial states when all state identities, labeled edges, observable names, counts, and outcomes remain identical. Existing graph-comparison regressions also passed.",
       "scope": "Local AC-08 diagnostics only. The new regression still requires hosted evidence. No configuration or DSL criterion gains hosted credit."
+    },
+    {
+      "sourceSHA": "dd3e44eb81287b69eaa731b5bd38b55b1f1c3703",
+      "command": "scripts/local-validation.sh swiftpm-test 'CompilerBoundaryDiagnosticTests'",
+      "exitCode": 0,
+      "testsPassed": 29,
+      "result": "The generated-model Bind parameter diagnostic points to the offending concrete state expression. The exact regression first failed with a missing source offset, then passed after the parser-location fix; the related compiler-diagnostic and eight EWD840 execution tests passed.",
+      "scope": "Local AC-19 and EWD840 composition diagnostics only. No hosted criterion or configuration credit."
+    },
+    {
+      "sourceSHA": "432bd65120acaa61f974bce261460928efed31c0",
+      "command": "scripts/local-validation.sh swiftpm-test 'GeneratedRefinementContractTests/missingAbstractStateMappingFailsCompilation'",
+      "exitCode": 0,
+      "testsPassed": 1,
+      "result": "An external consumer omitting a generated abstract State member Map fails Swift compilation for the missing value argument.",
+      "scope": "Local B-06 negative acceptance evidence only. The complete family and final-head hosted checks remain pending."
     }
   ],
   "nextFamily": null,
