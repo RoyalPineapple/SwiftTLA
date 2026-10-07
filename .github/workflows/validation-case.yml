@@ -370,7 +370,9 @@ jobs:
         run: |
           generated=".build/validation-evidence/upstream/$CASE_ID/generated-graph"
           oracle=".build/validation-evidence/oracle/$CASE_ID"
-          if [ ! -f "$generated/graph-events.bin.gz" ] &&
+          if jq -e '.graphCompared == true' \
+              ".build/validation-evidence/upstream/$CASE_ID/comparison.json" >/dev/null &&
+              [ ! -f "$generated/graph-events.bin.gz" ] &&
               [ ! -f ".build/validation-evidence/upstream/$CASE_ID/generated-full-graph/graph-events.bin.gz" ]; then
             test -f "$generated/oracle.json"
             test -f "$oracle/tlc-graph/graph-events.bin.gz"
