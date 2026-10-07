@@ -2937,8 +2937,8 @@
     {
       "path": "specifications/allocator",
       "name": "Resource Allocator",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "partial source and pinned-configuration audit",
+      "gap": "The existing SimpleAllocatorModel is a legacy raw Var/Action fixture, not a model-owned configuration. Its only test checks action declarations and compilation, not the published behavior. The pinned SimpleAllocator.cfg selects per-client weak fairness for returning all held resources, per-client strong fairness for some allocation, two invariants, and three temporal properties; the fixture declares none of that fairness or progress checking, and its TypeInvariant is not the published function-type predicate. All four allocator configurations remain missing, including the scheduling, implementation, and refinement models. Migrate the family through typed #spec, preserve each selected check and complete graph, then obtain both hosted comparisons; do not count this fixture as configuration evidence.",
       "legacyCleanupComplete": false,
       "modules": [
         {
