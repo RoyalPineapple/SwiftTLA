@@ -6546,14 +6546,14 @@
     {
       "path": "specifications/Huang",
       "name": "Huang's Algorithm",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Pinned Huang.tla, Huang.cfg, and the published manifest inspected; the sole declared TLC configuration has no Swift implementation or retained parity evidence.",
+      "gap": "Port the direct TLA+ transition relation without changing its state: active, weight, and msgs are total per-process functions, with dyadic-rational weight and in-flight message values. Preserve SendMsg's arbitrary recipient (including the sender), the separate nonleader and leader receive/idle actions, ordered message sequences, the recursive Sum and fold-based TypeOK conservation check, the Safe and Live temporal properties, and the explicit weak-fairness obligations. The configured model binds five distinct model values, selects Spec, TypeOK, Safe, Live, StateConstraint (weight denominator at most 8), Alias for trace presentation, and CHECK_DEADLOCK FALSE. The 40-second upstream manifest runtime is not evidence of native or generated-TLA parity. Resolve the DyadicRationals, SequencesExt, and Functions module dependencies and obtain complete hosted graph/property evidence before crediting this configuration; do not treat the state constraint as an exploration resource limit or infer a deadlock verdict.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/Huang/Huang.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The only published root defines the direct TLA+ state, five action families, dyadic-rational conservation invariant, explicit fairness, Safe and Live temporal checks, a denominator state constraint, and an output-only Alias. It extends DyadicRationals, SequencesExt, and Functions in addition to standard modules.",
           "implementations": [],
           "dispositionComplete": false
         }
