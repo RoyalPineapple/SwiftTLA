@@ -125,6 +125,26 @@ struct EWD840CorpusExecutionTests {
         #expect(run.native.checks.deadlock == nil)
     }
 
+    @Test("the EWD840 wrappers complete their selected native checks")
+    func wrapperScenarioCheckResults() throws {
+        let configurations: [(name: String, properties: Set<String>, initialStates: Int)] = [
+            ("APEWD840", ["TypeOK", "TerminationDetection"], 192),
+            ("EWD840_json", ["JsonInv"], 1_024)
+        ]
+        let scenarios = try EWD840Model.validationScenarios()
+        for configuration in configurations {
+            let scenario = try #require(scenarios.first { $0.name == configuration.name })
+            let run = try NativeScenarioRun(scenario, maximumStates: 100_000)
+            try run.validateExpectations()
+            let graph = try #require(run.native.graph)
+            #expect(graph.isComplete)
+            #expect(graph.graph.initialStateKeys.count == configuration.initialStates)
+            #expect(Set(run.native.checks.properties.keys) == configuration.properties)
+            #expect(run.native.checks.properties.values.allSatisfy { $0 == .satisfied })
+            #expect(run.native.checks.deadlock == nil)
+        }
+    }
+
     @Test("the model-owned refinement exports the generated abstract module and check")
     func refinementExportsGeneratedAbstractModel() throws {
         let scenario = try #require(EWD840Model.validationScenarios().first { $0.name == "EWD840" })
@@ -147,13 +167,5 @@ struct EWD840CorpusExecutionTests {
             $0.state.active.count == 4 && $0.state.active.keys.contains(3)
                 && $0.state.color.count == 4 && $0.state.color.keys.contains(3)
         })
-    }
-
-    @Test("the JSON wrapper's selected predicate holds on the complete four-node native graph")
-    func jsonSelectedPredicate() throws {
-        let scenario = try #require(EWD840Model.validationScenarios().first { $0.name == "EWD840_json" })
-        let graph = try scenario.explore(maximumStates: 100_000)
-        #expect(graph.initialStates.count == 1_024)
-        #expect(graph.safetyViolations.isEmpty)
     }
 }
