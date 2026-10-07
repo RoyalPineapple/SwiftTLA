@@ -551,6 +551,17 @@ extension ParserSession {
             }
             let name = args.first(where: { $0.label?.text == "_name" })?
                 .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? patternName
+            if varTypeName == nil,
+               let initial = args.first(where: { $0.label?.text == "initial" })?.expression,
+               let array = initial.as(ArrayExprSyntax.self), array.elements.isEmpty {
+                components.diagnostics.append(.init(
+                    message: "State '\(patternName)' has an empty collection with no element type.",
+                    source: initial,
+                    expected: "an explicit element type for the empty collection",
+                    nextSafeAction: "Add a concrete type to this state declaration; later assignments cannot infer the initial collection's element type."
+                ))
+                return
+            }
             if let range = args.first(where: { $0.label?.text == "in" })?.expression,
                let domain = finiteStateVariableDomain(range, declaredElementType: varTypeName, scope: sourceScope) {
                 components.variables.append(.init(name: name, initialization: .memberOf(domain.expression),

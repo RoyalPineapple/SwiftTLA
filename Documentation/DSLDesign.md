@@ -1,17 +1,16 @@
 # SwiftTLA DSL implementation specification
 
-Status: draft specification for the next implementation.
+Status: implementation specification with bounded authoring decisions in section 11.
 
 This document defines the target authoring API, semantic contracts, compiler
 boundaries, and acceptance criteria. It is not a description of what happens to
 exist today. Implementation must follow the completed specification rather than
 preserve incidental behavior or introduce alternative APIs.
 
-**Must** states a requirement; **must not** states a prohibition. Sections marked
-**API pending** have required behavior but unresolved surface syntax. Their
-examples are candidates, not approved signatures. Resolve the blockers in
-section 11 before implementing the affected API. The specification is not ready
-for implementation as a whole until those blockers are closed.
+**Must** states a requirement; **must not** states a prohibition. Section 11
+records the approved bounded syntax and semantics. Additional forms needed by
+later upstream configurations require their own named contract and acceptance
+cases; they are not implied by these decisions.
 
 [Compiler design](Design.md) supplies the architecture and pinned corpus target.
 [Generated machines](GeneratedMachines.md) describes the existing API and must be
@@ -390,8 +389,9 @@ finish independently of any property run that stops on the first stuck state.
 `Reachable()` creates the named handle for a positive reachability claim.
 Its predicate registration selects the matching states. Do not add a `Counterexample` declaration that asks
 users to negate their goal. Counterexamples name results of failed properties.
-Some property-handle decisions remain unresolved. Retain the temporal composition
-capabilities needed by the corpus; these four forms do not limit expressiveness.
+Additional property-handle forms need a named corpus case and an explicit
+contract. Retain the temporal composition capabilities needed by the corpus;
+these four forms do not limit expressiveness.
 
 ### Invariant handles across scopes
 
@@ -1648,14 +1648,15 @@ exercises the positive and negative deadlock cases and rejects missing,
 incomplete, and unavailable evidence. This syntax decision does not credit
 AC-09's separate native/TLC parity matrix.
 
-Until another blocker is closed, its code examples remain candidate syntax.
-The architecture and explicit guard contract do not become optional because
-other parts of the surface remain unresolved.
+An example outside the bounded decisions in section 11 remains candidate
+syntax until its source and generated behavior have acceptance tests. The
+architecture and explicit guard contract remain requirements throughout the
+corpus migration.
 
 ## 12. Implementation and completion
 
-1. Close the relevant specification blockers and turn the settled API examples
-   into compile-time and diagnostic fixtures.
+1. Verify the bounded section 11 decisions with compiling examples and
+   source-located rejection fixtures. Specify any new corpus-driven form first.
 2. Implement one model end to end through the typed pipeline, generated runtime,
    native checking, and separate TLC validation.
 3. Migrate its callers and remove the old path using section 9. Preserve required

@@ -72,6 +72,31 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("Unresolved collection state points to its empty initializer")
+    func unresolvedCollectionStatePointsToInitializer() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            static var spec: TLASpec {
+                #spec { scope in
+                    let items = scope.sharedVar(initial: [])
+                }
+            }
+        }
+        """)
+        let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let initializer = try #require(source.tokens(viewMode: .sourceAccurate)
+            .first { $0.text == "[" })
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(model)
+            Issue.record("An empty collection without element type must not become generated state")
+        } catch let diagnostic as SourceParseDiagnostic {
+            #expect(diagnostic.sourceSpan.location == .utf8Offset(
+                initializer.positionAfterSkippingLeadingTrivia.utf8Offset))
+            #expect(diagnostic.nextSafeAction.contains("concrete type"))
+        }
+    }
+
     @Test("Explicit unsupported enum raw values are rejected")
     func explicitUnsupportedEnumRawValueIsRejected() throws {
         let source = Parser.parse(source: """
