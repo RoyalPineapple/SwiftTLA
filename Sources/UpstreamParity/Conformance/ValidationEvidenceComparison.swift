@@ -221,17 +221,21 @@ package enum ValidationEvidenceComparison {
 
     private static func compareGraph(swiftGraph: Spool, tlcGraph: Spool,
         swiftRoot: URL, tlcRoot: URL) throws -> String? {
-        var swiftRanks = [Int](repeating: -1, count: swiftGraph.stateCount)
+        guard swiftGraph.stateCount <= Int(UInt32.max) else {
+            throw ValidationEvidenceComparisonError.invalidEvidence("native state count")
+        }
+        var swiftRanks = [UInt32](repeating: .max, count: swiftGraph.stateCount)
         var tlcRanks = try TLCRankIndex(stateCount: tlcGraph.stateCount)
         let equalStates = try matchStates(
             swiftGraph.states, tlcGraph.states,
             expectedCount: swiftGraph.stateCount
         ) { nativeID, fingerprint, rank in
-            guard nativeID < UInt64(swiftRanks.count), swiftRanks[Int(nativeID)] == -1,
+            guard nativeID < UInt64(swiftRanks.count), swiftRanks[Int(nativeID)] == .max,
+                  let value = UInt32(exactly: rank), value != .max,
                   tlcRanks.insert(fingerprint, rank: rank) else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("duplicate state identity")
             }
-            swiftRanks[Int(nativeID)] = rank
+            swiftRanks[Int(nativeID)] = value
         }
         guard equalStates, swiftGraph.stateCount == tlcGraph.stateCount else {
             return "complete state set"
@@ -684,20 +688,19 @@ package enum ValidationEvidenceComparison {
         return label
     }
 
-    private static func rankInitials(_ raw: URL, ranks: [Int], in directory: URL) throws -> URL {
+    private static func rankInitials(_ raw: URL, ranks: [UInt32], in directory: URL) throws -> URL {
         try rewrite(raw, in: directory) { fields in
             guard fields.count == 1, let id = Int(fields[0]), id >= 0, id < ranks.count,
-                  ranks[id] >= 0 else { throw ValidationEvidenceComparisonError.invalidEvidence("native initial ID") }
+                  ranks[id] != .max else { throw ValidationEvidenceComparisonError.invalidEvidence("native initial ID") }
             return String(ranks[id])
         }
     }
 
-    private static func rank(_ id: UInt64, in ranks: [Int]) throws -> UInt32 {
-        guard id < UInt64(ranks.count), ranks[Int(id)] >= 0,
-              let result = UInt32(exactly: ranks[Int(id)]) else {
+    private static func rank(_ id: UInt64, in ranks: [UInt32]) throws -> UInt32 {
+        guard id < UInt64(ranks.count), ranks[Int(id)] != .max else {
             throw ValidationEvidenceComparisonError.invalidEvidence("native edge rank")
         }
-        return result
+        return ranks[Int(id)]
     }
 
     private static func rank(_ id: UInt64, in ranks: TLCRankIndex) throws -> UInt32 {
