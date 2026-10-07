@@ -7501,28 +7501,28 @@
     {
       "path": "specifications/MissionariesAndCannibals",
       "name": "Missionaries and Cannibals",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Pinned source, published manifest, module roles, and both configuration bindings audited; no Swift implementation or hosted parity.",
+      "gap": "Implement the exact safe-move relation, complete bank/person-set state, TypeOK, and the deliberately violated Solution invariant. The direct TLC configuration binds six distinct model values; the Apalache annotation wrapper binds six quoted PERSON strings to the same underlying transition module. Its manifest reports symbolic success, which is not evidence of the TLC verdict. Preserve both configurations independently, establish each TLC outcome, and compare native and generated-TLA graphs before credit. No current Swift source or retained parity evidence covers either configuration.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/MissionariesAndCannibals/APMissionariesAndCannibals.tla",
-          "role": "configured root",
-          "reason": "Published configuration binding.",
+          "role": "configured annotation wrapper",
+          "reason": "Instantiates MissionariesAndCannibals without replacing its transitions; the Apalache type annotations are comments for TLC. Its configuration binds quoted PERSON strings and selects TypeOK and Solution.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/MissionariesAndCannibals/MissionariesAndCannibals_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof-only module",
+          "reason": "Extends MissionariesAndCannibals and TLAPS to prove TypeOK; the published manifest declares no model or configuration for this module. It is excluded from TLC configuration parity, not counted as an implemented Swift configuration.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla",
-          "role": "configured root",
-          "reason": "Published configuration binding.",
+          "role": "configured root and wrapper dependency",
+          "reason": "Declares the two state variables, safe subset move relation, TypeOK, and Solution. The direct configuration binds six model values and selects both invariants; the annotation wrapper imports this same module.",
           "implementations": [],
           "dispositionComplete": false
         }
