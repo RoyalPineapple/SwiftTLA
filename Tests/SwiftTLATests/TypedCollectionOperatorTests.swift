@@ -197,7 +197,7 @@ private struct ContextualCollectionModel {
 
 @TLAModel
 private struct FoldGeneratedModel {
-    enum Step: String, CaseIterable { case sum }
+    enum Step: String, CaseIterable { case sum, sumFunction }
 
     static var spec: TLASpec {
         #spec("FoldGeneratedModel") {
@@ -205,10 +205,15 @@ private struct FoldGeneratedModel {
             let foldGeneratedModel = Algorithm(label: "FoldGeneratedModel", scoped: { scope in
                 let values = scope.sharedVar(_name: "values", initial: TupleExpr<Int>.literal(1, 2, 3))
                 let total = scope.sharedVar(_name: "total", initial: 0)
+                let function = scope.sharedVar(initial: [0: 2, 1: -3, 2: 4])
+                let functionTotal = scope.sharedVar(initial: 0)
                 Do(Step.sum) {
                     Assign(total, to: Fold(values.expr, startingWith: 0) { element, accumulated in
                         element + accumulated
                     })
+                }
+                Do(Step.sumFunction) {
+                    Assign(functionTotal, to: Sum(function, over: IntRange(0, through: 2)))
                 }
             })
             foldGeneratedModel
@@ -617,6 +622,16 @@ private struct FoldGeneratedModel {
         #expect(try compilation.render().tlaBundle.tla.contains("FoldFunction(LAMBDA"))
         #expect(try compilation.render().plusCalBundle().root.tla.contains("FoldFunction(LAMBDA"))
         #expect(try compilation.render().tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
+    }
+
+    @Test("generated integer-function sums agree with the imported formal operator")
+    func generatedMachineSumsFunctionValues() throws {
+        var machine = try FoldGeneratedModel.makeMachine()
+        let bundle = try FoldGeneratedModel.spec.compile().render().tlaBundle
+        #expect(bundle.tla.contains("SumFunctionOnSet("))
+        #expect(bundle.imports.map(\.name) == ["Folds", "Functions"])
+        _ = try machine.send(.sum)
+        #expect(try machine.send(.sumFunction).after.functionTotal == 3)
     }
 
     @Test("the bundled KeyValueStore Util module preserves its upstream imports")

@@ -216,6 +216,15 @@ public func Functions<Domain: FormalSetValue, Range: FormalSetValue>(
   Expr(.functionSet(domain.stateExpr, values.stateExpr))
 }
 
+/// Sums integer function values over a finite domain. Import
+/// `FunctionsModule.module` so the formal output has `SumFunctionOnSet`.
+public func Sum<Mapping: FormalDictionaryValue, Domain: FormalSetValue>(
+  _ function: some TypedExpression<Mapping>,
+  over domain: some TypedExpression<Domain>
+) -> Expr<Int> where Mapping.Key == Domain.Element, Mapping.Value == Int {
+  Expr(.setSum(function.stateExpr, domain.stateExpr))
+}
+
 /// The mathematical integer domain, rendered as TLA+ `Int`.
 extension Int {
   public static var all: Expr<Set<Int>> { Expr(.integerSet) }

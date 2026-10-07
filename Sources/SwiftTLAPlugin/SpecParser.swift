@@ -1595,6 +1595,18 @@ final class ParserSession {
             var seen: Set<StateExpr> = []
             return .setLiteral(elements.filter { seen.insert($0).inserted })
         }
+        if let call = expression.as(FunctionCallExprSyntax.self),
+           compilerGrammarName(in: call.calledExpression) == "Sum",
+           call.arguments.count == 2,
+           call.arguments.first?.label == nil,
+           call.arguments.last?.label?.text == "over",
+           call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+           let functionSyntax = call.arguments.first?.expression,
+           let domainSyntax = call.arguments.last?.expression,
+           let function = decodeTypedFacadeValue(functionSyntax, scope: scope),
+           let domain = decodeTypedFacadeValue(domainSyntax, scope: scope) {
+            return .setSum(function, domain)
+        }
         let formalMember = expression.as(MemberAccessExprSyntax.self)
             ?? expression.as(FunctionCallExprSyntax.self)?.calledExpression.as(MemberAccessExprSyntax.self)
         if terminalTypeName(in: formalMember?.base) == "StateExpr" {
@@ -1928,6 +1940,7 @@ final class ParserSession {
                 ?? typedFacadeValueType(range, scope: scope)?.selectedElement
             if let key, let value { return .set(.dictionary(key, value)) }
         }
+        if compilerGrammarName(in: call.calledExpression) == "Sum" { return .int }
         if let record = nominalRecordType(call.calledExpression) { return record }
         if isSwiftCollectionConstructor(call, named: "Array"),
            call.calledExpression.is(ArrayExprSyntax.self) {

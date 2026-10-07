@@ -610,7 +610,7 @@ extension CompiledOperation {
         case .tupleConcatenate: ("(", " \\o ", ")")
         case .functionApply: ("", "[", "]")
         case .functionSet: ("[", " -> ", "]")
-        case .setSum: ("Sum(", ", ", ")")
+        case .setSum: ("SumFunctionOnSet(", ", ", ")")
         case .integerRange: ("", "..", "")
         case .negate: ("(-", "", ")")
         case .nextState: ("(", "", ")'")
