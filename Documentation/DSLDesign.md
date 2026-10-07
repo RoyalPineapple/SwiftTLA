@@ -1494,9 +1494,13 @@ on syntax; they do not provide a general semantic type-query interface. See the
 [Swift macro design](https://github.com/swiftlang/swift-evolution/blob/main/visions/macros.md).
 
 The implementation must therefore define a bounded, explicit DSL type contract.
-Ordinary typed Swift helper functions may require a supported declaration form
-before the compiler can export their meaning. Diagnostics must identify the
-unsupported call and the missing contract instead of guessing its semantics.
+Today, reusable statements inside `#spec` use an immutable, bound `Macro`;
+immutable local `let` declarations can name supported typed model expressions.
+These forms have model semantics in both the generated machine and TLA+ export.
+An ordinary Swift function body is not implicitly imported into either backend.
+An unsupported call fails at the call site, naming the call and its missing
+model-expression contract. A future helper-function form needs an identified
+upstream case and an explicit native/formal meaning, not a runtime fallback.
 
 ## 9. Replacement and deletion map
 
