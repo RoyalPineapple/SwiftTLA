@@ -20,52 +20,6 @@ package enum ValidationEvidenceComparisonError: Error, Equatable {
     case spoolingFailed(Int32)
 }
 
-/// TLC fingerprints are lookup keys only; matching complete state bytes assigns the ranks.
-private struct TLCRankIndex {
-    private let mask: Int
-    private var keys: [UInt64]
-    private var ranks: [UInt32]
-
-    init(stateCount: Int) throws {
-        guard stateCount >= 0, stateCount <= Int(UInt32.max),
-              stateCount <= Int.max / 2 else {
-            throw ValidationEvidenceComparisonError.invalidEvidence("TLC state count")
-        }
-        var capacity = 2
-        while capacity < stateCount * 2 { capacity *= 2 }
-        mask = capacity - 1
-        keys = [UInt64](repeating: 0, count: capacity)
-        ranks = [UInt32](repeating: .max, count: capacity)
-    }
-
-    mutating func insert(_ fingerprint: UInt64, rank: Int) -> Bool {
-        guard let value = UInt32(exactly: rank), value != .max else { return false }
-        var slot = firstSlot(for: fingerprint)
-        while ranks[slot] != .max {
-            if keys[slot] == fingerprint { return false }
-            slot = (slot + 1) & mask
-        }
-        keys[slot] = fingerprint
-        ranks[slot] = value
-        return true
-    }
-
-    func rank(for fingerprint: UInt64) -> UInt32? {
-        var slot = firstSlot(for: fingerprint)
-        while ranks[slot] != .max {
-            if keys[slot] == fingerprint { return ranks[slot] }
-            slot = (slot + 1) & mask
-        }
-        return nil
-    }
-
-    private func firstSlot(for fingerprint: UInt64) -> Int {
-        var hasher = Hasher()
-        hasher.combine(fingerprint)
-        return hasher.finalize() & mask
-    }
-}
-
 /// Exact, bounded-memory comparison. State keys are sorted once and assigned
 /// common ranks; full edges are then compared as sorted rank/action/rank records.
 package enum ValidationEvidenceComparison {
@@ -102,16 +56,21 @@ package enum ValidationEvidenceComparison {
             try spoolTLC(reference, caseID: caseID, actions: actions,
                 in: referenceRoot, executable: spoolExecutable, kind: "upstream")
         }
-        var generatedRanks = try TLCRankIndex(stateCount: generatedGraph.stateCount)
-        var referenceRanks = try TLCRankIndex(stateCount: referenceGraph.stateCount)
+        var generatedRanks = [UInt32](repeating: .max, count: generatedGraph.stateCount)
+        var referenceRanks = [UInt32](repeating: .max, count: referenceGraph.stateCount)
         let equalStates = try matchStates(
             generatedGraph.states, referenceGraph.states,
             expectedCount: generatedGraph.stateCount
         ) { generatedID, referenceID, rank in
-            guard generatedRanks.insert(generatedID, rank: rank),
-                  referenceRanks.insert(referenceID, rank: rank) else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("duplicate TLC fingerprint")
+            guard generatedID < UInt64(generatedRanks.count),
+                  referenceID < UInt64(referenceRanks.count),
+                  generatedRanks[Int(generatedID)] == .max,
+                  referenceRanks[Int(referenceID)] == .max,
+                  let value = UInt32(exactly: rank), value != .max else {
+                throw ValidationEvidenceComparisonError.invalidEvidence("duplicate state identity")
             }
+            generatedRanks[Int(generatedID)] = value
+            referenceRanks[Int(referenceID)] = value
         }
         guard equalStates, generatedGraph.stateCount == referenceGraph.stateCount else {
             return "complete state set"
@@ -123,8 +82,6 @@ package enum ValidationEvidenceComparison {
         let same = try compareBinaryEdges(generatedGraph.edges, referenceGraph.edges,
             stateCount: generatedGraph.stateCount,
             leftEdgeCount: generatedGraph.edgeCount, rightEdgeCount: referenceGraph.edgeCount,
-            leftCompactIDs: generatedGraph.compactEdgeIDs,
-            rightCompactIDs: referenceGraph.compactEdgeIDs,
             leftRank: { try Self.rank($0, in: generatedRanks) },
             rightRank: { try Self.rank($0, in: referenceRanks) })
         if !same { return "complete labeled edge set" }
@@ -227,17 +184,20 @@ package enum ValidationEvidenceComparison {
             throw ValidationEvidenceComparisonError.invalidEvidence("native state count")
         }
         var swiftRanks = [UInt32](repeating: .max, count: swiftGraph.stateCount)
-        var tlcRanks = try TLCRankIndex(stateCount: tlcGraph.stateCount)
+        var tlcRanks = [UInt32](repeating: .max, count: tlcGraph.stateCount)
         let equalStates = try matchStates(
             swiftGraph.states, tlcGraph.states,
             expectedCount: swiftGraph.stateCount
-        ) { nativeID, fingerprint, rank in
-            guard nativeID < UInt64(swiftRanks.count), swiftRanks[Int(nativeID)] == .max,
-                  let value = UInt32(exactly: rank), value != .max,
-                  tlcRanks.insert(fingerprint, rank: rank) else {
+        ) { nativeID, tlcID, rank in
+            guard nativeID < UInt64(swiftRanks.count),
+                  tlcID < UInt64(tlcRanks.count),
+                  swiftRanks[Int(nativeID)] == .max,
+                  tlcRanks[Int(tlcID)] == .max,
+                  let value = UInt32(exactly: rank), value != .max else {
                 throw ValidationEvidenceComparisonError.invalidEvidence("duplicate state identity")
             }
             swiftRanks[Int(nativeID)] = value
+            tlcRanks[Int(tlcID)] = value
         }
         guard equalStates, swiftGraph.stateCount == tlcGraph.stateCount else {
             return "complete state set"
@@ -249,8 +209,6 @@ package enum ValidationEvidenceComparison {
         let same = try compareBinaryEdges(swiftGraph.edges, tlcGraph.edges,
             stateCount: swiftGraph.stateCount,
             leftEdgeCount: swiftGraph.edgeCount, rightEdgeCount: tlcGraph.edgeCount,
-            leftCompactIDs: swiftGraph.compactEdgeIDs,
-            rightCompactIDs: tlcGraph.compactEdgeIDs,
             leftRank: { try Self.rank($0, in: swiftRanks) },
             rightRank: { try Self.rank($0, in: tlcRanks) })
         if !same { return "complete labeled edge set" }
@@ -326,12 +284,10 @@ package enum ValidationEvidenceComparison {
         let initialCount: Int
         let edgeCount: Int
         let binaryEdges: Bool
-        let compactEdgeIDs: Bool
         let witness: NativeDecisiveWitness?
 
         init(states: [URL], initial: URL, edges: URL, stateCount: Int,
             initialCount: Int = 0, edgeCount: Int = 0, binaryEdges: Bool = false,
-            compactEdgeIDs: Bool = false,
             witness: NativeDecisiveWitness? = nil) {
             self.states = states
             self.initial = initial
@@ -340,7 +296,6 @@ package enum ValidationEvidenceComparison {
             self.initialCount = initialCount
             self.edgeCount = edgeCount
             self.binaryEdges = binaryEdges
-            self.compactEdgeIDs = compactEdgeIDs
             self.witness = witness
         }
     }
@@ -357,7 +312,6 @@ package enum ValidationEvidenceComparison {
         let initialCount: Int
         let edgeCount: Int
         let binaryEdges: Bool
-        let compactEdgeIDs: Bool
         let witness: NativeDecisiveWitness?
     }
 
@@ -375,10 +329,9 @@ package enum ValidationEvidenceComparison {
     }
 
     private static func writeManifest(_ spool: Spool, in directory: URL) throws {
-        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v6",
+        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v7",
             stateCount: spool.stateCount, initialCount: spool.initialCount,
-            edgeCount: spool.edgeCount, binaryEdges: spool.binaryEdges,
-            compactEdgeIDs: spool.compactEdgeIDs, witness: spool.witness)
+            edgeCount: spool.edgeCount, binaryEdges: spool.binaryEdges, witness: spool.witness)
         try JSONEncoder().encode(manifest).write(
             to: directory.appendingPathComponent("spool.json"), options: .atomic)
     }
@@ -386,7 +339,7 @@ package enum ValidationEvidenceComparison {
     private static func readManifest(in directory: URL) throws -> Spool {
         let manifest = try JSONDecoder().decode(SpoolManifest.self,
             from: Data(contentsOf: directory.appendingPathComponent("spool.json")))
-        guard manifest.schema == "swifttla.validation-spool-v6", manifest.binaryEdges,
+        guard manifest.schema == "swifttla.validation-spool-v7", manifest.binaryEdges,
               manifest.stateCount >= 0, manifest.initialCount >= 0,
               manifest.edgeCount >= 0 else {
             throw ValidationEvidenceComparisonError.invalidEvidence("spool manifest")
@@ -404,7 +357,6 @@ package enum ValidationEvidenceComparison {
         return Spool(states: states, initial: initial, edges: edges,
             stateCount: manifest.stateCount, initialCount: manifest.initialCount,
             edgeCount: manifest.edgeCount, binaryEdges: manifest.binaryEdges,
-            compactEdgeIDs: manifest.compactEdgeIDs,
             witness: manifest.witness)
     }
 
@@ -415,7 +367,7 @@ package enum ValidationEvidenceComparison {
         let edges = directory.appendingPathComponent("edges.raw")
         var stateOut = try states.map(BinaryStateWriter.init)
         var initialOut = try ValidationLineWriter(initial)
-        var edgeOut = try BinaryEdgeWriter(edges, compactIDs: producer == 2)
+        var edgeOut = try BinaryEdgeWriter(edges)
         defer {
             for index in stateOut.indices { try? stateOut[index].close() }
             try? initialOut.close()
@@ -445,7 +397,7 @@ package enum ValidationEvidenceComparison {
             ($0.element, UInt32($0.offset))
         })
         var actionIDs: [UInt32] = []
-        var fingerprints: Set<UInt64> = []
+        var fingerprintIDs: [UInt64: UInt32] = [:]
         var stateCount = 0
         var initialCount = 0
         var edgeCount = 0
@@ -486,14 +438,18 @@ package enum ValidationEvidenceComparison {
                 guard initialFlag <= 1 else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("binary initial flag")
                 }
+                let localID: UInt64
                 if producer == 1 {
-                    guard fingerprints.insert(identity).inserted else {
+                    guard stateCount < Int(UInt32.max),
+                          fingerprintIDs.updateValue(UInt32(stateCount), forKey: identity) == nil else {
                         throw ValidationEvidenceComparisonError.invalidEvidence("TLC state identity")
                     }
+                    localID = UInt64(stateCount)
                 } else {
                     guard identity == UInt64(stateCount) else {
                         throw ValidationEvidenceComparisonError.invalidEvidence("native state identity")
                     }
+                    localID = identity
                 }
                 let key = try reader.bytes(Int(reader.uint32()))
                 do { try CanonicalBinaryState.validate(key) }
@@ -501,24 +457,37 @@ package enum ValidationEvidenceComparison {
                 let digest = CryptoKit.SHA256.hash(data: key)
                 let bucket = digest.withUnsafeBytes { Int($0[0]) & (stateBucketCount - 1) }
                 let sortKey = digest.prefix(8).reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
-                try stateOut[bucket].append(key: key, id: identity, sortKey: sortKey)
+                try stateOut[bucket].append(key: key, id: localID, sortKey: sortKey)
                 stateCount += 1
                 if producer == 2 && !expectedComplete { depths.append(initialFlag == 1 ? 0 : nil) }
                 if initialFlag == 1 {
                     initialCount += 1
-                    try initialOut.append(String(identity))
+                    try initialOut.append(String(localID))
                 }
             case 3:
                 let source = try reader.uint64()
                 let action = try reader.uint32()
                 let target = try reader.uint64()
-                let known = producer == 1
-                    ? fingerprints.contains(source) && fingerprints.contains(target)
-                    : source < UInt64(stateCount) && target < UInt64(stateCount)
-                guard known, UInt64(action) < UInt64(actionIDs.count) else {
+                let sourceID: UInt64
+                let targetID: UInt64
+                if producer == 1 {
+                    guard let sourceIndex = fingerprintIDs[source],
+                          let targetIndex = fingerprintIDs[target] else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("binary edge identity")
+                    }
+                    sourceID = UInt64(sourceIndex)
+                    targetID = UInt64(targetIndex)
+                } else {
+                    guard source < UInt64(stateCount), target < UInt64(stateCount) else {
+                        throw ValidationEvidenceComparisonError.invalidEvidence("binary edge identity")
+                    }
+                    sourceID = source
+                    targetID = target
+                }
+                guard UInt64(action) < UInt64(actionIDs.count) else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("binary edge identity")
                 }
-                try edgeOut.append(source: source, action: actionIDs[Int(action)], target: target)
+                try edgeOut.append(source: sourceID, action: actionIDs[Int(action)], target: targetID)
                 if producer == 2 && !expectedComplete && depths[Int(target)] == nil {
                     guard let sourceDepth = depths[Int(source)] else {
                         throw ValidationEvidenceComparisonError.invalidEvidence("native witness path")
@@ -531,7 +500,7 @@ package enum ValidationEvidenceComparison {
                 _ = try reader.uint64()
                 let flags = try reader.uint16()
                 let predicate = try reader.string()
-                guard producer == 1, fingerprints.contains(source), flags == 2,
+                guard producer == 1, fingerprintIDs[source] != nil, flags == 2,
                       !predicate.isEmpty else {
                     throw ValidationEvidenceComparisonError.invalidEvidence("TLC excluded transition")
                 }
@@ -613,8 +582,7 @@ package enum ValidationEvidenceComparison {
                 try edgeOut.close()
                 return Spool(states: states, initial: initial, edges: edges,
                     stateCount: stateCount, initialCount: initialCount,
-                    edgeCount: edgeCount, binaryEdges: true,
-                    compactEdgeIDs: producer == 2, witness: witness)
+                    edgeCount: edgeCount, binaryEdges: true, witness: witness)
             default:
                 throw ValidationEvidenceComparisonError.invalidEvidence("binary graph event")
             }
@@ -702,23 +670,16 @@ package enum ValidationEvidenceComparison {
     private static func rankInitials(_ raw: URL, ranks: [UInt32], in directory: URL) throws -> URL {
         try rewrite(raw, in: directory) { fields in
             guard fields.count == 1, let id = Int(fields[0]), id >= 0, id < ranks.count,
-                  ranks[id] != .max else { throw ValidationEvidenceComparisonError.invalidEvidence("native initial ID") }
+                  ranks[id] != .max else { throw ValidationEvidenceComparisonError.invalidEvidence("initial state ID") }
             return String(ranks[id])
         }
     }
 
     private static func rank(_ id: UInt64, in ranks: [UInt32]) throws -> UInt32 {
         guard id < UInt64(ranks.count), ranks[Int(id)] != .max else {
-            throw ValidationEvidenceComparisonError.invalidEvidence("native edge rank")
+            throw ValidationEvidenceComparisonError.invalidEvidence("edge rank")
         }
         return ranks[Int(id)]
-    }
-
-    private static func rank(_ id: UInt64, in ranks: TLCRankIndex) throws -> UInt32 {
-        guard let result = ranks.rank(for: id) else {
-            throw ValidationEvidenceComparisonError.invalidEvidence("TLC edge rank")
-        }
-        return result
     }
 
     private struct RankedAdjacency {
@@ -733,17 +694,16 @@ package enum ValidationEvidenceComparison {
 
     private static func compareBinaryEdges(_ left: URL, _ right: URL,
         stateCount: Int, leftEdgeCount: Int, rightEdgeCount: Int,
-        leftCompactIDs: Bool, rightCompactIDs: Bool,
         leftRank: (UInt64) throws -> UInt32,
         rightRank: (UInt64) throws -> UInt32) throws -> Bool {
         let lhs = try measured("left edge ranking") {
             try rankEdgeBuckets(left, stateCount: stateCount,
-                edgeCount: leftEdgeCount, compactIDs: leftCompactIDs, rank: leftRank)
+                edgeCount: leftEdgeCount, rank: leftRank)
         }
         try FileManager.default.removeItem(at: left)
         let rhs = try measured("right edge ranking") {
             try rankEdgeBuckets(right, stateCount: stateCount,
-                edgeCount: rightEdgeCount, compactIDs: rightCompactIDs, rank: rightRank)
+                edgeCount: rightEdgeCount, rank: rightRank)
         }
         try FileManager.default.removeItem(at: right)
         return try measured("edge match") {
@@ -771,12 +731,10 @@ package enum ValidationEvidenceComparison {
     }
 
     private static func rankEdgeBuckets(_ input: URL, stateCount: Int, edgeCount: Int,
-        compactIDs: Bool,
         rank: (UInt64) throws -> UInt32) throws -> RankedEdgeBuckets {
         let bytes = try Data(contentsOf: input, options: .mappedIfSafe)
-        let recordSize = compactIDs ? 12 : 20
-        guard stateCount >= 0, edgeCount >= 0, edgeCount <= Int.max / recordSize,
-              bytes.count == edgeCount * recordSize else {
+        guard stateCount >= 0, edgeCount >= 0, edgeCount <= Int.max / 12,
+              bytes.count == edgeCount * 12 else {
             throw ValidationEvidenceComparisonError.invalidEvidence("raw edge length")
         }
         let directory = input.deletingLastPathComponent().appendingPathComponent("ranked-edge-buckets")
@@ -796,15 +754,10 @@ package enum ValidationEvidenceComparison {
         var previousSourceRank: UInt32 = 0
         try bytes.withUnsafeBytes { raw in
             for edge in 0..<edgeCount {
-                let base = edge * recordSize
-                let sourceID: UInt64 = compactIDs
-                    ? UInt64(UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base, as: UInt32.self)))
-                    : UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base, as: UInt64.self))
-                let action = UInt32(bigEndian: raw.loadUnaligned(
-                    fromByteOffset: base + (compactIDs ? 4 : 8), as: UInt32.self))
-                let targetID: UInt64 = compactIDs
-                    ? UInt64(UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base + 8, as: UInt32.self)))
-                    : UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base + 12, as: UInt64.self))
+                let base = edge * 12
+                let sourceID = UInt64(UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base, as: UInt32.self)))
+                let action = UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base + 4, as: UInt32.self))
+                let targetID = UInt64(UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base + 8, as: UInt32.self)))
                 let source: UInt32
                 if previousSourceID == sourceID {
                     source = previousSourceRank
@@ -875,16 +828,6 @@ package enum ValidationEvidenceComparison {
             }
         }
         return RankedAdjacency(offsets: offsets, pairs: pairs)
-    }
-
-    private static func rankInitials(_ raw: URL, ranks: TLCRankIndex, in directory: URL) throws -> URL {
-        try rewrite(raw, in: directory) { fields in
-            guard fields.count == 1, let fingerprint = UInt64(fields[0]),
-                  let rank = ranks.rank(for: fingerprint) else {
-                throw ValidationEvidenceComparisonError.invalidEvidence("TLC initial fingerprint")
-            }
-            return String(rank)
-        }
     }
 
     private static func rewrite(_ raw: URL, in directory: URL,

@@ -344,29 +344,21 @@ struct BinaryGraphEvidenceReader {
 
 struct BinaryEdgeWriter {
     private let handle: FileHandle
-    private let compactIDs: Bool
     private var buffer = Data()
 
-    init(_ url: URL, compactIDs: Bool) throws {
+    init(_ url: URL) throws {
         try Data().write(to: url, options: .withoutOverwriting)
         handle = try FileHandle(forWritingTo: url)
-        self.compactIDs = compactIDs
         buffer.reserveCapacity(1_048_576)
     }
 
     mutating func append(source: UInt64, action: UInt32, target: UInt64) throws {
-        if compactIDs {
-            guard let source = UInt32(exactly: source), let target = UInt32(exactly: target) else {
-                throw BinaryGraphEvidenceError.invalid("compact edge identity")
-            }
-            uint32(source)
-            uint32(action)
-            uint32(target)
-        } else {
-            uint64(source)
-            uint32(action)
-            uint64(target)
+        guard let source = UInt32(exactly: source), let target = UInt32(exactly: target) else {
+            throw BinaryGraphEvidenceError.invalid("compact edge identity")
         }
+        uint32(source)
+        uint32(action)
+        uint32(target)
         if buffer.count >= 1_048_576 { try flush() }
     }
 
@@ -376,11 +368,6 @@ struct BinaryEdgeWriter {
     }
 
     private mutating func uint32(_ value: UInt32) {
-        var bigEndian = value.bigEndian
-        withUnsafeBytes(of: &bigEndian) { buffer.append(contentsOf: $0) }
-    }
-
-    private mutating func uint64(_ value: UInt64) {
         var bigEndian = value.bigEndian
         withUnsafeBytes(of: &bigEndian) { buffer.append(contentsOf: $0) }
     }

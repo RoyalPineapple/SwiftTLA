@@ -360,7 +360,7 @@ struct ValidationEvidenceComparisonTests {
             Data(contentsOf: spool.appendingPathComponent("spool.json"))) as? [String: Any])
         #expect(manifest["stateCount"] as? Int == 2)
         #expect(manifest["edgeCount"] as? Int == 60_000)
-        #expect(try Data(contentsOf: spool.appendingPathComponent("edges.raw")).count == 1_200_000)
+        #expect(try Data(contentsOf: spool.appendingPathComponent("edges.raw")).count == 720_000)
         let nativeSpool = root.appendingPathComponent("native-spool")
         try FileManager.default.createDirectory(at: nativeSpool, withIntermediateDirectories: false)
         try ValidationEvidenceComparison.writeNativeSpool(
@@ -377,7 +377,7 @@ struct ValidationEvidenceComparisonTests {
         let generated = root.appendingPathComponent("generated.bin")
         let reference = root.appendingPathComponent("reference.bin")
         try tlcGraph(edgeCount: 1).write(to: generated)
-        try tlcGraph(edgeCount: 1, source: 303, target: 404).write(to: reference)
+        try tlcGraph(edgeCount: 1, source: 303, target: 404, reverseStates: true).write(to: reference)
         #expect(try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
             generated: generated, reference: reference, actions: actions, in: root) == nil)
     }
@@ -621,12 +621,14 @@ struct ValidationEvidenceComparisonTests {
 
     private func tlcGraph(edgeCount: Int, source: UInt64 = 101, target: UInt64 = 202,
         actionName: String = "Next", actionLocation: String = "", reverseEdge: Bool = false,
-        stateCount: Int = 2, lastEdgeTarget: Int? = nil) -> Data {
+        stateCount: Int = 2, lastEdgeTarget: Int? = nil, reverseStates: Bool = false) -> Data {
         var body = Data("STLAGRF2".utf8)
         body.append(1)
         append("fixture", to: &body)
         append("00000000-0000-4000-8000-000000000001", to: &body)
-        for (fingerprint, value, initial) in [(source, 0, true), (target, 1, false)] {
+        var states = [(source, 0, true), (target, 1, false)]
+        if reverseStates { states.reverse() }
+        for (fingerprint, value, initial) in states {
             body.append(2)
             append(fingerprint, to: &body)
             body.append(initial ? 1 : 0)
