@@ -7,15 +7,15 @@ struct ScenarioValidationTests {
     func identifiesNamedUpstreamScenario() throws {
         let scenarios = try modelValidationScenarios()
         for (id, name) in [
+            ("ewd840-0", "EWD840"),
             ("ewd840-ap", "APEWD840"),
             ("ewd840-json-0", "EWD840_json"),
             ("sync-termination-detection-ap", "APSyncTerminationDetection")
         ] {
             #expect(scenarios.first { $0.id == id }?.scenario.name == name)
         }
-        #expect(scenarios.first { $0.scenario.name == "EWD840" }?.id == "diagnostic-ewd840-ewd840")
         #expect(Set(scenarios.map(\.id)).isDisjoint(with: [
-            "ewd840-0", "ewd840-1", "ewd840-2", "sync-termination-detection-1"
+            "ewd840-1", "ewd840-2", "sync-termination-detection-1"
         ]))
     }
 
