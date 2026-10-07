@@ -394,6 +394,40 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("Invalid Instance arguments point to the supplied expression")
+    func invalidInstanceArgumentPointsToExpression() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            static var spec: TLASpec {
+                #spec { scope in
+                    let abstract = TLASpec("Abstract") {
+                        let value = Var<Int>("Value")
+                        Variable(value, 0)
+                    }
+                    let count = scope.sharedVar(initial: 0)
+                    let target = Instance("Target", of: abstract, with: [
+                        ModuleArgument("Value", value: Unsupported())
+                    ])
+                    target
+                }
+            }
+        }
+        """)
+        let declaration = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let invalidValue = try #require(source.tokens(viewMode: .sourceAccurate)
+            .first { $0.text == "Unsupported" })
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(declaration)
+            Issue.record("An unsupported Instance argument must fail compilation")
+        } catch let diagnostic as SourceParseDiagnostic {
+            #expect(diagnostic.sourceSpan.location == .utf8Offset(
+                invalidValue.positionAfterSkippingLeadingTrivia.utf8Offset))
+            let emitted = parserDiagnostic(diagnostic, in: declaration)
+            #expect(emitted.node.positionAfterSkippingLeadingTrivia == invalidValue.positionAfterSkippingLeadingTrivia)
+        }
+    }
+
     @Test("An unknown formal dependency points to its name")
     func unknownFormalDependencyPointsToName() throws {
         let source = Parser.parse(source: """

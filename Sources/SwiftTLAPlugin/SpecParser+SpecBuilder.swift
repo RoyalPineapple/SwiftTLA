@@ -1417,12 +1417,18 @@ extension ParserSession {
                       (argumentCall.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "ModuleArgument"
                         || argumentCall.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.sourceIdentifierName == "init"),
                       let parameter = extractStringArg(argumentCall, index: 0),
-                      let valueSyntax = argumentCall.arguments.first(where: { $0.label?.text == "value" })?.expression,
-                      let value = decodeTypedFacadeValue(valueSyntax, scope: scope) ?? decodeStateExpr(valueSyntax)
+                      let valueSyntax = argumentCall.arguments.first(where: { $0.label?.text == "value" })?.expression
                 else {
                     components.diagnostics.append(.init(
                         message: "Each Instance argument must be ModuleArgument(\"parameter\", value: expression).",
                         source: element.expression
+                    ))
+                    return
+                }
+                guard let value = decodeTypedFacadeValue(valueSyntax, scope: scope) ?? decodeStateExpr(valueSyntax) else {
+                    components.diagnostics.append(.init(
+                        message: "Each Instance argument needs a supported typed value expression.",
+                        source: valueSyntax
                     ))
                     return
                 }
