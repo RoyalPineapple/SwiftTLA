@@ -18,8 +18,8 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
         fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?) throws {
         guard let machine = initialMachines.first else { throw ExplorationError.noInitialStates }
         var snapshots: [Machine.Snapshot] = []
-        var initialIDs: [Int] = []
-        var edges: [(source: Int, action: Machine.Action, target: Int)] = []
+        var initialStates: Set<Machine.Snapshot> = []
+        var transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]] = [:]
         let summary = try MachineValidator.run(
             initialMachines: initialMachines, maximumStates: maximumStates,
             checking: .init(properties: [], checkDeadlock: false),
@@ -29,17 +29,35 @@ public struct MachineValidationGraph<Machine: StateMachine>: Sendable {
             case .state(let id, let snapshot, let initial, _, _):
                 guard id == snapshots.count else { throw ExplorationError.configurationMismatch }
                 snapshots.append(snapshot)
-                if initial { initialIDs.append(id) }
+                guard transitions.updateValue([], forKey: snapshot) == nil else {
+                    throw ExplorationError.configurationMismatch
+                }
+                if initial { initialStates.insert(snapshot) }
             case .edge(let source, let action, let target):
-                edges.append((source, action, target))
+                guard snapshots.indices.contains(source), snapshots.indices.contains(target) else {
+                    throw ExplorationError.configurationMismatch
+                }
+                transitions[snapshots[source], default: []].append((action, snapshots[target]))
             default: break
             }
         }
         guard case .exhausted = summary.completion else {
             throw ExplorationError.configurationMismatch
         }
-        try self.init(machine: machine, snapshots: snapshots, initialIDs: initialIDs,
-            edges: edges, behavior: behavior, fairness: fairness)
+        self.init(machine: machine, initialStates: initialStates,
+            transitions: transitions, behavior: behavior, fairness: fairness)
+    }
+
+    package init(machine: Machine, initialStates: Set<Machine.Snapshot>,
+        transitions: [Machine.Snapshot: [(action: Machine.Action, target: Machine.Snapshot)]],
+        behavior: ModelBehavior,
+        fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?) {
+        self.machine = machine
+        self.initialStates = initialStates
+        self.transitions = transitions
+        self.behavior = behavior
+        selectedFairness = fairness
+        selectedEnabledness = nil
     }
 
     package init(machine: Machine, snapshots: [Machine.Snapshot], initialIDs: [Int],

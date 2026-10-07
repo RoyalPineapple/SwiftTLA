@@ -73,16 +73,22 @@ package enum NativeValidationRunner {
         }
         let needsGraph = !scenario.checking.properties.intersection(temporal.union(refinement)).isEmpty
         var snapshots: [Scenario.Machine.Snapshot] = []
-        var initialIDs: [Int] = []
-        var edges: [(source: Int, action: Scenario.Machine.Action, target: Int)] = []
+        var initialStates: Set<Scenario.Machine.Snapshot> = []
+        var transitions: [Scenario.Machine.Snapshot: [(action: Scenario.Machine.Action, target: Scenario.Machine.Snapshot)]] = [:]
         let observe: ((MachineValidationEvent<Scenario.Machine>) throws -> Void)? = needsGraph ? { event in
             switch event {
             case .state(let id, let snapshot, let initial, _, _):
                 guard id == snapshots.count else { throw ExplorationError.configurationMismatch }
                 snapshots.append(snapshot)
-                if initial { initialIDs.append(id) }
+                guard transitions.updateValue([], forKey: snapshot) == nil else {
+                    throw ExplorationError.configurationMismatch
+                }
+                if initial { initialStates.insert(snapshot) }
             case .edge(let source, let action, let target):
-                edges.append((source, action, target))
+                guard snapshots.indices.contains(source), snapshots.indices.contains(target) else {
+                    throw ExplorationError.configurationMismatch
+                }
+                transitions[snapshots[source], default: []].append((action, snapshots[target]))
             default: break
             }
         } : nil
@@ -106,8 +112,8 @@ package enum NativeValidationRunner {
         if needsGraph {
             let fairness = scenario.behavior == .specification
                 ? try scenario.fairnessConditions(on: first) : []
-            var complete = try MachineValidationGraph(machine: first, snapshots: snapshots,
-                initialIDs: initialIDs, edges: edges, behavior: scenario.behavior, fairness: fairness)
+            var complete = MachineValidationGraph(machine: first, initialStates: initialStates,
+                transitions: transitions, behavior: scenario.behavior, fairness: fairness)
             temporalResults = try complete.temporalResults(checking: scenario.checking.properties)
             refinementFailures = try first.validationRefinementFailures(
                 in: &complete, checking: scenario.checking.properties)
