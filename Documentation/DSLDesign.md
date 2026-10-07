@@ -219,7 +219,8 @@ Duplicate step labels and non-Boolean guards fail compilation.
 Independent steps may coexist with one `Algorithm` declaration. They interleave
 over shared state; an independent step leaves the algorithm's control location
 and process-local state unchanged. Algorithm steps retain their own scheduling
-and control-transfer semantics. Other B-06 composition work remains open.
+and control-transfer semantics. Other composition forms require a named upstream
+case and an explicit typed contract.
 
 Acceptance requires generated execution, complete native graphs, TLA+ export without synthetic control state, and independent hosted TLC evidence.
 The direct model must not acquire an authored PlusCal algorithm.
@@ -601,7 +602,7 @@ weak fairness. A stronger promise for one enabled repeatedly, but not continuous
 is distinct and must also be explicit. Bound independent steps and `Next` use
 the declarations below. Process members use `Each(..., fairness:)`; their
 inner `Do` steps are not independent action handles. Other scope references
-still require the remaining B-04 decisions. Declared fairness must be preserved in temporal checking
+are not inferred or silently reinterpreted as these handles. Declared fairness must be preserved in temporal checking
 and TLA+ export; it is not a runtime scheduling mechanism.
 
 For a disjunction of independent steps, bind each `Do` to a Swift `let` and
@@ -642,7 +643,8 @@ memberSymmetry
 The current finite-domain implementation accepts enumerated nonempty member
 sets and `NonEmptySubsets` of a literal finite set or a typed set parameter whose
 domain recursively proves nonempty atomic members. Other finite parameter-domain
-expressions remain B-04 work; their rejection is not a TLC or PlusCal restriction.
+expressions are outside this finite declaration form; their rejection is not a
+TLC or PlusCal restriction.
 The compiler retains the parameter identity; TLA+ export defines the
 permutation operator over the rendered parameter, not a sample or default set.
 Every configured value therefore selects its own members without changing the
@@ -660,8 +662,8 @@ scenario's TLC configuration. An absent selection keeps TLC unreduced; a
 foreign or duplicate selection fails compilation. A scenario selecting symmetry
 and a temporal or refinement check fails compilation at the selected symmetry
 handle; an unselected declaration does not prohibit a safety-only scenario.
-The selection changes neither transitions nor native checking. Other B-04
-scope references and native/TLC evidence remain open.
+The selection changes neither transitions nor native checking. Native/TLC
+orbit evidence remains an acceptance obligation, not a different scope rule.
 
 Without a scenario-level selection, model-owned validation renders an
 unreduced TLC configuration even when the model declares an available symmetry
@@ -762,7 +764,8 @@ The compiler retains typed member bindings through native generation and TLA+ ex
 Generated predicates capture native member values. They do not invoke an expression interpreter.
 Outer validation declarations can reference invariant handles through the forward-declaration syntax in this section.
 Temporal scope references use the temporal forward-declaration contract in this section.
-Fairness and symmetry still require the remaining B-04 decisions and evidence.
+Other fairness and symmetry references are not inferred from this temporal scope.
+Source-aligned native/TLC evidence remains required.
 
 ### Configured authored PlusCal export
 
@@ -790,8 +793,8 @@ unreduced model remains valid.
 Ordering, a distinguished member, or identity-dependent behavior can make members
 non-interchangeable. An explicit declaration does not excuse an unsound reduction.
 The bound finite-set syntax, scenario selection, and their validation rules are
-specified above. Remaining scope references and independent parity evidence
-still require B-04 work.
+specified above. Other reductions are not part of this DSL contract;
+independent parity evidence is still required for an explicitly selected reduction.
 
 ## 6. Validation scenarios attached to the model
 
@@ -1199,7 +1202,8 @@ the authoring API. The legacy `ModelCollection` callers, fixtures, and API have
 been removed locally; hosted parity on the cutover revision remains required.
 
 Generated scenarios support empty, singleton, and multi-member populations, including explicit weak and strong fairness.
-Independent validation remains required for every upstream configuration. Collection composition remains open.
+Independent validation remains required for every upstream configuration.
+Additional collection-composition forms need a named upstream case and their own typed contract.
 
 The selected syntax inside a model scope containing typed declarations is:
 
@@ -1244,8 +1248,10 @@ Generated native checking and TLA+ export use the same resolved refinement ident
 An abstract formal parameter mapped directly from concrete model parameters, including
 arithmetic over them, retains those typed inputs in the specialized abstract machine for native checking.
 
-General composition, abstract configurations not resolved by the concrete configuration,
-and additional refinement targets remain open under B-06.
+The current cross-model form requires the concrete configuration to determine
+the abstract instance's configuration. Arbitrary model composition and
+additional refinement targets are not implicit variants of `Instance`;
+they need a named upstream case and a separate typed contract.
 
 Cross-model refinement uses the other generated model as its abstract model, not a
 second handwritten formal schema. The selected authoring shape is a bound instance
@@ -1575,19 +1581,29 @@ agreement separately. Do not redefine membership from the implementation registr
 
 ## 11. Specification decisions
 
-Close each open item with exact signatures, semantics, and one positive and one
-negative acceptance example. Implementers must not resolve these silently by
-inventing a second API or preserving an accidental existing behavior. B-01
-through B-03 are settled below. B-04 through B-06 remain open.
+These decisions define the bounded authoring surface. Each extension still
+needs exact signatures, semantics, and positive and negative acceptance cases;
+implementers must not invent a second API or preserve accidental behavior.
+Hosted equivalence is separate from settling the syntax and semantics.
 
 | ID | Decision |
 | --- | --- |
 | B-01 | Settled: typed parameter-dependent domains and model-owned finite scenario bindings use the same resolved parameter identities and generated `Configuration`; `Each` and dictionary state use stable member IDs, not application objects. Runner limits stop validation and never constrain the model. The fixed `ModelCollection` authoring API is removed. Acceptance still requires source-aligned tests and hosted parity for applicable configurations |
 | B-02 | Settled: name-bearing declarations use their specified immutable Swift binding or typed enum identity; `Algorithm` and `Validation` require explicit registration by bound reference. Inline control statements need no extra identity. Optional `label:` is presentation-only |
 | B-03 | Settled: typed `.expect(property, .violated)` and `.expectDeadlock(.violated)` change scenario admission only; checking retains its default selections and typed result shapes |
-| B-04 | Partially settled: bound independent-step disjunctions use `WeakFairness(anyOf:)` or `StrongFairness(anyOf:)`; per-member process fairness uses `Each(..., fairness:)`, with named-step exemptions but no individually targetable inner-step handles. Remaining temporal and symmetry scope references, validation rules, and permitted reductions still need decisions; neither fairness nor symmetry is automatic |
-| B-05 | Swift value/helper contracts: define supported operations, helper functions, exact inference rules and required annotations under the no-guessing rule, checked arithmetic, collection indexing, and failure behavior |
-| B-06 | Corpus fit and migration: preserve existing models when moving to ordered assignments; demonstrate procedures, recursion, and required composition without a second execution backend. Cross-model refinement uses a bound `Instance(of: Model.self)` and typed generated-member mappings as specified above; remaining corpus-driven composition forms still require decisions |
+| B-04 | Settled for this DSL surface: only the explicit bound-step, `Next`, process-member, and projected fairness forms above declare obligations; inner process steps have no independent handles. Finite symmetry is opt-in for a registered, immutable binding, and only a safety-only TLC scenario may select it. Native checking remains unreduced. Unsupported scopes and reductions fail rather than silently changing meaning; independent parity evidence is still required |
+| B-05 | Bounded current contract: ordinary supported Swift values and the typed operations above retain their types; immutable local expressions and bound `Macro` statements are the supported reuse forms, not arbitrary Swift function bodies. Inference must resolve completely before emission; checked `Int` arithmetic, one-based DSL sequence indices, and explicit evaluation failures apply. Additional value or helper forms require a named case and a new native/formal contract |
+| B-06 | Settled for the present acceptance set: ordered assignments, procedures, recursion, typed configured populations, and bound generated-model `Instance` refinement share the one compiled model path. The concrete scenario determines the abstract instance configuration and typed mappings. Unspecified general composition is not inferred or routed through a second backend; add it only for a named upstream configuration |
+
+The B-04 positive examples are bound `WeakFairness(anyOf: [initiate, pass])`
+and safety-only `Validation {}.usingSymmetry(memberSymmetry)`; putting
+`WeakFairness(Step.pass)` inside `Each` or selecting symmetry with a temporal
+check fails. For B-05, a bound `Macro` call inside `Do` is supported, while
+`let value = arbitrarySwiftFunction()` in `#spec` fails at the call. For B-06,
+a bound generated `Instance(of: Model.self)` with a complete typed refinement
+mapping is supported; omitting an abstract state member mapping fails generated
+consumer compilation. These are acceptance examples, not automatic proof of
+all upstream configurations.
 
 For B-02, the authoring forms inside `#spec` are:
 
