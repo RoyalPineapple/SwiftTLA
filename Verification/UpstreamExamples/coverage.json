@@ -8010,14 +8010,14 @@
     {
       "path": "specifications/nbacc_ray97",
       "name": "Asynchronous Non-Blocking Atomic Commit",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "Pinned nbacc_ray97.tla, nbacc_ray97.cfg, README, and published manifest inspected; the sole TLC model reports 3,016 distinct states, 49,592 total states, and a successful exhaustive check, but no Swift or hosted parity evidence exists.",
+      "gap": "Port the direct TLA+ four-variable state (pc, rcvd, sent, fd) and one atomic Step(self) over Proc = 1..N without changing action labels. Receive(self) nondeterministically chooses any message set between rcvd[self] and sent; each step independently updates the failure detector, then chooses Yes, No, Crash, Sent, or explicit stutter. The Sent branches read the same step's updated fd and rcvd values. Spec declares WF_vars of the exact separate action expression exists self in Proc: Receive(self) and (UponYes(self) or UponNo(self) or UponSent(self)); that expression omits the UpdateFailureDetector conjunct even though Step includes it. Under Spec, fair occurrences still involve the corresponding Step transitions, but fair-action enabledness must retain the published expression. Existing whole-step fairness cannot simply be applied to Step, and splitting into differently labeled actions would change graph parity. Implement a typed, independently checked action-predicate fairness form for this named case rather than dropping or strengthening the obligation. The sole published N=2 configuration selects TypeOK and default deadlock checking; Validity and commented NonTriv are not selected. Preserve all nondeterministic initial pc/fd functions, the complete labeled graph, TypeOK and deadlock outcomes, and both hosted comparison paths before crediting the family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/nbacc_ray97/nbacc_ray97.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The only published root owns Init, the atomic Step(self) relation, subset-valued message receives, nondeterministic failure-detector updates, conditional commit/abort/crash behavior, a selective weak-fairness obligation, and TypeOK. No helper TLA module or second configuration is declared by the pinned manifest.",
           "implementations": [],
           "dispositionComplete": false
         }
