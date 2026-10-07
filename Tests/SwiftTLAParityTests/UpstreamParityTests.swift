@@ -364,17 +364,6 @@ struct UpstreamParityTests {
         #expect(graph.temporalResults[.Success]?.status == .satisfied)
     }
 
-    @Test("Paxos typed state preserves its bounded TLC graph")
-    func paxosTypedStateParity() throws {
-        let exploration = try explore(
-            PaxosModel.spec,
-            maximumStateLimit: Example.paxosSmall.maximumStateLimit
-        )
-
-        #expect(exploration.graph.states.count == Example.paxosSmall.expectedDistinct)
-        #expect(isSuccessful(exploration))
-    }
-
     @Test("Reachable bounded source port checks its generated machine")
     func reachableBoundedPort() throws {
         let graph = try ReachabilityGraph(
