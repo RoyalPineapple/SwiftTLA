@@ -31,13 +31,13 @@
     "candidateAuditWindow": 3,
     "feedbackLoop": "Diagnose failures before rebuilding. Run each exact failing test alone before related regressions. Freeze one candidate SHA for contracts and family comparisons. Record evidence afterward. Report results, confirmed causes, or required choices, not compilation progress.",
     "nextCandidateAudit": {
-      "status": "Three pinned candidate families inspected; CigaretteSmokers implementation in progress after the prior PR-head admission",
+      "status": "EWD840 remains the current incomplete family at frozen hosted SHA 17d82123; three wave-A candidates have had their pinned manifests and configured roots inspected, but none is selected or implemented while admission runs",
       "candidates": [
-        "specifications/ReadersWriters",
-        "specifications/CigaretteSmokers",
-        "specifications/barriers"
+        "specifications/MissionariesAndCannibals",
+        "specifications/tower_of_hanoi",
+        "specifications/SlidingPuzzles"
       ],
-      "scope": "CigaretteSmokers has two published configurations over one small finite transition system; its proof module has no standalone model. ReadersWriters additionally selects weak-fairness liveness over a queue, while barriers includes a 13-location PlusCal algorithm and refinement property. This selection confers no hosted-parity credit; the two CigaretteSmokers configurations need their own green hosted SHA."
+      "scope": "MissionariesAndCannibals has two configured roots: the Toolbox model binds six distinct model values, while its Apalache wrapper binds quoted PERSON strings; both select TypeOK and the deliberately failing Solution invariant. Hanoi has two deliberately failing NotSolved configurations and uses bitwise disk transitions; its animation root adds an SVG trace alias. SlidingPuzzles has two deliberately failing KlotskiGoal configurations over set-of-piece boards; its animation root also adds an SVG trace alias. These are source observations, not implementation or hosted-parity credit. Complete module dispositions and capability checks are required before selecting a ready family; do not expand the matrix before reconciling the frozen admission run."
     },
     "implementationFamiliesInProgress": 1,
     "initialCandidates": ["CoffeeCan", "DieHard", "Majority"],
