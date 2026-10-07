@@ -6,6 +6,32 @@ import Testing
 
 @Suite("typed refinement declarations")
 struct RefinementDeclarationTests {
+  @Test("selecting a refinement changes the compiled model identity")
+  func refinementSelectionContributesToIdentity() throws {
+    let value = Var<Int>("value")
+    let abstract = TLASpec("AbstractIdentity") {
+      Variable(value, 0)
+      Action("stay") { value.stays }
+    }
+    let first = Instance("First", of: abstract)
+    let second = Instance("Second", of: abstract)
+    let firstClaim = Refinement(_name: "FirstClaim", instance: first, mappings: [.init(value, from: value)])
+    let secondClaim = Refinement(_name: "SecondClaim", instance: second, mappings: [.init(value, from: value)])
+    var selected = TLASpec("ConcreteIdentity") {
+      Variable(value, 0)
+      Action("stay") { value.stays }
+      first
+      second
+      firstClaim
+      secondClaim
+    }
+    selected.validationScenarios = [Validation("Case") {}.checking(only: [firstClaim])]
+    var other = selected
+    other.validationScenarios = [Validation("Case") {}.checking(only: [secondClaim])]
+
+    #expect(try selected.compile().identity != other.compile().identity)
+  }
+
   @Test("scenario expectations reject a foreign refinement with the same display name")
   func rejectsForeignRefinementExpectation() throws {
     let value = Var<Int>("value")

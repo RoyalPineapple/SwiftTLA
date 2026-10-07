@@ -1315,7 +1315,7 @@ private struct CanonicalSpecificationEncoder {
             node("formal-parameter", [$0.name, $0.kind.rawValue])
         }
         if !spec.validationScenarios.isEmpty {
-            let properties = layout.stateProperties + layout.temporalProperties
+            let properties = layout.properties
             let scenarios = spec.validationScenarios.map { scenario in
                 node("scenario", [scenario.name,
                     canonicalList(scenario.bindings.map { node("binding", [$0.parameter.name, canonicalExpression($0.value)]) }),
