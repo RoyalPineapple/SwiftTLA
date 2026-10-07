@@ -3,7 +3,7 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct ScenarioValidationTests {
-    @Test("named upstream configurations reach native validation without positional duplicates")
+    @Test("model-owned scenarios use stable identities without positional duplicates")
     func identifiesNamedUpstreamScenario() throws {
         let scenarios = try modelValidationScenarios()
         for (id, name) in [
@@ -13,8 +13,9 @@ struct ScenarioValidationTests {
         ] {
             #expect(scenarios.first { $0.id == id }?.scenario.name == name)
         }
+        #expect(scenarios.first { $0.scenario.name == "EWD840" }?.id == "diagnostic-ewd840-ewd840")
         #expect(Set(scenarios.map(\.id)).isDisjoint(with: [
-            "ewd840-1", "ewd840-2", "sync-termination-detection-1"
+            "ewd840-0", "ewd840-1", "ewd840-2", "sync-termination-detection-1"
         ]))
     }
 

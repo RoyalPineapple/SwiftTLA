@@ -92,20 +92,30 @@ package func modelValidationScenarios() throws -> [(id: String, scenario: any Mo
     let root = try RetainedFiles.projectRoot(URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
     let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
         from: Data(contentsOf: root.appendingPathComponent("Verification/FiniteGraph/cases.json")))
-    return try modelRegistrations.flatMap { model in
+    let resolved = try modelRegistrations.flatMap { model in
         let scenarios = try model.scenarios()
         guard !scenarios.isEmpty else {
             throw EvidenceFormatError.invalidField(record: model.id, field: "no scenarios")
         }
-        return scenarios.enumerated().flatMap { index, scenario in
+        return try scenarios.flatMap { scenario in
             let caseIDs = manifest.cases.compactMap { declaration -> String? in
                 guard declaration.sourceModel.rawValue == model.id,
                       declaration.scenario == scenario.name else { return nil }
                 if case .assumptionsOnly = declaration.comparisonMode { return nil }
                 return declaration.id
             }
-            return (caseIDs.isEmpty ? ["\(model.id)-\(index)"] : caseIDs)
-                .map { (id: $0, scenario: scenario) }
+            if !caseIDs.isEmpty {
+                return caseIDs.map { (id: $0, scenario: scenario) }
+            }
+            let diagnosticID = "diagnostic-\(model.id)-\(scenario.name.lowercased())"
+            guard diagnosticID.range(of: "^[a-z0-9_-]+$", options: .regularExpression) != nil else {
+                throw EvidenceFormatError.invalidField(record: model.id, field: "scenario ID")
+            }
+            return [(id: diagnosticID, scenario: scenario)]
         }
     }
+    guard Set(resolved.map(\.id)).count == resolved.count else {
+        throw EvidenceFormatError.invalidField(record: "model validation scenarios", field: "duplicate case ID")
+    }
+    return resolved
 }
