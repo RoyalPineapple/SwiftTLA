@@ -14,7 +14,7 @@ struct LoopInvarianceCorpusCheckingTests {
             #expect(reference.comparisonMode == .exhaustive)
             let scenario = try #require(try reference.resolveScenario())
             #expect(scenario.name == name)
-            #expect(registered.contains { $0.id == id + "-0" && $0.scenario.name == name })
+            #expect(registered.contains { $0.id == reference.id && $0.scenario.name == name })
             let rendered = try scenario.render()
             #expect(rendered.checksDeadlock)
             #expect(rendered.checkNames.count == 4)

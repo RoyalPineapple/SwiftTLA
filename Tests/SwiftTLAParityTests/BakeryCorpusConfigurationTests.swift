@@ -5,7 +5,7 @@ struct BakeryCorpusConfigurationTests {
     @Test("MCBakery is available to independent native validation")
     func nativePipelineSelectsPublishedConfiguration() throws {
         #expect(try modelValidationScenarios().contains {
-            $0.id == "bakery-0" && $0.scenario.name == "MCBakery"
+            $0.id == "bakery" && $0.scenario.name == "MCBakery"
         })
     }
 

@@ -1,3 +1,4 @@
+import Foundation
 import SwiftTLA
 
 private struct ModelRegistration: Sendable {
@@ -88,11 +89,23 @@ package func modelValidationScenarios(for id: String) throws -> [any ModelValida
 }
 
 package func modelValidationScenarios() throws -> [(id: String, scenario: any ModelValidationScenario)] {
-    try modelRegistrations.flatMap { model in
+    let root = try RetainedFiles.projectRoot(URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+    let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
+        from: Data(contentsOf: root.appendingPathComponent("Verification/FiniteGraph/cases.json")))
+    return try modelRegistrations.flatMap { model in
         let scenarios = try model.scenarios()
         guard !scenarios.isEmpty else {
             throw EvidenceFormatError.invalidField(record: model.id, field: "no scenarios")
         }
-        return scenarios.enumerated().map { ("\(model.id)-\($0.offset)", $0.element) }
+        return scenarios.enumerated().flatMap { index, scenario in
+            let caseIDs = manifest.cases.compactMap { declaration -> String? in
+                guard declaration.sourceModel.rawValue == model.id,
+                      declaration.scenario == scenario.name else { return nil }
+                if case .assumptionsOnly = declaration.comparisonMode { return nil }
+                return declaration.id
+            }
+            return (caseIDs.isEmpty ? ["\(model.id)-\(index)"] : caseIDs)
+                .map { (id: $0, scenario: scenario) }
+        }
     }
 }

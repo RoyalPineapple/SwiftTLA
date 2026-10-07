@@ -12,7 +12,7 @@ struct LearnProofsCorpusCheckingTests {
         #expect(reference.comparisonMode == .exhaustive)
         let scenario = try #require(try reference.resolveScenario())
         #expect(scenario.name == "MCFindHighest")
-        #expect(try modelValidationScenarios().contains { $0.id == "find-highest-0" && $0.scenario.name == scenario.name })
+        #expect(try modelValidationScenarios().contains { $0.id == reference.id && $0.scenario.name == scenario.name })
         let root = projectURL("Verification/FiniteGraph/fixtures")
         for (path, hash) in [
             (reference.module, reference.moduleSHA256),

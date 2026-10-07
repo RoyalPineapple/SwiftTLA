@@ -3,6 +3,21 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct ScenarioValidationTests {
+    @Test("named upstream configurations reach native validation without positional duplicates")
+    func identifiesNamedUpstreamScenario() throws {
+        let scenarios = try modelValidationScenarios()
+        for (id, name) in [
+            ("ewd840-ap", "APEWD840"),
+            ("ewd840-json-0", "EWD840_json"),
+            ("sync-termination-detection-ap", "APSyncTerminationDetection")
+        ] {
+            #expect(scenarios.first { $0.id == id }?.scenario.name == name)
+        }
+        #expect(Set(scenarios.map(\.id)).isDisjoint(with: [
+            "ewd840-1", "ewd840-2", "sync-termination-detection-1"
+        ]))
+    }
+
     @Test("registered model scenarios have unique identities")
     func identifiesRegisteredScenarios() throws {
         let scenarios = try modelValidationScenarios()
