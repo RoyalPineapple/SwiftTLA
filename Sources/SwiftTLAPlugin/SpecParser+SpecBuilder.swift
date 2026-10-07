@@ -379,9 +379,13 @@ extension ParserSession {
                 sourceScope = sourceScope.extending(binding: sourceName, to: value,
                     shape: typedFacadeValueType(ExprSyntax(call), scope: sourceScope))
             } else {
+                let calledName = call.calledExpression.trimmedDescription
                 components.diagnostics.append(.init(
-                    message: "Specification body contains an unsupported local declaration.",
-                    source: binding
+                    message: "Model source cannot call unsupported function '\(calledName)'.",
+                    source: call,
+                    expected: "a supported SwiftTLA model expression",
+                    actual: "no model-expression contract for '\(calledName)'",
+                    nextSafeAction: "Replace this call with a supported model expression; Swift function bodies are not imported into generated machines or TLA+."
                 ))
             }
         }

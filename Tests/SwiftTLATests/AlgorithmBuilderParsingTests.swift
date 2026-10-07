@@ -767,11 +767,16 @@ import SwiftTLAMacros
         """
         let closure = try parseSpecTestClosure(source)
         let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+        let declaration = try #require(closure.statements.first?.item.as(VariableDeclSyntax.self))
+        let call = try #require(declaration.bindings.first?.initializer?.value.as(FunctionCallExprSyntax.self))
+        let diagnostic = try #require(parsed.diagnostics.first)
 
         #expect(parsed.variables.isEmpty)
-        #expect(parsed.diagnostics.map(\.message) == [
-            "Specification body contains an unsupported local declaration."
-        ])
+        #expect(parsed.diagnostics.count == 1)
+        #expect(diagnostic.message == "Model source cannot call unsupported function 'arbitrarySwiftFunction'.")
+        #expect(diagnostic.source == "arbitrarySwiftFunction()")
+        #expect(diagnostic.sourceSpan.location == .utf8Offset(call.positionAfterSkippingLeadingTrivia.utf8Offset))
+        #expect(diagnostic.nextSafeAction == "Replace this call with a supported model expression; Swift function bodies are not imported into generated machines or TLA+.")
     }
 
     @Test("Nonliteral for-loop ranges are diagnosed")
