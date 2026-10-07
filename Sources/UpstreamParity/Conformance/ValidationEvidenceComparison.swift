@@ -123,6 +123,8 @@ package enum ValidationEvidenceComparison {
         let same = try compareBinaryEdges(generatedGraph.edges, referenceGraph.edges,
             stateCount: generatedGraph.stateCount,
             leftEdgeCount: generatedGraph.edgeCount, rightEdgeCount: referenceGraph.edgeCount,
+            leftCompactIDs: generatedGraph.compactEdgeIDs,
+            rightCompactIDs: referenceGraph.compactEdgeIDs,
             leftRank: { try Self.rank($0, in: generatedRanks) },
             rightRank: { try Self.rank($0, in: referenceRanks) })
         if !same { return "complete labeled edge set" }
@@ -247,6 +249,8 @@ package enum ValidationEvidenceComparison {
         let same = try compareBinaryEdges(swiftGraph.edges, tlcGraph.edges,
             stateCount: swiftGraph.stateCount,
             leftEdgeCount: swiftGraph.edgeCount, rightEdgeCount: tlcGraph.edgeCount,
+            leftCompactIDs: swiftGraph.compactEdgeIDs,
+            rightCompactIDs: tlcGraph.compactEdgeIDs,
             leftRank: { try Self.rank($0, in: swiftRanks) },
             rightRank: { try Self.rank($0, in: tlcRanks) })
         if !same { return "complete labeled edge set" }
@@ -322,10 +326,12 @@ package enum ValidationEvidenceComparison {
         let initialCount: Int
         let edgeCount: Int
         let binaryEdges: Bool
+        let compactEdgeIDs: Bool
         let witness: NativeDecisiveWitness?
 
         init(states: [URL], initial: URL, edges: URL, stateCount: Int,
             initialCount: Int = 0, edgeCount: Int = 0, binaryEdges: Bool = false,
+            compactEdgeIDs: Bool = false,
             witness: NativeDecisiveWitness? = nil) {
             self.states = states
             self.initial = initial
@@ -334,6 +340,7 @@ package enum ValidationEvidenceComparison {
             self.initialCount = initialCount
             self.edgeCount = edgeCount
             self.binaryEdges = binaryEdges
+            self.compactEdgeIDs = compactEdgeIDs
             self.witness = witness
         }
     }
@@ -350,6 +357,7 @@ package enum ValidationEvidenceComparison {
         let initialCount: Int
         let edgeCount: Int
         let binaryEdges: Bool
+        let compactEdgeIDs: Bool
         let witness: NativeDecisiveWitness?
     }
 
@@ -367,9 +375,10 @@ package enum ValidationEvidenceComparison {
     }
 
     private static func writeManifest(_ spool: Spool, in directory: URL) throws {
-        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v5",
+        let manifest = SpoolManifest(schema: "swifttla.validation-spool-v6",
             stateCount: spool.stateCount, initialCount: spool.initialCount,
-            edgeCount: spool.edgeCount, binaryEdges: spool.binaryEdges, witness: spool.witness)
+            edgeCount: spool.edgeCount, binaryEdges: spool.binaryEdges,
+            compactEdgeIDs: spool.compactEdgeIDs, witness: spool.witness)
         try JSONEncoder().encode(manifest).write(
             to: directory.appendingPathComponent("spool.json"), options: .atomic)
     }
@@ -377,7 +386,7 @@ package enum ValidationEvidenceComparison {
     private static func readManifest(in directory: URL) throws -> Spool {
         let manifest = try JSONDecoder().decode(SpoolManifest.self,
             from: Data(contentsOf: directory.appendingPathComponent("spool.json")))
-        guard manifest.schema == "swifttla.validation-spool-v5", manifest.binaryEdges,
+        guard manifest.schema == "swifttla.validation-spool-v6", manifest.binaryEdges,
               manifest.stateCount >= 0, manifest.initialCount >= 0,
               manifest.edgeCount >= 0 else {
             throw ValidationEvidenceComparisonError.invalidEvidence("spool manifest")
@@ -395,6 +404,7 @@ package enum ValidationEvidenceComparison {
         return Spool(states: states, initial: initial, edges: edges,
             stateCount: manifest.stateCount, initialCount: manifest.initialCount,
             edgeCount: manifest.edgeCount, binaryEdges: manifest.binaryEdges,
+            compactEdgeIDs: manifest.compactEdgeIDs,
             witness: manifest.witness)
     }
 
@@ -405,7 +415,7 @@ package enum ValidationEvidenceComparison {
         let edges = directory.appendingPathComponent("edges.raw")
         var stateOut = try states.map(BinaryStateWriter.init)
         var initialOut = try ValidationLineWriter(initial)
-        var edgeOut = try BinaryEdgeWriter(edges)
+        var edgeOut = try BinaryEdgeWriter(edges, compactIDs: producer == 2)
         defer {
             for index in stateOut.indices { try? stateOut[index].close() }
             try? initialOut.close()
@@ -603,7 +613,8 @@ package enum ValidationEvidenceComparison {
                 try edgeOut.close()
                 return Spool(states: states, initial: initial, edges: edges,
                     stateCount: stateCount, initialCount: initialCount,
-                    edgeCount: edgeCount, binaryEdges: true, witness: witness)
+                    edgeCount: edgeCount, binaryEdges: true,
+                    compactEdgeIDs: producer == 2, witness: witness)
             default:
                 throw ValidationEvidenceComparisonError.invalidEvidence("binary graph event")
             }
@@ -722,16 +733,17 @@ package enum ValidationEvidenceComparison {
 
     private static func compareBinaryEdges(_ left: URL, _ right: URL,
         stateCount: Int, leftEdgeCount: Int, rightEdgeCount: Int,
+        leftCompactIDs: Bool, rightCompactIDs: Bool,
         leftRank: (UInt64) throws -> UInt32,
         rightRank: (UInt64) throws -> UInt32) throws -> Bool {
         let lhs = try measured("left edge ranking") {
             try rankEdgeBuckets(left, stateCount: stateCount,
-                edgeCount: leftEdgeCount, rank: leftRank)
+                edgeCount: leftEdgeCount, compactIDs: leftCompactIDs, rank: leftRank)
         }
         try FileManager.default.removeItem(at: left)
         let rhs = try measured("right edge ranking") {
             try rankEdgeBuckets(right, stateCount: stateCount,
-                edgeCount: rightEdgeCount, rank: rightRank)
+                edgeCount: rightEdgeCount, compactIDs: rightCompactIDs, rank: rightRank)
         }
         try FileManager.default.removeItem(at: right)
         return try measured("edge match") {
@@ -759,10 +771,12 @@ package enum ValidationEvidenceComparison {
     }
 
     private static func rankEdgeBuckets(_ input: URL, stateCount: Int, edgeCount: Int,
+        compactIDs: Bool,
         rank: (UInt64) throws -> UInt32) throws -> RankedEdgeBuckets {
         let bytes = try Data(contentsOf: input, options: .mappedIfSafe)
-        guard stateCount >= 0, edgeCount >= 0, edgeCount <= Int.max / 20,
-              bytes.count == edgeCount * 20 else {
+        let recordSize = compactIDs ? 12 : 20
+        guard stateCount >= 0, edgeCount >= 0, edgeCount <= Int.max / recordSize,
+              bytes.count == edgeCount * recordSize else {
             throw ValidationEvidenceComparisonError.invalidEvidence("raw edge length")
         }
         let directory = input.deletingLastPathComponent().appendingPathComponent("ranked-edge-buckets")
@@ -782,10 +796,15 @@ package enum ValidationEvidenceComparison {
         var previousSourceRank: UInt32 = 0
         try bytes.withUnsafeBytes { raw in
             for edge in 0..<edgeCount {
-                let base = edge * 20
-                let sourceID = UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base, as: UInt64.self))
-                let action = UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base + 8, as: UInt32.self))
-                let targetID = UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base + 12, as: UInt64.self))
+                let base = edge * recordSize
+                let sourceID: UInt64 = compactIDs
+                    ? UInt64(UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base, as: UInt32.self)))
+                    : UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base, as: UInt64.self))
+                let action = UInt32(bigEndian: raw.loadUnaligned(
+                    fromByteOffset: base + (compactIDs ? 4 : 8), as: UInt32.self))
+                let targetID: UInt64 = compactIDs
+                    ? UInt64(UInt32(bigEndian: raw.loadUnaligned(fromByteOffset: base + 8, as: UInt32.self)))
+                    : UInt64(bigEndian: raw.loadUnaligned(fromByteOffset: base + 12, as: UInt64.self))
                 let source: UInt32
                 if previousSourceID == sourceID {
                     source = previousSourceRank

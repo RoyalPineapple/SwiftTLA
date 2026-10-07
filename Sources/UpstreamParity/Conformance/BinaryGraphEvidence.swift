@@ -344,18 +344,29 @@ struct BinaryGraphEvidenceReader {
 
 struct BinaryEdgeWriter {
     private let handle: FileHandle
+    private let compactIDs: Bool
     private var buffer = Data()
 
-    init(_ url: URL) throws {
+    init(_ url: URL, compactIDs: Bool) throws {
         try Data().write(to: url, options: .withoutOverwriting)
         handle = try FileHandle(forWritingTo: url)
+        self.compactIDs = compactIDs
         buffer.reserveCapacity(1_048_576)
     }
 
     mutating func append(source: UInt64, action: UInt32, target: UInt64) throws {
-        uint64(source)
-        uint32(action)
-        uint64(target)
+        if compactIDs {
+            guard let source = UInt32(exactly: source), let target = UInt32(exactly: target) else {
+                throw BinaryGraphEvidenceError.invalid("compact edge identity")
+            }
+            uint32(source)
+            uint32(action)
+            uint32(target)
+        } else {
+            uint64(source)
+            uint32(action)
+            uint64(target)
+        }
         if buffer.count >= 1_048_576 { try flush() }
     }
 

@@ -361,6 +361,12 @@ struct ValidationEvidenceComparisonTests {
         #expect(manifest["stateCount"] as? Int == 2)
         #expect(manifest["edgeCount"] as? Int == 60_000)
         #expect(try Data(contentsOf: spool.appendingPathComponent("edges.raw")).count == 1_200_000)
+        let nativeSpool = root.appendingPathComponent("native-spool")
+        try FileManager.default.createDirectory(at: nativeSpool, withIntermediateDirectories: false)
+        try ValidationEvidenceComparison.writeNativeSpool(
+            root.appendingPathComponent("native/machine.bin.gz"), caseID: "fixture",
+            expectedComplete: true, actions: actions, in: nativeSpool)
+        #expect(try Data(contentsOf: nativeSpool.appendingPathComponent("edges.raw")).count == 720_000)
         #expect(try compare(root).result == "exact")
     }
 
