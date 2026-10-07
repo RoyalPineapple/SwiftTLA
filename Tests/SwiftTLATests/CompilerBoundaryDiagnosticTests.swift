@@ -204,11 +204,14 @@ struct CompilerBoundaryDiagnosticTests {
     func mutableProcessPopulationPointsToDomain() throws {
         let source = Parser.parse(source: """
         struct InvalidModel {
-            enum Step: String, CaseIterable, FiniteTLAValueDomain { case advance }
+            enum Step: String, CaseIterable, FiniteTLAValueDomain { case idle, advance }
             static var spec: TLASpec {
                 #spec {
                     let algorithm = Algorithm(scoped: { scope in
                         let members = scope.sharedVar(initial: Set<Int>([0]))
+                        Each(Set<Int>([1])) { _ in
+                            Do(Step.idle) { Skip() }
+                        }
                         Each(members) { _ in
                             Do(Step.advance) { Skip() }
                         }
@@ -226,7 +229,7 @@ struct CompilerBoundaryDiagnosticTests {
             _ = try TLASpecVerifier.parseAndVerify(model)
             Issue.record("A process population cannot depend on mutable state")
         } catch let diagnostic as CompilationDiagnostic {
-            #expect(diagnostic.path.contains("domain"))
+            #expect(diagnostic.path.contains("processes[1].domain"))
             #expect(diagnostic.expected == "an immutable process population")
             #expect(diagnostic.actual == "a domain that reads state or action enabledness")
             #expect(diagnostic.sourceOffset == domain.positionAfterSkippingLeadingTrivia.utf8Offset)
