@@ -200,6 +200,39 @@ struct CompilerBoundaryDiagnosticTests {
         }
     }
 
+    @Test("A mutable process population points to its domain")
+    func mutableProcessPopulationPointsToDomain() throws {
+        let source = Parser.parse(source: """
+        struct InvalidModel {
+            enum Step: String, CaseIterable, FiniteTLAValueDomain { case advance }
+            static var spec: TLASpec {
+                #spec {
+                    let algorithm = Algorithm(scoped: { scope in
+                        let members = scope.sharedVar(initial: Set<Int>([0]))
+                        Each(members) { _ in
+                            Do(Step.advance) { Skip() }
+                        }
+                    })
+                    algorithm
+                }
+            }
+        }
+        """)
+        let model = try #require(source.statements.first?.item.as(StructDeclSyntax.self))
+        let domain = try #require(source.tokens(viewMode: .sourceAccurate)
+            .filter { $0.text == "members" }.last)
+
+        do {
+            _ = try TLASpecVerifier.parseAndVerify(model)
+            Issue.record("A process population cannot depend on mutable state")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.path.contains("domain"))
+            #expect(diagnostic.expected == "an immutable process population")
+            #expect(diagnostic.actual == "a domain that reads state or action enabledness")
+            #expect(diagnostic.sourceOffset == domain.positionAfterSkippingLeadingTrivia.utf8Offset)
+        }
+    }
+
     @Test("Generated action type errors point to their labeled step")
     func generatedActionTypeErrorPointsToStep() throws {
         for (body, action) in [

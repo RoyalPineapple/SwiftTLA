@@ -10,6 +10,7 @@ final class ParserSession {
     var symmetryDeclarationOffsets: [Int] = []
     var stateDeclarationOffsets: [String: [Int]] = [:]
     var actionDeclarationOffsets: [String: [Int]] = [:]
+    var processDomainOffsets: [Int] = []
     var propertyDeclarationOffsets: [String: [Int]] = [:]
     var formalDependencyOffsets: [String: [Int]] = [:]
 
@@ -42,6 +43,17 @@ final class ParserSession {
         let name = String(suffix[..<end])
         guard let offsets = actionDeclarationOffsets[name], offsets.count == 1 else { return nil }
         return offsets[0]
+    }
+
+    func processDomainOffset(for diagnosticPath: String) -> Int? {
+        let prefix = "authoredPlusCal.processes["
+        guard diagnosticPath.hasPrefix(prefix),
+              let close = diagnosticPath.firstIndex(of: "]"),
+              let index = Int(diagnosticPath[diagnosticPath.index(diagnosticPath.startIndex,
+                  offsetBy: prefix.count)..<close]),
+              diagnosticPath[diagnosticPath.index(after: close)...].hasPrefix(".domain"),
+              processDomainOffsets.indices.contains(index) else { return nil }
+        return processDomainOffsets[index]
     }
 
     func recordPropertyDeclaration(named name: String, reachability: Bool, at call: FunctionCallExprSyntax) {

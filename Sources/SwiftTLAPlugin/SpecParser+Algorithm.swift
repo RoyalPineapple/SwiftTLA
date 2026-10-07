@@ -905,6 +905,7 @@ extension ParserSession {
         } else {
             fairness = .none
         }
+        processDomainOffsets.append(domainSyntax.positionAfterSkippingLeadingTrivia.utf8Offset)
         return .process(.init(typeName: typeName, domain: domain, fairness: fairness,
             components: components, resolvedElementType: elementType,
             fairnessExcludedLabels: fairnessExcludedLabels))
