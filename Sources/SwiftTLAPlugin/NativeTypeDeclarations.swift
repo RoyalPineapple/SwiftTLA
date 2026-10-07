@@ -50,6 +50,9 @@ struct NativeTypeDeclarations: Sendable {
             pending.append(contentsOf: program.behavior.temporalProperties.flatMap { $0.bindings.map(\.domain) })
             pending.append(contentsOf: program.behavior.fairness.compactMap(\.projection))
             pending.append(contentsOf: program.refinements.flatMap { $0.variableMappings.map(\.expression) })
+            pending.append(contentsOf: program.generatedRefinements.flatMap {
+                ($0.parameters + $0.state).map { $0.value.expression }
+            })
             pending.append(contentsOf: program.behavior.invariants.map { $0.predicate.expression })
             pending.append(contentsOf: program.behavior.reachabilityProperties.map { $0.predicate.expression })
             pending.append(contentsOf: [program.behavior.constraint, program.behavior.assume].compactMap { $0?.expression })

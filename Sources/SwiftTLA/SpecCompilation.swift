@@ -185,6 +185,30 @@ struct CompiledRefinement: Sendable {
     let variableMappings: [CompiledStateQuery]
 }
 
+package struct CompiledGeneratedModelBinding: Sendable {
+    package let fieldName: String
+    package let value: CompiledStateQuery
+
+    func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> Self {
+        .init(fieldName: fieldName, value: try value.map(transform))
+    }
+}
+
+package struct CompiledGeneratedModelRefinement: Sendable {
+    package let id: PropertyID
+    package let name: String
+    package let instanceName: String
+    package let targetModelType: String
+    package let parameters: [CompiledGeneratedModelBinding]
+    package let state: [CompiledGeneratedModelBinding]
+
+    func map(_ transform: (CompiledExpression) throws -> CompiledExpression) rethrows -> Self {
+        .init(id: id, name: name, instanceName: instanceName, targetModelType: targetModelType,
+            parameters: try parameters.map { try $0.map(transform) },
+            state: try state.map { try $0.map(transform) })
+    }
+}
+
 /// Source metadata needed by renderers after executable declarations are lowered.
 struct CompiledModuleMetadata: Sendable {
     var name: String
@@ -222,6 +246,7 @@ fileprivate struct CompiledModule: Sendable {
     let bindings: CompiledBindingTable
     let semantics: CompiledSemantics
     let refinements: [CompiledRefinement]
+    let generatedRefinements: [CompiledGeneratedModelRefinement]
     let authoredAlgorithm: (plan: CompiledAuthoredPlusCalAlgorithmPlan, declarations: AuthoredPlusCalDeclarationOrder)?
     let requiredStandardModules: Set<StandardModule>
     let definitionsBeforeInstances: [Int]
@@ -308,6 +333,7 @@ public struct CompiledSpecification: Sendable {
     package var semantics: CompiledSemantics { module.semantics }
     var bindings: CompiledBindingTable { module.bindings }
     var refinements: [CompiledRefinement] { module.refinements }
+    var generatedRefinements: [CompiledGeneratedModelRefinement] { module.generatedRefinements }
     var authoredAlgorithm: CompiledAuthoredPlusCalAlgorithmPlan? { module.authoredAlgorithm?.plan }
     fileprivate let module: CompiledModule
     fileprivate let imports: [CompiledModule]
@@ -315,6 +341,12 @@ public struct CompiledSpecification: Sendable {
 
     /// Render verification artifacts from the existing program without compiling it again.
     public func render() throws -> RenderedSpecification {
+        guard module.generatedRefinements.isEmpty else {
+            throw CompilationDiagnostic(code: .unsupportedRefinementTarget, stage: .rendering,
+                path: "generatedRefinements", expected: "typed generated-model linking",
+                actual: "CompiledSpecification has no generated target type",
+                nextSafeAction: "Render through the generated model's typed export.")
+        }
         let metadata = module.metadata
         let rootModule = try metadata.renderModule(module)
         guard rootModule.symbolicActions.isEmpty else {
@@ -467,6 +499,111 @@ public struct RenderedSpecification: Sendable {
             renderedPlusCalProfiles: plusCalProfiles,
             fairnessProfileOperators: _generatedFairnessProfileOperators,
             temporalObligations: _generatedTemporalObligations)
+    }
+
+    /// Links another generated model's compiled TLA at the final export boundary.
+    @_documentation(visibility: internal)
+    public func addingGeneratedRefinement<Abstract: ConfiguredGeneratedModel>(
+        _ name: String, instance: String, of abstract: Abstract.Type,
+        configuration abstractConfiguration: Abstract.Configuration,
+        parameters: [(PartialKeyPath<Abstract.Configuration>, String)],
+        state: [(PartialKeyPath<Abstract.State>, String)]
+    ) throws -> Self {
+        guard !configuration.assumptionsOnly, isTLADeclarationName(name), isTLADeclarationName(instance),
+              !checkNames.contains(name), name != instance else {
+            throw CompilationDiagnostic(code: .duplicateRefinement, stage: .rendering,
+                path: "refinements.\(name)", expected: "distinct formal refinement and instance names",
+                actual: "\(instance), \(name)", nextSafeAction: "Use distinct bound identities in #spec.")
+        }
+        func substitutions<Root>(
+            _ values: [(PartialKeyPath<Root>, String)],
+            names: [PartialKeyPath<Root>: GeneratedModelFieldIdentity], kind: String
+        ) throws -> [(String, String)] {
+            let mapped = try values.map { keyPath, expression in
+                guard let target = names[keyPath]?.formalName,
+                      !expression.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    throw CompilationDiagnostic(code: .unknownRefinementMappingTarget, stage: .rendering,
+                        path: "refinements.\(name).\(kind)", expected: "a generated target field and resolved expression",
+                        actual: "an unknown target or empty expression",
+                        nextSafeAction: "Map a generated member of the abstract model.")
+                }
+                return (target, expression)
+            }
+            guard mapped.count == names.count, Set(mapped.map { $0.0 }).count == names.count else {
+                throw CompilationDiagnostic(code: .incompleteRefinementMapping, stage: .rendering,
+                    path: "refinements.\(name).\(kind)", expected: "one mapping for every generated target field",
+                    actual: "\(mapped.count) mappings for \(names.count) fields",
+                    nextSafeAction: "Map every abstract field exactly once.")
+            }
+            return mapped
+        }
+        let bindings = try substitutions(parameters, names: Abstract.Configuration.fieldIdentities, kind: "parameters")
+            + substitutions(state, names: Abstract.State.fieldIdentities, kind: "state")
+        let target = try abstract.render(configuration: abstractConfiguration).tlaBundle
+        guard case .compiled(let targetIdentity, let targetOwnership, let targetDependencies) = target.provenance else {
+            throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                path: "refinements.\(name).abstract", expected: "a generated compiled abstract model",
+                actual: "external formal input", nextSafeAction: "Use a generated model as the refinement target.")
+        }
+        let replacement = bindings.sorted { $0.0 < $1.0 }
+            .map { "\($0.0) <- (\($0.1))" }.joined(separator: ", ")
+        let definitions = "\(instance) == INSTANCE \(target.root.name)"
+            + (replacement.isEmpty ? "" : " WITH " + replacement)
+            + "\n\(name) == \(instance)!Spec\n"
+        let selected = TLCConfiguration(behavior: configuration.behavior,
+            specificationName: configuration.specificationName, assumptionsOnly: configuration.assumptionsOnly,
+            declarations: configuration.declarations, checkDeadlock: configuration.checkDeadlock,
+            invariants: configuration.invariants, reachabilityProperties: configuration.reachabilityProperties,
+            properties: configuration.properties, refinements: configuration.refinements + [name],
+            symmetry: configuration.symmetry)
+        func linked(_ source: TLAModuleBundle) throws -> TLAModuleBundle {
+            guard let end = source.root.tla.range(of: "====", options: .backwards),
+                  case .compiled(let rootIdentity, let rootOwnership, let rootDependencies) = source.provenance else {
+                throw CompilationDiagnostic(code: .compilationIdentityMismatch, stage: .rendering,
+                    path: "refinements.\(name).source", expected: "a complete generated concrete module",
+                    actual: "an incomplete or external module", nextSafeAction: "Render the generated concrete model first.")
+            }
+            let sourceText = String(source.root.tla[..<end.lowerBound]) + definitions + source.root.tla[end.lowerBound...]
+            var imports = source.imports
+            for file in [target.root] + target.imports {
+                if let existing = imports.first(where: { $0.name == file.name }) {
+                    // ponytail: distinct sources with one module name need compiler-assigned import namespaces.
+                    guard existing.tla == file.tla else { throw TLAModuleBundleIntegrityError.duplicateModule(file.name) }
+                } else {
+                    imports.append(.init(name: file.name, tla: file.tla))
+                }
+            }
+            let identityInput = rootIdentity.value + ":" + targetIdentity.value + ":" + definitions
+            let identity = CompilationIdentity(value: SHA256.hash(data: Data(identityInput.utf8))
+                .map { String(format: "%02x", $0) }.joined())
+            let path = [instance]
+            let ownership = rootOwnership + targetOwnership.map {
+                TLAModuleBundle.OwnershipEntry(moduleName: $0.moduleName,
+                    owningRoot: source.root.name, structuralPath: path + $0.structuralPath)
+            }
+            let dependencies = rootDependencies
+                + [.init(importingModule: source.root.name, importedModule: target.root.name, structuralPath: path)]
+                + targetDependencies.map {
+                    .init(importingModule: $0.importingModule, importedModule: $0.importedModule,
+                        structuralPath: path + $0.structuralPath)
+                }
+            let bundle = TLAModuleBundle(root: .init(name: source.root.name, tla: sourceText,
+                cfg: selected.render(usesSymmetryReduction: false)), imports: imports,
+                provenance: .compiled(identity: identity, ownership: ownership, dependencies: dependencies))
+            try bundle.validateDeclaredClosure()
+            return bundle
+        }
+        func linkedResult(_ result: Result<TLAModuleBundle, CompilationDiagnostic>) throws
+            -> Result<TLAModuleBundle, CompilationDiagnostic> {
+            switch result {
+            case .success(let bundle): return .success(try linked(bundle))
+            case .failure(let diagnostic): return .failure(diagnostic)
+            }
+        }
+        return try Self(tlaBundle: linked(tlaBundle), configuration: selected, actions: actions,
+            renderedPlusCalModuleBundle: renderedPlusCalModuleBundle.map(linkedResult),
+            renderedPlusCalProfiles: renderedPlusCalProfiles.mapValues(linkedResult),
+            fairnessProfileOperators: fairnessProfileOperators, temporalObligations: temporalObligations)
     }
 
     public func tlaBundle(
@@ -773,7 +910,9 @@ private extension TLASpec {
             (recursiveFuncs.map(\.name), "recursive operator", "recursiveFunctions"),
             (formalOperatorDefinitions.map(\.name), "formal operator", "formalOperators"),
             (moduleInstances.map(\.name), "module instance", "moduleInstances"),
-            (refinements.map(\.name), "refinement", "refinements")
+            (refinements.map(\.name), "refinement", "refinements"),
+            (generatedModelInstances.map(\.name), "generated model instance", "generatedModelInstances"),
+            (generatedRefinements.map(\.name), "generated refinement", "generatedRefinements")
         ]
 
         for (names, kind, path) in declarationGroups {
@@ -818,6 +957,7 @@ public extension TLASpec {
         let layout = module.layout
         let semantics = module.semantics
         let compiledRefinements = module.refinements
+        let compiledGeneratedRefinements = module.generatedRefinements
         let identity = compilationIdentity
         let imports = try closure.entries.filter { $0.id != closure.root.id }.map { entry in
             let source = try entry.module.loweredSourceModel()
@@ -856,7 +996,7 @@ public extension TLASpec {
             invariants: semantics.behavior.invariants.map(\.name),
             reachabilityProperties: semantics.behavior.reachabilityProperties.map(\.name),
             temporalProperties: semantics.behavior.temporalProperties.map(\.name),
-            refinements: compiledRefinements.map(\.name),
+            refinements: compiledRefinements.map(\.name) + compiledGeneratedRefinements.map(\.name),
             stateConstraint: semantics.behavior.constraint.map { _ in "StateConstraint" },
             procedures: layout.procedures.map {
                 .init(
@@ -895,6 +1035,7 @@ public extension TLASpec {
             code: .duplicateInvariant, path: "properties")
         try validateSymmetryDeclarations()
         try validateRefinements()
+        try validateGeneratedRefinements()
         let definitionOrder = try orderedDirectDefinitions()
         let layout = CompiledLayout(source: self)
         var lowerer = CompiledLowerer(
@@ -909,12 +1050,15 @@ public extension TLASpec {
             authoredAlgorithm = nil
         }
         let refinements = try compiledRefinements(lowerer: &lowerer, layout: layout, semantics: semantics)
+        let compiledGenerated = try compiledGeneratedRefinements(
+            lowerer: &lowerer, layout: layout, semantics: semantics)
         semantics.operators = lowerer.operators
         semantics.operators.resolveDependencies()
         try validateAuthoredProperties(algorithm: authoredAlgorithm?.plan, layout: layout)
         return CompiledModule(
             metadata: .init(source: self, modelValueNames: lowerer.modelValueNames), layout: layout, bindings: lowerer.bindings, semantics: semantics,
-            refinements: refinements, authoredAlgorithm: authoredAlgorithm,
+            refinements: refinements, generatedRefinements: compiledGenerated,
+            authoredAlgorithm: authoredAlgorithm,
             requiredStandardModules: lowerer.requiredStandardModules,
             definitionsBeforeInstances: definitionOrder.beforeInstances,
             definitionsAfterInstances: definitionOrder.afterInstances
@@ -1112,6 +1256,87 @@ public extension TLASpec {
                     nextSafeAction: "Move every substitution into Refinement."
                 )
             }
+        }
+    }
+
+    private func validateGeneratedRefinements() throws {
+        try validateUnique(generatedModelInstances.map(\.name), code: .duplicateRefinement,
+            path: "generatedModelInstances")
+        try validateUnique(generatedRefinements.map(\.name), code: .duplicateRefinement,
+            path: "generatedRefinements")
+        let occupied = Set(variables.map(\.name) + actions.map(\.name) + invariants.map(\.name)
+            + reachabilityProperties.map(\.name) + temporalProperties.map(\.name)
+            + formalOperatorDefinitions.map(\.name) + recursiveFuncs.map(\.name)
+            + moduleInstances.map(\.name) + refinements.map(\.name))
+        for instance in generatedModelInstances {
+            guard !occupied.contains(instance.name), !instance.targetModelType.isEmpty else {
+                throw CompilationDiagnostic(code: .duplicateRefinement, stage: .validation,
+                    path: "generatedModelInstances.\(instance.name)",
+                    expected: "a distinct bound generated-model type and instance",
+                    actual: instance.targetModelType,
+                    nextSafeAction: "Use a distinct let-bound generated model instance.")
+            }
+            try validateUnique(instance.fieldBindings.map(\.fieldName),
+                code: .duplicateRefinementMapping, path: "generatedModelInstances.\(instance.name).bindings")
+        }
+        let instanceNames = Set(generatedModelInstances.map(\.name))
+        for refinement in generatedRefinements {
+            guard !occupied.contains(refinement.name), !instanceNames.contains(refinement.name) else {
+                throw CompilationDiagnostic(code: .duplicateRefinement, stage: .validation,
+                    path: "generatedRefinements.\(refinement.name)",
+                    expected: "a property identity distinct from other declarations",
+                    actual: refinement.name,
+                    nextSafeAction: "Use a distinct let binding for the refinement.")
+            }
+            guard instanceNames.contains(refinement.instanceName) else {
+                throw CompilationDiagnostic(code: .unresolvedRefinementInstance, stage: .linking,
+                    path: "generatedRefinements.\(refinement.name).instance",
+                    expected: "a registered generated-model Instance",
+                    actual: refinement.instanceName,
+                    nextSafeAction: "Register the bound Instance before its Refinement.")
+            }
+            try validateUnique(refinement.fieldMappings.map(\.fieldName),
+                code: .duplicateRefinementMapping, path: "generatedRefinements.\(refinement.name).mappings")
+        }
+    }
+
+    private func compiledGeneratedRefinements(
+        lowerer: inout CompiledLowerer,
+        layout: CompiledLayout,
+        semantics: CompiledSemantics
+    ) throws -> [CompiledGeneratedModelRefinement] {
+        try zip(generatedRefinements, layout.generatedRefinementProperties).map { refinement, property in
+            guard let instance = generatedModelInstances.first(where: { $0.name == refinement.instanceName }) else {
+                throw CompilationDiagnostic(code: .unresolvedRefinementInstance, stage: .linking,
+                    path: "generatedRefinements.\(refinement.name).instance",
+                    expected: "a registered generated-model Instance", actual: refinement.instanceName,
+                    nextSafeAction: "Register the bound Instance before its Refinement.")
+            }
+            let parameters = try instance.fieldBindings.map { binding in
+                let expression = try lowerer.refinementExpression(binding.source,
+                    at: "generatedModelInstances.\(instance.name).bindings.\(binding.fieldName)")
+                let requirements = expression.stateRequirements(operators: lowerer.operators)
+                guard requirements.variables.isEmpty && !requirements.requiresCompleteState else {
+                    throw CompilationDiagnostic(code: .stateDependentRefinementParameter, stage: .binding,
+                        path: "generatedModelInstances.\(instance.name).bindings.\(binding.fieldName)",
+                        expected: "a state-independent abstract configuration value",
+                        actual: "an expression that reads concrete model state",
+                        nextSafeAction: "Bind the abstract parameter from concrete configuration only.")
+                }
+                return CompiledGeneratedModelBinding(fieldName: binding.fieldName,
+                    value: .init(expression: expression, operators: lowerer.operators,
+                        actionDependencies: semantics.behavior.enabledActionDependencies))
+            }
+            let state = try refinement.fieldMappings.map { mapping in
+                let expression = try lowerer.refinementExpression(mapping.source,
+                    at: "generatedRefinements.\(refinement.name).mappings.\(mapping.fieldName)")
+                return CompiledGeneratedModelBinding(fieldName: mapping.fieldName,
+                    value: .init(expression: expression, operators: lowerer.operators,
+                        actionDependencies: semantics.behavior.enabledActionDependencies))
+            }
+            return .init(id: property.id, name: refinement.name,
+                instanceName: instance.name, targetModelType: instance.targetModelType,
+                parameters: parameters, state: state)
         }
     }
 
@@ -1431,6 +1656,20 @@ private struct CanonicalSpecificationEncoder {
             ])
         }
         list("refinements", refinements) { $0 }
+        let generatedInstances = spec.generatedModelInstances.map { instance in
+            node("generated-instance", [instance.name, instance.targetModelType,
+                canonicalList(instance.fieldBindings.map {
+                    node("bind", [$0.fieldName, canonicalExpression($0.source)])
+                })])
+        }
+        list("generatedInstances", generatedInstances) { $0 }
+        let generatedRefinements = spec.generatedRefinements.map { refinement in
+            node("generated-refinement", [refinement.name, refinement.instanceName,
+                canonicalList(refinement.fieldMappings.map {
+                    node("map", [$0.fieldName, canonicalExpression($0.source)])
+                })])
+        }
+        list("generatedRefinements", generatedRefinements) { $0 }
         let symmetrySets = spec.symmetrySets.map { set in
             let domain: String
             switch set.domain {
@@ -1597,6 +1836,14 @@ extension CompiledProgram {
         try renderModule(named: moduleName, owningRoot: moduleName, structuralPath: [])
     }
 
+    package func renderGeneratedModelValue(_ value: CompiledStateQuery) throws -> String {
+        let renderer = CompiledTLARenderer(moduleName: moduleName,
+            reservedNames: exportedModelValueNames.union(moduleMetadata.constants.map(\.name)),
+            layout: layout, bindings: .init(binders: binderNames), operators: .init(),
+            actions: behavior.actions, functions: functions)
+        return try renderer.state(value.expression)
+    }
+
     private var exportedModelValueNames: Set<String> {
         refinements.reduce(moduleMetadata.modelValueNames.union(CompiledValue.modelValueNames(
             in: moduleMetadata.constants.map { CompiledValue(formal: $0.value) }))) {
@@ -1618,9 +1865,14 @@ extension CompiledProgram {
         var replacements = formalModuleReplacements.map { $0.configuration(moduleNames: moduleNames) }
             + moduleImports.replacements(for: metadata.imports, moduleNames: moduleNames)
         let modelValues = exportedModelValueNames
-        let reserved = Set(layout.declarations.map(\.name) + metadata.constants.map(\.name)
-            + layout.parameters.map { $0.reference.name } + layout.moduleInstances.map(\.namespace)
-            + refinements.map(\.name) + ["Init", "Next", "Spec", "vars", "StateConstraint", "Terminating"])
+        var reserved = Set(layout.declarations.map(\.name))
+        reserved.formUnion(metadata.constants.map(\.name))
+        reserved.formUnion(layout.parameters.map { $0.reference.name })
+        reserved.formUnion(layout.moduleInstances.map(\.namespace))
+        reserved.formUnion(refinements.map(\.name))
+        reserved.formUnion(generatedRefinements.map(\.name))
+        reserved.formUnion(generatedRefinements.map(\.instanceName))
+        reserved.formUnion(["Init", "Next", "Spec", "vars", "StateConstraint", "Terminating"])
         for value in modelValues.subtracting(metadata.modelValueNames).sorted() where reserved.contains(value) {
             guard metadata.constants.contains(where: { $0.name == value && $0.value == .constant(value) }) else {
                 throw CompilationDiagnostic(code: .invalidFormalDeclaration, stage: .rendering,

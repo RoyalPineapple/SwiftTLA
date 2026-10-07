@@ -26,6 +26,7 @@ package struct CompiledProgram: Sendable {
     package let layout: CompiledLayout
     package let behavior: CompiledBehavior
     package let refinements: [CompiledRefinementProgram]
+    package let generatedRefinements: [CompiledGeneratedModelRefinement]
     package let enums: CompiledEnums
     /// Implicit conversions required by this program, including their components.
     package let projections: Set<ResolvedProjectionPair>

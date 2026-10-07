@@ -48,6 +48,32 @@ public protocol StateMachine: Sendable {
     ) throws -> Bool
 }
 
+/// A generated machine whose immutable model parameters are represented by a
+/// typed configuration. Cross-model composition uses these compiled outputs;
+/// it never rebuilds the referenced model from its source specification.
+public struct GeneratedModelFieldIdentity: Hashable, Sendable {
+    public let swiftName: String
+    public let formalName: String
+
+    public init(swiftName: String, formalName: String) {
+        self.swiftName = swiftName
+        self.formalName = formalName
+    }
+}
+
+public protocol GeneratedModelFields: Sendable {
+    static var fieldIdentities: [PartialKeyPath<Self>: GeneratedModelFieldIdentity] { get }
+}
+
+public protocol ConfiguredGeneratedModel: StateMachine {
+    associatedtype Configuration: Hashable & GeneratedModelFields
+    associatedtype State: Hashable & GeneratedModelFields
+    var state: State { get }
+    static func initialMachines(configuration: Configuration) throws -> [Self]
+    static func makeMachine(_ initial: State, configuration: Configuration) throws -> Self
+    static func render(configuration: Configuration) throws -> RenderedSpecification
+}
+
 extension StateMachine {
     public func visitSuccessors(for action: Action, checking context: inout CheckingContext<CheckingRegisters>,
                                 _ visit: (Self) throws -> Bool) throws -> Bool {

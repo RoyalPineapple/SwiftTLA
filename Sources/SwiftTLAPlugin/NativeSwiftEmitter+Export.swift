@@ -95,10 +95,30 @@ extension NativeSwiftEmitter {
             if module.temporalObligations.isEmpty {
                 obligationMetadata = "let _obligations: [String: [_RenderedTemporalObligation]] = [:]"
             }
+            let generatedLinks = try program.generatedRefinements.map { refinement in
+                let target = refinement.targetModelType
+                let configuration = try refinement.parameters.map { binding in
+                    "\(binding.fieldName): \(try expression(binding.value.expression, state: ""))"
+                }.joined(separator: ", ")
+                func renderedBindings(_ bindings: [CompiledGeneratedModelBinding]) throws -> String {
+                    try bindings.map { binding in
+                        let value = try program.renderGeneratedModelValue(binding.value)
+                        return "(\\.\(binding.fieldName), \(String(reflecting: value)))"
+                    }.joined(separator: ", ")
+                }
+                return """
+                _rendered = try _rendered.addingGeneratedRefinement(
+                    \(String(reflecting: refinement.name)),
+                    instance: \(String(reflecting: refinement.instanceName)), of: \(target).self,
+                    configuration: try \(target).Configuration(\(configuration)),
+                    parameters: [\(try renderedBindings(refinement.parameters))],
+                    state: [\(try renderedBindings(refinement.state))])
+                """
+            }
             body = """
             \(actionMetadata)
             \(obligationMetadata)
-            return try RenderedSpecification(_generatedModule: \(String(reflecting: program.moduleName)),
+            \(generatedLinks.isEmpty ? "let" : "var") _rendered = try RenderedSpecification(_generatedModule: \(String(reflecting: program.moduleName)),
                 source: \(String(reflecting: module.renderedModuleSource)),
                 compilationIdentity: \(String(reflecting: program.identity.value)),
                 declarations: [\(declarations.joined(separator: ", "))],
@@ -117,6 +137,8 @@ extension NativeSwiftEmitter {
                     "\(String(reflecting: $0.name)): \(String(reflecting: $0.operatorName))"
                 }.joined(separator: ", ") + "]"),
                 _generatedTemporalObligations: _obligations)
+            \(generatedLinks.joined(separator: "\n"))
+            return _rendered
             """
         } catch let diagnostic as CompilationDiagnostic {
             body = """

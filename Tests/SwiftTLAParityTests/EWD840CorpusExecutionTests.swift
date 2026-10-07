@@ -9,7 +9,7 @@ struct EWD840CorpusExecutionTests {
         let scenario = try #require(scenarios.first { $0.name == "EWD840" })
         let rendered = try scenario.render()
         #expect(rendered.tlaBundle.cfg.contains("N = 3"))
-        #expect(rendered.checkNames == ["TypeOK", "TerminationDetection", "Inv", "Liveness"])
+        #expect(rendered.checkNames == ["TypeOK", "TerminationDetection", "Inv", "Liveness", "TDSpec"])
         #expect(!rendered.checksDeadlock)
 
         let ap = try #require(scenarios.first { $0.name == "APEWD840" })
@@ -76,6 +76,8 @@ struct EWD840CorpusExecutionTests {
         let native = try ReachabilityGraph(initialMachines: initial, maximumStates: 1_000)
         #expect(native.transitions.count == 302)
         #expect(native.temporalResults[.Liveness]?.status == .satisfied)
+        #expect(native.checking.properties.contains(.TDSpec))
+        #expect(native.refinementFailures[.TDSpec] == nil)
         #expect(try EWD840Model.render(configuration: configuration).checkNames.contains("Liveness"))
         let sender = try #require(initial.first {
             $0.state.active[0] == true && $0.state.active[1] == false && $0.state.active[2] == false
@@ -94,23 +96,31 @@ struct EWD840CorpusExecutionTests {
 
     @Test("EWD840's generated machine refines synchronous termination detection, including fairness")
     func synchronousTerminationRefinement() throws {
-        let concrete = try MachineValidationGraph(
-            initialMachines: EWD840Model.initialMachines(configuration: .init(N: 3)),
-            maximumStates: 1_000)
+        let scenario = try #require(EWD840Model.validationScenarios().first { $0.name == "EWD840" })
+        let initial = try scenario.initialMachines()
+        let machine = try #require(initial.first)
+        var concrete = try MachineValidationGraph(initialMachines: initial, maximumStates: 1_000)
+        #expect(scenario.checking.properties.contains(.TDSpec))
         let abstractConfiguration = try SyncTerminationDetectionModel.Configuration(N: 3)
-        let abstract = try SyncTerminationDetectionModel.initialMachines(
-            configuration: abstractConfiguration)
+        let abstract = try SyncTerminationDetectionModel.initialMachines(configuration: abstractConfiguration)
         let abstractStart = try #require(abstract.first)
         #expect(try abstractStart.fairnessConditions().count == 1)
-        let failure = try concrete.refinementFailure(initialMachines: abstract) { snapshot in
-            let state = snapshot.state
-            return try SyncTerminationDetectionModel.makeMachine(
-                .init(active: state.active,
-                    terminationDetected: state.tpos == 0 && state.tcolor == .white
-                        && state.color[0] == .white && state.active[0] == false),
-                configuration: abstractConfiguration)
-        }
-        #expect(failure == nil)
+        let failures = try machine.validationRefinementFailures(in: &concrete,
+            checking: scenario.checking.properties)
+        #expect(failures[.TDSpec] == nil)
+    }
+
+    @Test("the model-owned refinement exports the generated abstract module and check")
+    func refinementExportsGeneratedAbstractModel() throws {
+        let scenario = try #require(EWD840Model.validationScenarios().first { $0.name == "EWD840" })
+        let rendered = try scenario.render()
+        let abstractConfiguration = try SyncTerminationDetectionModel.Configuration(N: 3)
+        let abstract = try SyncTerminationDetectionModel.render(configuration: abstractConfiguration)
+        #expect(rendered.checkNames.contains("TDSpec"))
+        #expect(rendered.tlaBundle.cfg.contains("PROPERTY TDSpec"))
+        #expect(rendered.tlaBundle.imports.first { $0.name == abstract.tlaBundle.root.name }?.tla
+            == abstract.tlaBundle.root.tla)
+        #expect(rendered.tlaBundle.root.tla.contains("TDSpec == TD!Spec"))
     }
 
     @Test("EWD840's configured domain supplies all four-node initial functions")

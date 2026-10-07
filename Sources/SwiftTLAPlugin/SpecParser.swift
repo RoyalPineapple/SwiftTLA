@@ -299,6 +299,7 @@ final class ParserSession {
         var actions: [String: NamedAction] = [:]
         var atomicSteps: [String: AtomicStep] = [:]
         var instances: [String: FormalModuleInstance] = [:]
+        var generatedInstances: [String: ParsedGeneratedModelInstance] = [:]
         var algorithms: [String: Algorithm] = [:]
         var validations: [String: ValidationDeclaration] = [:]
         var fairnessProfiles: [String: FairnessProfileDecl] = [:]
@@ -2023,7 +2024,7 @@ final class ParserSession {
         return .init(source: Syntax(generic), name: name, arguments: arguments)
     }
 
-    private static func sourceTypePath(_ expression: ExprSyntax) -> [String]? {
+    static func sourceTypePath(_ expression: ExprSyntax) -> [String]? {
         if let reference = expression.as(DeclReferenceExprSyntax.self) {
             return [reference.baseName.sourceIdentifierName]
         }

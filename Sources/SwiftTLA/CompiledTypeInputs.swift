@@ -12,6 +12,7 @@ package struct CompiledEnums: Sendable {
 /// Resolved declaration types and domains shared by compiler checking scopes.
 package final class CompiledTypeInputs: Sendable {
     let refinements: [CompiledRefinementProgram]
+    let generatedRefinements: [CompiledGeneratedModelRefinement]
     let identity: CompilationIdentity
     let moduleMetadata: CompiledModuleMetadata
     let moduleImports: CompiledModuleImports
@@ -37,6 +38,7 @@ package final class CompiledTypeInputs: Sendable {
                 abstract: try CompiledProgram(inputs: abstractInputs),
                 variableMappings: refinement.variableMappings)
         }
+        generatedRefinements = compilation.generatedRefinements
         identity = compilation.identity
         moduleMetadata = compilation.moduleMetadata
         moduleImports = compilation.moduleImports

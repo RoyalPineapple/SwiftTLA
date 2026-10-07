@@ -5553,7 +5553,7 @@
       "path": "specifications/ewd840",
       "name": "EWD840: Termination Detection in a Ring",
       "audit": "partial source and pinned-configuration audit",
-      "gap": "Hosted run 37548075042 on a736e947 establishes complete two-path parity for SyncTerminationDetection N=7: 129 initial/reachable states, 3,593 labeled edges, TypeOK, TDCorrect, Quiescence, Liveness, and default deadlock. The same run reports exact generated-TLA versus pinned-upstream parity for APSyncTerminationDetection, APEWD840, and EWD840_json, but their named native jobs were skipped because native enumeration used positional IDs. Local commit 581a4045 joins declared case IDs to model-owned scenario names without positional duplicates; it is not pushed or hosted-validated. EWD840_anim has exact native-versus-generated and generated-versus-upstream sampled AnimInv violations with retained witnesses; neither partial sampled graph is a complete-graph claim. The pinned EWD840.cfg still selects TDSpec, an INSTANCE refinement of SyncTerminationDetection.Spec including weak fairness of DetectTermination. A focused N=3 generated-machine check passes the active/terminationDetected state mapping, transition simulation, and abstract fairness obligation, but that direct check is not a selected model-owned property or hosted parity. Complete parity still requires cross-model #spec composition without duplicating the abstract model, generated refinement-property wiring, and independent TLC comparisons. Family cleanup remains open. The two TLAPS-only proof companions are classified without a proof-validation claim.",
+      "gap": "Hosted run 37548075042 on a736e947 establishes complete two-path parity for SyncTerminationDetection N=7: 129 initial/reachable states, 3,593 labeled edges, TypeOK, TDCorrect, Quiescence, Liveness, and default deadlock. That run also established generated-TLA versus pinned-upstream parity for APSyncTerminationDetection, APEWD840, and EWD840_json, but their named native jobs were skipped. EWD840_anim has paired sampled AnimInv violations with retained witnesses, not complete-graph parity. The current local candidate adds EWD840.cfg as a direct matrix case and declares its selected TDSpec in #spec using the generated SyncTerminationDetection model. Its resolved parameter and state mappings feed native refinement checking and TLA export; the focused EWD840 suite and related refinement regressions pass locally. This candidate has no hosted EWD840 parity or full admission evidence, so the family remains partial. Family cleanup remains open. The two TLAPS-only proof companions are classified without a proof-validation claim.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5650,10 +5650,16 @@
           "module": "specifications/ewd840/EWD840.tla",
           "configuration": "specifications/ewd840/EWD840.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [
+            {
+              "file": "Sources/UpstreamParity/Examples/EWD840.swift",
+              "scenario": "EWD840",
+              "caseID": "ewd840-0"
+            }
+          ],
           "evidence": []
         },
         {

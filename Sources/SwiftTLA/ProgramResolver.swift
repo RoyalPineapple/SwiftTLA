@@ -55,6 +55,9 @@ private final class ProgramResolver {
                 operator: refinement.operator, abstract: refinement.abstract,
                 variableMappings: try refinement.variableMappings.map { try $0.map(root) })
         }
+        let generatedRefinements = try checked.generatedRefinements.map { refinement in
+            try refinement.map(root)
+        }
         let projections = Set(projectionChecks.compactMap { pair, allowed in allowed ? pair : nil })
         let resolvedFunctions = try functions.map { try require($0) }
         for (index, function) in resolvedFunctions.enumerated() {
@@ -68,7 +71,8 @@ private final class ProgramResolver {
         let program = CompiledProgram(identity: checked.identity, moduleMetadata: checked.moduleMetadata,
             moduleImports: checked.moduleImports, formalModuleReplacements: replacements,
             requiredStandardModules: checked.requiredStandardModules, layout: checked.layout,
-            behavior: behavior, refinements: refinements, enums: checked.enums,
+            behavior: behavior, refinements: refinements,
+            generatedRefinements: generatedRefinements, enums: checked.enums,
             projections: projections, variableTypes: checked.variableTypes,
             checkingRegisterTypes: checked.checkingRegisterTypes, bindingTypes: checked.bindingTypes, binderNames: binderNames,
             functions: resolvedFunctions, authoredAlgorithm: authoredAlgorithm)
@@ -90,6 +94,12 @@ private final class ProgramResolver {
             for binding in action.bindings {
                 try program.requireImmutableDomain(binding.domain,
                     path: "actions.\(checked.layout.actions[action.id.ordinal].declaration.name).bindings.\(binding.sourceName).domain")
+            }
+        }
+        for refinement in generatedRefinements {
+            for parameter in refinement.parameters {
+                try program.requireImmutableDomain(parameter.value.expression,
+                    path: "generatedModelInstances.\(refinement.instanceName).bindings.\(parameter.fieldName)")
             }
         }
         return program

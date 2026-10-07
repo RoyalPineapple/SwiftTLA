@@ -72,6 +72,10 @@ extension TLASpec {
         moduleInstances.append(instance)
       } else if let refinement = comp as? RefinementDecl {
         refinements.append(refinement)
+      } else if let instance = comp as? any GeneratedModelInstanceSource {
+        generatedModelInstances.append(instance)
+      } else if let refinement = comp as? any GeneratedModelRefinementSource {
+        generatedRefinements.append(refinement)
       }
     }
 
@@ -188,6 +192,8 @@ extension TLASpec {
     lowered.parameters = parameters
     lowered.checkingRegisters = checkingRegisters
     lowered.validationScenarios = validationScenarios
+    lowered.generatedModelInstances = generatedModelInstances
+    lowered.generatedRefinements = generatedRefinements
     lowered.fairnessProfiles = fairnessProfiles
     lowered.initialInvariantSelections = initialInvariantSelections
     lowered.algorithmPhase = .lowered

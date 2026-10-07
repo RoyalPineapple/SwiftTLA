@@ -6,6 +6,7 @@ extension NativeSwiftEmitter {
         guard program.layout.variables.isEmpty, program.behavior.actions.isEmpty,
               program.behavior.invariants.isEmpty, program.behavior.reachabilityProperties.isEmpty,
               program.behavior.temporalProperties.isEmpty, program.refinements.isEmpty,
+              program.generatedRefinements.isEmpty,
               program.behavior.constraint == nil, program.behavior.fairness.isEmpty,
               let assumption = program.behavior.assume else {
             throw unsupported("assumption-only module with no state, actions, or selected state checks")

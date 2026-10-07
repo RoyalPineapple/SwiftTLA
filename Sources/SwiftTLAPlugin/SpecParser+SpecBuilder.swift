@@ -35,6 +35,14 @@ extension ParserSession {
                 }
             } else if case .expr(let expression) = statement.item,
                       let reference = expression.as(DeclReferenceExprSyntax.self),
+                      let instance = specBindings.generatedInstances[reference.baseName.sourceIdentifierName] {
+                if components.generatedModelInstances.contains(where: { $0.name == instance.name }) {
+                    components.diagnostics.append(.init(message: "A generated-model Instance is registered more than once.", source: reference))
+                } else {
+                    components.generatedModelInstances.append(instance)
+                }
+            } else if case .expr(let expression) = statement.item,
+                      let reference = expression.as(DeclReferenceExprSyntax.self),
                       specBindings.instances[reference.baseName.sourceIdentifierName] != nil {
                 continue
             } else if case .expr(let expression) = statement.item,
@@ -77,6 +85,13 @@ extension ParserSession {
                     source: statement.item
                 ))
             }
+        }
+        for refinement in components.generatedRefinements where !components.generatedModelInstances.contains(where: {
+            $0.name == refinement.instanceName
+        }) {
+            components.diagnostics.append(.init(
+                message: "A generated-model Refinement requires its Instance to be registered first.",
+                source: closure))
         }
         components.symmetrySets = symmetryDeclarations.map { $0.resolved() }
         components.extendsModules = canonicalStandardModules(components.extendsModules)
@@ -226,7 +241,14 @@ extension ParserSession {
                 }
                 var parsed = TLASpec(name: components.name, variables: [], actions: [], invariants: [])
                 if compilerGrammarName(in: call.calledExpression) == "Refinement" {
-                    parseRefinement(call, named: sourceName, into: &parsed)
+                    if call.arguments.contains(where: { $0.label?.text == "instance" })
+                        && call.arguments.contains(where: { $0.label?.text == "mappings" }) == false {
+                        if let refinement = parseGeneratedModelRefinement(call, named: sourceName, into: &parsed) {
+                            specBindings.properties[sourceName] = refinement
+                        }
+                    } else {
+                        parseRefinement(call, named: sourceName, into: &parsed)
+                    }
                 } else {
                     parseBuilderCall(call, into: &parsed)
                 }
@@ -252,6 +274,16 @@ extension ParserSession {
                     ExprSyntax(call), context: "Action parameter binding '\(sourceName)'", position: 1,
                     diagnostics: &components.diagnostics
                 )
+            } else if compilerGrammarName(in: call.calledExpression) == "Instance",
+                      call.arguments.first?.label?.text == "of" {
+                guard declaration.bindingSpecifier.text == "let",
+                      specBindings.generatedInstances[sourceName] == nil else {
+                    components.diagnostics.append(.init(message: "A generated-model Instance requires a unique immutable let binding.", source: binding))
+                    continue
+                }
+                if let instance = parseGeneratedModelInstance(call, named: sourceName, into: &components) {
+                    specBindings.generatedInstances[sourceName] = instance
+                }
             } else if call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "Instance" {
                 let count = components.moduleInstances.count
                 parseFormalModuleInstance(
@@ -1805,6 +1837,8 @@ extension ParserSession {
             components.temporalProperties.append(.init(name: property.name, expr: property.expr, bindings: [], reference: property.reference))
         } else if let property = property as? RefinementDecl {
             components.refinements.append(property)
+        } else if let property = property as? any GeneratedModelRefinementSource {
+            components.generatedRefinements.append(property)
         }
     }
 

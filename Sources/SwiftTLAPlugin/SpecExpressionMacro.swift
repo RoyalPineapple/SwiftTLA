@@ -130,6 +130,24 @@ private final class DSLRewriter: SyntaxRewriter {
             let constructor = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName
                 ?? (member?.base?.as(DeclReferenceExprSyntax.self)?.baseName.sourceIdentifierName == "SwiftTLA"
                     ? member?.declName.baseName.sourceIdentifierName : nil)
+            if constructor == "Instance", call.arguments.first?.label?.text == "of" {
+                guard node.bindingSpecifier.text == "let" else {
+                    context.diagnose(Diagnostic(node: Syntax(source), message: InstanceBindingDiagnostic()))
+                    return binding
+                }
+                guard let metatype = call.arguments.first?.expression.as(MemberAccessExprSyntax.self),
+                      metatype.declName.baseName.sourceIdentifierName == "self",
+                      let type = metatype.base else { return binding }
+                let identity = LabeledExprSyntax(label: .identifier("_name"), colon: .colonToken(),
+                    expression: StringLiteralExprSyntax(content: name), trailingComma: .commaToken())
+                var arguments = [identity] + Array(call.arguments)
+                if !arguments.isEmpty { arguments[arguments.count - 1].trailingComma = .commaToken() }
+                arguments.append(argument("_typeName", ExprSyntax(
+                    StringLiteralExprSyntax(content: type.trimmedDescription))))
+                call.arguments = LabeledExprListSyntax(arguments)
+                binding.initializer?.value = ExprSyntax(call)
+                return binding
+            }
             if constructor == "Symmetry" || constructor == "FairnessProfile" {
                 guard node.bindingSpecifier.text == "let" else {
                     if constructor == "Symmetry" {
@@ -228,6 +246,18 @@ private final class DSLRewriter: SyntaxRewriter {
 
     override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
         var visited = super.visit(node).as(FunctionCallExprSyntax.self) ?? node
+        if let name = helperName(in: node), name == "Bind" || name == "Map",
+           visited.arguments.contains(where: { $0.label?.text == "_fieldName" }) == false,
+           let keyPath = node.arguments.first?.expression.as(KeyPathExprSyntax.self),
+           keyPath.root == nil, keyPath.components.count == 1,
+           let field = keyPath.components.first?.component.as(KeyPathPropertyComponentSyntax.self),
+           field.genericArgumentClause == nil {
+            var arguments = Array(visited.arguments)
+            if !arguments.isEmpty { arguments[arguments.count - 1].trailingComma = .commaToken() }
+            arguments.append(argument("_fieldName", ExprSyntax(
+                StringLiteralExprSyntax(content: field.declName.baseName.sourceIdentifierName))))
+            visited.arguments = LabeledExprListSyntax(arguments)
+        }
         if helperName(in: node) == "Do", node.arguments.contains(where: { $0.label?.text == "over" }),
            let closure = node.trailingClosure {
             let names: [String]
@@ -429,6 +459,12 @@ private struct BuilderBindingDiagnostic: DiagnosticMessage {
     let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-builder-binding")
     let severity: DiagnosticSeverity = .error
     let message = "Algorithm and Validation require an immutable named let binding inside #spec."
+}
+
+private struct InstanceBindingDiagnostic: DiagnosticMessage {
+    let diagnosticID = MessageID(domain: "SwiftTLA", id: "invalid-generated-instance-binding")
+    let severity: DiagnosticSeverity = .error
+    let message = "A generated-model Instance requires an immutable named let binding inside #spec."
 }
 
 private struct SymmetryBindingDiagnostic: DiagnosticMessage {

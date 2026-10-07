@@ -174,7 +174,9 @@ struct CompiledModuleInstanceLayout: Hashable, Sendable {
 }
 
 package struct CompiledLayout: Hashable, Sendable {
-    package var properties: [CompiledPropertyLayout] { stateProperties + temporalProperties + refinementProperties }
+    package var properties: [CompiledPropertyLayout] {
+        stateProperties + temporalProperties + refinementProperties + generatedRefinementProperties
+    }
 
     package func propertyDisplayName(_ id: PropertyID) -> String? {
         let property = properties.first { $0.id == id }
@@ -188,6 +190,7 @@ package struct CompiledLayout: Hashable, Sendable {
     let stateProperties: [CompiledPropertyLayout]
     let temporalProperties: [CompiledPropertyLayout]
     let refinementProperties: [CompiledPropertyLayout]
+    let generatedRefinementProperties: [CompiledPropertyLayout]
     let procedures: [CompiledProcedureLayout]
     package let controlLocations: [CompiledControlLocation]
     let moduleInstances: [CompiledModuleInstanceLayout]
@@ -246,6 +249,12 @@ package struct CompiledLayout: Hashable, Sendable {
                 declaration: .init(kind: .refinement, name: refinement.name, sourceOffset: nil),
                 reference: refinement.reference)
         }
+        let formalRefinementCount = refinementProperties.count
+        generatedRefinementProperties = spec.generatedRefinements.enumerated().map { ordinal, refinement in
+            .init(id: .init(ordinal: statePropertyCount + temporalPropertyCount + formalRefinementCount + ordinal),
+                declaration: .init(kind: .refinement, name: refinement.name, sourceOffset: nil),
+                reference: refinement.reference)
+        }
         procedures = spec.sourceAlgorithms.flatMap { algorithm in
             algorithm.model.procedures.enumerated().map { ordinal, procedure in
                 .init(
@@ -269,6 +278,7 @@ package struct CompiledLayout: Hashable, Sendable {
             + stateProperties.map(\.declaration)
             + temporalProperties.map(\.declaration)
             + refinementProperties.map(\.declaration)
+            + generatedRefinementProperties.map(\.declaration)
     }
 
     func programCounterID() -> VariableID? {

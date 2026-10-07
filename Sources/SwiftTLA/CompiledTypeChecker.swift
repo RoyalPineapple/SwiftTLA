@@ -477,6 +477,9 @@ package struct CompiledTypeChecker: Sendable {
                 operator: refinement.operator, abstract: refinement.abstract,
                 variableMappings: mappings)
         }
+        let generatedRefinements = try inputs.generatedRefinements.map { refinement in
+            try refinement.map { expression in try checkOperand(expression, expected: .unknown) }
+        }
         let behavior = CompiledBehavior(
             checkDeadlock: inputs.semantics.behavior.checkDeadlock,
             parameterDomains: parameterDomains,
@@ -508,7 +511,8 @@ package struct CompiledTypeChecker: Sendable {
         }
         return CompiledProgram(identity: inputs.identity, moduleMetadata: inputs.moduleMetadata,
             moduleImports: inputs.moduleImports, formalModuleReplacements: replacements,
-            requiredStandardModules: inputs.requiredStandardModules, layout: inputs.layout, behavior: behavior, refinements: refinements,
+            requiredStandardModules: inputs.requiredStandardModules, layout: inputs.layout, behavior: behavior,
+            refinements: refinements, generatedRefinements: generatedRefinements,
             enums: inputs.types.enums, projections: [], variableTypes: variables,
             checkingRegisterTypes: inputs.checkingRegisterTypes, bindingTypes: bindingTypes, binderNames: inputs.bindings.binders,
             functions: [], authoredAlgorithm: authoredAlgorithm)

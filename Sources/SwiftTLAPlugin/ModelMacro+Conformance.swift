@@ -15,6 +15,9 @@ extension ModelMacro: ExtensionMacro {
         guard declaration.is(StructDeclSyntax.self), !protocols.isEmpty,
               let model = try? TLASpecVerifier.parseAndVerify(declaration),
               !model.program.layout.variables.isEmpty else { return [] }
-        return [try ExtensionDeclSyntax("extension \(type): SwiftTLA.StateMachine {}")]
+        if model.program.layout.parameters.isEmpty {
+            return [try ExtensionDeclSyntax("extension \(type): SwiftTLA.StateMachine {}")]
+        }
+        return [try ExtensionDeclSyntax("extension \(type): SwiftTLA.StateMachine, SwiftTLA.ConfiguredGeneratedModel {}")]
     }
 }

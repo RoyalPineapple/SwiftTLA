@@ -389,7 +389,7 @@ struct NativeCodeGenerationTests {
         let program = CompiledProgram(identity: compilation.identity, moduleMetadata: compilation.moduleMetadata,
             moduleImports: compilation.moduleImports, formalModuleReplacements: [],
             requiredStandardModules: compilation.requiredStandardModules, layout: compilation.layout,
-            behavior: behavior, refinements: [], enums: .init(), projections: [], variableTypes: [:], checkingRegisterTypes: [:], bindingTypes: [:], binderNames: [:],
+            behavior: behavior, refinements: [], generatedRefinements: [], enums: .init(), projections: [], variableTypes: [:], checkingRegisterTypes: [:], bindingTypes: [:], binderNames: [:],
             functions: [], authoredAlgorithm: nil)
         let model = try MacroCompilation(typeName: "SharedPredicates",
             program: program)

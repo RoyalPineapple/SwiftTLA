@@ -1353,6 +1353,25 @@
       "timeoutSeconds": 120
     },
     {
+      "id": "ewd840-0",
+      "sourceModel": "ewd840",
+      "scenario": "EWD840",
+      "module": "ewd840/EWD840.tla",
+      "configuration": "ewd840/EWD840.cfg",
+      "imports": ["sync-termination-detection/SyncTerminationDetection.tla"],
+      "dependencies": [
+        {"importingModule": "EWD840", "importedModule": "SyncTerminationDetection"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd840/EWD840.tla",
+        "sha256": "4a42e8a67c7ecb8425c6e370a5d3b180ad697751128d7b331e778afbcd29b747"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "4a42e8a67c7ecb8425c6e370a5d3b180ad697751128d7b331e778afbcd29b747",
+      "cfgSHA256": "9a217ccbacc3209c0b132606eef01ccd62c5fc2889cc2ce32c06b478bb9f0e89",
+      "timeoutSeconds": 300
+    },
+    {
       "id": "ewd840-anim-0",
       "sourceModel": "ewd840-anim",
       "scenario": "EWD840_anim",

@@ -84,8 +84,18 @@ package struct EWD840Model: Sendable {
             JsonInv { inductiveInvariant }
             Liveness(.leadsTo(terminated, terminationDetected))
 
+            let TD = Instance(of: SyncTerminationDetectionModel.self) {
+                Bind(\.N, to: N)
+            }
+            TD
+            let TDSpec = Refinement(instance: TD) {
+                Map(\.active, from: active)
+                Map(\.terminationDetected, from: terminationDetected)
+            }
+            TDSpec
+
             let EWD840 = Validation { Bind(N, to: 3) }
-                .checking(only: [TypeOK, TerminationDetection, Inv, Liveness])
+                .checking(only: [TypeOK, TerminationDetection, Inv, Liveness, TDSpec])
                 .checkingDeadlock(false)
             EWD840
             let APEWD840 = Validation { Bind(N, to: 3) }

@@ -1223,6 +1223,39 @@ arithmetic over them, retains those typed inputs in the specialized abstract mac
 General composition, abstract configurations not resolved by the concrete configuration,
 and additional refinement targets remain open under B-06.
 
+Cross-model refinement uses the other generated model as its abstract model, not a
+second handwritten formal schema. The selected authoring shape is a bound instance
+followed by a bound, registered refinement:
+
+```swift
+let TD = Instance(of: SyncTerminationDetectionModel.self) {
+    Bind(\.N, to: N)
+}
+TD
+let TDSpec = Refinement(instance: TD) {
+    Map(\.active, from: active)
+    Map(\.terminationDetected, from: terminationDetected)
+}
+TDSpec
+```
+
+The key paths address generated `Configuration` and `State` members of the abstract
+model. `Bind` requires a state-independent expression of the target parameter's
+type; `Map` requires an expression of the target state member's type. A missing,
+duplicate, or type-mismatched binding fails compilation. The `let` bindings,
+not display labels or inline declarations, identify the instance and refinement.
+The abstract model's compiled generated transitions supply native refinement
+checking; its compiled TLA+ module supplies export. The concrete model's one
+resolved mapping supplies both paths. Neither path compiles the abstract model
+again at runtime, copies its declarations, or evaluates it through an interpreter.
+EWD840's selected `TDSpec` must include the abstract model's fairness obligation.
+An instance alone does not add a check; the registered refinement is selected
+by default in each validation scenario unless an explicit selection omits it.
+For example, omitting `Map(\.terminationDetected, from: ...)` or writing
+`Bind(\.N, to: tpos)` is a compile-time error: the former leaves an abstract
+state member unmapped, and the latter reads mutable concrete state to configure
+an immutable abstract parameter.
+
 `.expectDeadlock(.violated)` declares an expected deadlock without disabling its
 check. Duplicate overrides and expectations for disabled checks are errors.
 `Model.validationScenarios()` returns generated scenario values with immutable
@@ -1526,7 +1559,7 @@ through B-03 are settled below. B-04 through B-06 remain open.
 | B-03 | Settled: typed `.expect(property, .violated)` and `.expectDeadlock(.violated)` change scenario admission only; checking retains its default selections and typed result shapes |
 | B-04 | Temporal and symmetry syntax: settle explicit fairness and interchangeability declarations, scope references, validation rules, and permitted reductions; neither fairness nor symmetry is automatic |
 | B-05 | Swift value/helper contracts: define supported operations, helper functions, exact inference rules and required annotations under the no-guessing rule, checked arithmetic, collection indexing, and failure behavior |
-| B-06 | Corpus fit and migration: preserve existing models when moving to ordered assignments; demonstrate procedures, recursion, and required composition without a second execution backend |
+| B-06 | Corpus fit and migration: preserve existing models when moving to ordered assignments; demonstrate procedures, recursion, and required composition without a second execution backend. Cross-model refinement uses a bound `Instance(of: Model.self)` and typed generated-member mappings as specified above; remaining corpus-driven composition forms still require decisions |
 
 For B-02, the authoring forms inside `#spec` are:
 

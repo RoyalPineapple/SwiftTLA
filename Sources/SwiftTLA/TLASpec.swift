@@ -288,6 +288,8 @@ public struct TLASpec: Sendable {
   /// Named source-level TLA+ `INSTANCE` declarations.
   package var moduleInstances: [FormalModuleInstance]
   package var refinements: [RefinementDecl]
+  package var generatedModelInstances: [any GeneratedModelInstanceSource] = []
+  package var generatedRefinements: [any GeneratedModelRefinementSource] = []
   package var symmetrySets: [SymmetrySet]
   /// The authored Algorithm declaration that supplies the compiled PlusCal plan.
   package var sourceAlgorithms: [Algorithm]
@@ -701,6 +703,8 @@ public enum SpecBuilder {
   public static func buildExpression(_ expr: ImportDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: FormalModuleInstance) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RefinementDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression<Model: ConfiguredGeneratedModel>(_ expr: GeneratedModelInstance<Model>) -> [SpecComponent] { [expr] }
+  public static func buildExpression<Model: ConfiguredGeneratedModel>(_ expr: GeneratedModelRefinement<Model>) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }

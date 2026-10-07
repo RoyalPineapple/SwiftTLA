@@ -60,13 +60,39 @@ extension NativeSwiftEmitter {
                 }
                 """)
             }
+            for refinement in program.generatedRefinements {
+                let target = refinement.targetModelType
+                let parameters = try refinement.parameters.map { binding in
+                    "\(binding.fieldName): \(try expression(binding.value.expression, state: ""))"
+                }.joined(separator: ", ")
+                let state = try refinement.state.map { binding in
+                    "\(binding.fieldName): \(try expression(binding.value.expression))"
+                }.joined(separator: ", ")
+                let property = propertyCases[refinement.id]!
+                checks.append("""
+                if checking.contains(.\(property)) {
+                    let abstractConfiguration = try \(target).Configuration(\(parameters))
+                    let failure = try graph.refinementFailure(
+                        initialMachines: \(target).initialMachines(configuration: abstractConfiguration)
+                    ) { state in
+                        let abstractState = \(target).State(\(state))
+                        return try \(target).makeMachine(abstractState, configuration: abstractConfiguration)
+                    }
+                    if let failure { failures[.\(property)] = failure }
+                }
+                """)
+            }
         }
         let body = checks.isEmpty
             ? unsupported.joined(separator: "\n") + "\nreturn [:]"
             : "var failures: [Property: RefinementFailure<Snapshot, Action>] = [:]\n"
                 + (checks + unsupported).joined(separator: "\n") + "\nreturn failures"
         declarations += try nativeDeclarations("""
-        public static var refinementProperties: [Property] { [\(program.refinements.map { ".\(propertyCases[$0.id]!)" }.joined(separator: ", "))] }
+        public static var refinementProperties: [Property] {
+            [\((program.refinements.map(\.id) + program.generatedRefinements.map(\.id)).map {
+                ".\(propertyCases[$0]!)"
+            }.joined(separator: ", "))]
+        }
         public func refinementFailures(in graph: inout ReachabilityGraph<Self>, checking: Set<Property> = Set(Property.allCases)) throws -> [Property: RefinementFailure<Snapshot, Action>] {
             \(body)
         }

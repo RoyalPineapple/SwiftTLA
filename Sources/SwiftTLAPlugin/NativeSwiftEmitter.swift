@@ -46,6 +46,9 @@ struct NativeSwiftEmitter {
         for mapping in program.refinements.flatMap({ $0.variableMappings }) {
             enabledActionIDs.formUnion(mapping.enabledActions)
         }
+        for mapping in program.generatedRefinements.flatMap({ $0.parameters + $0.state }) {
+            enabledActionIDs.formUnion(mapping.value.enabledActions)
+        }
         for condition in program.behavior.fairness {
             enabledActionIDs.formUnion(condition.enabledActions)
         }
