@@ -11,6 +11,20 @@ struct StateProjectionCapabilityTests {
         }
     }
 
+    @Test("Set projections retain complete values and locate invalid members")
+    func validatesSetMembers() throws {
+        let token = try #require(TLAStateProjection.Token(validating: "state"))
+        let valid = TLAValue.set([.int(1), .int(2)])
+        let projection = try TLAStateProjection(validating: [.init(token: token, value: valid)])
+        #expect(projection.value(for: token) == valid)
+
+        #expect(throws: TLAStateProjectionDiagnostic.invalidConstant(path: "state{0}")) {
+            try TLAStateProjection(validating: [
+                .init(token: token, value: .set([.constant("invalid-key")]))
+            ])
+        }
+    }
+
     @Test("State projections require validated tokens and safely enumerate entries")
     func stateProjectionGuardsFormalKeys() throws {
         let count = try #require(TLAStateProjection.Token(validating: "count"))

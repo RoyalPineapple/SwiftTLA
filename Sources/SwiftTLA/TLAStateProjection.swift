@@ -81,8 +81,15 @@ public struct TLAStateProjection: Sendable, Hashable, CustomStringConvertible {
                 throw TLAStateProjectionDiagnostic.invalidConstant(path: path)
             }
         case .set(let values):
-            for (index, value) in values.sorted().enumerated() {
-                try validate(value, at: "\(path){\(index)}")
+            for value in values {
+                do {
+                    try validate(value, at: path)
+                } catch {
+                    for (index, ordered) in values.sorted().enumerated() {
+                        try validate(ordered, at: "\(path){\(index)}")
+                    }
+                    throw error
+                }
             }
         case .tuple(let values):
             for (index, value) in values.enumerated() {
