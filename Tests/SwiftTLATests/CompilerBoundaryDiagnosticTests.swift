@@ -173,6 +173,12 @@ struct CompilerBoundaryDiagnosticTests {
                 })
                 counter
             }
+            """,
+            """
+            #spec { scope in
+                let count: SharedVariable<Int> = scope.sharedVar(initial: true)
+                let auxiliary = TLASpec("Auxiliary") {}
+            }
             """
         ] {
             let source = Parser.parse(source: """

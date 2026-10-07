@@ -377,7 +377,19 @@ extension ParserSession {
         }
 
         let outerScope = sourceScope
-        defer { sourceScope = outerScope }
+        let outerOffsets = (
+            state: stateDeclarationOffsets,
+            action: actionDeclarationOffsets,
+            property: propertyDeclarationOffsets,
+            symmetry: symmetryDeclarationOffsets
+        )
+        defer {
+            sourceScope = outerScope
+            stateDeclarationOffsets = outerOffsets.state
+            actionDeclarationOffsets = outerOffsets.action
+            propertyDeclarationOffsets = outerOffsets.property
+            symmetryDeclarationOffsets = outerOffsets.symmetry
+        }
         let parsed = parseSpecClosure(named: moduleName, body)
         if let diagnostic = parsed.diagnostics.first {
             components.diagnostics.append(diagnostic)
