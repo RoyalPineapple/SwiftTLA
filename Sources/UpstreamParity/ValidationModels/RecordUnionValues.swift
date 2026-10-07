@@ -129,29 +129,38 @@ package struct SignedBlockAlternativesModel {
     package static var spec: TLASpec {
         #spec("SignedBlockAlternatives") { scope in
             let value = scope.sharedVar(in: Set<Value>([
-                Value.first(SignedBlock(
-                    block: Block.first(Genesis(type: "genesis", account: "public", balance: 2)),
+                .first(SignedBlock(
+                    block: .first(Genesis(type: "genesis", account: "public", balance: 2)),
                     signature: Signature(data: "hash", signedWith: "private"))),
-                Value.first(SignedBlock(
-                    block: Block.second(NonGenesis.first(Send(
+                .first(SignedBlock(
+                    block: .second(.first(Send(
                         previous: "hash", balance: 1, destination: "public", type: "send"))),
                     signature: Signature(data: "hash", signedWith: "private"))),
-                Value.first(SignedBlock(
-                    block: Block.second(NonGenesis.second(OtherBlocks.first(Open(
+                .first(SignedBlock(
+                    block: .second(.second(.first(Open(
                         account: "public", source: "hash", rep: "public", type: "open")))),
                     signature: Signature(data: "hash", signedWith: "private"))),
-                Value.first(SignedBlock(
-                    block: Block.second(NonGenesis.second(OtherBlocks.second(Remaining.first(Receive(
+                .first(SignedBlock(
+                    block: .second(.second(.second(.first(Receive(
                         previous: "hash", source: "hash", type: "receive"))))),
                     signature: Signature(data: "hash", signedWith: "private"))),
-                Value.first(SignedBlock(
-                    block: Block.second(NonGenesis.second(OtherBlocks.second(Remaining.second(ChangeRep(
+                .first(SignedBlock(
+                    block: .second(.second(.second(.second(ChangeRep(
                         previous: "hash", rep: "public", type: "change"))))),
                     signature: Signature(data: "hash", signedWith: "private"))),
-                Value.second(NoBlock.value)
+                .second(NoBlock.value)
             ]))
+            let ledger: SharedVariable<[String: Value]> = scope.sharedVar(
+                initial: ["hash": .second(NoBlock.value)])
+            let pending: SharedVariable<[Value]> = scope.sharedVar(
+                initial: [.second(NoBlock.value)])
             let CheckBlock = Algorithm {
-                Do(Step.finish) { Assign(value, to: value); Stop() }
+                Do(Step.finish) {
+                    Assign(value, to: value)
+                    Assign(ledger, to: ledger)
+                    Assign(pending, to: pending)
+                    Stop()
+                }
             }
             CheckBlock
             let allAlternatives = Validation(label: "All signed-block alternatives") {}
