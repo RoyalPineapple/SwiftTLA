@@ -48,6 +48,29 @@ import SwiftTLAMacros
         return try specification.loweredSourceModel()
     }
 
+    @Test("process steps reject separate fairness declarations inside Each")
+    func processStepFairnessRequiresEachPolicy() throws {
+        let parsed = parseAlgorithm(try parseSpecTestClosure("""
+        {
+            let algorithm = Algorithm {
+                Each(Set<Int>([0]), fairness: .weak) { _ in
+                    Do(TestControlLabel.advance) { Goto(TestControlLabel.advance) }
+                    WeakFairness(TestControlLabel.advance)
+                }
+            }
+            algorithm
+        }
+        """))
+        #expect(parsed.diagnostics.isEmpty)
+        do {
+            _ = try compile(parsed, named: "InvalidProcessStepFairness")
+            Issue.record("A process step must not acquire a separate fairness declaration.")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidAlgorithmFairnessPlacement)
+            #expect(diagnostic.path == "algorithm.components[0].components[1]")
+        }
+    }
+
     @Test("process and procedure state declarations require named bindings")
     func rejectsAnonymousLocalStateDeclaration() throws {
         for body in [

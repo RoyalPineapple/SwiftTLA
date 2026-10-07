@@ -598,8 +598,10 @@ scheduler.
 
 An explicit promise for a continuously enabled process/action corresponds to
 weak fairness. A stronger promise for one enabled repeatedly, but not continuously,
-is distinct and must also be explicit. Independent steps and `Next` use the declarations below.
-Other scope references still require the remaining B-04 decisions. Declared fairness must be preserved in temporal checking
+is distinct and must also be explicit. Bound independent steps and `Next` use
+the declarations below. Process members use `Each(..., fairness:)`; their
+inner `Do` steps are not independent action handles. Other scope references
+still require the remaining B-04 decisions. Declared fairness must be preserved in temporal checking
 and TLA+ export; it is not a runtime scheduling mechanism.
 
 For a disjunction of independent steps, bind each `Do` to a Swift `let` and
@@ -681,6 +683,28 @@ For each process member, the fairness obligation applies to the disjunction of
 its eligible atomic steps, not to a separate obligation for each step. An
 exemption removes that step from the disjunction. This matches PlusCal process
 fairness and the published Dijkstra `Spec` and `LSpec` formulas.
+
+This is the process-scoped fairness form for `#spec`. With a typed `members`
+parameter and a `Step` enum containing `ncs` and `pass`, the following gives
+each member one weak-fairness obligation over its eligible steps other than
+`ncs`:
+
+```swift
+let algorithm = Algorithm {
+    Each(members, fairness: .weak(excluding: [Step.ncs])) { _ in
+        Do(Step.ncs) { Goto(Step.pass) }
+        Do(Step.pass) { Goto(Step.ncs) }
+    }
+}
+algorithm
+```
+
+Putting `WeakFairness(Step.pass)` inside that `Each` is invalid. An inner `Do`
+is a process control step, not a bound independent action handle; neither
+`WeakFairness(anyOf:)` nor `WeakFairness(each:)` changes this process scope.
+Finer obligations inside a process require a named corpus case and a separate
+language decision. The DSL does not create individually targetable inner-step
+handles now.
 
 Each exemption must name a step in the same `Each` declaration. Duplicate and unknown exemptions produce compiler diagnostics.
 For example, `.weak(excluding: [Step.ncs, Step.ncs])` is invalid.
@@ -1557,7 +1581,7 @@ through B-03 are settled below. B-04 through B-06 remain open.
 | B-01 | Settled: typed parameter-dependent domains and model-owned finite scenario bindings use the same resolved parameter identities and generated `Configuration`; `Each` and dictionary state use stable member IDs, not application objects. Runner limits stop validation and never constrain the model. The fixed `ModelCollection` authoring API is removed. Acceptance still requires source-aligned tests and hosted parity for applicable configurations |
 | B-02 | Settled: name-bearing declarations use their specified immutable Swift binding or typed enum identity; `Algorithm` and `Validation` require explicit registration by bound reference. Inline control statements need no extra identity. Optional `label:` is presentation-only |
 | B-03 | Settled: typed `.expect(property, .violated)` and `.expectDeadlock(.violated)` change scenario admission only; checking retains its default selections and typed result shapes |
-| B-04 | Temporal and symmetry syntax: settle explicit fairness and interchangeability declarations, scope references, validation rules, and permitted reductions; neither fairness nor symmetry is automatic |
+| B-04 | Partially settled: bound independent-step disjunctions use `WeakFairness(anyOf:)` or `StrongFairness(anyOf:)`; per-member process fairness uses `Each(..., fairness:)`, with named-step exemptions but no individually targetable inner-step handles. Remaining temporal and symmetry scope references, validation rules, and permitted reductions still need decisions; neither fairness nor symmetry is automatic |
 | B-05 | Swift value/helper contracts: define supported operations, helper functions, exact inference rules and required annotations under the no-guessing rule, checked arithmetic, collection indexing, and failure behavior |
 | B-06 | Corpus fit and migration: preserve existing models when moving to ordered assignments; demonstrate procedures, recursion, and required composition without a second execution backend. Cross-model refinement uses a bound `Instance(of: Model.self)` and typed generated-member mappings as specified above; remaining corpus-driven composition forms still require decisions |
 
