@@ -5786,8 +5786,8 @@
     {
       "path": "specifications/ewd998",
       "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
-      "audit": "Pinned AsyncTerminationDetection, EWD998, EWD998Chan, EWD998ChanID, and EWD998PCal modules and their published configurations inspected; other EWD998 variants remain unaudited",
-      "gap": "AsyncTerminationDetection has a typed model-owned #spec scenario, exact pinned fixtures, and a locally complete 4097-state native graph. Safra's EWD998 N=4 and N=3 and EWD998Chan N=3 configurations have typed model-owned scenarios and byte-identical pinned TLA/CFG inputs; focused transition and rendering tests pass, but both hosted paths remain pending. EWD998PCal N=3 matched both complete hosted comparison paths at c05c9837, including EWD998Spec and default deadlock. EWD998ChanID now has a partial typed model with bounded per-member fairness, full clock-bearing state, and a rendered channel refinement; its published VIEW checking semantics, N=5 initial-choice performance, scenario, and hosted parity remain open. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
+      "audit": "Pinned AsyncTerminationDetection, EWD998, EWD998Chan, EWD998ChanID, EWD998PCal, the source-defined opts variants and orchestration harness, and the Folds/Utils helpers inspected; other EWD998 variants remain unaudited",
+      "gap": "AsyncTerminationDetection has a typed model-owned #spec scenario, exact pinned fixtures, and a locally complete 4097-state native graph. Safra's EWD998 N=4 and N=3 and EWD998Chan N=3 configurations have typed model-owned scenarios and byte-identical pinned TLA/CFG inputs; focused transition and rendering tests pass, but both hosted paths remain pending. EWD998PCal N=3 matched both complete hosted comparison paths at c05c9837, including EWD998Spec and default deadlock. EWD998ChanID has a partial typed model with bounded per-member fairness, full clock-bearing state, and a rendered channel refinement. Its published VIEW changes TLC's seen-state identity and therefore needs explicit native quotient checking and view-aware graph evidence; rendering a VIEW line alone cannot establish parity. N=5 initial-choice performance, the scenario, and hosted parity also remain open. The source-defined EWD998_opts and EWD998Chan_opts generator variants and EWD998_optsSC campaign remain unimplemented. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5813,15 +5813,15 @@
         },
         {
           "path": "specifications/ewd998/EWD998_opts.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "source-defined simulation variant",
+          "reason": "Extends EWD998 with five feature flags, probabilistic generation, an action constraint, a state constraint, and CSV statistics. Its configuration is embedded after CONFIG in the source; no separate .cfg file is published. The generator variant and its sampled/statistical outcome still require implementation and evidence.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/EWD998_optsSC.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "source-defined orchestration harness",
+          "reason": "Its embedded CONFIG launches nested EWD998_opts TLC generation runs across feature subsets and node counts, then records exit codes in CSV. This is a simulation campaign, not a standalone state graph; reproducing its declared outcomes remains open.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5841,8 +5841,8 @@
         },
         {
           "path": "specifications/ewd998/EWD998Chan_opts.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "source-defined simulation variant",
+          "reason": "Extends EWD998Chan with four feature flags, probabilistic generation, an action constraint, a state constraint, and CSV statistics. Its configuration is embedded after CONFIG in the source; no separate .cfg file is published. The variant and its sampled/statistical outcome remain unimplemented.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5870,7 +5870,7 @@
         {
           "path": "specifications/ewd998/EWD998ChanID.tla",
           "role": "configured root",
-          "reason": "A partial typed model and rendered EWD998Chan refinement exist, but the published VIEW semantics and configuration are not implemented or verified.",
+          "reason": "A partial typed model and rendered EWD998Chan refinement exist. The published VIEW changes seen-state identity; native quotient checking and view-aware complete graph evidence are not implemented, so the published configuration cannot yet be registered or verified.",
           "implementations": ["Sources/UpstreamParity/Examples/EWD998ChanID.swift"],
           "dispositionComplete": false
         },
@@ -5897,10 +5897,10 @@
         },
         {
           "path": "specifications/ewd998/Folds.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "pure helper module",
+          "reason": "Defines MapThenFoldSet only; it has no variables, behavior, or configuration of its own. Any configured model that imports it must still implement the operator's semantics; it is not a separate graph-parity case.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/SmokeEWD998_SC.tla",
@@ -5918,10 +5918,10 @@
         },
         {
           "path": "specifications/ewd998/Utils.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "pure helper module",
+          "reason": "Defines IsSimpleCycle only; it has no variables, behavior, or configuration of its own. A configured importer must still preserve this operator's semantics; it is not a separate graph-parity case.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
