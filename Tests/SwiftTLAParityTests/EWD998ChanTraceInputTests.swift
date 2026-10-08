@@ -32,4 +32,23 @@ struct EWD998ChanTraceInputTests {
         let reported = try? EWD998ChanTraceInput(ndjson: Data(failure.utf8))
         #expect(reported?.events.first?.hasFailure == true)
     }
+
+    @Test("causal-order validation preserves concurrent choices and rejects missing or reversed events")
+    func validatesSelectedCausalOrder() throws {
+        let log = """
+        {"N":2}
+        {"event":"d","node":0,"pkt":{"vc":{"0":1}}}
+        {"event":"d","node":1,"pkt":{"vc":{"1":1}}}
+        {"event":"d","node":0,"pkt":{"vc":{"0":2,"1":2}}}
+        """
+        let input = try EWD998ChanTraceInput(ndjson: Data(log.utf8))
+        #expect(try input.events(inCausalOrder: [2, 3, 4]).map(\.sourceLine) == [2, 3, 4])
+        #expect(try input.events(inCausalOrder: [3, 2, 4]).map(\.sourceLine) == [3, 2, 4])
+        #expect(throws: EWD998ChanTraceInput.InputError.incompleteCausalOrder) {
+            try input.events(inCausalOrder: [2, 2, 4])
+        }
+        #expect(throws: EWD998ChanTraceInput.InputError.causalityViolation(earlier: 4, later: 2)) {
+            try input.events(inCausalOrder: [4, 2, 3])
+        }
+    }
 }

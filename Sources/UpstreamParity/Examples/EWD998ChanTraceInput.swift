@@ -53,10 +53,40 @@ package struct EWD998ChanTraceInput: Sendable {
         case missingHeader
         case invalidHeader
         case invalidEvent(Int)
+        case incompleteCausalOrder
+        case causalityViolation(earlier: Int, later: Int)
     }
 
     package let nodeCount: Int
     package let events: [Event]
+
+    /// Validates a selected linearization without choosing between concurrent events.
+    /// Source lines identify the raw events, so repeated or omitted records cannot pass.
+    package func events(inCausalOrder sourceLines: [Int]) throws -> [Event] {
+        let byLine = Dictionary(uniqueKeysWithValues: events.map { ($0.sourceLine, $0) })
+        guard sourceLines.count == events.count, Set(sourceLines).count == events.count else {
+            throw InputError.incompleteCausalOrder
+        }
+        let ordered = try sourceLines.map { line -> Event in
+            guard let event = byLine[line] else { throw InputError.incompleteCausalOrder }
+            return event
+        }
+        for index in ordered.indices {
+            let earlier = ordered[index]
+            for later in ordered[(index + 1)...] {
+                // Upstream accepts strict happens-before or concurrency after filling
+                // absent vector-clock entries with zero. Both require one component
+                // of the earlier clock to be strictly smaller than the later clock.
+                guard later.clock.contains(where: { node, value in
+                    earlier.clock[node, default: 0] < value
+                }) else {
+                    throw InputError.causalityViolation(
+                        earlier: earlier.sourceLine, later: later.sourceLine)
+                }
+            }
+        }
+        return ordered
+    }
 
     package init(ndjson: Data) throws {
         let lines = ndjson.split(separator: 0x0A, omittingEmptySubsequences: false)
