@@ -26,7 +26,10 @@ environment variable and uses the separately pinned CommunityModules release
 and source closure. Its draft-PR workflow checks the upstream TLC outcome and
 retains the exact inputs. A second, explicitly instrumented copy prints TLC's
 chosen `TraceLog`; the diagnostic maps its complete records back to the 654
-source lines and checks that ordering against the vector clocks. This capture
+source lines and checks that ordering against the vector clocks. The pinned
+`VectorClocks.tla` (`69cc7f09a0b1048495843778ba34afd3e1cb11881cd8e1ce7b725b376aeb9a6a`)
+uses `CHOOSE` over valid permutations, so a locally chosen topological order
+would not establish TLC's selected `TraceLog`. This capture
 has not run on a host. It does not compare a generated Swift machine, so it
 does not complete trace parity.
 
