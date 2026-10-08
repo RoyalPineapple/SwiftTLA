@@ -80,6 +80,37 @@ struct NativeSampledValidationTests {
         #expect(report.edges == 6)
     }
 
+    @Test("sampled comparison rejects an invalid earlier behavior")
+    func rejectsInvalidEarlierSample() throws {
+        let scenario = try sampledScenario()
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: output) }
+        let report = try NativeValidationRunner.run(
+            scenario: scenario, caseID: "sampled-earlier", maximumStates: 10, to: output)
+        let url = output.appendingPathComponent("sampled-traces.jsonl")
+        let original = try Data(contentsOf: url)
+        var earlier = try #require(JSONSerialization.jsonObject(with: Data(original.dropLast()))
+            as? [String: Any])
+        earlier["kind"] = "inconclusive"
+        earlier["property"] = ""
+        var steps = try #require(earlier["steps"] as? [[String: Any]])
+        steps[0]["state"] = ["x": ["version": 1, "tag": "int", "value": 999]]
+        earlier["steps"] = steps
+        var forged = try JSONSerialization.data(withJSONObject: earlier, options: [.sortedKeys])
+        forged.append(0x0A)
+        forged.append(original)
+        try forged.write(to: url, options: .atomic)
+        let retained = NativeValidationReport(schema: report.schema, scenario: report.scenario,
+            maximumStates: report.maximumStates, graphComplete: false,
+            initialStates: 2, states: 2, edges: 0, properties: report.properties,
+            deadlock: report.deadlock, deadlockSelected: report.deadlockSelected,
+            postconditionName: report.postconditionName, postcondition: report.postcondition)
+        #expect(throws: NativeValidationRunnerError.self) {
+            try NativeValidationRunner.verifySampledWitness(
+                scenario: scenario, caseID: "sampled-earlier", report: retained, in: output)
+        }
+    }
+
     @Test("sampled verdict parity requires replayable independent TLC evidence")
     func comparesSampledWitnesses() throws {
         let scenario = try sampledScenario()

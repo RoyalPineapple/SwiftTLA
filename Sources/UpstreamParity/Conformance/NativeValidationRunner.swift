@@ -315,47 +315,48 @@ package enum NativeValidationRunner {
               report.edges == witnesses.reduce(0, { $0 + $1.steps.count - 1 }) else {
             throw NativeValidationRunnerError.invalidCoverage("sampled native trace stream")
         }
-        guard witness.schema == "swifttla.native-sampled-trace", witness.caseID == caseID,
-              witness.kind == "violation", witness.seed == 1,
-              witness.traces == traces, witness.maximumDepth == maximumDepth,
-              !witness.steps.isEmpty, witness.steps.count - 1 <= maximumDepth,
-              witness.steps.first?.action?.name == nil else {
+        guard witness.kind == "violation" else {
             throw NativeValidationRunnerError.invalidCoverage("sampled native trace")
         }
         let initial = try scenario.initialMachines()
         guard let first = initial.first else { throw ExplorationError.noInitialStates }
-        var context = CheckingContext(registers: try first.initialCheckingRegisters())
-        try context.advanceLevel()
         func projected(_ machine: Scenario.Machine) throws -> [String: TLAValue] {
             let projection = try first.formalProjection(of: machine.snapshot)
             return Dictionary(uniqueKeysWithValues: projection.entries.map {
                 ($0.token.description, $0.value)
             })
         }
-        let starting = try initial.filter { try projected($0) == witness.steps[0].state }
-        guard starting.count == 1, let start = starting.first,
-              try start.assumptionsHold(), try start.satisfiesStateConstraint() else {
-            throw NativeValidationRunnerError.invalidCoverage("sampled initial state")
-        }
-        var machine = start
-        for step in witness.steps.dropFirst() {
-            guard let action = step.action else {
-                throw NativeValidationRunnerError.invalidCoverage("sampled action")
-            }
-            let matches = try machine.successors(checking: &context).filter { candidate in
-                let call = try first.formalCall(for: candidate.action)
-                guard call.name == action.name, call.arguments == action.arguments,
-                      try projected(candidate.machine) == step.state else { return false }
-                return try candidate.machine.satisfiesStateConstraint()
-            }
-            let distinct = Dictionary(grouping: matches, by: { $0.machine.snapshot })
-            guard distinct.count == 1, let next = distinct.values.first?.first?.machine,
-                  next.hasSameConfiguration(as: first) else {
-                throw NativeValidationRunnerError.invalidCoverage("sampled transition")
-            }
-            machine = next
+        func replay(_ sampled: SampledWitness) throws -> Scenario.Machine {
+            var context = CheckingContext(registers: try first.initialCheckingRegisters())
             try context.advanceLevel()
+            let starting = try initial.filter { try projected($0) == sampled.steps[0].state }
+            guard starting.count == 1, let start = starting.first,
+                  try start.assumptionsHold(), try start.satisfiesStateConstraint() else {
+                throw NativeValidationRunnerError.invalidCoverage("sampled initial state")
+            }
+            var machine = start
+            for step in sampled.steps.dropFirst() {
+                guard let action = step.action else {
+                    throw NativeValidationRunnerError.invalidCoverage("sampled action")
+                }
+                let matches = try machine.successors(checking: &context).filter { candidate in
+                    let call = try first.formalCall(for: candidate.action)
+                    guard call.name == action.name, call.arguments == action.arguments,
+                          try projected(candidate.machine) == step.state else { return false }
+                    return try candidate.machine.satisfiesStateConstraint()
+                }
+                let distinct = Dictionary(grouping: matches, by: { $0.machine.snapshot })
+                guard distinct.count == 1, let next = distinct.values.first?.first?.machine,
+                      next.hasSameConfiguration(as: first) else {
+                    throw NativeValidationRunnerError.invalidCoverage("sampled transition")
+                }
+                machine = next
+                try context.advanceLevel()
+            }
+            return machine
         }
+        for earlier in witnesses.dropLast() { _ = try replay(earlier) }
+        let machine = try replay(witness)
         let names = scenario.formalPropertyNames
         guard let property = scenario.checking.properties.first(where: { names[$0] == witness.property }),
               report.properties[witness.property] == .violated,
