@@ -7,6 +7,7 @@ private struct ModelRegistration: Sendable {
 }
 
 private let fixtureModelRegistrations: [ModelRegistration] = [
+    .init(id: "checking-postcondition", scenarios: { try CheckingPostconditionModel.validationScenarios() }),
     .init(id: "counter", scenarios: { try ConfiguredCounter.validationScenarios() }),
     .init(id: "configured-processes", scenarios: { try ConfiguredProcessMachine.validationScenarios() }),
     .init(id: "weakly-fair-processes", scenarios: { try WeaklyFairConfiguredProcessMachine.validationScenarios() }),
