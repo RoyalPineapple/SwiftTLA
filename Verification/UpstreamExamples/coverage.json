@@ -5863,7 +5863,7 @@
         {
           "path": "specifications/ewd998/EWD998ChanID_shiviz.tla",
           "role": "configured root",
-          "reason": "Published seven-node configuration overrides Init with all nodes active and white and places the initial token at Initiator. Inv is TLCGet(level) < 666, ALIAS formats per-host vector clocks, and the source recommends TLC generator mode with a depth beyond the limit. A typed alternate-initialization and trace-output scenario is still missing; this is not the five-node base graph.",
+          "reason": "Published seven-node configuration overrides Init with all nodes active and white and places the initial token at Initiator. Inv is TLCGet(level) < 666, ALIAS formats per-host vector clocks, and the source recommends TLC generator mode with a depth beyond the limit. The override MCInit does not assign the declared passes variable. Do not invent an initial passes value in Swift; first establish the actual pinned TLC outcome. This is not the five-node base graph.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -5992,7 +5992,7 @@
           "configuration": "specifications/ewd998/EWD998ChanID_shiviz.cfg",
           "required": true,
           "status": "missing",
-          "gap": "Seven-node alternate MCInit, TLCGet(level) < 666 outcome, ALIAS trace projection, and source-documented generator/depth behavior are unimplemented. The five-node base scenario cannot stand in for this configuration.",
+          "gap": "The pinned MCInit override does not assign the declared passes variable. Establish the actual pinned TLC outcome before translating it; do not invent passes = 0. The seven-node alternate initialization, TLCGet(level) < 666 outcome, ALIAS trace projection, and source-documented generator mode remain unimplemented. The five-node base scenario cannot stand in for this configuration.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "unknown",
           "implementations": [],

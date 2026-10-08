@@ -1368,9 +1368,11 @@ inconclusive. A sampled counterexample is a
 violation with a witness; finishing
 the traces without one is inconclusive, not satisfaction or complete-graph
 evidence. Simulation does not change the generated TLA+ model. The TLC adapter
-must request the same bounds independently, and validation infrastructure must
-verify each reported witness before claiming parity. Until that evidence path
-exists, simulation cases are excluded from admission, not run as exhaustive checks.
+requests the same bounds independently. Validation infrastructure checks the
+configured inputs and each reported witness before it claims parity. A sampled
+violation with checked witnesses can pass admission without graph parity. A
+simulation that finds no violation remains inconclusive. It cannot pass as a
+satisfied property or an equal complete graph.
 The native validator runs against the generated machine and records its states,
 transitions, and selected check outcomes without invoking TLC or rendering TLA+.
 Separately, TLC checks the generated TLA+ bundle. The two reports must agree on
