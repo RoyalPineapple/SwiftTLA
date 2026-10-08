@@ -27,4 +27,23 @@ struct RandomSubsetExpressionTests {
         #expect(tla.contains("EXTENDS Integers, Randomization"))
         #expect(tla.contains("RandomSubset(100, [1..30 -> {FALSE, TRUE}])"))
     }
+
+    @Test("formal evaluation samples a large function space without enumerating it")
+    func interpretedFunctionDomain() throws {
+        let sample = RandomSubset(upTo: 100,
+            from: Functions(from: IntRange(1, through: 64), to: SetExpr<Bool>.literal(false, true)))
+        guard case .set(let functions) = try evaluateClosed(sample.stateExpr) else {
+            Issue.record("RandomSubset did not return a set")
+            return
+        }
+        #expect(functions.count == 100)
+        for value in functions {
+            guard case .function(let mapping) = value else {
+                Issue.record("RandomSubset returned a non-function member")
+                continue
+            }
+            #expect(Set(mapping.keys) == Set((1...64).map(TLAValue.int)))
+            #expect(mapping.values.allSatisfy { $0 == .bool(false) || $0 == .bool(true) })
+        }
+    }
 }

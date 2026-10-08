@@ -258,6 +258,7 @@ private enum EvaluatorTask {
     case finish(CompiledOperation, operandCount: Int)
     case functionSpaceDomain(candidate: CompiledExpression, scope: EvaluatorScope)
     case functionSpaceMember(domain: Set<CompiledValue>, range: Set<CompiledValue>)
+    case randomFunctionSubset
     case sequenceMember
     case integerDomainMember(CompiledOperation)
     case booleanResult
@@ -360,6 +361,19 @@ struct CompiledEvaluator: Sendable {
                 } else {
                     values.append(.boolean(false))
                 }
+
+            case .randomFunctionSubset:
+                let range = try popValue(from: &values)
+                let domain = try popValue(from: &values)
+                let count = try integer(popValue(from: &values))
+                guard case .set(let domainValues) = domain, case .set(let rangeValues) = range else {
+                    throw EvalError.expected(.functionSetDomains, actual: [domain, range])
+                }
+                let functions = try nativeOperation {
+                    try _NativeMachineOperations.randomFunctionSubset(
+                        upTo: count, from: domainValues, to: rangeValues)
+                }
+                values.append(.set(Set(functions.map(CompiledValue.function))))
 
             case .integerDomainMember(let domain):
                 let candidate = try popValue(from: &values)
@@ -775,6 +789,13 @@ struct CompiledEvaluator: Sendable {
                     var bodyScope = scope
                     bodyScope.bindings = bodyScope.bindings.binding(boundExpression, from: scope, to: binder, retainingIn: &pendingArguments)
                     tasks.append(.expression(body, bodyScope))
+                case .randomSubset where expression.children.count == 2 &&
+                    expression.children[1].computation.operation == .functionSet:
+                    let space = expression.children[1].computation
+                    tasks.append(.randomFunctionSubset)
+                    tasks.append(.expression(space.children[1], scope))
+                    tasks.append(.expression(space.children[0], scope))
+                    tasks.append(.expression(expression.children[0], scope))
                 case .letIn(_):
                     let body = expression.children[0]
 
@@ -1078,7 +1099,6 @@ extension CompiledOperation {
             let functions = try nativeOperation { try _NativeMachineOperations.functionSet(domainValues, rangeValues) }
             values.append(.set(Set(functions.map(CompiledValue.function))))
         case .randomSubset:
-            // shortcut: interpreted function spaces are still materialized; specialize before using this path for generator runs.
             let domain = try popValue(from: &values)
             let count = try integer(popValue(from: &values))
             guard case .set(let members) = domain else {
