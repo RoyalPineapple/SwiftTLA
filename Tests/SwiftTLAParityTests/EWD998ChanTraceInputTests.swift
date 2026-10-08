@@ -18,6 +18,9 @@ struct EWD998ChanTraceInputTests {
         #expect(input.events[1].clock[4] == 91)
         let failures = input.events.filter { $0.hasFailure }
         #expect(failures.isEmpty)
+        #expect(throws: EWD998ChanTraceInput.InputError.causalityViolation(earlier: 3, later: 4)) {
+            try input.events(inCausalOrder: input.events.map(\.sourceLine))
+        }
     }
 
     @Test("invalid input fails closed while a reported failure remains an event")
