@@ -380,12 +380,13 @@ package enum UpstreamTLCParity {
                   || $0.hasPrefix("__step_assert_") }) else {
             throw UpstreamTLCParityError.configurationMismatch(id)
         }
-        let graphChecks = Set(configuration.invariants).union(compilerAssertions)
+        let referenceGraphChecks = Set(configuration.invariants)
+        let generatedGraphChecks = referenceGraphChecks.union(compilerAssertions)
         let generatedGraphBundle = try rendered.tlaBundle(
-            checking: graphChecks,
+            checking: generatedGraphChecks,
             checkDeadlock: configuration.checksDeadlock)
         let referenceGraphBundle = try rendered.referenceBundle(
-            checking: graphChecks,
+            checking: referenceGraphChecks,
             checkDeadlock: configuration.checksDeadlock,
             declarations: configuration.declarations, in: reference)
         var generatedGraphOutput = directory.appendingPathComponent("generated-graph")
