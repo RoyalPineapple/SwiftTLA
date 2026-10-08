@@ -5907,7 +5907,7 @@
         {
           "path": "specifications/ewd998/EWD998_opts.tla",
           "role": "source-defined simulation variant",
-          "reason": "Extends EWD998 with five feature flags, probabilistic generation, an action constraint, a state constraint, and CSV statistics. Its configuration is embedded after CONFIG in the source; no separate .cfg file is published. The generator variant and its sampled/statistical outcome still require implementation and evidence.",
+          "reason": "Extends EWD998 with five feature flags, probabilistic generation, an action constraint, a state constraint, and CSV statistics. Its configuration is embedded after CONFIG in the source; no separate .cfg file is published. RandomSubset(1000, S) samples up to 1000 members of the finite initial domain S, not one 1000-member model state; SendMsgOpts also uses a checking-level-dependent RandomElement guard. The generated-machine simulator currently enumerates all initial machines and eligible successors, so it does not implement this TLC generator contract. The generator variant and its sampled/statistical outcome still require implementation and evidence.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -6005,7 +6005,7 @@
         {
           "path": "specifications/ewd998/SmokeEWD998.tla",
           "role": "configured root",
-          "reason": "Published simulation smoke test: SmokeInit samples initial states using RandomSubset, and StopAfter limits duration or trace depth. It needs sampled-outcome evidence under its declared mode, not an exhaustive-graph claim; implementation and hosted comparison remain open.",
+          "reason": "Published simulation smoke test: SmokeInit uses RandomSubset(k, S) to sample up to k members from each finite initial domain S before taking the product, rather than enumerating all initial machines. StopAfter limits duration or trace depth. It needs a generator-aware native path and sampled-outcome evidence under its declared mode, not an exhaustive-graph claim; implementation and hosted comparison remain open.",
           "implementations": [],
           "dispositionComplete": false
         },
