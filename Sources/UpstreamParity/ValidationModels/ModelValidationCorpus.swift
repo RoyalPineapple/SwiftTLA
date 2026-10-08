@@ -64,6 +64,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "moving-cat", scenarios: { try CatModel.validationScenarios() }),
     .init(id: "asynch-interface", scenarios: { try AsynchInterfaceModel.validationScenarios() }),
     .init(id: "majority", scenarios: { try MajorityModel.validationScenarios() }),
+    .init(id: "missionaries-and-cannibals", scenarios: { try MissionariesAndCannibalsModel.validationScenarios() }),
     .init(id: "n-queens", scenarios: { try NQueensModel.validationScenarios() }),
     .init(id: "queens", scenarios: { try QueensModel.validationScenarios() }),
     .init(id: "coffee-can", scenarios: { try CoffeeCanModel.validationScenarios() }),

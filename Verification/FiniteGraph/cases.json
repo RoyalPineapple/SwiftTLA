@@ -83,6 +83,24 @@
       "timeoutSeconds": 60
     },
     {
+      "id": "ap-missionaries-and-cannibals",
+      "sourceModel": "missionaries-and-cannibals",
+      "scenario": "APMissionariesAndCannibals",
+      "comparisonMode": "decisive-counterexample",
+      "module": "missionaries-and-cannibals/APMissionariesAndCannibals.tla",
+      "configuration": "missionaries-and-cannibals/APMissionariesAndCannibals.cfg",
+      "imports": ["missionaries-and-cannibals/MissionariesAndCannibals.tla"],
+      "dependencies": [{"importingModule": "APMissionariesAndCannibals", "importedModule": "MissionariesAndCannibals"}],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MissionariesAndCannibals/APMissionariesAndCannibals.tla",
+        "sha256": "faa5f76aa2766c48c3e546bc3a78143accf287133d1f1137859a213623370725"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "faa5f76aa2766c48c3e546bc3a78143accf287133d1f1137859a213623370725",
+      "cfgSHA256": "9fc8f0be2ffa7c8d2e7b6c6934e4b555bf7c7ba0561b0168adf713fc23179581",
+      "timeoutSeconds": 60
+    },
+    {
       "id": "mc-die-harder",
       "sourceModel": "die-harder",
       "scenario": "MCDieHarder",
@@ -97,6 +115,24 @@
       "exploration": {"maximumStateLimit": 100000, "symmetryReduction": "disabled"},
       "moduleSHA256": "0c45536b4116e80a3736af5a968d5df43653eb54809567bcdcf4e2ca3d54a324",
       "cfgSHA256": "2aaf747d6566dc2c8ffb2d17caacc7c9cf64cd8faa623f8b312e9078ed72a557",
+      "timeoutSeconds": 60
+    },
+    {
+      "id": "missionaries-and-cannibals",
+      "sourceModel": "missionaries-and-cannibals",
+      "scenario": "MissionariesAndCannibals",
+      "comparisonMode": "decisive-counterexample",
+      "module": "missionaries-and-cannibals/MissionariesAndCannibals.tla",
+      "configuration": "missionaries-and-cannibals/MissionariesAndCannibals.cfg",
+      "imports": [],
+      "dependencies": [],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla",
+        "sha256": "afb87e6ebc4af897ab9b27f90729c0170f061f8d95444a54035df1afaf21c65a"
+      },
+      "exploration": {"maximumStateLimit": 1000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "afb87e6ebc4af897ab9b27f90729c0170f061f8d95444a54035df1afaf21c65a",
+      "cfgSHA256": "8c0b9134393385ec605f5c6cd31e1215aef6f8c7b8b20ffe1e5261c614bcd5b8",
       "timeoutSeconds": 60
     },
     {

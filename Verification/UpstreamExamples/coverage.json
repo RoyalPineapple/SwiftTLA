@@ -7699,16 +7699,16 @@
     {
       "path": "specifications/MissionariesAndCannibals",
       "name": "Missionaries and Cannibals",
-      "audit": "Pinned source, published manifest, module roles, and both configuration bindings audited; no Swift implementation or hosted parity.",
-      "gap": "Implement the exact safe-move relation, complete bank/person-set state, TypeOK, and the deliberately violated Solution invariant. The direct TLC configuration binds six distinct model values; the Apalache annotation wrapper binds six quoted PERSON strings to the same underlying transition module. Its manifest reports symbolic success, which is not evidence of the TLC verdict. Preserve both configurations independently, establish each TLC outcome, and compare native and generated-TLA graphs before credit. No current Swift source or retained parity evidence covers either configuration.",
-      "legacyCleanupComplete": false,
+      "audit": "The two published configurations now resolve to one typed Swift model and byte-identical pinned upstream inputs. Focused native tests check safe crossings and the deliberate Solution violation for both value encodings; hosted parity is still absent.",
+      "gap": "Obtain hosted evidence for each configuration on both independent comparison paths. The direct case uses six TLC model values; the Apalache annotation wrapper uses six quoted PERSON strings. Its symbolic-success manifest does not establish the TLC verdict. Decisive counterexample matching must compare selected verdicts and a valid witness without claiming complete-graph equality. Historical local checks do not credit either configuration.",
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/MissionariesAndCannibals/APMissionariesAndCannibals.tla",
           "role": "configured annotation wrapper",
           "reason": "Instantiates MissionariesAndCannibals without replacing its transitions; the Apalache type annotations are comments for TLC. Its configuration binds quoted PERSON strings and selects TypeOK and Solution.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": ["Sources/UpstreamParity/Examples/MissionariesAndCannibals.swift"],
+          "dispositionComplete": true
         },
         {
           "path": "specifications/MissionariesAndCannibals/MissionariesAndCannibals_proof.tla",
@@ -7721,8 +7721,8 @@
           "path": "specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla",
           "role": "configured root and wrapper dependency",
           "reason": "Declares the two state variables, safe subset move relation, TypeOK, and Solution. The direct configuration binds six model values and selects both invariants; the annotation wrapper imports this same module.",
-          "implementations": [],
-          "dispositionComplete": false
+          "implementations": ["Sources/UpstreamParity/Examples/MissionariesAndCannibals.swift"],
+          "dispositionComplete": true
         }
       ],
       "configurations": [
@@ -7730,20 +7730,28 @@
           "module": "specifications/MissionariesAndCannibals/APMissionariesAndCannibals.tla",
           "configuration": "specifications/MissionariesAndCannibals/APMissionariesAndCannibals.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "symbolic",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{
+            "file": "Sources/UpstreamParity/Examples/MissionariesAndCannibals.swift",
+            "scenario": "APMissionariesAndCannibals",
+            "caseID": "ap-missionaries-and-cannibals"
+          }],
           "evidence": []
         },
         {
           "module": "specifications/MissionariesAndCannibals/MissionariesAndCannibals.tla",
           "configuration": "specifications/MissionariesAndCannibals/MissionariesAndCannibals.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "safety failure",
-          "implementations": [],
+          "implementations": [{
+            "file": "Sources/UpstreamParity/Examples/MissionariesAndCannibals.swift",
+            "scenario": "MissionariesAndCannibals",
+            "caseID": "missionaries-and-cannibals"
+          }],
           "evidence": []
         }
       ],
