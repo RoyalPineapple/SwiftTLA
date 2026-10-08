@@ -10,10 +10,17 @@ module/configuration pairs are a baseline, not a cap on source-defined variants.
 
 ## Baseline and admission rule
 
-At Swift SHA `767fe50bf6108ec39f7b19c35e4badd44735c364`, the ledger records
+The current ledger marks all 19 DSL criteria implemented and retains
+requirement-specific acceptance evidence for 18. AC-13 still requires final-head
+hosted admission of its cleanup. Historical configuration matches are progress,
+not proof that PR #394's current head or all 78 families are complete. The full,
+unfiltered validation run for frozen PR SHA `852295bc` must be reconciled
+before admission; local commit `c948d57f` is not part of that run and has no
+hosted credit.
+
+At Swift SHA `767fe50bf6108ec39f7b19c35e4badd44735c364`, the ledger recorded
 19/78 complete families and 44/234 hosted-matched published configurations.
-Twelve DSL criteria are marked implemented, not finally accepted; seven are
-marked missing. Ordinary CI run `37004522387` and the full Independent Validation
+Ordinary CI run `37004522387` and the full Independent Validation
 Pipeline run `37004522298` passed on this exact SHA. The latter passed 100 native
 and 53 upstream parity jobs, retained 154 nonempty artifacts, and admitted the
 unfiltered matrix. This qualifies that matrix, not the unfinished DSL
@@ -64,11 +71,14 @@ models or checks to fit the implementation.
 
 Keep one candidate SHA and one active family at a time. The immediate queue is:
 
-1. Remove the measured Boulanger runtime gap while preserving complete evidence.
-2. Finish the native-checking migration, then close the remaining DSL contract
-   gaps and PR #394's existing configurations.
-3. Complete the next whole family and repeat. Dijkstra is a candidate, not
-   pre-credited work.
+1. Reconcile frozen PR SHA `852295bc` against ordinary CI, the full validation
+   matrix, and retained evidence. Do not promote the later local commit using
+   the earlier SHA's result.
+2. Close AC-13's final-head admission and PR #394's existing configurations on
+   one green pushed revision, then merge the DSL migration.
+3. Complete the remaining upstream corpus one whole family at a time. EWD998
+   is the current partial family; its historical configuration matches do not
+   complete its unverified variants.
 
 ### 1. Close the current candidate and performance gap
 
@@ -292,59 +302,27 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       generated TLA and native scenario identity on the migrated matrix.
 - [ ] Audit AC-01 through AC-19 against each criterion's full acceptance text.
       Existing `implemented` labels are not acceptance evidence by themselves.
-- [ ] Close AC-09 with separate native/TLC invariant, deadlock, termination,
-      stuttering, and temporal-cycle cases, including legitimate early results.
-- [ ] Close AC-12 by moving every application and Swift-checking caller to the
-      generated transitions and predicates. Remove interpreter/compiled-runtime
-      checking paths only after their behavior is covered; keep formal parsing
-      or export boundaries only with an explicit non-checking justification.
-      The remaining source-owned paths include `ModelChecker`,
-      `RefinementChecker`, and `CompiledSpecification+TemporalAnalysis`; their
-      formal-core test callers must migrate to generated-machine contracts, not
-      simply be deleted without equivalent behavioral proof. VoteProof's
-      corpus execution test now checks generated initial values, typed ballot
-      choices, invariants, and ambiguity directly; its compiled-runtime oracle
-      and duplicate rendering-suite witness were removed in local commit
-      `097a1092`. The focused execution and rendering suites pass locally;
-      hosted acceptance remains pending.
-      Three collection fixtures now use generated independent `Do` steps and
-      native exploration instead of formal `ModelChecker` calls. Their complete
-      small labeled graphs, invariant/deadlock outcomes, and rendered collection
-      operations pass focused local checks; the formal value round-trip remains
-      a separate serialization-boundary test. This does not credit AC-12 or
-      independent TLC parity.
-      The duplicated formal function-update models have likewise been replaced
-      by one generated typed-dictionary model. Its initial action choices,
-      complete four-state/four-edge labeled graph, and deadlock pass locally;
-      the distinct formal expression-lowering suite still passes. No hosted
-      parity claim follows from these focused tests. The non-empty-subset
-      authoring regression now checks generated initial states and export
-      instead of a duplicate compiled-runtime oracle; its focused and
-      neighboring tests pass locally. The integer-backed enum's duplicate
-      compiled-runtime initial-state probe has been removed: the generated
-      machine now checks its sole typed initial state and exact formal value
-      before exploring both transitions. Its focused and related projection
-      tests pass locally. This removes one legacy checker caller without
-      claiming AC-12 completion. Lock's bounded graph and safety checks now
-      run on generated transitions, and Peterson's published state count is
-      checked by its existing native/formal graph contract; two redundant
-      formal-explorer probes are gone. The reduced Consensus fixture also now
-      uses native graph and temporal checking. It exposes three terminal
-      deadlocks that its previous state-count-only probe did not report; the
-      pinned upstream configuration disables deadlock checking, so no upstream
-      parity or family credit follows. Four focused generated checks pass
-      locally; the remaining formal-core checker and family gaps stay open.
-- [ ] Close AC-13 by removing replaced spellings, duplicate configuration,
-      obsolete callers, compatibility aliases, and stale documentation. The
-      legacy `CollectionVarType` field had no effect on model behavior; it was
-      only copied through declarations and included in the compilation
-      fingerprint. Its public type, field plumbing, and test-only identity
-      variant have been removed locally. The 80-test compiler-pipeline suite
-      and static guard pass; this still needs hosted admission on a new SHA.
-- [ ] Close AC-14 with generated-machine identity by default and sound,
-      explicit symmetry admission plus complete TLC-orbit comparison.
-- [ ] Close AC-17 through AC-19 with direct Swift value types, stable
-      declaration-derived names, and compile-time type resolution/diagnostics.
+- [x] Accept AC-09's native checking contract for invariant, deadlock,
+      termination, stuttering, temporal cycles, and legitimate early results.
+      The requirement-specific hosted evidence is recorded in `coverage.json`;
+      final-head matrix admission remains separate.
+- [x] Accept AC-12's generated-transition boundary. Migrated application and
+      native-checking paths use the generated machine without TLC or an
+      expression interpreter. Package-only formal-core test oracles are not
+      application or native-checking paths and need not be deleted to satisfy
+      this criterion. The audited callers and hosted evidence are recorded in
+      `coverage.json`; direct-TLA corpus ports retain their own migration gaps.
+- [ ] Admit AC-13 on the final PR head. The source audit in `coverage.json`
+      records removal of replaced spellings, duplicate configuration, obsolete
+      callers, compatibility aliases, and stale documentation. Its cleanup is
+      implemented, but the ledger has no `acceptanceComplete` hosted evidence
+      for this criterion. Do not reopen formal-core test oracles as an invented
+      application-migration requirement.
+- [x] Accept AC-14's generated-machine identity by default and explicit,
+      sound symmetry admission with complete TLC-orbit comparison. Historical
+      evidence is recorded in `coverage.json`; final-head admission is separate.
+- [x] Accept AC-17 through AC-19 for the bounded Swift value-type,
+      declaration-derived name, and compile-time type-diagnostic contracts.
       Ordinary `[Element]()` and `[Element]([...])` array constructors now
       resolve in `#spec` through the same type resolver as `Array<Element>`.
       The generated array fixture failed before this parser fix and its four
@@ -363,7 +341,8 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       non-empty subsets, and TLA export retains one symbolic module with two
       CFG bindings. Its focused case and 29 related collection/configuration
       tests pass locally. This does not settle every B-01 domain decision.
-      Hosted acceptance remains open.
+      Their requirement-specific historical hosted acceptance is recorded in
+      `coverage.json`; final-head matrix admission remains open.
 - [ ] Confirm the four required end-to-end model classes (Counter, mutual
       exclusion, puzzle, distributed protocol) each execute as an application,
       explore the same generated transitions, validate separately with TLC,
