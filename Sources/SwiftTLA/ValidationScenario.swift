@@ -108,6 +108,11 @@ public protocol ModelValidationScenario: Sendable {
     func fairnessConditions(on machine: Machine) throws -> [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]
     func render() throws -> RenderedSpecification
     var formalPropertyNames: [Property: String] { get }
+    var usesView: Bool { get }
+    func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
+        stopOnViolation: Bool, stopOnReachability: Bool,
+        emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property>
+    func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine) throws -> TLAStateProjection
 }
 
 /// The product result for a configured module with no state machine.
@@ -131,12 +136,34 @@ public protocol AssumptionValidationScenario: Sendable {
 
 extension ModelValidationScenario {
     public var checkingMode: ValidationCheckingMode { .exhaustive }
+    public var usesView: Bool { false }
+
+    public func runValidation(maximumStates: Int, checking: ModelChecks<Property>,
+        stopOnViolation: Bool, stopOnReachability: Bool,
+        emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
+        try runValidation(initialMachines: initialMachines(), maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation,
+            stopOnReachability: stopOnReachability, emit: emit)
+    }
+
+    public func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
+        stopOnViolation: Bool, stopOnReachability: Bool,
+        emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
+        try MachineValidator.run(initialMachines: initialMachines, maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation,
+            stopOnReachability: stopOnReachability, emit: emit)
+    }
+
+    public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine) throws -> TLAStateProjection {
+        return try machine.formalProjection(of: snapshot)
+    }
 
     public func fairnessConditions(on machine: Machine) throws -> [MachineFairnessCondition<Machine.Snapshot, Machine.Action>] {
         try machine.fairnessConditions()
     }
 
     public func check(maximumStates: Int) throws -> NativeCheckResult<Machine> {
+        guard !usesView else { throw ExplorationError.viewRequiresStreamingValidation }
         let initial = try initialMachines()
         let fairness = behavior == .specification ? try initial.first.map { try fairnessConditions(on: $0) } : nil
         return try ReachabilityGraph.check(initialMachines: initial, maximumStates: maximumStates,
@@ -144,6 +171,7 @@ extension ModelValidationScenario {
     }
 
     public func explore(maximumStates: Int) throws -> ReachabilityGraph<Machine> {
+        guard !usesView else { throw ExplorationError.viewRequiresStreamingValidation }
         let initial = try initialMachines()
         let fairness = behavior == .specification ? try initial.first.map { try fairnessConditions(on: $0) } : nil
         return try ReachabilityGraph(initialMachines: initial, maximumStates: maximumStates,
@@ -209,6 +237,7 @@ public struct ValidationDeclaration: SpecComponent {
     package var fairnessProfileSelections: [FairnessProfileReference] = []
     package var checkingModeSelections: [ValidationCheckingMode] = []
     package var symmetrySelections: [SymmetryReference] = []
+    package var viewSelections: [StateExpr] = []
 
     package init(name: String, displayLabel: String? = nil, bindings: [ValidationBinding]) {
         self.name = name
@@ -265,6 +294,13 @@ public struct ValidationDeclaration: SpecComponent {
     public func usingSymmetry(_ symmetry: SymmetrySetDecl) -> Self {
         var copy = self
         copy.symmetrySelections.append(symmetry.reference)
+        return copy
+    }
+
+    /// Selects the typed value TLC uses to identify explored states for this scenario.
+    public func viewing<Value: TLAValueType>(_ value: some TypedExpression<Value>) -> Self {
+        var copy = self
+        copy.viewSelections.append(value.stateExpr)
         return copy
     }
 }

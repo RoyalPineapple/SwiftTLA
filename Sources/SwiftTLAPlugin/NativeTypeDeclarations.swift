@@ -45,6 +45,7 @@ struct NativeTypeDeclarations: Sendable {
                 program.behavior.checkingRegisterInitializations[$0.id]
             })
             pending.append(contentsOf: program.behavior.validationScenarios.flatMap { $0.bindings.values })
+            pending.append(contentsOf: program.behavior.validationScenarios.compactMap(\.view))
             pending.append(contentsOf: program.behavior.actions.flatMap { $0.bindings.map(\.domain) })
             pending.append(contentsOf: program.behavior.temporalProperties.flatMap { $0.expression.predicates.map(\.expression) })
             pending.append(contentsOf: program.behavior.temporalProperties.flatMap { $0.bindings.map(\.domain) })

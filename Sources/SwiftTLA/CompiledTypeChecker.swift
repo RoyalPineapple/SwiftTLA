@@ -328,7 +328,15 @@ package struct CompiledTypeChecker: Sendable {
                 expectations: scenario.expectations, deadlockExpectation: scenario.deadlockExpectation,
                 checks: scenario.checks, checkDeadlock: scenario.checkDeadlock, behavior: scenario.behavior,
                 checkingMode: scenario.checkingMode, symmetry: scenario.symmetry,
-                fairnessProfileIndex: scenario.fairnessProfileIndex)
+                fairnessProfileIndex: scenario.fairnessProfileIndex,
+                view: try scenario.view.map {
+                    let checked = try checkOperand($0)
+                    guard checked.resultType.resolved else {
+                        throw CompiledValueType.unresolvedDiagnostic(checked.resultType,
+                            at: "validation.\(scenario.name).view")
+                    }
+                    return checked
+                })
         }
         var actions: [CompiledAction] = []
         var invariants: [CompiledStatePredicate] = []

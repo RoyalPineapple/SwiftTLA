@@ -57,11 +57,22 @@ struct BinaryGraphEvidenceWriter {
         try flushIfNeeded()
     }
 
-    mutating func state(id: UInt64, key: Data, initial: Bool) throws {
+    mutating func state(id: UInt64, key: Data, initial: Bool, representative: Data? = nil) throws {
+        guard CanonicalBinaryState.isView(key) == (representative != nil) else {
+            throw BinaryGraphEvidenceError.invalid("view representative")
+        }
         byte(2)
         uint64(id)
         byte(initial ? 1 : 0)
         try bytes(key)
+        if let representative {
+            guard !CanonicalBinaryState.isView(representative) else {
+                throw BinaryGraphEvidenceError.invalid("complete representative")
+            }
+            byte(9)
+            uint64(id)
+            try bytes(representative)
+        }
         states += 1
         if initial { initials += 1 }
         try flushIfNeeded()
@@ -77,12 +88,19 @@ struct BinaryGraphEvidenceWriter {
     }
 
     mutating func invariantFailure(property: String, key: Data,
-        predecessor: UInt64?, action: UInt32?) throws {
+        predecessor: UInt64?, action: UInt32?, representative: Data? = nil) throws {
+        guard CanonicalBinaryState.isView(key) == (representative != nil) else {
+            throw BinaryGraphEvidenceError.invalid("view property representative")
+        }
         byte(6)
         try string(property)
         try bytes(key)
         uint64(predecessor ?? UInt64.max)
         uint32(action ?? UInt32.max)
+        if let representative {
+            byte(10)
+            try bytes(representative)
+        }
         violations += 1
         try flushIfNeeded()
     }
@@ -95,12 +113,19 @@ struct BinaryGraphEvidenceWriter {
     }
 
     mutating func reached(property: String, key: Data,
-        predecessor: UInt64?, action: UInt32?) throws {
+        predecessor: UInt64?, action: UInt32?, representative: Data? = nil) throws {
+        guard CanonicalBinaryState.isView(key) == (representative != nil) else {
+            throw BinaryGraphEvidenceError.invalid("view property representative")
+        }
         byte(8)
         try string(property)
         try bytes(key)
         uint64(predecessor ?? UInt64.max)
         uint32(action ?? UInt32.max)
+        if let representative {
+            byte(10)
+            try bytes(representative)
+        }
         reachability += 1
         try flushIfNeeded()
     }

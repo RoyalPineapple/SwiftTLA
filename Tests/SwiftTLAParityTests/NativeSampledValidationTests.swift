@@ -23,6 +23,7 @@ struct NativeSampledValidationTests {
             behavior: original.behavior, selectedSymmetry: original.selectedSymmetry,
             selectedFairnessProfile: original.selectedFairnessProfile,
             selectedFairnessProfileName: original.selectedFairnessProfileName,
+            selectedView: original.selectedView,
             expectations: [.BelowThree: .violated], deadlockExpectation: nil)
     }
 

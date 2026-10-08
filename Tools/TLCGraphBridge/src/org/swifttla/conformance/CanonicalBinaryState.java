@@ -23,6 +23,7 @@ import tlc2.value.impl.Value;
 /** Complete value identity for the versioned graph-evidence wire contract. */
 final class CanonicalBinaryState {
     private static final byte[] VERSION = "STLASV01".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] VIEW_VERSION = "STLAVW01".getBytes(StandardCharsets.US_ASCII);
     private static final Comparator<byte[]> BYTES = Arrays::compareUnsigned;
 
     private CanonicalBinaryState() { }
@@ -42,6 +43,16 @@ final class CanonicalBinaryState {
             }
             output.write(value((Value) binding));
         }
+        return bytes.toByteArray();
+    }
+
+    static byte[] encodeView(Value view) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        DataOutputStream output = new DataOutputStream(bytes);
+        output.write(VIEW_VERSION);
+        output.writeInt(1);
+        string(output, "View");
+        output.write(value(view));
         return bytes.toByteArray();
     }
 

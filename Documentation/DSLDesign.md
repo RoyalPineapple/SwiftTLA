@@ -912,6 +912,28 @@ Native checking and export consume the same choice. Duplicate behavior modifiers
 produce a diagnostic. Expected outcomes do not select or alter behavior.
 Evidence identifies the selected behavior separately from property and deadlock coverage.
 
+`Validation.viewing(_:)` selects a typed state expression as TLC's `VIEW` and as
+the native checker's visited-state identity. Without it, both checkers use the
+complete state. A view can deliberately omit auxiliary state, but it does not
+change the generated machine, its transitions, state constraints, or selected
+checks. For example, EWD998ChanID excludes vector clocks while retaining the
+active flags, colors, counters, clock-free inbox, and pass count:
+
+```swift
+let published = Validation { Bind(Node, to: fiveNodes) }
+    .viewing(Quintuple.literal(active, color, counter, viewInbox, passes))
+    .checking(only: [EWD998Safe, Max3TokenRounds, EWD998ChanSpec, EWD998Live])
+    .checkingDeadlock(false)
+published
+```
+
+View-based exploration records complete representative states for diagnostics,
+but graph equality compares the complete, typed view values and labeled edges.
+Representatives chosen by the two independent checkers need not be identical.
+The graph result must say that it is view-quotiented; it must not masquerade as
+complete full-state parity. A full-state graph export API rejects a viewed
+scenario, leaving the streaming validator as the supported check path.
+
 ### Declaration syntax
 
 #### Counter parameter contract

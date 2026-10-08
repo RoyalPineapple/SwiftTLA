@@ -4,6 +4,11 @@ import SwiftTLA
 /// Versioned, complete value identity for parity evidence. This is a wire
 /// contract between independent producers, not a model execution API.
 enum CanonicalBinaryState {
+    private static let fullVersion = Data("STLASV01".utf8)
+    private static let viewVersion = Data("STLAVW01".utf8)
+
+    static func isView(_ data: Data) -> Bool { data.prefix(8) == viewVersion }
+
     enum CodingError: Error {
         case lengthOverflow
         case malformed
@@ -14,26 +19,30 @@ enum CanonicalBinaryState {
         private(set) var bytes = Data()
         private var lengthPatches: [LengthPatch] = []
 
-        mutating func encode(_ projection: TLAStateProjection) throws {
-            try CanonicalBinaryState.encode(projection, into: &bytes, lengthPatches: &lengthPatches)
+        mutating func encode(_ projection: TLAStateProjection, viewed: Bool = false) throws {
+            try CanonicalBinaryState.encode(projection, viewed: viewed,
+                into: &bytes, lengthPatches: &lengthPatches)
         }
     }
 
-    static func encode(_ projection: TLAStateProjection) throws -> Data {
+    static func encode(_ projection: TLAStateProjection, viewed: Bool = false) throws -> Data {
         var encoder = Encoder()
-        try encoder.encode(projection)
+        try encoder.encode(projection, viewed: viewed)
         return encoder.bytes
     }
 
     private static func encode(
-        _ projection: TLAStateProjection, into output: inout Data,
+        _ projection: TLAStateProjection, viewed: Bool, into output: inout Data,
         lengthPatches: inout [LengthPatch]
     ) throws {
         output.removeAll(keepingCapacity: true)
         output.reserveCapacity(512)
-        output.append(contentsOf: "STLASV01".utf8)
+        output.append(viewed ? viewVersion : fullVersion)
         lengthPatches.removeAll(keepingCapacity: true)
         let entries = projection.entries
+        if viewed, entries.count != 1 || entries.first?.token.description != "View" {
+            throw CodingError.malformed
+        }
         try appendCount(entries.count, to: &output)
         for entry in entries {
             try appendString(entry.token.description, to: &output)
@@ -44,14 +53,17 @@ enum CanonicalBinaryState {
 
     static func validate(_ data: Data) throws {
         var cursor = Cursor(data: data)
-        guard try cursor.take(8) == Data("STLASV01".utf8) else {
+        let version = try cursor.take(8)
+        guard version == fullVersion || version == viewVersion else {
             throw CodingError.malformed
         }
         let count = try cursor.count()
+        if version == viewVersion && count != 1 { throw CodingError.malformed }
         guard count <= (data.count - cursor.offset) / 9 else { throw CodingError.malformed }
         var previous: Data?
         for _ in 0..<count {
             let name = try cursor.stringBytes()
+            if version == viewVersion && name != Data("View".utf8) { throw CodingError.malformed }
             guard previous.map({ $0.lexicographicallyPrecedes(name) }) ?? true else {
                 throw CodingError.malformed
             }

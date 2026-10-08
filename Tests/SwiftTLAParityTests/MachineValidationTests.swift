@@ -198,7 +198,8 @@ struct MachineValidationTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let output = directory.appendingPathComponent("native.bin")
         let summary = try MachineValidationEvidence.write(
-            scenario: scenario, caseID: "counter-0", maximumStates: 100,
+            scenario: scenario, initialMachines: scenario.initialMachines(),
+            caseID: "counter-0", maximumStates: 100,
             stopOnViolation: false, to: output)
         let evidence = try Data(contentsOf: output)
         let profileURL = output.deletingPathExtension().appendingPathExtension("profile.json")
@@ -279,6 +280,7 @@ struct MachineValidationTests {
             selectedSymmetry: scenario.selectedSymmetry,
             selectedFairnessProfile: scenario.selectedFairnessProfile,
             selectedFairnessProfileName: scenario.selectedFairnessProfileName,
+            selectedView: scenario.selectedView,
             expectations: expectations, deadlockExpectation: scenario.deadlockExpectation)
         let changedReport = try NativeValidationRunner.run(
             scenario: changed, caseID: "constant-state-claims-0", maximumStates: 10,

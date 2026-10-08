@@ -456,7 +456,8 @@ struct CompiledLowerer {
                   scenario.behaviorSelections.count <= 1,
                   scenario.fairnessProfileSelections.count <= 1,
                   scenario.checkingModeSelections.count <= 1,
-                  scenario.symmetrySelections.count <= 1 else {
+                  scenario.symmetrySelections.count <= 1,
+                  scenario.viewSelections.count <= 1 else {
                 throw invalid(scenario.name, "duplicate check selection")
             }
             if let mode = scenario.checkingModeSelections.first,
@@ -563,7 +564,10 @@ struct CompiledLowerer {
                 deadlockExpectation: scenario.deadlockExpectations.first, checks: checks, checkDeadlock: checkDeadlock,
                 behavior: scenario.behaviorSelections.first ?? .specification,
                 checkingMode: scenario.checkingModeSelections.first ?? .exhaustive,
-                symmetry: selectedSymmetry, fairnessProfileIndex: fairnessProfileIndex))
+                symmetry: selectedSymmetry, fairnessProfileIndex: fairnessProfileIndex,
+                view: try scenario.viewSelections.first.map {
+                    try lower($0, at: "validation.\(scenario.name).view", scope: rootScope)
+                }))
         }
         return scenarios
     }

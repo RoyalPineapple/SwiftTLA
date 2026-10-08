@@ -78,7 +78,8 @@ package enum NativeValidationRunner {
         } : nil
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         let batch = try MachineValidationEvidence.write(
-            scenario: scenario, caseID: caseID, maximumStates: maximumStates, stopOnViolation: decisive,
+            scenario: scenario, initialMachines: initial, caseID: caseID,
+            maximumStates: maximumStates, stopOnViolation: decisive,
             stopOnReachability: decisive,
             checking: .init(properties: safety, checkDeadlock: scenario.checking.checkDeadlock),
             to: directory.appendingPathComponent("machine.bin.gz"), observe: observe)

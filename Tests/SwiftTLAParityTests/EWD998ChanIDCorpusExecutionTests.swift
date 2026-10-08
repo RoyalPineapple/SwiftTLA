@@ -3,6 +3,25 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct EWD998ChanIDCorpusExecutionTests {
+    @Test("published identifier-node configuration selects the clock-free view and all checks")
+    func publishedViewConfiguration() throws {
+        let scenario = try #require(EWD998ChanIDModel.validationScenarios().first)
+        let rendered = try scenario.render()
+        let cfg = rendered.tlaBundle.cfg
+        let module = rendered.tlaBundle.root.tla
+
+        #expect(scenario.name == "EWD998ChanID")
+        #expect(scenario.usesView)
+        #expect(cfg.contains("VIEW __SwiftTLAView"))
+        #expect(cfg.contains("CHECK_DEADLOCK FALSE"))
+        #expect(cfg.contains("EWD998Safe"))
+        #expect(cfg.contains("Max3TokenRounds"))
+        #expect(cfg.contains("EWD998ChanSpec"))
+        #expect(cfg.contains("EWD998Live"))
+        #expect(module.contains("__SwiftTLAView"))
+        #expect(!module.contains("__SwiftTLAView == clock"))
+    }
+
     @Test("identifier-node refinement renders for three and seven-node configurations")
     func channelRefinementMapping() throws {
         let rendered = try EWD998ChanIDModel.render(configuration: .init(Node: [.n1, .n2, .n3]))

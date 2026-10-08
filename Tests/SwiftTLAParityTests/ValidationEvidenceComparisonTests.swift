@@ -10,6 +10,27 @@ struct ValidationEvidenceComparisonTests {
         RenderedAction(sourceName: "Other", arguments: [], renderedName: "Other")
     ]
 
+    @Test("view graphs compare exact identity keys while retaining distinct full representatives")
+    func viewGraphRepresentatives() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let first = root.appendingPathComponent("first.bin.gz")
+        let second = root.appendingPathComponent("second.bin.gz")
+        let missing = root.appendingPathComponent("missing.bin.gz")
+        try writeGzip(tlcGraph(edgeCount: 1, viewRepresentativeOffset: 0), to: first)
+        try writeGzip(tlcGraph(edgeCount: 1, reverseStates: true,
+            viewRepresentativeOffset: 10), to: second)
+        try writeGzip(tlcGraph(edgeCount: 1, viewRepresentativeOffset: 0,
+            omitViewRepresentative: true), to: missing)
+        #expect(try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+            generated: first, reference: second, actions: [actions[0]], in: root) == nil)
+        #expect(throws: ValidationEvidenceComparisonError.invalidEvidence("missing view representative")) {
+            try ValidationEvidenceComparison.compareTLCGraphs(caseID: "fixture",
+                generated: missing, reference: second, actions: [actions[0]], in: root)
+        }
+    }
+
     @Test("binary producers compare the complete labeled graph")
     func completeGraphMatches() throws {
         let root = try fixture()
@@ -621,7 +642,8 @@ struct ValidationEvidenceComparisonTests {
 
     private func tlcGraph(edgeCount: Int, source: UInt64 = 101, target: UInt64 = 202,
         actionName: String = "Next", actionLocation: String = "", reverseEdge: Bool = false,
-        stateCount: Int = 2, lastEdgeTarget: Int? = nil, reverseStates: Bool = false) -> Data {
+        stateCount: Int = 2, lastEdgeTarget: Int? = nil, reverseStates: Bool = false,
+        viewRepresentativeOffset: Int? = nil, omitViewRepresentative: Bool = false) -> Data {
         var body = Data("STLAGRF2".utf8)
         body.append(1)
         append("fixture", to: &body)
@@ -632,18 +654,32 @@ struct ValidationEvidenceComparisonTests {
             body.append(2)
             append(fingerprint, to: &body)
             body.append(initial ? 1 : 0)
-            let key = tlcKey(value)
+            let key = viewRepresentativeOffset == nil ? tlcKey(value) : tlcViewKey(value)
             append(UInt32(key.count), to: &body)
             body.append(key)
+            if let viewRepresentativeOffset, !omitViewRepresentative {
+                body.append(9)
+                append(fingerprint, to: &body)
+                let representative = tlcKey(value + viewRepresentativeOffset)
+                append(UInt32(representative.count), to: &body)
+                body.append(representative)
+            }
         }
         if stateCount > 2 {
             for id in 2..<stateCount {
                 body.append(2)
                 append(UInt64(1_000 + id), to: &body)
                 body.append(0)
-                let key = tlcKey(id)
+                let key = viewRepresentativeOffset == nil ? tlcKey(id) : tlcViewKey(id)
                 append(UInt32(key.count), to: &body)
                 body.append(key)
+                if let viewRepresentativeOffset, !omitViewRepresentative {
+                    body.append(9)
+                    append(UInt64(1_000 + id), to: &body)
+                    let representative = tlcKey(id + viewRepresentativeOffset)
+                    append(UInt32(representative.count), to: &body)
+                    body.append(representative)
+                }
             }
         }
         body.append(1)
@@ -682,6 +718,16 @@ struct ValidationEvidenceComparisonTests {
         var key = Data("STLASV01".utf8)
         append(UInt32(1), to: &key)
         append("x", to: &key)
+        key.append(1)
+        append(UInt32(8), to: &key)
+        append(UInt64(bitPattern: Int64(value)), to: &key)
+        return key
+    }
+
+    private func tlcViewKey(_ value: Int) -> Data {
+        var key = Data("STLAVW01".utf8)
+        append(UInt32(1), to: &key)
+        append("View", to: &key)
         key.append(1)
         append(UInt32(8), to: &key)
         append(UInt64(bitPattern: Int64(value)), to: &key)

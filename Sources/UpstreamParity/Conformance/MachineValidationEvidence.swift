@@ -35,7 +35,8 @@ private struct MachineValidationProfile: Encodable {
 /// Append-only evidence from the generated Swift machine. TLC is never read by this checker.
 package enum MachineValidationEvidence {
     package static func write<Scenario: ModelValidationScenario>(
-        scenario: Scenario, caseID: String, maximumStates: Int, stopOnViolation: Bool,
+        scenario: Scenario, initialMachines: [Scenario.Machine], caseID: String,
+        maximumStates: Int, stopOnViolation: Bool,
         stopOnReachability: Bool = false,
         checking: ModelChecks<Scenario.Property>? = nil, to output: URL,
         observe: ((MachineValidationEvent<Scenario.Machine>) throws -> Void)? = nil
@@ -52,8 +53,7 @@ package enum MachineValidationEvidence {
               !checking.checkDeadlock || scenario.checking.checkDeadlock else {
             throw MachineValidationEvidenceError.invalidPropertyName
         }
-        let initial = try scenario.initialMachines()
-        guard let machine = initial.first else { throw ExplorationError.noInitialStates }
+        guard let machine = initialMachines.first else { throw ExplorationError.noInitialStates }
         var writer = try BinaryGraphEvidenceWriter(to: output, caseID: caseID)
         defer { writer.close() }
         var actionIDs: [Scenario.Machine.Action: UInt32] = [:]
@@ -67,6 +67,7 @@ package enum MachineValidationEvidence {
         var stateWriteNanoseconds: UInt64 = 0
         var edgeWriteNanoseconds: UInt64 = 0
         var stateKeyEncoder = CanonicalBinaryState.Encoder()
+        var representativeEncoder = CanonicalBinaryState.Encoder()
 
         func actionID(_ action: Scenario.Machine.Action) throws -> UInt32 {
             if let previousAction, previousAction.action == action { return previousAction.id }
@@ -84,11 +85,18 @@ package enum MachineValidationEvidence {
         }
 
         func encodeStateKey(_ snapshot: Scenario.Machine.Snapshot) throws {
-            try stateKeyEncoder.encode(machine.formalProjection(of: snapshot))
+            try stateKeyEncoder.encode(scenario.formalIdentityProjection(of: snapshot, using: machine),
+                viewed: scenario.usesView)
         }
 
-        let result = try MachineValidator.run(
-            initialMachines: initial, maximumStates: maximumStates,
+        func representative(_ snapshot: Scenario.Machine.Snapshot) throws -> Data? {
+            guard scenario.usesView else { return nil }
+            try representativeEncoder.encode(machine.formalProjection(of: snapshot))
+            return representativeEncoder.bytes
+        }
+
+        let result = try scenario.runValidation(initialMachines: initialMachines,
+            maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
             stopOnReachability: stopOnReachability
         ) { event in
@@ -98,18 +106,20 @@ package enum MachineValidationEvidence {
                 if stateEvents % 256 == 1 {
                     sampledStates += 1
                     let projectionStartedAt = DispatchTime.now().uptimeNanoseconds
-                    let projection = try machine.formalProjection(of: snapshot)
+                    let projection = try scenario.formalIdentityProjection(of: snapshot, using: machine)
                     let encodingStartedAt = DispatchTime.now().uptimeNanoseconds
-                    try stateKeyEncoder.encode(projection)
+                    try stateKeyEncoder.encode(projection, viewed: scenario.usesView)
                     let writeStartedAt = DispatchTime.now().uptimeNanoseconds
-                    try writer.state(id: UInt64(id), key: stateKeyEncoder.bytes, initial: isInitial)
+                    try writer.state(id: UInt64(id), key: stateKeyEncoder.bytes, initial: isInitial,
+                        representative: representative(snapshot))
                     let finishedAt = DispatchTime.now().uptimeNanoseconds
                     typedProjectionNanoseconds += encodingStartedAt - projectionStartedAt
                     canonicalEncodingNanoseconds += writeStartedAt - encodingStartedAt
                     stateWriteNanoseconds += finishedAt - writeStartedAt
                 } else {
                     try encodeStateKey(snapshot)
-                    try writer.state(id: UInt64(id), key: stateKeyEncoder.bytes, initial: isInitial)
+                    try writer.state(id: UInt64(id), key: stateKeyEncoder.bytes, initial: isInitial,
+                        representative: representative(snapshot))
                 }
             case .edge(let source, let action, let target):
                 let action = try actionID(action)
@@ -129,7 +139,8 @@ package enum MachineValidationEvidence {
                 let action = try action.map(actionID)
                 try encodeStateKey(snapshot)
                 try writer.invariantFailure(property: name, key: stateKeyEncoder.bytes,
-                    predecessor: predecessor.map(UInt64.init), action: action)
+                    predecessor: predecessor.map(UInt64.init), action: action,
+                    representative: representative(snapshot))
             case .deadlock(let state):
                 try writer.deadlock(state: UInt64(state))
             case .reachability(let property, let snapshot, let predecessor, let action):
@@ -139,7 +150,8 @@ package enum MachineValidationEvidence {
                 let action = try action.map(actionID)
                 try encodeStateKey(snapshot)
                 try writer.reached(property: name, key: stateKeyEncoder.bytes,
-                    predecessor: predecessor.map(UInt64.init), action: action)
+                    predecessor: predecessor.map(UInt64.init), action: action,
+                    representative: representative(snapshot))
             }
             try observe?(event)
         }

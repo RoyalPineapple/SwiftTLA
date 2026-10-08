@@ -5,7 +5,7 @@ extension ParserSession {
     func validationRoot(_ call: FunctionCallExprSyntax) -> FunctionCallExprSyntax? {
         var root = call
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
-              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "simulating", "behavior", "usingSymmetry", "usingFairness"].contains(member.declName.baseName.sourceIdentifierName),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "simulating", "behavior", "usingSymmetry", "usingFairness", "viewing"].contains(member.declName.baseName.sourceIdentifierName),
               let base = member.base?.as(FunctionCallExprSyntax.self) {
             root = base
         }
@@ -17,7 +17,7 @@ extension ParserSession {
         var root = call
         var overrides: [FunctionCallExprSyntax] = []
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
-              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "simulating", "behavior", "usingSymmetry", "usingFairness"].contains(member.declName.baseName.sourceIdentifierName),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "simulating", "behavior", "usingSymmetry", "usingFairness", "viewing"].contains(member.declName.baseName.sourceIdentifierName),
               let base = member.base?.as(FunctionCallExprSyntax.self) {
             overrides.append(root)
             root = base
@@ -49,6 +49,15 @@ extension ParserSession {
             var scenario = ValidationDeclaration(name: name, displayLabel: displayLabel, bindings: bindings)
             for override in overrides.reversed() {
                 if let member = override.calledExpression.as(MemberAccessExprSyntax.self) {
+                    if member.declName.baseName.sourceIdentifierName == "viewing" {
+                        guard override.arguments.count == 1,
+                              let argument = override.arguments.first,
+                              let value = decodeTypedFacadeValue(argument.expression, scope: sourceScope) else {
+                            throw SourceParseDiagnostic(message: "View selection requires a typed state expression.", source: override)
+                        }
+                        scenario.viewSelections.append(value)
+                        continue
+                    }
                     if member.declName.baseName.sourceIdentifierName == "behavior" {
                         guard override.arguments.count == 1,
                               let value = override.arguments.first?.expression.as(MemberAccessExprSyntax.self),

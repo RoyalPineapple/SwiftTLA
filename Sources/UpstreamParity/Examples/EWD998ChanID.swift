@@ -1,7 +1,6 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-// The pinned VIEW configuration remains to be added before parity registration.
 // Upstream: specifications/ewd998/EWD998ChanID.tla and EWD998ChanID.cfg.
 @TLAModel
 package struct EWD998ChanIDModel: Sendable {
@@ -219,15 +218,18 @@ package struct EWD998ChanIDModel: Sendable {
                 }).count < 3 && counter[node] <= 3
             })
 
-            let abstractInbox = Dictionary<Int, [AbstractMessage]>.mapping(over: IntRange(0, through: N - 1)) { position in
-                SequenceMapping(length: inbox[nat2node[position]].count) { index in
-                    If(inbox[nat2node[position]][index].recordFields.contains("q"),
+            let viewInbox = Dictionary<NodeID, [AbstractMessage]>.mapping(over: Node) { node in
+                SequenceMapping(length: inbox[node].count) { index in
+                    If(inbox[node][index].recordFields.contains("q"),
                         then: AbstractMessage.first(AbstractTokenMessage.expression(
                             type: TokenKind.token,
-                            q: inbox[nat2node[position]][index].assuming(TokenMessage.self).q,
-                            color: inbox[nat2node[position]][index].assuming(TokenMessage.self).color)),
+                            q: inbox[node][index].assuming(TokenMessage.self).q,
+                            color: inbox[node][index].assuming(TokenMessage.self).color)),
                         else: AbstractMessage.second(AbstractPayloadMessage.expression(type: PayloadKind.payload)))
                 }
+            }
+            let abstractInbox = Dictionary<Int, [AbstractMessage]>.mapping(over: IntRange(0, through: N - 1)) { position in
+                viewInbox[nat2node[position]]
             }
             let abstract = Instance(of: EWD998ChanModel.self) { Bind(\.N, to: N) }
             abstract
@@ -244,6 +246,12 @@ package struct EWD998ChanIDModel: Sendable {
                 }, projecting: [Int: EWD998ChanModel.Color].self)
             }
             EWD998ChanSpec
+
+            let EWD998ChanID = Validation { Bind(Node, to: Set<NodeID>([.n1, .n2, .n3, .n4, .n5])) }
+                .viewing(Quintuple.literal(active, color, counter, viewInbox, passes))
+                .checking(only: [EWD998Safe, Max3TokenRounds, EWD998ChanSpec, EWD998Live])
+                .checkingDeadlock(false)
+            EWD998ChanID
         }
     }
 }

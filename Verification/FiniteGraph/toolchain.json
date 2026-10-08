@@ -35,10 +35,10 @@
   "bridge": {
     "class": "org.swifttla.conformance.LosslessStateWriter",
     "sources": {
-      "Tools/TLCGraphBridge/src/org/swifttla/conformance/CanonicalBinaryState.java": "55e8eeac044488c4b7b910e06b130796512c82ac4cc5d06ea579307344250af4",
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/CanonicalBinaryState.java": "d7d4f416e962731aa059d6e4dc7e55294765ca5cc7c0a60e51672c115cb9b190",
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/ConfigurationParser.java": "f5c776ba9d07f3bd4b760b81900a1212e991d86ba43d6e474cfeca4a72f9d388",
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/InstanceActions.java": "1197df262b61e26cdd062bab4f549f66c78dc26df23210a84f95ad18957e9dbc",
-      "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java": "6c97622cebfdedeb840d03e6b0ad8a717d1a8dec1b92f3282e3fe34ca826694f",
+      "Tools/TLCGraphBridge/src/org/swifttla/conformance/LosslessStateWriter.java": "617a922ddfe92fe55dd6ad564a41d7aa5060bbb09eca49b6297cf84464fd1f9c",
       "Tools/TLCGraphBridge/src/org/swifttla/conformance/TLCEvaluationOutput.java": "42ca0b8833868f35de4b29841906cbea41ef976b3559bcace84bb2e4ed98cbd8"
     }
   }

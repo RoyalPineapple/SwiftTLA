@@ -95,6 +95,7 @@ public enum ExplorationError: Error, Equatable, Sendable {
     case unsupportedRefinement(String)
     case undeclaredReachabilityProperty(String)
     case unsupportedValidationProperty(String)
+    case viewRequiresStreamingValidation
     case unsupportedActionSampling
 }
 

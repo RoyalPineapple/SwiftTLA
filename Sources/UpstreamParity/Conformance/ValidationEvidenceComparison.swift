@@ -408,9 +408,17 @@ package enum ValidationEvidenceComparison {
         var reachabilityCount = 0
         var depths: [Int?] = []
         var witness: NativeDecisiveWitness?
+        var pendingRepresentative: UInt64?
+        var pendingPropertyRepresentative = false
         while true {
             let footerOffset = reader.offset
             let tag = try reader.byte()
+            if pendingRepresentative != nil && tag != 9 {
+                throw ValidationEvidenceComparisonError.invalidEvidence("missing view representative")
+            }
+            if pendingPropertyRepresentative && tag != 10 {
+                throw ValidationEvidenceComparisonError.invalidEvidence("missing view property representative")
+            }
             switch tag {
             case 1:
                 let id = try reader.uint32()
@@ -454,6 +462,7 @@ package enum ValidationEvidenceComparison {
                 let key = try reader.bytes(Int(reader.uint32()))
                 do { try CanonicalBinaryState.validate(key) }
                 catch { throw ValidationEvidenceComparisonError.invalidEvidence("binary state key") }
+                pendingRepresentative = CanonicalBinaryState.isView(key) ? identity : nil
                 let digest = CryptoKit.SHA256.hash(data: key)
                 let bucket = digest.withUnsafeBytes { Int($0[0]) & (stateBucketCount - 1) }
                 let sortKey = digest.prefix(8).reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
@@ -523,6 +532,7 @@ package enum ValidationEvidenceComparison {
                 let action = try reader.uint32()
                 do { try CanonicalBinaryState.validate(key) }
                 catch { throw ValidationEvidenceComparisonError.invalidEvidence("native property state") }
+                pendingPropertyRepresentative = CanonicalBinaryState.isView(key)
                 guard !property.isEmpty,
                       predecessor == UInt64.max || predecessor < UInt64(stateCount),
                       action == UInt32.max || UInt64(action) < UInt64(actionIDs.count) else {
@@ -558,6 +568,27 @@ package enum ValidationEvidenceComparison {
                     }
                     witness = NativeDecisiveWitness(kind: "deadlock", property: "", states: depth + 1)
                 }
+            case 9:
+                let identity = try reader.uint64()
+                let representative = try reader.bytes(Int(reader.uint32()))
+                guard pendingRepresentative == identity,
+                      !CanonicalBinaryState.isView(representative) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("view representative identity")
+                }
+                do { try CanonicalBinaryState.validate(representative) }
+                catch { throw ValidationEvidenceComparisonError.invalidEvidence("view representative value") }
+                pendingRepresentative = nil
+            case 10:
+                guard pendingPropertyRepresentative else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("unexpected property representative")
+                }
+                let representative = try reader.bytes(Int(reader.uint32()))
+                guard !CanonicalBinaryState.isView(representative) else {
+                    throw ValidationEvidenceComparisonError.invalidEvidence("view property representative value")
+                }
+                do { try CanonicalBinaryState.validate(representative) }
+                catch { throw ValidationEvidenceComparisonError.invalidEvidence("view property representative value") }
+                pendingPropertyRepresentative = false
             case 255:
                 let counts = try (0..<8).map { _ in try reader.uint64() }
                 let completion = try reader.byte()

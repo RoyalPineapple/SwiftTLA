@@ -85,6 +85,7 @@ struct ScenarioExpectationTests {
             selectedSymmetry: original.selectedSymmetry,
             selectedFairnessProfile: original.selectedFairnessProfile,
             selectedFairnessProfileName: original.selectedFairnessProfileName,
+            selectedView: original.selectedView,
             expectations: [.AllVisited: .violated], deadlockExpectation: original.deadlockExpectation)
         #expect(try Set(original.initialMachines().map(\.snapshot)) == Set(changed.initialMachines().map(\.snapshot)))
         let originalRun = try NativeScenarioRun(original, maximumStates: 10)

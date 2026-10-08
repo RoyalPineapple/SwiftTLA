@@ -32,7 +32,8 @@ package struct CompiledBehavior: Sendable {
                     expectations: $0.expectations, deadlockExpectation: $0.deadlockExpectation,
                     checks: $0.checks, checkDeadlock: $0.checkDeadlock, behavior: $0.behavior,
                     checkingMode: $0.checkingMode, symmetry: $0.symmetry,
-                    fairnessProfileIndex: $0.fairnessProfileIndex)
+                    fairnessProfileIndex: $0.fairnessProfileIndex,
+                    view: try $0.view.map(transform))
             },
             initializations: initializations.map {
                 (variable: $0.variable, initialization: try $0.initialization.map(transform))
@@ -79,4 +80,5 @@ package struct CompiledValidationScenario: Sendable {
     package let checkingMode: ValidationCheckingMode
     package let symmetry: SymmetrySet?
     package let fairnessProfileIndex: Int?
+    package let view: CompiledExpression?
 }

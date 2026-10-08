@@ -15,6 +15,7 @@ struct GeneratedTLCOracleTests {
             selectedSymmetry: original.selectedSymmetry,
             selectedFairnessProfile: original.selectedFairnessProfile,
             selectedFairnessProfileName: original.selectedFairnessProfileName,
+            selectedView: original.selectedView,
             expectations: expectations, deadlockExpectation: original.deadlockExpectation)
         let pin = try testReferencePin()
         let originalKey = try GeneratedTLCOracle.cacheKey(
@@ -33,6 +34,7 @@ struct GeneratedTLCOracleTests {
             selectedSymmetry: decisive.selectedSymmetry,
             selectedFairnessProfile: decisive.selectedFairnessProfile,
             selectedFairnessProfileName: decisive.selectedFairnessProfileName,
+            selectedView: decisive.selectedView,
             expectations: decisive.expectations, deadlockExpectation: decisive.deadlockExpectation)
         let pin = try testReferencePin()
         let decisiveBundle = try decisive.render().tlaBundle
@@ -58,6 +60,7 @@ struct GeneratedTLCOracleTests {
             behavior: configured.behavior, selectedSymmetry: configured.selectedSymmetry,
             selectedFairnessProfile: configured.selectedFairnessProfile,
             selectedFairnessProfileName: configured.selectedFairnessProfileName,
+            selectedView: configured.selectedView,
             expectations: configured.expectations, deadlockExpectation: configured.deadlockExpectation)
         let deeper = EWD840AnimationModel.ValidationScenario(
             name: configured.name, displayName: configured.displayName,
@@ -66,6 +69,7 @@ struct GeneratedTLCOracleTests {
             behavior: configured.behavior, selectedSymmetry: configured.selectedSymmetry,
             selectedFairnessProfile: configured.selectedFairnessProfile,
             selectedFairnessProfileName: configured.selectedFairnessProfileName,
+            selectedView: configured.selectedView,
             expectations: configured.expectations, deadlockExpectation: configured.deadlockExpectation)
         #expect(base != (try GeneratedTLCOracle.cacheKey(
             scenario: moreTraces, id: "ewd840-anim-0", maximumStates: 1_000_000, pin: pin)))

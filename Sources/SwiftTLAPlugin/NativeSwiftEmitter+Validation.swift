@@ -33,7 +33,26 @@ extension NativeSwiftEmitter {
         let identifiers = properties.map { propertyCases[$0.id]! }
         let hasConfiguration = !program.layout.parameters.isEmpty
         var scenarios: [String] = []
-        for scenario in program.behavior.validationScenarios {
+        var viewRuns: [String] = []
+        var viewProjections: [String] = []
+        for (index, scenario) in program.behavior.validationScenarios.enumerated() {
+            if let view = scenario.view {
+                let identity = try expression(view, state: "machine.snapshot.")
+                let projected = try expression(view, state: "snapshot.")
+                viewRuns.append("""
+                case \(index):
+                    return try MachineValidator.run(initialMachines: initialMachines, maximumStates: maximumStates,
+                        checking: checking, stopOnViolation: stopOnViolation,
+                        stopOnReachability: stopOnReachability,
+                        identity: { machine in \(identity) }, emit: emit)
+                """)
+                viewProjections.append("""
+                case \(index):
+                    return try TLAStateProjection(validating: [
+                        .init(token: TLAStateProjection.Token(validating: "View")!,
+                              value: \(try formalValue(projected, type: view.resultType)))])
+                """)
+            }
             let bindings = try program.layout.parameters.map { parameter in
                 guard let value = scenario.bindings[parameter.binder] else {
                     throw unsupported("missing scenario binding: \(parameter.reference.name)")
@@ -66,6 +85,7 @@ extension NativeSwiftEmitter {
                 selectedSymmetry: \(symmetry),
                 selectedFairnessProfile: \(scenario.fairnessProfileIndex.map(String.init) ?? "nil"),
                 selectedFairnessProfileName: \(profileName),
+                selectedView: \(scenario.view == nil ? "nil" : String(index)),
                 expectations: [\(selected.isEmpty ? ":" : expectations)],
                 deadlockExpectation: \(deadlock))
             """)
@@ -84,8 +104,10 @@ extension NativeSwiftEmitter {
             let selectedSymmetry: String?
             let selectedFairnessProfile: Int?
             let selectedFairnessProfileName: String?
+            let selectedView: Int?
             public let expectations: [Property: ValidationExpectation]
             public let deadlockExpectation: ValidationExpectation?
+            public var usesView: Bool { selectedView != nil }
 
             public func initialMachines() throws -> [\(model.typeName)] {
                 try \(model.typeName).initialMachines(\(arguments))
@@ -102,10 +124,31 @@ extension NativeSwiftEmitter {
                 default: throw ExplorationError.configurationMismatch
                 }
             }
+            public func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
+                stopOnViolation: Bool, stopOnReachability: Bool,
+                emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property> {
+                switch selectedView {
+                \(viewRuns.joined(separator: "\n"))
+                case nil:
+                    return try MachineValidator.run(initialMachines: initialMachines, maximumStates: maximumStates,
+                        checking: checking, stopOnViolation: stopOnViolation,
+                        stopOnReachability: stopOnReachability, emit: emit)
+                default: throw ExplorationError.configurationMismatch
+                }
+            }
+            public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine) throws -> TLAStateProjection {
+                switch selectedView {
+                \(viewProjections.joined(separator: "\n"))
+                case nil:
+                    return try machine.formalProjection(of: snapshot)
+                default: throw ExplorationError.configurationMismatch
+                }
+            }
             public func render() throws -> RenderedSpecification {
                 try \(model.typeName).render(\(arguments)).selectingChecks(checking,
                     formalPropertyNames: Machine.formalPropertyNames, behavior: behavior,
-                    symmetry: selectedSymmetry, fairnessProfile: selectedFairnessProfileName)
+                    symmetry: selectedSymmetry, fairnessProfile: selectedFairnessProfileName,
+                    view: selectedView.map { "__SwiftTLAView\\($0)" })
             }
         }
         public static func validationScenarios() throws -> [ValidationScenario] {
