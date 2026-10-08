@@ -18,6 +18,7 @@ default:
       compare run --case <id-or-all> --native <directory> --oracle <directory> --output <directory>
       upstream list | run --case <id-or-all> --output <directory> | cache-key --case <id>
       upstream trace-reference --output <directory>
+      upstream shiviz-reference --output <directory>
       temporal-symmetry run --output <directory>
     """, stderr)
     exit(1)

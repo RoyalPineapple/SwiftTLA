@@ -29,3 +29,9 @@ chosen `TraceLog`; the diagnostic maps its complete records back to the 654
 source lines and checks that ordering against the vector clocks. This capture
 has not run on a host. It does not compare a generated Swift machine, so it
 does not complete trace parity.
+
+`EWD998ChanID_shiviz.tla` and `.cfg` are also byte-for-byte pinned upstream
+inputs. A separate reference-only job records TLC's terminal outcome under
+the published configuration before a Swift port claims semantics for its
+`MCInit`, which omits the base model's `passes` variable. That job is not
+graph parity or a replacement for the documented generator-mode campaign.

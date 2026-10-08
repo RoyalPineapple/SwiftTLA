@@ -6116,7 +6116,7 @@
           "configuration": "specifications/ewd998/EWD998ChanID_shiviz.cfg",
           "required": true,
           "status": "missing",
-          "gap": "The pinned MCInit override does not assign the declared passes variable. Establish the actual pinned TLC outcome before translating it; do not invent passes = 0. The seven-node alternate initialization, TLCGet(level) < 666 outcome, ALIAS trace projection, and source-documented generator mode remain unimplemented. The five-node base scenario cannot stand in for this configuration.",
+          "gap": "The pinned MCInit override does not assign the declared passes variable. An exact-input, reference-only hosted outcome probe is prepared but has not run; establish the actual pinned TLC outcome before translating it, and do not invent passes = 0. The seven-node alternate initialization, TLCGet(level) < 666 outcome, ALIAS trace projection, and source-documented generator mode remain unimplemented. The five-node base scenario cannot stand in for this configuration.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "unknown",
           "implementations": [],

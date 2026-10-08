@@ -5,9 +5,11 @@ on:
     paths:
       - .github/workflows/ewd998-trace-reference.yml
       - Sources/UpstreamParity/Conformance/EWD998ChanTraceReference.swift
+      - Sources/UpstreamParity/Conformance/EWD998ChanIDShivizReference.swift
       - Sources/TLCValidate/UpstreamCommand.swift
       - Verification/FiniteGraph/community-modules.json
       - Verification/FiniteGraph/fixtures/ewd998/EWD998ChanTrace.*
+      - Verification/FiniteGraph/fixtures/ewd998/EWD998ChanID_shiviz.*
       - scripts/setup-finite-graph-tools.sh
 
 permissions:
@@ -69,6 +71,55 @@ jobs:
           path: |
             .build/validation-evidence/trace-source-sha.txt
             .build/validation-evidence/ewd998-trace-reference
+          compression-level: 0
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  shiviz:
+    name: Pinned ShiViz outcome probe (diagnostic)
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Validate immutable source revision
+        run: '[[ "$SWIFT_TLA_SHA" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          submodules: false
+      - name: Verify and retain exact source revision
+        run: |
+          test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          mkdir -p .build/validation-evidence
+          git rev-parse HEAD > .build/validation-evidence/shiviz-source-sha.txt
+      - name: Build pinned source probe
+        run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .build/finite-graph-tools/downloads
+            .build/finite-graph-tools/java-arm64
+            .build/finite-graph-tools/java-x86_64
+          key: tlc-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Verification/FiniteGraph/toolchain.json') }}
+      - name: Prepare pinned TLC
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+        run: ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT" --skip-inputs
+      - name: Probe unmodified ShiViz configuration
+        env:
+          SWIFTTLA_SHIVIZ_TIMEOUT_SECONDS: '120'
+        run: |
+          .build/release/tlc-validate upstream shiviz-reference \
+            --output .build/validation-evidence/ewd998-shiviz-reference
+          jq -e '.schema == "swifttla.ewd998-shiviz-reference" and .result == "terminal" and .caseID == "ewd998-chan-id-shiviz"' \
+            .build/validation-evidence/ewd998-shiviz-reference/report.json
+          test -s .build/validation-evidence/ewd998-shiviz-reference/tlc/tlc-process.json
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ewd998-shiviz-reference-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
+          path: |
+            .build/validation-evidence/shiviz-source-sha.txt
+            .build/validation-evidence/ewd998-shiviz-reference
           compression-level: 0
           include-hidden-files: true
           if-no-files-found: warn
