@@ -76,6 +76,8 @@ public struct MachineValidationSummary<Property: Hashable & Sendable>: Sendable 
     public let initialStates: Int
     public let states: Int
     public let edges: Int
+    /// Highest one-based BFS level among discovered states.
+    public let maximumLevel: Int
     public let violatedInvariants: Set<Property>
     public let reachedProperties: Set<Property>
     public let deadlockFound: Bool
@@ -173,6 +175,7 @@ public enum MachineValidator {
         var head = 0
         var initialCount = 0
         var edgeCount = 0
+        var maximumLevel = 0
         var violated: Set<Machine.Property> = []
         var reached: Set<Machine.Property> = []
         var deadlockFound = false
@@ -191,7 +194,7 @@ public enum MachineValidator {
         func summary(_ completion: MachineValidationSummary<Machine.Property>.Completion)
             -> MachineValidationSummary<Machine.Property> {
             .init(completion: completion, initialStates: initialCount, states: seen.count,
-                  edges: edgeCount, violatedInvariants: violated,
+                  edges: edgeCount, maximumLevel: maximumLevel, violatedInvariants: violated,
                   reachedProperties: reached, deadlockFound: deadlockFound,
                   timing: .init(
                     elapsedNanoseconds: DispatchTime.now().uptimeNanoseconds - startedAt,
@@ -269,12 +272,13 @@ public enum MachineValidator {
         }
 
         func insertDiscovered(_ machine: Machine, snapshot: Machine.Snapshot, identity value: Identity, hash: Int,
-            initial: Bool, predecessor: Int?, action: Machine.Action?) throws -> Int {
+            level: Int, initial: Bool, predecessor: Int?, action: Machine.Action?) throws -> Int {
             guard seen.count < maximumStates else { throw ExplorationError.stateLimitExceeded(maximumStates) }
             let insertStarted = DispatchTime.now().uptimeNanoseconds
             let id = seen.insert(value, hash: hash)
             seenInsertNanoseconds += DispatchTime.now().uptimeNanoseconds - insertStarted
             pending.append((id, machine))
+            maximumLevel = max(maximumLevel, level)
             if initial { initialCount += 1 }
             try emitEvent(.state(id: id, snapshot: snapshot, initial: initial,
                             predecessor: predecessor, action: action))
@@ -297,7 +301,7 @@ public enum MachineValidator {
                 }
                 if admitted, let value, let (hash, existing) = lookup, existing == nil {
                     _ = try insertDiscovered(machine, snapshot: snapshot, identity: value, hash: hash,
-                        initial: true, predecessor: nil, action: nil)
+                        level: 1, initial: true, predecessor: nil, action: nil)
                 }
                 continue
             }
@@ -311,7 +315,7 @@ public enum MachineValidator {
             let (hash, existing) = stateID(value)
             if existing == nil {
                 _ = try insertDiscovered(machine, snapshot: snapshot, identity: value, hash: hash,
-                    initial: true, predecessor: nil, action: nil)
+                    level: 1, initial: true, predecessor: nil, action: nil)
             }
         }
         guard initialCount > 0 else { throw ExplorationError.noInitialStates }
@@ -381,7 +385,7 @@ public enum MachineValidator {
                         if try !constraintHolds(successor) { return true }
                     }
                     let target = try insertDiscovered(successor, snapshot: snapshot, identity: value, hash: hash,
-                        initial: false, predecessor: source, action: action)
+                        level: successorLevel, initial: false, predecessor: source, action: action)
                     edgeCount += 1
                     try emitEvent(.edge(source: source, action: action, target: target))
                     return true

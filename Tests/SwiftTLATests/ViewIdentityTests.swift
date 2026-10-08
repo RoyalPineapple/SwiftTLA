@@ -52,6 +52,7 @@ struct ViewIdentityTests {
         #expect(states.map { "\($0.0):\($0.1)" } == ["0:0", "1:1", "0:2"])
         #expect(result.states == 3)
         #expect(result.edges == 2)
+        #expect(result.maximumLevel == 3)
         guard case .exhausted = result.completion else {
             Issue.record("The level-sensitive view stopped before completing exploration")
             return
