@@ -1486,6 +1486,11 @@ Nested records and model parameters remain typed expressions until native or for
 Native execution constructs the original Swift record, not a parallel schema.
 Literal `RecordType(...)` remains ordinary Swift construction.
 
+`OneOf<First, Second>` preserves either record shape without an added tag.
+If the alternatives have different fields, `recordFields` gives the fields of the current value.
+A guard can inspect those fields before an `assuming(...)` view reads a field from one alternative.
+Generated Swift and rendered TLA+ use the same complete record value.
+
 Formal set expressions support `mapping`, `filtering`, and `flatMapping`.
 The `flatMapping` closure returns a typed set expression for each member.
 The result is the union of those sets, with no duplicate members.

@@ -1306,6 +1306,8 @@ package struct CompiledTypeChecker: Sendable {
         case .dictionary(let key, _): result = .set(key)
         case .array, .tuple: result = .set(.int)
         case .record, .nominalRecord: result = .set(.string)
+        case .oneOf(let first, let second) where first.recordFields != nil && second.recordFields != nil:
+            result = .set(.string)
         case .unknown: result = .set(.unknown)
         default: throw CompiledValueType.diagnostic("domain", "unsupported domain shape")
         }

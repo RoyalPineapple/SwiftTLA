@@ -1200,6 +1200,13 @@ struct NativeSwiftEmitter {
             case .record(let fields), .nominalRecord(_, let fields):
                 let domain = "Set<String>([\(fields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
                 return "(try { () throws -> Set<String> in _ = \(try emit(0)); return \(domain) }())"
+            case .oneOf(let first, let second):
+                guard let firstFields = first.recordFields, let secondFields = second.recordFields else {
+                    throw unsupported("DOMAIN")
+                }
+                let firstDomain = "Set<String>([\(firstFields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
+                let secondDomain = "Set<String>([\(secondFields.map { String(reflecting: $0.name) }.joined(separator: ", "))])"
+                return "(try { () throws -> Set<String> in switch \(try emit(0)) { case .first(_): return \(firstDomain); case .second(_): return \(secondDomain) } }())"
             default: throw unsupported("DOMAIN")
             }
         case .functionLiteral(let binding):

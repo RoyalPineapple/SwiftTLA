@@ -1214,6 +1214,7 @@ final class ParserSession {
             case "keys":
                 guard case .dictionary = typedFacadeValueType(baseSyntax, scope: scope) else { return nil }
                 return .domain(base)
+            case "recordFields": return .domain(base)
             case "count":
                 switch typedFacadeValueType(baseSyntax, scope: scope) {
                 case .array: return .tupleLength(base)
