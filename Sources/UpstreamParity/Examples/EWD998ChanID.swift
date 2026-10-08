@@ -1,7 +1,7 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-// The pinned VIEW configuration and refinement remain to be added before registration.
+// The pinned VIEW configuration remains to be added before parity registration.
 // Upstream: specifications/ewd998/EWD998ChanID.tla and EWD998ChanID.cfg.
 @TLAModel
 package struct EWD998ChanIDModel: Sendable {
@@ -48,6 +48,18 @@ package struct EWD998ChanIDModel: Sendable {
     }
 
     package typealias Message = OneOf<TokenMessage, PayloadMessage>
+
+    package struct AbstractTokenMessage: Hashable, Sendable {
+        package let type: TokenKind
+        package let q: Int
+        package let color: Color
+    }
+
+    package struct AbstractPayloadMessage: Hashable, Sendable {
+        package let type: PayloadKind
+    }
+
+    package typealias AbstractMessage = OneOf<AbstractTokenMessage, AbstractPayloadMessage>
 
     private enum Step: String, CaseIterable {
         case InitiateProbe, PassToken, SendMsg, RecvMsg, Deactivate
@@ -206,6 +218,32 @@ package struct EWD998ChanIDModel: Sendable {
                     message.recordFields.contains("src")
                 }).count < 3 && counter[node] <= 3
             })
+
+            let abstractInbox = Dictionary<Int, [AbstractMessage]>.mapping(over: IntRange(0, through: N - 1)) { position in
+                SequenceMapping(length: inbox[nat2node[position]].count) { index in
+                    If(inbox[nat2node[position]][index].recordFields.contains("q"),
+                        then: AbstractMessage.first(AbstractTokenMessage.expression(
+                            type: TokenKind.token,
+                            q: inbox[nat2node[position]][index].assuming(TokenMessage.self).q,
+                            color: inbox[nat2node[position]][index].assuming(TokenMessage.self).color)),
+                        else: AbstractMessage.second(AbstractPayloadMessage.expression(type: PayloadKind.payload)))
+                }
+            }
+            let abstract = Instance(of: EWD998ChanModel.self) { Bind(\.N, to: N) }
+            abstract
+            let EWD998ChanSpec = Refinement(instance: abstract) {
+                Map(\.counter, from: Dictionary<Int, Int>.mapping(over: IntRange(0, through: N - 1)) { position in
+                    counter[nat2node[position]]
+                })
+                Map(\.inbox, from: abstractInbox, projecting: [Int: [EWD998ChanModel.Message]].self)
+                Map(\.active, from: Dictionary<Int, Bool>.mapping(over: IntRange(0, through: N - 1)) { position in
+                    active[nat2node[position]]
+                })
+                Map(\.color, from: Dictionary<Int, Color>.mapping(over: IntRange(0, through: N - 1)) { position in
+                    color[nat2node[position]]
+                }, projecting: [Int: EWD998ChanModel.Color].self)
+            }
+            EWD998ChanSpec
         }
     }
 }

@@ -1967,7 +1967,13 @@ package struct CompiledTypeChecker: Sendable {
                     let context: CompiledValueType
                     if admitsEmptyFunctionContext(no, left) { context = left }
                     else if admitsEmptyFunctionContext(yes, right) { context = right }
-                    else { context = try Self.operandContext(left, right) }
+                    else if expected.unionAlternatives != nil,
+                            inputs.types.canProjectRead(left, to: expected),
+                            inputs.types.canProjectRead(right, to: expected) { context = expected }
+                    else if let common = try? Self.operandContext(left, right) { context = common }
+                    else if left.recordFields != nil && right.recordFields != nil {
+                        context = try CompiledValueType.preservingUnion(left, right, namedDomains: namedDomains)
+                    } else { context = try Self.operandContext(left, right) }
                     let offset: Int = if case .ifThenElse = ancestors.last?.operation { 1 } else { 0 }
                     pending.append(.result(context))
                     // Recheck only branches whose context changed, preserving

@@ -3,6 +3,15 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct EWD998ChanIDCorpusExecutionTests {
+    @Test("identifier nodes refine the channel model through indexed node and message projections")
+    func channelRefinementMapping() throws {
+        let rendered = try EWD998ChanIDModel.render(configuration: .init(Node: [.n1, .n2, .n3]))
+        let module = rendered.tlaBundle.root.tla
+        #expect(module.contains("EWD998ChanSpec =="))
+        #expect(module.contains("inbox <-"))
+        #expect(module.contains("counter <-"))
+    }
+
     @Test("the initial token carries its node clock and passing it advances that clock")
     func initialTokenPass() throws {
         let nodes: Set<EWD998ChanIDModel.NodeID> = [.n1, .n2, .n3]
