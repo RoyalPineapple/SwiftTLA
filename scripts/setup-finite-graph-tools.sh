@@ -155,6 +155,7 @@ with open(sys.argv[1], encoding="utf-8") as source:
 tag = lock.get("tag")
 commit = lock.get("commit")
 jar = lock.get("jar")
+modules = lock.get("modules")
 if lock.get("schema") != "PinnedCommunityModules" or not isinstance(jar, dict) \
         or not isinstance(tag, str) or not re.fullmatch(r"[0-9]{12}", tag) \
         or not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit) \
@@ -162,6 +163,11 @@ if lock.get("schema") != "PinnedCommunityModules" or not isinstance(jar, dict) \
         or jar.get("url") != ("https://github.com/tlaplus/CommunityModules/releases/download/"
                               + tag + "/CommunityModules-deps-" + tag + ".jar"):
     raise SystemExit("invalid pinned CommunityModules release")
+if not isinstance(modules, dict) or set(modules) != {
+        "FiniteSetsExt", "Folds", "Functions", "IOUtils", "SequencesExt", "VectorClocks"} \
+        or any(not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
+               for value in modules.values()):
+    raise SystemExit("invalid pinned CommunityModules source inventory")
 print(jar["url"])
 print(jar["sha256"])
 PY
@@ -254,6 +260,32 @@ if [ "$WITH_COMMUNITY_MODULES" = true ]; then
     COMMUNITY_URL="$(printf '%s\n' "$COMMUNITY_VALUES" | sed -n '1p')"
     COMMUNITY_SHA256="$(printf '%s\n' "$COMMUNITY_VALUES" | sed -n '2p')"
     download_locked "$COMMUNITY_URL" "$COMMUNITY_SHA256" "$TOOL_ROOT/downloads/CommunityModules-deps.jar"
+    python3 - "$TOOL_ROOT/downloads/CommunityModules-deps.jar" "$COMMUNITY_LOCK" "$TOOL_ROOT/community-modules" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+import zipfile
+
+jar, lock_path, output = sys.argv[1:]
+expected = json.loads(Path(lock_path).read_text(encoding="utf-8"))["modules"]
+sources = {}
+with zipfile.ZipFile(jar) as archive:
+    for module, digest in expected.items():
+        name = module + ".tla"
+        if archive.namelist().count(name) != 1:
+            raise SystemExit("CommunityModules JAR requires exactly one " + name)
+        source = archive.read(name)
+        if hashlib.sha256(source).hexdigest() != digest:
+            raise SystemExit("CommunityModules source digest mismatch: " + name)
+        sources[name] = source
+Path(output).mkdir(parents=True, exist_ok=True)
+for name, source in sources.items():
+    destination = Path(output) / name
+    temporary = destination.with_suffix(".tla.partial")
+    temporary.write_bytes(source)
+    temporary.replace(destination)
+PY
 fi
 CACHE_ROOT="$PROJECT_ROOT/Tools/TLCGraphBridge/.tool-cache"
 seed_from_cache "$CACHE_ROOT/OpenJDK17U-jdk_${ARCHITECTURE}_mac_hotspot_17.0.19_10.tar.gz" "$JAVA_SHA256" "$JAVA_ARCHIVE"
