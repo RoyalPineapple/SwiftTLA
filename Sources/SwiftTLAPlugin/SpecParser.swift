@@ -1817,6 +1817,7 @@ final class ParserSession {
         if decodeIntegerDomain(expression) != nil { return .set(.int) }
         if let checking = decodeCheckingExpression(expression, scope: scope) {
             if case .checkingLevel = checking { return .int }
+            if case .checkingDiameter = checking { return .int }
             return .bool
         }
         if decodeStepEnabledness(expression, scope: scope) != nil { return .bool }

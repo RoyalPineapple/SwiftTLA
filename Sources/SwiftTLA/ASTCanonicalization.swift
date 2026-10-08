@@ -414,6 +414,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .parameter(let reference): parts.append("parameter(\(reference.name))")
             case .checkingRegister(let reference): parts.append("checkingRegister(\(reference.name))")
             case .checkingLevel: parts.append("checkingLevel")
+            case .checkingDiameter: parts.append("checkingDiameter")
             case .setCheckingRegister(let reference, let value):
                 schedule([value], environment: environment) { "setCheckingRegister(\(reference.name),\($0[0]))" }
             case .processLocalFamily(let name): parts.append("processLocalFamily(\(environment[name] ?? name))")

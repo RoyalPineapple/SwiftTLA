@@ -5,7 +5,7 @@ extension ParserSession {
     func validationRoot(_ call: FunctionCallExprSyntax) -> FunctionCallExprSyntax? {
         var root = call
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
-              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "simulating", "behavior", "usingSymmetry", "usingFairness", "viewing"].contains(member.declName.baseName.sourceIdentifierName),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "simulating", "behavior", "usingSymmetry", "usingFairness", "viewing", "postcondition"].contains(member.declName.baseName.sourceIdentifierName),
               let base = member.base?.as(FunctionCallExprSyntax.self) {
             root = base
         }
@@ -17,7 +17,7 @@ extension ParserSession {
         var root = call
         var overrides: [FunctionCallExprSyntax] = []
         while let member = root.calledExpression.as(MemberAccessExprSyntax.self),
-              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "simulating", "behavior", "usingSymmetry", "usingFairness", "viewing"].contains(member.declName.baseName.sourceIdentifierName),
+              ["expect", "expectDeadlock", "checking", "checkingDeadlock", "checkingMode", "simulating", "behavior", "usingSymmetry", "usingFairness", "viewing", "postcondition"].contains(member.declName.baseName.sourceIdentifierName),
               let base = member.base?.as(FunctionCallExprSyntax.self) {
             overrides.append(root)
             root = base
@@ -49,6 +49,36 @@ extension ParserSession {
             var scenario = ValidationDeclaration(name: name, displayLabel: displayLabel, bindings: bindings)
             for override in overrides.reversed() {
                 if let member = override.calledExpression.as(MemberAccessExprSyntax.self) {
+                    if member.declName.baseName.sourceIdentifierName == "postcondition" {
+                        let arguments = Array(override.arguments)
+                        guard (1...3).contains(arguments.count), arguments[0].label == nil,
+                              let condition = decodeTypedFacadeValue(arguments[0].expression, scope: sourceScope) else {
+                            throw SourceParseDiagnostic(message: "Postcondition requires a typed Boolean expression.", source: override)
+                        }
+                        var name: String?
+                        var expected: ValidationExpectation = .satisfied
+                        var hasExpectation = false
+                        for argument in arguments.dropFirst() {
+                            switch argument.label?.text {
+                            case "name" where name == nil && !hasExpectation:
+                                guard let literal = argument.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue else {
+                                    throw SourceParseDiagnostic(message: "Postcondition name must be a string literal.", source: argument)
+                                }
+                                name = literal
+                            case "expecting" where !hasExpectation:
+                                guard let selected = argument.expression.as(MemberAccessExprSyntax.self),
+                                      let outcome = ValidationExpectation(rawValue: selected.declName.baseName.sourceIdentifierName) else {
+                                    throw SourceParseDiagnostic(message: "Postcondition expectation must be .satisfied or .violated.", source: argument)
+                                }
+                                expected = outcome
+                                hasExpectation = true
+                            default:
+                                throw SourceParseDiagnostic(message: "Invalid or duplicate postcondition modifier argument.", source: argument)
+                            }
+                        }
+                        scenario.postconditionSelections.append((name, condition, expected))
+                        continue
+                    }
                     if member.declName.baseName.sourceIdentifierName == "viewing" {
                         guard override.arguments.count == 1,
                               let argument = override.arguments.first,

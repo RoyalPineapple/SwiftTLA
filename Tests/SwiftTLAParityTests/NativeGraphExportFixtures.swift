@@ -20,7 +20,13 @@ struct ReachabilityExportModel {
             let levelView = Validation { }.viewing(Pair.literal(value, scope.checkingLevel))
                 .checking(only: [])
                 .checkingDeadlock(false)
+                .postcondition(scope.checkingDiameter == 3, name: "TraceAccepted")
             levelView
+            let rejectedView = Validation { }.viewing(Pair.literal(value, scope.checkingLevel))
+                .checking(only: [])
+                .checkingDeadlock(false)
+                .postcondition(scope.checkingDiameter == 4, name: "TooDeep", expecting: .violated)
+            rejectedView
         }
     }
 }

@@ -443,7 +443,8 @@ public struct RenderedSpecification: Sendable {
     @_documentation(visibility: internal)
     public init(_generatedModule name: String, source: String, compilationIdentity: String,
         declarations: [String], checkDeadlock: Bool, invariants: [String], reachabilityProperties: [String], properties: [String], refinements: [String],
-        symmetry: [String], viewOperators: [String] = [], actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil,
+        symmetry: [String], viewOperators: [String] = [], postconditionOperators: [String] = [],
+        actions: [RenderedAction], _generatedPlusCal: Result<String, CompilationDiagnostic>? = nil,
         _generatedPlusCalProfiles: [String: Result<String, CompilationDiagnostic>] = [:],
         _assumptionsOnly: Bool = false,
         _generatedParameters: [(name: String, value: TLAValue)] = [],
@@ -484,7 +485,8 @@ public struct RenderedSpecification: Sendable {
         let configuration = TLCConfiguration(assumptionsOnly: _assumptionsOnly,
             declarations: declarations, checkDeadlock: checkDeadlock,
             invariants: invariants, reachabilityProperties: reachabilityProperties, properties: properties, refinements: refinements,
-            symmetry: symmetry, viewOperators: viewOperators)
+            symmetry: symmetry, viewOperators: viewOperators,
+            postconditionOperators: postconditionOperators)
         let bundle = TLAModuleBundle(root: .init(name: name, tla: try configuredSource(source),
             cfg: configuration.render(usesSymmetryReduction: false)),
             imports: _generatedImports.map { .init(name: $0.name, tla: $0.source) }, provenance: .compiled(
@@ -571,7 +573,9 @@ public struct RenderedSpecification: Sendable {
             declarations: configuration.declarations, checkDeadlock: configuration.checkDeadlock,
             invariants: configuration.invariants, reachabilityProperties: configuration.reachabilityProperties,
             properties: configuration.properties, refinements: configuration.refinements + [name],
-            symmetry: configuration.symmetry, viewOperators: configuration.viewOperators, view: configuration.view)
+            symmetry: configuration.symmetry, viewOperators: configuration.viewOperators, view: configuration.view,
+            postconditionOperators: configuration.postconditionOperators,
+            postcondition: configuration.postcondition)
         func linked(_ source: TLAModuleBundle) throws -> TLAModuleBundle {
             guard let end = source.root.tla.range(of: "====", options: .backwards),
                   case .compiled(let rootIdentity, let rootOwnership, let rootDependencies) = source.provenance else {
@@ -643,6 +647,7 @@ public struct RenderedSpecification: Sendable {
     public var refinementNames: Set<String> { Set(configuration.refinements) }
     public var checkNames: Set<String> { Set(configuration.invariants + configuration.reachabilityProperties + configuration.properties + configuration.refinements) }
     public var checksDeadlock: Bool { configuration.checkDeadlock }
+    public var postconditionName: String? { configuration.postcondition }
     public var isAssumptionsOnly: Bool { configuration.assumptionsOnly }
     public var behavior: ModelBehavior { configuration.behavior }
 
@@ -677,7 +682,7 @@ public struct RenderedSpecification: Sendable {
     /// Converts model-owned check identities at the formal export boundary.
     public func selectingChecks<Property: Hashable & Sendable>(_ checks: ModelChecks<Property>, formalPropertyNames: [Property: String],
         behavior: ModelBehavior? = nil, symmetry: String? = nil, fairnessProfile: String? = nil,
-        view: String? = nil) throws -> Self {
+        view: String? = nil, postcondition: String? = nil) throws -> Self {
         let names = try Set(checks.properties.map { property in
             guard let name = formalPropertyNames[property] else {
                 throw CompilationDiagnostic(code: .unknownReference, stage: .rendering, path: "check selection",
@@ -705,7 +710,7 @@ public struct RenderedSpecification: Sendable {
         }
         let selected = try configuration.selecting(names, checkDeadlock: checks.checkDeadlock,
                 behavior: behavior, specificationName: profileOperator)
-            .selectingSymmetry(symmetry).selectingView(view)
+            .selectingSymmetry(symmetry).selectingView(view).selectingPostcondition(postcondition)
         func bundle(_ original: TLAModuleBundle, using configuration: TLCConfiguration) -> TLAModuleBundle {
             .init(root: .init(name: original.root.name, tla: original.root.tla,
                 cfg: configuration.render(usesSymmetryReduction: symmetry != nil)), imports: original.imports, provenance: original.provenance)
@@ -736,8 +741,10 @@ public struct RenderedSpecification: Sendable {
     /// Selects declared checks for an independent validation pass without rendering the model again.
     /// Symmetry defaults to disabled so the pass retains the complete, unreduced graph.
     public func tlaBundle(checking checks: Set<String>, checkDeadlock: Bool,
-        symmetryReduction: SymmetryReduction = .disabled, behavior: ModelBehavior? = nil) throws -> TLAModuleBundle {
+        symmetryReduction: SymmetryReduction = .disabled, behavior: ModelBehavior? = nil,
+        postcondition: String? = nil) throws -> TLAModuleBundle {
         let selected = try configuration.selecting(checks, checkDeadlock: checkDeadlock, behavior: behavior)
+            .selectingPostcondition(postcondition)
         let usesSymmetryReduction = try selected.usesSupportedSymmetryReduction(symmetryReduction)
         return TLAModuleBundle(
             root: .init(name: tlaBundle.root.name, tla: tlaBundle.root.tla,
@@ -1585,7 +1592,10 @@ private struct CanonicalSpecificationEncoder {
                     canonicalList(scenario.symmetrySelections.map { reference in
                         String(spec.symmetrySets.firstIndex(where: { $0.reference == reference }) ?? -1)
                     }),
-                    canonicalList(scenario.viewSelections.map(canonicalExpression))])
+                    canonicalList(scenario.viewSelections.map(canonicalExpression)),
+                    canonicalList(scenario.postconditionSelections.map {
+                        node("postcondition", [$0.name ?? "", canonicalExpression($0.condition), $0.expected.rawValue])
+                    })])
             }
             list("validation", scenarios) { $0 }
         }
@@ -1855,9 +1865,14 @@ extension CompiledProgram {
         let views = try behavior.validationScenarios.enumerated().compactMap { index, scenario in
             try scenario.view.map { "__SwiftTLAView\(index) == \(try renderer.state($0))" }
         }
+        let postconditions = try behavior.validationScenarios.compactMap { scenario in
+            try scenario.postcondition.map {
+                "\(scenario.postconditionName!) == \(try renderer.state($0))"
+            }
+        }
         let module = try metadata.authoredPlusCalModule(algorithm: selectedAlgorithm,
             layout: layout, declarations: declarations,
-            prelude: prelude, define: [], postTranslation: declarations.instances + views,
+            prelude: prelude, define: [], postTranslation: declarations.instances + views + postconditions,
             parameterNames: layout.parameters.map { binderNames[$0.binder]! }, requiredModules: requiredStandardModules)
         return try AlgorithmPlusCalRenderer(module: module, formalRenderer: renderer).render()
     }
@@ -2389,8 +2404,13 @@ private extension CompiledModuleMetadata {
             if let view = scenario.view {
                 lines.append("__SwiftTLAView\(index) == \(try renderer.state(view))")
             }
+            if let postcondition = scenario.postcondition {
+                lines.append("\(scenario.postconditionName!) == \(try renderer.state(postcondition))")
+            }
         }
-        if behavior.validationScenarios.contains(where: { $0.view != nil }) { lines.append("") }
+        if behavior.validationScenarios.contains(where: { $0.view != nil || $0.postcondition != nil }) {
+            lines.append("")
+        }
         lines.append(contentsOf: renderedTemporalProperties)
         if !renderedTemporalProperties.isEmpty { lines.append("") }
         if instancesAfterBehavior { lines += instanceDeclarations }
@@ -2429,7 +2449,8 @@ private extension CompiledModuleMetadata {
             symmetry: symmetrySets.map { "Symm\($0.variableName)" },
             viewOperators: behavior.validationScenarios.enumerated().compactMap {
                 $0.element.view == nil ? nil : "__SwiftTLAView\($0.offset)"
-            }
+            },
+            postconditionOperators: behavior.validationScenarios.compactMap(\.postconditionName)
         )
     }
 

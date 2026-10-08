@@ -466,14 +466,21 @@ struct CompiledLowerer {
             throw invalid("declarations", "duplicate property registration")
         }
         var scenarios: [CompiledValidationScenario] = []
-        for scenario in spec.validationScenarios {
+        for (scenarioIndex, scenario) in spec.validationScenarios.enumerated() {
             guard scenario.propertySelections.count <= 1, scenario.deadlockSelections.count <= 1,
                   scenario.behaviorSelections.count <= 1,
                   scenario.fairnessProfileSelections.count <= 1,
                   scenario.checkingModeSelections.count <= 1,
                   scenario.symmetrySelections.count <= 1,
-                  scenario.viewSelections.count <= 1 else {
+                  scenario.viewSelections.count <= 1,
+                  scenario.postconditionSelections.count <= 1 else {
                 throw invalid(scenario.name, "duplicate check selection")
+            }
+            let postconditionName = scenario.postconditionSelections.first?.name
+                ?? "__SwiftTLAPostcondition\(scenarioIndex)"
+            if scenario.postconditionSelections.first != nil,
+               postconditionName.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) == nil {
+                throw invalid(scenario.name, "postcondition name must be a TLA identifier")
             }
             if let mode = scenario.checkingModeSelections.first,
                case .simulation(let traces, let maximumDepth) = mode,
@@ -582,7 +589,10 @@ struct CompiledLowerer {
                 symmetry: selectedSymmetry, fairnessProfileIndex: fairnessProfileIndex,
                 view: try scenario.viewSelections.first.map {
                     try lower($0, at: "validation.\(scenario.name).view", scope: rootScope)
-                }))
+                }, postcondition: try scenario.postconditionSelections.first.map {
+                    try lower($0.condition, at: "validation.\(scenario.name).postcondition", scope: rootScope)
+                }, postconditionName: scenario.postconditionSelections.isEmpty ? nil : postconditionName,
+                postconditionExpectation: scenario.postconditionSelections.first?.expected))
         }
         return scenarios
     }
@@ -1326,6 +1336,9 @@ struct CompiledLowerer {
                 case .checkingLevel:
                     requiredStandardModules.insert(.tlc)
                     lowered.append(.init(expression: .init(operation: .checkingLevel, children: []), operatorReferences: []))
+                case .checkingDiameter:
+                    requiredStandardModules.insert(.tlc)
+                    lowered.append(.init(expression: .init(operation: .checkingDiameter, children: []), operatorReferences: []))
                 case .controlLocation(let reference):
                     let matches = layout.controlLocations.filter { location in
                         location.sourceName == reference.sourceName

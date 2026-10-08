@@ -36,7 +36,8 @@ struct UpstreamScenarioCoverageTests {
             schema: "swifttla.upstream-tlc-parity", caseID: "fixture",
             result: "exact", graphCompared: true, difference: nil,
             generatedProperties: properties, referenceProperties: properties,
-            generatedDeadlock: nil, referenceDeadlock: nil, deadlockSelected: false)
+            generatedDeadlock: nil, referenceDeadlock: nil, deadlockSelected: false,
+            generatedPostcondition: nil, referencePostcondition: nil, postconditionSelected: false)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try JSONEncoder().encode(report).write(to: url)
         return url

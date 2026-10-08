@@ -4,6 +4,21 @@ import SwiftTLA
 import Foundation
 
 struct MachineValidationTests {
+    @Test("a model-owned postcondition reports the result after complete native exploration")
+    func reportsPostconditionOutcome() throws {
+        for (name, expected) in [("levelView", ValidationVerdict.satisfied),
+                                 ("rejectedView", .violated)] {
+            let scenario = try #require(ReachabilityExportModel.validationScenarios().first { $0.name == name })
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let report = try NativeValidationRunner.run(scenario: scenario, caseID: name,
+                maximumStates: 4, to: directory)
+            #expect(report.graphComplete)
+            #expect(report.postcondition == expected)
+            #expect(report.postcondition?.satisfies(try #require(scenario.postconditionExpectation)) == true)
+        }
+    }
+
     @Test("a typed view identifies explored states while evidence retains complete representatives")
     func exploresByViewWithoutProjectingStateEvents() throws {
         var states: [Int: Int] = [:]
@@ -234,6 +249,12 @@ struct MachineValidationTests {
         }
         #expect(summary.states == 3)
         #expect(summary.edges == 2)
+        #expect(summary.maximumLevel == 3)
+        #expect(try scenario.postconditionSatisfied(after: summary) == true)
+        let rendered = try scenario.render().tlaBundle
+        #expect(rendered.cfg.contains("POSTCONDITION TraceAccepted"))
+        #expect(rendered.tla.contains("TraceAccepted =="))
+        #expect(rendered.tla.contains("TLCGet(\"stats\").diameter"))
 
         var reader = try BinaryGraphEvidenceReader(output)
         defer { reader.close() }
@@ -339,6 +360,9 @@ struct MachineValidationTests {
             selectedFairnessProfile: scenario.selectedFairnessProfile,
             selectedFairnessProfileName: scenario.selectedFairnessProfileName,
             selectedView: scenario.selectedView,
+            selectedPostcondition: scenario.selectedPostcondition,
+            postconditionName: scenario.postconditionName,
+            postconditionExpectation: scenario.postconditionExpectation,
             expectations: expectations, deadlockExpectation: scenario.deadlockExpectation)
         let changedReport = try NativeValidationRunner.run(
             scenario: changed, caseID: "constant-state-claims-0", maximumStates: 10,

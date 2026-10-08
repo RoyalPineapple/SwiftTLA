@@ -12,6 +12,8 @@ package struct ValidationEvidenceComparisonReport: Codable, Sendable {
     package let properties: [String: ValidationVerdict]
     package let deadlock: ValidationVerdict?
     package let deadlockSelected: Bool
+    package let postconditionName: String?
+    package let postcondition: ValidationVerdict?
 }
 
 package enum ValidationEvidenceComparisonError: Error, Equatable {
@@ -101,7 +103,8 @@ package enum ValidationEvidenceComparison {
               tlc.schema == "swifttla.generated-tlc-oracle",
               tlc.caseID == caseID, swift.scenario == tlc.scenario,
               swift.maximumStates > 0, swift.maximumStates == tlc.maximumStates,
-              swift.deadlockSelected == tlc.deadlockSelected else {
+              swift.deadlockSelected == tlc.deadlockSelected,
+              swift.postconditionName == tlc.postconditionName else {
             throw ValidationEvidenceComparisonError.invalidEvidence("report identity")
         }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
@@ -112,8 +115,9 @@ package enum ValidationEvidenceComparison {
         var difference: String?
         if swift.graphComplete != tlc.graphComplete {
             difference = "exploration completion"
-        } else if swift.properties != tlc.properties || swift.deadlock != tlc.deadlock {
-            difference = "selected property or deadlock verdict"
+        } else if swift.properties != tlc.properties || swift.deadlock != tlc.deadlock
+                    || swift.postcondition != tlc.postcondition {
+            difference = "selected property, deadlock, or postcondition verdict"
         }
         let compareGraph = swift.graphComplete && tlc.graphComplete
         if difference == nil {
@@ -171,7 +175,8 @@ package enum ValidationEvidenceComparison {
             schema: "swifttla.validation-evidence-comparison", caseID: caseID,
             result: difference == nil ? "exact" : "different", graphCompared: compareGraph,
             difference: difference, properties: swift.properties, deadlock: swift.deadlock,
-            deadlockSelected: swift.deadlockSelected)
+            deadlockSelected: swift.deadlockSelected,
+            postconditionName: swift.postconditionName, postcondition: swift.postcondition)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("comparison.json"), options: .atomic)

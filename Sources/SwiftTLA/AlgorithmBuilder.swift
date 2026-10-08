@@ -454,6 +454,7 @@ public final class SpecificationScope {
     init() {}
 
     public var checkingLevel: Expr<Int> { Expr(.checkingLevel) }
+    public var checkingDiameter: Expr<Int> { Expr(.checkingDiameter) }
 
     public func checkingRegister<Value: TLAValueType>(
         as: Value.Type, initial: some TypedExpression<Value>, _name: String = "",

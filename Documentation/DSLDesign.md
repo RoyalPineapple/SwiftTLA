@@ -950,6 +950,27 @@ The graph result must say that it is view-quotiented; it must not masquerade as
 complete full-state parity. A full-state graph export API rejects a viewed
 scenario, leaving the streaming validator as the supported check path.
 
+`Validation.postcondition(_:, name:, expecting:)` selects a typed Boolean
+condition to check after exhaustive exploration. Its optional name is the
+TLA+ operator name; when omitted, the compiler generates a stable name from
+the scenario. `scope.checkingDiameter` is the maximum one-based breadth-first
+level seen by the checker, rendered as `TLCGet("stats").diameter` in TLA+.
+For a configuration with a `VIEW`, both sides compute this value over the
+view-identified search. For example:
+
+Inside `#spec { scope in ... }`, a scenario can declare:
+
+```swift
+let trace = Validation {}.postcondition(scope.checkingDiameter == 3,
+    name: "TraceAccepted")
+trace
+```
+
+The condition is a check of the completed run, not a state invariant. It must
+not depend on an individual machine state or `scope.checkingLevel`. A run that
+stops early cannot claim that the postcondition passed. Native checking and
+TLC report its verdict separately from graph, property, and deadlock results.
+
 ### Declaration syntax
 
 #### Counter parameter contract

@@ -612,7 +612,7 @@ struct CompiledEvaluator: Sendable {
                     ))
                 }
                 switch expression.operation {
-                case .checkingRegister, .setCheckingRegister, .checkingLevel:
+                case .checkingRegister, .setCheckingRegister, .checkingLevel, .checkingDiameter:
                     throw EvalError.registersRequireGeneratedChecking
                 case .value(let value):
                     values.append(value)

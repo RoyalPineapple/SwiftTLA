@@ -1112,7 +1112,7 @@ enum AlgorithmLowerer {
     private static func rewrite(_ expression: StateExpr, localRoots: Set<String>) -> StateExpr {
         func rewritten(_ expression: StateExpr, localRoots: Set<String>) -> StateExpr {
             switch expression {
-            case .sourceIssue, .value, .integerSet, .parameter, .checkingRegister, .checkingLevel, .programCounter, .procedureStack, .controlLocation:
+            case .sourceIssue, .value, .integerSet, .parameter, .checkingRegister, .checkingLevel, .checkingDiameter, .programCounter, .procedureStack, .controlLocation:
                 return expression
             case .setCheckingRegister(let reference, let value):
                 return .setCheckingRegister(reference, rewritten(value, localRoots: localRoots))

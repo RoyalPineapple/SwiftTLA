@@ -24,6 +24,9 @@ struct NativeSampledValidationTests {
             selectedFairnessProfile: original.selectedFairnessProfile,
             selectedFairnessProfileName: original.selectedFairnessProfileName,
             selectedView: original.selectedView,
+            selectedPostcondition: original.selectedPostcondition,
+            postconditionName: original.postconditionName,
+            postconditionExpectation: original.postconditionExpectation,
             expectations: [.BelowThree: .violated], deadlockExpectation: nil)
     }
 
@@ -68,7 +71,8 @@ struct NativeSampledValidationTests {
             scenario: scenario.name, maximumStates: 10, graphComplete: false,
             graphInputSHA256: try GeneratedTLCOracle.inputIdentity(
                 bundle: bundle, pin: pin, arguments: arguments, invocation: .propertyCheck),
-            properties: ["BelowThree": .violated], deadlock: nil, deadlockSelected: false)
+            properties: ["BelowThree": .violated], deadlock: nil, deadlockSelected: false,
+            postconditionName: nil, postcondition: nil)
         try JSONEncoder().encode(report).write(to: oracle.appendingPathComponent("oracle.json"))
         let process: [String: Any] = [
             "caseID": caseID,

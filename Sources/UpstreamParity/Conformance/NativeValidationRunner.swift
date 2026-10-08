@@ -28,6 +28,8 @@ package struct NativeValidationReport: Codable, Sendable {
     package let properties: [String: ValidationVerdict]
     package let deadlock: ValidationVerdict?
     package let deadlockSelected: Bool
+    package let postconditionName: String?
+    package let postcondition: ValidationVerdict?
 }
 
 package enum NativeValidationRunnerError: Error, Equatable {
@@ -48,6 +50,8 @@ package enum NativeValidationRunner {
                   $0.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) != nil
               }),
               scenario.checking.properties == Set(scenario.expectations.keys),
+              scenario.postconditionName == (try scenario.render()).postconditionName,
+              (scenario.postconditionExpectation != nil) == (scenario.postconditionName != nil),
               (scenario.deadlockExpectation != nil) == scenario.checking.checkDeadlock else {
             throw NativeValidationRunnerError.invalidCoverage(scenario.name)
         }
@@ -68,6 +72,9 @@ package enum NativeValidationRunner {
         }
         let safety = scenario.checking.properties.intersection(invariant.union(reachability))
         let decisive = scenario.checkingMode == .decisiveCounterexample
+        guard !decisive || scenario.postconditionName == nil else {
+            throw NativeValidationRunnerError.unavailable("postcondition requires exhaustive exploration")
+        }
         guard !decisive || (safety.count == 1 && scenario.checking.properties == safety) else {
             throw NativeValidationRunnerError.unavailable("decisive mode requires one selected safety check")
         }
@@ -130,13 +137,23 @@ package enum NativeValidationRunner {
         } else {
             deadlock = nil
         }
+        let postcondition: ValidationVerdict?
+        if scenario.postconditionName != nil {
+            guard let satisfied = try scenario.postconditionSatisfied(after: batch) else {
+                throw NativeValidationRunnerError.unavailable("postcondition requires complete exploration")
+            }
+            postcondition = satisfied ? .satisfied : .violated
+        } else {
+            postcondition = nil
+        }
         let report = NativeValidationReport(
             schema: "swifttla.native-validation-report", scenario: scenario.name,
             maximumStates: maximumStates,
             graphComplete: !decisive, initialStates: batch.initialStates,
             states: batch.states, edges: batch.edges,
             properties: properties, deadlock: deadlock,
-            deadlockSelected: scenario.checking.checkDeadlock)
+            deadlockSelected: scenario.checking.checkDeadlock,
+            postconditionName: scenario.postconditionName, postcondition: postcondition)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         try encoder.encode(report).write(to: directory.appendingPathComponent("report.json"), options: .atomic)
@@ -180,6 +197,9 @@ package enum NativeValidationRunner {
         scenario: Scenario, caseID: String, maximumStates: Int,
         traces: Int, maximumDepth: Int, to directory: URL
     ) throws -> NativeValidationReport {
+        guard scenario.postconditionName == nil else {
+            throw NativeValidationRunnerError.unavailable("postcondition requires exhaustive exploration")
+        }
         var generator = SampleGenerator()
         let initial = try scenario.initialMachines()
         guard let first = initial.first else { throw ExplorationError.noInitialStates }
@@ -239,7 +259,8 @@ package enum NativeValidationRunner {
             maximumStates: maximumStates, graphComplete: false,
             initialStates: 1, states: steps.count, edges: max(0, steps.count - 1),
             properties: properties, deadlock: deadlock,
-            deadlockSelected: scenario.checking.checkDeadlock)
+            deadlockSelected: scenario.checking.checkDeadlock,
+            postconditionName: nil, postcondition: nil)
         try encoder.encode(report).write(to: directory.appendingPathComponent("report.json"), options: .atomic)
         return report
     }

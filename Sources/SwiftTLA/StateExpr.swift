@@ -266,6 +266,7 @@ public indirect enum StateExpr: Hashable, Sendable {
     case checkingRegister(CheckingRegisterReference)
     case setCheckingRegister(CheckingRegisterReference, StateExpr)
     case checkingLevel
+    case checkingDiameter
     case processLocalFamily(String)
     case currentProcess
     case programCounter

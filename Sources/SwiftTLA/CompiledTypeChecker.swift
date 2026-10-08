@@ -336,7 +336,10 @@ package struct CompiledTypeChecker: Sendable {
                             at: "validation.\(scenario.name).view")
                     }
                     return checked
-                })
+                }, postcondition: try scenario.postcondition.map {
+                    try checkOperand($0, expected: .bool)
+                }, postconditionName: scenario.postconditionName,
+                postconditionExpectation: scenario.postconditionExpectation)
         }
         var actions: [CompiledAction] = []
         var invariants: [CompiledStatePredicate] = []
@@ -2401,6 +2404,7 @@ package struct CompiledTypeChecker: Sendable {
             let value = try checkOperand(expression.children[0], expected: type)
             return try checkedType(.bool, expected: expected, children: [value])
         case .checkingLevel: return try checkedType(.int, expected: expected)
+        case .checkingDiameter: return try checkedType(.int, expected: expected)
         case .integerSet: return try checkedType(.set(.int), expected: expected)
         case .assertView(let shape):
             let value = expression.children[0]

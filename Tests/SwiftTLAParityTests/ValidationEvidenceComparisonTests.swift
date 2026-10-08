@@ -464,7 +464,8 @@ struct ValidationEvidenceComparisonTests {
             schema: "swifttla.upstream-tlc-parity", caseID: "fixture", result: "exact",
             graphCompared: true, difference: nil,
             generatedProperties: ["Safe": .satisfied], referenceProperties: ["Safe": .satisfied],
-            generatedDeadlock: nil, referenceDeadlock: nil, deadlockSelected: false)
+            generatedDeadlock: nil, referenceDeadlock: nil, deadlockSelected: false,
+            generatedPostcondition: nil, referencePostcondition: nil, postconditionSelected: false)
         let report = root.appendingPathComponent("comparison.json")
         try JSONEncoder().encode(prior).write(to: report)
         #expect(try UpstreamTLCParity.recompareCached(

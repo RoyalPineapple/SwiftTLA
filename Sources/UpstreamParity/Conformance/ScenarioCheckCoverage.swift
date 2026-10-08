@@ -8,6 +8,7 @@ package struct ScenarioCheckCoverage: Codable, Equatable, Sendable {
     package let behavior: ModelBehavior
     package let coversCompleteScenario: Bool
     package let propertyDisplayNames: [String: String]
+    package let postconditionName: String?
 
     package init<Scenario: ModelValidationScenario>(_ scenario: Scenario) throws {
         let names = scenario.formalPropertyNames
@@ -31,6 +32,7 @@ package struct ScenarioCheckCoverage: Codable, Equatable, Sendable {
         propertyDisplayNames = Dictionary(uniqueKeysWithValues: names.map {
             ($0.value, displayNames[$0.key]!)
         })
+        postconditionName = scenario.postconditionName
     }
 
     package static func annotateUpstream<Scenario: ModelValidationScenario>(
@@ -42,10 +44,16 @@ package struct ScenarioCheckCoverage: Codable, Equatable, Sendable {
         let reported = Set(report.generatedProperties.keys)
         guard report.schema == "swifttla.upstream-tlc-parity", report.caseID == caseID,
               report.deadlockSelected == coverage.checksDeadlock,
+              report.postconditionSelected == (coverage.postconditionName != nil),
               reported == Set(report.referenceProperties.keys),
               reported.isSubset(of: Set(coverage.selectedProperties)),
               !report.graphCompared || reported == Set(coverage.selectedProperties) else {
             throw EvidenceFormatError.invalidField(record: caseID, field: "upstream check coverage")
+        }
+        if let expected = scenario.postconditionExpectation,
+           (report.generatedPostcondition?.satisfies(expected) != true
+            || report.referencePostcondition?.satisfies(expected) != true) {
+            throw EvidenceFormatError.invalidField(record: caseID, field: "upstream postcondition outcome")
         }
         try coverage.attach(to: reportURL)
     }

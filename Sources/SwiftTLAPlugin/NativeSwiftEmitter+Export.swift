@@ -130,6 +130,7 @@ extension NativeSwiftEmitter {
                 refinements: \(String(reflecting: module.configuration.refinements)),
                 symmetry: \(String(reflecting: module.configuration.symmetry)),
                 viewOperators: \(String(reflecting: module.configuration.viewOperators)),
+                postconditionOperators: \(String(reflecting: module.configuration.postconditionOperators)),
                 actions: _actions, _generatedPlusCal: \(plusCal),
                 _generatedPlusCalProfiles: \(plusCalProfiles.isEmpty ? "[:]" : "[" + plusCalProfiles.joined(separator: ", ") + "]"),
                 _assumptionsOnly: \(module.configuration.assumptionsOnly),

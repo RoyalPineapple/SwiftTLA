@@ -4,6 +4,26 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct GeneratedTLCOracleTests {
+    @Test("postcondition failures are distinguished from ordinary assumption failures")
+    func identifiesPostconditionVerdict() throws {
+        let retained = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let logs = retained.appendingPathComponent("logs")
+        try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: retained) }
+        let stdout = logs.appendingPathComponent("tlc.stdout.log")
+        try Data("Error: Postcondition TraceAccepted at line 5 is false.\n".utf8)
+            .write(to: stdout)
+        #expect(try GeneratedTLCOracle.postconditionVerdict(name: "TraceAccepted",
+            outcome: .assumptionViolation, retained: retained) == .violated)
+        #expect(try GeneratedTLCOracle.postconditionVerdict(name: "TraceAccepted",
+            outcome: .completed, retained: retained) == .satisfied)
+        try Data("Error: Assumption A is false.\n".utf8).write(to: stdout)
+        #expect(throws: GeneratedTLCOracle.Error.self) {
+            try GeneratedTLCOracle.postconditionVerdict(name: "TraceAccepted",
+                outcome: .assumptionViolation, retained: retained)
+        }
+    }
+
     @Test("expecting an invariant failure does not change TLC inputs or cache identity")
     func expectationsDoNotSelectOracleChecks() throws {
         let original = try #require(ConstantStateClaims.validationScenarios().first)
@@ -16,6 +36,9 @@ struct GeneratedTLCOracleTests {
             selectedFairnessProfile: original.selectedFairnessProfile,
             selectedFairnessProfileName: original.selectedFairnessProfileName,
             selectedView: original.selectedView,
+            selectedPostcondition: original.selectedPostcondition,
+            postconditionName: original.postconditionName,
+            postconditionExpectation: original.postconditionExpectation,
             expectations: expectations, deadlockExpectation: original.deadlockExpectation)
         let pin = try testReferencePin()
         let originalKey = try GeneratedTLCOracle.cacheKey(
@@ -35,6 +58,9 @@ struct GeneratedTLCOracleTests {
             selectedFairnessProfile: decisive.selectedFairnessProfile,
             selectedFairnessProfileName: decisive.selectedFairnessProfileName,
             selectedView: decisive.selectedView,
+            selectedPostcondition: decisive.selectedPostcondition,
+            postconditionName: decisive.postconditionName,
+            postconditionExpectation: decisive.postconditionExpectation,
             expectations: decisive.expectations, deadlockExpectation: decisive.deadlockExpectation)
         let pin = try testReferencePin()
         let decisiveBundle = try decisive.render().tlaBundle
@@ -61,6 +87,9 @@ struct GeneratedTLCOracleTests {
             selectedFairnessProfile: configured.selectedFairnessProfile,
             selectedFairnessProfileName: configured.selectedFairnessProfileName,
             selectedView: configured.selectedView,
+            selectedPostcondition: configured.selectedPostcondition,
+            postconditionName: configured.postconditionName,
+            postconditionExpectation: configured.postconditionExpectation,
             expectations: configured.expectations, deadlockExpectation: configured.deadlockExpectation)
         let deeper = EWD840AnimationModel.ValidationScenario(
             name: configured.name, displayName: configured.displayName,
@@ -70,6 +99,9 @@ struct GeneratedTLCOracleTests {
             selectedFairnessProfile: configured.selectedFairnessProfile,
             selectedFairnessProfileName: configured.selectedFairnessProfileName,
             selectedView: configured.selectedView,
+            selectedPostcondition: configured.selectedPostcondition,
+            postconditionName: configured.postconditionName,
+            postconditionExpectation: configured.postconditionExpectation,
             expectations: configured.expectations, deadlockExpectation: configured.deadlockExpectation)
         #expect(base != (try GeneratedTLCOracle.cacheKey(
             scenario: moreTraces, id: "ewd840-anim-0", maximumStates: 1_000_000, pin: pin)))

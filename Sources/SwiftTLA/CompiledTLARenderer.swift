@@ -370,6 +370,7 @@ struct CompiledTLARenderer {
                 case .boundValue(let binder): parts.append(try binderName(binder))
                 case .checkingRegister(let id): parts.append("TLCGet(\(id.ordinal))")
                 case .checkingLevel: parts.append("TLCGet(\"level\")")
+                case .checkingDiameter: parts.append("TLCGet(\"stats\").diameter")
                 case .setCheckingRegister(let id):
                     parts.append("TLCSet(\(id.ordinal), ")
                     tasks.append(.text(")"))

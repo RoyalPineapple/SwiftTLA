@@ -35,7 +35,27 @@ extension NativeSwiftEmitter {
         var scenarios: [String] = []
         var viewRuns: [String] = []
         var viewProjections: [String] = []
+        var postconditionCases: [String] = []
         for (index, scenario) in program.behavior.validationScenarios.enumerated() {
+            if let postcondition = scenario.postcondition {
+                var pending = [postcondition]
+                var visitedFunctions: Set<ResolvedFunctionID> = []
+                while let current = pending.popLast() {
+                    switch current.operation {
+                    case .stateVariable, .checkingLevel, .checkingRegister, .setCheckingRegister,
+                         .enabledAction, .nextState, .stutteringStep:
+                        throw unsupported("postcondition depends on model state or a state-level checking value")
+                    case .call(let id) where visitedFunctions.insert(id).inserted:
+                        pending.append(program[id].body)
+                    default: break
+                    }
+                    pending.append(contentsOf: current.children)
+                }
+                let previousCheckingDiameterName = checkingDiameterName
+                checkingDiameterName = "summary.maximumLevel"
+                defer { checkingDiameterName = previousCheckingDiameterName }
+                postconditionCases.append("case \(index): return \(try expression(postcondition, state: ""))")
+            }
             if let view = scenario.view {
                 let previousCheckingLevelName = checkingLevelName
                 checkingLevelName = "level"
@@ -89,6 +109,9 @@ extension NativeSwiftEmitter {
                 selectedFairnessProfile: \(scenario.fairnessProfileIndex.map(String.init) ?? "nil"),
                 selectedFairnessProfileName: \(profileName),
                 selectedView: \(scenario.view == nil ? "nil" : String(index)),
+                selectedPostcondition: \(scenario.postcondition == nil ? "nil" : String(index)),
+                postconditionName: \(scenario.postconditionName.map(String.init(reflecting:)) ?? "nil"),
+                postconditionExpectation: \(scenario.postconditionExpectation.map { ".\($0.rawValue)" } ?? "nil"),
                 expectations: [\(selected.isEmpty ? ":" : expectations)],
                 deadlockExpectation: \(deadlock))
             """)
@@ -108,9 +131,21 @@ extension NativeSwiftEmitter {
             let selectedFairnessProfile: Int?
             let selectedFairnessProfileName: String?
             let selectedView: Int?
+            let selectedPostcondition: Int?
+            public let postconditionName: String?
+            public let postconditionExpectation: ValidationExpectation?
             public let expectations: [Property: ValidationExpectation]
             public let deadlockExpectation: ValidationExpectation?
             public var usesView: Bool { selectedView != nil }
+
+            public func postconditionSatisfied(after summary: MachineValidationSummary<Property>) throws -> Bool? {
+                guard case .exhausted = summary.completion else { return nil }
+                switch selectedPostcondition {
+                \(postconditionCases.joined(separator: "\n"))
+                case nil: return nil
+                default: throw ExplorationError.configurationMismatch
+                }
+            }
 
             public func initialMachines() throws -> [\(model.typeName)] {
                 try \(model.typeName).initialMachines(\(arguments))
@@ -152,7 +187,8 @@ extension NativeSwiftEmitter {
                 try \(model.typeName).render(\(arguments)).selectingChecks(checking,
                     formalPropertyNames: Machine.formalPropertyNames, behavior: behavior,
                     symmetry: selectedSymmetry, fairnessProfile: selectedFairnessProfileName,
-                    view: selectedView.map { "__SwiftTLAView\\($0)" })
+                    view: selectedView.map { "__SwiftTLAView\\($0)" },
+                    postcondition: postconditionName)
             }
         }
         public static func validationScenarios() throws -> [ValidationScenario] {

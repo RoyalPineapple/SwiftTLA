@@ -9,6 +9,7 @@ package enum CompiledOperation: Hashable, Sendable {
     case checkingRegister(CheckingRegisterID)
     case setCheckingRegister(CheckingRegisterID)
     case checkingLevel
+    case checkingDiameter
     case controlLocation(ControlLocationID)
     case operatorReference(OperatorID)
     case add

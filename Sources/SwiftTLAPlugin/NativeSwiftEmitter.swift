@@ -24,6 +24,7 @@ struct NativeSwiftEmitter {
     private var nextMembershipPredicate = 0
     var checkingContextName: String?
     var checkingLevelName: String?
+    var checkingDiameterName: String?
     var printTOutputName: String?
 
     init(model: MacroCompilation, sharedTypes: NativeTypeDeclarations? = nil) {
@@ -590,7 +591,7 @@ struct NativeSwiftEmitter {
                  .functionLiteral(let binder), .letValue(let binder):
                 bound.insert(binder)
             case .foldFunction(let binders): bound.formUnion(binders)
-            case .stateVariable, .checkingRegister, .setCheckingRegister, .checkingLevel,
+            case .stateVariable, .checkingRegister, .setCheckingRegister, .checkingLevel, .checkingDiameter,
                  .enabledAction, .nextState, .stutteringStep, .printT, .call,
                  .checkedCall, .operatorReference, .operatorApplication, .letIn,
                  .integerSet:
@@ -628,6 +629,9 @@ struct NativeSwiftEmitter {
                 return "(try { () throws -> Int in throw NativeMachineEvaluationError.checkingContextRequired }())"
             }
             return "(try { () throws -> Int in guard let level = \(context)?.level else { throw NativeMachineEvaluationError.checkingContextRequired }; return level }())"
+        case .checkingDiameter:
+            guard let checkingDiameterName else { throw unsupported("checking diameter outside a postcondition") }
+            return checkingDiameterName
         case .stutteringStep:
             guard state != "nextState." else { throw unsupported("nested successor-state read") }
             let before = try expression(id.children[0], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
