@@ -7,17 +7,18 @@ Write one Swift source model for state, actions, and invariants. At build time,
 `Transition` values together with native Swift initialization, guards, and
 updates. The generated machine executes this Swift code directly. SwiftUI
 stores the machine as a value; the generated `Actor` serializes access to it.
-For formal verification, `compile()` uses the same compiler to produce an
-immutable specification for bounded exploration and TLA+/PlusCal rendering.
+The native checker explores those same generated transitions. The compiler also
+exports equivalent TLA+ for independent TLC validation; application execution
+and native checking do not invoke TLC or a formal expression interpreter.
 
 **One source model. Typed application state. Bounded formal evidence.**
 
 ```text
 Swift source model → validated, resolved compiler representation
  ├── @TLAModel → native Swift State, Action, Transition, and machine
- └── compile() → CompiledSpecification
-                 ├── formal runtime and bounded exploration
-                 └── TLA+ bundle and, for one authored Algorithm, PlusCal bundle
+ │               └── native checking of generated transitions
+ └── formal export → TLA+ bundle and, for one authored Algorithm, PlusCal bundle
+                     └── independent TLC validation
 
 Generated machine
  ├── value stored in SwiftUI @State
@@ -162,9 +163,10 @@ generated machine behind actor isolation.
 
 ## Add bounded assurance
 
-This clock's compiled specification renders direct TLA+ and its authored
-PlusCal algorithm. Finite graph comparison compares bounded SwiftTLA
-exploration with a pinned TLC run. See
+This clock's generated machine supports native exploration. Its compiled model
+also renders direct TLA+ and the authored PlusCal algorithm. The independent
+validation pipeline compares the generated machine with a pinned TLC run of
+the exported TLA+. See
 [Finite graph comparison](Documentation/FiniteGraphComparison.md).
 
 ## Use it where state order matters
