@@ -278,6 +278,7 @@ public struct TLASpec: Sendable {
   package var checkDeadlock: Bool
   package var extendsModules: [StandardModule]
   package var constraints: [ModelPredicateClause]
+  package var actionConstraints: [ModelPredicateClause] = []
   package var recursiveFuncs: [RecursiveFunc]
   /// Executable, higher-order operator definitions retained as formal AST data.
   package var formalOperatorDefinitions: [FormalOperatorDefinition]
@@ -659,6 +660,10 @@ public struct ConstraintDecl: SpecComponent, Equatable {
   public let body: StateExpr
   package init(_ body: StateExpr) { self.body = body }
 }
+public struct ActionConstraintDecl: SpecComponent, Equatable {
+  package let body: StateExpr
+  package init(_ body: StateExpr) { self.body = body }
+}
 public struct RecursiveFunc: Sendable, Equatable {
   public let name: String
   public let params: [String]
@@ -706,6 +711,7 @@ public enum SpecBuilder {
   public static func buildExpression<Model: ConfiguredGeneratedModel>(_ expr: GeneratedModelInstance<Model>) -> [SpecComponent] { [expr] }
   public static func buildExpression<Model: ConfiguredGeneratedModel>(_ expr: GeneratedModelRefinement<Model>) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: ConstraintDecl) -> [SpecComponent] { [expr] }
+  public static func buildExpression(_ expr: ActionConstraintDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: RecursiveFuncDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: SymmetrySetDecl) -> [SpecComponent] { [expr] }
   public static func buildExpression(_ expr: Algorithm) -> [SpecComponent] { [expr] }
@@ -976,6 +982,12 @@ public func Extends(_ modules: StandardModule...) -> ExtendsDecl {
 }
 public func Constraint(_ expr: some StateExprConvertible) -> ConstraintDecl {
   ConstraintDecl(expr.stateExpr)
+}
+public func ActionConstraint<Value: TLAValueType>(
+  on value: some TypedExpression<Value>,
+  _ predicate: (Expr<Value>, Expr<Value>) -> some TypedExpression<Bool>
+) -> ActionConstraintDecl {
+  ActionConstraintDecl(predicate(value.expr, Expr(.nextState(value.stateExpr))).stateExpr)
 }
 public func DefineRecursive(
   _ name: String, params: [String], @InvariantBuilder body: () -> StateExpr

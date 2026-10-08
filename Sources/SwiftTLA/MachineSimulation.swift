@@ -83,10 +83,11 @@ public enum MachineSimulator {
             var actions = try machine.actionCandidates()
             actions.shuffle(using: &generator)
             var selected: (action: Machine.Action, successors: [Machine])?
+            var hasRawSuccessor = false
             for action in actions {
                 var eligible: [Machine] = []
                 var witness: SafetyCounterexample<Machine>?
-                _ = try machine.visitSuccessors(for: action, checking: &context) { successor in
+                func inspect(_ successor: Machine, permitted: Bool) throws -> Bool {
                     guard successor.hasSameConfiguration(as: first) else {
                         throw ExplorationError.configurationMismatch
                     }
@@ -97,8 +98,23 @@ public enum MachineSimulator {
                             trace: trace + [(action, successor.snapshot)], checking: checking)
                         return false
                     }
-                    if try successor.satisfiesStateConstraint() { eligible.append(successor) }
+                    if permitted {
+                        if try successor.satisfiesStateConstraint() { eligible.append(successor) }
+                    }
                     return true
+                }
+                if Machine.hasActionConstraint {
+                    let candidates = try machine.successors(for: action, checking: &context)
+                    hasRawSuccessor = hasRawSuccessor || !candidates.isEmpty
+                    for successor in candidates {
+                        let permitted = try machine.satisfiesActionConstraint(to: successor, checking: &context)
+                        if try !inspect(successor, permitted: permitted) { break }
+                    }
+                } else {
+                    let found = try machine.visitSuccessors(for: action, checking: &context) { successor in
+                        try inspect(successor, permitted: true)
+                    }
+                    hasRawSuccessor = hasRawSuccessor || found
                 }
                 if let witness { return .counterexample(witness) }
                 if !eligible.isEmpty {
@@ -107,7 +123,7 @@ public enum MachineSimulator {
                 }
             }
             guard let selected else {
-                if checking.checkDeadlock {
+                if checking.checkDeadlock && !hasRawSuccessor {
                     return .counterexample(.init(violations: [.deadlock], trace: trace, checking: checking))
                 }
                 return try finishTrace(trace, reason: .deadEnd, first: first,

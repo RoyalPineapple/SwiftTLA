@@ -32,6 +32,12 @@ package struct ModelChecker {
 
     /// Safety violations are retained without truncating the reachable graph.
     package func explore() throws -> FiniteExploration {
+        guard compilation.semantics.behavior.actionConstraint == nil else {
+            throw CompilationDiagnostic(code: .unsupportedActionConstraintEvaluation, stage: .validation,
+                path: "actionConstraint", expected: "native generated-machine checking",
+                actual: "the legacy formal explorer does not evaluate action constraints",
+                nextSafeAction: "Check the generated machine with MachineValidator or ReachabilityGraph.")
+        }
         guard compilation.semantics.behavior.reachabilityProperties.isEmpty else {
             throw CompilationDiagnostic(code: .unsupportedReachabilityEvaluation, stage: .validation,
                 path: "reachabilityProperties", expected: "generated native exploration for positive reachability",

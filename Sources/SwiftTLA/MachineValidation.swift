@@ -313,13 +313,21 @@ public enum MachineValidator {
                 let successorStartedAt = DispatchTime.now().uptimeNanoseconds
                 var processingNanoseconds: UInt64 = 0
                 var decision: MachineValidationSummary<Machine.Property>.Completion?
-                let hasSuccessor = try machine.visitSuccessors(checking: &context) { action, successor in
+                func inspect(_ action: Machine.Action, _ successor: Machine, permitted: Bool) throws -> Bool {
                     let processingStartedAt = DispatchTime.now().uptimeNanoseconds
                     defer {
                         processingNanoseconds += DispatchTime.now().uptimeNanoseconds - processingStartedAt
                     }
                     guard sameConfiguration(successor) else {
                         throw ExplorationError.configurationMismatch
+                    }
+                    if !permitted {
+                        let reached = try checkReachability(successor, predecessor: source, action: action)
+                        let failed = try checkInvariants(successor, atLevel: successorLevel,
+                            predecessor: source, action: action)
+                        if failed && stopOnViolation { decision = .decisiveViolation; return false }
+                        if reached && stopOnReachability { decision = .decisiveReachability; return false }
+                        return true
                     }
                     // A view can merge different complete states. Check the constraint
                     // before looking up an identity, and still check properties at the
@@ -360,6 +368,24 @@ public enum MachineValidator {
                     edgeCount += 1
                     try emitEvent(.edge(source: source, action: action, target: target))
                     return true
+                }
+                let hasSuccessor: Bool
+                if Machine.hasActionConstraint {
+                    let candidates = try machine.successors(checking: &context)
+                    hasSuccessor = !candidates.isEmpty
+                    for (action, successor) in candidates {
+                        guard sameConfiguration(successor) else { throw ExplorationError.configurationMismatch }
+                        let constraintStartedAt = DispatchTime.now().uptimeNanoseconds
+                        let permitted = try machine.satisfiesActionConstraint(to: successor, checking: &context)
+                        let constraintDuration = DispatchTime.now().uptimeNanoseconds - constraintStartedAt
+                        constraintNanoseconds += constraintDuration
+                        processingNanoseconds += constraintDuration
+                        if try !inspect(action, successor, permitted: permitted) { break }
+                    }
+                } else {
+                    hasSuccessor = try machine.visitSuccessors(checking: &context) { action, successor in
+                        try inspect(action, successor, permitted: true)
+                    }
                 }
                 successorNanoseconds += DispatchTime.now().uptimeNanoseconds - successorStartedAt - processingNanoseconds
                 successorCalls += 1

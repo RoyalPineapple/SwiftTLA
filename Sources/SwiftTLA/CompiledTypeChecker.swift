@@ -343,6 +343,7 @@ package struct CompiledTypeChecker: Sendable {
         var reachabilityProperties: [CompiledStatePredicate] = []
         var temporalProperties: [CompiledTemporal<CompiledStateQuery>] = []
         var constraint: CompiledStateQuery?
+        var actionConstraint: CompiledStateQuery?
         var assume: CompiledStateQuery?
         let declarations = Dictionary(uniqueKeysWithValues: inputs.layout.variables.map { ($0.id, $0.declaration) })
         for initialization in inputs.semantics.behavior.initializations {
@@ -421,6 +422,9 @@ package struct CompiledTypeChecker: Sendable {
         }
         constraint = try inputs.semantics.behavior.constraint.map {
             try checkModelPredicate($0, named: "constraint")
+        }
+        actionConstraint = try inputs.semantics.behavior.actionConstraint.map {
+            try checkModelPredicate($0, named: "actionConstraint")
         }
         assume = try inputs.semantics.behavior.assume.map {
             try checkModelPredicate($0, named: "assume")
@@ -512,6 +516,7 @@ package struct CompiledTypeChecker: Sendable {
                     })
             },
             constraint: constraint,
+            actionConstraint: actionConstraint,
             assume: assume)
         let replacements = try inputs.semantics.formalModuleReplacements.map {
             CompiledFormalModuleReplacement(moduleName: $0.moduleName, operatorName: $0.operatorName,

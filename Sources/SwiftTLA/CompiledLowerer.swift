@@ -391,6 +391,20 @@ struct CompiledLowerer {
             return CompiledStateQuery(expression: query.expression, enabledActions: query.enabledActions,
                 clauseSourceOffsets: spec.constraints.map(\.sourceOffset))
         }
+        var transitionScope = rootScope
+        transitionScope.allowsNextState = true
+        let actionConstraintClauses = try spec.actionConstraints.enumerated().map { index, clause in
+            do { return try lower(clause.expression, at: "actionConstraint[\(index)]", scope: transitionScope) }
+            catch var diagnostic as CompilationDiagnostic {
+                if diagnostic.sourceOffset == nil { diagnostic.sourceOffset = clause.sourceOffset }
+                throw diagnostic
+            }
+        }
+        let actionConstraint = conjoin(actionConstraintClauses).map {
+            let query = predicate($0)
+            return CompiledStateQuery(expression: query.expression, enabledActions: query.enabledActions,
+                clauseSourceOffsets: spec.actionConstraints.map(\.sourceOffset))
+        }
         let scenarios = try lowerValidationScenarios(spec)
         for replacement in formalModuleReplacements {
             let requirements = replacement.expression.stateRequirements(operators: operators)
@@ -422,6 +436,7 @@ struct CompiledLowerer {
                 fairness: compiledFairness,
                 fairnessProfiles: fairnessProfiles,
                 constraint: constraint,
+                actionConstraint: actionConstraint,
                 assume: assume.map { .init(expression: $0, enabledActions: [],
                     clauseSourceOffsets: spec.assumptions.map(\.sourceOffset)) }),
             operators: operators,
@@ -799,7 +814,7 @@ struct CompiledLowerer {
                     let nested = try collect(process.components, path: "\(componentPath).components")
                     properties += nested.properties
                     translatorOwnedNames.formUnion(nested.translatorOwnedNames)
-                case .shared, .procedure, .formalOperator, .stateConstraint, .invalidPlacement, .local, .step:
+                case .shared, .procedure, .formalOperator, .stateConstraint, .actionConstraint, .invalidPlacement, .local, .step:
                     continue
                 }
             }

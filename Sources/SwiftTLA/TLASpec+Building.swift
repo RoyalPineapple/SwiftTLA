@@ -61,6 +61,8 @@ extension TLASpec {
         extendsModules.append(contentsOf: e.modules)
       } else if let c = comp as? ConstraintDecl {
         constraints.append(.init(c.body))
+      } else if let c = comp as? ActionConstraintDecl {
+        actionConstraints.append(.init(c.body))
       } else if let rf = comp as? RecursiveFuncDecl {
         recursiveFuncs.append(rf.funcDef)
       } else if let definition = comp as? FormalOperatorDecl {
@@ -109,6 +111,7 @@ extension TLASpec {
     var temporalProperties = temporalProperties
     var fairness = fairness
     var constraints = constraints
+    var actionConstraints = actionConstraints
     var formalOperatorDefinitions = formalOperatorDefinitions
     var authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
 
@@ -143,6 +146,7 @@ extension TLASpec {
         fairness += lowered.fairness
         formalOperatorDefinitions += algorithm.model.formalOperatorDefinitions
         constraints += lowered.constraints
+        actionConstraints += lowered.actionConstraints
       }
     }
 
@@ -189,6 +193,7 @@ extension TLASpec {
       sourceAlgorithms: sourceAlgorithms
     )
     lowered.authoredPlusCalAlgorithmPlan = authoredPlusCalAlgorithmPlan
+    lowered.actionConstraints = actionConstraints
     lowered.parameters = parameters
     lowered.checkingRegisters = checkingRegisters
     lowered.validationScenarios = validationScenarios
@@ -269,6 +274,7 @@ extension CompiledModuleMetadata {
     }
     let postTranslationDeclarations = postTranslation
       + (declarations.constraint.map { [$0] } ?? [])
+      + (declarations.actionConstraint.map { [$0] } ?? [])
       + renderedProperties
       + (try authoredPlusCalSymmetry(layout: layout, parameterNames: parameterNames))
     let module = AuthoredPlusCalModule(

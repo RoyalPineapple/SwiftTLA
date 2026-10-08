@@ -135,6 +135,10 @@ enum AlgorithmLowerer {
             guard case .stateConstraint(let constraint) = component else { return nil }
             return constraint
         }
+        let declaredActionConstraints = algorithm.components.compactMap { component -> ModelPredicateClause? in
+            guard case .actionConstraint(let constraint) = component else { return nil }
+            return constraint
+        }
         let processConstraints = processes.flatMap { process -> [ModelPredicateClause] in
             let localRoots = Set(process.components.compactMap { component -> String? in
                 guard case .local(let state) = component else { return nil }
@@ -142,6 +146,18 @@ enum AlgorithmLowerer {
             })
             return process.components.compactMap { component -> ModelPredicateClause? in
                 guard case .stateConstraint(let constraint) = component else { return nil }
+                return .init(.forAll(process.domain, processBinding.rawValue,
+                    rewrite(constraint.expression, localRoots: localRoots)),
+                    sourceOffset: constraint.sourceOffset)
+            }
+        }
+        let processActionConstraints = processes.flatMap { process -> [ModelPredicateClause] in
+            let localRoots = Set(process.components.compactMap { component -> String? in
+                guard case .local(let state) = component else { return nil }
+                return state.root
+            })
+            return process.components.compactMap { component -> ModelPredicateClause? in
+                guard case .actionConstraint(let constraint) = component else { return nil }
                 return .init(.forAll(process.domain, processBinding.rawValue,
                     rewrite(constraint.expression, localRoots: localRoots)),
                     sourceOffset: constraint.sourceOffset)
@@ -425,7 +441,7 @@ enum AlgorithmLowerer {
             actions.append(NamedAction(name: CompilerControlSymbol.terminatingAction.rawValue, body: unchanged, isTermination: true))
         }
 
-        return lowered(TLASpec(
+        var result = TLASpec(
             name: algorithm.name,
             variables: variables,
             actions: actions,
@@ -436,7 +452,9 @@ enum AlgorithmLowerer {
             fairness: fairness,
             constraints: declaredConstraints + processConstraints,
             formalOperatorDefinitions: resolvedFormalOperators,
-            sourceAlgorithms: [Algorithm(model: algorithm)]))
+            sourceAlgorithms: [Algorithm(model: algorithm)])
+        result.actionConstraints = declaredActionConstraints + processActionConstraints
+        return lowered(result)
     }
 
     private static func constantFunction(
@@ -555,6 +573,10 @@ enum AlgorithmLowerer {
             guard case .stateConstraint(let constraint) = component else { return nil }
             return constraint
         }
+        let declaredActionConstraints = algorithm.components.compactMap { component -> ModelPredicateClause? in
+            guard case .actionConstraint(let constraint) = component else { return nil }
+            return constraint
+        }
 
         let sharedVariables = shared.map { state in
             NamedVar(
@@ -591,7 +613,7 @@ enum AlgorithmLowerer {
             }
         }
         guard let first = steps.first else {
-            return lowered(TLASpec(
+            var result = TLASpec(
                 name: algorithm.name,
                 variables: sharedVariables + procedureVariables,
                 actions: [],
@@ -602,7 +624,9 @@ enum AlgorithmLowerer {
                 constraints: declaredConstraints,
                 formalOperatorDefinitions: formalOperatorDefinitions,
                 sourceAlgorithms: [Algorithm(model: algorithm)]
-            ))
+            )
+            result.actionConstraints = declaredActionConstraints
+            return lowered(result)
         }
         // Match PlusCal's declaration order so TLC emits comparable frame
         // records in its retained DOT graph.
@@ -700,7 +724,7 @@ enum AlgorithmLowerer {
             actions.append(NamedAction(name: CompilerControlSymbol.terminatingAction.rawValue, body: terminate, isTermination: true))
         }
 
-        return lowered(TLASpec(
+        var result = TLASpec(
             name: algorithm.name,
             variables: variables,
             actions: actions,
@@ -711,7 +735,9 @@ enum AlgorithmLowerer {
             constraints: declaredConstraints,
             formalOperatorDefinitions: formalOperatorDefinitions,
             sourceAlgorithms: [Algorithm(model: algorithm)]
-        ))
+        )
+        result.actionConstraints = declaredActionConstraints
+        return lowered(result)
     }
 
     private static func deterministicInitialization(

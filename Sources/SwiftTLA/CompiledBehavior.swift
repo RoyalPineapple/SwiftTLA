@@ -17,6 +17,7 @@ package struct CompiledBehavior: Sendable {
     package let fairness: [CompiledFairnessCondition]
     package let fairnessProfiles: [CompiledFairnessProfile]
     package let constraint: CompiledStateQuery?
+    package let actionConstraint: CompiledStateQuery?
     package let assume: CompiledStateQuery?
 
     package func map(
@@ -56,6 +57,7 @@ package struct CompiledBehavior: Sendable {
                     fairness: try profile.fairness.map { try $0.map(transform) })
             },
             constraint: constraint.map { try $0.map(transform) },
+            actionConstraint: actionConstraint.map { try $0.map(transform) },
             assume: assume.map { try $0.map(transform) })
     }
 

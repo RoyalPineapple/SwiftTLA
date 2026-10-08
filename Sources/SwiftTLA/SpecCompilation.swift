@@ -59,6 +59,7 @@ public struct CompilationDescription: Sendable, Equatable {
     public let temporalProperties: [String]
     public let refinements: [String]
     public let stateConstraint: String?
+    public let actionConstraint: String?
     public let procedures: [ProcedureDescription]
     public let controlLocations: [ControlLocationDescription]
     public let imports: [ModuleDescription]
@@ -127,6 +128,7 @@ package struct RenderedModule: Sendable, Equatable {
     let refinements: [String]
     let properties: [PropertyID: String]
     let constraint: String?
+    let actionConstraint: String?
     package var temporalObligations: [PropertyID: [_RenderedTemporalObligation]] = [:]
     package var temporalBindingNames: [BinderID: String] = [:]
 }
@@ -809,6 +811,7 @@ public struct CompilationDiagnostic: Error, Sendable, Hashable, CustomStringConv
         case compilationIdentityMismatch
         case unsupportedGeneratedValueShape
         case unsupportedReachabilityEvaluation
+        case unsupportedActionConstraintEvaluation
         case unresolvedGeneratedValueShape
         case emptyFormalModuleClosure
         case cyclicFormalModule
@@ -1013,6 +1016,7 @@ public extension TLASpec {
             temporalProperties: semantics.behavior.temporalProperties.map(\.name),
             refinements: compiledRefinements.map(\.name) + compiledGeneratedRefinements.map(\.name),
             stateConstraint: semantics.behavior.constraint.map { _ in "StateConstraint" },
+            actionConstraint: semantics.behavior.actionConstraint.map { _ in "ActionConstraint" },
             procedures: layout.procedures.map {
                 .init(
                     algorithm: $0.algorithm,
@@ -1437,6 +1441,7 @@ public extension TLASpec {
             specialized.parameters += self.parameters.filter { modelParameterDependencies.contains($0.reference) }
             // A TLC exploration constraint is configuration, not part of C!Spec.
             specialized.constraints = []
+            specialized.actionConstraints = []
             return .init(
                 id: property.id,
                 name: refinement.name,
@@ -1627,6 +1632,10 @@ private struct CanonicalSpecificationEncoder {
             partial.map { .and($0, expression) } ?? expression
         }
         field("constraint", canonicalOptional(constraint.map(canonicalExpression)))
+        let actionConstraint = spec.actionConstraints.map(\.expression).reduce(nil as StateExpr?) { partial, expression in
+            partial.map { .and($0, expression) } ?? expression
+        }
+        field("actionConstraint", canonicalOptional(actionConstraint.map(canonicalExpression)))
         let recursiveFunctions = spec.recursiveFuncs.map {
             node("recursive-function", [$0.name, canonicalList($0.params), canonicalExpression($0.body)])
         }
@@ -1893,7 +1902,7 @@ extension CompiledProgram {
         reserved.formUnion(refinements.map(\.name))
         reserved.formUnion(generatedRefinements.map(\.name))
         reserved.formUnion(generatedRefinements.map(\.instanceName))
-        reserved.formUnion(["Init", "Next", "Spec", "vars", "StateConstraint", "Terminating"])
+        reserved.formUnion(["Init", "Next", "Spec", "vars", "StateConstraint", "ActionConstraint", "Terminating"])
         for value in modelValues.subtracting(metadata.modelValueNames).sorted() where reserved.contains(value) {
             guard metadata.constants.contains(where: { $0.name == value && $0.value == .constant(value) }) else {
                 throw CompilationDiagnostic(code: .invalidFormalDeclaration, stage: .rendering,
@@ -2084,6 +2093,9 @@ private extension CompiledModuleMetadata {
             + behavior.reachabilityProperties.map { ($0.id, "\($0.name) == \(try statePredicate($0.predicate.expression, negated: true))") }
         let temporalProperties = try behavior.temporalProperties.map { ($0.id, "\($0.name) == \(try renderer.temporal($0))") }
         let constraint = try behavior.constraint.map { "StateConstraint == \(try renderer.state($0.expression))" }
+        let actionConstraint = try behavior.actionConstraint.map {
+            "ActionConstraint == \(try renderer.state($0.expression))"
+        }
         let emittedActionNamesByID = Dictionary(
             uniqueKeysWithValues: layout.actions.map { ($0.id, $0.renderedName) }
         )
@@ -2133,6 +2145,7 @@ private extension CompiledModuleMetadata {
                 renderedInvariants: invariants.map(\.1),
                 renderedTemporalProperties: temporalProperties.map(\.1),
                 renderedConstraint: constraint,
+                renderedActionConstraint: actionConstraint,
                 renderedActions: directModuleActions,
                 emittedActionCallNames: emittedActionCallNames,
                 renderedRefinements: renderedRefinements,
@@ -2148,7 +2161,8 @@ private extension CompiledModuleMetadata {
             renderedActions: directModuleActions.filter { !$0.sourceName.isEmpty }.flatMap(\.calls),
             symbolicActions: behavior.actions.filter { $0.bindings.contains { $0.literalMembers == nil } }.map(\.id),
             definitions: definitions, instances: instances, refinements: renderedRefinements,
-            properties: Dictionary(uniqueKeysWithValues: invariants + temporalProperties), constraint: constraint,
+            properties: Dictionary(uniqueKeysWithValues: invariants + temporalProperties),
+            constraint: constraint, actionConstraint: actionConstraint,
             temporalObligations: Dictionary(uniqueKeysWithValues: try behavior.temporalProperties.compactMap { property in
                 guard let obligations = try renderer.temporalObligations(property.expression) else { return nil }
                 return (property.id, obligations)
@@ -2165,6 +2179,7 @@ private extension CompiledModuleMetadata {
         renderedInvariants: [String],
         renderedTemporalProperties: [String],
         renderedConstraint: String?,
+        renderedActionConstraint: String?,
         renderedActions: [DirectModuleAction],
         emittedActionCallNames: [CompiledActionCall: String],
         renderedRefinements: [String],
@@ -2260,6 +2275,10 @@ private extension CompiledModuleMetadata {
         if !renderedInvariants.isEmpty { lines.append("") }
         if let renderedConstraint {
             lines.append(renderedConstraint)
+            lines.append("")
+        }
+        if let renderedActionConstraint {
+            lines.append(renderedActionConstraint)
             lines.append("")
         }
         guard !isLibraryModule else {
@@ -2394,10 +2413,11 @@ private extension CompiledModuleMetadata {
             lines.append("CONSTANT \(name) = \(name)")
         }
         if behavior.constraint != nil { lines.append("CONSTRAINT StateConstraint") }
+        if behavior.actionConstraint != nil { lines.append("ACTION_CONSTRAINT ActionConstraint") }
         let assumptionsOnly = !hasState && behavior.actions.isEmpty
             && behavior.invariants.isEmpty && behavior.reachabilityProperties.isEmpty
             && behavior.temporalProperties.isEmpty && refinementNames.isEmpty && behavior.assume != nil
-            && behavior.constraint == nil && behavior.fairness.isEmpty
+            && behavior.constraint == nil && behavior.actionConstraint == nil && behavior.fairness.isEmpty
         return TLCConfiguration(
             assumptionsOnly: assumptionsOnly,
             declarations: lines,

@@ -719,6 +719,10 @@ public enum AlgorithmBuilder {
         [AlgorithmElement(model: .stateConstraint(.init(component.body)))]
     }
 
+    public static func buildExpression(_ component: ActionConstraintDecl) -> [AlgorithmElement] {
+        [AlgorithmElement(model: .actionConstraint(.init(component.body)))]
+    }
+
     public static func buildExpression(_ component: FormalOperatorDecl) -> [AlgorithmElement] {
         [AlgorithmElement(model: .formalOperator(component.definition))]
     }
@@ -1629,7 +1633,7 @@ package enum AlgorithmValidator {
                 break
             case .formalOperator(let definition):
                 validateName(definition.name, at: .algorithm, diagnostics: &diagnostics)
-            case .stateConstraint:
+            case .stateConstraint, .actionConstraint:
                 break
             case .step(let step):
                 validateSequential(
@@ -1722,7 +1726,7 @@ package enum AlgorithmValidator {
                 validateName(temporal.name, at: processAnchor, diagnostics: &diagnostics)
             case .invalidPlacement:
                 continue
-            case .stateConstraint:
+            case .stateConstraint, .actionConstraint:
                 continue
             case .formalOperator:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))
@@ -1796,7 +1800,7 @@ package enum AlgorithmValidator {
             case .local, .step, .invalidPlacement:
                 break
             case .shared, .process, .procedure, .invariant, .reachable, .temporal,
-                 .formalOperator, .stateConstraint:
+                 .formalOperator, .stateConstraint, .actionConstraint:
                 diagnostics.append(.init(.invalidAlgorithmComponent, at: anchor))
             }
         }

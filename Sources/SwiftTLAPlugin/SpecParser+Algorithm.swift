@@ -37,6 +37,7 @@ private enum AlgorithmSourceConstruct: Equatable {
     case fairness
     case assume
     case stateConstraint
+    case actionConstraint
     case whenCondition
     case assert
     case assign
@@ -104,6 +105,7 @@ private enum AlgorithmSourceConstruct: Equatable {
             self = .fairness
         case "Assume": self = .assume
         case "StateConstraint": self = .stateConstraint
+        case "ActionConstraint": self = .actionConstraint
         case "When": self = .whenCondition
         case "Assert": self = .assert
         case "Assign": self = .assign
@@ -523,6 +525,9 @@ extension ParserSession {
             else { return nil }
             return .stateConstraint(.init(condition,
                 sourceOffset: call.positionAfterSkippingLeadingTrivia.utf8Offset))
+        case .actionConstraint:
+            guard let predicate = parseAlgorithmActionConstraint(call, scope: scope) else { return nil }
+            return .actionConstraint(predicate)
         default:
             return nil
         }
@@ -1160,6 +1165,9 @@ extension ParserSession {
             else { return nil }
             return .stateConstraint(.init(condition,
                 sourceOffset: call.positionAfterSkippingLeadingTrivia.utf8Offset))
+        case .actionConstraint:
+            guard let predicate = parseAlgorithmActionConstraint(call, scope: scope) else { return nil }
+            return .actionConstraint(predicate)
         default:
             return nil
         }
@@ -1520,6 +1528,32 @@ extension ParserSession {
         finiteAlgorithmDomain(syntax).map { domain in
             StateExpr.setLiteral(domain.values.map(StateExpr.value))
         } ?? decodeAlgorithmStateExpression(syntax, scope: scope)
+    }
+
+    private func parseAlgorithmActionConstraint(
+        _ call: FunctionCallExprSyntax, scope: TypedFacadeScope
+    ) -> ModelPredicateClause? {
+        let arguments = Array(call.arguments)
+        guard arguments.count == 1, arguments[0].label?.text == "on",
+              let value = decodeTypedFacadeValue(arguments[0].expression, scope: scope),
+              let closure = call.trailingClosure, closure.statements.count == 1,
+              case .expr(let body) = closure.statements.first?.item else {
+            algorithmParseFailure = "ActionConstraint requires one typed value and a two-parameter predicate closure."
+            return nil
+        }
+        let parameters = closureParameterNames(in: closure)
+        guard parameters.count == 2, Set(parameters).count == 2 else {
+            algorithmParseFailure = "ActionConstraint requires distinct before and after parameters."
+            return nil
+        }
+        let shape = typedFacadeValueType(arguments[0].expression, scope: scope)
+        let nested = scope.extending(binding: parameters[0], to: value, shape: shape)
+            .extending(binding: parameters[1], to: .nextState(value), shape: shape)
+        guard let predicate = decodeTypedFacadeValue(body, scope: nested) else {
+            algorithmParseFailure = "ActionConstraint requires a supported Boolean transition predicate."
+            return nil
+        }
+        return .init(predicate, sourceOffset: call.positionAfterSkippingLeadingTrivia.utf8Offset)
     }
 
     private func decodeAlgorithmStateExpression(

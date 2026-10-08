@@ -843,7 +843,19 @@ Resource limits remain runner controls, not model constraints.
 Normal completion retains the semantics in section 4.
 
 State constraints select the initial states and successors that exploration
-retains. They do not change the executable transition relation. Deadlock checks
+retains. An action constraint selects successors using a typed before/after
+value beside the algorithm it bounds:
+
+```swift
+let counter = Algorithm(scoped: { scope in
+    let count = scope.sharedVar(initial: 0)
+    While(Step.advance, true) { Assign(count, to: count + 1) }
+    ActionConstraint(on: count) { before, after in after <= 2 }
+})
+counter
+```
+
+Neither constraint changes the executable transition relation. Deadlock checks
 use successors before constraint filtering. Invariant checks include all initial
 states and generated successors, including excluded candidates. These rules
 match the [pinned TLC checker](https://github.com/tlaplus/tlaplus/blob/867aefb69ffc2452031292587b389d1fc3eb43ff/tlatools/org.lamport.tlatools/src/tlc2/tool/ModelChecker.java#L406-L451).

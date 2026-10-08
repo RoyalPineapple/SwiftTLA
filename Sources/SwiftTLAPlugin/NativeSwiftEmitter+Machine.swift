@@ -622,6 +622,7 @@ extension NativeSwiftEmitter {
         var declarations: [DeclSyntax] = []
         var checks: [String] = []
         declarations += try nativeDeclarations("public static var checksDeadlock: Bool { \(program.behavior.checkDeadlock) }")
+        declarations += try nativeDeclarations("public static var hasActionConstraint: Bool { \(program.behavior.actionConstraint != nil) }")
         if let constraint = program.behavior.constraint {
             declarations += try nativeDeclarations("""
             private static func _constraintHolds(in state: Snapshot\(configurationParameters)) throws -> Bool {
@@ -633,6 +634,30 @@ extension NativeSwiftEmitter {
             """)
         } else {
             declarations += try nativeDeclarations("public func satisfiesStateConstraint() throws -> Bool { true }")
+        }
+        if let actionConstraint = program.behavior.actionConstraint {
+            let previousCheckingContextName = checkingContextName
+            checkingContextName = "context"
+            let body = try expression(actionConstraint.expression)
+            checkingContextName = previousCheckingContextName
+            declarations += try nativeDeclarations("""
+            private static func _actionConstraintHolds(in state: Snapshot, nextState: Snapshot,
+                checking context: inout CheckingContext<CheckingRegisters>?\(configurationParameters)) throws -> Bool {
+                \(body)
+            }
+            public func satisfiesActionConstraint(to successor: Self,
+                checking context: inout CheckingContext<CheckingRegisters>) throws -> Bool {
+                var run: CheckingContext<CheckingRegisters>? = context
+                defer { context = run! }
+                return try Self._actionConstraintHolds(in: _execution, nextState: successor._execution,
+                    checking: &run\(arguments))
+            }
+            """)
+        } else {
+            declarations += try nativeDeclarations("""
+            public func satisfiesActionConstraint(to successor: Self,
+                checking context: inout CheckingContext<CheckingRegisters>) throws -> Bool { true }
+            """)
         }
         for invariant in program.behavior.invariants {
             let previousCheckingLevelName = checkingLevelName
