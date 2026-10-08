@@ -5949,7 +5949,7 @@
         {
           "path": "specifications/ewd998/EWD998ChanID_export.tla",
           "role": "configured root",
-          "reason": "Published seven-node configuration overrides Init with all nodes active and white and selects PostInv. The configured property can execute curl against postman-echo.com when its level-bound RealInv fails; a hosted check must retain the intended trace/export outcome without silently performing that external POST. The source recommends generator mode. This is not ordinary base ChanID graph parity.",
+          "reason": "Published seven-node configuration overrides Init with all nodes active and white and selects PostInv. Its MCInit omits the base model's passes variable, so the actual pinned TLC initialization outcome needs a safe hosted reference probe before a Swift scenario can claim parity. If TLC reaches PostInv, it can execute curl against postman-echo.com when the level-bound RealInv fails; do not silently perform that external POST. The source recommends generator mode. This is not ordinary base ChanID graph parity.",
           "implementations": [],
           "dispositionComplete": false
         },
