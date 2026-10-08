@@ -3,9 +3,30 @@ import SwiftTLA
 @testable import UpstreamParity
 
 struct EWD998ChanCorpusExecutionTests {
+    @Test("trace initialization retains every token position with active white nodes")
+    func traceInitialStates() throws {
+        let initial = try EWD998ChanModel.initialMachines(
+            configuration: .init(N: 5, TraceMode: true))
+        #expect(initial.count == 5)
+        var tokenPositions = Set<Int>()
+        for machine in initial {
+            #expect(machine.state.active == [0: true, 1: true, 2: true, 3: true, 4: true])
+            #expect(machine.state.color == [0: .white, 1: .white, 2: .white, 3: .white, 4: .white])
+            #expect(machine.state.counter == [0: 0, 1: 0, 2: 0, 3: 0, 4: 0])
+            let occupied = machine.state.inbox.filter { !$0.value.isEmpty }
+            let tokenPosition = try #require(occupied.keys.first)
+            #expect(occupied.count == 1)
+            #expect(occupied[tokenPosition] == [
+                .first(.init(type: .token, q: 0, color: .black))
+            ])
+            tokenPositions.insert(tokenPosition)
+        }
+        #expect(tokenPositions == [0, 1, 2, 3, 4])
+    }
+
     @Test("channel delivery preserves token and payload order when a payload is consumed")
     func orderedInboxTransitions() throws {
-        let initial = try EWD998ChanModel.initialMachines(configuration: .init(N: 2))
+        let initial = try EWD998ChanModel.initialMachines(configuration: .init(N: 2, TraceMode: false))
         #expect(initial.count == 32)
         let source = try #require(initial.first {
             $0.state.active[0] == true && $0.state.active[1] == false
@@ -31,7 +52,9 @@ struct EWD998ChanCorpusExecutionTests {
         #expect(rendered.checkNames == ["TypeOK", "EWD998Spec"])
         #expect(!rendered.checksDeadlock)
         #expect(rendered.tlaBundle.cfg.contains("N = 3"))
-        let machine = try #require(EWD998ChanModel.initialMachines(configuration: .init(N: 2)).first)
+        #expect(rendered.tlaBundle.cfg.contains("TraceMode = FALSE"))
+        let machine = try #require(EWD998ChanModel.initialMachines(
+            configuration: .init(N: 2, TraceMode: false)).first)
         let conditions = try machine.fairnessConditions()
         #expect(conditions.count == 1)
         #expect(conditions[0].matches(.InitiateProbe))

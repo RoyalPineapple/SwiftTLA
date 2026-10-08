@@ -52,6 +52,7 @@ package struct EWD998ChanModel: Sendable {
             Extends(.integers, .sequences, .finiteSets)
             Import(FunctionsModule.module)
             let N = scope.parameter(as: Int.self, in: Int.all)
+            let TraceMode = scope.parameter(as: Bool.self, in: Set<Bool>([false, true]))
             Assume(N > 0)
             let Node = IntRange(0, through: N - 1)
             let Colors = SetExpr<Color>.literal(.white, .black)
@@ -66,8 +67,10 @@ package struct EWD998ChanModel: Sendable {
                 }
             })
             let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
-                in: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
-            let color: SharedVariable<[Int: Color]> = scope.sharedVar(in: Functions(from: Node, to: Colors))
+                in: Functions(from: Node, to: If(TraceMode,
+                    then: SetExpr<Bool>.literal(true), else: SetExpr<Bool>.literal(false, true))))
+            let color: SharedVariable<[Int: Color]> = scope.sharedVar(in: Functions(from: Node,
+                to: If(TraceMode, then: SetExpr<Color>.literal(.white), else: Colors)))
 
             let initiate = Do(Step.InitiateProbe) {
                 With(IntRange(1, through: inbox[0].count)) { index in
@@ -157,7 +160,10 @@ package struct EWD998ChanModel: Sendable {
             }
             EWD998Spec
 
-            let EWD998Chan = Validation { Bind(N, to: 3) }
+            let EWD998Chan = Validation {
+                Bind(N, to: 3)
+                Bind(TraceMode, to: false)
+            }
                 .checking(only: [TypeOK, EWD998Spec])
                 .checkingDeadlock(false)
             EWD998Chan

@@ -231,7 +231,10 @@ package struct EWD998ChanIDModel: Sendable {
             let abstractInbox = Dictionary<Int, [AbstractMessage]>.mapping(over: IntRange(0, through: N - 1)) { position in
                 viewInbox[nat2node[position]]
             }
-            let abstract = Instance(of: EWD998ChanModel.self) { Bind(\.N, to: N) }
+            let abstract = Instance(of: EWD998ChanModel.self) {
+                Bind(\.N, to: N)
+                Bind(\.TraceMode, to: false)
+            }
             abstract
             let EWD998ChanSpec = Refinement(instance: abstract) {
                 Map(\.counter, from: Dictionary<Int, Int>.mapping(over: IntRange(0, through: N - 1)) { position in
