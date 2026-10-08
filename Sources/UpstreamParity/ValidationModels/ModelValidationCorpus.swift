@@ -21,6 +21,7 @@ private let fixtureModelRegistrations: [ModelRegistration] = [
     .init(id: "recursive-step", scenarios: { try RecursiveStep.validationScenarios() }),
     .init(id: "parameterized-atomic-steps", scenarios: { try ParameterizedAtomicSteps.validationScenarios() }),
     .init(id: "configured-dictionary-values", scenarios: { try ConfiguredDictionaryValues.validationScenarios() }),
+    .init(id: "nonempty-subset-selection", scenarios: { try NonEmptySubsetSelectionModel.validationScenarios() }),
     .init(id: "record-union-ordering", scenarios: { try RecordUnionOrderingModel.validationScenarios() }),
     .init(id: "record-union-field-domains", scenarios: { try RecordUnionFieldDomainModel.validationScenarios() }),
     .init(id: "record-union-sentinel", scenarios: { try RecordUnionSentinelModel.validationScenarios() }),

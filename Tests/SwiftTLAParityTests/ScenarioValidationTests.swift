@@ -24,6 +24,10 @@ struct ScenarioValidationTests {
         let scenarios = try modelValidationScenarios()
         #expect(!scenarios.isEmpty)
         #expect(Set(scenarios.map(\.id)).count == scenarios.count)
+        #expect(Set(scenarios.map(\.id)).isSuperset(of: [
+            "diagnostic-nonempty-subset-selection-twomembers",
+            "diagnostic-nonempty-subset-selection-threemembers"
+        ]))
     }
 
     @Test("registered scenarios retain exhausted graphs or decisive counterexamples with declared outcomes",
