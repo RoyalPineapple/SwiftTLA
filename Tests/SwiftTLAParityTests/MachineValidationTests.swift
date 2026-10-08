@@ -4,6 +4,77 @@ import SwiftTLA
 import Foundation
 
 struct MachineValidationTests {
+    @Test("a typed view identifies explored states while evidence retains complete representatives")
+    func exploresByViewWithoutProjectingStateEvents() throws {
+        var states: [Int: Int] = [:]
+        var edges: Set<String> = []
+        let result = try MachineValidator.run(
+            initialMachines: ReachabilityExportModel.initialMachines(), maximumStates: 3,
+            checking: .init(properties: [], checkDeadlock: false), stopOnViolation: false,
+            identity: { $0.state.value % 2 }
+        ) { event in
+            switch event {
+            case .state(let id, let snapshot, _, _, _): states[id] = snapshot.state.value
+            case .edge(let source, _, let target): edges.insert("\(source)->\(target)")
+            default: break
+            }
+        }
+        if case .exhausted = result.completion {} else { Issue.record("Expected completed view exploration") }
+        #expect(result.states == 2)
+        #expect(result.edges == 2)
+        #expect(states == [0: 0, 1: 1])
+        #expect(edges == ["0->1", "1->0"])
+    }
+
+    @Test("a view collision cannot admit a constrained-out successor or hide its invariant failure")
+    func checksExcludedSuccessorsBeforeViewLookup() throws {
+        let configuration = try ConstraintBoundaryCounter.Configuration(safetyLimit: 2)
+        var edges: Set<String> = []
+        var failures: [Int] = []
+        let result = try MachineValidator.run(
+            initialMachines: ConstraintBoundaryCounter.initialMachines(configuration: configuration),
+            maximumStates: 3, checking: .init(properties: [.Bounded], checkDeadlock: false),
+            stopOnViolation: false, identity: { $0.state.count % 2 }
+        ) { event in
+            switch event {
+            case .edge(let source, _, let target): edges.insert("\(source)->\(target)")
+            case .invariantFailure(_, let snapshot, _, _): failures.append(snapshot.state.count)
+            default: break
+            }
+        }
+        if case .exhausted = result.completion {} else { Issue.record("Expected completed view exploration") }
+        #expect(result.states == 2)
+        #expect(result.edges == 1)
+        #expect(edges == ["0->1"])
+        #expect(result.violatedInvariants == [.Bounded])
+        #expect(failures == [2])
+    }
+
+    @Test("a view merges admitted initial states but still checks an excluded initial state")
+    func checksInitialConstraintBeforeViewLookup() throws {
+        var initialValues: [Int] = []
+        var failures: [Int] = []
+        let result = try MachineValidator.run(
+            initialMachines: ConstraintInitialCounter.initialMachines(), maximumStates: 3,
+            checking: .init(properties: [.Bounded], checkDeadlock: false),
+            stopOnViolation: false, identity: { _ in 0 }
+        ) { event in
+            switch event {
+            case .state(_, let snapshot, let initial, _, _) where initial:
+                initialValues.append(snapshot.state.count)
+            case .invariantFailure(_, let snapshot, _, _):
+                failures.append(snapshot.state.count)
+            default: break
+            }
+        }
+        if case .exhausted = result.completion {} else { Issue.record("Expected completed view exploration") }
+        #expect(result.initialStates == 1)
+        #expect(result.states == 1)
+        #expect(initialValues == [0])
+        #expect(result.violatedInvariants == [.Bounded])
+        #expect(failures == [2])
+    }
+
     @Test("distinct generated states remain distinct when their snapshot hashes collide")
     func retainsFullStateIdentityAcrossHashCollisions() throws {
         let initial = try ReachabilityExportModel.initialMachines().map(CollidingReachabilityMachine.init(base:))
