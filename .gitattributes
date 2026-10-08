@@ -15,4 +15,5 @@ Verification/FiniteGraph/fixtures/cigarette-smokers/* whitespace=-blank-at-eol,-
 Verification/FiniteGraph/fixtures/ewd840/EWD840.tla whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/ewd840/SequencesExt.tla whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/ewd998/EWD998ChanID_shiviz.* whitespace=-blank-at-eol
+Verification/FiniteGraph/fixtures/ewd998/EWD998ChanID_export.* whitespace=-blank-at-eol
 Verification/FiniteGraph/fixtures/echo/* whitespace=-blank-at-eol,-blank-at-eof

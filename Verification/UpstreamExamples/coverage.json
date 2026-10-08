@@ -5949,7 +5949,7 @@
         {
           "path": "specifications/ewd998/EWD998ChanID_export.tla",
           "role": "configured root",
-          "reason": "Published seven-node configuration overrides Init with all nodes active and white and selects PostInv. Its MCInit omits the base model's passes variable, so the actual pinned TLC initialization outcome needs a safe hosted reference probe before a Swift scenario can claim parity. If TLC reaches PostInv, it can execute curl against postman-echo.com when the level-bound RealInv fails; do not silently perform that external POST. The source recommends generator mode. This is not ordinary base ChanID graph parity.",
+          "reason": "Published seven-node configuration overrides Init with all nodes active and white and selects PostInv. Its MCInit omits the base model's passes variable. The exact upstream TLA/CFG are pinned; a reference-only hosted probe is prepared but has not run, so the actual TLC outcome remains unknown. If PostInv invokes curl, the probe restricts PATH to a local interceptor, retains the attempted trace payload, and makes no external POST. The source recommends generator mode. No Swift scenario or base ChanID graph-parity claim follows.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -6105,7 +6105,7 @@
           "configuration": "specifications/ewd998/EWD998ChanID_export.cfg",
           "required": true,
           "status": "missing",
-          "gap": "Seven-node alternate MCInit, level-bound selected PostInv, and generator-style trace outcome are unimplemented. PostInv may invoke curl to postman-echo.com; do not execute that external POST as an unnoticed parity side effect. Retain the configured outcome and export evidence with an explicit safe execution contract.",
+          "gap": "Seven-node alternate MCInit, level-bound selected PostInv, and generator-style trace outcome remain unimplemented. A reference-only diagnostic stages byte-identical pinned TLA/CFG and intercepts the configured curl POST locally; it has not run on a host and does not establish parity. Retain TLC's actual outcome, any attempted payload, and source/tool pins before translating this configuration.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "unknown",
           "implementations": [],

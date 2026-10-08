@@ -35,3 +35,13 @@ inputs. A separate reference-only job records TLC's terminal outcome under
 the published configuration before a Swift port claims semantics for its
 `MCInit`, which omits the base model's `passes` variable. That job is not
 graph parity or a replacement for the documented generator-mode campaign.
+
+`EWD998ChanID_export.tla` and `.cfg` are byte-for-byte pinned at SHA-256
+`638f814c422250d6debe1209419971b66ead59c8aa8aca4a2efcc29feb379985`
+and `a02a94fce512a1c7f8c47f0c35bbad7813dfedbafec7212d2404c585541b078a`.
+Their selected `PostInv` can execute an HTTP POST. The reference-only diagnostic
+stages the exact source and configuration but gives TLC a `PATH` containing only
+a local `curl` interceptor. The interceptor accepts only the published command,
+retains its trace payload, and performs no network request. TLC's actual
+terminal outcome has not yet been observed on a host, and no Swift parity is
+claimed for this configuration.
