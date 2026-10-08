@@ -67,6 +67,13 @@
       "conclusion": "failure",
       "scope": "For ewd998-pcal-0, generated TLA versus pinned upstream matched the complete graph (8 initial states, 321370 distinct states), EWD998Spec, and default deadlock. Native versus generated TLA stopped before comparison with invalidInitialState because the generated refinement bridge required every reachable mapped abstract state to be initial. This is one successful comparison path, not a hosted configuration match; a locally tested bridge fix requires a new hosted run."
     },
+    "ewd998PcalRefinementRecovery": {
+      "sourceSHA": "c05c9837d5e2c56619fa00ab1ab3e6a57263ec8e",
+      "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37721773124",
+      "observedStatus": "completed",
+      "conclusion": "success",
+      "scope": "Focused ewd998-pcal-0 diagnostic only: generated-TLA versus pinned upstream and native versus generated-TLA both matched complete initial states, labeled graphs, EWD998Spec, and default deadlock. The native report records 8 initial states, 321370 states, and 2224768 labeled edges. Both comparison artifacts and the generated oracle were retained with source SHA, run provenance, exact input hashes, and pinned TLC v1.8.0/Java/bridge metadata. This does not admit the full matrix, ordinary CI, or the remaining EWD998 configurations."
+    },
     "prHeadFullMatrix": {
       "sourceSHA": "e9891d0b16c47ccd233c44538ea1c39f4b808281",
       "ordinaryCI": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/36770669789",
@@ -5780,7 +5787,7 @@
       "path": "specifications/ewd998",
       "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
       "audit": "Pinned AsyncTerminationDetection, EWD998, EWD998Chan, and EWD998PCal modules and their five published configurations audited; other EWD998 variants remain unaudited",
-      "gap": "AsyncTerminationDetection has a typed model-owned #spec scenario, exact pinned fixtures, and a locally complete 4097-state native graph. Safra's EWD998 N=4 and N=3, EWD998Chan N=3, and EWD998PCal N=3 configurations have typed model-owned scenarios and byte-identical pinned TLA/CFG inputs; focused transition and rendering tests pass. At 8e754f55, EWD998PCal generated TLA matched pinned upstream on the complete graph, EWD998Spec, and default deadlock; native parity failed at the generated refinement bridge before comparison. Both hosted paths remain pending for the other four configurations. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
+      "gap": "AsyncTerminationDetection has a typed model-owned #spec scenario, exact pinned fixtures, and a locally complete 4097-state native graph. Safra's EWD998 N=4 and N=3 and EWD998Chan N=3 configurations have typed model-owned scenarios and byte-identical pinned TLA/CFG inputs; focused transition and rendering tests pass, but both hosted paths remain pending. EWD998PCal N=3 matched both complete hosted comparison paths at c05c9837, including EWD998Spec and default deadlock. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5884,9 +5891,9 @@
         {
           "path": "specifications/ewd998/EWD998PCal.tla",
           "role": "configured root",
-          "reason": "Published N=3 PlusCal configuration has a typed model-owned scenario and pinned inputs. Generated TLA matched pinned upstream at 8e754f55, but native parity failed before comparison; hosted configuration parity remains pending.",
+          "reason": "Published N=3 PlusCal configuration has a typed model-owned scenario and pinned inputs. Both independent hosted comparisons matched the complete graph and selected outcomes at c05c9837; this module disposition is now resolved, while the family remains partial.",
           "implementations": ["Sources/UpstreamParity/Examples/EWD998PCal.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/Folds.tla",
@@ -6002,11 +6009,25 @@
           "module": "specifications/ewd998/EWD998PCal.tla",
           "configuration": "specifications/ewd998/EWD998PCal.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "c05c9837d5e2c56619fa00ab1ab3e6a57263ec8e",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998PCal.swift", "scenario": "EWD998PCal", "caseID": "ewd998-pcal-0"}],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "c05c9837d5e2c56619fa00ab1ab3e6a57263ec8e",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37721773124",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37721773124/artifacts/11527180465",
+            "artifactDigest": "sha256:cd0c782ced4088575cffb05c095daceb0c7cfd16939dc7c1cf2624a0b71fa385",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37721773124/artifacts/11527100918",
+            "nativeArtifactDigest": "sha256:7a6eeb27ce52191d48776d91d8df126c221ff404affa735b3d35a0bdc9bc1f77",
+            "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37721773124/artifacts/11526158877",
+            "generatedOracleArtifactDigest": "sha256:9a8f80c82a348fd96ed52d9353b4708fd8addad4dce29e38d287a963afa36345",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "The focused hosted run completed both independent comparisons exactly. Native and generated-TLA TLC have 8 initial states, 321370 complete states, and 2224768 labeled edges; generated-TLA TLC and pinned upstream TLC compare equal on the complete initial-state set and labeled graph. Native, generated-TLA TLC, and upstream TLC satisfy EWD998Spec and selected default deadlock with no omitted property. Both TLC paths retain CONSTRAINT StateConstraint. The reference root TLA SHA-256 d1622e16901edfa5b01d4e9c00779408b97483156d241c7b0f22515a1d81dc0d matches the ceeaa904 case pin; the raw CFG SHA-256 44073c04a88dd7aa593cab099e59b7b1dd4be31ec2d5b59616b0426a3a84f892 matches the pinned fixture. Retained source-sha and evidence-origin records bind artifacts to this SHA and run. TLC v1.8.0, Temurin 17.0.19+10, jar and bridge hashes are recorded. This focused configuration match does not replace ordinary CI or full-matrix admission on the final revision."
+          }]
         },
         {
           "module": "specifications/ewd998/SmokeEWD998.tla",
@@ -6042,9 +6063,6 @@
       }, {
         "implementation": "Sources/UpstreamParity/Examples/EWD998Chan.swift",
         "reason": "The published N=3 channel configuration is typed, registered against pinned inputs, and locally checked for ordered message transitions, refinement selection, and grouped fairness. Complete native/generated and generated/pinned graph and verdict parity remain open."
-      }, {
-        "implementation": "Sources/UpstreamParity/Examples/EWD998PCal.swift",
-        "reason": "The published N=3 PlusCal configuration is typed, registered against pinned inputs, and locally tested for bag multiplicity, token movement, refinement selection, state constraint, and default deadlock. Generated/pinned graph and verdict parity matched at 8e754f55; native/generated parity failed at the refinement bridge before comparison and remains open."
       }]
     },
     {
