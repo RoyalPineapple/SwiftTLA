@@ -38,7 +38,7 @@ package struct EchoModel: Sendable {
         #spec("Echo") { (spec: SpecificationScope) in
             Extends(.finiteSets)
             let Node = spec.parameter(as: Set<NodeID>.self, in: Subsets(of: NodeID.all.assuming(Set<NodeID>.self)))
-            let initiator = spec.parameter(as: NodeID.self, in: Node)
+            let initiator = Select(from: Node) { _ in true }
             let pairs = Node.flatMapping { (from: WithValue<NodeID>) in
                 Node.mapping { (to: WithValue<NodeID>) in Pair<NodeID, NodeID>.literal(from, to) }
             }
@@ -171,7 +171,6 @@ package struct EchoModel: Sendable {
             Echo
             let MCEcho = Validation {
                 Bind(Node, to: Set<NodeID>([.a, .b, .c]))
-                Bind(initiator, to: NodeID.a)
                 Bind(R, to: Set<Pair<NodeID, NodeID>>([
                     Pair(first: .a, second: .b), Pair(first: .b, second: .a),
                     Pair(first: .a, second: .c), Pair(first: .c, second: .a),
