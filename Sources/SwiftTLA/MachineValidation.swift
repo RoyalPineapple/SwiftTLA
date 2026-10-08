@@ -111,7 +111,7 @@ public enum MachineValidator {
     ) throws -> MachineValidationSummary<Machine.Property> {
         try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
-            stopOnReachability: stopOnReachability, identity: { $0.snapshot }, usesView: false, emit: emit)
+            stopOnReachability: stopOnReachability, identity: { machine, _ in machine.snapshot }, usesView: false, emit: emit)
     }
 
     /// The identity is a typed state function. Equal identities share one exploration node;
@@ -128,6 +128,23 @@ public enum MachineValidator {
     ) throws -> MachineValidationSummary<Machine.Property> {
         try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
             checking: checking, stopOnViolation: stopOnViolation,
+            stopOnReachability: stopOnReachability, identity: { machine, _ in try identity(machine) },
+            usesView: true, emit: emit)
+    }
+
+    /// The checking level is the BFS depth exposed by TLCGet("level"): initial
+    /// states have level one, and a successor has its source level plus one.
+    public static func run<Machine: StateMachine, Identity: Hashable & Sendable>(
+        initialMachines: [Machine],
+        maximumStates: Int,
+        checking: ModelChecks<Machine.Property>,
+        stopOnViolation: Bool,
+        stopOnReachability: Bool = false,
+        identity: (Machine, Int) throws -> Identity,
+        emit: (MachineValidationEvent<Machine>) throws -> Void
+    ) throws -> MachineValidationSummary<Machine.Property> {
+        try runWithIdentity(initialMachines: initialMachines, maximumStates: maximumStates,
+            checking: checking, stopOnViolation: stopOnViolation,
             stopOnReachability: stopOnReachability, identity: identity, usesView: true, emit: emit)
     }
 
@@ -137,7 +154,7 @@ public enum MachineValidator {
         checking: ModelChecks<Machine.Property>,
         stopOnViolation: Bool,
         stopOnReachability: Bool,
-        identity: (Machine) throws -> Identity,
+        identity: (Machine, Int) throws -> Identity,
         usesView: Bool,
         emit: (MachineValidationEvent<Machine>) throws -> Void
     ) throws -> MachineValidationSummary<Machine.Property> {
@@ -270,7 +287,7 @@ public enum MachineValidator {
             if usesView {
                 let admitted = try constraintHolds(machine)
                 let snapshot = machine.snapshot
-                let value = admitted ? try identity(machine) : nil
+                let value = admitted ? try identity(machine, 1) : nil
                 let lookup = value.map(stateID)
                 if !admitted || lookup?.1 == nil {
                     let reached = try checkReachability(machine, predecessor: nil, action: nil)
@@ -290,7 +307,7 @@ public enum MachineValidator {
             if reached && stopOnReachability { return summary(.decisiveReachability) }
             guard try constraintHolds(machine) else { continue }
             let snapshot = machine.snapshot
-            let value = try identity(machine)
+            let value = try identity(machine, 1)
             let (hash, existing) = stateID(value)
             if existing == nil {
                 _ = try insertDiscovered(machine, snapshot: snapshot, identity: value, hash: hash,
@@ -343,7 +360,7 @@ public enum MachineValidator {
                         }
                     }
                     let snapshot = successor.snapshot
-                    let value = try identity(successor)
+                    let value = try identity(successor, successorLevel)
                     let (hash, existing) = stateID(value)
                     if let target = existing {
                         edgeCount += 1

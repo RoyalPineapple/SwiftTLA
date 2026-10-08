@@ -26,10 +26,39 @@ struct ViewIdentityTests {
         #expect(edges.map { "\($0.0)->\($0.1)" } == ["0->1", "1->0"])
         let token = try #require(TLAStateProjection.Token(validating: "View"))
         let initial = try #require(scenario.initialMachines().first)
-        let projection = try scenario.formalIdentityProjection(of: initial.snapshot, using: initial)
+        let projection = try scenario.formalIdentityProjection(of: initial.snapshot, using: initial,
+            atLevel: 1)
         #expect(projection.value(for: token) == .int(0))
         #expect(throws: ExplorationError.viewRequiresStreamingValidation) {
             try scenario.explore(maximumStates: 3)
         }
+    }
+
+    @Test("a view containing the checking level retains revisits at later depths")
+    func levelSensitiveView() throws {
+        let scenario = try #require(ViewIdentityCounter.validationScenarios().first {
+            $0.name == "levelSensitive"
+        })
+        let rendered = try scenario.render().tlaBundle
+        #expect(rendered.root.tla.contains("TLCGet(\"level\")"))
+
+        var states: [(Int, Int)] = []
+        let result = try scenario.runValidation(maximumStates: 4, checking: scenario.checking,
+            stopOnViolation: false, stopOnReachability: false) { event in
+            if case .state(_, let snapshot, _, _, _) = event {
+                states.append((snapshot.state.phase, snapshot.state.history))
+            }
+        }
+        #expect(states.map { "\($0.0):\($0.1)" } == ["0:0", "1:1", "0:2"])
+        #expect(result.states == 3)
+        #expect(result.edges == 2)
+        guard case .exhausted = result.completion else {
+            Issue.record("The level-sensitive view stopped before completing exploration")
+            return
+        }
+        let initial = try #require(scenario.initialMachines().first)
+        let first = try scenario.formalIdentityProjection(of: initial.snapshot, using: initial, atLevel: 1)
+        let revisited = try scenario.formalIdentityProjection(of: initial.snapshot, using: initial, atLevel: 3)
+        #expect(first != revisited)
     }
 }

@@ -6003,7 +6003,7 @@
           "configuration": "specifications/ewd998/EWD998ChanTrace.cfg",
           "required": true,
           "status": "missing",
-          "gap": "The pinned NDJSON input has a typed reader, but neither hosted runner binds it. The reader preserves source order because upstream CausalOrder permits multiple valid orders. Typed ACTION_CONSTRAINT is locally implemented but not wired into this configuration or hosted-verified. A trace-validation path still needs causal choice, level-sensitive VIEW identity, and POSTCONDITION TraceAccepted. Base graph parity does not establish trace acceptance.",
+          "gap": "The pinned NDJSON input has a typed reader, but neither hosted runner binds it. The reader preserves source order because upstream CausalOrder permits multiple valid orders. Typed ACTION_CONSTRAINT and level-sensitive VIEW identity are locally implemented and tested, but neither is wired into this configuration or hosted-verified. A trace-validation path still needs causal choice and POSTCONDITION TraceAccepted. Base graph parity does not establish trace acceptance.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [],

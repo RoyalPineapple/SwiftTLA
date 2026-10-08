@@ -59,6 +59,7 @@ package enum MachineValidationEvidence {
         var actionIDs: [Scenario.Machine.Action: UInt32] = [:]
         var previousAction: (action: Scenario.Machine.Action, id: UInt32)?
         var stateEvents = 0
+        var stateLevels: [Int] = []
         var edgeEvents = 0
         var sampledStates = 0
         var sampledEdges = 0
@@ -84,8 +85,19 @@ package enum MachineValidationEvidence {
             return id
         }
 
-        func encodeStateKey(_ snapshot: Scenario.Machine.Snapshot) throws {
-            try stateKeyEncoder.encode(scenario.formalIdentityProjection(of: snapshot, using: machine),
+        func level(after predecessor: Int?) throws -> Int {
+            guard let predecessor else { return 1 }
+            guard stateLevels.indices.contains(predecessor) else {
+                throw ExplorationError.configurationMismatch
+            }
+            let (next, overflow) = stateLevels[predecessor].addingReportingOverflow(1)
+            guard !overflow else { throw ExplorationError.levelOverflow }
+            return next
+        }
+
+        func encodeStateKey(_ snapshot: Scenario.Machine.Snapshot, atLevel level: Int) throws {
+            try stateKeyEncoder.encode(scenario.formalIdentityProjection(of: snapshot, using: machine,
+                atLevel: level),
                 viewed: scenario.usesView)
         }
 
@@ -101,12 +113,23 @@ package enum MachineValidationEvidence {
             stopOnReachability: stopOnReachability
         ) { event in
             switch event {
-            case .state(let id, let snapshot, let isInitial, _, _):
+            case .state(let id, let snapshot, let isInitial, let predecessor, _):
+                let checkingLevel: Int
+                if scenario.usesView {
+                    guard id == stateLevels.count, isInitial == (predecessor == nil) else {
+                        throw ExplorationError.configurationMismatch
+                    }
+                    checkingLevel = try level(after: predecessor)
+                    stateLevels.append(checkingLevel)
+                } else {
+                    checkingLevel = 1
+                }
                 stateEvents += 1
                 if stateEvents % 256 == 1 {
                     sampledStates += 1
                     let projectionStartedAt = DispatchTime.now().uptimeNanoseconds
-                    let projection = try scenario.formalIdentityProjection(of: snapshot, using: machine)
+                    let projection = try scenario.formalIdentityProjection(of: snapshot, using: machine,
+                        atLevel: checkingLevel)
                     let encodingStartedAt = DispatchTime.now().uptimeNanoseconds
                     try stateKeyEncoder.encode(projection, viewed: scenario.usesView)
                     let writeStartedAt = DispatchTime.now().uptimeNanoseconds
@@ -117,7 +140,7 @@ package enum MachineValidationEvidence {
                     canonicalEncodingNanoseconds += writeStartedAt - encodingStartedAt
                     stateWriteNanoseconds += finishedAt - writeStartedAt
                 } else {
-                    try encodeStateKey(snapshot)
+                    try encodeStateKey(snapshot, atLevel: checkingLevel)
                     try writer.state(id: UInt64(id), key: stateKeyEncoder.bytes, initial: isInitial,
                         representative: representative(snapshot))
                 }
@@ -137,7 +160,8 @@ package enum MachineValidationEvidence {
                     throw MachineValidationEvidenceError.invalidPropertyName
                 }
                 let action = try action.map(actionID)
-                try encodeStateKey(snapshot)
+                try encodeStateKey(snapshot,
+                    atLevel: scenario.usesView ? level(after: predecessor) : 1)
                 try writer.invariantFailure(property: name, key: stateKeyEncoder.bytes,
                     predecessor: predecessor.map(UInt64.init), action: action,
                     representative: representative(snapshot))
@@ -148,7 +172,8 @@ package enum MachineValidationEvidence {
                     throw MachineValidationEvidenceError.invalidPropertyName
                 }
                 let action = try action.map(actionID)
-                try encodeStateKey(snapshot)
+                try encodeStateKey(snapshot,
+                    atLevel: scenario.usesView ? level(after: predecessor) : 1)
                 try writer.reached(property: name, key: stateKeyEncoder.bytes,
                     predecessor: predecessor.map(UInt64.init), action: action,
                     representative: representative(snapshot))

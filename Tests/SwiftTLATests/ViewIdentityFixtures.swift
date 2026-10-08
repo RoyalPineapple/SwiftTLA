@@ -15,6 +15,8 @@ struct ViewIdentityCounter {
             }
             let quotient = Validation { }.viewing(phase)
             quotient
+            let levelSensitive = Validation { }.viewing(Pair.literal(phase, scope.checkingLevel))
+            levelSensitive
         }
     }
 }

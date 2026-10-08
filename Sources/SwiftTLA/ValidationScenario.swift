@@ -112,7 +112,8 @@ public protocol ModelValidationScenario: Sendable {
     func runValidation(initialMachines: [Machine], maximumStates: Int, checking: ModelChecks<Property>,
         stopOnViolation: Bool, stopOnReachability: Bool,
         emit: (MachineValidationEvent<Machine>) throws -> Void) throws -> MachineValidationSummary<Property>
-    func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine) throws -> TLAStateProjection
+    func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
+        atLevel level: Int) throws -> TLAStateProjection
 }
 
 /// The product result for a configured module with no state machine.
@@ -154,7 +155,8 @@ extension ModelValidationScenario {
             stopOnReachability: stopOnReachability, emit: emit)
     }
 
-    public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine) throws -> TLAStateProjection {
+    public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
+        atLevel level: Int) throws -> TLAStateProjection {
         return try machine.formalProjection(of: snapshot)
     }
 

@@ -37,6 +37,9 @@ extension NativeSwiftEmitter {
         var viewProjections: [String] = []
         for (index, scenario) in program.behavior.validationScenarios.enumerated() {
             if let view = scenario.view {
+                let previousCheckingLevelName = checkingLevelName
+                checkingLevelName = "level"
+                defer { checkingLevelName = previousCheckingLevelName }
                 let identity = try expression(view, state: "machine.snapshot.")
                 let projected = try expression(view, state: "snapshot.")
                 viewRuns.append("""
@@ -44,7 +47,7 @@ extension NativeSwiftEmitter {
                     return try MachineValidator.run(initialMachines: initialMachines, maximumStates: maximumStates,
                         checking: checking, stopOnViolation: stopOnViolation,
                         stopOnReachability: stopOnReachability,
-                        identity: { machine in \(identity) }, emit: emit)
+                        identity: { machine, level in \(identity) }, emit: emit)
                 """)
                 viewProjections.append("""
                 case \(index):
@@ -136,7 +139,8 @@ extension NativeSwiftEmitter {
                 default: throw ExplorationError.configurationMismatch
                 }
             }
-            public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine) throws -> TLAStateProjection {
+            public func formalIdentityProjection(of snapshot: Machine.Snapshot, using machine: Machine,
+                atLevel level: Int) throws -> TLAStateProjection {
                 switch selectedView {
                 \(viewProjections.joined(separator: "\n"))
                 case nil:

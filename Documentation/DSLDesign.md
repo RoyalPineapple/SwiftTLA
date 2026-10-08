@@ -942,6 +942,10 @@ published
 View-based exploration records complete representative states for diagnostics,
 but graph equality compares the complete, typed view values and labeled edges.
 Representatives chosen by the two independent checkers need not be identical.
+The view may include `scope.checkingLevel` when a trace must distinguish a
+revisited model state at a later breadth-first depth. Initial states have level
+1, and each successor is evaluated at its source level plus 1 in native checking
+and evidence encoding; TLA+ export renders this term as `TLCGet("level")`.
 The graph result must say that it is view-quotiented; it must not masquerade as
 complete full-state parity. A full-state graph export API rejects a viewed
 scenario, leaving the streaming validator as the supported check path.
