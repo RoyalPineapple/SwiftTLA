@@ -5770,7 +5770,7 @@
       "path": "specifications/ewd998",
       "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
       "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "gap": "The unregistered raw EWD998Termination fixture and its formal-runtime-only test were removed without configuration credit. Audit the pinned module roles and configuration semantics, then complete the typed EWD998 family on its separate branch with both hosted parity paths.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -11149,7 +11149,7 @@
       "id": "AC-13",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Duplicate public record-schema and configuration APIs, compatibility spellings, hand-maintained example TLA/CFG, and obsolete fixture-name aliases have been removed. Model-owned #spec scenarios supply the registered bindings and checks; formal-core Var/Variable/Action remains only for generated or explicitly formal fixtures. The incomplete raw SimpleAllocator and NanoBlockchain example models and their two tests were removed without claiming either family: all four allocator and three Nano configurations remain missing until complete typed ports and both hosted parity paths exist. The older raw EWD998Termination fixture remains and must be removed or replaced before AC-13 acceptance. Final-head source/documentation audit plus ordinary and full hosted admission are also required.",
+      "reason": "Duplicate public record-schema and configuration APIs, compatibility spellings, hand-maintained example TLA/CFG, and obsolete fixture-name aliases have been removed. Model-owned #spec scenarios supply registered bindings and checks; formal-core Var/Variable/Action remains only for generated or explicitly formal fixtures. The incomplete raw SimpleAllocator, NanoBlockchain, and EWD998Termination example models and their tests were removed without claiming those families. Their published configurations remain missing until complete typed ports and both hosted parity paths exist. AC-13 still needs a final-head source/documentation audit plus ordinary and full hosted admission before acceptance.",
       "evidence": []
     },
     {
