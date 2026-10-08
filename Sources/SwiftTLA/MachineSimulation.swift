@@ -28,6 +28,7 @@ public enum MachineSimulator {
         initialMachines: [Machine], maximumDepth: Int, traceCount: Int = 1,
         checking: ModelChecks<Machine.Property>, behavior: ModelBehavior,
         fairness: [MachineFairnessCondition<Machine.Snapshot, Machine.Action>]?,
+        onTrace: ((NativeSimulationResult<Machine>) throws -> Void)? = nil,
         using generator: inout Generator
     ) throws -> NativeSimulationResult<Machine> {
         guard traceCount > 0 else { throw ExplorationError.invalidSimulationTraceCount(traceCount) }
@@ -48,7 +49,10 @@ public enum MachineSimulator {
             let failures = try machine.violatedInvariants(checking: checking.properties, atLevel: initialContext.level)
                 .map(SafetyViolation.invariant)
             if !failures.isEmpty {
-                return .counterexample(.init(violations: failures, trace: [(nil, machine.snapshot)], checking: checking))
+                let result: NativeSimulationResult<Machine> = .counterexample(.init(
+                    violations: failures, trace: [(nil, machine.snapshot)], checking: checking))
+                try onTrace?(result)
+                return result
             }
             if try machine.satisfiesStateConstraint() { eligibleInitial.append(machine) }
         }
@@ -56,10 +60,12 @@ public enum MachineSimulator {
 
         var result = try runTrace(initialMachines: eligibleInitial, first: first, maximumDepth: maximumDepth,
             checking: checking, behavior: behavior, fairness: selectedFairness, using: &generator)
+        try onTrace?(result)
         for _ in 1..<traceCount {
             if case .inconclusive = result {} else { return result }
             result = try runTrace(initialMachines: eligibleInitial, first: first, maximumDepth: maximumDepth,
                 checking: checking, behavior: behavior, fairness: selectedFairness, using: &generator)
+            try onTrace?(result)
         }
         return result
     }
