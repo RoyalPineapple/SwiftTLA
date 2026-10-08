@@ -1,0 +1,9 @@
+{
+  "schema": "PinnedCommunityModules",
+  "tag": "202609120237",
+  "commit": "9aae8ea1318b3ded4629abdccec2c4754b528d70",
+  "jar": {
+    "url": "https://github.com/tlaplus/CommunityModules/releases/download/202609120237/CommunityModules-deps-202609120237.jar",
+    "sha256": "3d9a282c360e90d55e9bbe99caa2987d508fef1556d652760b4af4455e283733"
+  }
+}

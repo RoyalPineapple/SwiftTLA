@@ -4,14 +4,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="${FINITE_GRAPH_PROJECT_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 TOOLCHAIN="$PROJECT_ROOT/Verification/FiniteGraph/toolchain.json"
+COMMUNITY_LOCK="$PROJECT_ROOT/Verification/FiniteGraph/community-modules.json"
 TOOL_ROOT="$PROJECT_ROOT/.build/finite-graph-tools"
 CASES_FILE="${FINITE_GRAPH_CASES:-$PROJECT_ROOT/Verification/FiniteGraph/cases.json}"
 STAGE_INPUTS_ONLY=false
 SKIP_INPUTS=false
 VERIFY_BRIDGE_ONLY=false
+WITH_COMMUNITY_MODULES=false
 
 usage() {
-    echo "Usage: $0 [--toolchain <path>] [--tool-root <path>] [--cases <path>] [--stage-inputs-only] [--skip-inputs] [--verify-bridge-sources]" >&2
+    echo "Usage: $0 [--toolchain <path>] [--tool-root <path>] [--cases <path>] [--stage-inputs-only] [--skip-inputs] [--verify-bridge-sources] [--with-community-modules]" >&2
     exit 2
 }
 
@@ -23,6 +25,7 @@ while [ "$#" -gt 0 ]; do
         --stage-inputs-only) STAGE_INPUTS_ONLY=true; shift ;;
         --skip-inputs) SKIP_INPUTS=true; shift ;;
         --verify-bridge-sources) VERIFY_BRIDGE_ONLY=true; shift ;;
+        --with-community-modules) WITH_COMMUNITY_MODULES=true; shift ;;
         *) usage ;;
     esac
 done
@@ -141,6 +144,29 @@ for path in sys.argv[2:]:
 PY
 }
 
+read_community_lock() {
+    python3 - "$COMMUNITY_LOCK" <<'PY'
+import json
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    lock = json.load(source)
+tag = lock.get("tag")
+commit = lock.get("commit")
+jar = lock.get("jar")
+if lock.get("schema") != "PinnedCommunityModules" or not isinstance(jar, dict) \
+        or not isinstance(tag, str) or not re.fullmatch(r"[0-9]{12}", tag) \
+        or not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit) \
+        or not isinstance(jar.get("sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", jar["sha256"]) \
+        or jar.get("url") != ("https://github.com/tlaplus/CommunityModules/releases/download/"
+                              + tag + "/CommunityModules-deps-" + tag + ".jar"):
+    raise SystemExit("invalid pinned CommunityModules release")
+print(jar["url"])
+print(jar["sha256"])
+PY
+}
+
 if ! LOCK_VALUES="$(read_lock tlc.jar.repository tlc.jar.artifactID tlc.jar.sha256 java.archives."$(uname -m)".url java.archives."$(uname -m)".sha256 tlc.jar.archiveSHA256 tlc.commit)"; then
     fail "${LOCK_VALUES:-toolchain lock does not match the accepted TLC reference pin}"
 fi
@@ -181,7 +207,10 @@ PY
 )"; then
     fail "bridge source validation failed"
 fi
-[ "$VERIFY_BRIDGE_ONLY" = false ] || exit 0
+if [ "$VERIFY_BRIDGE_ONLY" = true ]; then
+    read_community_lock >/dev/null || fail "community module pin validation failed"
+    exit 0
+fi
 
 sha256() {
     shasum -a 256 "$1" | awk '{print $1}'
@@ -220,6 +249,12 @@ seed_from_cache() {
 mkdir -p "$TOOL_ROOT/downloads" "$TOOL_ROOT/bridge-classes"
 TLC_JAR="$TOOL_ROOT/downloads/tla2tools.jar"
 JAVA_ARCHIVE="$TOOL_ROOT/downloads/temurin-${ARCHITECTURE}.tar.gz"
+if [ "$WITH_COMMUNITY_MODULES" = true ]; then
+    COMMUNITY_VALUES="$(read_community_lock)" || fail "invalid community module pin"
+    COMMUNITY_URL="$(printf '%s\n' "$COMMUNITY_VALUES" | sed -n '1p')"
+    COMMUNITY_SHA256="$(printf '%s\n' "$COMMUNITY_VALUES" | sed -n '2p')"
+    download_locked "$COMMUNITY_URL" "$COMMUNITY_SHA256" "$TOOL_ROOT/downloads/CommunityModules-deps.jar"
+fi
 CACHE_ROOT="$PROJECT_ROOT/Tools/TLCGraphBridge/.tool-cache"
 seed_from_cache "$CACHE_ROOT/OpenJDK17U-jdk_${ARCHITECTURE}_mac_hotspot_17.0.19_10.tar.gz" "$JAVA_SHA256" "$JAVA_ARCHIVE"
 TLC_HEADERS=(
