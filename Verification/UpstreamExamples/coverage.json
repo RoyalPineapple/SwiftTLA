@@ -5787,7 +5787,7 @@
       "path": "specifications/ewd998",
       "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
       "audit": "Pinned AsyncTerminationDetection, EWD998, EWD998Chan, EWD998ChanID, EWD998PCal, the source-defined opts variants and orchestration harness, and the Folds/Utils helpers inspected; other EWD998 variants remain unaudited",
-      "gap": "AsyncTerminationDetection has a typed model-owned #spec scenario, exact pinned fixtures, and a locally complete 4097-state native graph. Safra's EWD998 N=4 and N=3 and EWD998Chan N=3 configurations have typed model-owned scenarios and byte-identical pinned TLA/CFG inputs; focused transition and rendering tests pass, but both hosted paths remain pending. EWD998PCal N=3 matched both complete hosted comparison paths at c05c9837, including EWD998Spec and default deadlock. EWD998ChanID has a partial typed model with bounded per-member fairness, full clock-bearing state, a rendered channel refinement, and an isolated unhosted five-node VIEW scenario using native quotient identity and view-aware binary evidence. Its pinned TLA/CFG fixtures are byte-identical to upstream at ceeaa904; case registration and exact hosted parity remain open; local implementation alone cannot establish parity. N=5 initial-choice performance is not measured. The source-defined EWD998_opts and EWD998Chan_opts generator variants and EWD998_optsSC campaign remain unimplemented. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
+      "gap": "AsyncTerminationDetection has a typed model-owned #spec scenario, exact pinned fixtures, and a locally complete 4097-state native graph. Safra's EWD998 N=4 and N=3 and EWD998Chan N=3 configurations have typed model-owned scenarios and byte-identical pinned TLA/CFG inputs; focused transition and rendering tests pass, but both hosted paths remain pending. EWD998PCal N=3 matched both complete hosted comparison paths at c05c9837, including EWD998Spec and default deadlock. EWD998ChanID has a partial typed model with bounded per-member fairness, full clock-bearing state, a rendered channel refinement, and an isolated unhosted five-node VIEW scenario using native quotient identity and view-aware binary evidence. Its pinned TLA/CFG fixtures are byte-identical to upstream at ceeaa904; case registration is in place, but exact hosted parity remains open; local implementation alone cannot establish parity. N=5 initial-choice performance is not measured. The source-defined EWD998_opts and EWD998Chan_opts generator variants and EWD998_optsSC campaign remain unimplemented. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5870,7 +5870,7 @@
         {
           "path": "specifications/ewd998/EWD998ChanID.tla",
           "role": "configured root",
-          "reason": "A partial typed model with n1..n7 identifiers and rendered EWD998Chan refinement exists. An isolated, unhosted worktree now has a model-owned five-node scenario, native typed VIEW identity, and view-aware binary graph evidence. The pinned upstream TLA/CFG fixture is present and byte-identical at ceeaa904; case registration, exact hosted parity on both paths, and source-bound artifacts are still missing. This configuration is not yet verified.",
+          "reason": "A typed model with n1..n7 identifiers and rendered EWD998Chan refinement has a model-owned five-node scenario, native typed VIEW identity, and view-aware binary graph evidence. The pinned upstream TLA/CFG fixture is byte-identical at ceeaa904 and the case is registered. Exact hosted parity on both paths and source-bound artifacts remain missing; this configuration is not yet verified.",
           "implementations": ["Sources/UpstreamParity/Examples/EWD998ChanID.swift"],
           "dispositionComplete": false
         },
@@ -5969,11 +5969,11 @@
           "module": "specifications/ewd998/EWD998ChanID.tla",
           "configuration": "specifications/ewd998/EWD998ChanID.cfg",
           "required": true,
-          "status": "missing",
-          "gap": "Pinned TLA and CFG fixtures now match upstream ceeaa904 byte-for-byte. The typed five-node #spec scenario remains unregistered and unhosted; complete two-path graph, selected-property, refinement, VIEW, and deadlock evidence is required before coverage credit.",
+          "status": "implemented",
+          "gap": "Pinned TLA and CFG fixtures match upstream ceeaa904 byte-for-byte and the typed five-node #spec scenario is registered. Complete two-path graph, selected-property, refinement, VIEW, and deadlock evidence is still required before coverage credit.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998ChanID.swift", "scenario": "EWD998ChanID", "caseID": "ewd998-chan-id-0"}],
           "evidence": []
         },
         {
@@ -6066,6 +6066,9 @@
       }, {
         "implementation": "Sources/UpstreamParity/Examples/EWD998Chan.swift",
         "reason": "The published N=3 channel configuration is typed, registered against pinned inputs, and locally checked for ordered message transitions, refinement selection, and grouped fairness. Complete native/generated and generated/pinned graph and verdict parity remain open."
+      }, {
+        "implementation": "Sources/UpstreamParity/Examples/EWD998ChanID.swift",
+        "reason": "The published five-node identifier configuration is typed and registered against byte-identical pinned inputs with configured VIEW identity. Focused local diagnostics pass; both complete hosted graph and verdict comparisons remain open."
       }]
     },
     {

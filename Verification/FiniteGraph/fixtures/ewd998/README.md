@@ -16,4 +16,4 @@ pinned `tlaplus/Examples` revision. The configuration selects five nodes,
 disables deadlock checking. Their SHA-256 digests are
 `c498e5e35a83d84257016fdf4ba359ddb40dbb5f3b2234656e32b419a5499e93`
 and `69ec430deca39d7af5e2bfb1f6e43b5c941d29f4362a70048d534a52b8a54146`.
-They are reference inputs only; the case is not registered or verified yet.
+The five-node case is registered but has no hosted parity evidence yet.

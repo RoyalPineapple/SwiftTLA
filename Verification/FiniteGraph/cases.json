@@ -1549,6 +1549,37 @@
       "timeoutSeconds": 10800
     },
     {
+      "id": "ewd998-chan-id-0",
+      "sourceModel": "ewd998-chan-id",
+      "scenario": "EWD998ChanID",
+      "module": "ewd998/EWD998ChanID.tla",
+      "configuration": "ewd998/EWD998ChanID.cfg",
+      "imports": ["ewd998/Utils.tla", "ewd840/SequencesExt.tla", "ewd998/EWD998Chan.tla", "ewd998/EWD998.tla", "ewd998/AsyncTerminationDetection.tla", "kvsnap/Functions.tla", "ewd998/Folds.tla", "die-hardest/FiniteSetsExt.tla"],
+      "dependencies": [
+        {"importingModule": "EWD998ChanID", "importedModule": "Utils"},
+        {"importingModule": "EWD998ChanID", "importedModule": "SequencesExt"},
+        {"importingModule": "EWD998ChanID", "importedModule": "EWD998Chan"},
+        {"importingModule": "EWD998Chan", "importedModule": "Utils"},
+        {"importingModule": "EWD998Chan", "importedModule": "SequencesExt"},
+        {"importingModule": "EWD998Chan", "importedModule": "EWD998"},
+        {"importingModule": "Utils", "importedModule": "Functions"},
+        {"importingModule": "SequencesExt", "importedModule": "FiniteSetsExt"},
+        {"importingModule": "SequencesExt", "importedModule": "Folds"},
+        {"importingModule": "SequencesExt", "importedModule": "Functions"},
+        {"importingModule": "EWD998", "importedModule": "AsyncTerminationDetection"},
+        {"importingModule": "EWD998", "importedModule": "Functions"},
+        {"importingModule": "Functions", "importedModule": "Folds"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/EWD998ChanID.tla",
+        "sha256": "c498e5e35a83d84257016fdf4ba359ddb40dbb5f3b2234656e32b419a5499e93"
+      },
+      "exploration": {"maximumStateLimit": 300000000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "c498e5e35a83d84257016fdf4ba359ddb40dbb5f3b2234656e32b419a5499e93",
+      "cfgSHA256": "69ec430deca39d7af5e2bfb1f6e43b5c941d29f4362a70048d534a52b8a54146",
+      "timeoutSeconds": 10800
+    },
+    {
       "id": "ewd998-pcal-0",
       "sourceModel": "ewd998-pcal",
       "scenario": "EWD998PCal",
