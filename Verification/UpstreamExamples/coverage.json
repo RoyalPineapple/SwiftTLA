@@ -11149,8 +11149,17 @@
       "id": "AC-13",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Duplicate public record-schema and configuration APIs, compatibility spellings, hand-maintained example TLA/CFG, and obsolete fixture-name aliases have been removed. Model-owned #spec scenarios supply registered bindings and checks; formal-core Var/Variable/Action remains only for generated or explicitly formal fixtures. A current source audit found no legacy application authoring in Examples and no hand-maintained example TLA/CFG. README, Design, and ProductionReadiness now describe the generated checker and explicitly justify the package-only formal interpreter's compiler/fixture boundary. The incomplete raw SimpleAllocator, NanoBlockchain, and EWD998Termination models remain removed without claiming their families. AC-13 awaits ordinary and full hosted admission of these documentation corrections on the final SHA.",
-      "evidence": []
+      "reason": "Duplicate public record-schema and configuration APIs, compatibility spellings, hand-maintained example TLA/CFG, and obsolete fixture-name aliases have been removed. Model-owned #spec scenarios supply registered bindings and checks; formal-core Var/Variable/Action remains only for generated or explicitly formal fixtures. A source audit at 852295bc found no legacy application authoring in Examples and no hand-maintained example TLA/CFG. README, Design, and ProductionReadiness describe the generated checker and justify the package-only formal interpreter's compiler/fixture boundary. The incomplete raw SimpleAllocator, NanoBlockchain, and EWD998Termination models remain removed without claiming their families. Ordinary CI and the full unfiltered hosted matrix passed on 852295bc; later local commits require their own final-head admission.",
+      "evidence": [{
+        "sourceSHA": "852295bc34d3f76141dbce4c1aa708dd54360e82",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37808634825",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37808634825/artifacts/11565439727",
+        "artifactSHA256": "9731a418d1b5a4651756000678b681e3d90746a3263a589d32243a9bcdc93631",
+        "validationRunURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37808635016",
+        "acceptanceComplete": true,
+        "scope": "The source-audited replacement/deletion contract is unchanged on this SHA. Ordinary CI passed all five jobs, including Apple-platform examples; the unfiltered independent validation passed 417 jobs and retained 300 nonempty artifacts for 116 native scenarios and 66 applicable upstream comparisons. Fifty diagnostic-only upstream jobs and the replay diagnostic were intentionally skipped. Retained source-sha files and the PR head identify 852295bc. This accepts AC-13 cleanup on that revision, not the two subsequent local commits or the remaining upstream families."
+      }]
     },
     {
       "id": "AC-14",

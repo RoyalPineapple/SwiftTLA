@@ -11,12 +11,14 @@ module/configuration pairs are a baseline, not a cap on source-defined variants.
 ## Baseline and admission rule
 
 The current ledger marks all 19 DSL criteria implemented and retains
-requirement-specific acceptance evidence for 18. AC-13 still requires final-head
-hosted admission of its cleanup. Historical configuration matches are progress,
-not proof that PR #394's current head or all 78 families are complete. The full,
-unfiltered validation run for frozen PR SHA `852295bc` must be reconciled
-before admission; local commit `c948d57f` is not part of that run and has no
-hosted credit.
+requirement-specific acceptance evidence for all 19. AC-13's cleanup is
+accepted on frozen PR SHA `852295bc`: ordinary CI run `37808634825` passed all
+five jobs, and unfiltered validation run `37808635016` passed 417 jobs with
+300 nonempty artifacts. The 50 diagnostic-only upstream jobs and one replay
+diagnostic were intentionally skipped. The PR head remained that SHA and draft
+when reconciled. This admits that revision, not the two later local commits or
+all 78 upstream families; final-head admission is still required after those
+commits are pushed.
 
 At Swift SHA `767fe50bf6108ec39f7b19c35e4badd44735c364`, the ledger recorded
 19/78 complete families and 44/234 hosted-matched published configurations.
@@ -71,11 +73,11 @@ models or checks to fit the implementation.
 
 Keep one candidate SHA and one active family at a time. The immediate queue is:
 
-1. Reconcile frozen PR SHA `852295bc` against ordinary CI, the full validation
-   matrix, and retained evidence. Do not promote the later local commit using
-   the earlier SHA's result.
-2. Close AC-13's final-head admission and PR #394's existing configurations on
-   one green pushed revision, then merge the DSL migration.
+1. Push one candidate containing the two local commits and this source-aligned
+   evidence update, then admit that final head with ordinary CI and the full
+   matrix. The earlier `852295bc` result does not qualify the new candidate.
+2. Merge PR #394 only after the final-head evidence and existing configurations
+   are reconciled on the same revision.
 3. Complete the remaining upstream corpus one whole family at a time. EWD998
    is the current partial family; its historical configuration matches do not
    complete its unverified variants.
@@ -312,12 +314,13 @@ Keep one candidate SHA and one active family at a time. The immediate queue is:
       application or native-checking paths and need not be deleted to satisfy
       this criterion. The audited callers and hosted evidence are recorded in
       `coverage.json`; direct-TLA corpus ports retain their own migration gaps.
-- [ ] Admit AC-13 on the final PR head. The source audit in `coverage.json`
-      records removal of replaced spellings, duplicate configuration, obsolete
-      callers, compatibility aliases, and stale documentation. Its cleanup is
-      implemented, but the ledger has no `acceptanceComplete` hosted evidence
-      for this criterion. Do not reopen formal-core test oracles as an invented
-      application-migration requirement.
+- [x] Accept AC-13's replacement/deletion contract on `852295bc`. The source
+      audit in `coverage.json` records removal of replaced spellings, duplicate
+      configuration, obsolete callers, compatibility aliases, and stale
+      documentation; ordinary CI and the full hosted matrix passed on that SHA.
+      The two later local commits still require final-head admission. Do not
+      reopen formal-core test oracles as an invented application-migration
+      requirement.
 - [x] Accept AC-14's generated-machine identity by default and explicit,
       sound symmetry admission with complete TLC-orbit comparison. Historical
       evidence is recorded in `coverage.json`; final-head admission is separate.
