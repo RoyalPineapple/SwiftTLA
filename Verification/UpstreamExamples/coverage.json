@@ -8868,21 +8868,21 @@
     {
       "path": "specifications/SlidingPuzzles",
       "name": "Sliding Block Puzzle",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned state machine and both published configurations inspected; implementation and hosted parity pending",
+      "gap": "Both configurations start from the same ten-piece Klotski board, check TypeOK and the deliberately violated KlotskiGoal invariant, and use one-cell translations of a uniquely identified adjacent piece into an empty cell. The animation root additionally selects an SVG-producing ALIAS; this trace output must not become part of graph-state identity. Implement the set-of-piece board and exact transition relation in typed #spec, retain the alias output for the animation configuration, and compare each decisive verdict and witness on both hosted paths. No configuration is implemented or credited yet.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/SlidingPuzzles/SlidingPuzzles_anim.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Extends the core sliding-puzzle module and adds the published SVG trace alias while checking the same Init, Next, TypeOK, and KlotskiGoal.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/SlidingPuzzles/SlidingPuzzles.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Defines the set-of-piece Klotski state and one-cell move relation; its published configuration selects TypeOK and deliberately violated KlotskiGoal.",
           "implementations": [],
           "dispositionComplete": false
         }
@@ -10725,56 +10725,56 @@
     {
       "path": "specifications/tower_of_hanoi",
       "name": "The Tower of Hanoi Puzzle",
-      "audit": "not audited",
-      "gap": "Audit existing Swift sources, module roles, configuration semantics, and retained evidence.",
+      "audit": "pinned modules and both published configurations inspected; implementation and hosted parity pending",
+      "gap": "The Toolbox MC root binds D=5/N=3 and checks the deliberately violated NotSolved invariant through Spec. Hanoi_anim binds D=3/N=3, uses INIT/NEXT, checks the same invariant, and selects an SVG-producing ALIAS. Both use the numeric bitmask tower state and the Bits bitwise-AND operator; the upstream Bits.java TLC override is a pinned tool dependency to resolve for hosted execution, not a reason to change the model. Preserve the exact bitmask transition semantics in typed #spec, using existing arithmetic and recursion if sufficient rather than presuming a new compiler operator. Preserve selected alias output separately from graph identity, and compare each decisive verdict and witness on both hosted paths. HanoiSeq is an unconfigured sequence-state variant, not an alias of the configured bitmask model. No configuration or module is credited yet.",
       "legacyCleanupComplete": false,
       "modules": [
         {
           "path": "specifications/tower_of_hanoi/Bits.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "helper dependency",
+          "reason": "Hanoi imports its integer bitwise-AND operator; the Toolbox copy has the same pinned Git blob and Bits.java provides the documented TLC operator override.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/tower_of_hanoi/Hanoi_anim.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The published D=3/N=3 configuration selects Hanoi's Init, Next, NotSolved, and an SVG-producing trace alias.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/tower_of_hanoi/Hanoi.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "algorithm dependency",
+          "reason": "Both configured roots use this numeric bitmask-tower state machine and its NotSolved invariant; its Toolbox copy has the same pinned Git blob.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/Bits.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "helper dependency copy",
+          "reason": "Byte-identical pinned Git blob of the top-level Bits.tla, located beside the Toolbox model.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/Hanoi.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "algorithm dependency copy",
+          "reason": "Byte-identical pinned Git blob of the top-level Hanoi.tla, extended by the Toolbox MC root.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/tower_of_hanoi/Hanoi.toolbox/Model_1/MC.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The published Toolbox model binds D=5/N=3, selects Spec, and checks the deliberately violated NotSolved invariant.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/tower_of_hanoi/HanoiSeq.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured algorithm variant",
+          "reason": "An independent sequence-of-disks representation with its own Init, Next, and invariants; the published manifest selects no TLC configuration for it.",
           "implementations": [],
           "dispositionComplete": false
         }
