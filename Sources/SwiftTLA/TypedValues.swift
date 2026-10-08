@@ -513,6 +513,74 @@ public struct Triple<First: TLAValueType, Second: TLAValueType, Third: TLAValueT
 
 extension Triple: FormalTupleValue {}
 
+/// A typed five-member TLA+ tuple with independently typed positions.
+public struct Quintuple<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
+    Fourth: TLAValueType, Fifth: TLAValueType>: TLAValueType, Hashable, Sendable {
+  public static var formalValueShape: FormalValueShape {
+    .tuple([First.formalValueShape, Second.formalValueShape, Third.formalValueShape,
+            Fourth.formalValueShape, Fifth.formalValueShape])
+  }
+  public let first: First
+  public let second: Second
+  public let third: Third
+  public let fourth: Fourth
+  public let fifth: Fifth
+
+  public init(first: First = .defaultValue, second: Second = .defaultValue,
+              third: Third = .defaultValue, fourth: Fourth = .defaultValue,
+              fifth: Fifth = .defaultValue) {
+    self.first = first
+    self.second = second
+    self.third = third
+    self.fourth = fourth
+    self.fifth = fifth
+  }
+
+  public init?(formalValue: TLAValue) {
+    guard case .tuple(let values) = formalValue, values.count == 5,
+          let first = First(formalValue: values[0]),
+          let second = Second(formalValue: values[1]),
+          let third = Third(formalValue: values[2]),
+          let fourth = Fourth(formalValue: values[3]),
+          let fifth = Fifth(formalValue: values[4]),
+          first.sourceIssue == nil, second.sourceIssue == nil, third.sourceIssue == nil,
+          fourth.sourceIssue == nil, fifth.sourceIssue == nil else { return nil }
+    self.init(first: first, second: second, third: third, fourth: fourth, fifth: fifth)
+  }
+
+  public var sourceIssue: SourceModelIssue? {
+    first.sourceIssue ?? second.sourceIssue ?? third.sourceIssue ?? fourth.sourceIssue ?? fifth.sourceIssue
+  }
+  public var tlaValue: TLAValue {
+    .tuple([first.tlaValue, second.tlaValue, third.tlaValue, fourth.tlaValue, fifth.tlaValue])
+  }
+  public static var defaultValue: Self { Self() }
+
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.sourceIssue == rhs.sourceIssue && lhs.tlaValue == rhs.tlaValue
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(sourceIssue)
+    hasher.combine(tlaValue)
+  }
+
+  public static func literal(_ first: First, _ second: Second, _ third: Third,
+    _ fourth: Fourth, _ fifth: Fifth) -> Expr<Self> {
+    Expr(.tupleLiteral([first.stateExpr, second.stateExpr, third.stateExpr,
+                        fourth.stateExpr, fifth.stateExpr]))
+  }
+
+  public static func literal(_ first: some TypedExpression<First>, _ second: some TypedExpression<Second>,
+    _ third: some TypedExpression<Third>, _ fourth: some TypedExpression<Fourth>,
+    _ fifth: some TypedExpression<Fifth>) -> Expr<Self> {
+    Expr(.tupleLiteral([first.stateExpr, second.stateExpr, third.stateExpr,
+                        fourth.stateExpr, fifth.stateExpr]))
+  }
+}
+
+extension Quintuple: FormalTupleValue {}
+
 /// A finite formal sequence whose first element is at index zero.
 ///
 /// TLA+ represents this value as a function with domain `0..<(count)` for
@@ -1000,6 +1068,36 @@ extension TypedExpression where ExpressionValue: FormalTupleValue {
   public func third<First: TLAValueType, Second: TLAValueType, Third: TLAValueType>() -> Expr<Third>
   where ExpressionValue == Triple<First, Second, Third> {
     Expr<Third>(.tupleAccess(stateExpr, 3))
+  }
+
+  public func first<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
+    Fourth: TLAValueType, Fifth: TLAValueType>() -> Expr<First>
+  where ExpressionValue == Quintuple<First, Second, Third, Fourth, Fifth> {
+    Expr<First>(.tupleAccess(stateExpr, 1))
+  }
+
+  public func second<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
+    Fourth: TLAValueType, Fifth: TLAValueType>() -> Expr<Second>
+  where ExpressionValue == Quintuple<First, Second, Third, Fourth, Fifth> {
+    Expr<Second>(.tupleAccess(stateExpr, 2))
+  }
+
+  public func third<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
+    Fourth: TLAValueType, Fifth: TLAValueType>() -> Expr<Third>
+  where ExpressionValue == Quintuple<First, Second, Third, Fourth, Fifth> {
+    Expr<Third>(.tupleAccess(stateExpr, 3))
+  }
+
+  public func fourth<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
+    Fourth: TLAValueType, Fifth: TLAValueType>() -> Expr<Fourth>
+  where ExpressionValue == Quintuple<First, Second, Third, Fourth, Fifth> {
+    Expr<Fourth>(.tupleAccess(stateExpr, 4))
+  }
+
+  public func fifth<First: TLAValueType, Second: TLAValueType, Third: TLAValueType,
+    Fourth: TLAValueType, Fifth: TLAValueType>() -> Expr<Fifth>
+  where ExpressionValue == Quintuple<First, Second, Third, Fourth, Fifth> {
+    Expr<Fifth>(.tupleAccess(stateExpr, 5))
   }
 
   public var count: Expr<Int> {

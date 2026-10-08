@@ -11,7 +11,7 @@ struct NativeTypeDeclarations: Sendable {
     let modelValueCases: [String: String]
 
     static func usesPublicTuple(_ type: CompiledValueType) -> Bool {
-        guard case .tuple(let elements) = type, (2...3).contains(elements.count) else { return false }
+        guard case .tuple(let elements) = type, [2, 3, 5].contains(elements.count) else { return false }
         return elements.allSatisfy(supportsPublicValueType)
     }
 

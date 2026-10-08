@@ -966,6 +966,8 @@ final class ParserSession {
             case "first": return .tupleAccess(base, 1)
             case "second": return .tupleAccess(base, 2)
             case "third": return .tupleAccess(base, 3)
+            case "fourth": return .tupleAccess(base, 4)
+            case "fifth": return .tupleAccess(base, 5)
             case "head": return .tupleHead(base)
             case "tail": return .tupleTail(base)
             default: break
@@ -1303,8 +1305,8 @@ final class ParserSession {
                     elements.append(element)
                 }
                 return literalType.name == "TupleExpr" ? .tupleLiteral(elements) : formalZeroBasedSequence(elements)
-            case "Pair", "Triple":
-                let count = literalType.name == "Pair" ? 2 : 3
+            case "Pair", "Triple", "Quintuple":
+                let count = literalType.name == "Pair" ? 2 : literalType.name == "Triple" ? 3 : 5
                 guard call.arguments.count == count else { return nil }
                 let elements = call.arguments.compactMap { decodeTypedFacadeValue($0.expression, scope: scope) }
                 guard elements.count == count else { return nil }
@@ -1879,6 +1881,8 @@ final class ParserSession {
             case "first": return elements.first
             case "second": return elements.count > 1 ? elements[1] : nil
             case "third": return elements.count > 2 ? elements[2] : nil
+            case "fourth": return elements.count > 3 ? elements[3] : nil
+            case "fifth": return elements.count > 4 ? elements[4] : nil
             default: break
             }
         }
@@ -2098,6 +2102,7 @@ final class ParserSession {
         switch name {
         case "Pair": return (["first", "second"], initializer)
         case "Triple": return (["first", "second", "third"], initializer)
+        case "Quintuple": return (["first", "second", "third", "fourth", "fifth"], initializer)
         default: return nil
         }
     }

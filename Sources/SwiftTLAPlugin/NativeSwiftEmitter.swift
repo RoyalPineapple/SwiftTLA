@@ -103,7 +103,7 @@ struct NativeSwiftEmitter {
         case .oneOf(let first, let second): return "OneOf<\(try swiftType(first)), \(try swiftType(second))>"
         case .nominalRecord(let name, _): return name
         case .tuple(let elements) where NativeTypeDeclarations.usesPublicTuple(type):
-            let name = elements.count == 2 ? "Pair" : "Triple"
+            let name = elements.count == 2 ? "Pair" : elements.count == 3 ? "Triple" : "Quintuple"
             return "\(name)<\(try elements.map(swiftType).joined(separator: ", "))>"
         case .finite, .union, .record, .tuple:
             guard let name = typeDeclarations.names[type] else {
@@ -143,7 +143,7 @@ struct NativeSwiftEmitter {
         case .record(let fields), .nominalRecord(_, let fields): return escaped ? "`\(fields[index].name)`" : fields[index].name
         case .tuple(let elements):
             if NativeTypeDeclarations.usesPublicTuple(type) {
-                return ["first", "second", "third"][index]
+                return ["first", "second", "third", "fourth", "fifth"][index]
             }
             return elements.count == 2 ? (index == 0 ? "first" : "second") : "element\(index + 1)"
         default: preconditionFailure("Field naming requires resolved record or tuple types")

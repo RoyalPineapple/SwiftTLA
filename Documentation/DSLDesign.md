@@ -1030,8 +1030,9 @@ Array expressions support append, concatenation, indexed reads, indexed removal,
 selection, length, head, and folds through the shared sequence operations.
 These operations retain the array type. They do not require a `TupleExpr` value.
 When a TLA+ state value is a heterogeneous fixed-length tuple rather than a
-sequence, `Pair<A, B>` and `Triple<A, B, C>` retain each position's Swift type
-and serialize as `<<...>>`. The generated machine keeps the same ordered values.
+sequence, `Pair<A, B>`, `Triple<A, B, C>`, and five-position `Quintuple` retain
+each position's Swift type and serialize as `<<...>>`. The generated machine
+keeps the same ordered values.
 `Sequences` and `SortedSequences` produce domains of ordinary Swift arrays.
 Set operations accept different set representations with the same element type and preserve the receiver type.
 DSL sequence indices start at one, as in TLA+.
