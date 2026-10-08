@@ -11198,21 +11198,29 @@
       "id": "AC-13",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Duplicate public record-schema and configuration APIs, compatibility spellings, hand-maintained example TLA/CFG, and obsolete fixture-name aliases have been removed. Model-owned #spec scenarios supply registered bindings and checks; formal-core Var/Variable/Action remains only for generated or explicitly formal fixtures. The incomplete raw SimpleAllocator and NanoBlockchain example models and their tests were removed without claiming those families. The old raw EWD998Termination fixture and test-only helpers were removed; this branch has a typed model-owned #spec replacement for AsyncTerminationDetection. Safra's EWD998 N=4 and N=3 and EWD998Chan N=3 configurations are typed and locally registered, but their hosted parity and remaining EWD998 variants remain open. AC-13 still needs a final-head source/documentation audit plus ordinary and full hosted admission before acceptance.",
+      "reason": "Duplicate public record-schema and configuration APIs, compatibility spellings, hand-maintained example TLA/CFG, and obsolete fixture-name aliases have been removed. Model-owned #spec scenarios supply registered bindings and checks; formal-core Var/Variable/Action remains only for generated or explicitly formal fixtures. A current source audit found no legacy application authoring in Examples and no hand-maintained example TLA/CFG. README, Design, and ProductionReadiness now describe the generated checker and justify the package-only formal interpreter's compiler/fixture boundary. The incomplete raw SimpleAllocator, NanoBlockchain, and EWD998Termination fixtures and test-only helpers remain removed; this branch instead has typed #spec models for AsyncTerminationDetection, EWD998 N=4 and N=3, and EWD998Chan N=3. Their hosted parity and the remaining EWD998 variants remain open. AC-13 awaits ordinary and full hosted admission on a final SHA.",
       "evidence": []
     },
     {
       "id": "AC-14",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "ConcreteVerificationGraphTests rejects reduced temporal and refinement analysis, including reused reduction evidence. SymmetryDomainAdmissionTests rejects composite domains that can collapse distinct function keys. SymmetryCounterexampleTests first demonstrated that the old formal-explorer reduction could hide a reachable invariant violation. ModelChecker now rejects explicit reduction; isolated commit b44c4a36 deletes its unreachable reducer and stale tests. Public TLC bundle selection rejects unsupported explicit symmetry instead of silently emitting an unreduced check. The generated-machine checker retains an exact unreduced graph and independent TLC orbit comparison. The #spec finite-symmetry declaration requires an immutable named binding and explicit registration; the direct formal-core string-named declaration remains a formal builder. A generated validation scenario does not enable symmetry by default. Model-owned usingSymmetry selects one registered handle for safety-only TLC export, while same-name foreign, duplicate, and unregistered references fail. The bounded B-04 scope now specifies which fairness and symmetry forms are supported and rejects other reductions rather than silently changing checking mode. On the integrated DSL branch, 71 focused symmetry, fairness, type, and refinement tests plus 19 orbit-conformance tests pass locally, including non-equivariant transition and initial-state rejection, exact raw/reduced graph comparison, and default unreduced selection. AC-14 is implemented but uncredited: complete orbit comparisons and final-head ordinary/full hosted evidence are still required.",
-      "evidence": []
+      "reason": "Explicit finite symmetry is opt-in through a registered immutable binding and safety-only TLC scenario; native checking remains unreduced. The source-audited ConcreteVerificationGraphTests, SymmetryDomainAdmissionTests, and SymmetryCounterexampleTests reject unsafe reductions, including temporal/refinement modes and non-equivariant domains. The generated native symmetry fixture is checked against independent raw and reduced TLC graphs. On hosted SHA 77ef17da, all four complete scope-2-through-5 orbit comparisons are exact, and ordinary CI plus the full validation gate pass. This accepts the bounded AC-14 contract, not other upstream configurations or a later final SHA.",
+      "evidence": [{
+        "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11528898933",
+        "artifactSHA256": "6c3bf78ece911e5b5515c3da1e512a60f50275dd3caaa2dafe761eadab0fcdf3",
+        "acceptanceComplete": true,
+        "scope": "Retained source-sha.txt binds the artifact to this SHA. All four symmetry case-outcome records are exact. Each native raw graph and both TLC raw/reduced graph streams has a complete footer; the orbit comparison retains full value-identified orbit members and quotient edges. Temporal and refinement reduction is rejected, not silently applied. Ordinary CI run 37729461379 and the unfiltered validation run both succeeded. This does not claim native reduced exploration or full corpus coverage."
+      }]
     },
     {
       "id": "AC-15",
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
-      "reason": "Audited generated tests preserve the complete three-state/four-edge temporal graph under no, weak, and strong fairness and assert the corresponding absence/presence of WF_/SF_ in generated export. ConfiguredProcessTests covers per-instance obligations, empty populations, and reachable completion without assuming eventual completion. ProjectedFairnessTests covers state projections and stuttering. ProcessFairnessExemptionTests checks that process fairness is one obligation over the eligible atomic-step disjunction in both generated native code and TLA export. The bounded B-04 scope now excludes individually targetable inner process steps and any inferred fairness. On the integrated DSL branch, the focused symmetry, fairness, type, and refinement audit passes all 71 selected tests; EWD840's nine execution tests also pass, including the single System fairness obligation in native and TLA output. Prior hosted evidence at 6d0617ab predates grouped-fairness correction. Complete source-aligned hosted evidence, including independent projected/exempt fairness comparison, remains required. This criterion is implemented but uncredited.",
+      "reason": "No fairness is inferred. Generated no/weak/strong fairness changes temporal outcomes without changing the complete three-state/four-edge graph, and the exported WF_/SF_ obligations match TLC. Source-audited configured-process, projected-fairness, and process-exemption tests cover the bounded B-04 forms. At hosted SHA 77ef17da, the 25 temporal/symmetry outcomes are exact; projected Cat fairness has complete graph and TypeOK/Victory/deadlock agreement for even and odd scenarios, and Dijkstra's excluded noncritical step has complete graph and MutualExclusion/DeadlockFreedom/deadlock agreement against both generated and pinned-upstream TLC. This accepts AC-15 for the bounded DSL surface; final-head admission and other corpus configurations remain separate.",
       "evidence": [
         {
           "sourceSHA": "6d0617ab720ad6fb54f6dce11f642dbe63863c9d",
@@ -11231,6 +11239,35 @@
           "artifactSHA256": "af3883b8c8772868a567160e676cb1cb301e36625fec46cb093eb95267146294",
           "acceptanceComplete": false,
           "scope": "The separately executed TLC matrix agrees on all six temporal properties in each fairness mode. Native and reference violation traces are retained. The base matrix proves no inferred fairness and explicit fairness outcome agreement, not every process, projection, exemption, or unresolved scope form."
+        },
+        {
+          "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11528898933",
+          "artifactSHA256": "6c3bf78ece911e5b5515c3da1e512a60f50275dd3caaa2dafe761eadab0fcdf3",
+          "acceptanceComplete": true,
+          "scope": "All 21 retained no/weak/strong temporal property and deadlock comparisons are exact against TLC. Complete native and TLC graphs have one initial state, three states, and four edges in every mode. LeavesZero is violated without fairness and satisfied with weak and strong fairness; violation lassos are retained. Source-aligned ordinary CI run 37729461379 and the full validation gate passed."
+        },
+        {
+          "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531083385",
+          "artifactSHA256": "c2a6c033b3053c0e14c889d8035a841f189f517e94fcc090358911d5b4c60966",
+          "pairedArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531272648",
+          "pairedArtifactSHA256": "aa45122f1abf8bac4266bc735404e05f8a3963216208b70bd84355b58e484f8e",
+          "acceptanceComplete": true,
+          "scope": "Moving Cat's WeakFairnessNext(on: cat_box) projects the fairness obligation. Both even and odd cases have complete native graphs (48/80 and 30/48 states/edges), exact native/generated-TLC and generated/pinned-upstream initial-state and labeled-graph comparisons, satisfied TypeOK and Victory, and satisfied selected deadlock."
+        },
+        {
+          "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+          "developerToolsVersion": "16.4",
+          "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+          "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11531375374",
+          "artifactSHA256": "8c4424522566f25595cfa94a94ba35dfbab78b3f37691bdbaa500e3686acaaeb",
+          "acceptanceComplete": true,
+          "scope": "Dijkstra's scenario excludes its noncritical process step from the fairness obligation. The hosted three-initial/90,882-state/282,807-edge native graph matches generated TLC and the generated export matches pinned upstream; MutualExclusion, DeadlockFreedom, and selected deadlock are satisfied. The full graph is retained, not inferred from a sampled lasso."
         }
       ]
     },
@@ -11267,16 +11304,40 @@
       "status": "implemented",
       "source": "Documentation/DSLDesign.md",
       "recordUnionGap": {
-        "graphAndExport": "Diagnostic 52471 passes complete native/formal initial-state, state, and labeled-edge comparisons for nested record unions and same-field disjoint records. All emitted root TLA/CFG and import files match. Commit 15e52d62 moves the same fixtures into Sources/UpstreamParity/ValidationModels/RecordUnionValues.swift and registers record-union-ordering-0 and record-union-field-domains-0 for the existing hosted native/generated-TLC scenario comparison. Local scenario graph/export identity, complete check coverage, and default deadlock expectations pass; independent hosted results for these cases remain pending.",
+        "graphAndExport": "Diagnostic 52471 passes complete native/formal initial-state, state, and labeled-edge comparisons for nested record unions and same-field disjoint records. The RecordUnionValues scenarios now have source-aligned hosted native/generated-TLC complete-graph and deadlock parity at 77ef17da. They are DSL boundary evidence, not NanoBlockchain upstream parity.",
         "literalBoundary": "Native record-literal emission previously ignored unexpected fields, allowing a larger record to be narrowed into an earlier union alternative. The shared emitter now validates the exact field keys before construction. Diagnostics 79809 and 53930 pass strict and nested literal regressions. The subsequent record-union work retains the same strict boundary.",
-        "requiredBy": "Pinned Nano.tla defines genesis, send, open, receive, and change record alternatives; genesis.account is PublicKey. SignedBlock embeds the block union and a signature record. Ledger and hashFunction also admit the NoBlock model-value sentinel configured through the Nano instance. The current fixture has only genesis/send plus a fabricated NoBlock record and uses PrivateKey for genesis.account; those differences must be removed, not preserved as the target union contract. The NanoBlockchain family sourceAudit records all three required configurations and coupled gaps.",
+        "requiredBy": "Pinned Nano.tla defines genesis, send, open, receive, and change record alternatives; genesis.account is PublicKey. SignedBlock embeds the block union and a signature record. Ledger and hashFunction also admit the NoBlock model-value sentinel configured through the Nano instance. The bounded SignedBlockAlternatives fixture now exercises five native record alternatives and a separate NoBlock model value, but uses diagnostic string values and does not implement Nano's transitions, typed key domains, or any of its three configurations. The NanoBlockchain family sourceAudit retains those separate gaps.",
         "resolver": "SourceTypeResolver retains declared OneOf alternatives through preservingUnion. normalizedUnion now admits ordinary nominal records with distinct field sets or fields whose declared types prove disjoint. Ambiguous alternatives still fail. Nested union construction retains its record computation type and uses the existing explicit conversion node rather than relabeling the record computation as a union.",
         "ordering": "NativeSwiftEmitter now compares cross-alternative values through their resolved native types. Record ordering compares sorted field-name/value pairs, including common leading values before later key differences. Nested unions and native collection comparison recurse through typed comparators; finite scalar domains use shared compile-time ranks with linear generated switches. No runtime TLAValue serialization or interpreter is used. Diagnostic 53930 verifies generated nested-record ordering and same-field int/bool alternatives; mixed tuple/array and finite-composite ordering cases still require capability and acceptance audits.",
         "requiredChecks": "Preserve the declared native alternatives; reject overlapping untagged formal shapes; distinguish disjoint record key sets; compare different record alternatives by the existing formal field/value order, including common leading fields with different values; cover nested unions and collection element ordering; roundtrip exact field sets and reject malformed projections. Do not route native ordering through TLA serialization or an interpreter. The pinned Nano model requires five distinct record alternatives, a nested signed block, and a separate NoBlock model-value sentinel. The legacy Swift associated-value enum and custom discriminator are implementation choices, not upstream requirements; use existing typed records and unions if they reproduce the exact values.",
-        "scope": "The initial read-only audit at c3574a69 identified coupled resolver, ordering, projection, and authoring gaps. Diagnostic 53930 verifies the record-union primitive locally. The focused RecordUnionOrderingTests suite passes all seven cases after repairing nested cross-record comparator emission; its signed-block case exercises five ordinary record alternatives, a nested signature, a NoBlock model value, exact native/formal roundtrips, and malformed-record rejection. A later local run of the same seven cases also verifies context-inferred nested .first/.second constructors in typed sets, records, arrays, and dictionaries; EnumEncodingTests, TypedFacadeSyntaxTests, and SwiftRecordTypeTests pass as related regressions. These local value-shape cases are not a NanoBlockchain port or hosted parity cases. NanoBlockchain's complete model, all three configurations, and hosted source-aligned AC-17 acceptance remain open."
+        "scope": "The initial audit at c3574a69 identified coupled resolver, ordering, projection, and authoring gaps. RecordUnionOrderingTests exercises five ordinary record alternatives, a nested signature, a NoBlock model value, exact native/formal roundtrips, malformed-record rejection, and context-inferred nested constructors in typed sets, records, arrays, and dictionaries. On hosted 77ef17da the ordinary suite passes, and all three registered record-union diagnostic scenarios have exact complete native/generated-TLC graphs and deadlock verdicts. NanoBlockchain's complete model and all three published configurations remain separate upstream-family work."
       },
-      "reason": "The bounded value contract is implemented locally: GeneratedSwiftRecordTests executes original Swift records through typed transitions; SwiftRecordTypeTests preserves nominal identity and nested arrays and sets; RecordUnionOrderingTests covers disjoint alternatives, exact fields, nested ordering, strict projections, and a five-variant signed-block shape with a NoBlock model value. Context-inferred nested union constructors now work in typed sets, records, arrays, and dictionaries. EnumEncodingTests exercises raw-value enums, and ArrayValueTests, SetConfigurationTests, and TypedCollectionOperatorTests cover generated Swift collections. Unsupported record and enum declarations carry source locations. An associated-value enum without a declared model-value contract now fails at its initializer; its exact regression failed before the parser fix and 108 related tests passed afterward. The focused value, projection, and collection audit passed 60 tests; a subsequent boundary/type/value regression passed 92. This marks implementation of the explicitly supported types and source-located rejection, not hosted acceptance. NanoBlockchain's complete model, all three upstream configurations, and hosted parity remain separate corpus work; the recordUnionGap above retains those details. Hosted source-aligned acceptance is still required.",
-      "evidence": []
+      "reason": "Supported Swift structs, enums, arrays, and sets serve as model values in generated execution, strict projections, and TLA export. Source-located compiler diagnostics reject unsupported or ambiguous forms. On hosted SHA 77ef17da, ordinary CI passes the record, enum, collection, projection, and diagnostic suites; three independent record-union scenarios have complete exact native/generated-TLC graph and deadlock comparisons, including disjoint alternatives and a model-value sentinel. This accepts the bounded AC-17 value contract, not the unported NanoBlockchain family or any later final SHA.",
+      "evidence": [{
+        "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11530254114",
+        "artifactSHA256": "517c883a7eb3ec7f17338078fb0029286245cf9a19ce8b23aedf815efe1f8431",
+        "acceptanceComplete": true,
+        "scope": "RecordUnionOrdering allRecordAlternatives has a complete native graph, exact complete initial-state and labeled-edge comparison to generated TLC, and satisfied selected deadlock. The nested alternatives retain exact values. Ordinary CI run 37729461379 passed all 1660 tests, including RecordUnionOrderingTests, SwiftRecordTypeTests, and EnumEncodingTests."
+      }, {
+        "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11530633159",
+        "artifactSHA256": "802d27d79d523d8bd37d6cf40661ad65d8013a7f625d8295aee5b9ae4645caf8",
+        "acceptanceComplete": true,
+        "scope": "RecordUnionFieldDomain allFieldDomains compares complete native and TLC graphs exactly, including same-field int/bool alternatives, and checks default deadlock. The generated TLC artifact was reused from source de4a1ab3 only through a matching validated content key; the native result is bound to 77ef17da."
+      }, {
+        "sourceSHA": "77ef17da74a03eb16ec4080c4e1ecbdf2374934f",
+        "developerToolsVersion": "16.4",
+        "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594",
+        "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37729461594/artifacts/11530567142",
+        "artifactSHA256": "8f604d9aaf0404ec963c98379bf7208a94d673bab6f7caa4769e59b3d4799aa9",
+        "acceptanceComplete": true,
+        "scope": "RecordUnionSentinel recordsAndModelValueSentinel compares complete native and TLC graphs exactly with the NoBlock model-value sentinel distinct from record fields and checks default deadlock. The generated oracle was content-key reused from de4a1ab3; this is not NanoBlockchain upstream parity."
+      }]
     },
     {
       "id": "AC-18",

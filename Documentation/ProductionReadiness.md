@@ -18,8 +18,10 @@ same generated transitions. Formal text exists at export and external-tool bound
 The supported application execution API contains one generated-machine route.
 The `@TLAModel` expansion emits native initialization, transitions, and property checks.
 Generated machines do not compile or interpret source declarations at runtime.
-Remaining formal-core interpreter callers require migration or an explicit boundary justification.
-Their presence does not establish a second application backend or completion of the DSL migration.
+The package-only formal interpreter supports compiler fixtures, imported TLA+
+modules, and compile-time evaluation of closed configuration expressions. It is
+not a generated-machine execution or native-checking fallback. Its presence
+does not by itself complete the DSL migration.
 
 ## Qualify a release commit
 

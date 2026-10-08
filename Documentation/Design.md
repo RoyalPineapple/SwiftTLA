@@ -93,10 +93,11 @@ Supported refinement checks use generated abstract transitions and generated sta
 Independent TLC comparisons cover the registered finite cases and model-owned scenarios.
 Full DSL support, corpus coverage, and complete independent validation remain outstanding.
 
-The temporal and symmetry conformance checks now explore generated native
-machines. The earlier package-only `ModelChecker` and expression evaluator
-remain in formal-core fixtures and compiled-state temporal/refinement code.
-Those remaining checking callers still require removal or an explicit
-formal-boundary justification; they are not an alternative application backend.
-Formal calls remain serialization data for TLC action labels, not instructions for generated execution.
+The temporal and symmetry conformance checks explore generated native machines.
+The package-only `ModelChecker` and compiled-state evaluator remain for
+formal-core compiler fixtures, including imported TLA+ modules; the parser also
+uses the evaluator at compile time for closed configuration expressions. They
+are not an application API, a native-checking fallback, or an independent
+implementation selected by a generated model. Formal calls remain serialization
+data for TLC action labels, not instructions for generated execution.
 The replacement and deletion requirements in `DSLDesign.md` remain part of completion.
