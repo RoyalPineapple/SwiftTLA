@@ -31,11 +31,46 @@ struct UpstreamScenarioCoverageTests {
         }
     }
 
+    @Test("compiler assertions need an explicit complete-graph derivation")
+    func requiresGraphDerivedAssertionProvenance() throws {
+        let scenario = try #require(EchoModel.validationScenarios().first)
+        let coverage = try ScenarioCheckCoverage(scenario)
+        let assertions = coverage.selectedProperties.filter { $0.hasPrefix("__pcal_assert_") }
+        #expect(assertions.count == 2)
+        let properties = Dictionary(uniqueKeysWithValues: coverage.selectedProperties.map {
+            ($0, ValidationVerdict.satisfied)
+        })
+        let missingDerivation = UpstreamTLCParityReport(
+            schema: "swifttla.upstream-tlc-parity", caseID: "fixture",
+            result: "exact", graphCompared: true, difference: nil,
+            generatedProperties: properties, referenceProperties: properties,
+            referenceGraphDerivedProperties: [],
+            generatedDeadlock: .satisfied, referenceDeadlock: .satisfied,
+            deadlockSelected: true)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try JSONEncoder().encode(missingDerivation).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(throws: EvidenceFormatError.self) {
+            try ScenarioCheckCoverage.annotateUpstream(scenario, caseID: "fixture", reportURL: url)
+        }
+        let accepted = UpstreamTLCParityReport(
+            schema: "swifttla.upstream-tlc-parity", caseID: "fixture",
+            result: "exact", graphCompared: true, difference: nil,
+            generatedProperties: properties, referenceProperties: properties,
+            referenceGraphDerivedProperties: assertions,
+            generatedDeadlock: .satisfied, referenceDeadlock: .satisfied,
+            deadlockSelected: true)
+        try JSONEncoder().encode(accepted).write(to: url)
+        try ScenarioCheckCoverage.annotateUpstream(scenario, caseID: "fixture", reportURL: url)
+    }
+
     private func retainedReport(properties: [String: ValidationVerdict]) throws -> URL {
         let report = UpstreamTLCParityReport(
             schema: "swifttla.upstream-tlc-parity", caseID: "fixture",
             result: "exact", graphCompared: true, difference: nil,
             generatedProperties: properties, referenceProperties: properties,
+            referenceGraphDerivedProperties: [],
             generatedDeadlock: nil, referenceDeadlock: nil, deadlockSelected: false)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try JSONEncoder().encode(report).write(to: url)

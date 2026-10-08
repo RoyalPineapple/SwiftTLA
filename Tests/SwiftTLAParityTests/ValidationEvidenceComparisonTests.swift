@@ -443,6 +443,7 @@ struct ValidationEvidenceComparisonTests {
             schema: "swifttla.upstream-tlc-parity", caseID: "fixture", result: "exact",
             graphCompared: true, difference: nil,
             generatedProperties: ["Safe": .satisfied], referenceProperties: ["Safe": .satisfied],
+            referenceGraphDerivedProperties: [],
             generatedDeadlock: nil, referenceDeadlock: nil, deadlockSelected: false)
         let report = root.appendingPathComponent("comparison.json")
         try JSONEncoder().encode(prior).write(to: report)

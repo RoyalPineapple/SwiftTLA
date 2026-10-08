@@ -40,11 +40,19 @@ package struct ScenarioCheckCoverage: Codable, Equatable, Sendable {
             from: Data(contentsOf: reportURL))
         let coverage = try Self(scenario)
         let reported = Set(report.generatedProperties.keys)
+        let compilerAssertions = Set(coverage.selectedProperties.filter {
+            $0.hasPrefix("__pcal_assert_") || $0.hasPrefix("__step_assert_")
+        })
+        let derived = Set(report.referenceGraphDerivedProperties ?? [])
         guard report.schema == "swifttla.upstream-tlc-parity", report.caseID == caseID,
               report.deadlockSelected == coverage.checksDeadlock,
               reported == Set(report.referenceProperties.keys),
               reported.isSubset(of: Set(coverage.selectedProperties)),
-              !report.graphCompared || reported == Set(coverage.selectedProperties) else {
+              !report.graphCompared || reported == Set(coverage.selectedProperties),
+              !report.graphCompared || derived == compilerAssertions,
+              report.graphCompared || derived.isEmpty,
+              derived.allSatisfy({ report.generatedProperties[$0] == .satisfied
+                  && report.referenceProperties[$0] == .satisfied }) else {
             throw EvidenceFormatError.invalidField(record: caseID, field: "upstream check coverage")
         }
         try coverage.attach(to: reportURL)

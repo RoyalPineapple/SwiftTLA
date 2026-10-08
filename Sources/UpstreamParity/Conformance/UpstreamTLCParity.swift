@@ -9,6 +9,9 @@ package struct UpstreamTLCParityReport: Codable, Sendable {
     package let difference: String?
     package let generatedProperties: [String: ValidationVerdict]
     package let referenceProperties: [String: ValidationVerdict]
+    /// State predicates checked by generated TLC and transferred to the
+    /// reference only after the complete state graphs compare exactly.
+    package let referenceGraphDerivedProperties: [String]?
     package let generatedDeadlock: ValidationVerdict?
     package let referenceDeadlock: ValidationVerdict?
     package let deadlockSelected: Bool
@@ -173,6 +176,7 @@ package enum UpstreamTLCParity {
             difference: difference,
             generatedProperties: [name: generatedVerdict],
             referenceProperties: [name: referenceVerdict],
+            referenceGraphDerivedProperties: nil,
             generatedDeadlock: nil, referenceDeadlock: nil, deadlockSelected: false)
         try write(report, to: directory)
         return report
@@ -363,13 +367,20 @@ package enum UpstreamTLCParity {
                 result: difference == nil ? "exact" : "different",
                 graphCompared: false, difference: difference,
                 generatedProperties: generatedResults, referenceProperties: referenceResults,
+                referenceGraphDerivedProperties: nil,
                 generatedDeadlock: generatedDeadlock, referenceDeadlock: referenceDeadlock,
                 deadlockSelected: configuration.checksDeadlock)
             try write(report, to: directory)
             return report
         }
 
-        let graphChecks = Set(configuration.invariants)
+        let compilerAssertions = rendered.checkNames.subtracting(names)
+        guard compilerAssertions.isSubset(of: rendered.invariantNames),
+              compilerAssertions.allSatisfy({ $0.hasPrefix("__pcal_assert_")
+                  || $0.hasPrefix("__step_assert_") }) else {
+            throw UpstreamTLCParityError.configurationMismatch(id)
+        }
+        let graphChecks = Set(configuration.invariants).union(compilerAssertions)
         let generatedGraphBundle = try rendered.tlaBundle(
             checking: graphChecks,
             checkDeadlock: configuration.checksDeadlock)
@@ -482,11 +493,23 @@ package enum UpstreamTLCParity {
                 reference: referenceGraphOutput.appendingPathComponent("graph-events.bin.gz"),
                 actions: rendered.actions, in: directory, spoolExecutable: spoolExecutable)
         }
+        var graphDerived: [String] = []
+        if difference == nil && graphCompared {
+            guard generatedCheckingOutcome == .completed else {
+                throw UpstreamTLCParityError.invalidOutcome("generated assertion check: \(id)")
+            }
+            for name in compilerAssertions {
+                generatedResults[name] = .satisfied
+                referenceResults[name] = .satisfied
+            }
+            graphDerived = compilerAssertions.sorted()
+        }
         let report = UpstreamTLCParityReport(
             schema: "swifttla.upstream-tlc-parity", caseID: id,
             result: difference == nil ? "exact" : "different",
             graphCompared: graphCompared, difference: difference,
             generatedProperties: generatedResults, referenceProperties: referenceResults,
+            referenceGraphDerivedProperties: graphDerived,
             generatedDeadlock: generatedDeadlock, referenceDeadlock: referenceDeadlock,
             deadlockSelected: configuration.checksDeadlock)
         try write(report, to: directory)
@@ -522,6 +545,7 @@ package enum UpstreamTLCParity {
                 graphCompared: true, difference: difference,
                 generatedProperties: previous.generatedProperties,
                 referenceProperties: previous.referenceProperties,
+                referenceGraphDerivedProperties: previous.referenceGraphDerivedProperties,
                 generatedDeadlock: previous.generatedDeadlock,
                 referenceDeadlock: previous.referenceDeadlock,
                 deadlockSelected: previous.deadlockSelected)
