@@ -24,5 +24,8 @@ full clock-bearing graph or final-revision admission claim.
 inputs. The reference diagnostic binds the 654-event log through the `JSON`
 environment variable and uses the separately pinned CommunityModules release
 and source closure. Its draft-PR workflow checks the upstream TLC outcome and
-retains the exact inputs. It does not capture TLC's chosen causal order or
-compare a generated Swift machine, so it does not complete trace parity.
+retains the exact inputs. A second, explicitly instrumented copy prints TLC's
+chosen `TraceLog`; the diagnostic maps its complete records back to the 654
+source lines and checks that ordering against the vector clocks. This capture
+has not run on a host. It does not compare a generated Swift machine, so it
+does not complete trace parity.

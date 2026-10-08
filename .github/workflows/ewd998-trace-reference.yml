@@ -23,7 +23,7 @@ jobs:
   reference:
     name: Pinned upstream trace only (diagnostic)
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - name: Validate immutable source revision
         run: '[[ "$SWIFT_TLA_SHA" =~ ^[0-9a-f]{40}$ ]]'
@@ -50,15 +50,18 @@ jobs:
         env:
           FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
         run: ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT" --skip-inputs --with-community-modules
-      - name: Check pinned upstream trace
+      - name: Check pinned upstream trace and retain selected causal order
         env:
           SWIFTTLA_TRACE_TIMEOUT_SECONDS: '1800'
         run: |
           .build/release/tlc-validate upstream trace-reference \
             --output .build/validation-evidence/ewd998-trace-reference
-          jq -e '.schema == "swifttla.ewd998-trace-reference" and .result == "completed" and .nodeCount == 5 and .eventCount == 654 and .causalOrderCaptured == false' \
+          jq -e '.schema == "swifttla.ewd998-trace-reference" and .result == "completed" and .nodeCount == 5 and .eventCount == 654 and .causalOrderCaptured == true' \
             .build/validation-evidence/ewd998-trace-reference/report.json
           test -s .build/validation-evidence/ewd998-trace-reference/tlc/tlc-process.json
+          test -s .build/validation-evidence/ewd998-trace-reference/tlc-order/tlc-process.json
+          test -s .build/validation-evidence/ewd998-trace-reference/selected-order.json
+          test "$(jq length .build/validation-evidence/ewd998-trace-reference/selected-order.json)" -eq 654
       - uses: actions/upload-artifact@v6
         if: always()
         with:

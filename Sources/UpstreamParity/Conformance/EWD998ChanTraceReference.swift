@@ -1,3 +1,4 @@
+import CoreFoundation
 import Foundation
 import SwiftTLA
 
@@ -78,13 +79,14 @@ package enum EWD998ChanTraceReference {
             ("FiniteSetsExt", "Folds"), ("FiniteSetsExt", "Functions"),
             ("Functions", "Folds")
         ]
+        let dependencies = edges.enumerated().map { index, edge in
+            TLAModuleBundle.ModuleDependency(
+                importingModule: edge.0, importedModule: edge.1,
+                structuralPath: [caseID, "dependencies", String(index)])
+        }
         let bundle = TLAModuleBundle.external(
             root: TLAModuleFile(name: "EWD998ChanTrace", tla: module, cfg: cfg),
-            imports: examples + community,
-            dependencies: edges.enumerated().map { index, edge in
-                .init(importingModule: edge.0, importedModule: edge.1,
-                      structuralPath: [caseID, "dependencies", String(index)])
-            })
+            imports: examples + community, dependencies: dependencies)
         try bundle.validateDeclaredClosure()
 
         try RetainedFiles.outputDirectory(output, beneath: output.deletingLastPathComponent())
@@ -112,6 +114,42 @@ package enum EWD998ChanTraceReference {
         guard outcome == .completed else {
             throw EvidenceFormatError.invalidField(record: caseID, field: "pinned trace check: \(outcome)")
         }
+        let marker = "\n============================================================================="
+        guard module.components(separatedBy: marker).count == 2 else {
+            throw EvidenceFormatError.invalidField(record: caseID, field: "trace module footer")
+        }
+        let instrumentedModule = module.replacingOccurrences(of: marker,
+            with: "\nASSUME PrintT(TraceLog)\n" + marker)
+        let instrumentedBundle = TLAModuleBundle.external(
+            root: TLAModuleFile(name: "EWD998ChanTrace", tla: instrumentedModule, cfg: cfg),
+            imports: examples + community, dependencies: dependencies)
+        try GeneratedTLCOracle.retainGeneratedInputs(instrumentedBundle,
+            in: output.appendingPathComponent("order-input"))
+        let instrumentedCase = try FiniteGraphCase(
+            id: caseID, exploration: .init(maximumStateLimit: Int.max, symmetryReduction: .disabled),
+            moduleSHA256: SHA256.hex(Data(instrumentedModule.utf8)),
+            cfgSHA256: SHA256.hex(Data(cfg.utf8)), arguments: arguments,
+            environment: ["JSON": stagedLog.path], pin: pin)
+        let orderRequest = TLCProcessRequest(
+            javaExecutable: tools.java, jar: tools.jar, bridgeJar: tools.bridgeJar,
+            supplementalJar: jar, bundle: instrumentedBundle,
+            graphEvents: work.appendingPathComponent("unused-order.bin"),
+            traceOutput: work.appendingPathComponent("order-counterexample.json"),
+            evaluationOutput: work.appendingPathComponent("trace-log.bin"),
+            workingDirectory: work, finiteGraphCase: instrumentedCase, runID: UUID(),
+            timeout: timeout, invocation: .propertyCheck, referenceArtifacts: tools.artifacts)
+        let orderOutcome = try process.run(orderRequest, retainingIn: output.appendingPathComponent("tlc-order"))
+        guard orderOutcome == .completed else {
+            throw EvidenceFormatError.invalidField(record: caseID, field: "instrumented trace check: \(orderOutcome)")
+        }
+        let printed = try TLCEvaluationOutput(reading:
+            output.appendingPathComponent("tlc-order/tlc-evaluation.bin"))
+        guard printed.values.count == 1 else {
+            throw EvidenceFormatError.invalidField(record: caseID, field: "printed trace-log count")
+        }
+        let selectedOrder = try sourceLines(in: log, orderedBy: printed.values[0], input: input)
+        let orderData = try JSONSerialization.data(withJSONObject: selectedOrder)
+        try orderData.write(to: output.appendingPathComponent("selected-order.json"), options: .atomic)
         let tlcInput = try GeneratedTLCOracle.inputIdentity(
             bundle: bundle, pin: pin, arguments: arguments, invocation: .propertyCheck,
             supplementalJar: jar)
@@ -126,8 +164,62 @@ package enum EWD998ChanTraceReference {
             "nodeCount": input.nodeCount,
             "eventCount": input.events.count,
             "communityJarSHA256": jar.sha256,
-            "causalOrderCaptured": false
+            "causalOrderCaptured": true,
+            "selectedOrderSHA256": SHA256.hex(orderData),
+            "instrumentedModuleSHA256": instrumentedCase.moduleSHA256
         ], to: output.appendingPathComponent("report.json"))
+    }
+
+    package static func sourceLines(
+        in ndjson: Data, orderedBy printed: CanonicalValue, input: EWD998ChanTraceInput
+    ) throws -> [Int] {
+        guard case .orderedTuple(let ordered) = printed, ordered.count == input.events.count else {
+            throw EvidenceFormatError.invalidField(record: caseID, field: "printed trace-log shape")
+        }
+        let lines = ndjson.split(separator: 0x0A, omittingEmptySubsequences: true)
+        guard lines.count == input.events.count + 1 else {
+            throw EvidenceFormatError.invalidField(record: caseID, field: "implementation log length")
+        }
+        var sourceLinesByValue: [CanonicalValue: [Int]] = [:]
+        for (offset, line) in lines.dropFirst().enumerated() {
+            let value = try canonicalJSON(Data(line))
+            sourceLinesByValue[value, default: []].append(offset + 2)
+        }
+        var selected: [Int] = []
+        selected.reserveCapacity(ordered.count)
+        for value in ordered {
+            guard var available = sourceLinesByValue[value], !available.isEmpty else {
+                throw EvidenceFormatError.invalidField(record: caseID, field: "printed trace-log event")
+            }
+            selected.append(available.removeFirst())
+            sourceLinesByValue[value] = available
+        }
+        guard sourceLinesByValue.values.allSatisfy(\.isEmpty) else {
+            throw EvidenceFormatError.invalidField(record: caseID, field: "printed trace-log permutation")
+        }
+        _ = try input.events(inCausalOrder: selected)
+        return selected
+    }
+
+    private static func canonicalJSON(_ data: Data) throws -> CanonicalValue {
+        try canonicalJSONValue(decodeJSONObject(data, line: 0))
+    }
+
+    private static func canonicalJSONValue(_ value: Any) throws -> CanonicalValue {
+        if let fields = value as? [String: Any] {
+            return .record(try fields.mapValues(canonicalJSONValue))
+        }
+        if let values = value as? [Any] {
+            return .tuple(try values.map(canonicalJSONValue))
+        }
+        if let string = value as? String { return .string(string) }
+        if let number = value as? NSNumber {
+            if CFGetTypeID(number) == CFBooleanGetTypeID() { return .boolean(number.boolValue) }
+            if !CFNumberIsFloatType(number), let integer = Int(number.stringValue) {
+                return .integer(integer)
+            }
+        }
+        throw EvidenceFormatError.invalidField(record: caseID, field: "JSON trace-log value")
     }
 
     private static func pinnedText(_ url: URL, sha256: String) throws -> String {
