@@ -218,6 +218,64 @@ struct MachineValidationTests {
         #expect(profile["edgeEvents"] as? Int == summary.edges)
     }
 
+    @Test("binary view evidence uses the same checking level as native state identity")
+    func recordsCheckerLevelInViewEvidence() throws {
+        let scenario = try #require(ReachabilityExportModel.validationScenarios().first)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output = directory.appendingPathComponent("native.bin")
+        var snapshots: [ReachabilityExportModel.Snapshot] = []
+        let summary = try MachineValidationEvidence.write(
+            scenario: scenario, initialMachines: scenario.initialMachines(),
+            caseID: "level-view", maximumStates: 4, stopOnViolation: false, to: output
+        ) { event in
+            if case .state(_, let snapshot, _, _, _) = event { snapshots.append(snapshot) }
+        }
+        #expect(summary.states == 3)
+        #expect(summary.edges == 2)
+
+        var reader = try BinaryGraphEvidenceReader(output)
+        defer { reader.close() }
+        #expect(try reader.bytes(8) == Data("STLAGRF2".utf8))
+        #expect(try reader.byte() == 2)
+        #expect(try reader.string() == "level-view")
+        #expect(try reader.string().isEmpty)
+        var keys: [Data] = []
+        while keys.count < summary.states {
+            switch try reader.byte() {
+            case 1:
+                _ = try reader.uint32()
+                _ = try reader.string()
+                _ = try reader.string()
+            case 2:
+                #expect(try reader.uint64() == UInt64(keys.count))
+                _ = try reader.byte()
+                keys.append(try reader.bytes(Int(reader.uint32())))
+            case 3:
+                _ = try reader.uint64()
+                _ = try reader.uint32()
+                _ = try reader.uint64()
+            case 9:
+                _ = try reader.uint64()
+                _ = try reader.bytes(Int(reader.uint32()))
+            default:
+                Issue.record("Unexpected record before the complete view state set")
+                return
+            }
+        }
+        let machine = try #require(scenario.initialMachines().first)
+        guard snapshots.count == keys.count else {
+            Issue.record("Every retained view state needs one generated-machine snapshot")
+            return
+        }
+        for (offset, snapshot) in snapshots.enumerated() {
+            let projection = try scenario.formalIdentityProjection(of: snapshot, using: machine,
+                atLevel: offset + 1)
+            #expect(try keys[offset] == CanonicalBinaryState.encode(projection, viewed: true))
+        }
+    }
+
     @Test("generated assertions and reachability retain all selected scenario outcomes")
     func validatesConfiguredCounter() throws {
         let scenario = try ConfiguredCounter.validationScenarios()[0]

@@ -17,6 +17,10 @@ struct ReachabilityExportModel {
             counter
             Reachable("Positive") { value > 0 }
             Reachable("BeyondLimit") { value > 2 }
+            let levelView = Validation { }.viewing(Pair.literal(value, scope.checkingLevel))
+                .checking(only: [])
+                .checkingDeadlock(false)
+            levelView
         }
     }
 }
