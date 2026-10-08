@@ -34,11 +34,20 @@ extension NativeSwiftEmitter {
             return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in\nswitch value { \(cases) } }(\(value)))"
         }
         if [.int, .bool, .string, .modelValue].contains(source) {
-            let cases = finiteViewMembers(target).compactMap { member -> String? in
-                guard let pattern = try? literal(member, as: source), let payload = try? literal(member, as: target) else { return nil }
-                return "case \(pattern): return \(payload)"
-            }.joined(separator: "\n")
-            return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in\nswitch value { \(cases)\ndefault: throw NativeMachineEvaluationError.noMatchingCase } }(\(value)))"
+            let mapped = finiteViewMembers(target).compactMap { member -> (value: CompiledValue, clause: String)? in
+                guard let pattern = try? literal(member, as: source),
+                      let payload = try? literal(member, as: target) else { return nil }
+                return (member, "case \(pattern): return \(payload)")
+            }
+            let cases = mapped.map(\.clause).joined(separator: "\n")
+            let members = Set(mapped.map(\.value))
+            let exhaustive = switch source {
+            case .bool: members == Set([.boolean(false), .boolean(true)])
+            case .modelValue: members == Set(typeDeclarations.modelValueCases.keys.map(CompiledValue.constant))
+            default: false
+            }
+            let fallback = exhaustive ? "" : "\ndefault: throw NativeMachineEvaluationError.noMatchingCase"
+            return "(try { (value: \(try swiftType(source))) throws -> \(try swiftType(target)) in\nswitch value { \(cases)\(fallback) } }(\(value)))"
         }
         if let inputs = source.recordFields, let outputs = target.recordFields,
            inputs.count == outputs.count, Set(inputs.map(\.name)) == Set(outputs.map(\.name)) {
