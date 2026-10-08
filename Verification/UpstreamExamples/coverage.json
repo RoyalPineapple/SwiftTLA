@@ -5391,30 +5391,30 @@
     {
       "path": "specifications/echo",
       "name": "The Echo Algorithm",
-      "audit": "Pinned Echo, Relation, and MCEcho modules and the sole published TLC configuration inspected; hosted parity pending",
+      "audit": "All three pinned module blobs, the sole published TLC configuration, and the model-owned Echo scenario were inspected. Module roles and legacy cleanup are resolved; hosted parity remains pending.",
       "gap": "Echo has typed Node and relation parameters with upstream irreflexivity, symmetry, and connectivity assumptions, plus a bounded MCEcho binding, upstream state shape, model-value NoNode, TypeOK, AncestorProperties, generated PlusCal assertions, and default deadlock checking. The initiator is now derived with typed Select from Node, matching upstream I1 == CHOOSE n in N1 instead of binding a literal. Its 75-state configured native graph and verdicts pass focused local diagnostics; changing the connected relation or node population changes the generated machine. Pinned TLC v1.8.0 selects the first normalized set element for bounded CHOOSE, while StringValue order follows UniqueString intern IDs rather than alphabetical spelling, so source inspection does not establish the same selected node or complete parity. No generated-TLA/pinned-upstream or native/generated-TLA hosted graph and property evidence exists yet. The concrete relation binding, action labels, exact state projection, and transitive-closure export remain subject to independent comparison; do not count the configuration or family as verified.",
-      "legacyCleanupComplete": false,
+      "legacyCleanupComplete": true,
       "modules": [
         {
           "path": "specifications/echo/Echo.tla",
           "role": "algorithm dependency",
-          "reason": "MCEcho extends this module. Echo owns the PlusCal algorithm, translated state, and the configured TypeOK and AncestorProperties invariants. The bounded Swift port is implemented locally but not hosted-verified.",
+          "reason": "MCEcho extends this module. Echo owns the PlusCal algorithm, translated state, TypeOK, AncestorProperties, and relation assumptions. EchoModel is its only Swift implementation; hosted semantic parity remains unproved.",
           "implementations": ["Sources/UpstreamParity/Examples/Echo.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/echo/MCEcho.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "The sole configured root defines N1, chooses I1 from N1, defines the complete irreflexive R1 relation, and wraps Echo.Spec with PrintT(R). The model-owned MCEcho scenario supplies the binding and selected checks; PrintT is observational output, not a state transition.",
           "implementations": ["Sources/UpstreamParity/Examples/Echo.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/echo/Relation.tla",
           "role": "helper dependency",
-          "reason": "Echo extends Relation and uses its relation predicates and transitive closure in assumptions and AncestorProperties. The finite three-node relation and bounded reachability predicate are represented in the Swift scenario but require hosted semantic comparison; this helper is not an excluded model.",
+          "reason": "Echo extends this unconfigured helper for irreflexivity, symmetry, connectivity, and transitive closure. The typed scenario expresses those predicates over its finite node set; this helper defines no separate configured transition system. Hosted semantic comparison remains required for Echo.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         }
       ],
       "configurations": [
