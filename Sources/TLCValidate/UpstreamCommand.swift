@@ -53,10 +53,10 @@ func runUpstream(arguments: [String]) -> Never {
                 ?? (reference == "trace-reference" ? "1800" : "120")) ?? 0
             guard timeout.isFinite, timeout > 0 else { throw UpstreamCommandError.usage }
             if reference == "trace-reference" {
-                try EWD998ChanTraceReference.capture(
+                let verdict = try EWD998ChanTraceReference.capture(
                     repositoryRoot: root, toolRoot: toolRoot, tools: tools, pin: pin,
                     timeout: timeout, to: output)
-                print("upstream ewd998-chan-trace: completed reference check")
+                print("upstream ewd998-chan-trace: TraceAccepted \(verdict.rawValue)")
             } else {
                 guard let base = manifest.cases.first(where: { $0.id == "ewd998-chan-id-0" }) else {
                     throw UpstreamCommandError.unknownCase("ewd998-chan-id-0")

@@ -33,7 +33,7 @@ package enum EWD998ChanTraceReference {
         repositoryRoot: URL, toolRoot: URL, tools: ResolvedTLCToolchain,
         pin: TLCReferencePin, timeout: TimeInterval, to output: URL,
         process: TLCProcessAdapter = TLCProcessAdapter()
-    ) throws {
+    ) throws -> ValidationVerdict {
         let root = repositoryRoot.appendingPathComponent(fixture)
         let module = try pinnedText(root.appendingPathComponent("EWD998ChanTrace.tla"),
             sha256: "da182795698ff457ae8979b7d97cd47842d75e3d860323ca02031dc47c940171")
@@ -110,10 +110,10 @@ package enum EWD998ChanTraceReference {
             traceOutput: work.appendingPathComponent("counterexample.json"),
             workingDirectory: work, finiteGraphCase: configuration, runID: UUID(),
             timeout: timeout, invocation: .propertyCheck, referenceArtifacts: tools.artifacts)
-        let outcome = try process.run(request, retainingIn: output.appendingPathComponent("tlc"))
-        guard outcome == .completed else {
-            throw EvidenceFormatError.invalidField(record: caseID, field: "pinned trace check: \(outcome)")
-        }
+        let retained = output.appendingPathComponent("tlc")
+        let outcome = try process.run(request, retainingIn: retained)
+        let verdict = try GeneratedTLCOracle.postconditionVerdict(
+            name: "TraceAccepted", outcome: outcome, retained: retained)
         let marker = "\n============================================================================="
         guard module.components(separatedBy: marker).count == 2 else {
             throw EvidenceFormatError.invalidField(record: caseID, field: "trace module footer")
@@ -138,9 +138,12 @@ package enum EWD998ChanTraceReference {
             evaluationOutput: work.appendingPathComponent("trace-log.bin"),
             workingDirectory: work, finiteGraphCase: instrumentedCase, runID: UUID(),
             timeout: timeout, invocation: .propertyCheck, referenceArtifacts: tools.artifacts)
-        let orderOutcome = try process.run(orderRequest, retainingIn: output.appendingPathComponent("tlc-order"))
-        guard orderOutcome == .completed else {
-            throw EvidenceFormatError.invalidField(record: caseID, field: "instrumented trace check: \(orderOutcome)")
+        let orderRetained = output.appendingPathComponent("tlc-order")
+        let orderOutcome = try process.run(orderRequest, retainingIn: orderRetained)
+        let orderVerdict = try GeneratedTLCOracle.postconditionVerdict(
+            name: "TraceAccepted", outcome: orderOutcome, retained: orderRetained)
+        guard orderVerdict == verdict else {
+            throw EvidenceFormatError.invalidField(record: caseID, field: "instrumented trace verdict")
         }
         let printed = try TLCEvaluationOutput(reading:
             output.appendingPathComponent("tlc-order/tlc-evaluation.bin"))
@@ -158,7 +161,7 @@ package enum EWD998ChanTraceReference {
         ], options: [.sortedKeys])
         try RetainedFiles.writeJSON([
             "schema": "swifttla.ewd998-trace-reference",
-            "caseID": caseID, "result": "completed",
+            "caseID": caseID, "result": "completed", "postconditionVerdict": verdict.rawValue,
             "inputIdentity": SHA256.hex(identity),
             "implementationLogSHA256": logSHA,
             "nodeCount": input.nodeCount,
@@ -168,6 +171,7 @@ package enum EWD998ChanTraceReference {
             "selectedOrderSHA256": SHA256.hex(orderData),
             "instrumentedModuleSHA256": instrumentedCase.moduleSHA256
         ], to: output.appendingPathComponent("report.json"))
+        return verdict
     }
 
     package static func sourceLines(

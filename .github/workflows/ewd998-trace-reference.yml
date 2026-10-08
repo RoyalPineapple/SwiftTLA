@@ -60,7 +60,7 @@ jobs:
         run: |
           .build/release/tlc-validate upstream trace-reference \
             --output .build/validation-evidence/ewd998-trace-reference
-          jq -e '.schema == "swifttla.ewd998-trace-reference" and .result == "completed" and .nodeCount == 5 and .eventCount == 654 and .causalOrderCaptured == true' \
+          jq -e '.schema == "swifttla.ewd998-trace-reference" and .result == "completed" and .postconditionVerdict == "satisfied" and .nodeCount == 5 and .eventCount == 654 and .causalOrderCaptured == true' \
             .build/validation-evidence/ewd998-trace-reference/report.json
           test -s .build/validation-evidence/ewd998-trace-reference/tlc/tlc-process.json
           test -s .build/validation-evidence/ewd998-trace-reference/tlc-order/tlc-process.json
