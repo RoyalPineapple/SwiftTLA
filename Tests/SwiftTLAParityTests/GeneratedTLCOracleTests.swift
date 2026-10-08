@@ -153,8 +153,15 @@ struct GeneratedTLCOracleTests {
         let propertyOnly = try GeneratedTLCOracle.inputIdentity(
             bundle: bundle(configuration: "CHECK_DEADLOCK TRUE", imported: "---- MODULE Helper ----\nX == 1\n===="),
             pin: pin, arguments: ["-workers", "1"], invocation: .propertyCheck)
+        let supplemental = try PinnedTLCModuleJar(
+            url: URL(fileURLWithPath: "/tmp/CommunityModules.jar"),
+            sha256: SHA256.hex(Data("pinned community modules".utf8)))
+        let withSupplemental = try GeneratedTLCOracle.inputIdentity(
+            bundle: bundle(configuration: "CHECK_DEADLOCK TRUE", imported: "---- MODULE Helper ----\nX == 1\n===="),
+            pin: pin, arguments: ["-workers", "1"], supplementalJar: supplemental)
         #expect(base != changedConfiguration)
         #expect(base != changedImport)
         #expect(base != propertyOnly)
+        #expect(base != withSupplemental)
     }
 }

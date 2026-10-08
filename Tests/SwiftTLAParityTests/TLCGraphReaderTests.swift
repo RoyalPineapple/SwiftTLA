@@ -387,7 +387,7 @@ struct TLCGraphReaderTests {
     #expect(command.contains("/tmp/trace.json"))
   }
 
-  @Test("execution rejects substituted JAR and bridge classpath artifacts")
+  @Test("execution rejects substituted core and supplemental classpath artifacts")
   func rejectsSubstitutedExecutionArtifacts() throws {
     let root = URL(fileURLWithPath: "/tmp/validated-bridge")
     let artifacts = TLCReferenceArtifacts(
@@ -411,6 +411,23 @@ struct TLCGraphReaderTests {
     )
     #expect(throws: FiniteGraphCaseError.pinMismatch("execution bridge JAR")) {
       try substitutedBridge.validateReferenceBinding(artifacts: artifacts)
+    }
+
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let moduleJar = directory.appendingPathComponent("CommunityModules.jar")
+    try Data("pinned module archive".utf8).write(to: moduleJar)
+    let supplemental = try PinnedTLCModuleJar(
+      url: moduleJar, sha256: SHA256.hex(Data("pinned module archive".utf8)))
+    let request = try requestWithReferenceArtifacts(
+      jar: artifacts.jar, bridgeJar: root, artifacts: artifacts, supplementalJar: supplemental)
+    #expect(request.launchArguments.contains(
+      "/tmp/validated-tla2tools.jar:/tmp/validated-bridge:\(moduleJar.path)"))
+    try request.validateReferenceBinding(artifacts: artifacts)
+    try Data("substituted module archive".utf8).write(to: moduleJar)
+    #expect(throws: FiniteGraphCaseError.pinMismatch("supplemental TLC module JAR")) {
+      try request.validateReferenceBinding(artifacts: artifacts)
     }
   }
 

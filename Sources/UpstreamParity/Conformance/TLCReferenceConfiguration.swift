@@ -22,7 +22,8 @@ package struct TLCReferenceConfiguration: Decodable, Sendable {
     defer { try? FileManager.default.removeItem(at: input.module.deletingLastPathComponent()) }
     let output = directory.appendingPathComponent("configuration.json")
     let result = try executeProcess(executable: request.javaExecutable,
-      arguments: ["-cp", request.bridgeJar.path + ":" + request.jar.path,
+      arguments: ["-cp", ([request.bridgeJar, request.jar]
+        + (request.supplementalJar.map { [$0.url] } ?? [])).map(\.path).joined(separator: ":"),
         "org.swifttla.conformance.ConfigurationParser", input.module.path, input.configuration.path, output.path]
         + nativeChecks.sorted(),
       directory: input.module.deletingLastPathComponent(), timeout: request.timeout, environment: request.effectiveEnvironment)

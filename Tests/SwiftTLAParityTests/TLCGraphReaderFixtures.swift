@@ -306,10 +306,12 @@ func launchRequest(
 func requestWithReferenceArtifacts(
   jar: URL,
   bridgeJar: URL,
-  artifacts: TLCReferenceArtifacts
+  artifacts: TLCReferenceArtifacts,
+  supplementalJar: PinnedTLCModuleJar? = nil
 ) throws -> TLCProcessRequest {
   TLCProcessRequest(
     javaExecutable: URL(fileURLWithPath: "/usr/bin/java"), jar: jar, bridgeJar: bridgeJar,
+    supplementalJar: supplementalJar,
     bundle: .external(root: TLAModuleFile(name: "Fixture", tla: "---- MODULE Fixture ----", cfg: "SPECIFICATION Spec")),
     graphEvents: URL(fileURLWithPath: "/tmp/events.jsonl"),
     traceOutput: URL(fileURLWithPath: "/tmp/trace.json"),

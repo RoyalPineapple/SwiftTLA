@@ -90,10 +90,33 @@ package enum TLCProcessError: Error, Equatable, Sendable {
   case invalidModuleBundle(TLCModuleBundleError)
 }
 
+package struct PinnedTLCModuleJar: Equatable, Sendable {
+  package let url: URL
+  package let sha256: String
+
+  package init(url: URL, sha256: String) throws {
+    guard TLCReferencePin.isSHA256(sha256) else {
+      throw FiniteGraphCaseError.invalidSHA256(field: "supplemental TLC module JAR")
+    }
+    self.url = url
+    self.sha256 = sha256
+  }
+
+  package func validate() throws {
+    guard FileManager.default.fileExists(atPath: url.path) else {
+      throw FiniteGraphCaseError.missingArtifact("supplemental TLC module JAR")
+    }
+    guard SHA256.hex(try Data(contentsOf: url)) == sha256 else {
+      throw FiniteGraphCaseError.pinMismatch("supplemental TLC module JAR")
+    }
+  }
+}
+
 package struct TLCProcessRequest: Equatable, Sendable {
   package let javaExecutable: URL
   package let jar: URL
   package let bridgeJar: URL
+  package let supplementalJar: PinnedTLCModuleJar?
   /// The only TLA+ sources that this TLC invocation may receive.
   package let bundle: TLAModuleBundle
   package let graphEvents: URL
@@ -110,6 +133,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
     javaExecutable: URL,
     jar: URL,
     bridgeJar: URL,
+    supplementalJar: PinnedTLCModuleJar? = nil,
     bundle: TLAModuleBundle,
     graphEvents: URL,
     traceOutput: URL,
@@ -124,6 +148,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
     self.javaExecutable = javaExecutable
     self.jar = jar
     self.bridgeJar = bridgeJar
+    self.supplementalJar = supplementalJar
     self.bundle = bundle
     self.graphEvents = graphEvents
     self.traceOutput = traceOutput
@@ -137,6 +162,12 @@ package struct TLCProcessRequest: Equatable, Sendable {
   }
 
   package var caseID: String { finiteGraphCase.id }
+  package var classpath: String {
+    ([jar, bridgeJar] + (supplementalJar.map { [$0.url] } ?? [])).map(\.path).joined(separator: ":")
+  }
+  package var protectedToolInputs: [URL] {
+    [javaExecutable, jar, bridgeJar] + (supplementalJar.map { [$0.url] } ?? [])
+  }
 
   package var effectiveEnvironment: [String: String] { finiteGraphCase.environment }
   package var moduleFileName: String { "\(bundle.root.name).tla" }
@@ -172,7 +203,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
     let argumentGroups: [[String]] = [
       graphOptions,
       evaluationOptions,
-      ["-cp", "\(jar.path):\(bridgeJar.path)", mainClass],
+      ["-cp", classpath, mainClass],
       graphDump,
       ["-dumpTrace", "json", traceOutput.path],
       finiteGraphCase.arguments,
@@ -286,6 +317,7 @@ package struct TLCProcessRequest: Equatable, Sendable {
     guard sameFile(bridgeJar, artifacts.bridgeBinary) else {
       throw FiniteGraphCaseError.pinMismatch("execution bridge JAR")
     }
+    try supplementalJar?.validate()
   }
 
   private func sameFile(_ lhs: URL, _ rhs: URL) -> Bool {
@@ -398,8 +430,7 @@ package struct TLCProcessAdapter: Sendable {
     let resolved = try RetainedFiles.resolve(target, beneath: root)
     let retained = directory.resolvingSymlinksInPath().standardizedFileURL
     let input = request.inputDirectory.resolvingSymlinksInPath().standardizedFileURL
-    let protected = [request.javaExecutable, request.jar, request.bridgeJar,
-                     request.graphEvents, request.traceOutput]
+    let protected = (request.protectedToolInputs + [request.graphEvents, request.traceOutput])
       .map { $0.resolvingSymlinksInPath().standardizedFileURL }
     guard request.invocation == .propertyCheck, resolved != root,
           resolved != retained, !resolved.path.hasPrefix(retained.path + "/"),
@@ -415,7 +446,7 @@ package struct TLCProcessAdapter: Sendable {
     let root = request.workingDirectory.resolvingSymlinksInPath().standardizedFileURL
     let trace = try RetainedFiles.resolve(request.traceOutput, beneath: root)
     let retained = directory.resolvingSymlinksInPath().standardizedFileURL
-    let protected = [request.javaExecutable, request.jar, request.bridgeJar, request.graphEvents]
+    let protected = (request.protectedToolInputs + [request.graphEvents])
       .map { $0.resolvingSymlinksInPath().standardizedFileURL }
     guard trace != root, trace != retained, !trace.path.hasPrefix(retained.path + "/"),
           !protected.contains(trace) else {
@@ -438,13 +469,17 @@ package struct TLCProcessAdapter: Sendable {
     failure: TLCProcessExecutionFailure? = nil,
     in directory: URL
   ) throws {
+    var toolPin = pinJSON(request.finiteGraphCase.pin)
+    if let supplementalJar = request.supplementalJar {
+      toolPin["supplementalJarSHA256"] = supplementalJar.sha256
+    }
     let record: [String: Any] = [
       "caseID": request.caseID,
       "runID": request.runID.uuidString.lowercased(),
       "timeout": request.timeout,
       "inputs": bundleInputJSON(request.bundle),
       "configuration": request.bundle.cfg,
-      "toolPin": pinJSON(request.finiteGraphCase.pin),
+      "toolPin": toolPin,
       "invocation": invocationJSON(request: request, process: process, failure: failure)
     ]
     try RetainedFiles.writeJSON(record, to: directory.appendingPathComponent("tlc-process.json"))
@@ -476,7 +511,7 @@ package struct TLCProcessAdapter: Sendable {
         let root = request.workingDirectory.resolvingSymlinksInPath().standardizedFileURL
         let resolved = try RetainedFiles.resolve(source, beneath: root)
         let values = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
-        let protected = [request.javaExecutable, request.jar, request.bridgeJar, request.traceOutput, destination]
+        let protected = (request.protectedToolInputs + [request.traceOutput, destination])
           .map { $0.resolvingSymlinksInPath().standardizedFileURL }
         let inputs = request.inputDirectory.resolvingSymlinksInPath().standardizedFileURL
         guard values.isRegularFile == true, values.isSymbolicLink != true,
@@ -652,7 +687,7 @@ extension TLCProcessRequest {
       arguments: configuration.arguments, environment: configuration.environment, pin: configuration.pin,
       renderedActions: configuration.renderedActions, symmetryGenerators: configuration.symmetryGroup)
     return TLCProcessRequest(javaExecutable: javaExecutable, jar: jar,
-      bridgeJar: bridgeJar, bundle: bundle,
+      bridgeJar: bridgeJar, supplementalJar: supplementalJar, bundle: bundle,
       graphEvents: work.appendingPathComponent("events.jsonl"), traceOutput: work.appendingPathComponent("counterexample.json"),
       workingDirectory: work, finiteGraphCase: selected, runID: runID, timeout: timeout,
       invocation: invocation, referenceArtifacts: referenceArtifacts)

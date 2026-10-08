@@ -345,6 +345,7 @@ package enum GeneratedTLCOracle {
         tools: ResolvedTLCToolchain, pin: TLCReferencePin, workRoot: URL,
         retained: URL, invocation: TLCInvocationKind, renderedActions: [RenderedAction],
         process: TLCProcessAdapter, captureEvaluations: Bool = false,
+        supplementalJar: PinnedTLCModuleJar? = nil,
         arguments: [String] = ["-workers", "1", "-fp", "1"]
     ) throws -> TLCExecutionOutcome {
         let work = workRoot.appendingPathComponent(UUID().uuidString)
@@ -358,6 +359,7 @@ package enum GeneratedTLCOracle {
             renderedActions: renderedActions)
         let request = TLCProcessRequest(
             javaExecutable: tools.java, jar: tools.jar, bridgeJar: tools.bridgeJar,
+            supplementalJar: supplementalJar,
             bundle: bundle, graphEvents: work.appendingPathComponent("events.bin.gz"),
             traceOutput: work.appendingPathComponent("counterexample.json"),
             evaluationOutput: captureEvaluations ? work.appendingPathComponent("evaluations.bin") : nil,
@@ -420,7 +422,8 @@ package enum GeneratedTLCOracle {
 
     package static func inputIdentity(bundle: TLAModuleBundle, pin: TLCReferencePin,
         arguments: [String], invocation: TLCInvocationKind = .finiteGraph,
-        captureEvaluations: Bool = false) throws -> String {
+        captureEvaluations: Bool = false,
+        supplementalJar: PinnedTLCModuleJar? = nil) throws -> String {
         let sources = bundle.files.sorted { $0.name < $1.name }.map {
             ["name": $0.name, "sha256": SHA256.hex(Data($0.tla.utf8))]
         }
@@ -435,6 +438,7 @@ package enum GeneratedTLCOracle {
             "invocation": invocation == .finiteGraph ? "finite-graph" : "property-check"
         ]
         if captureEvaluations { input["captureEvaluations"] = true }
+        if let supplementalJar { input["supplementalJarSHA256"] = supplementalJar.sha256 }
         let canonical = try JSONSerialization.data(withJSONObject: input, options: [.sortedKeys])
         return SHA256.hex(canonical)
     }
