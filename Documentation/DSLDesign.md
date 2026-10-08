@@ -1146,6 +1146,12 @@ Each(nodes, scoped: { member, process in
 })
 ```
 
+When the process action needs a stable formal name, pass a typed String-backed
+case with `Each(nodes, named: ProcessName.node, fairness: .weak)`. The name is
+the emitted process/action identity, not a display label. An unconditional
+single-step loop over a range or nonempty literal population needs no `pc`;
+other process control flows retain it.
+
 The population expression can depend on immutable parameters and supported
 helpers. It cannot depend on machine state or action enabledness. For example,
 `Each(selected)` is invalid when `selected` is mutable model state.

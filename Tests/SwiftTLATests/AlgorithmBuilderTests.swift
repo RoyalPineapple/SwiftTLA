@@ -125,6 +125,10 @@ struct AlgorithmBuilderTests {
         case work
     }
 
+    private enum ProcessActionName: String, CaseIterable {
+        case node
+    }
+
     private enum GeneratedSurfaceKey: String, FiniteTLAValueDomain {
         case value
 
@@ -1229,6 +1233,45 @@ struct AlgorithmBuilderTests {
 
         let (compilation, initial) = try initialState(of: spec)
         let next = try successor(named: "pcalProcess1", arguments: [.string("first")], in: compilation, from: initial)
+        #expect(try value(named: "value", in: next, compilation: compilation) == .int(1))
+    }
+
+    @Test("a range-domain single-loop process does not invent a program counter")
+    func elidesRedundantProgramCounterForRangeDomain() throws {
+        let algorithm = Algorithm("RangeLoop", scoped: { scope in
+            let value = scope.sharedVar(_name: "value", initial: 0)
+            Each(IntRange(0, through: 2)) { _ in
+                While(TestControlLabel.advance, true) {
+                    Assign(value, to: value + 1)
+                }
+            }
+        })
+
+        let spec = try loweredSourceSpecification(algorithm)
+        #expect(spec.variables.map(\.name) == ["value"])
+        #expect(spec.actions.map(\.name) == ["pcalProcess1"])
+
+        let (compilation, initial) = try initialState(of: spec)
+        let next = try successor(named: "pcalProcess1", arguments: [.int(1)], in: compilation, from: initial)
+        #expect(try value(named: "value", in: next, compilation: compilation) == .int(1))
+    }
+
+    @Test("a named range process preserves its translated action identity")
+    func preservesNamedProcessAction() throws {
+        let algorithm = Algorithm("NamedRangeLoop", scoped: { scope in
+            let value = scope.sharedVar(_name: "value", initial: 0)
+            Each(IntRange(0, through: 2), named: ProcessActionName.node) { _ in
+                While(TestControlLabel.advance, true) {
+                    Assign(value, to: value + 1)
+                }
+            }
+        })
+
+        let spec = try loweredSourceSpecification(algorithm)
+        #expect(spec.variables.map(\.name) == ["value"])
+        #expect(spec.actions.map(\.name) == ["node"])
+        let (compilation, initial) = try initialState(of: spec)
+        let next = try successor(named: "node", arguments: [.int(1)], in: compilation, from: initial)
         #expect(try value(named: "value", in: next, compilation: compilation) == .int(1))
     }
 

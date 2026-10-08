@@ -470,13 +470,21 @@ enum AlgorithmLowerer {
         }
     }
 
-    /// A nonempty process machine with one unconditional control-free loop has no `pc`.
+    /// A nonempty literal or range-domain process with one control-free loop has no `pc`.
     private static func requiresProgramCounter(for algorithm: AlgorithmModel) -> Bool {
         guard !algorithm.processes.isEmpty, algorithm.procedures.isEmpty else {
             return true
         }
         return !algorithm.processes.allSatisfy { process in
-            guard let members = process.domain.literalSetMembers, !members.isEmpty else { return false }
+            let hasRangeDomain: Bool
+            if case .integerRange = process.domain {
+                hasRangeDomain = true
+            } else {
+                hasRangeDomain = false
+            }
+            guard hasRangeDomain || !(process.domain.literalSetMembers?.isEmpty ?? true) else {
+                return false
+            }
             return isControlFreeLoop(process.steps)
         }
     }

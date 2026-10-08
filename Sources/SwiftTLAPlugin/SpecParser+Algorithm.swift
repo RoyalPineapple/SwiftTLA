@@ -868,6 +868,16 @@ extension ParserSession {
             }
             components.append(component)
         }
+        let name: String?
+        if let expression = call.arguments.first(where: { $0.label?.text == "named" })?.expression {
+            guard let parsedName = algorithmLabel(expression) else {
+                algorithmParseFailure = "Each named: requires a typed String-backed case label."
+                return nil
+            }
+            name = parsedName
+        } else {
+            name = nil
+        }
         let fairness: AlgorithmFairness
         var fairnessExcludedLabels: [AlgorithmLabelModel] = []
         if let expression = call.arguments.first(where: { $0.label?.text == "fairness" })?.expression {
@@ -906,7 +916,7 @@ extension ParserSession {
             fairness = .none
         }
         processDomainOffsets.append(domainSyntax.positionAfterSkippingLeadingTrivia.utf8Offset)
-        return .process(.init(typeName: typeName, domain: domain, fairness: fairness,
+        return .process(.init(typeName: typeName, name: name, domain: domain, fairness: fairness,
             components: components, resolvedElementType: elementType,
             fairnessExcludedLabels: fairnessExcludedLabels))
     }

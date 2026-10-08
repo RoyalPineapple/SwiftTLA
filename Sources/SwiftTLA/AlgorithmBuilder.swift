@@ -838,7 +838,16 @@ public func Each<Domain: FormalSetValue>(
     fairness: ProcessFairness = .none,
     @AlgorithmBuilder _ body: (ProcessIdentifier<Domain.Element>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
-    process(domain, fairness: fairness, body)
+    process(domain, name: nil, fairness: fairness, body)
+}
+
+public func Each<Name: CaseIterable & RawRepresentable & Sendable, Domain: FormalSetValue>(
+    _ domain: some TypedExpression<Domain>,
+    named name: Name,
+    fairness: ProcessFairness = .none,
+    @AlgorithmBuilder _ body: (ProcessIdentifier<Domain.Element>) -> [AlgorithmElement]
+) -> AlgorithmElement where Name.RawValue == String {
+    process(domain, name: name.rawValue, fairness: fairness, body)
 }
 
 public func Each<Domain: FormalSetValue>(
@@ -858,8 +867,28 @@ public func Each<Domain: FormalSetValue>(
     )))
 }
 
+public func Each<Name: CaseIterable & RawRepresentable & Sendable, Domain: FormalSetValue>(
+    _ domain: some TypedExpression<Domain>,
+    named name: Name,
+    fairness: ProcessFairness = .none,
+    @AlgorithmBuilder scoped body: (ProcessIdentifier<Domain.Element>, ProcessScope) -> [AlgorithmElement]
+) -> AlgorithmElement where Name.RawValue == String {
+    let scope = ProcessScope()
+    let identifier = ProcessIdentifier<Domain.Element>(expression: .currentProcess)
+    let components = body(identifier, scope)
+    return AlgorithmElement(model: .process(.init(
+        typeName: swiftSurfaceTypeName(for: Domain.Element.self),
+        name: name.rawValue,
+        domain: domain.stateExpr,
+        fairness: fairness.model,
+        components: scope.declarations.map(\.model) + components.map(\.model),
+        fairnessExcludedLabels: fairness.excludedLabels
+    )))
+}
+
 private func process<Domain: FormalSetValue>(
     _ domain: some TypedExpression<Domain>,
+    name: String?,
     fairness: ProcessFairness,
     @AlgorithmBuilder _ body: (ProcessIdentifier<Domain.Element>) -> [AlgorithmElement]
 ) -> AlgorithmElement {
@@ -868,6 +897,7 @@ private func process<Domain: FormalSetValue>(
         model: .process(
             AlgorithmProcessModel(
                 typeName: swiftSurfaceTypeName(for: Domain.Element.self),
+                name: name,
                 domain: domain.stateExpr,
                 fairness: fairness.model,
                 components: body(identifier).map(\.model),
@@ -1553,6 +1583,10 @@ package enum AlgorithmValidator {
         if Set(sequentialLabels).count != sequentialLabels.count {
             diagnostics.append(AlgorithmDiagnostic(.duplicateLabel, at: .algorithm))
         }
+        let processNames = model.processes.compactMap(\.name)
+        if Set(processNames).count != processNames.count {
+            diagnostics.append(AlgorithmDiagnostic(.duplicateLabel, at: .algorithm))
+        }
 
         for (index, component) in model.components.enumerated() {
             switch component {
@@ -1630,6 +1664,9 @@ package enum AlgorithmValidator {
         diagnostics: inout [AlgorithmDiagnostic]
     ) {
         let processAnchor = AlgorithmDiagnosticAnchor.process(index)
+        if let name = process.name {
+            validateName(name, at: processAnchor, diagnostics: &diagnostics)
+        }
         if let members = process.domain.literalSetMembers {
             validateDomain(members, at: processAnchor, diagnostics: &diagnostics)
         } else if case .sourceIssue(.finiteDomain(_, let problem)) = process.domain {
