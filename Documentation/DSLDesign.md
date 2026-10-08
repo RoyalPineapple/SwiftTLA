@@ -622,6 +622,14 @@ is invalid. The native checker and TLA+ export must retain this same scope;
 EWD840's `WF_vars(System)` is the corpus example. No fairness is inferred from
 the presence of the steps.
 
+For a disjunction with one obligation per member, write
+`WeakFairness(eachOf: [initiate, pass])` or `StrongFairness(eachOf: [initiate, pass])`.
+Both steps must use the same immutable member domain. Each member gets one
+obligation over the two steps for that member. This is not one global obligation
+or two separate obligations per member. EWD998ChanID's
+`\A n \in Node: WF_vars(System(n))` needs this form because `System(n)` is the
+disjunction of `InitiateProbe(n)` and `PassToken(n)`.
+
 Fairness belongs to behavior because it changes allowed executions.
 
 ### Explicit finite symmetry
@@ -711,7 +719,7 @@ algorithm
 
 Putting `WeakFairness(Step.pass)` inside that `Each` is invalid. An inner `Do`
 is a process control step, not a bound independent action handle; neither
-`WeakFairness(anyOf:)` nor `WeakFairness(each:)` changes this process scope.
+`WeakFairness(anyOf:)`, `WeakFairness(eachOf:)`, and `WeakFairness(each:)` do not change this process scope.
 Finer obligations inside a process require a named corpus case and a separate
 language decision. The DSL does not create individually targetable inner-step
 handles now.

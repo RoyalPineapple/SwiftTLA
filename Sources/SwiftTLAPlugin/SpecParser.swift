@@ -3024,13 +3024,19 @@ extension ParserSession {
         let condition: FairnessCondition
         let arguments = Array(call.arguments)
         let hasAction = name == "WeakFairness" || name == "StrongFairness"
-        if hasAction, arguments.count == 1, arguments[0].label?.text == "anyOf" {
+        if hasAction, arguments.count == 1,
+           let group = arguments[0].label?.text, group == "anyOf" || group == "eachOf" {
             guard let array = arguments[0].expression.as(ArrayExprSyntax.self), !array.elements.isEmpty else {
                 return nil
             }
             let names = array.elements.compactMap { atomicStepName($0.expression) }
             guard names.count == array.elements.count, Set(names).count == names.count else { return nil }
-            return name == "WeakFairness" ? .weakFairnessActionGroup(names) : .strongFairnessActionGroup(names)
+            if group == "eachOf" {
+                return name == "WeakFairness" ? .weakFairnessEachActionGroup(names)
+                    : .strongFairnessEachActionGroup(names)
+            }
+            return name == "WeakFairness" ? .weakFairnessActionGroup(names)
+                : .strongFairnessActionGroup(names)
         }
         let offset = hasAction ? 1 : 0
         guard arguments.count == offset || arguments.count == offset + 1 else { return nil }
