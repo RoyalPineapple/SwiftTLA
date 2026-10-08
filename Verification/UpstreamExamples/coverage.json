@@ -5880,7 +5880,7 @@
       "path": "specifications/ewd998",
       "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
       "audit": "Pinned AsyncTerminationDetection, EWD998, EWD998Chan, EWD998ChanID, EWD998PCal, ChanID export/ShiViz, ChanTrace, the source-defined opts variants and orchestration harness, and the Folds/Utils helpers inspected; remaining source-defined variants still need disposition audits",
-      "gap": "AsyncTerminationDetection has a typed model-owned #spec scenario, exact pinned fixtures, and a locally complete 4097-state native graph. Safra's EWD998 N=4 and N=3 and EWD998Chan N=3 configurations have typed model-owned scenarios and byte-identical pinned TLA/CFG inputs; focused transition and rendering tests pass, but both hosted paths remain pending. EWD998PCal N=3 matched both complete hosted comparison paths at c05c9837, including EWD998Spec and default deadlock. EWD998ChanID has a partial typed model with bounded per-member fairness, full clock-bearing state, a rendered channel refinement, and an isolated unhosted five-node VIEW scenario using native quotient identity and view-aware binary evidence. Its pinned TLA/CFG fixtures are byte-identical to upstream at ceeaa904; case registration is in place, but exact hosted parity remains open; local implementation alone cannot establish parity. N=5 initial-choice performance is not measured. The source-defined EWD998_opts and EWD998Chan_opts generator variants and EWD998_optsSC campaign remain unimplemented. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
+      "gap": "AsyncTerminationDetection has a typed model-owned #spec scenario, exact pinned fixtures, and a locally complete 4097-state native graph. Safra's EWD998 N=4 and N=3 and EWD998Chan N=3 configurations have typed model-owned scenarios and byte-identical pinned TLA/CFG inputs; focused transition and rendering tests pass, but both hosted paths remain pending. EWD998PCal N=3 matched both complete hosted comparison paths at c05c9837, including EWD998Spec and default deadlock. EWD998ChanID N=5 matched both hosted comparison paths at c1c4ee49 on its complete configured VIEW graph and four selected properties; this does not prove equality of the full clock-bearing graph or final-revision admission. The source-defined EWD998_opts and EWD998Chan_opts generator variants and EWD998_optsSC campaign remain unimplemented. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5963,9 +5963,9 @@
         {
           "path": "specifications/ewd998/EWD998ChanID.tla",
           "role": "configured root",
-          "reason": "A typed model with n1..n7 identifiers and rendered EWD998Chan refinement has a model-owned five-node scenario, native typed VIEW identity, and view-aware binary graph evidence. The pinned upstream TLA/CFG fixture is byte-identical at ceeaa904 and the case is registered. Exact hosted parity on both paths and source-bound artifacts remain missing; this configuration is not yet verified.",
+          "reason": "A typed model with n1..n7 identifiers and rendered EWD998Chan refinement has a model-owned five-node scenario, native typed VIEW identity, and view-aware binary graph evidence. The pinned upstream TLA/CFG fixture is byte-identical at ceeaa904. Both hosted paths match the complete configured VIEW graph and four selected checks at c1c4ee49, without claiming full clock-bearing graph equality.",
           "implementations": ["Sources/UpstreamParity/Examples/EWD998ChanID.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/EWD998ChanTrace.tla",
@@ -6062,12 +6062,28 @@
           "module": "specifications/ewd998/EWD998ChanID.tla",
           "configuration": "specifications/ewd998/EWD998ChanID.cfg",
           "required": true,
-          "status": "implemented",
-          "gap": "Pinned TLA and CFG fixtures match upstream ceeaa904 byte-for-byte and the typed five-node #spec scenario is registered. Complete two-path graph, selected-property, refinement, VIEW, and deadlock evidence is still required before coverage credit.",
+          "status": "hosted match",
+          "verifiedSourceSHA": "c1c4ee49179592fa50751e045bfdbaaa6f829060",
+          "gap": "The focused c1c4ee49 run matches the complete configured VIEW quotient graph and selected verdicts on both paths. This historical match does not prove the full clock-bearing graph or final-revision admission.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998ChanID.swift", "scenario": "EWD998ChanID", "caseID": "ewd998-chan-id-0"}],
-          "evidence": []
+          "evidence": [
+            {
+              "sourceSHA": "c1c4ee49179592fa50751e045bfdbaaa6f829060",
+              "developerToolsVersion": "16.4",
+              "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37767594632",
+              "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37767594632/artifacts/11549697245",
+              "artifactDigest": "sha256:7666116b94d8c04e6271eb7711b5f4d2eda0d04195f9b9279221f23ff4cc8092",
+              "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37767594632/artifacts/11550376982",
+              "nativeArtifactDigest": "sha256:92f4fd5c514e188cb2438371374792ed6bd33bad9c864c8660377a29ec67a4e5",
+              "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37767594632/artifacts/11548612561",
+              "generatedOracleArtifactDigest": "sha256:33ad396b739cae766ddeb07451d14113b4a419dfb9c1dba0053fdf8e9b539c8a",
+              "completeGraph": true,
+              "allPropertiesMatch": true,
+              "scope": "The focused hosted run completed native versus generated-TLA TLC and generated-TLA TLC versus pinned-upstream TLC with exact complete initial-state sets and labeled VIEW quotient graphs: 1 initial state, 14 viewed states, and 13 edges. EWD998Safe, Max3TokenRounds, EWD998ChanSpec refinement, and EWD998Live are satisfied on all paths; the pinned CFG disables deadlock. The clock-bearing full-state graph is not compared. The pinned root TLA and raw CFG SHA-256 values c498e5e35a83d84257016fdf4ba359ddb40dbb5f3b2234656e32b419a5499e93 and 69ec430deca39d7af5e2bfb1f6e43b5c941d29f4362a70048d534a52b8a54146 match the ceeaa904 case pins. Both TLC paths record v1.8.0, Temurin 17.0.19+10, and exact jar/bridge hashes; nonempty artifact digests, source-sha files, and evidence origins bind the run to c1c4ee49. This focused match is not full PR admission or completion of EWD998."
+            }
+          ]
         },
         {
           "module": "specifications/ewd998/EWD998ChanID_export.tla",
