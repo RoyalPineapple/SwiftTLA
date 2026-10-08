@@ -5391,8 +5391,8 @@
     {
       "path": "specifications/echo",
       "name": "The Echo Algorithm",
-      "audit": "All three pinned module blobs, the sole published TLC configuration, and the model-owned Echo scenario were inspected. Module roles and legacy cleanup are resolved; hosted parity remains pending.",
-      "gap": "Echo has typed Node and relation parameters with upstream irreflexivity, symmetry, and connectivity assumptions, plus a bounded MCEcho binding, upstream state shape, model-value NoNode, TypeOK, AncestorProperties, generated PlusCal assertions, and default deadlock checking. The initiator is now derived with typed Select from Node, matching upstream I1 == CHOOSE n in N1 instead of binding a literal. Its 75-state configured native graph and verdicts pass focused local diagnostics; changing the connected relation or node population changes the generated machine. Pinned TLC v1.8.0 selects the first normalized set element for bounded CHOOSE, while StringValue order follows UniqueString intern IDs rather than alphabetical spelling, so source inspection does not establish the same selected node or complete parity. No generated-TLA/pinned-upstream or native/generated-TLA hosted graph and property evidence exists yet. The concrete relation binding, action labels, exact state projection, and transitive-closure export remain subject to independent comparison; do not count the configuration or family as verified.",
+      "audit": "All three pinned module blobs, the sole published TLC configuration, and the model-owned Echo scenario were inspected. Module roles and legacy cleanup are resolved. Focused hosted runs exposed an upstream coverage-annotation defect and then an incorrectly selected generated-only assertion in the pinned upstream CFG; the corrected branch head has not yet run hosted.",
+      "gap": "At hosted SHA 9d94d93d, focused run 37724242774 retained exact complete generated-TLA/pinned-upstream initial states and labeled graphs (75 states), matching TypeOK, AncestorProperties, and default deadlock. Its native/generated-TLA path separately passed with 1 initial state, 75 states, 115 labeled edges, both generated PlusCal assertions, the named checks, and deadlock. The upstream job failed later while attaching model-owned coverage because its exact comparison report omitted provenance for generated-only assertions; this run does not qualify the configuration. A follow-up at 3c4cf847 incorrectly selected those assertions in the pinned upstream CFG and TLC rejected the undefined names. Current head 742ff68b selects the assertions only for generated TLC and retains pinned upstream's named checks, but has no hosted result. Run both paths on that exact head, require coverage annotation and retained artifacts, then credit the family only if the complete hosted case passes.",
       "legacyCleanupComplete": true,
       "modules": [
         {
@@ -5431,7 +5431,7 @@
       ],
       "partialCases": [{
         "implementation": "Sources/UpstreamParity/Examples/Echo.swift",
-        "reason": "MCEcho is locally checked and registered with exact pinned inputs. Both hosted parity paths and a complete source-module audit remain open."
+        "reason": "The source-module audit is complete. At 9d94d93d both hosted graph comparisons were exact, but upstream coverage annotation failed after comparison; 3c4cf847 then failed upstream TLC on a generated-only assertion in its CFG. The corrected 742ff68b head needs both hosted paths and final case admission. Do not count the configuration as hosted match yet."
       }]
     },
     {
