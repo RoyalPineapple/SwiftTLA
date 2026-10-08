@@ -338,6 +338,13 @@ public protocol FormalSetValue: TLAValueType {
 }
 extension SetExpr: FormalSetValue {}
 
+/// Draws up to `count` distinct members of a finite formal domain.
+public func RandomSubset<Element: TLAValueType>(
+  upTo count: some TypedExpression<Int>, from domain: some TypedExpression<SetExpr<Element>>
+) -> Expr<SetExpr<Element>> {
+  Expr(.randomSubset(count.stateExpr, domain.stateExpr))
+}
+
 extension TypedExpression where ExpressionValue: FormalSetValue {
   public func intersection<Other: FormalSetValue>(
     _ other: some TypedExpression<Other>

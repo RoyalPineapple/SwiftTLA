@@ -1090,6 +1090,7 @@ extension ParserSession {
                 case "naturals": return .naturals
                 case "finiteSets": return .finiteSets
                 case "sequences": return .sequences
+                case "randomization": return .randomization
                 case "tlc": return .tlc
                 default: return nil
                 }

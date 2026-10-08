@@ -246,6 +246,7 @@ public enum StandardModule: String, Sendable, Hashable, CaseIterable {
   case finiteSets = "FiniteSets"
   case sequences = "Sequences"
   case tlc = "TLC"
+  case randomization = "Randomization"
 }
 
 package func canonicalStandardModules(_ modules: [StandardModule]) -> [StandardModule] {

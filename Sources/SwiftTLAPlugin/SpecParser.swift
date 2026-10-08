@@ -931,6 +931,16 @@ final class ParserSession {
             return functions
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
+           compilerGrammarName(in: call.calledExpression) == "RandomSubset",
+           call.arguments.map({ $0.label?.text }) == ["upTo", "from"],
+           call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+           let countArgument = call.arguments.first,
+           let domainArgument = call.arguments.dropFirst().first,
+           let count = decodeTypedFacadeValue(countArgument.expression, scope: scope),
+           let domain = decodeTypedFacadeValue(domainArgument.expression, scope: scope) {
+            return .randomSubset(count, domain)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
            let operation = scope.recursiveOperator(for: reference) {
             let arguments = call.arguments.compactMap {
@@ -1889,6 +1899,10 @@ final class ParserSession {
         }
         if compilerGrammarName(in: call.calledExpression) == "PrintT" { return .bool }
         if compilerGrammarName(in: call.calledExpression) == "IntRange" { return .set(.int) }
+        if compilerGrammarName(in: call.calledExpression) == "RandomSubset",
+           let domain = call.arguments.first(where: { $0.label?.text == "from" })?.expression {
+            return typedFacadeValueType(domain, scope: scope)
+        }
         if compilerGrammarName(in: call.calledExpression) == "If",
            let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,
            let elseSyntax = call.arguments.first(where: { $0.label?.text == "else" })?.expression,

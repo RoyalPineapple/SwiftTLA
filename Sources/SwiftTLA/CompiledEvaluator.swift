@@ -779,7 +779,7 @@ struct CompiledEvaluator: Sendable {
                     let body = expression.children[0]
 
                     tasks.append(.expression(body, scope))
-                case .integerSet, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .printT, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .sequenceSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .sequenceFromFunction, .setSum, .functionSet:
+                case .integerSet, .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .assertView, .negate, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .not, .printT, .setLiteral, .in, .subset, .union, .intersection, .setDifference, .cardinality, .powerSet, .sequenceSet, .unionAll, .integerRange, .tupleLiteral, .tupleAccess, .tupleDynamicAccess, .tupleLength, .tupleAppend, .tupleHead, .tupleTail, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .recordLiteral, .recordAccess, .domain, .sequenceFromSet, .sequenceFromFunction, .setSum, .functionSet, .randomSubset:
                     schedule(expression.operation, expression.children)
 
                 }
@@ -1077,6 +1077,14 @@ extension CompiledOperation {
             }
             let functions = try nativeOperation { try _NativeMachineOperations.functionSet(domainValues, rangeValues) }
             values.append(.set(Set(functions.map(CompiledValue.function))))
+        case .randomSubset:
+            // shortcut: interpreted function spaces are still materialized; specialize before using this path for generator runs.
+            let domain = try popValue(from: &values)
+            let count = try integer(popValue(from: &values))
+            guard case .set(let members) = domain else {
+                throw EvalError.expected(.set, actual: [domain])
+            }
+            values.append(.set(try nativeOperation { try _NativeMachineOperations.randomSubset(upTo: count, from: members) }))
         default:
             throw EvalError.invalidContinuation(availableValues: values.count)
         }

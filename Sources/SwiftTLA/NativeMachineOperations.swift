@@ -32,6 +32,7 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
     case functionArgumentOutsideDomain
     case tupleIndexOutsideDomain(Int)
     case recordFieldUnavailable(String)
+    case invalidRandomSubsetCount(Int)
 
     public var description: String {
         switch self {
@@ -58,6 +59,7 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
         case .functionArgumentOutsideDomain: return "Function argument is outside its domain"
         case .tupleIndexOutsideDomain(let index): return "Tuple index \(index) is outside its domain"
         case .recordFieldUnavailable(let field): return "Record field \(field) is unavailable"
+        case .invalidRandomSubsetCount(let count): return "RandomSubset requires a nonnegative count; received \(count)"
         }
     }
 }
@@ -177,6 +179,51 @@ public enum _NativeMachineOperations: Sendable {
             }
         }
         return Set(functions)
+    }
+
+    public static func randomSubset<Element: Hashable & Sendable>(
+        upTo count: Int, from values: Set<Element>
+    ) throws -> Set<Element> {
+        guard count >= 0 else { throw NativeMachineEvaluationError.invalidRandomSubsetCount(count) }
+        return Set(values.shuffled().prefix(count))
+    }
+
+    public static func randomFunctionSubset<Key: Hashable & Sendable, Value: Hashable & Sendable>(
+        upTo count: Int, from domain: Set<Key>, to range: Set<Value>
+    ) throws -> Set<[Key: Value]> {
+        guard count >= 0 else { throw NativeMachineEvaluationError.invalidRandomSubsetCount(count) }
+        guard count > 0 else { return [] }
+        guard !domain.isEmpty else { return [[:]] }
+        guard !range.isEmpty else { return [] }
+
+        var cardinality = 1
+        var exceedsCount = false
+        for _ in domain {
+            let product = cardinality.multipliedReportingOverflow(by: range.count)
+            if product.overflow {
+                exceedsCount = true
+                break
+            }
+            cardinality = product.partialValue
+            if cardinality > count {
+                exceedsCount = true
+                break
+            }
+        }
+        if !exceedsCount {
+            return try functionSet(domain, range)
+        }
+
+        let keys = Array(domain)
+        let values = Array(range)
+        var chosen: Set<[Key: Value]> = []
+        while chosen.count < count {
+            try Task<Never, Never>.checkCancellation()
+            var function: [Key: Value] = [:]
+            for key in keys { function[key] = values.randomElement()! }
+            chosen.insert(function)
+        }
+        return chosen
     }
 
     /// Reject unrepresentable cardinalities before enumeration allocates the function space.

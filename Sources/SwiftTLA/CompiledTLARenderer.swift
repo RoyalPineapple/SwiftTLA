@@ -461,7 +461,7 @@ struct CompiledTLARenderer {
                     rendered.append(.expression(body))
                     rendered.append(.text(")"))
                     schedule(rendered)
-                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .setSum, .integerRange, .negate, .not, .printT, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .sequenceFromFunction, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
+                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .randomSubset, .setSum, .integerRange, .negate, .not, .printT, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .sequenceFromFunction, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
                     try schedule(expression.operation, expression.children)
 
                 }
@@ -611,6 +611,7 @@ extension CompiledOperation {
         case .tupleConcatenate: ("(", " \\o ", ")")
         case .functionApply: ("", "[", "]")
         case .functionSet: ("[", " -> ", "]")
+        case .randomSubset: ("RandomSubset(", ", ", ")")
         case .setSum: ("SumFunctionOnSet(", ", ", ")")
         case .integerRange: ("", "..", "")
         case .negate: ("(-", "", ")")

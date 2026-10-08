@@ -657,7 +657,7 @@ struct NativeSwiftEmitter {
         case .setLiteral, .tupleLiteral, .in, .subset, .union,
              .intersection, .setDifference, .cardinality, .integerRange, .setFilter,
              .setMap, .forAll, .exists, .choose, .sequenceFromSet, .sequenceFromFunction,
-             .powerSet, .sequenceSet, .unionAll, .functionSet, .setSum:
+             .powerSet, .sequenceSet, .unionAll, .functionSet, .randomSubset, .setSum:
             return try collectionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .foldFunction, .sequenceSelect, .tupleAccess, .tupleDynamicAccess, .tupleRemoving, .tuplePrefix,
              .tupleLength, .tupleHead, .tupleTail, .tupleAppend, .tupleConcatenate:
@@ -927,6 +927,15 @@ struct NativeSwiftEmitter {
             return "(\(try emit(0)).reduce(into: Set<\(try swiftType(element))>()) { $0.formUnion($1) })"
         case .functionSet:
             return "(try _NativeMachineOperations.functionSet(\(try emit(0)), \(try emit(1))))"
+        case .randomSubset:
+            if case .functionSet = node.children[1].operation,
+               case .set(.dictionary) = node.resultType {
+                let functionSet = node.children[1]
+                let domain = try self.expression(functionSet.children[0], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+                let range = try self.expression(functionSet.children[1], state: state, substitutions: substitutions, activeFunctions: activeFunctions)
+                return "(try _NativeMachineOperations.randomFunctionSubset(upTo: \(try emit(0)), from: \(domain), to: \(range)))"
+            }
+            return "(try _NativeMachineOperations.randomSubset(upTo: \(try emit(0)), from: \(try emit(1))))"
         case .setSum:
             let functionCode = try emit(0)
             let domainCode = try emit(1)

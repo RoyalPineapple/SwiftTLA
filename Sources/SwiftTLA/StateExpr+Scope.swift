@@ -34,7 +34,8 @@ extension StateExpr {
                  .subset(let lhs, let rhs), .union(let lhs, let rhs),
                  .intersection(let lhs, let rhs), .setDifference(let lhs, let rhs),
                  .tupleAppend(let lhs, let rhs), .tupleConcatenate(let lhs, let rhs),
-                 .functionApply(let lhs, let rhs), .functionSet(let lhs, let rhs):
+                 .functionApply(let lhs, let rhs), .functionSet(let lhs, let rhs),
+                 .randomSubset(let lhs, let rhs):
                 schedule([lhs, rhs], bound: bound)
             case .assertView(let value, _), .nextState(let value), .negate(let value), .not(let value), .printT(let value), .cardinality(let value),
                  .powerSet(let value), .sequenceSet(let value), .unionAll(let value), .tupleLength(let value),

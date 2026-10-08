@@ -272,9 +272,15 @@ extension NativeSwiftEmitter {
                 }
             case .memberOf(let expression):
                 if let field = stateMemberNames[initialization.variable] {
+                    let membershipDomain: CompiledExpression
+                    if case .randomSubset = expression.computation.operation {
+                        membershipDomain = expression.computation.children[1]
+                    } else {
+                        membershipDomain = expression
+                    }
                     let membership = CompiledExpression(operation: .in, resultType: .bool, children: [
                         CompiledExpression(operation: .stateVariable(initialization.variable), resultType: type, children: []),
-                        expression
+                        membershipDomain
                     ])
                     code += """
                     let \(name)Candidates: [\(try swiftType(type))]

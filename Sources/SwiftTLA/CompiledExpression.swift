@@ -73,6 +73,7 @@ package enum CompiledOperation: Hashable, Sendable {
     case sequenceFromFunction
     case setSum
     case functionSet
+    case randomSubset
     case foldFunction([BinderID])
     case letValue(BinderID)
     case call(ResolvedFunctionID)

@@ -169,6 +169,7 @@ extension StateExpr {
         case .printT(let value): return .printT(sub(value))
         case .setSum(let f, let s): return .setSum(sub(f), sub(s))
         case .functionSet(let d, let r): return .functionSet(sub(d), sub(r))
+        case .randomSubset(let count, let domain): return .randomSubset(sub(count), sub(domain))
         case .foldFunction(let operation, let initial, let sequence):
             let scoped = underParameters(operation.parameters, body: operation.body)
             return .foldFunction(
@@ -317,6 +318,7 @@ extension StateExpr {
             case .printT(let value): return .printT(visit(value))
             case .setSum(let function, let set): return .setSum(visit(function), visit(set))
             case .functionSet(let domain, let range): return .functionSet(visit(domain), visit(range))
+            case .randomSubset(let count, let domain): return .randomSubset(visit(count), visit(domain))
             case .foldFunction(let operation, let initial, let sequence):
                 return .foldFunction(
                     FormalLambda(parameters: operation.parameters, body: visitUnderBindings(Set(operation.parameters), operation.body)),
