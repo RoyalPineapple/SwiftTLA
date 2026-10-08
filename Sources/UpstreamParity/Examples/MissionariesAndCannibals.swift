@@ -77,14 +77,12 @@ package struct MissionariesAndCannibalsModel: Sendable {
                 Bind(Cannibals, to: Set<Person>([.c1, .c2, .c3]))
             }.checking(only: [TypeOK, Solution])
                 .expect(Solution, .violated)
-                .checkingMode(.decisiveCounterexample)
             MissionariesAndCannibals
             let APMissionariesAndCannibals = Validation {
                 Bind(Missionaries, to: Set<Person>([.apM1, .apM2, .apM3]))
                 Bind(Cannibals, to: Set<Person>([.apC1, .apC2, .apC3]))
             }.checking(only: [TypeOK, Solution])
                 .expect(Solution, .violated)
-                .checkingMode(.decisiveCounterexample)
             APMissionariesAndCannibals
         }
     }

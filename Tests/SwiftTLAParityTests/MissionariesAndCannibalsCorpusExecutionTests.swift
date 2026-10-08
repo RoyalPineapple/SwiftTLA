@@ -17,7 +17,7 @@ struct MissionariesAndCannibalsCorpusExecutionTests {
                 "Verification/FiniteGraph/fixtures/" + declaration.configuration))
             #expect(SHA256.hex(module) == declaration.moduleSHA256)
             #expect(SHA256.hex(configuration) == declaration.cfgSHA256)
-            #expect(declaration.comparisonMode == .decisiveCounterexample)
+            #expect(declaration.comparisonMode == .exhaustive)
         }
     }
 
@@ -60,7 +60,7 @@ struct MissionariesAndCannibalsCorpusExecutionTests {
             let rendered = try scenario.render()
             #expect(rendered.checkNames == ["TypeOK", "Solution"])
             #expect(rendered.checksDeadlock)
-            #expect(scenario.checkingMode == .decisiveCounterexample)
+            #expect(scenario.checkingMode == .exhaustive)
             if scenario.name == "APMissionariesAndCannibals" {
                 #expect(rendered.tlaBundle.cfg.contains("\"m1_OF_PERSON\""))
                 #expect(rendered.tlaBundle.cfg.contains("\"c1_OF_PERSON\""))
@@ -74,7 +74,17 @@ struct MissionariesAndCannibalsCorpusExecutionTests {
                 Issue.record("Expected the published solution counterexample")
                 continue
             }
-            #expect(run.native.graph == nil)
+            #expect(run.coverage.coversCompleteScenario)
+            let complete = try MachineValidator.run(initialMachines: scenario.initialMachines(),
+                maximumStates: 1_000, checking: scenario.checking, stopOnViolation: false) { _ in }
+            if case .exhausted = complete.completion {} else {
+                Issue.record("Expected complete exploration after the solution witness")
+            }
+            #expect(complete.violatedInvariants.count == 1)
+            #expect(complete.violatedInvariants.contains {
+                scenario.formalPropertyNames[$0] == "Solution"
+            })
+            #expect(!complete.deadlockFound)
         }
     }
 }
