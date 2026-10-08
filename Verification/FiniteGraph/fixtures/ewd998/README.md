@@ -16,4 +16,13 @@ pinned `tlaplus/Examples` revision. The configuration selects five nodes,
 disables deadlock checking. Their SHA-256 digests are
 `c498e5e35a83d84257016fdf4ba359ddb40dbb5f3b2234656e32b419a5499e93`
 and `69ec430deca39d7af5e2bfb1f6e43b5c941d29f4362a70048d534a52b8a54146`.
-The five-node case is registered but has no hosted parity evidence yet.
+The five-node case has focused hosted parity on its complete configured `VIEW`
+graph at `c1c4ee49179592fa50751e045bfdbaaa6f829060`; this is not a
+full clock-bearing graph or final-revision admission claim.
+
+`EWD998ChanTrace.tla`, `.cfg`, and `.ndjson` are unchanged pinned upstream
+inputs. The reference diagnostic binds the 654-event log through the `JSON`
+environment variable and uses the separately pinned CommunityModules release
+and source closure. Its draft-PR workflow checks the upstream TLC outcome and
+retains the exact inputs. It does not capture TLC's chosen causal order or
+compare a generated Swift machine, so it does not complete trace parity.

@@ -6127,7 +6127,7 @@
           "configuration": "specifications/ewd998/EWD998ChanTrace.cfg",
           "required": true,
           "status": "missing",
-          "gap": "The upstream trace TLA/CFG and pinned NDJSON input are staged, and the typed log reader and optional pinned CommunityModules source closure are available, but neither hosted runner binds them. Raw source order violates CausalOrder at lines 3 and 4; a selected causal order must be retained and checked, not assumed from the file. Typed ACTION_CONSTRAINT, level-sensitive VIEW identity, and generic POSTCONDITION are locally implemented and tested, but TraceAccepted is not wired into this configuration or hosted-verified. Base graph parity does not establish trace acceptance.",
+          "gap": "The upstream trace TLA/CFG and pinned NDJSON input are staged. A draft-PR reference-only diagnostic now binds the typed log and pinned CommunityModules closure, but it has not run on a host and neither generated-TLA nor native parity path is connected. Raw source order violates CausalOrder at lines 3 and 4; a selected causal order must be retained and checked, not assumed from the file. Typed ACTION_CONSTRAINT, level-sensitive VIEW identity, and generic POSTCONDITION are locally implemented and tested, but TraceAccepted is not wired into a generated configuration or hosted-verified. Base graph parity does not establish trace acceptance.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [],
