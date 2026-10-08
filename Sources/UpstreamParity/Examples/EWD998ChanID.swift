@@ -6,7 +6,7 @@ import SwiftTLAMacros
 @TLAModel
 package struct EWD998ChanIDModel: Sendable {
     package enum NodeID: String, CaseIterable, FiniteTLAValueDomain {
-        case n1, n2, n3, n4, n5
+        case n1, n2, n3, n4, n5, n6, n7
 
         package static var defaultValue: Self { .n1 }
         package static let finiteValues = allCases

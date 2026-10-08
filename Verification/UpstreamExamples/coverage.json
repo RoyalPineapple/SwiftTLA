@@ -5870,7 +5870,7 @@
         {
           "path": "specifications/ewd998/EWD998ChanID.tla",
           "role": "configured root",
-          "reason": "A partial typed model and rendered EWD998Chan refinement exist. The published VIEW changes seen-state identity; native quotient checking and view-aware complete graph evidence are not implemented, so the published configuration cannot yet be registered or verified.",
+          "reason": "A partial typed model with n1..n7 identifiers and rendered EWD998Chan refinement exists. The published VIEW changes seen-state identity; native quotient checking and view-aware complete graph evidence are not implemented, so the published configuration cannot yet be registered or verified.",
           "implementations": ["Sources/UpstreamParity/Examples/EWD998ChanID.swift"],
           "dispositionComplete": false
         },
