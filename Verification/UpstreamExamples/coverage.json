@@ -6022,11 +6022,26 @@
           "module": "specifications/ewd998/AsyncTerminationDetection.tla",
           "configuration": "specifications/ewd998/AsyncTerminationDetection.cfg",
           "required": true,
-          "status": "implemented",
+          "status": "hosted match",
+          "verifiedSourceSHA": "bc35e8d25aa83f9cf12dbd969b33d8871f2afbab",
+          "gap": "This focused configuration match does not admit the full matrix or complete the EWD998 family on a final source revision.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
           "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998Termination.swift", "scenario": "AsyncTerminationDetection", "caseID": "ewd998-async"}],
-          "evidence": []
+          "evidence": [{
+            "sourceSHA": "bc35e8d25aa83f9cf12dbd969b33d8871f2afbab",
+            "developerToolsVersion": "16.4",
+            "runURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37803925315",
+            "artifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37803925315/artifacts/11562883950",
+            "artifactDigest": "sha256:377c60a6f0506cfbfb71c5687748c10d76c5f28d6ae40dc34c475d9c31a79208",
+            "nativeArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37803925315/artifacts/11562354678",
+            "nativeArtifactDigest": "sha256:241eb7ede271f3976c231baf7ed81b4bbb193c2146dae782355334050070a394",
+            "generatedOracleArtifactURL": "https://github.com/RoyalPineapple/SwiftTLA/actions/runs/37803925315/artifacts/11562733373",
+            "generatedOracleArtifactDigest": "sha256:b4ad339bd8ec2d350fe2f2ab5061ba46058f67bd14140647c40ab7271776425d",
+            "completeGraph": true,
+            "allPropertiesMatch": true,
+            "scope": "Focused hosted generated-TLA TLC versus pinned-upstream TLC and native versus generated-TLA TLC comparisons are exact on complete initial-state sets and labeled graphs: 17 initial states, 4097 states, and 45062 edges. TypeOK, Safe, Quiescence, Live, and default deadlock are satisfied on all paths; no declared property is omitted. The pinned root TLA and raw CFG hashes c1b15be68a73c6e5f69c5c09f2736870182a9b0765ad9860452240119911b030 and 6affac15002d814a67775f16affa001d9e01c2a758a9d35dbfbaccdd1fc9f5c6 match the ceeaa904 case pins. Both TLC paths retain v1.8.0, Temurin 17.0.19+10, exact jar and bridge hashes, nonempty graph artifacts, source-sha files, and run-origin records. This focused diagnostic is not ordinary CI, full-matrix admission, or EWD998 family completion."
+          }]
         },
         {
           "module": "specifications/ewd998/EWD998.tla",
