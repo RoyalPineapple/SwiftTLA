@@ -1,5 +1,6 @@
 @testable import SwiftTLAPlugin
 @testable import SwiftTLA
+@testable import UpstreamParity
 import SwiftTLAMacros
 import SwiftParser
 import SwiftSyntax
@@ -109,29 +110,6 @@ private struct TypedQuantifierGeneratedModel {
                 }
             })
             typedQuantifierGeneratedModel
-        }
-    }
-}
-
-@TLAModel
-private struct NonEmptySubsetGeneratedModel {
-    enum Step: String, CaseIterable { case keep }
-
-    static var spec: TLASpec {
-        #spec("NonEmptySubsetGeneratedModel") { model in
-            let members = model.parameter(as: Set<Int>.self,
-                in: Set<Set<Int>>([Set<Int>([1, 2]), Set<Int>([1, 2, 3])]))
-            let nonEmptySubsetGeneratedModel = Algorithm(label: "NonEmptySubsetGeneratedModel", scoped: { scope in
-                let selectedKeys = scope.sharedVar(_name: "selectedKeys", in: NonEmptySubsets(
-                    of: members
-                ))
-                Do(Step.keep) { Assign(selectedKeys, to: selectedKeys.expr) }
-            })
-            nonEmptySubsetGeneratedModel
-            let twoMembers = Validation { Bind(members, to: Set<Int>([1, 2])) }
-            twoMembers
-            let threeMembers = Validation { Bind(members, to: Set<Int>([1, 2, 3])) }
-            threeMembers
         }
     }
 }
@@ -710,7 +688,7 @@ private struct FoldGeneratedModel {
 
     @Test("configured Swift-set subsets preserve type and exclude the empty set")
     func configuredSwiftSetSubsetsPreserveType() throws {
-        let scenarios = try NonEmptySubsetGeneratedModel.validationScenarios()
+        let scenarios = try NonEmptySubsetSelectionModel.validationScenarios()
         #expect(scenarios.count == 2)
         let expected: [Set<Set<Int>>] = [
             [Set([1]), Set([2]), Set([1, 2])],

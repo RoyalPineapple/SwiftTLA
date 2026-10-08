@@ -9,10 +9,11 @@ configuration, and evidence status; this checklist owns only the sequence and
 admission gates. Do not credit a partial graph, timeout, or unrun configuration.
 
 As recorded in the ledger on 2026-10-08, all 19 DSL criteria are marked
-implemented; 18 have requirement-specific acceptance evidence. AC-13 still
-awaits final-head hosted admission. Sixty of the 234 published configurations
-have historical hosted-match evidence. Neither historical count establishes
-completion on a final revision.
+implemented with requirement-specific historical acceptance evidence. AC-13 was
+accepted on frozen PR SHA `852295bc`, with all five ordinary CI jobs and the
+unfiltered validation matrix green. Sixty of the 234 published configurations
+have historical hosted-match evidence. The later PR head still needs its own
+admission result; none of these counts completes the 78-family corpus.
 
 ## 1. Close draft PR #394 without expanding its corpus
 
