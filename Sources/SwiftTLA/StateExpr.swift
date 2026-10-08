@@ -342,6 +342,7 @@ public indirect enum StateExpr: Hashable, Sendable {
     case setSum(StateExpr, StateExpr)
     case functionSet(StateExpr, StateExpr)
     case randomSubset(StateExpr, StateExpr)
+    case randomElement(StateExpr)
     case foldFunction(FormalLambda, initial: StateExpr, sequence: StateExpr)
 
     case operatorApplication(FormalOperator, [FormalCallArgument])

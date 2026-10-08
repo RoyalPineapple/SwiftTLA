@@ -941,6 +941,15 @@ final class ParserSession {
             return .randomSubset(count, domain)
         }
         if let call = expression.as(FunctionCallExprSyntax.self),
+           compilerGrammarName(in: call.calledExpression) == "RandomElement",
+           call.arguments.count == 1,
+           call.arguments.first?.label?.text == "from",
+           call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+           let argument = call.arguments.first,
+           let domain = decodeTypedFacadeValue(argument.expression, scope: scope) {
+            return .randomElement(domain)
+        }
+        if let call = expression.as(FunctionCallExprSyntax.self),
            let reference = call.calledExpression.as(DeclReferenceExprSyntax.self),
            let operation = scope.recursiveOperator(for: reference) {
             let arguments = call.arguments.compactMap {
@@ -1902,6 +1911,10 @@ final class ParserSession {
         if compilerGrammarName(in: call.calledExpression) == "RandomSubset",
            let domain = call.arguments.first(where: { $0.label?.text == "from" })?.expression {
             return typedFacadeValueType(domain, scope: scope)
+        }
+        if compilerGrammarName(in: call.calledExpression) == "RandomElement",
+           let domain = call.arguments.first(where: { $0.label?.text == "from" })?.expression {
+            return typedFacadeValueType(domain, scope: scope)?.selectedElement
         }
         if compilerGrammarName(in: call.calledExpression) == "If",
            let thenSyntax = call.arguments.first(where: { $0.label?.text == "then" })?.expression,

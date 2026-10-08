@@ -1452,6 +1452,7 @@ struct CompiledLowerer {
                 case .functionApply(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .functionApply, on: &tasks)
                 case .functionSet(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .functionSet, on: &tasks)
                 case .randomSubset(let count, let domain): scheduleBinary(count, domain, at: path, scope: scope, operation: .randomSubset, on: &tasks)
+                case .randomElement(let domain): scheduleUnary(domain, at: path, scope: scope, operation: .randomElement, on: &tasks)
                 case .setSum(let lhs, let rhs): scheduleBinary(lhs, rhs, at: path, scope: scope, operation: .setSum, on: &tasks)
                 case .integerRange(let lower, let upper):
                     schedule([(lower, "\(path).lower"), (upper, "\(path).upper")], at: path, scope: scope, build: { .integerRange($0[0].expression, $0[1].expression) }, on: &tasks)

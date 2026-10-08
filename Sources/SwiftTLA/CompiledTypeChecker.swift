@@ -200,6 +200,7 @@ private enum ExpressionCheckTask {
     case finishUnaryCollection(expected: CompiledValueType)
     case finishFunctionSet(expected: CompiledValueType)
     case finishRandomSubset(expected: CompiledValueType)
+    case finishRandomElement(expected: CompiledValueType)
     case set
     case setElements(ArraySlice<CompiledExpression>, element: CompiledValueType)
     case mergeSetElement(ArraySlice<CompiledExpression>, previous: CompiledValueType)
@@ -1677,6 +1678,13 @@ package struct CompiledTypeChecker: Sendable {
                             .retainOperand(1), .check(expression.children[1], expected: expected == .unknown ? .set(.unknown) : expected),
                             .retainOperand(0), .check(expression.children[0], expected: .int),
                         ])
+                    case .randomElement:
+                        ancestors.append(expression)
+                        operandFrames.append([:])
+                        pending.append(contentsOf: [
+                            .finishRandomElement(expected: expected),
+                            .retainOperand(0), .check(expression.children[0], expected: .set(expected)),
+                        ])
                     case .setFilter(let id), .choose(let id):
                         let domain = expression.children[0]
                         let predicate = expression.children[1]
@@ -1934,6 +1942,13 @@ package struct CompiledTypeChecker: Sendable {
                         throw CompiledValueType.diagnostic("RandomSubset", "expected a set domain")
                     }
                     let checked = try checkedType(domain, expected: expected, operandContexts: [count, domain])
+                    results.append(checked.type)
+                    try finish(checked, in: &self)
+                case .finishRandomElement(let expected):
+                    guard let domain = results.popLast(), case .set(let element) = domain else {
+                        throw CompiledValueType.diagnostic("RandomElement", "expected a set domain")
+                    }
+                    let checked = try checkedType(element, expected: expected, operandContexts: [domain])
                     results.append(checked.type)
                     try finish(checked, in: &self)
                 case .refineDomain(let domain, let id):
@@ -2466,6 +2481,12 @@ package struct CompiledTypeChecker: Sendable {
                 throw CompiledValueType.diagnostic("RandomSubset", "expected a set domain")
             }
             return try checkedType(domain.resultType, expected: expected, children: [count, domain])
+        case .randomElement:
+            let domain = try checkOperand(expression.children[0], expected: .set(expected))
+            guard case .set(let element) = domain.resultType else {
+                throw CompiledValueType.diagnostic("RandomElement", "expected a set domain")
+            }
+            return try checkedType(element, expected: expected, children: [domain])
         case .sequenceSelect(let id):
             let sequence = expression.children[0]
             let predicate = expression.children[1]

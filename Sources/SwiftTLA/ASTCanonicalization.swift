@@ -376,6 +376,7 @@ func stateKey(_ expression: StateExpr, environment: [String: String], next: inou
             case .setSum(let lhs, let rhs): schedule("sum", [lhs, rhs], environment: environment)
             case .functionSet(let lhs, let rhs): schedule("functionSet", [lhs, rhs], environment: environment)
             case .randomSubset(let count, let domain): schedule("randomSubset", [count, domain], environment: environment)
+            case .randomElement(let domain): schedule("randomElement", [domain], environment: environment)
             case .assertView(let value, let shape): schedule("assertView[\(shape)]", [value], environment: environment)
             case .negate(let value): schedule("negate", [value], environment: environment)
             case .nextState(let value): schedule("nextState", [value], environment: environment)

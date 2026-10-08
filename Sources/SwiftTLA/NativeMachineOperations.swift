@@ -33,6 +33,7 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
     case tupleIndexOutsideDomain(Int)
     case recordFieldUnavailable(String)
     case invalidRandomSubsetCount(Int)
+    case emptyRandomElementDomain
 
     public var description: String {
         switch self {
@@ -60,6 +61,7 @@ public enum NativeMachineEvaluationError: Error, Equatable, Sendable, CustomStri
         case .tupleIndexOutsideDomain(let index): return "Tuple index \(index) is outside its domain"
         case .recordFieldUnavailable(let field): return "Record field \(field) is unavailable"
         case .invalidRandomSubsetCount(let count): return "RandomSubset requires a nonnegative count; received \(count)"
+        case .emptyRandomElementDomain: return "RandomElement requires a nonempty domain"
         }
     }
 }
@@ -186,6 +188,15 @@ public enum _NativeMachineOperations: Sendable {
     ) throws -> Set<Element> {
         guard count >= 0 else { throw NativeMachineEvaluationError.invalidRandomSubsetCount(count) }
         return Set(values.shuffled().prefix(count))
+    }
+
+    public static func randomElement<Element: Hashable & Sendable>(
+        from values: Set<Element>
+    ) throws -> Element {
+        guard let value = values.randomElement() else {
+            throw NativeMachineEvaluationError.emptyRandomElementDomain
+        }
+        return value
     }
 
     public static func randomFunctionSubset<Key: Hashable & Sendable, Value: Hashable & Sendable>(

@@ -345,6 +345,13 @@ public func RandomSubset<Element: TLAValueType>(
   Expr(.randomSubset(count.stateExpr, domain.stateExpr))
 }
 
+/// Draws one member of a nonempty finite domain on each evaluation.
+public func RandomElement<Domain: FormalSetValue>(
+  from domain: some TypedExpression<Domain>
+) -> Expr<Domain.Element> {
+  Expr(.randomElement(domain.stateExpr))
+}
+
 extension TypedExpression where ExpressionValue: FormalSetValue {
   public func intersection<Other: FormalSetValue>(
     _ other: some TypedExpression<Other>

@@ -1205,6 +1205,7 @@ enum AlgorithmLowerer {
             case .setSum(let function, let set): return .setSum(rewritten(function, localRoots: localRoots), rewritten(set, localRoots: localRoots))
             case .functionSet(let domain, let range): return .functionSet(rewritten(domain, localRoots: localRoots), rewritten(range, localRoots: localRoots))
             case .randomSubset(let count, let domain): return .randomSubset(rewritten(count, localRoots: localRoots), rewritten(domain, localRoots: localRoots))
+            case .randomElement(let domain): return .randomElement(rewritten(domain, localRoots: localRoots))
             case .foldFunction(let operation, let initial, let sequence):
                 return .foldFunction(
                     FormalLambda(

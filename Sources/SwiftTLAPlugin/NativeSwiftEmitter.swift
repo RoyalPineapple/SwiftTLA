@@ -657,7 +657,7 @@ struct NativeSwiftEmitter {
         case .setLiteral, .tupleLiteral, .in, .subset, .union,
              .intersection, .setDifference, .cardinality, .integerRange, .setFilter,
              .setMap, .forAll, .exists, .choose, .sequenceFromSet, .sequenceFromFunction,
-             .powerSet, .sequenceSet, .unionAll, .functionSet, .randomSubset, .setSum:
+             .powerSet, .sequenceSet, .unionAll, .functionSet, .randomSubset, .randomElement, .setSum:
             return try collectionExpression(id, state: state, substitutions: substitutions, activeFunctions: activeFunctions)
         case .foldFunction, .sequenceSelect, .tupleAccess, .tupleDynamicAccess, .tupleRemoving, .tuplePrefix,
              .tupleLength, .tupleHead, .tupleTail, .tupleAppend, .tupleConcatenate:
@@ -936,6 +936,8 @@ struct NativeSwiftEmitter {
                 return "(try _NativeMachineOperations.randomFunctionSubset(upTo: \(try emit(0)), from: \(domain), to: \(range)))"
             }
             return "(try _NativeMachineOperations.randomSubset(upTo: \(try emit(0)), from: \(try emit(1))))"
+        case .randomElement:
+            return "(try _NativeMachineOperations.randomElement(from: \(try emit(0))))"
         case .setSum:
             let functionCode = try emit(0)
             let domainCode = try emit(1)
