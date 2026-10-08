@@ -304,32 +304,40 @@ public struct LocalVariable<Value: TLAValueType>: TypedExpression {
     fileprivate let name: String
     fileprivate let initialization: VariableInitialization
     fileprivate let displayLabel: String?
+    fileprivate let exposed: Bool
 
-    fileprivate init(name: String, initialization: VariableInitialization, displayLabel: String? = nil) {
+    fileprivate init(name: String, initialization: VariableInitialization, displayLabel: String? = nil,
+                     exposed: Bool = false) {
         self.name = name
         self.initialization = initialization
         self.displayLabel = displayLabel
+        self.exposed = exposed
     }
 
-    fileprivate init(name: String, initial: Value, displayLabel: String? = nil) {
+    fileprivate init(name: String, initial: Value, displayLabel: String? = nil, exposed: Bool = false) {
         self.init(
             name: name,
             initialization: initial.sourceIssue.map { .expression(.sourceIssue($0)) } ?? .value(initial.tlaValue),
-            displayLabel: displayLabel
+            displayLabel: displayLabel,
+            exposed: exposed
         )
     }
 
-    fileprivate init(name: String, initial: some TypedExpression<Value>, displayLabel: String? = nil) {
+    fileprivate init(name: String, initial: some TypedExpression<Value>, displayLabel: String? = nil,
+                     exposed: Bool = false) {
         self.init(
             name: name,
             initialization: .expression(initial.stateExpr),
-            displayLabel: displayLabel
+            displayLabel: displayLabel,
+            exposed: exposed
         )
     }
 
-    fileprivate init<Domain: FormalSetValue>(name: String, in values: some TypedExpression<Domain>, displayLabel: String? = nil)
+    fileprivate init<Domain: FormalSetValue>(name: String, in values: some TypedExpression<Domain>,
+                                             displayLabel: String? = nil, exposed: Bool = false)
     where Domain.Element == Value {
-        self.init(name: name, initialization: .memberOf(values.stateExpr), displayLabel: displayLabel)
+        self.init(name: name, initialization: .memberOf(values.stateExpr), displayLabel: displayLabel,
+                  exposed: exposed)
     }
 
     public var stateExpr: StateExpr { .variable(name) }
@@ -581,23 +589,27 @@ public final class ProcessScope {
     public func localVar<Value: TLAValueType>(
         _name name: String = "",
         label: String? = nil,
-        initial: Value
+        initial: Value,
+        exposed: Bool = false
     ) -> LocalVariable<Value> {
-        let variable = LocalVariable(name: name, initial: initial, displayLabel: label)
+        let variable = LocalVariable(name: name, initial: initial, displayLabel: label, exposed: exposed)
         declarations.append(localDeclaration(variable))
         return variable
     }
 
-    public func localVar<Value: TLAValueType>(_name name: String = "", label: String? = nil, initial: some TypedExpression<Value>) -> LocalVariable<Value> {
-        let variable = LocalVariable(name: name, initial: initial, displayLabel: label)
+    public func localVar<Value: TLAValueType>(_name name: String = "", label: String? = nil,
+                                               initial: some TypedExpression<Value>, exposed: Bool = false)
+        -> LocalVariable<Value> {
+        let variable = LocalVariable(name: name, initial: initial, displayLabel: label, exposed: exposed)
         declarations.append(localDeclaration(variable))
         return variable
     }
 
     public func localVar<Domain: FormalSetValue>(
-        _name name: String = "", label: String? = nil, in values: some TypedExpression<Domain>
+        _name name: String = "", label: String? = nil, in values: some TypedExpression<Domain>,
+        exposed: Bool = false
     ) -> LocalVariable<Domain.Element> {
-        let variable = LocalVariable(name: name, in: values, displayLabel: label)
+        let variable = LocalVariable(name: name, in: values, displayLabel: label, exposed: exposed)
         declarations.append(localDeclaration(variable))
         return variable
     }
@@ -630,7 +642,8 @@ private func localDeclaration<Value>(_ variable: LocalVariable<Value>) -> Algori
         root: variable.name,
         initialization: variable.initialization,
         displayLabel: variable.displayLabel,
-        swiftTypeName: swiftSurfaceTypeName(for: Value.self)
+        swiftTypeName: swiftSurfaceTypeName(for: Value.self),
+        exposed: variable.exposed
     )))
 }
 
@@ -1709,7 +1722,9 @@ package enum AlgorithmValidator {
                 validateName(temporal.name, at: processAnchor, diagnostics: &diagnostics)
             case .invalidPlacement:
                 continue
-            case .formalOperator, .stateConstraint:
+            case .stateConstraint:
+                continue
+            case .formalOperator:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))
             case .shared, .process, .procedure:
                 diagnostics.append(AlgorithmDiagnostic(.invalidAlgorithmComponent, at: processAnchor))

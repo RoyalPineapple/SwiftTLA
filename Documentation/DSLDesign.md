@@ -132,6 +132,7 @@ Inside `#spec`, scoped state declarations derive their names from immutable Swif
 let count = scope.sharedVar(initial: 0)
 let hour = scope.sharedVar(in: 1...12)
 let visited = process.localVar(initial: false)
+let publicCount = process.localVar(initial: 0, exposed: true)
 let readable = scope.sharedVar(label: "Current value", initial: 0)
 let limit = scope.parameter(as: Int.self, in: 1...12, label: "Visit limit")
 ```
@@ -149,6 +150,10 @@ for every variable, and generated `State.displayNames` exposes labels for public
 state fields keyed by typed Swift key paths, falling back to the Swift binding
 name. Labels do not change the formal identifier, state
 value, transitions, or compilation identity; duplicate labels are permitted.
+Process-local values are internal to generated execution by default. Use
+`exposed: true` only when a typed generated `State` field is needed outside the
+process, such as for a refinement mapping. Exposure does not change the formal
+state or transition semantics; it changes the generated Swift surface.
 
 Parameter handles also derive their names from immutable Swift bindings and
 accept an optional nonempty literal `label:`. The label is available through
@@ -301,6 +306,9 @@ Do(Step.twice) { advance(); advance() }
 Later calls observe assignments from earlier calls in the same step.
 Parameterized independent steps and nested algorithms can use these macros.
 An algorithm can declare a local macro with the same name.
+An `Each` body can also declare a bound macro after its local state and use it
+inside its `Do` or `While` steps. Such a macro can capture that process's typed
+state; expansion remains inside the caller's atomic step.
 Specification macros require unique immutable bindings.
 Control transfers inside a macro still require an enclosing algorithm.
 

@@ -72,7 +72,8 @@ extension ParserSession {
                   let field = generatedFieldName(target.expression),
                   let value = mapping.arguments.first(where: { $0.label?.text == "from" }),
                   value.label?.text == "from",
-                  let source = decodeTypedFacadeValue(value.expression, scope: sourceScope) else {
+                  let source = generatedSourceFieldName(value.expression).map(StateExpr.variable)
+                    ?? decodeTypedFacadeValue(value.expression, scope: sourceScope) else {
                 components.diagnostics.append(.init(
                     message: "Refinement mappings require distinct Map(\\.field, from: typedValue) entries.",
                     source: statement))
@@ -106,5 +107,20 @@ extension ParserSession {
               let field = keyPath.components.first?.component.as(KeyPathPropertyComponentSyntax.self),
               field.genericArgumentClause == nil else { return nil }
         return field.declName.baseName.sourceIdentifierName
+    }
+
+    private func generatedSourceFieldName(_ expression: ExprSyntax) -> String? {
+        guard let sourceModelTypeName,
+              expression.as(KeyPathExprSyntax.self) != nil else { return nil }
+        let source = expression.trimmedDescription
+        guard source.hasPrefix("\\") else { return nil }
+        let components = source.dropFirst().split(separator: ".")
+        guard components.count == 3,
+              components[0] == sourceModelTypeName,
+              components[1] == "State",
+              !components[2].isEmpty else { return nil }
+        let field = components[2]
+        return field.first == "`" && field.last == "`"
+            ? String(field.dropFirst().dropLast()) : String(field)
     }
 }

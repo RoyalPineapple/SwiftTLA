@@ -135,6 +135,18 @@ enum AlgorithmLowerer {
             guard case .stateConstraint(let constraint) = component else { return nil }
             return constraint
         }
+        let processConstraints = processes.flatMap { process -> [ModelPredicateClause] in
+            let localRoots = Set(process.components.compactMap { component -> String? in
+                guard case .local(let state) = component else { return nil }
+                return state.root
+            })
+            return process.components.compactMap { component -> ModelPredicateClause? in
+                guard case .stateConstraint(let constraint) = component else { return nil }
+                return .init(.forAll(process.domain, processBinding.rawValue,
+                    rewrite(constraint.expression, localRoots: localRoots)),
+                    sourceOffset: constraint.sourceOffset)
+            }
+        }
 
         var variables = shared.map { state in
             NamedVar(
@@ -177,7 +189,7 @@ enum AlgorithmLowerer {
                         resolvedValueType: process.resolvedElementType.flatMap { key in
                             state.resolvedValueType.map { .dictionary(key, $0) }
                         },
-                        origin: .compiler
+                        origin: state.exposed ? .source : .compiler
                     ))
             }
         }
@@ -422,7 +434,7 @@ enum AlgorithmLowerer {
             reachabilityProperties: declaredReachability + processReachability,
             temporalProperties: declaredTemporal + processTemporal,
             fairness: fairness,
-            constraints: declaredConstraints,
+            constraints: declaredConstraints + processConstraints,
             formalOperatorDefinitions: resolvedFormalOperators,
             sourceAlgorithms: [Algorithm(model: algorithm)]))
     }

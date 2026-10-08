@@ -42,6 +42,7 @@ private let upstreamModelRegistrations: [ModelRegistration] = [
     .init(id: "ewd998", scenarios: { try EWD998TerminationModel.validationScenarios() }),
     .init(id: "ewd998-safra", scenarios: { try EWD998Model.validationScenarios() }),
     .init(id: "ewd998-chan", scenarios: { try EWD998ChanModel.validationScenarios() }),
+    .init(id: "ewd998-pcal", scenarios: { try EWD998PCalModel.validationScenarios() }),
     .init(id: "sync-termination-detection", scenarios: { try SyncTerminationDetectionModel.validationScenarios() }),
     .init(id: "bakery", scenarios: { try BakeryModel.validationScenarios() }),
     .init(id: "boulanger", scenarios: { try BoulangerModel.validationScenarios() }),

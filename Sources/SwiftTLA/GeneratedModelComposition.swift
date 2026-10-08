@@ -89,6 +89,18 @@ public func Map<State: GeneratedModelFields, Value: TLAValueType>(
     return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr, projected: false)
 }
 
+/// Reads a generated concrete state field at the refinement boundary.
+public func Map<State: GeneratedModelFields, Concrete: GeneratedModelFields, Value: TLAValueType>(
+    _ target: KeyPath<State, Value>, from source: KeyPath<Concrete, Value>, _fieldName: String = ""
+) -> GeneratedModelStateMapping<State> {
+    let targetIdentity = State.fieldIdentities[target]
+    let sourceIdentity = Concrete.fieldIdentities[source]
+    let value = sourceIdentity.map { StateExpr.variable($0.formalName) }
+        ?? .sourceIssue(.formalDeclaration(kind: "generated state field", name: nil,
+            problem: "unregistered concrete key path"))
+    return .init(fieldName: targetIdentity?.swiftName ?? _fieldName, source: value, projected: false)
+}
+
 /// Projects a structurally equivalent formal value into the abstract model's
 /// distinct Swift type. The generated checker verifies the complete value.
 public func Map<State: GeneratedModelFields, Target: TLAValueType, Source: TLAValueType>(
@@ -97,6 +109,20 @@ public func Map<State: GeneratedModelFields, Target: TLAValueType, Source: TLAVa
 ) -> GeneratedModelStateMapping<State> {
     let identity = State.fieldIdentities[target]
     return .init(fieldName: identity?.swiftName ?? _fieldName, source: source.stateExpr, projected: true)
+}
+
+/// Projects a generated concrete field with the same complete formal value as the abstract field.
+public func Map<State: GeneratedModelFields, Concrete: GeneratedModelFields,
+    Target: TLAValueType, Source: TLAValueType>(
+    _ target: KeyPath<State, Target>, from source: KeyPath<Concrete, Source>,
+    projecting _: Target.Type, _fieldName: String = ""
+) -> GeneratedModelStateMapping<State> {
+    let targetIdentity = State.fieldIdentities[target]
+    let sourceIdentity = Concrete.fieldIdentities[source]
+    let value = sourceIdentity.map { StateExpr.variable($0.formalName) }
+        ?? .sourceIssue(.formalDeclaration(kind: "generated state field", name: nil,
+            problem: "unregistered concrete key path"))
+    return .init(fieldName: targetIdentity?.swiftName ?? _fieldName, source: value, projected: true)
 }
 
 @resultBuilder

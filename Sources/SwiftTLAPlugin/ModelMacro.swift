@@ -36,6 +36,7 @@ enum TLASpecVerifier {
         let enumInfos = try Self.collectEnumVariables(from: memberList)
         let sourceMetadata = try sourceTypes(in: memberList, enums: enumInfos)
         let parser = ParserSession(sourceTypes: sourceMetadata)
+        parser.sourceModelTypeName = typeName
         let parsed = parser.parseSpecClosure(named: source.name, source.closure)
         do {
             let compilation = try parsed.compile()

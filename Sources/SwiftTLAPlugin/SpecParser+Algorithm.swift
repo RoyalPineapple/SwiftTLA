@@ -804,7 +804,21 @@ extension ParserSession {
         var processScope = scope.extending(binding: parameter,
             to: .currentProcess, shape: elementType)
         var components: [AlgorithmComponentModel] = []
+        var processMacros = macros
+        var localMacroNames: Set<String> = []
         for (index, statement) in closure.statements.enumerated() {
+            if case .decl(let declaration) = statement.item,
+               let variable = declaration.as(VariableDeclSyntax.self),
+               let macro = parseAlgorithmMacroDeclaration(variable, scope: processScope) {
+                let name = variable.bindings.first?.pattern.as(IdentifierPatternSyntax.self)?
+                    .identifier.sourceIdentifierName ?? ""
+                guard localMacroNames.insert(name).inserted else {
+                    algorithmParseFailure = "Process macro '\(name)' is declared more than once."
+                    return nil
+                }
+                processMacros[name] = macro
+                continue
+            }
             if case .decl(let declaration) = statement.item,
                let variable = declaration.as(VariableDeclSyntax.self),
                let parsedVariable = parseAlgorithmVariableDeclaration(
@@ -818,7 +832,8 @@ extension ParserSession {
                     root: state.root,
                     initialization: state.initialization,
                     swiftTypeName: state.swiftTypeName,
-                    resolvedValueType: state.resolvedValueType
+                    resolvedValueType: state.resolvedValueType,
+                    exposed: state.exposed
                 )))
                 processScope = processScope.extending(binding: parsedVariable.sourceName,
                     to: .variable(state.root),
@@ -857,8 +872,8 @@ extension ParserSession {
                 componentCall,
                 construct: construct,
                 processParameter: parameter,
-                macros: macros,
-                    scope: processScope
+                macros: processMacros,
+                scope: processScope
             ) else {
                 if algorithmParseFailure == nil {
                     algorithmParseFailure = "Process component \(index + 1) could not be decoded: "
@@ -942,6 +957,17 @@ extension ParserSession {
         }
         let declaredName = initializer.arguments.first(where: { $0.label?.text == "_name" })?
             .expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue ?? sourceName
+        let exposed: Bool
+        if let argument = initializer.arguments.first(where: { $0.label?.text == "exposed" }) {
+            guard kind == .local,
+                  let value = argument.expression.as(BooleanLiteralExprSyntax.self) else {
+                algorithmParseFailure = "Only a process localVar may use exposed: with a Boolean literal."
+                return nil
+            }
+            exposed = value.literal.text == "true"
+        } else {
+            exposed = false
+        }
         let displayLabel: String?
         do {
             displayLabel = try declarationDisplayLabel(initializer, kind: "state")
@@ -978,7 +1004,8 @@ extension ParserSession {
                 root: declaredName,
                 initialization: .expression(initial),
                 displayLabel: displayLabel,
-                swiftTypeName: declaredValueType ?? initialValueTypeName(from: initialSyntax)
+                swiftTypeName: declaredValueType ?? initialValueTypeName(from: initialSyntax),
+                exposed: exposed
             )
             inferredType = state.swiftTypeName == nil ? typedFacadeValueType(initialSyntax, scope: scope) : nil
         } else if let domainSyntax = initializer.arguments.first(where: { $0.label?.text == "in" })?.expression {
@@ -993,7 +1020,8 @@ extension ParserSession {
                 root: declaredName,
                 initialization: .memberOf(domain.expression),
                 displayLabel: displayLabel,
-                swiftTypeName: domain.elementType
+                swiftTypeName: domain.elementType,
+                exposed: exposed
             )
             inferredType = state.swiftTypeName == nil ? typedFacadeValueType(domainSyntax, scope: scope)?.selectedElement : nil
         } else {
@@ -1008,7 +1036,8 @@ extension ParserSession {
             return nil
         }
         let resolvedState = AlgorithmStateModel(root: state.root, initialization: state.initialization,
-            displayLabel: state.displayLabel, swiftTypeName: state.swiftTypeName, resolvedValueType: inferredType)
+            displayLabel: state.displayLabel, swiftTypeName: state.swiftTypeName,
+            resolvedValueType: inferredType, exposed: state.exposed)
         recordStateDeclaration(named: resolvedState.root, at: binding)
         let component: AlgorithmComponentModel = kind == .shared ? .shared(resolvedState) : .local(resolvedState)
         return (sourceName, component, valueType)
@@ -1125,6 +1154,12 @@ extension ParserSession {
         case .leadsTo, .eventually, .always, .alwaysEventually, .eventuallyAlways:
             guard let temporal = parseAlgorithmTemporal(call, construct: construct, scope: scope) else { return nil }
             return .temporal(temporal)
+        case .stateConstraint:
+            guard let argument = call.arguments.first,
+                  let condition = decodeAlgorithmStateExpression(argument.expression, scope: scope)
+            else { return nil }
+            return .stateConstraint(.init(condition,
+                sourceOffset: call.positionAfterSkippingLeadingTrivia.utf8Offset))
         default:
             return nil
         }

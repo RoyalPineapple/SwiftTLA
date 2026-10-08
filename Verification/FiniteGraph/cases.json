@@ -1549,6 +1549,30 @@
       "timeoutSeconds": 10800
     },
     {
+      "id": "ewd998-pcal-0",
+      "sourceModel": "ewd998-pcal",
+      "scenario": "EWD998PCal",
+      "module": "ewd998/EWD998PCal.tla",
+      "configuration": "ewd998/EWD998PCal.cfg",
+      "imports": ["ewd998/BagsExt.tla", "ewd998/EWD998.tla", "ewd998/AsyncTerminationDetection.tla", "kvsnap/Functions.tla", "ewd998/Folds.tla"],
+      "dependencies": [
+        {"importingModule": "EWD998PCal", "importedModule": "BagsExt"},
+        {"importingModule": "EWD998PCal", "importedModule": "EWD998"},
+        {"importingModule": "BagsExt", "importedModule": "Folds"},
+        {"importingModule": "EWD998", "importedModule": "AsyncTerminationDetection"},
+        {"importingModule": "EWD998", "importedModule": "Functions"},
+        {"importingModule": "Functions", "importedModule": "Folds"}
+      ],
+      "sourceInput": {
+        "path": "tlaplus/Examples@ceeaa904140e3e03781cb2a79cd6c6d8b8b08e10/specifications/ewd998/EWD998PCal.tla",
+        "sha256": "d1622e16901edfa5b01d4e9c00779408b97483156d241c7b0f22515a1d81dc0d"
+      },
+      "exploration": {"maximumStateLimit": 300000000, "symmetryReduction": "disabled"},
+      "moduleSHA256": "d1622e16901edfa5b01d4e9c00779408b97483156d241c7b0f22515a1d81dc0d",
+      "cfgSHA256": "44073c04a88dd7aa593cab099e59b7b1dd4be31ec2d5b59616b0426a3a84f892",
+      "timeoutSeconds": 10800
+    },
+    {
       "id": "sync-termination-detection-0",
       "sourceModel": "sync-termination-detection",
       "scenario": "SyncTerminationDetection",

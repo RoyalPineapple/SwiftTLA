@@ -5772,8 +5772,8 @@
     {
       "path": "specifications/ewd998",
       "name": "EWD998: Termination Detection in a Ring with Asynchronous Message Delivery",
-      "audit": "Pinned AsyncTerminationDetection, EWD998, and EWD998Chan modules and their four published configurations audited; other EWD998 variants remain unaudited",
-      "gap": "AsyncTerminationDetection has a typed model-owned #spec scenario, exact pinned fixtures, and a locally complete 4097-state native graph. Safra's EWD998 N=4 and N=3 configurations and the EWD998Chan N=3 configuration have typed model-owned scenarios and byte-identical pinned TLA/CFG inputs; their selected checks, state constraints, and deadlock settings are registered, and focused transition/rendering tests pass. Both hosted comparison paths remain pending for all four. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
+      "audit": "Pinned AsyncTerminationDetection, EWD998, EWD998Chan, and EWD998PCal modules and their five published configurations audited; other EWD998 variants remain unaudited",
+      "gap": "AsyncTerminationDetection has a typed model-owned #spec scenario, exact pinned fixtures, and a locally complete 4097-state native graph. Safra's EWD998 N=4 and N=3, EWD998Chan N=3, and EWD998PCal N=3 configurations have typed model-owned scenarios and byte-identical pinned TLA/CFG inputs; focused transition and rendering tests pass. Both hosted comparison paths remain pending for all five. Upstream reports roughly 219 million states for EWD998 N=4, so registration is not a claim that hosted capacity or complete parity is established. Other EWD998 variants and module dispositions remain missing; this is not a completed family.",
       "legacyCleanupComplete": false,
       "modules": [
         {
@@ -5877,8 +5877,8 @@
         {
           "path": "specifications/ewd998/EWD998PCal.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
-          "implementations": [],
+          "reason": "Published N=3 PlusCal configuration has a typed model-owned scenario and pinned inputs; hosted parity remains pending.",
+          "implementations": ["Sources/UpstreamParity/Examples/EWD998PCal.swift"],
           "dispositionComplete": false
         },
         {
@@ -5995,10 +5995,10 @@
           "module": "specifications/ewd998/EWD998PCal.tla",
           "configuration": "specifications/ewd998/EWD998PCal.cfg",
           "required": true,
-          "status": "missing",
+          "status": "implemented",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "success",
-          "implementations": [],
+          "implementations": [{"file": "Sources/UpstreamParity/Examples/EWD998PCal.swift", "scenario": "EWD998PCal", "caseID": "ewd998-pcal-0"}],
           "evidence": []
         },
         {
@@ -6035,6 +6035,9 @@
       }, {
         "implementation": "Sources/UpstreamParity/Examples/EWD998Chan.swift",
         "reason": "The published N=3 channel configuration is typed, registered against pinned inputs, and locally checked for ordered message transitions, refinement selection, and grouped fairness. Complete native/generated and generated/pinned graph and verdict parity remain open."
+      }, {
+        "implementation": "Sources/UpstreamParity/Examples/EWD998PCal.swift",
+        "reason": "The published N=3 PlusCal configuration is typed, registered against pinned inputs, and locally tested for bag multiplicity, token movement, refinement selection, state constraint, and default deadlock. Complete native/generated and generated/pinned graph and verdict parity remain open."
       }]
     },
     {

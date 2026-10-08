@@ -6,6 +6,7 @@ import Foundation
 
 
 final class ParserSession {
+    var sourceModelTypeName: String?
     var symmetryDeclarations: [SymmetrySetDecl] = []
     var symmetryDeclarationOffsets: [Int] = []
     var stateDeclarationOffsets: [String: [Int]] = [:]

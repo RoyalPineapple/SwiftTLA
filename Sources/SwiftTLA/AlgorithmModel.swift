@@ -543,19 +543,22 @@ package struct AlgorithmStateModel: Sendable {
     package let displayLabel: String?
     package let swiftTypeName: String?
     package let resolvedValueType: CompiledValueType?
+    package let exposed: Bool
 
     package init(
         root: String,
         initialization: VariableInitialization,
         displayLabel: String? = nil,
         swiftTypeName: String? = nil,
-        resolvedValueType: CompiledValueType? = nil
+        resolvedValueType: CompiledValueType? = nil,
+        exposed: Bool = false
     ) {
         self.root = root
         self.initialization = initialization.normalized
         self.displayLabel = displayLabel
         self.swiftTypeName = swiftTypeName
         self.resolvedValueType = resolvedValueType
+        self.exposed = exposed
     }
 }
 
