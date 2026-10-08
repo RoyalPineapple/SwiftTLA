@@ -5893,9 +5893,9 @@
         {
           "path": "specifications/ewd998/AsyncTerminationDetection.tla",
           "role": "configured root",
-          "reason": "Published N = 4 configuration is implemented as a typed model-owned scenario; hosted parity remains pending.",
+          "reason": "Published N = 4 configuration has a typed model-owned scenario and an exact focused hosted match on both comparison paths at bc35e8d2. Its complete initial states, labeled graph, selected properties, and default deadlock match. Final-revision admission and the other EWD998 modules remain separate.",
           "implementations": ["Sources/UpstreamParity/Examples/EWD998Termination.swift"],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/EWD998_anim.tla",
