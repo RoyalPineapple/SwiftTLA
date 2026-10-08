@@ -22,12 +22,13 @@ struct FairRefinementTarget {
 
 @TLAModel
 struct StutteringRefinementSource {
-    enum Step: String, CaseIterable { case stay }
+    enum Step: String, CaseIterable { case stay, advance }
 
     static var spec: TLASpec {
         #spec("StutteringRefinementSource") { scope in
             let value = scope.sharedVar(initial: 0)
             Do(Step.stay) { Skip() }
+            Do(Step.advance, when: value == 0) { Assign(value, to: 1) }
 
             let abstract = Instance(of: FairRefinementTarget.self) { Bind(\.N, to: 1) }
             abstract

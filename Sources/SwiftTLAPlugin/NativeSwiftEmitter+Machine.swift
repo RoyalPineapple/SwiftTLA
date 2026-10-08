@@ -67,6 +67,14 @@ extension NativeSwiftEmitter {
             \(program.layout.parameters.isEmpty ? "" : "self.configuration = configuration")
         }
         """)
+        if hiddenVariables.isEmpty {
+            declarations += try nativeDeclarations("""
+            @_documentation(visibility: internal)
+            public static func _machineForRefinement(_ state: State\(appendedParameters)) -> Self {
+                Self(execution: Snapshot(state: state)\(appendedArguments))
+            }
+            """)
+        }
         declarations += try nativeDeclarations("""
         public func hasSameConfiguration(as other: Self) -> Bool {
             \(program.layout.parameters.isEmpty ? "true" : "configuration == other.configuration")

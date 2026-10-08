@@ -3,7 +3,7 @@ import SwiftTLA
 
 @Suite("Generated refinement behavior")
 struct GeneratedRefinementBehaviorTests {
-    @Test("initial-and-next refinement ignores abstract fairness in native and TLA checks")
+    @Test("generated refinement maps non-initial states and respects selected abstract fairness")
     func explicitSafetyOnlyRefinement() throws {
         let initial = try StutteringRefinementSource.initialMachines()
         var graph = try ReachabilityGraph(initialMachines: initial, maximumStates: 10)

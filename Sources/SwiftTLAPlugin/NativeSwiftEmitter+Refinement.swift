@@ -78,7 +78,7 @@ extension NativeSwiftEmitter {
                         abstractBehavior: .\(refinement.behavior.rawValue)
                     ) { state in
                         let abstractState = \(target).State(\(state))
-                        return try \(target).makeMachine(abstractState, configuration: abstractConfiguration)
+                        return \(target)._machineForRefinement(abstractState, configuration: abstractConfiguration)
                     }
                     if let failure { failures[.\(property)] = failure }
                 }
