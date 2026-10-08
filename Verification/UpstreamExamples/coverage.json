@@ -5792,10 +5792,10 @@
       "modules": [
         {
           "path": "specifications/ewd998/AsyncTerminationDetection_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof-only module",
+          "reason": "Unconfigured TLAPS proof companion extending AsyncTerminationDetection. Its lemmas and theorems are not a TLC configuration or an additional state machine; no TLAPS proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/AsyncTerminationDetection.tla",
@@ -5806,10 +5806,10 @@
         },
         {
           "path": "specifications/ewd998/EWD998_anim.tla",
-          "role": "unclassified",
-          "reason": "No standalone configuration in the upstream manifest. Dependency or variant review remains open.",
+          "role": "unconfigured visualization companion",
+          "reason": "Extends EWD998ChanID to render SVG transition frames; it declares no published TLC configuration or distinct transition system. Visualization output is not counted as graph-parity evidence for the base model.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/EWD998_opts.tla",
@@ -5827,10 +5827,10 @@
         },
         {
           "path": "specifications/ewd998/EWD998_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof-only module",
+          "reason": "Unconfigured TLAPS proof companion extending EWD998. Its theorems do not add a TLC configuration; no TLAPS proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/EWD998.tla",
@@ -5877,16 +5877,16 @@
         {
           "path": "specifications/ewd998/EWD998ChanTrace.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Published trace-validation configuration: it reads an external NDJSON implementation log, causally orders its events, and checks acceptance with an action constraint and postcondition. It is not an exhaustive check of the EWD998Chan state graph; the trace input and trace-validation contract remain to be implemented and verified.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/EWD998PCal_proof.tla",
-          "role": "unclassified",
-          "reason": "Upstream declares proof work and no standalone model. Dependency and exclusion review remain open.",
+          "role": "proof-only module",
+          "reason": "Unconfigured TLAPS proof companion for EWD998PCal. It is not a separate TLC configuration or generated-machine case; no TLAPS proof-validation claim is made.",
           "implementations": [],
-          "dispositionComplete": false
+          "dispositionComplete": true
         },
         {
           "path": "specifications/ewd998/EWD998PCal.tla",
@@ -5905,14 +5905,14 @@
         {
           "path": "specifications/ewd998/SmokeEWD998_SC.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Published orchestration harness: it forks 30 rounds of nested TLC simulations across single bug-flag selections and records their exit codes in CSV. This is not a standalone model graph. Reproducing and comparing its sampled campaign remains open; do not credit exact graph parity from it.",
           "implementations": [],
           "dispositionComplete": false
         },
         {
           "path": "specifications/ewd998/SmokeEWD998.tla",
           "role": "configured root",
-          "reason": "Published configuration binding.",
+          "reason": "Published simulation smoke test: SmokeInit samples initial states using RandomSubset, and StopAfter limits duration or trace depth. It needs sampled-outcome evidence under its declared mode, not an exhaustive-graph claim; implementation and hosted comparison remain open.",
           "implementations": [],
           "dispositionComplete": false
         },
@@ -6034,6 +6034,7 @@
           "configuration": "specifications/ewd998/SmokeEWD998.cfg",
           "required": true,
           "status": "missing",
+          "gap": "RandomSubset initial-state sampling and TLC simulate mode make this a sampled smoke check; match selected checks and retained witnesses without claiming a complete graph.",
           "upstreamMode": {
             "simulate": {
               "traceCount": 100
@@ -6048,6 +6049,7 @@
           "configuration": "specifications/ewd998/SmokeEWD998_SC.cfg",
           "required": true,
           "status": "missing",
+          "gap": "External nested-TLC and CSV campaign, not a model-state graph; reproduce the published bug-flag/exit-code contract or record an explicit justified disposition, with hosted evidence.",
           "upstreamMode": "exhaustive search",
           "upstreamExpectedResult": "unknown",
           "implementations": [],
