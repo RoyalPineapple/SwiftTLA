@@ -2,10 +2,80 @@
 EXTENDS TLAPS, GeneratedAtomicCopyProofModel
 VARIABLE choiceSelected
 Choice == INSTANCE GeneratedGuardedChoiceProofModel WITH selected <- choiceSelected
-CONSTANTS Vars, Values, Key
+CONSTANTS Vars, Values, Key, ActionLabels
 ASSUME KeyIsVariable == Key \in Vars
 
 States == [Vars -> Values]
+LabeledEdges == States \X ActionLabels \X States
+
+ChoiceEdges(domain, branches) == UNION {branches[value] : value \in domain}
+GuardEdges(enabled, edges) == IF enabled THEN edges ELSE {}
+EnabledIn(edges, state, action) ==
+    \E successor \in States : <<state, action, successor>> \in edges
+
+THEOREM GuardedChoiceComposition ==
+    \A domain \in SUBSET Values :
+        \A source, rendered \in [domain -> SUBSET LabeledEdges] :
+            (\A value \in domain : source[value] = rendered[value]) =>
+                \A guard \in BOOLEAN :
+                    GuardEdges(guard, ChoiceEdges(domain, source))
+                    = GuardEdges(guard, ChoiceEdges(domain, rendered))
+    BY SMT DEF GuardEdges, ChoiceEdges, LabeledEdges, States
+
+THEOREM GuardedChoiceEnabledness ==
+    \A domain \in SUBSET Values :
+        \A source, rendered \in [domain -> SUBSET LabeledEdges] :
+            (\A value \in domain : source[value] = rendered[value]) =>
+                \A guard \in BOOLEAN, state \in States, action \in ActionLabels :
+                    EnabledIn(GuardEdges(guard, ChoiceEdges(domain, source)), state, action)
+                    <=> EnabledIn(GuardEdges(guard, ChoiceEdges(domain, rendered)), state, action)
+    BY GuardedChoiceComposition, SMT DEF EnabledIn
+
+ApplyDelta(s, keys, delta) ==
+    [key \in Vars |-> IF key \in keys THEN delta[key] ELSE s[key]]
+
+RenderedDelta(s, t, keys, delta) ==
+    /\ \A key \in keys : t[key] = delta[key]
+    /\ \A key \in Vars \ keys : t[key] = s[key]
+
+THEOREM CompleteDeltaUpdate ==
+    \A keys \in SUBSET Vars :
+        \A s, t \in States :
+            \A delta \in [keys -> Values] :
+                (t = ApplyDelta(s, keys, delta)) <=> RenderedDelta(s, t, keys, delta)
+    BY SMT DEF ApplyDelta, RenderedDelta, States
+
+MergeCompatible(firstKeys, first, secondKeys, second) ==
+    [key \in firstKeys \cup secondKeys |->
+        IF key \in firstKeys THEN first[key] ELSE second[key]]
+
+Compatible(firstKeys, first, secondKeys, second) ==
+    \A key \in firstKeys \cap secondKeys : first[key] = second[key]
+
+RenderedConjunction(s, t, firstKeys, first, secondKeys, second) ==
+    /\ \A key \in firstKeys : t[key] = first[key]
+    /\ \A key \in secondKeys : t[key] = second[key]
+    /\ \A key \in Vars \ (firstKeys \cup secondKeys) : t[key] = s[key]
+
+THEOREM CompatibleConjunction ==
+    \A firstKeys, secondKeys \in SUBSET Vars :
+        \A s, t \in States :
+            \A first \in [firstKeys -> Values] :
+                \A second \in [secondKeys -> Values] :
+                    Compatible(firstKeys, first, secondKeys, second) =>
+                        (t = ApplyDelta(s, firstKeys \cup secondKeys,
+                            MergeCompatible(firstKeys, first, secondKeys, second)))
+                        <=> RenderedConjunction(s, t, firstKeys, first, secondKeys, second)
+    BY SMT DEF ApplyDelta, MergeCompatible, Compatible, RenderedConjunction, States
+
+THEOREM ConflictingConjunctionHasNoSuccessor ==
+    \A firstKeys, secondKeys \in SUBSET Vars :
+        \A s, t \in States :
+            \A first \in [firstKeys -> Values] :
+                \A second \in [secondKeys -> Values] :
+                    ~Compatible(firstKeys, first, secondKeys, second)
+                    => ~RenderedConjunction(s, t, firstKeys, first, secondKeys, second)
+    BY SMT DEF Compatible, RenderedConjunction, States
 
 \* The generated Swift machine replaces one value in a complete state.
 NativeStep(s, t, guard, value) ==

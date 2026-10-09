@@ -30,6 +30,21 @@ in order while the resulting step remains externally atomic. A local negative
 control changed the second rendered value to the first value; TLAPS rejected
 the resulting obligation. Restoring the correct value restored the proof.
 
+The generalized update rule now covers any typed subset of state variables:
+applying a partial assignment map to a complete state is equivalent to the
+rendered assignments plus an unchanged frame for every other variable. A
+second rule covers conjunction of two assignment maps when overlapping writes
+agree. If they disagree, the rendered conjunction has no successor. The
+compiled and generated Swift enumerators instead throw a conflicting-assignment
+error; the universal proof must show that accepted `#spec` lowering cannot
+reach such a conflict, or align the declared error semantics across outputs.
+
+The guarded-choice composition rule preserves complete labeled edges and
+enabledness for any choice domain, provided corresponding branches produce
+equal edge sets and both outputs use the same guard and domain. These premises
+are not yet discharged for arbitrary compiler input. The rule is a reusable
+induction step, not proof that the current Swift emitter satisfies it.
+
 `GeneratedAtomicCopyProofModel.tla` is the complete TLA module emitted from a
 small `#spec` model. `GeneratedAtomicUpdateProofTests` requires byte-for-byte
 equality with `GeneratedAtomicCopyProofModel.render()` and checks the generated
@@ -53,7 +68,7 @@ Widening the emitted choice domain from `1..2` to `1..3` made the action proof
 fail; restoring it restored the proof. This is a second output-linked case,
 not a general proof of guarded choice or of the Swift emitter.
 
-TLAPS 1.6.0-pre checked all 34 obligations locally with fingerprint reuse
+TLAPS 1.6.0-pre checked all 45 obligations locally with fingerprint reuse
 disabled. The arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
 its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
