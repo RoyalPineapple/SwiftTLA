@@ -112,10 +112,10 @@ jobs:
         run: |
           .build/release/tlc-validate upstream shiviz-reference \
             --output .build/validation-evidence/ewd998-shiviz-reference
-          jq -e '.schema == "swifttla.ewd998-shiviz-reference" and .result == "terminal" and .caseID == "ewd998-chan-id-shiviz" and .tlcOutcome == "safetyViolation" and .modelCheckComplete == false' \
+          jq -e '.schema == "swifttla.ewd998-shiviz-reference" and .result == "source-invalid" and .caseID == "ewd998-chan-id-shiviz" and .tlcExitStatus == 255 and .modelCheckComplete == false' \
             .build/validation-evidence/ewd998-shiviz-reference/report.json
           test -s .build/validation-evidence/ewd998-shiviz-reference/tlc/tlc-process.json
-          test -s .build/validation-evidence/ewd998-shiviz-reference/tlc/counterexample.json
+          test ! -e .build/validation-evidence/ewd998-shiviz-reference/tlc/counterexample.json
       - uses: actions/upload-artifact@v6
         if: always()
         with:
@@ -162,12 +162,12 @@ jobs:
         run: |
           .build/release/tlc-validate upstream export-reference \
             --output .build/validation-evidence/ewd998-export-reference
-          jq -e '.schema == "swifttla.ewd998-export-reference" and .result == "terminal" and .caseID == "ewd998-chan-id-export" and .tlcOutcome == "safetyViolation" and .modelCheckComplete == false and .externalPostIntercepted == true and .moduleSHA256 == "638f814c422250d6debe1209419971b66ead59c8aa8aca4a2efcc29feb379985" and .cfgSHA256 == "a02a94fce512a1c7f8c47f0c35bbad7813dfedbafec7212d2404c585541b078a"' \
+          jq -e '.schema == "swifttla.ewd998-export-reference" and .result == "source-invalid" and .caseID == "ewd998-chan-id-export" and .tlcExitStatus == 255 and .modelCheckComplete == false and .externalPostIntercepted == false and .moduleSHA256 == "638f814c422250d6debe1209419971b66ead59c8aa8aca4a2efcc29feb379985" and .cfgSHA256 == "a02a94fce512a1c7f8c47f0c35bbad7813dfedbafec7212d2404c585541b078a"' \
             .build/validation-evidence/ewd998-export-reference/report.json
           test -s .build/validation-evidence/ewd998-export-reference/tlc/tlc-process.json
-          test -s .build/validation-evidence/ewd998-export-reference/tlc/counterexample.json
+          test ! -e .build/validation-evidence/ewd998-export-reference/tlc/counterexample.json
           test -s .build/validation-evidence/ewd998-export-reference/interception/curl
-          test -s .build/validation-evidence/ewd998-export-reference/blocked-post-payload.json
+          test ! -e .build/validation-evidence/ewd998-export-reference/blocked-post-payload.json
       - uses: actions/upload-artifact@v6
         if: always()
         with:

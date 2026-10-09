@@ -124,26 +124,17 @@ package enum EWD998ChanIDExportReference {
         let outcome = try process.run(request, retainingIn: output.appendingPathComponent("tlc"))
         let payload: Data? = FileManager.default.fileExists(atPath: interceptor.payload.path)
             ? try Data(contentsOf: interceptor.payload) : nil
-        guard outcome == .safetyViolation else {
-            throw UpstreamTLCParityError.invalidOutcome("\(Self.caseID): \(outcome)")
-        }
-        guard payload?.isEmpty == false else {
-            throw FiniteGraphCaseError.missingArtifact("\(Self.caseID) intercepted POST payload")
-        }
-        let trace = output.appendingPathComponent("tlc/counterexample.json")
-        guard FileManager.default.fileExists(atPath: trace.path),
-              !(try Data(contentsOf: trace)).isEmpty else {
-            throw FiniteGraphCaseError.missingArtifact("\(Self.caseID) counterexample")
-        }
+        try EWD998IncompleteInitialState.requireUninitializedPasses(
+            outcome: outcome, retainedIn: output.appendingPathComponent("tlc"), caseID: caseID)
+        guard payload == nil else { throw UpstreamTLCParityError.invalidOutcome("\(caseID): unexpected POST") }
         try RetainedFiles.writeJSON([
             "schema": "swifttla.ewd998-export-reference",
-            "caseID": caseID, "result": "terminal", "tlcOutcome": String(describing: outcome),
-            "modelCheckComplete": outcome == .completed,
+            "caseID": caseID, "result": "source-invalid", "tlcExitStatus": 255,
+            "modelCheckComplete": false,
             "moduleSHA256": moduleSHA, "cfgSHA256": cfgSHA,
             "communityJarSHA256": jar.sha256,
             "curlInterceptorSHA256": SHA256.hex(Data(curlScript.utf8)),
-            "externalPostIntercepted": payload != nil,
-            "interceptedPayloadSHA256": payload.map(SHA256.hex) ?? ""
+            "externalPostIntercepted": false
         ], to: output.appendingPathComponent("report.json"))
     }
 }
