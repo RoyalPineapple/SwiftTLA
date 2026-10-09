@@ -1,0 +1,102 @@
+# Semantic-preservation contract
+
+Status: **unproved**. This document defines the claim to prove. Finite graph
+comparisons do not discharge it.
+
+## Scope
+
+The source language is the subset of `#spec` accepted after parsing, binding,
+type checking, and configuration resolution. An unsupported source form must
+fail with a diagnostic. The target paths are the generated Swift machine and
+the rendered TLA+ module with its configuration. Authored PlusCal is a third
+target only for programs whose export succeeds.
+
+`CompiledProgram` is a proof boundary, not the source semantics. Two backends
+can agree on an incorrectly lowered program. That agreement does not prove
+that either backend implements the author's `#spec`.
+
+## Observable behavior
+
+For a source model `M` and resolved configuration `C`, define:
+
+- `Init(M,C)`: the set of complete initial model states.
+- `Step(M,C,s,a,t)`: one enabled atomic transition from `s` to `t`, labeled by
+  the complete action invocation `a`.
+- `Eval(M,C,s,p)`: the value or specified evaluation failure of a state claim.
+- `Traces(M,C)`: the infinite behaviors formed from `Init` and `Step`, with
+  TLA+ stuttering and declared fairness interpreted explicitly.
+
+The observation includes hidden control locations and every declared model
+variable. Checking-only registers, resource limits, views, symmetry reduction,
+and serialized evidence are separate operations with separately stated
+semantics. None silently changes `Init` or `Step`. A declared view can identify
+states for checking only when the corresponding source/TLA checking mode does.
+
+The state correspondence must be a total, value-preserving encoding of every
+supported state type. The action correspondence must retain the action identity
+and all bound arguments. Neither a fingerprint nor a traversal ID establishes
+equality. Auxiliary PlusCal translator variables require an explicit relation.
+They cannot be discarded by an implicit projection.
+
+## Required theorems
+
+If compilation and emission succeed, these theorems must hold for every
+accepted `M` and legal `C`:
+
+1. **Initial states.** The source, generated Swift, and generated TLA+ initial
+   sets correspond in both directions under the declared state encoding.
+2. **Atomic steps.** For every corresponding source/target state, each enabled
+   source action invocation has exactly the corresponding generated successors,
+   and every generated successor comes from such a source step. Disabled
+   actions, nondeterministic branches, assignment conflicts, and evaluation
+   failures retain their specified outcomes. Repeated identical derivations
+   are one labeled graph edge unless the source contract explicitly observes
+   multiplicity.
+3. **Claims.** State invariants, reachability, deadlock, and selected
+   postconditions have corresponding evaluations. Infinite-trace properties,
+   fairness, stuttering, and refinement preserve their declared meaning, not
+   merely their result on one finite graph.
+4. **Outputs.** The proof reaches emitted Swift and TLA+ syntax. An
+   intermediate-representation theorem alone is insufficient. Rendering,
+   generated code, and their name/value encodings need a verified or
+   independently checked connection to the semantics above.
+5. **PlusCal.** For every supported authored PlusCal export, translation by the
+   pinned official translator satisfies the declared state/action relation and
+   the same selected checking behavior. Each translator assumption belongs in
+   the trusted-boundary record.
+
+The forward and reverse step clauses intentionally demand equality for the
+model transition system. A one-way refinement claim is not a substitute for
+the promised native/TLA fidelity. Infinite-trace properties require a separate
+argument even after finite transition equality is established.
+
+## Proof decomposition and trusted boundaries
+
+Prove source-to-resolved-program lowering, resolved-expression evaluation,
+atomic-action execution, initialization, and claim construction separately.
+Then prove each emitter against the resolved-program semantics. The current
+implementation boundaries are `SpecParser`, `CompiledLowerer`,
+`ProgramResolver`, `NativeSwiftEmitter`, `CompiledTLARenderer`, and
+`AlgorithmPlusCalRenderer`. The proof must track their current behavior,
+not a simplified substitute.
+
+Record exactly which parser, macro-expansion, Swift compiler/runtime, TLA+
+parser/TLC, PlusCal translator, serialization, and proof-checker facts remain
+assumptions. Do not describe a result as a universal guarantee if a backend
+or text-generation boundary remains unproved or unchecked.
+
+## Independent evidence
+
+Keep purpose-built finite conformance models with hand-specified expected
+states and transitions. For each supported construct, require a source-level
+witness, native/generated-TLA complete-graph comparison, selected verdicts,
+and a negative control that the comparison rejects. Where the construct is
+expressible in PlusCal, retain the official-translator differential check.
+These checks find mistakes in the formalization and implementation. No finite
+set of them proves the universal theorems.
+
+The proof milestone is complete only when every supported source and target
+construct is covered by machine-checked theorems, all proof assumptions are
+documented, and hosted CI runs the proof and independent regressions on the
+same final revision. The upstream example-family corpus remains a subsequent
+milestone, not evidence that can replace this proof.
