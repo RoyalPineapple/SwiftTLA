@@ -67,6 +67,14 @@ not certificates for every occurrence in an accepted program. Division and
 modulo additionally require their operand-domain and rounding rules to match;
 those rules are not covered by these theorems.
 
+The direct TLA+ renderer now binds each operand once and normalizes a negative
+divisor into a positive one before integer division. This avoids relying on
+TLC's negative-divisor extension to the mathematical `\div` operator. The
+output link is still incomplete: `Int.min / -1`, division by zero, target
+integer bounds, and evaluation-failure order still need matching outcome
+proofs. TLC's bounded integer evaluator may also overflow while evaluating
+an intermediate negation that is valid in mathematical TLA+.
+
 ## Choice-expression obligation
 
 The expression-level `StateExpr.choose` is distinct from the nondeterministic

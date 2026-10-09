@@ -279,6 +279,17 @@ struct CompiledTLARenderer {
     func state(_ expression: CompiledExpression, stateNames: [VariableID: String] = [:]) throws -> String {
         var tasks = [StateRenderingTask.expression(expression)]
         var parts: [String] = []
+        let occupied = reservedNames.union(bindings.binders.values).union(bindings.operatorNames.values)
+            .union(layout.declarations.map(\.name)).union(layout.actions.map(\.renderedName))
+            .union(stateNames.values)
+        var nextDivisionName = 0
+
+        func divisionName(_ role: String) -> String {
+            var name = "__\(moduleName)_\(role)\(nextDivisionName)"
+            nextDivisionName += 1
+            while occupied.contains(name) { name += "_" }
+            return name
+        }
 
         func schedule(_ operation: CompiledOperation, _ operands: [CompiledExpression]) throws {
             let syntax = try operation.tlaSyntax(operandCount: operands.count,
@@ -461,7 +472,17 @@ struct CompiledTLARenderer {
                     rendered.append(.expression(body))
                     rendered.append(.text(")"))
                     schedule(rendered)
-                case .add, .subtract, .multiply, .divide, .integerDivide, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .randomSubset, .randomElement, .setSum, .integerRange, .negate, .not, .printT, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .sequenceFromFunction, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
+                case .divide, .integerDivide:
+                    guard expression.children.count == 2 else {
+                        throw CompiledValueType.diagnostic("rendering.divide", "integer division requires two operands")
+                    }
+                    let dividend = divisionName("dividend")
+                    let divisor = divisionName("divisor")
+                    parts.append("(LET \(dividend) == ")
+                    schedule([.expression(expression.children[0]), .text(" IN (LET \(divisor) == "),
+                        .expression(expression.children[1]),
+                        .text(" IN (IF \(divisor) < 0 THEN (-\(dividend)) \\div (-\(divisor)) ELSE \(dividend) \\div \(divisor))))")])
+                case .add, .subtract, .multiply, .modulo, .equal, .notEqual, .lessThan, .lessOrEqual, .greaterThan, .greaterOrEqual, .and, .or, .in, .subset, .union, .intersection, .setDifference, .tupleDynamicAccess, .tupleAppend, .tupleConcatenate, .tupleRemoving, .tuplePrefix, .sequenceSelect, .functionApply, .functionSet, .randomSubset, .randomElement, .setSum, .integerRange, .negate, .not, .printT, .cardinality, .powerSet, .sequenceSet, .tupleLength, .tupleHead, .tupleTail, .domain, .sequenceFromSet, .sequenceFromFunction, .ifThenElse, .setFilter, .tupleLiteral, .tupleAccess, .recordLiteral, .recordAccess, .functionLiteral, .except, .caseExpr, .forAll, .exists, .choose, .foldFunction, .letValue:
                     try schedule(expression.operation, expression.children)
 
                 }
@@ -630,7 +651,6 @@ extension CompiledOperation {
         case .sequenceFromSet: ("SeqFromSet(", "", ")")
         case .setLiteral: ("{", ", ", "}")
         case .tupleLiteral: ("<<", ", ", ">>")
-        case .divide, .integerDivide: ("(", " \\div ", ")")
         default: nil
         }
     }

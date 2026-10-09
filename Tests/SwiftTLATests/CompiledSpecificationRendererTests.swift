@@ -4,6 +4,19 @@ import Testing
 
 @Suite("Compiled specification rendering")
 struct CompiledSpecificationRendererTests {
+    @Test("Signed division uses a positive formal divisor")
+    func rendersSignedDivision() throws {
+        let compiled = try TLASpec(name: "SignedDivision", variables: [], actions: [], invariants: []).compile()
+        let renderer = CompiledTLARenderer(moduleName: "SignedDivision", reservedNames: [], layout: compiled.layout,
+            bindings: .init(), operators: compiled.semantics.operators, actions: [], functions: [])
+        for operation in [CompiledOperation.divide, .integerDivide] {
+            let expression = CompiledExpression(operation: operation, resultType: .int,
+                children: [.value(.integer(5)), .value(.integer(-2))])
+            #expect(try renderer.state(expression)
+                == "(LET __SignedDivision_dividend0 == 5 IN (LET __SignedDivision_divisor1 == -2 IN (IF __SignedDivision_divisor1 < 0 THEN (-__SignedDivision_dividend0) \\div (-__SignedDivision_divisor1) ELSE __SignedDivision_dividend0 \\div __SignedDivision_divisor1)))")
+        }
+    }
+
     @Test("Powerset operands retain their grouping inside function domains")
     func groupsPowersetRangeOperand() throws {
         let compiled = try TLASpec(name: "PowersetDomain", variables: [], actions: [], invariants: []).compile()
