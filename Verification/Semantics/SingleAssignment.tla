@@ -136,6 +136,97 @@ THEOREM OrderedHistoriesAgree ==
     <1>4. QED
         BY <1>3, SMT DEF P
 
+ExtendSourceHistory(history, length, instruction) ==
+    [index \in 0..(length + 1) |->
+        IF index = length + 1
+        THEN AdvanceSource(history[length], instruction)
+        ELSE history[index]]
+
+ExtendScheduledHistory(original, history, length, instruction) ==
+    [index \in 0..(length + 1) |->
+        IF index = length + 1
+        THEN AdvanceScheduleRecord(original, history[length], instruction)
+        ELSE history[index]]
+
+HistoriesExist(original, steps) ==
+    \E source \in [0..Len(steps) -> States] :
+        \E scheduled \in [0..Len(steps) -> ScheduledRecords] :
+            SourceHistory(original, steps, source)
+            /\ ScheduledHistory(original, steps, scheduled)
+
+THEOREM OrderedHistoriesExist ==
+    ASSUME NEW original \in States
+    PROVE \A steps \in Seq(Instructions) : HistoriesExist(original, steps)
+    PROOF
+    <1>1. HistoriesExist(original, <<>>)
+        <2>. DEFINE emptySource == [index \in 0..0 |-> original]
+                    emptyScheduled ==
+                        [index \in 0..0 |-> [keys |-> {}, values |-> original]]
+        <2>1. emptySource \in [0..Len(<<>>) -> States]
+            BY SMT DEF emptySource
+        <2>2. emptyScheduled \in [0..Len(<<>>) -> ScheduledRecords]
+            BY SMT DEF emptyScheduled, ScheduledRecords
+        <2>3. SourceHistory(original, <<>>, emptySource)
+            BY SMT DEF SourceHistory, emptySource
+        <2>4. ScheduledHistory(original, <<>>, emptyScheduled)
+            BY SMT DEF ScheduledHistory, emptyScheduled
+        <2>. QED
+            BY <2>1, <2>2, <2>3, <2>4, SMT DEF HistoriesExist
+    <1>2. ASSUME NEW prior \in Seq(Instructions),
+                  NEW instruction \in Instructions,
+                  HistoriesExist(original, prior)
+          PROVE HistoriesExist(original, Append(prior, instruction))
+        <2>1. PICK source \in [0..Len(prior) -> States],
+                    scheduled \in [0..Len(prior) -> ScheduledRecords] :
+                    SourceHistory(original, prior, source)
+                    /\ ScheduledHistory(original, prior, scheduled)
+            BY HistoriesExist(original, prior) DEF HistoriesExist
+        <2>2. AdvanceSource(source[Len(prior)], instruction) \in States
+            BY <2>1, SMT DEF AdvanceSource, Instructions, States
+        <2>3. AdvanceScheduleRecord(original, scheduled[Len(prior)], instruction)
+            \in ScheduledRecords
+            BY <2>1, SMT DEF AdvanceScheduleRecord, ScheduledRecords,
+                Instructions, ApplyDelta, States
+        <2>4. ExtendSourceHistory(source, Len(prior), instruction)
+            \in [0..Len(Append(prior, instruction)) -> States]
+            BY <2>1, <2>2, AppendProperties, SMT DEF ExtendSourceHistory
+        <2>5. ExtendScheduledHistory(original, scheduled, Len(prior), instruction)
+            \in [0..Len(Append(prior, instruction)) -> ScheduledRecords]
+            BY <2>1, <2>3, AppendProperties, SMT DEF ExtendScheduledHistory
+        <2>6. SourceHistory(original, Append(prior, instruction),
+                 ExtendSourceHistory(source, Len(prior), instruction))
+            BY <2>1, AppendProperties, SMT DEF SourceHistory,
+                ExtendSourceHistory
+        <2>7. ScheduledHistory(original, Append(prior, instruction),
+                 ExtendScheduledHistory(original, scheduled, Len(prior), instruction))
+            <3>1. \A index \in 0..Len(prior) :
+                    ExtendScheduledHistory(original, scheduled, Len(prior), instruction)[index]
+                    = scheduled[index]
+                BY SMT DEF ExtendScheduledHistory
+            <3>2. ExtendScheduledHistory(original, scheduled, Len(prior), instruction)
+                    [Len(prior) + 1]
+                    = AdvanceScheduleRecord(original, scheduled[Len(prior)], instruction)
+                BY SMT DEF ExtendScheduledHistory
+            <3>. QED
+                BY <2>1, <3>1, <3>2, AppendProperties,
+                    SMT DEF ScheduledHistory
+        <2>. QED
+            BY <2>4, <2>5, <2>6, <2>7 DEF HistoriesExist
+    <1>3. QED
+        BY <1>1, <1>2, SequencesInductionAppend
+
+THEOREM OrderedDoPreservation ==
+    ASSUME NEW original \in States
+    PROVE \A steps \in Seq(Instructions) :
+        \E source \in [0..Len(steps) -> States] :
+            \E scheduled \in [0..Len(steps) -> ScheduledRecords] :
+                /\ SourceHistory(original, steps, source)
+                /\ ScheduledHistory(original, steps, scheduled)
+                /\ \A index \in 0..Len(steps) :
+                    HistoryAgrees(original, source, scheduled, index)
+    BY OrderedHistoriesExist, OrderedHistoriesAgree,
+        SMT DEF HistoriesExist
+
 MergeCompatible(firstKeys, first, secondKeys, second) ==
     [key \in firstKeys \cup secondKeys |->
         IF key \in firstKeys THEN first[key] ELSE second[key]]

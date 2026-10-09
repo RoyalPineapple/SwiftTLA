@@ -46,15 +46,16 @@ are not yet discharged for arbitrary compiler input. The rule is a reusable
 induction step, not proof that the current Swift emitter satisfies it.
 
 The ordered-`Do` lemma uses finite, indexed source and scheduled histories.
-TLAPS proves by induction that their complete states agree at every position,
-including repeated writes and reads of earlier writes, **if both histories
-obey the stated step rules**. This is a sound conditional relation theorem,
-not yet a total compiler-correctness theorem: we have not proved that those
-histories exist for every accepted instruction sequence, that the abstract
-schedule is exactly the Swift lowerer's schedule, or that either emitter
-implements the abstract rules. The indexed formulation also avoids a
-recursive-operator limitation in this pinned TLAPS build; avoiding that
-limitation does not discharge any of these missing obligations.
+TLAPS proves that both histories exist for every finite sequence of typed
+abstract instructions and that their complete states agree at every position,
+including repeated writes and reads of earlier writes. This removes the
+vacuity risk in the earlier conditional theorem. It is **not** a total
+compiler-correctness theorem: we have not proved that the abstract schedule
+is exactly the Swift lowerer's schedule, that accepted source expressions
+denote the abstract instruction functions, or that either emitter implements
+the abstract rules. The indexed formulation avoids a recursive-operator
+limitation in this pinned TLAPS build; that tool workaround does not discharge
+the compiler and output obligations.
 
 `GeneratedAtomicCopyProofModel.tla` is the complete TLA module emitted from a
 small `#spec` model. `GeneratedAtomicUpdateProofTests` requires byte-for-byte
@@ -79,7 +80,7 @@ Widening the emitted choice domain from `1..2` to `1..3` made the action proof
 fail; restoring it restored the proof. This is a second output-linked case,
 not a general proof of guarded choice or of the Swift emitter.
 
-TLAPS 1.6.0-pre checked all 89 obligations locally with fingerprint reuse
+TLAPS 1.6.0-pre checked all 148 obligations locally with fingerprint reuse
 disabled. The arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
 its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
