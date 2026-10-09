@@ -14,7 +14,7 @@ let namedActionWithBinding = NamedAction(
 @TLAModel
 struct InvalidSingleParameterActionAPI {
   static var spec: TLASpec {
-    TLASpec("InvalidSingleParameterActionAPI") {
+    #spec("InvalidSingleParameterActionAPI") {
       let floor = Var<Int>("floor")
       Variable(floor, 0)
       Action("singleParameter", parameter: ActionParameter("id", values: [1, 2])) { id in
@@ -27,7 +27,7 @@ struct InvalidSingleParameterActionAPI {
 @TLAModel
 struct InvalidMultipleParameterActionAPI {
   static var spec: TLASpec {
-    TLASpec("InvalidMultipleParameterActionAPI") {
+    #spec("InvalidMultipleParameterActionAPI") {
       let floor = Var<Int>("floor")
       Variable(floor, 0)
       Action(
@@ -44,7 +44,7 @@ struct InvalidMultipleParameterActionAPI {
 @TLAModel
 struct InvalidIDParameterActionAPI {
   static var spec: TLASpec {
-    TLASpec("InvalidIDParameterActionAPI") {
+    #spec("InvalidIDParameterActionAPI") {
       let floor = Var<Int>("floor")
       Variable(floor, 0)
       Action("idParameter", id: [1, 2]) { id in
@@ -57,7 +57,7 @@ struct InvalidIDParameterActionAPI {
 @TLAModel
 struct InvalidNamedParameterActionAPI {
   static var spec: TLASpec {
-    TLASpec("InvalidNamedParameterActionAPI") {
+    #spec("InvalidNamedParameterActionAPI") {
       let floor = Var<Int>("floor")
       Variable(floor, 0)
       Action("namedParameters", person: [1, 2], elevator: [3, 4]) { person, elevator in

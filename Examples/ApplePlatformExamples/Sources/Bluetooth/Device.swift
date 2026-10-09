@@ -9,39 +9,34 @@ public struct PeripheralModel {
         case disconnected, connected, discovering, ready
         public static var defaultValue: Self { .disconnected }
         public static let finiteValues = allCases
-        public var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum ConnectProcess: String, FiniteTLAValueDomain { case connectEvent
         static var defaultValue: Self { .connectEvent }
         static let finiteValues: [Self] = [.connectEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum BeginDiscoveryProcess: String, FiniteTLAValueDomain { case beginDiscoveryEvent
         static var defaultValue: Self { .beginDiscoveryEvent }
         static let finiteValues: [Self] = [.beginDiscoveryEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum FinishDiscoveryProcess: String, FiniteTLAValueDomain { case finishDiscoveryEvent
         static var defaultValue: Self { .finishDiscoveryEvent }
         static let finiteValues: [Self] = [.finishDiscoveryEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum DiscoveryFailedProcess: String, FiniteTLAValueDomain { case discoveryFailedEvent
         static var defaultValue: Self { .discoveryFailedEvent }
         static let finiteValues: [Self] = [.discoveryFailedEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum DisconnectProcess: String, FiniteTLAValueDomain { case disconnectEvent
         static var defaultValue: Self { .disconnectEvent }
         static let finiteValues: [Self] = [.disconnectEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum Step: String, CaseIterable { case connected, beginDiscovery, finishDiscovery, discoveryFailed, disconnect }
 
     public static var spec: TLASpec {
-        #spec("PeripheralModel") {
-            Algorithm("PeripheralModel", scoped: { scope in
-                let phase = scope.sharedVar("phase", initial: Phase.disconnected)
+        #spec {
+            let knownPeripheralPhase = Invariant()
+            let peripheralModel = Algorithm(scoped: { scope in
+                let phase = scope.sharedVar(initial: Phase.disconnected)
                 Each(ConnectProcess.all) { _ in
                     Do(Step.connected) {
                         When(phase == .disconnected)
@@ -53,8 +48,9 @@ public struct PeripheralModel {
                 Each(FinishDiscoveryProcess.all) { _ in Do(Step.finishDiscovery) { When(phase == .discovering); Assign(phase, to: Phase.ready); Goto(Step.finishDiscovery) } }
                 Each(DiscoveryFailedProcess.all) { _ in Do(Step.discoveryFailed) { When(phase == .discovering); Assign(phase, to: Phase.connected); Goto(Step.discoveryFailed) } }
                 Each(DisconnectProcess.all) { _ in Do(Step.disconnect) { When(phase == .ready); Assign(phase, to: Phase.disconnected); Goto(Step.disconnect) } }
-                Invariant("knownPeripheralPhase") { phase == .disconnected || phase == .connected || phase == .discovering || phase == .ready }
+                knownPeripheralPhase { phase == .disconnected || phase == .connected || phase == .discovering || phase == .ready }
             })
+            peripheralModel
         }
     }
 

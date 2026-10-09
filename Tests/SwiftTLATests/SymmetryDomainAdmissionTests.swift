@@ -2,6 +2,38 @@
 import Testing
 
 struct SymmetryDomainAdmissionTests {
+    private struct CollidingMember: Hashable, TLAValueConvertible {
+        let id: Int
+        var tlaValue: TLAValue { .string("same") }
+    }
+
+    @Test("Distinct Swift symmetry members cannot collapse to one formal value")
+    func distinctSwiftMembersKeepTheirIdentity() {
+        let members: Set<CollidingMember> = [.init(id: 1), .init(id: 2)]
+        let spec = TLASpec("CollidingSymmetry") { Symmetry("Members", members) }
+        do {
+            _ = try spec.compile()
+            Issue.record("Distinct Swift symmetry members collapsed")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidSymmetryDeclaration)
+            #expect(diagnostic.actual.contains("distinct Swift members have the same formal value"))
+        } catch {
+            Issue.record("Unexpected compilation error: \(error)")
+        }
+    }
+
+    @Test("Symmetry accepts nonempty subsets of a finite set parameter")
+    func parameterDependentMembersRemainFinite() throws {
+        let spec = TLASpec("DependentSymmetry") { scope in
+            let candidates = scope.parameter(as: Set<Int>.self,
+                in: NonEmptySubsets(of: Set<Int>([1, 2])), _name: "candidates")
+            let members = scope.parameter(as: Set<Int>.self,
+                in: NonEmptySubsets(of: candidates), _name: "members")
+            Symmetry(_name: "Members", members)
+        }
+        _ = try spec.compile()
+    }
+
     @Test("Composite domains are rejected before distinct function keys can collide")
     func compositeMembersCannotCollapseDistinctFunctionKeys() {
         let atom = TLAValue.int(1)
@@ -26,26 +58,51 @@ struct SymmetryDomainAdmissionTests {
         }
     }
 
-    @Test("All supported atomic member kinds retain idempotent representatives")
-    func atomicDomainsRemainSupported() throws {
-        let compilation = try TLASpec(
-            name: "AtomicDomainPermutation",
-            variables: [.init(name: "value", initialization: .value(.tuple([.int(2), .string("b")])), origin: .compiler)],
-            actions: [], invariants: [],
-            symmetrySets: [
-                .init(variableName: "Numbers", values: [.int(1), .int(2)]),
-                .init(variableName: "Names", values: [.string("a"), .string("b")]),
-                .init(variableName: "Flags", values: [.bool(false), .bool(true)]),
-                .init(variableName: "Models", values: [.constant("p"), .constant("q")])
-            ]
-        ).compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let plan = try SymmetryPlan(compilation: compilation, reduction: .enabled(maximumPermutationCount: 16))
-        let initial = try #require(try runtime.initialStates().first)
-        let canonical = try plan.canonicalState(initial)
-        #expect(try plan.canonicalState(canonical) == canonical)
-        let renamed = try CompiledState(values: [.tuple([.integer(1), .string("a")])], compilation: compilation)
-        #expect(try plan.canonicalState(renamed) == canonical)
+    @Test("Configured symmetry cannot bypass nonempty atomic member admission")
+    func configuredMembersMustBeNonemptyAndAtomic() {
+        let empty = TLASpec("EmptyConfiguredSymmetry") { scope in
+            let members = scope.parameter(as: Set<Int>.self,
+                in: Set<Set<Int>>([Set<Int>()]))
+            Symmetry(_name: "Members", members)
+        }
+        let composite = TLASpec("CompositeConfiguredSymmetry") { scope in
+            let members = scope.parameter(as: Set<[Int]>.self,
+                in: Set<Set<[Int]>>([Set<[Int]>([[1], [2]])]))
+            Symmetry(_name: "Members", members)
+        }
+        let subsetsIncludingEmpty = TLASpec("EmptySubsetSymmetry") { scope in
+            let members = scope.parameter(as: Set<Int>.self,
+                in: Subsets(of: Set<Int>([1, 2])))
+            Symmetry(_name: "Members", members)
+        }
+        let compositeSubsets = TLASpec("CompositeSubsetSymmetry") { scope in
+            let members = scope.parameter(as: Set<[Int]>.self,
+                in: NonEmptySubsets(of: Set<[Int]>([[1], [2]])))
+            Symmetry(_name: "Members", members)
+        }
+        let possiblyEmptySource = TLASpec("EmptyDependentSymmetry") { scope in
+            let candidates = scope.parameter(as: Set<Int>.self,
+                in: Subsets(of: Set<Int>([1, 2])), _name: "candidates")
+            let members = scope.parameter(as: Set<Int>.self,
+                in: NonEmptySubsets(of: candidates), _name: "members")
+            Symmetry(_name: "Members", members)
+        }
+        for (spec, reason) in [(empty, "an empty domain"),
+                               (composite, "composite symmetry member"),
+                               (subsetsIncludingEmpty, "an empty domain"),
+                               (possiblyEmptySource, "an empty domain"),
+                               (compositeSubsets, "composite symmetry member")] {
+            do {
+                _ = try spec.compile()
+                Issue.record("Invalid configured symmetry domain compiled")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.code == .invalidSymmetryDeclaration)
+                #expect(diagnostic.path == "symmetrySets[0].values")
+                #expect(diagnostic.actual.contains(reason))
+            } catch {
+                Issue.record("Unexpected compilation error: \(error)")
+            }
+        }
     }
 
     private func expectInvalidCompositeDomain(_ spec: TLASpec) {

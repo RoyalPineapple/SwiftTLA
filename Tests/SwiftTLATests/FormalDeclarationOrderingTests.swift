@@ -27,7 +27,7 @@ struct FormalDeclarationOrderingTests {
       )
     }
 
-    let source = try specification.compile().renderedTLAModuleBundle().tla
+    let source = try specification.compile().render().tlaBundle.tla
     let dependency = try #require(source.range(of: "SafeAt(value0) == TRUE"))
     let use = try #require(source.range(of: "TypeOK == SafeAt(1)"))
     #expect(dependency.lowerBound < use.lowerBound)

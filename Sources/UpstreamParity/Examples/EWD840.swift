@@ -1,19 +1,9 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// Dijkstra's three-node termination detector from EWD 840.
+/// Dijkstra's termination detector from EWD 840.
 @TLAModel
 package struct EWD840Model: Sendable {
-    package enum Node: Int, CaseIterable, FiniteTLAValueDomain {
-        case zero = 0
-        case one = 1
-        case two = 2
-
-        package static var defaultValue: Self { .zero }
-        package static let finiteValues = allCases
-        package var tlaValue: TLAValue { .int(rawValue) }
-    }
-
     package enum Color: String, TLAValueType {
         case white
         case black
@@ -21,89 +11,101 @@ package struct EWD840Model: Sendable {
         package static var defaultValue: Self { .white }
     }
 
+    private enum Step: String, CaseIterable {
+        case InitiateProbe, PassToken, SendMsg, Deactivate
+    }
+
     package static var spec: TLASpec {
         #spec("EWD840") { scope in
-            Extends(.integers)
-            let active = scope.sharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
-                Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, false)),
-                Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, true)),
-                Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, false)),
-                Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, true)),
-                Function<Node, Bool>.literal((Node.zero, true), (Node.one, false), (Node.two, false)),
-                Function<Node, Bool>.literal((Node.zero, true), (Node.one, false), (Node.two, true)),
-                Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, false)),
-                Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, true))
-            ))
-            let color = scope.sharedVar("color", in: SetExpr<Function<Node, Color>>.literal(
-                Function<Node, Color>.literal((Node.zero, .white), (Node.one, .white), (Node.two, .white)),
-                Function<Node, Color>.literal((Node.zero, .white), (Node.one, .white), (Node.two, .black)),
-                Function<Node, Color>.literal((Node.zero, .white), (Node.one, .black), (Node.two, .white)),
-                Function<Node, Color>.literal((Node.zero, .white), (Node.one, .black), (Node.two, .black)),
-                Function<Node, Color>.literal((Node.zero, .black), (Node.one, .white), (Node.two, .white)),
-                Function<Node, Color>.literal((Node.zero, .black), (Node.one, .white), (Node.two, .black)),
-                Function<Node, Color>.literal((Node.zero, .black), (Node.one, .black), (Node.two, .white)),
-                Function<Node, Color>.literal((Node.zero, .black), (Node.one, .black), (Node.two, .black))
-            ))
-            let tpos = scope.sharedVar("tpos", in: 0...2)
-            let tcolor = scope.sharedVar("tcolor", initial: Color.black)
+            Extends(.naturals)
+            let N = scope.parameter(as: Int.self, in: Int.all)
+            Assume(N > 0)
+            let Node = IntRange(0, through: N - 1)
+            let colors = SetExpr<Color>.literal(.white, .black)
+            let active: SharedVariable<[Int: Bool]> = scope.sharedVar(
+                in: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
+            let color: SharedVariable<[Int: Color]> = scope.sharedVar(in: Functions(from: Node, to: colors))
+            let tpos = scope.sharedVar(in: Node)
+            let tcolor = scope.sharedVar(initial: Color.black)
 
-            SwiftTLA.Action("InitiateProbe") {
-                tpos == 0 && (tcolor == Color.black || color[.zero] == Color.black)
-                    && tpos.becomes(2) && tcolor.becomes(.white)
-                    && color.becomes(color.updating(.zero, to: .white)) && active.stays
+            let initiate = Do(Step.InitiateProbe, when: tpos == 0
+                && (tcolor == Color.black || color[0] == Color.black)) {
+                Assign(tpos, to: N - 1)
+                Assign(tcolor, to: Color.white)
+                Assign(color[0], to: Color.white)
             }
+            initiate
 
-            SwiftTLA.Action("PassToken_1") {
-                tpos == 1 && (active[.one] == false || color[.one] == Color.black || tcolor == Color.black)
-                    && tpos.becomes(0)
-                    && ((color[.one] == Color.black && tcolor.becomes(.black))
-                        || (color[.one] != Color.black && tcolor.stays))
-                    && color.becomes(color.updating(.one, to: .white)) && active.stays
+            let pass = Do(Step.PassToken, over: Node) { i in
+                When(i != 0 && tpos == i
+                    && (!active[i] || color[i] == Color.black || tcolor == Color.black))
+                Assign(tpos, to: i - 1)
+                Assign(tcolor, to: If(color[i] == Color.black, then: Color.black, else: tcolor))
+                Assign(color[i], to: Color.white)
             }
-            SwiftTLA.Action("PassToken_2") {
-                tpos == 2 && (active[.two] == false || color[.two] == Color.black || tcolor == Color.black)
-                    && tpos.becomes(1)
-                    && ((color[.two] == Color.black && tcolor.becomes(.black))
-                        || (color[.two] != Color.black && tcolor.stays))
-                    && color.becomes(color.updating(.two, to: .white)) && active.stays
+            pass
+            WeakFairness(anyOf: [initiate, pass])
+
+            Do(Step.SendMsg, over: Node) { i in
+                When(active[i])
+                With(Node) { j in
+                    When(j != i)
+                    Assign(active[j], to: true)
+                    If(j > i) {
+                        Assign(color[i], to: Color.black)
+                    }
+                }
             }
 
-            SwiftTLA.Action("SendMsg_0_to_1") {
-                active[.zero] == true && active.becomes(active.updating(.one, to: true))
-                    && color.becomes(color.updating(.zero, to: .black)) && tpos.stays && tcolor.stays
-            }
-            SwiftTLA.Action("SendMsg_0_to_2") {
-                active[.zero] == true && active.becomes(active.updating(.two, to: true))
-                    && color.becomes(color.updating(.zero, to: .black)) && tpos.stays && tcolor.stays
-            }
-            SwiftTLA.Action("SendMsg_1_to_0") {
-                active[.one] == true && active.becomes(active.updating(.zero, to: true))
-                    && color.stays && tpos.stays && tcolor.stays
-            }
-            SwiftTLA.Action("SendMsg_1_to_2") {
-                active[.one] == true && active.becomes(active.updating(.two, to: true))
-                    && color.becomes(color.updating(.one, to: .black)) && tpos.stays && tcolor.stays
-            }
-            SwiftTLA.Action("SendMsg_2_to_0") {
-                active[.two] == true && active.becomes(active.updating(.zero, to: true))
-                    && color.stays && tpos.stays && tcolor.stays
-            }
-            SwiftTLA.Action("SendMsg_2_to_1") {
-                active[.two] == true && active.becomes(active.updating(.one, to: true))
-                    && color.stays && tpos.stays && tcolor.stays
+            Do(Step.Deactivate, over: Node) { i in
+                When(active[i])
+                Assign(active[i], to: false)
             }
 
-            Invariant("TypeOK") {
-                tpos >= 0 && tpos < 3 && (tcolor == Color.white || tcolor == Color.black)
+            let TypeOK = Invariant()
+            let TerminationDetection = Invariant()
+            let Inv = Invariant()
+            let JsonInv = Invariant()
+            let Liveness = Temporal()
+            let terminated = ForAll(in: Node) { i in !active[i] }
+            let terminationDetected = tpos == 0 && tcolor == Color.white
+                && color[0] == Color.white && !active[0]
+            TypeOK {
+                Functions(from: Node, to: SetExpr<Bool>.literal(false, true)).contains(active)
+                    && Functions(from: Node, to: colors).contains(color)
+                    && Node.contains(tpos) && colors.contains(tcolor)
             }
+            TerminationDetection { !terminationDetected || terminated }
+            let inductiveInvariant = ForAll(in: Node) { i in tpos >= i || !active[i] }
+                || Exists(in: IntRange(0, through: tpos)) { i in color[i] == Color.black }
+                || tcolor == Color.black
+            Inv { inductiveInvariant }
+            // The upstream JSON trace/exit effect belongs to validation, not the state predicate.
+            JsonInv { inductiveInvariant }
+            Liveness(.leadsTo(terminated, terminationDetected))
+
+            let TD = Instance(of: SyncTerminationDetectionModel.self) {
+                Bind(\.N, to: N)
+            }
+            TD
+            let TDSpec = Refinement(instance: TD) {
+                Map(\.active, from: active)
+                Map(\.terminationDetected, from: terminationDetected)
+            }
+            TDSpec
+
+            let EWD840 = Validation { Bind(N, to: 3) }
+                .checking(only: [TypeOK, TerminationDetection, Inv, Liveness, TDSpec])
+                .checkingDeadlock(false)
+            EWD840
+            let APEWD840 = Validation { Bind(N, to: 3) }
+                .checking(only: [TypeOK, TerminationDetection])
+                .checkingDeadlock(false)
+            APEWD840
+            let EWD840_json = Validation { Bind(N, to: 4) }
+                .checking(only: [JsonInv])
+                .checkingDeadlock(false)
+            EWD840_json
         }
     }
-}
-
-extension Example {
-    package static let ewd840 = FiniteModelFixture(
-        expectedDistinct: 258,
-        maximumStateLimit: 50_000,
-        spec: EWD840Model.spec,
-    )
 }

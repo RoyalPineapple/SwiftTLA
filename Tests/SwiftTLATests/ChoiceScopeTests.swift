@@ -79,7 +79,7 @@ struct ChoiceScopeTests {
         let next = try #require(try runtime.successors(from: initial).first)
         let result = try compilation.layout.variables.map { try next.state.value(for: $0.id) }
         #expect(result == [.integer(2), .integer(2), .integer(0)])
-        let rendered = compilation.renderedTLAModuleBundle().tla
+        let rendered = try compilation.render().tlaBundle.tla
         #expect(rendered.contains("chosen' = selected"))
         #expect(rendered.contains("copied' = Echo(selected)"))
         #expect(rendered.contains("observed' = Read"))
@@ -120,8 +120,8 @@ struct ChoiceScopeTests {
     func generatedControlPathsRetainTheirDestinations() throws {
         for jumps in [false, true] {
             let algorithm = Algorithm("ConditionalControl", scoped: { scope in
-                let flag = scope.sharedVar("flag", initial: jumps)
-                let count = scope.sharedVar("count", initial: 0)
+                let flag = scope.sharedVar(_name: "flag", initial: jumps)
+                let count = scope.sharedVar(_name: "count", initial: 0)
                 Do(TestControlLabel.advance) {
                     If(flag) {
                         Goto(TestControlLabel.done)

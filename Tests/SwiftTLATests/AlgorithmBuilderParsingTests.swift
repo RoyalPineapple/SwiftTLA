@@ -1,0 +1,1703 @@
+import Testing
+@testable import SwiftTLAPlugin
+import SwiftSyntax
+import SwiftParser
+@testable import SwiftTLA
+import SwiftTLAMacros
+
+@Suite(.serialized) struct AlgorithmBuilderParsingTests {
+    private var controlLabels: SourceEnum {
+        parserTestEnum(
+            "TestControlLabel",
+            cases: .init(TestControlLabel.allCases.map { .init($0.rawValue, .string($0.rawValue)) })
+        )
+    }
+
+    private var procedureNames: SourceEnum {
+        parserTestEnum("ProcedureName", cases: ["work": .string("work")])
+    }
+
+    private func parseAlgorithm(
+        named name: String = "Parsed",
+        _ closure: ClosureExprSyntax,
+        enums: [SourceEnum] = [],
+        sourceTypes: SourceTypeMetadata = .init()
+    ) -> TLASpec {
+        SpecParser.parseSpecClosure(named: name,
+            closure,
+            sourceTypes: .init(aliases: sourceTypes.aliases, structs: sourceTypes.structs,
+                enums: [controlLabels] + enums + sourceTypes.enums)
+        )
+    }
+
+    private func compile(
+        _ parsed: TLASpec,
+        named name: String
+    ) throws -> CompiledSpecification {
+        var specification = parsed
+        specification.name = name
+        return try specification.compile()
+    }
+
+    private func loweredSource(
+        _ parsed: TLASpec,
+        named name: String
+    ) throws -> TLASpec {
+        var specification = parsed
+        specification.name = name
+        return try specification.loweredSourceModel()
+    }
+
+    @Test("process steps reject separate fairness declarations inside Each")
+    func processStepFairnessRequiresEachPolicy() throws {
+        let parsed = parseAlgorithm(try parseSpecTestClosure("""
+        {
+            let algorithm = Algorithm {
+                Each(Set<Int>([0]), fairness: .weak) { _ in
+                    Do(TestControlLabel.advance) { Goto(TestControlLabel.advance) }
+                    WeakFairness(TestControlLabel.advance)
+                }
+            }
+            algorithm
+        }
+        """))
+        #expect(parsed.diagnostics.isEmpty)
+        do {
+            _ = try compile(parsed, named: "InvalidProcessStepFairness")
+            Issue.record("A process step must not acquire a separate fairness declaration.")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidAlgorithmFairnessPlacement)
+            #expect(diagnostic.path == "algorithm.components[0].components[1]")
+        }
+    }
+
+    @Test("process and procedure state declarations require named bindings")
+    func rejectsAnonymousLocalStateDeclaration() throws {
+        for body in [
+            "Each(ParserNode.all, scoped: { _, scope in scope.localVar(initial: false) })",
+            "Procedure(ProcedureName.work, scoped: { scope in scope.localVar(initial: false) })"
+        ] {
+            let parsed = parseAlgorithm(
+                try parseSpecTestClosure("{ let Counter = Algorithm { \(body) } }"),
+                enums: [parserTestEnum("ParserNode", finiteValues: [.string("left"), .string("right")]), procedureNames]
+            )
+            let diagnostic = try #require(parsed.diagnostics.first)
+            #expect(diagnostic.message.contains("A state handle must be an immutable named let binding."))
+            #expect(diagnostic.sourceSpan.location != .unavailable)
+        }
+    }
+
+    @Test("conditional parsing rejects an undecodable supplied else branch", arguments: [
+        "If(count == 0) { Skip() } else: { unsupportedStatement() }",
+        "If(count == 0, else: externalBranch) { Skip() }"
+    ])
+    func rejectsUndecodableElseBranch(_ statement: String) throws {
+        let parsed = parseAlgorithm(try parseSpecTestClosure("""
+        {
+            let Conditional = Algorithm(scoped: { scope in
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Do(TestControlLabel.increment) {
+                    \(statement)
+                }
+            })
+        }
+        """))
+        #expect(!parsed.diagnostics.isEmpty)
+        #expect(throws: SourceParseDiagnostic.self) { try parsed.compile() }
+    }
+
+    @Test("Step guards reject undecodable expressions and invalid arguments", arguments: [
+        "when: unknownGuard()", "unless: count == 0", "when: count == 0, when: count == 1"
+    ])
+    func rejectsInvalidStepGuard(_ argument: String) throws {
+        let parsed = parseAlgorithm(try parseSpecTestClosure("""
+        {
+            let InvalidGuard = Algorithm(scoped: { scope in
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Do(TestControlLabel.increment, \(argument)) {
+                    Assign(count, to: count + 1)
+                }
+            })
+        }
+        """))
+        #expect(!parsed.diagnostics.isEmpty)
+        #expect(throws: SourceParseDiagnostic.self) { try parsed.compile() }
+    }
+
+    @Test("Algorithm Each Do syntax lowers through the ordinary parser AST")
+    func parsesBoundedAlgorithm() throws {
+        let source = """
+        {
+            let Counter = Algorithm(scoped: { scope in
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Each(Node.all) { node in
+                    Do(TestControlLabel.increment, when: count < 2) {
+                        Assign(count, to: count + 1)
+                    }
+                }
+            })
+            Counter
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(
+            closure,
+            enums: [parserTestEnum("Node", finiteValues: [.string("left"), .string("right")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        let compilation = try compile(parsed, named: "Counter")
+        let specification = try loweredSource(parsed, named: "Counter")
+        #expect(specification.variables.map(\.name) == ["pc", "count"])
+        #expect(specification.actions.map(\.name) == ["increment", "Terminating"])
+        #expect(specification.actions.first?.bindings.map(\.name) == ["process"])
+        #expect(specification.actions.first?.bindings.map(\.literalMembers) == [[.string("left"), .string("right")]])
+        let increment = try #require(GeneratedMachineAPI(layout: compilation.layout, actions: compilation.semantics.behavior.actions).actions.first {
+            $0.swiftIdentifier == "increment"
+        })
+        #expect(compilation.semantics.behavior.actions.first { $0.id == increment.compiledAction }?.bindings.map(\.generatedSwiftType) == ["Node"])
+    }
+
+    @Test("parser retains unsupported procedure declarations for compiler diagnostics")
+    func retainsUnsupportedProcedureDeclarationForCompilerDiagnostic() throws {
+        let parsed = parseAlgorithm(try parseSpecTestClosure("""
+        {
+            let ProcedureCapability = Algorithm {
+                Procedure(ProcedureName.work) {
+                    Do(TestControlLabel.advance) { Return() }
+                    WeakFairnessNext()
+                }
+            }
+            ProcedureCapability
+        }
+        """), enums: [procedureNames])
+
+        #expect(parsed.diagnostics.isEmpty)
+        do {
+            _ = try compile(parsed, named: "ProcedureCapability")
+            Issue.record("Expected unsupported procedure fairness to stop compilation.")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidAlgorithmFairnessPlacement)
+            #expect(diagnostic.stage == .validation)
+            #expect(diagnostic.path == "algorithm.components[0].procedure.components[1]")
+        } catch {
+            Issue.record("Expected CompilationDiagnostic, received \(error).")
+        }
+    }
+
+    @Test("Function mapping declarations retain their generated Swift type")
+    func preservesFunctionMappingTypeForGeneratedSurface() throws {
+        let source = """
+        {
+            let Counter = Algorithm(scoped: { scope in
+                let values = scope.sharedVar(_name: "values", initial: Function<Node, SetExpr<Int>>.mapping { _ in SetExpr<Int>() })
+                Do(TestControlLabel.increment) {
+                    Assign(values, to: values)
+                    Stop()
+                }
+            })
+            Counter
+        }
+        """
+        let parsed = parseAlgorithm(
+            try parseSpecTestClosure(source),
+            enums: [parserTestEnum("Node", finiteValues: [.string("only")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        let compilation = try compile(parsed, named: "Counter")
+        #expect(compilation.layout.variables.filter { $0.declaration.origin == .source }.map(\.generatedSwiftType) == ["Function<Node, SetExpr<Int>>"])
+    }
+
+    @Test("Algorithm parser carries prior shared bindings into mapping initializers")
+    func parsesScopedSharedBindingInMappingInitializer() throws {
+        let source = """
+        {
+            let MappingScope = Algorithm(scoped: { scope in
+                let enabled = scope.sharedVar(_name: "enabled", initial: true)
+                let values = scope.sharedVar(_name: "values", initial: Function<Node, Int>.mapping { _ in
+                    If(enabled == true, then: 1, else: 0)
+                })
+                Do(TestControlLabel.done) { Stop() }
+            })
+            MappingScope
+        }
+        """
+        let parsed = parseAlgorithm(
+            try parseSpecTestClosure(source),
+            enums: [parserTestEnum("Node", finiteValues: [.string("only")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(try loweredSource(parsed, named: "MappingScope").variables.map(\.name) == ["pc", "enabled", "values"])
+    }
+
+    @Test("Algorithm parser carries shared bindings into Each bodies")
+    func parsesScopedSharedBindingInEachBody() throws {
+        let source = """
+        {
+            let EachScope = Algorithm(scoped: { scope in
+                let enabled = scope.sharedVar(_name: "enabled", initial: true)
+                Each(Node.all) { _ in
+                    Do(TestControlLabel.advance, when: enabled == true) {
+                        Stop()
+                    }
+                }
+            })
+            EachScope
+        }
+        """
+        let parsed = parseAlgorithm(
+            try parseSpecTestClosure(source),
+            enums: [parserTestEnum("Node", finiteValues: [.string("only")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(try loweredSource(parsed, named: "EachScope").actions.map(\.name) == ["advance", "Terminating"])
+    }
+
+    @Test("Algorithm parser carries shared bindings into macro declarations")
+    func parsesScopedSharedBindingInMacroDeclaration() throws {
+        let source = """
+        {
+            let MacroScope = Algorithm(scoped: { scope in
+                let enabled = scope.sharedVar(_name: "enabled", initial: true)
+                let waitUntilEnabled = Macro { (value: MacroParameter<Bool>) in
+                    When(enabled == value.expr)
+                }
+                Do(TestControlLabel.advance) { waitUntilEnabled(enabled) }
+            })
+            MacroScope
+        }
+        """
+        let parsed = parseAlgorithm(try parseSpecTestClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(try loweredSource(parsed, named: "MacroScope").actions.map(\.name) == ["advance", "Terminating"])
+    }
+
+    @Test("Algorithm parser resolves enum cases through lexical and declared type scope", arguments: ["current", "selectedNode"])
+    func parsesScopedEnumCases(localName: String) throws {
+        let source = """
+        {
+            let EnumScope = Algorithm(scoped: { scope in
+                let phases = scope.sharedVar(_name: "phases", initial: Function<Node, Phase>.mapping { node in
+                    If(node == Node.one, then: .ready, else: .done)
+                })
+                Each(Worker.all, scoped: { _, scope in
+                    let current: LocalVariable<Node> = scope.localVar(_name: "\(localName)", initial: .one)
+                    Do(TestControlLabel.advance, when: phases[current] == .ready) {
+                        Stop()
+                    }
+                })
+            })
+            EnumScope
+        }
+        """
+        let parsed = parseAlgorithm(
+            try parseSpecTestClosure(source),
+            enums: [
+                parserTestEnum(
+                    "Node",
+                    cases: ["one": .string("n1"), "two": .string("n2")],
+                    finiteValues: [.string("n1"), .string("n2")]
+                ),
+                parserTestEnum(
+                    "Worker",
+                    cases: ["one": .string("w1")],
+                    finiteValues: [.string("w1")]
+                ),
+                parserTestEnum(
+                    "Phase",
+                    cases: ["ready": .string("ready"), "done": .string("done")]
+                ),
+                parserTestEnum(
+                    "OtherPhase",
+                    cases: ["ready": .string("otherReady")]
+                )
+            ]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        _ = try compile(parsed, named: "EnumScope")
+    }
+
+    @Test("Algorithm parser lowers tuple append inside a lexical binding")
+    func parsesTupleAppendInLet() throws {
+        let source = """
+        {
+            let TupleAppend = Algorithm(scoped: { scope in
+                let values = scope.sharedVar(_name: "values", initial: TupleExpr<Int>())
+                Do(TestControlLabel.advance) {
+                    Let(values.expr.appending(1)) { extended in
+                        Assert(extended.expr.count == 1)
+                    }
+                    Stop()
+                }
+            })
+            TupleAppend
+        }
+        """
+        let parsed = parseAlgorithm(try parseSpecTestClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        _ = try compile(parsed, named: "TupleAppend")
+    }
+
+    @Test("Algorithm parser lowers tuple count from its bound value type")
+    func parsesTupleCount() throws {
+        let source = """
+        {
+            Extends(.sequences)
+            let TupleCount = Algorithm(scoped: { scope in
+                let values = scope.sharedVar(_name: "values", initial: TupleExpr<Int>.literal(1, 2))
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Do(TestControlLabel.advance) {
+                    Assign(count, to: values.count)
+                    Stop()
+                }
+            })
+            TupleCount
+        }
+        """
+        let parsed = parseAlgorithm(try parseSpecTestClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let module = try compile(parsed, named: "TupleCount").render().tlaBundle.tla
+        #expect(module.contains("Len(values)"))
+    }
+
+    @Test("Algorithm parser lowers zero-based sequence count through its domain")
+    func parsesZeroBasedSequenceCount() throws {
+        let source = """
+        {
+            let ZeroBasedCount = Algorithm(scoped: { scope in
+                let input = scope.sharedVar(_name: "input", in: ZeroBasedSequences(
+                    of: SetExpr<Int>.literal(1, 2),
+                    lengths: 1...2
+                ))
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Do(TestControlLabel.advance) {
+                    Assign(count, to: input.count)
+                    Stop()
+                }
+            })
+            ZeroBasedCount
+        }
+        """
+        let parsed = parseAlgorithm(try parseSpecTestClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let module = try compile(parsed, named: "ZeroBasedCount").render().tlaBundle.tla
+        #expect(module.contains("Cardinality(DOMAIN input)"))
+        #expect(!module.contains("Len(input)"))
+    }
+
+    @Test("Algorithm parser preserves tuple type through With and quantifier bindings")
+    func parsesBoundTupleCounts() throws {
+        let source = """
+        {
+            Extends(.sequences)
+            let BoundTupleCount = Algorithm(scoped: { scope in
+                let pending = scope.sharedVar(_name: "pending",
+                    initial: SetExpr<TupleExpr<Int>>.literal(TupleExpr<Int>.literal(1))
+                )
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Do(TestControlLabel.advance) {
+                    With(pending) { tuple in
+                        Assign(count, to: tuple.expr.count)
+                    }
+                    Stop()
+                }
+                Invariant("TupleLengths") {
+                    ForAll(in: pending.expr) { tuple in
+                        tuple.expr.count == 1
+                    }
+                }
+            })
+            BoundTupleCount
+        }
+        """
+        let parsed = parseAlgorithm(try parseSpecTestClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let module = try compile(parsed, named: "BoundTupleCount").render().tlaBundle.tla
+        #expect(module.components(separatedBy: "Len(").count == 3)
+    }
+
+    @Test("Algorithm parser preserves tuple-valued finite shared domains")
+    func parsesTupleValuedSharedDomain() throws {
+        let source = """
+        {
+            Extends(.sequences)
+            let TupleDomain = Algorithm(scoped: { scope in
+                let domain = SetExpr<TupleExpr<Node>>.literal(
+                    TupleExpr<Node>.literal(Node.one, Node.two),
+                    TupleExpr<Node>.literal(Node.two, Node.one)
+                )
+                let frontier = scope.sharedVar(_name: "frontier",
+                    in: SetExpr<TupleExpr<Node>>.literal(
+                        TupleExpr<Node>.literal(Node.one, Node.two),
+                        TupleExpr<Node>.literal(Node.two, Node.one)
+                    )
+                )
+                Do(TestControlLabel.advance) {
+                    Assert(frontier.count == 2)
+                    Stop()
+                }
+            })
+            TupleDomain
+        }
+        """
+        let nodes = parserTestEnum(
+            "Node",
+            cases: .init([.init("one", .int(1)), .init("two", .int(2))])
+        )
+        let parsed = parseAlgorithm(try parseSpecTestClosure(source), enums: [nodes])
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let module = try compile(parsed, named: "TupleDomain").render().tlaBundle.tla
+        #expect(module.contains("frontier \\in {<<1, 2>>, <<2, 1>>}"))
+    }
+
+    @Test("Specification parser preserves a bound algorithm identity when PlusCal reserves its spelling")
+    func bindsTypedLocalAlgorithmComponent() throws {
+        let source = """
+        {
+            let algorithm: Algorithm = Algorithm(scoped: { scope in
+                let _algorithm = scope.sharedVar(_name: "_algorithm", initial: 0)
+                Do(TestControlLabel.increment) {
+                    Assign(_algorithm, to: _algorithm + 1)
+                    Stop()
+                }
+            })
+            algorithm
+        }
+        """
+        let parsed = parseAlgorithm(try parseSpecTestClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.sourceAlgorithms.count == 1)
+        #expect(parsed.sourceAlgorithms.map(\.model.name) == ["algorithm"])
+        let compilation = try compile(parsed, named: "Counter")
+        #expect(compilation.description.algorithms.map(\.name) == ["algorithm"])
+        #expect(compilation.description.variables.map(\.name) == ["pc", "_algorithm"])
+        #expect(compilation.description.actions.map(\.name) == ["increment", "Terminating"])
+        #expect(try compilation.render().plusCalBundle().root.tla.contains("(*--algorithm _algorithm_1 {"))
+    }
+
+    @Test("Variable reports an unsupported initializer")
+    func reportsUnsupportedVariableInitializer() throws {
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed",
+            try parseSpecTestClosure("{ let value = Var<Int>(\"value\"); Variable(value, UnsupportedValue()) }")
+        )
+
+        #expect(parsed.diagnostics.map(\.message) == [
+            "Variable 'value' requires a supported initial formal value."
+        ])
+    }
+
+    @Test("Algorithm parser rejects a local declaration scope")
+    func rejectsLocalDeclarationScopeAtAlgorithmLevel() throws {
+        let source = """
+        {
+            let Counter = Algorithm(scoped: { scope in
+                let count = scope.localVar(_name: "count", initial: 0)
+                Do(TestControlLabel.increment) { Stop() }
+            })
+        }
+        """
+        let parsed = parseAlgorithm(try parseSpecTestClosure(source))
+
+        #expect(parsed.diagnostics.count == 1)
+        #expect(parsed.diagnostics[0].message.contains("Unsupported Algorithm declaration"))
+    }
+
+    @Test("Algorithm parser keeps process locals inside their process")
+    func rejectsProcessLocalInSiblingProcess() throws {
+        let source = """
+        {
+            let SiblingScopes = Algorithm {
+                Each(Node.all, scoped: { node, scope in
+                    let local = scope.localVar(_name: "local", initial: 0)
+                    Do(TestControlLabel.increment, when: local == 0) {
+                        Stop()
+                    }
+                })
+                Each(Node.all) { node in
+                    Do(TestControlLabel.done, when: local == 0) {
+                        Stop()
+                    }
+                }
+            }
+        }
+        """
+
+        let parsed = parseAlgorithm(
+            try parseSpecTestClosure(source),
+            enums: [parserTestEnum("Node", finiteValues: [.string("only")])]
+        )
+
+        #expect(parsed.sourceAlgorithms.isEmpty)
+        #expect(parsed.diagnostics.count == 1)
+    }
+
+    @Test("Algorithm properties cannot read an unbound process-local name")
+    func rejectsProcessLocalOutsideProcess() throws {
+        let source = """
+        {
+            let LocalProperty = Algorithm {
+                Each(Node.all, scoped: { node, scope in
+                    let local = scope.localVar(_name: "local", initial: 0)
+                    Do(TestControlLabel.done) { Stop() }
+                })
+                Invariant("LeakedLocal") { local == 0 }
+            }
+        }
+        """
+        let parsed = parseAlgorithm(try parseSpecTestClosure(source),
+            enums: [parserTestEnum("Node", finiteValues: [.string("only")])])
+        #expect(parsed.sourceAlgorithms.isEmpty)
+        #expect(parsed.diagnostics.count == 1)
+    }
+
+    @Test("Algorithms inherit renamed state from the enclosing specification")
+    func inheritsEnclosingStateBindings() throws {
+        let source = """
+        { scope in
+            let count = scope.sharedVar(_name: "storedCount", initial: 0)
+            let Counter = Algorithm {
+                Do(TestControlLabel.increment) {
+                    Assign(count, to: count + 1)
+                    Stop()
+                }
+            }
+            Counter
+        }
+        """
+        let parsed = parseAlgorithm(try parseSpecTestClosure(source))
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.sourceAlgorithms.count == 1)
+        _ = try parsed.compile()
+    }
+
+    @Test("Specification parser binds root scoped shared declarations")
+    func parsesRootScopedSharedDeclaration() throws {
+        let source = """
+        { scope in
+            let count = scope.sharedVar(_name: "count", initial: 0)
+            Invariant("Nonnegative") { count >= 0 }
+        }
+        """
+
+        let closure = try parseSpecTestClosure(source)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.variables.map(\.name) == ["count"])
+        #expect(parsed.invariants.map(\.name) == ["Nonnegative"])
+    }
+
+    @Test("Unknown Algorithm identifiers are rejected as unregistered")
+    func unknownAlgorithmIdentifierIsRejectedAsUnregistered() throws {
+        let source = """
+        {
+            let Unsupported = Algorithm {
+                UnsupportedAlgorithmConstruct()
+            }
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+
+        #expect(parsed.variables.isEmpty)
+        #expect(parsed.actions.isEmpty)
+        #expect(parsed.sourceAlgorithms.isEmpty)
+        let diagnostic = try #require(parsed.diagnostics.first)
+        #expect(diagnostic.code == .unsupportedLanguageConstruct)
+        #expect(diagnostic.sourcePath == ["Algorithm", "UnsupportedAlgorithmConstruct"])
+        #expect(diagnostic.expected == "a supported Algorithm declaration")
+        #expect(diagnostic.actual == "unknown Algorithm declaration 'UnsupportedAlgorithmConstruct'")
+        #expect(diagnostic.nextSafeAction == "Use a declaration supported by Algorithm.")
+    }
+
+    @Test("Unknown Algorithm statement calls retain source diagnostics at every nesting depth")
+    func unknownAlgorithmStatementCallsAreRejectedAsUnregisteredInNestedBodies() throws {
+        let cases = [
+            (
+                name: "UnknownInDo",
+                body: """
+                Do(TestControlLabel.advance) {
+                    UnknownInDo()
+                }
+                """
+            ),
+            (
+                name: "UnknownInIf",
+                body: """
+                Do(TestControlLabel.advance) {
+                    If(true) {
+                        UnknownInIf()
+                    }
+                }
+                """
+            ),
+            (
+                name: "UnknownInWith",
+                body: """
+                Do(TestControlLabel.advance) {
+                    With(SetExpr<Int>.literal(1)) { value in
+                        UnknownInWith()
+                    }
+                }
+                """
+            )
+        ]
+
+        for testCase in cases {
+            let source = """
+            {
+                let Nested = Algorithm {
+                    \(testCase.body)
+                }
+            }
+            """
+            let parsed = parseAlgorithm(try parseSpecTestClosure(source))
+
+            #expect(parsed.sourceAlgorithms.isEmpty)
+            let diagnostic = try #require(parsed.diagnostics.first)
+            #expect(diagnostic.code == .unsupportedLanguageConstruct)
+            #expect(diagnostic.sourcePath == ["Algorithm", testCase.name])
+            #expect(diagnostic.sourceSpan.location != .unavailable)
+            #expect(diagnostic.expected == "a supported Algorithm declaration")
+            #expect(diagnostic.actual == "unknown Algorithm declaration '\(testCase.name)'")
+            #expect(diagnostic.nextSafeAction == "Use a declaration supported by Algorithm.")
+            #expect(!parsed.diagnostics.contains { $0.message.contains("Unsupported Algorithm declaration") })
+        }
+    }
+
+    @Test("Formal expression closures stay outside Algorithm declaration parsing")
+    func formalExpressionClosuresDoNotBecomeAlgorithmDeclarations() throws {
+        let source = """
+        {
+            let FormalClosureBoundary = Algorithm { scope in
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Do(TestControlLabel.advance) {
+                    let imported: Expr<Int> = ModuleCall("Instance", "Value", count)
+                    Assign(count, to: imported)
+                }
+                StateConstraint(ForAll(in: SetExpr<Int>.literal(0, 1)) { value in value >= 0 })
+                Invariant("Bounded") {
+                    ForAll(in: SetExpr<Int>.literal(0, 1)) { value in value >= count }
+                }
+                FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, limit in
+                    LetRec("SA", over: IntRange(0, through: limit), taking: Int.self, { recursion, current in
+                        If(current == 0, then: true, else: recursion(current.expr - 1))
+                    }, in: { recursion in recursion(ballot.expr) })
+                }
+            }
+            FormalClosureBoundary
+        }
+        """
+
+        let parsed = parseAlgorithm(try parseSpecTestClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(parsed.sourceAlgorithms.map(\.model.name) == ["FormalClosureBoundary"])
+    }
+
+    @Test("Unsupported action source does not create a placeholder action", arguments: [false, true])
+    func rejectsUnsupportedActionWithoutSemanticPlaceholder(_ parameterized: Bool) throws {
+        let parameters = parameterized ? #", parameters: [ActionParameter("member", values: [1, 2])]"# : ""
+        let source = """
+        {
+            Action("unsupported"\(parameters)) {
+                let value = 1
+            }
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+
+        #expect(parsed.actions.isEmpty)
+        #expect(parsed.diagnostics.map(\.message) == [
+            "\(parameterized ? "Parameterized action" : "Action") 'unsupported' contains an unsupported action expression."
+        ])
+    }
+
+    @Test("Unsupported top-level source is diagnosed")
+    func rejectsUnsupportedTopLevelSource() throws {
+        let source = """
+        {
+            UnsupportedDeclaration()
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+
+        #expect(parsed.diagnostics.map(\.message) == [
+            "Specification body contains an unsupported declaration 'UnsupportedDeclaration'."
+        ])
+    }
+
+    @Test("Specification aliases accept typed member expressions")
+    func parsesDerivedMemberAlias() throws {
+        let source = """
+        { scope in
+            let start = 1
+            let x = scope.sharedVar(_name: "x", initial: 0)
+            let count = IntRange(start, through: x).filtering { value in
+                value.expr > 0
+            }.cardinality
+            Invariant("nonnegative") { count >= 0 }
+        }
+        """
+        let parsed = SpecParser.parseSpecClosure(named: "DerivedAlias", try parseSpecTestClosure(source))
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(parsed.invariants.count == 1)
+        #expect(try parsed.compile().render().tlaBundle.tla.contains("Cardinality"))
+    }
+
+    @Test("Unsupported local source is diagnosed")
+    func rejectsUnsupportedLocalSource() throws {
+        let source = """
+        {
+            let value = arbitrarySwiftFunction()
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+        let declaration = try #require(closure.statements.first?.item.as(VariableDeclSyntax.self))
+        let call = try #require(declaration.bindings.first?.initializer?.value.as(FunctionCallExprSyntax.self))
+        let diagnostic = try #require(parsed.diagnostics.first)
+
+        #expect(parsed.variables.isEmpty)
+        #expect(parsed.diagnostics.count == 1)
+        #expect(diagnostic.message == "Model source cannot call unsupported function 'arbitrarySwiftFunction'.")
+        #expect(diagnostic.source == "arbitrarySwiftFunction()")
+        #expect(diagnostic.sourceSpan.location == .utf8Offset(call.positionAfterSkippingLeadingTrivia.utf8Offset))
+        #expect(diagnostic.nextSafeAction == "Replace this call with a supported model expression; Swift function bodies are not imported into generated machines or TLA+.")
+    }
+
+    @Test("Nonliteral for-loop ranges are diagnosed")
+    func rejectsNonliteralForLoopRange() throws {
+        let source = """
+        {
+            for index in 1...limit {
+                Action("step") { flag.becomes(true) }
+            }
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+
+        #expect(parsed.actions.isEmpty)
+        #expect(parsed.diagnostics.map(\.message) == [
+            "Specification for-loop requires a literal closed integer range."
+        ])
+    }
+
+    @Test("Unsupported for-loop body source is diagnosed")
+    func rejectsUnsupportedForLoopBodySource() throws {
+        let source = """
+        {
+            for index in 1...1 {
+                let value = index
+            }
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+
+        #expect(parsed.actions.isEmpty)
+        #expect(parsed.diagnostics.map(\.message) == [
+            "Specification for-loop body contains an unsupported item."
+        ])
+    }
+
+    @Test("Supplied fairness must decode instead of defaulting to none", arguments: [
+        "externalFairness", "chooseFairness()", "true", ".unsupported"
+    ])
+    func rejectsUndecodableFairness(_ fairness: String) throws {
+        for declaration in [
+            "let InvalidFairness = Algorithm(fairness: \(fairness)) {}",
+            "let InvalidFairness = Algorithm { Each(Node.all, fairness: \(fairness)) { node in } }"
+        ] {
+            let parsed = parseAlgorithm(
+                try parseSpecTestClosure("{ \(declaration) }"),
+                enums: [parserTestEnum("Node", finiteValues: [.string("one")])]
+            )
+            #expect(parsed.diagnostics.contains { $0.message.contains("fairness must be") })
+            #expect(throws: SourceParseDiagnostic.self) { try parsed.compile() }
+        }
+    }
+
+    @Test("parser lowers the mechanical PlusCal statements through the shared IR")
+    func parsesMechanicalPlusCalStatements() throws {
+        let source = """
+        {
+            let Counter = Algorithm { scope in
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Each(Node.all, fairness: .strong) { node in
+                    While(TestControlLabel.increment, count < 2) {
+                        When(count >= 0)
+                        With(Node.all) { choice in
+                            Assert(choice == node)
+                            Assign(count, to: count + 1)
+                        }
+                    }
+                }
+            }
+            Counter
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(
+            closure,
+            enums: [parserTestEnum("Node", finiteValues: [.string("left"), .string("right")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        let specification = try loweredSource(parsed, named: "Counter")
+        #expect(specification.invariants.map(\.name) == ["__pcal_assert_0", "__pcal_assert_1"])
+        #expect(specification.fairness == [.strongFairnessEachActionGroup(["increment"])])
+    }
+
+    @Test("Algorithm parser decodes each temporal declaration")
+    func parsesAlgorithmTemporalDeclarations() throws {
+        let source = """
+        {
+            let Temporal = Algorithm { scope in
+                let value = scope.sharedVar(_name: "value", initial: 0)
+                Do(TestControlLabel.advance) {
+                    Assign(value, to: value + 1)
+                }
+                LeadsTo("progress", value == 0, value > 0)
+                Eventually("eventual", value > 0)
+                Always("safe", value >= 0)
+                AlwaysEventually("recurs", value > 0)
+                EventuallyAlways("settles", value >= 0)
+            }
+            Temporal
+        }
+        """
+        let parsed = parseAlgorithm(try parseSpecTestClosure(source))
+
+        #expect(parsed.diagnostics.isEmpty)
+        #expect(try loweredSource(parsed, named: "Temporal").temporalProperties.map(\.name) == [
+            "progress", "eventual", "safe", "recurs", "settles"
+        ])
+    }
+
+    @Test("Algorithm parser preserves process-bound formal lambda meaning in both bundles")
+    func preservesProcessScopedFormalLambdaMeaning() throws {
+        let source = """
+        {
+            let ScopedFormalLambda = Algorithm { scope in
+                let counters = scope.sharedVar(_name: "counters", initial: Function<Worker, Int>.literal(
+                    (.left, 0),
+                    (.right, 0)
+                ))
+                Each(Worker.all) { worker in
+                    Do(TestControlLabel.advance) {
+                        Assign(counters, to: counters.updating(worker, to: Expr<Int>(
+                            StateExpr.operatorApplication(
+                                .lambda(FormalLambda(
+                                    parameters: ["value"],
+                                    body: StateExpr.variable("value") + 1
+                                )),
+                                [.value(counters[worker].raw)]
+                            )
+                        )))
+                    }
+                }
+            }
+            ScopedFormalLambda
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(
+            closure,
+            enums: [parserTestEnum(
+                "Worker",
+                cases: ["left": .string("left"), "right": .string("right")],
+                finiteValues: [.string("left"), .string("right")]
+            )]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        let specification = try loweredSource(parsed, named: "ScopedFormalLambda")
+        #expect(specification.actions.map(\.name) == ["advance", "Terminating"])
+        let compilation = try specification.compile()
+        let direct = try compilation.render().tlaBundle.root.tla
+        let authored = try compilation.render().plusCalBundle().root.tla
+        #expect(direct.contains("LET value == counters[_process] IN (value + 1)"))
+        #expect(direct.contains("LAMBDA") == false)
+        #expect(authored.contains("counters[self] + 1"))
+        #expect(authored.contains("LAMBDA") == false)
+    }
+
+    @Test("formal operator parsing failure retains all six diagnostic fields")
+    func malformedFormalLambdaRetainsSixFieldDiagnostic() throws {
+        let source = """
+        {
+            let MalformedFormalLambda = Algorithm { scope in
+                let counter = scope.sharedVar(_name: "counter", initial: 0)
+                Do(TestControlLabel.advance) {
+                    Assign(counter, to: Expr<Int>(StateExpr.operatorApplication(
+                        .lambda(FormalLambda(parameters: [], body: .int(1))),
+                        [.value(counter.expr.raw)]
+                    )))
+                }
+            }
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(closure)
+        guard let diagnostic = parsed.diagnostics.first else {
+            Issue.record("Expected a malformed formal-lambda diagnostic")
+            return
+        }
+
+        #expect(diagnostic.description.contains("What failed:") == true)
+        #expect(diagnostic.description.contains("Where:") == true)
+        #expect(diagnostic.description.contains("Expected:") == true)
+        #expect(diagnostic.description.contains("Actual:") == true)
+        #expect(diagnostic.description.contains("Next safe action:") == true)
+    }
+
+    @Test("parser lowers ordered multi-source With bindings")
+    func parsesThreeIndependentWithBindings() throws {
+        let source = """
+        {
+            let ThreeWith = Algorithm { scope in
+                let selected = scope.sharedVar(_name: "selected", initial: 0)
+                Do(TestControlLabel.choose) {
+                    With(
+                        SetExpr<Int>.literal(1, 2),
+                        SetExpr<Int>.literal(10),
+                        SetExpr<Int>.literal(100, 200)
+                    ) { first, second, third in
+                        Assign(selected, to: first.expr + second.expr + third.expr)
+                    }
+                }
+            }
+            ThreeWith
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let specification = try loweredSource(parsed, named: "ThreeWith")
+        let rendered = try specification.compile().render().tlaBundle.tla
+        #expect(rendered.components(separatedBy: "\\E ").count == 4)
+    }
+
+    @Test("parser preserves a bounded statement macro through compilation")
+    func parsesStatementMacro() throws {
+        let source = """
+        {
+            let MacroLock = Algorithm { scope in
+                let lock = scope.sharedVar(_name: "lock", initial: 1)
+                let acquire = Macro { (value: MacroParameter<Int>) in
+                    When(value == 1)
+                    Assign(value, to: 0)
+                }
+                Each(Node.all) { _ in
+                    Do(TestControlLabel.acquire) { acquire(lock) }
+                }
+            }
+            MacroLock
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(
+            closure,
+            enums: [parserTestEnum("Node", finiteValues: [.string("left"), .string("right")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        let specification = try loweredSource(parsed, named: "MacroLock")
+        #expect(specification.actions.map(\.name) == ["acquire", "Terminating"])
+        #expect(try specification.compile().render().tlaBundle.tla.contains("lock"))
+    }
+
+    @Test("process-local statement macros capture typed process state")
+    func parsesProcessLocalStatementMacro() throws {
+        let source = """
+        {
+            let MacroProcess = Algorithm { _ in
+                Each(Node.all, scoped: { _, process in
+                    let count = process.localVar(_name: "count", initial: 0)
+                    let advance = Macro {
+                        When(count == 0)
+                        Assign(count, to: count + 1)
+                    }
+                    Do(TestControlLabel.acquire) { advance() }
+                })
+            }
+            MacroProcess
+        }
+        """
+        let parsed = parseAlgorithm(
+            try parseSpecTestClosure(source),
+            enums: [parserTestEnum("Node", finiteValues: [.string("left"), .string("right")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let specification = try loweredSource(parsed, named: "MacroProcess")
+        #expect(specification.actions.map(\.name) == ["acquire", "Terminating"])
+        #expect(try specification.compile().render().tlaBundle.tla.contains("count"))
+    }
+
+    @Test("only explicitly exposed process locals enter the typed state surface")
+    func exposesSelectedProcessLocalState() throws {
+        let source = """
+        {
+            let Scoped = Algorithm { _ in
+                Each(Node.all, scoped: { _, process in
+                    let visible = process.localVar(_name: "visible", initial: 0, exposed: true)
+                    let hidden = process.localVar(_name: "hidden", initial: 0)
+                    Do(TestControlLabel.acquire) {
+                        Assign(visible, to: visible + 1)
+                        Assign(hidden, to: hidden + 1)
+                    }
+                })
+            }
+            Scoped
+        }
+        """
+        let parsed = parseAlgorithm(
+            try parseSpecTestClosure(source),
+            enums: [parserTestEnum("Node", finiteValues: [.string("left"), .string("right")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let compilation = try compile(parsed, named: "Scoped")
+        let generated = try GeneratedMachineAPI(
+            layout: compilation.layout, actions: compilation.semantics.behavior.actions)
+        #expect(generated.variables.map(\.swiftIdentifier) == ["visible"])
+    }
+
+    @Test("parser expands every statement macro parameter in caller scope")
+    func parsesTwoParameterStatementMacro() throws {
+        let source = """
+        {
+            let CopyValue = Algorithm { scope in
+                let destination = scope.sharedVar(_name: "destination", initial: 0)
+                let source = scope.sharedVar(_name: "source", initial: 7)
+                let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
+                    Assign(target, to: value.expr)
+                }
+                Do(TestControlLabel.copy) { copy(destination, source) }
+            }
+            CopyValue
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        let specification = try loweredSource(parsed, named: "CopyValue")
+        let compilation = try specification.compile()
+        let initial = try firstCompiledState(in: compilation)
+        let next = try #require(try compiledSuccessors(
+            named: "copy", arguments: [], in: compilation, from: initial).first)
+        #expect(try renderedValue(named: "destination", in: next, compilation: compilation) == .int(7))
+        #expect(try compilation.render().tlaBundle.tla.contains("__pcal_macro_parameter") == false)
+    }
+
+    @Test("parser retains formal expression macro arguments")
+    func parsesExpressionStatementMacroArguments() throws {
+        let source = """
+        {
+            let OffsetValue = Algorithm { scope in
+                let destination = scope.sharedVar(_name: "destination", initial: 0)
+                let source = scope.sharedVar(_name: "source", initial: 7)
+                let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
+                    Assign(target, to: value.expr)
+                }
+                Do(TestControlLabel.copy) { copy(destination, source.expr + 1) }
+            }
+            OffsetValue
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        let specification = try loweredSource(parsed, named: "OffsetValue")
+        let compilation = try specification.compile()
+        let initial = try firstCompiledState(in: compilation)
+        let next = try #require(try compiledSuccessors(
+            named: "copy", arguments: [], in: compilation, from: initial).first)
+        #expect(try renderedValue(named: "destination", in: next, compilation: compilation) == .int(8))
+    }
+
+    @Test("parser retains typed pair projections and formal calls in a statement macro")
+    func parsesTypedPairStatementMacro() throws {
+        let source = """
+        {
+            let PairVote = Algorithm {
+                FormalDefinition("SafeAt", taking: Int.self, Int.self) { ballot, value in
+                    ballot >= 0 && value >= 0
+                }
+                let vote = Macro { (pair: MacroParameter<Pair<Int, Int>>) in
+                    When(
+                        pair.expr.first() >= 0
+                            && FormalCall(as: Bool.self, "SafeAt", pair.expr.first(), pair.expr.second())
+                    )
+                }
+                Do(TestControlLabel.vote) { vote(Pair.literal(1, 2)) }
+            }
+            PairVote
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let specification = try loweredSource(parsed, named: "PairVote")
+        #expect(try specification.compile().render().tlaBundle.tla.contains(
+            "SafeAt(<<1, 2>>[1], <<1, 2>>[2])"
+        ))
+    }
+
+    @Test("parser rejects an expression used for a macro assignment target")
+    func diagnosesExpressionMacroAssignmentTarget() throws {
+        let source = """
+        {
+            let InvalidMacroTarget = Algorithm { scope in
+                let destination = scope.sharedVar(_name: "destination", initial: 0)
+                let write = Macro { (target: MacroParameter<Int>) in
+                    Assign(target, to: 1)
+                }
+                Do(TestControlLabel.write) { write(destination.expr + 1) }
+            }
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(closure)
+
+        #expect(parsed.actions.isEmpty)
+        let diagnostic = parsed.diagnostics.first?.message ?? ""
+        #expect(diagnostic.contains("What failed: statement macro 'write' assigns through parameter"))
+        #expect(diagnostic.contains("Expected a formal variable assignment target"))
+        #expect(diagnostic.contains("Next safe action"))
+    }
+
+    @Test("source model compiles procedure bindings to deterministic formal slots", arguments: ["offset", "adjustment"])
+    func parsesTypedProcedureBindings(localName: String) throws {
+        let source = """
+        {
+            let ProcedureSource = Algorithm { scope in
+                let output = scope.sharedVar(_name: "output", initial: 0)
+                Procedure(ProcedureName.work, parameters: Int.self, scoped: { value, scope in
+                    let offset = scope.localVar(_name: "\(localName)", initial: 1)
+                    Do(TestControlLabel.enter, when: value.expr >= 0) {
+                        Assign(output, to: value.expr + offset.expr)
+                        Return()
+                    }
+                })
+                Do(TestControlLabel.start) { Call(ProcedureName.work, with: 7) }
+                Do(TestControlLabel.finished) { Stop() }
+            }
+            ProcedureSource
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(closure, enums: [procedureNames])
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let specification = try loweredSource(parsed, named: "ProcedureSource")
+        #expect(specification.variables.contains { $0.name == "parameter0" })
+        #expect(specification.actions.contains { $0.name == "procedure.work.enter" })
+    }
+
+    @Test("statement macro arity diagnostics identify the declaration and safe repair")
+    func diagnosesStatementMacroArity() throws {
+        let source = """
+        {
+            let BadMacroCall = Algorithm { scope in
+                let destination = scope.sharedVar(_name: "destination", initial: 0)
+                let source = scope.sharedVar(_name: "source", initial: 7)
+                let copy = Macro { (target: MacroParameter<Int>, value: MacroParameter<Int>) in
+                    Assign(target, to: value.expr)
+                }
+                Do(TestControlLabel.copy) { copy(destination) }
+            }
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(closure)
+
+        #expect(parsed.actions.isEmpty)
+        #expect(parsed.diagnostics.first?.message.contains("Statement macro 'copy' expects 2 arguments but received 1.") == true)
+    }
+
+    @Test("parser expands a parameterless statement macro")
+    func parsesParameterlessStatementMacro() throws {
+        let source = """
+        {
+            let ParameterlessMacro = Algorithm { scope in
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                let increment = Macro {
+                    Assign(count, to: count + 1)
+                }
+                Do(TestControlLabel.increment) { increment() }
+            }
+            ParameterlessMacro
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(closure)
+
+        #expect(parsed.diagnostics.isEmpty)
+        let specification = try loweredSource(parsed, named: "ParameterlessMacro")
+        let compilation = try specification.compile()
+        let initial = try firstCompiledState(in: compilation)
+        let next = try #require(try compiledSuccessors(
+            named: "increment", arguments: [], in: compilation, from: initial).first)
+        #expect(try renderedValue(named: "count", in: next, compilation: compilation) == .int(1))
+    }
+
+    @Test("parser retains a filtered formal function initial domain")
+    func parsesFilteredFunctionInitialDomain() throws {
+        let source = """
+        {
+            let FunctionDomain = Algorithm { scope in
+                let successors = scope.sharedVar(_name: "successors", in: Where(
+                    Functions(from: Node.all, to: Subsets(of: SetExpr<Node>.literal(.first, .second)))
+                ) { successor in
+                    ForAll(Node.all) { node in
+                        successor[node].cardinality == 1
+                    }
+                })
+                Do(TestControlLabel.done) { Stop() }
+            }
+            FunctionDomain
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(
+            closure,
+            enums: [parserTestEnum(
+                "Node",
+                cases: ["first": .string("first"), "second": .string("second")]
+            )]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let compilation = try compile(parsed, named: "FunctionDomain")
+        let successors = try #require(try loweredSource(parsed, named: "FunctionDomain").variables.first { $0.name == "successors" })
+        let variable = try #require(compilation.layout.variables.first { $0.declaration.name == successors.name })
+        #expect(variable.generatedSwiftType == "Function<Node, SetExpr<Node>>")
+        guard case .memberOf = successors.initialization else {
+            Issue.record("Expected successors to retain its initial domain")
+            return
+        }
+        #expect(try compilation.render().tlaBundle.tla.contains("Cardinality"))
+    }
+
+    @Test("Algorithm parser decodes scoped function-set invariants")
+    func parsesScopedFunctionSetInvariant() throws {
+        let source = """
+        {
+            let FunctionSetInvariant = Algorithm(scoped: { scope in
+                let values = scope.sharedVar(_name: "values", initial: Function<Node, Int>.mapping { _ in 0 })
+                let grouped = scope.sharedVar(_name: "grouped", initial: Function<Node, SetExpr<Node>>.mapping { _ in SetExpr<Node>() })
+                let members = scope.sharedVar(_name: "members", initial: SetExpr<Node>())
+                Do(TestControlLabel.done) { Stop() }
+                Invariant("TypeOK") {
+                    Functions(from: Node.all, to: SetExpr<Int>.literal(0, 1)).contains(values.expr)
+                        && members.isSubset(of: SetExpr<Node>.literal(.only))
+                        && Functions(
+                            from: Node.all,
+                            to: Subsets(of: SetExpr<Node>.literal(.only))
+                        ).contains(grouped.expr)
+                }
+            })
+            FunctionSetInvariant
+        }
+        """
+        let parsed = parseAlgorithm(
+            try parseSpecTestClosure(source),
+            enums: [parserTestEnum(
+                "Node",
+                cases: ["only": .string("only")],
+                finiteValues: [.string("only")]
+            )]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        #expect(try loweredSource(parsed, named: "FunctionSetInvariant").invariants.map(\.name) == ["TypeOK"])
+    }
+
+    @Test("parser retains a typed record-valued function comprehension")
+    func parsesRecordFunctionComprehension() throws {
+        let source = """
+        {
+            let RecordFunction = Algorithm { scope in
+                let cars = scope.sharedVar(_name: "cars", initial: Function<Car, CarState>.mapping { _ in
+                    CarState(floor: 4, door: Door.closed)
+                })
+                Do(TestControlLabel.hold) { Assign(cars, to: cars.expr) }
+            }
+            RecordFunction
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(
+            closure,
+            enums: [
+                parserTestEnum("Door", cases: ["closed": .string("closed")]),
+                parserTestEnum("Car", finiteValues: [.string("north"), .string("south")])
+            ],
+            sourceTypes: try swiftRecordMetadata("struct CarState { let floor: Int; let door: Door }")
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let specification = try loweredSource(parsed, named: "RecordFunction")
+        let carsDeclaration = try #require(specification.variables.first { $0.name == "cars" })
+        guard case .expression(let initializer) = carsDeclaration.initialization,
+              case .function(let cars) = try evaluateClosed(initializer) else {
+            Issue.record("Expected cars to retain a formal finite function")
+            return
+        }
+        #expect(cars.count == 2)
+        #expect(cars.values.allSatisfy { value in
+            guard case .record(let fields) = value else { return false }
+            return fields.value(named: "floor") == .int(4)
+                && fields.value(named: "door") == .string("closed")
+        })
+    }
+
+    @Test("parser retains an empty typed set in a function comprehension")
+    func parsesEmptySetFunctionComprehension() throws {
+        let source = """
+        {
+            let Votes = Algorithm { scope in
+                let votes = scope.sharedVar(_name: "votes", initial: Function<Acceptor, SetExpr<Int>>.mapping { _ in SetExpr() })
+                Do(TestControlLabel.hold) { Assign(votes, to: votes.expr) }
+            }
+            Votes
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(
+            closure,
+            enums: [parserTestEnum("Acceptor", finiteValues: [.string("a1"), .string("a2")])]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let specification = try loweredSource(parsed, named: "Votes")
+        let votesDeclaration = try #require(specification.variables.first { $0.name == "votes" })
+        guard case .expression(let initializer) = votesDeclaration.initialization,
+              case .function(let votes) = try evaluateClosed(initializer) else {
+            Issue.record("Expected votes to retain a formal finite function")
+            return
+        }
+        #expect(votes == [.string("a1"): .set([]), .string("a2"): .set([])])
+    }
+
+    @Test("parser retains a typed finite function literal with its bound key")
+    func parsesTypedFunctionLiteral() throws {
+        let source = """
+        {
+            let FiniteFunction = Algorithm {
+                Each(Node.all) { node in
+                    Do(TestControlLabel.hold) {
+                        let successor = Function<Node, Node>.literal(
+                            (Node.one, Node.two),
+                            (Node.two, Node.one)
+                        )
+                        When(successor[node] == Node.two)
+                    }
+                }
+            }
+            FiniteFunction
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(
+            closure,
+            enums: [parserTestEnum(
+                "Node",
+                cases: ["one": .int(1), "two": .int(2)]
+            )]
+        )
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let specification = try loweredSource(parsed, named: "FiniteFunction")
+        #expect(try specification.compile().render().tlaBundle.tla.contains("CASE"))
+    }
+
+    @Test("source model retains a formal selection until evaluation")
+    func parsesStaticFormalSelection() throws {
+        let source = """
+        {
+            let StaticChoice = Algorithm { scope in
+                let selected = Select(
+                    from: SetExpr<Int>.literal(1, 2, 3),
+                    matching: { value in value.expr % 2 == 0 }
+                )
+                let current: SharedVariable<Int> = scope.sharedVar(_name: "current", initial: selected)
+                Do(TestControlLabel.done) { Stop() }
+            }
+            StaticChoice
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(closure)
+
+        #expect(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+        let specification = try loweredSource(parsed, named: "StaticChoice")
+        let current = try #require(specification.variables.first { $0.name == "current" })
+        guard case .expression(.choose) = current.initialization else {
+            Issue.record("Expected the formal selection expression")
+            return
+        }
+        let compilation = try specification.compile()
+        #expect(try compilation.render().tlaBundle.tla.contains("CHOOSE"))
+        let state = try #require(CompiledRuntime(compilation: compilation).initialStates().first)
+        let token = try #require(TLAStateProjection.Token(validating: "current"))
+        #expect(try state.projection(using: compilation.layout).value(for: token) == .int(2))
+    }
+
+    @Test("parser expands a statement macro with the current process identifier")
+    func parsesStatementMacroWithProcessIdentifier() throws {
+        let source = """
+        {
+            let MacroProcess = Algorithm { scope in
+                let marked = scope.sharedVar(_name: "marked", initial: Function<Node, Bool>.literal((Node.left, false), (Node.right, false)))
+                let mark = Macro { (node: MacroParameter<Node>) in
+                    Assign(marked, to: marked.updating(node, to: true))
+                }
+                Each(Node.all) { node in
+                    Do(TestControlLabel.mark) { mark(node) }
+                }
+            }
+            MacroProcess
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(
+            closure,
+            enums: [parserTestEnum(
+                "Node",
+                cases: ["left": .string("left"), "right": .string("right")]
+            )]
+        )
+
+        #expect(parsed.diagnostics.isEmpty)
+        let specification = try loweredSource(parsed, named: "MacroProcess")
+        let action = try #require(try specification.compile().semantics.behavior.actions.first)
+        #expect(action.bindings.map(\.sourceName).contains("process"))
+    }
+
+    @Test("Do, While, and Goto use their declared label raw values")
+    func parsesDeclaredAlgorithmLabels() throws {
+        let source = """
+        {
+            let RawLabel = Algorithm {
+                Do(Step.start) { Goto(Step.finish) }
+                While(Step.loop, true) { Goto(Step.finish) }
+                Do(Step.finish) { Stop() }
+            }
+            RawLabel
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure,
+            sourceTypes: .init(enums: [parserTestEnum("Step", cases: [
+                "start": .string("Begin"),
+                "loop": .string("Repeat"),
+                "finish": .string("Finish")
+            ])]))
+
+        #expect(parsed.diagnostics.isEmpty)
+        let algorithm = try #require(parsed.sourceAlgorithms.first?.model)
+        #expect(algorithm.sequentialSteps.map(\.label.name) == ["Begin", "Repeat", "Finish"])
+        #expect(algorithm.sequentialSteps[0].statements == [.goto(.init(name: "Finish"))])
+        #expect(algorithm.sequentialSteps[1].statements == [.goto(.init(name: "Finish"))])
+        _ = try compile(parsed, named: "RawLabel")
+    }
+
+    @Test("Do, While, and Goto reject labels outside a registered enum")
+    func rejectsUnboundAlgorithmLabels() throws {
+        let invalidLabels = [
+            #""label""#,
+            ".advance",
+            "Unknown.advance",
+            "TestControlLabel.missing"
+        ]
+        for construct in ["Do", "While", "Goto"] {
+            for label in invalidLabels {
+                let statement: String
+                switch construct {
+                case "Do": statement = "Do(\(label)) { Stop() }"
+                case "While": statement = "While(\(label), true) { Stop() }"
+                default: statement = "Do(TestControlLabel.advance) { Goto(\(label)) }"
+                }
+                let parsed = parseAlgorithm(try parseSpecTestClosure("""
+                {
+                    let InvalidLabel = Algorithm {
+                        \(statement)
+                    }
+                }
+                """))
+
+                #expect(parsed.sourceAlgorithms.isEmpty, "\(construct) accepted \(label)")
+                let diagnostic = try #require(parsed.diagnostics.first)
+                #expect(diagnostic.message.contains(
+                    "Algorithm control label '\(label)' must be a qualified case of a registered String-backed enum."
+                ))
+            }
+        }
+    }
+
+    @Test("Procedure and Call reject names outside a registered enum")
+    func rejectsUnboundProcedureNames() throws {
+        let invalidNames = [
+            (#""work""#, "procedure name '\"work\"' must be a qualified enum case."),
+            (".work", "procedure name '.work' must be a qualified enum case."),
+            ("Unknown.work", "procedure-name enum 'Unknown' is not registered."),
+            ("ProcedureName.missing", "procedure name 'missing' is not declared in registered enum 'ProcedureName'."),
+            ("NumberedProcedure.work", "procedure name 'NumberedProcedure.work' must have a String raw value")
+        ]
+        for construct in ["Procedure", "Call"] {
+            for (name, expected) in invalidNames {
+                let body: String
+                if construct == "Procedure" {
+                    body = "Procedure(\(name)) { Do(TestControlLabel.advance) { Return() } }"
+                } else {
+                    body = """
+                    Procedure(ProcedureName.work) { Do(TestControlLabel.advance) { Return() } }
+                    Do(TestControlLabel.start) { Call(\(name)) }
+                    """
+                }
+                let parsed = parseAlgorithm(
+                    try parseSpecTestClosure("""
+                    {
+                        let InvalidProcedureName = Algorithm {
+                            \(body)
+                        }
+                    }
+                    """),
+                    enums: [
+                        procedureNames,
+                        parserTestEnum("NumberedProcedure", cases: ["work": .int(1)])
+                    ]
+                )
+
+                #expect(parsed.sourceAlgorithms.isEmpty, "\(construct) accepted \(name)")
+                let diagnostic = try #require(parsed.diagnostics.first)
+                #expect(diagnostic.message.contains("\(construct) \(expected)"))
+            }
+        }
+    }
+
+    @Test("parsed algorithms compile their declared process owner")
+    func parsedAlgorithmCompilesDeclaredProcessOwner() throws {
+        let source = """
+        {
+            let Counter = Algorithm(scoped: { scope in
+                let count = scope.sharedVar(_name: "count", initial: 0)
+                Each(ParserNode.all) { _ in
+                    Do(TestControlLabel.increment, when: count < 2) {
+                        Assign(count, to: count + 1)
+                    }
+                }
+            })
+            Counter
+        }
+        """
+        let closure = try parseSpecTestClosure(source)
+        let parsed = parseAlgorithm(
+            closure,
+            enums: [parserTestEnum(
+                "ParserNode",
+                cases: ["left": .string("left"), "right": .string("right")],
+                finiteValues: [.string("left"), .string("right")]
+            )]
+        )
+        let parserSpecification = try loweredSource(parsed, named: "Counter")
+        let parserCompilation = try parserSpecification.compile()
+        #expect(parserCompilation.description.variables.map(\.name) == ["pc", "count"])
+        #expect(parserCompilation.description.actions.map(\.name) == ["increment", "Terminating"])
+        #expect(parserCompilation.description.controlLocations.first?.owner == .process(
+            algorithm: "Counter",
+            declarationOrder: 0,
+            typeName: "ParserNode"
+        ))
+    }
+
+    @Test("parsed shared initializers retain and evaluate their formal expression")
+    func parsedSharedInitializerRetainsFormalExpression() throws {
+        let closure = try parseSpecTestClosure("""
+        { scope in
+            let count: SharedVariable<Int> = scope.sharedVar(_name: "count", initial: 1 + 2)
+        }
+        """)
+        let parsed = SpecParser.parseSpecClosure(named: "SharedInitializer", closure)
+        #expect(parsed.diagnostics.isEmpty)
+
+        let parsedVariable = try #require(try loweredSource(parsed, named: "SharedInitializer").variables.first)
+
+        #expect(parsedVariable.initialization == .expression(.add(.value(.int(1)), .value(.int(2)))))
+
+        let compilation = try parsed.compile()
+        let state = try #require(try CompiledRuntime(compilation: compilation).initialStates().first)
+        let count = try #require(TLAStateProjection.Token(validating: "count"))
+        #expect(try state.projection(using: compilation.layout).value(for: count) == .int(3))
+    }
+
+    @Test("parsed and built literal initializers have one compilation identity")
+    func parsedAndBuiltLiteralInitializersShareIdentity() throws {
+        let closure = try parseSpecTestClosure("""
+        { scope in
+            let count = scope.sharedVar(_name: "count", initial: 1)
+        }
+        """)
+        let parsed = try SpecParser.parseSpecClosure(named: "LiteralInitializer", closure).compile()
+        let built = try TLASpec("LiteralInitializer") { scope in
+            let _ = scope.sharedVar(_name: "count", initial: 1)
+        }.compile()
+
+        #expect(parsed.identity == built.identity)
+    }
+
+    @Test("parsed initial domains retain state dependencies")
+    func parsedInitialDomainsRetainStateDependencies() throws {
+        let closure = try parseSpecTestClosure("""
+        { scope in
+            let limit = scope.sharedVar(_name: "limit", initial: 2)
+            let choice = scope.sharedVar(_name: "choice", in: Where(SetExpr<Int>.literal(1, 2, 3)) { value in
+                value <= limit
+            })
+        }
+        """)
+        let parsed = SpecParser.parseSpecClosure(named: "DependentInitialDomain", closure)
+        let compilation = try parsed.compile()
+        let choice = try #require(compilation.layout.testVariableID(named: "choice"))
+        let states = try CompiledRuntime(compilation: compilation).initialStates()
+
+        #expect(Set(try states.map {
+            try $0.value(for: choice).rendered(using: compilation.layout)
+        }) == [.int(1), .int(2)])
+    }
+
+    @Test("unsupported variable initializers fail during parsing")
+    func rejectsUnsupportedVariableInitializer() throws {
+        let closure = try parseSpecTestClosure("""
+        {
+            let count = Var("count", UnsupportedInitialValue())
+        }
+        """)
+        let parsed = SpecParser.parseSpecClosure(named: "Parsed", closure)
+
+        #expect(parsed.variables.isEmpty)
+        #expect(parsed.diagnostics.map(\.message) == ["Var requires a supported initial formal value."])
+    }
+}

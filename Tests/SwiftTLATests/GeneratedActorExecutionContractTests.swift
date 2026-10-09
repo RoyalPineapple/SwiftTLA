@@ -1,33 +1,5 @@
 import Testing
 import SwiftTLA
-import SwiftTLAMacros
-
-@TLAModel
-struct ParameterizedActorModel {
-    static var spec: TLASpec {
-        TLASpec("ParameterizedActorModel") {
-            let leader = Var<Int>("leader")
-            let turn = Var<Int>("turn")
-            Variable(leader, 1)
-            Variable(turn, 0)
-            SwiftTLA.Action("pass", parameters: [
-                ActionParameter("from", values: [1, 2]),
-                ActionParameter("to", values: [1, 2]),
-                ActionParameter("round", values: [1, 2, 3])
-            ]) {
-                let from = Expr<Int>(.variable("from"))
-                let to = Expr<Int>(.variable("to"))
-                let round = Expr<Int>(.variable("round"))
-                leader == from
-                    && to != from
-                    && turn + 1 == round
-                    && leader.becomes(to)
-                    && turn.becomes(round)
-            }
-        }
-    }
-
-}
 
 struct GeneratedActorExecutionContractTests {
     @Test("actor matches the generated machine for a typed schedule")

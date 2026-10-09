@@ -11,50 +11,43 @@ public struct BluetoothModel {
 
         public static var defaultValue: Self { .unknown }
         public static let finiteValues = allCases
-        public var tlaValue: TLAValue { .string(rawValue) }
     }
 
     private enum PoweredOnProcess: String, FiniteTLAValueDomain { case poweredOnEvent
         static var defaultValue: Self { .poweredOnEvent }
         static let finiteValues: [Self] = [.poweredOnEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum PoweredOffProcess: String, FiniteTLAValueDomain { case poweredOffEvent
         static var defaultValue: Self { .poweredOffEvent }
         static let finiteValues: [Self] = [.poweredOffEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum StartScanProcess: String, FiniteTLAValueDomain { case startScanEvent
         static var defaultValue: Self { .startScanEvent }
         static let finiteValues: [Self] = [.startScanEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum StopScanProcess: String, FiniteTLAValueDomain { case stopScanEvent
         static var defaultValue: Self { .stopScanEvent }
         static let finiteValues: [Self] = [.stopScanEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum ResettingProcess: String, FiniteTLAValueDomain { case resettingEvent
         static var defaultValue: Self { .resettingEvent }
         static let finiteValues: [Self] = [.resettingEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum UnsupportedProcess: String, FiniteTLAValueDomain { case unsupportedEvent
         static var defaultValue: Self { .unsupportedEvent }
         static let finiteValues: [Self] = [.unsupportedEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum UnauthorizedProcess: String, FiniteTLAValueDomain { case unauthorizedEvent
         static var defaultValue: Self { .unauthorizedEvent }
         static let finiteValues: [Self] = [.unauthorizedEvent]
-        var tlaValue: TLAValue { .string(rawValue) }
     }
     private enum Step: String, CaseIterable { case poweredOn, poweredOff, resetting, unsupported, unauthorized, startScan, stopScan }
 
     public static var spec: TLASpec {
-        #spec("BluetoothModel") {
-            Algorithm("BluetoothModel", scoped: { scope in
-                let phase = scope.sharedVar("phase", initial: Phase.unknown)
+        #spec {
+            let knownCentralPhase = Invariant()
+            let bluetoothModel = Algorithm(scoped: { scope in
+                let phase = scope.sharedVar(initial: Phase.unknown)
                 Each(PoweredOnProcess.all) { _ in
                     Do(Step.poweredOn) {
                         When(phase == .unknown || phase == .resetting || phase == .poweredOff)
@@ -96,8 +89,9 @@ public struct BluetoothModel {
                 Each(StopScanProcess.all) { _ in
                     Do(Step.stopScan) { When(phase == .scanning); Assign(phase, to: Phase.poweredOn); Goto(Step.stopScan) }
                 }
-                Invariant("knownCentralPhase") { phase == .unknown || phase == .resetting || phase == .unsupported || phase == .unauthorized || phase == .poweredOff || phase == .poweredOn || phase == .scanning }
+                knownCentralPhase { phase == .unknown || phase == .resetting || phase == .unsupported || phase == .unauthorized || phase == .poweredOff || phase == .poweredOn || phase == .scanning }
             })
+            bluetoothModel
         }
     }
 

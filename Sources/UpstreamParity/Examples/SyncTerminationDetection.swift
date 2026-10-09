@@ -1,76 +1,63 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// The three-node bounded termination detector from EWD 840.
+// Upstream: specifications/ewd840/SyncTerminationDetection.tla, SyncTerminationDetection.cfg.
 @TLAModel
 package struct SyncTerminationDetectionModel: Sendable {
-    package enum Node: Int, CaseIterable, FiniteTLAValueDomain {
-        case zero = 0
-        case one = 1
-        case two = 2
-
-        package static var defaultValue: Self { .zero }
-        package static let finiteValues = allCases
-        package var tlaValue: TLAValue { .int(rawValue) }
+    private enum Step: String, CaseIterable {
+        case Terminate, Wakeup, DetectTermination
     }
 
     package static var spec: TLASpec {
         #spec("SyncTerminationDetection") { scope in
-            Extends(.integers)
-            let active = scope.sharedVar("active", in: SetExpr<Function<Node, Bool>>.literal(
-                Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, false)),
-                Function<Node, Bool>.literal((Node.zero, false), (Node.one, false), (Node.two, true)),
-                Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, false)),
-                Function<Node, Bool>.literal((Node.zero, false), (Node.one, true), (Node.two, true)),
-                Function<Node, Bool>.literal((Node.zero, true), (Node.one, false), (Node.two, false)),
-                Function<Node, Bool>.literal((Node.zero, true), (Node.one, false), (Node.two, true)),
-                Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, false)),
-                Function<Node, Bool>.literal((Node.zero, true), (Node.one, true), (Node.two, true))
-            ))
-            let terminationDetected = scope.sharedVar("terminationDetected", initial: false)
+            Extends(.naturals)
+            let N = scope.parameter(as: Int.self, in: Int.all)
+            Assume(N > 0)
+            let Node = IntRange(0, through: N - 1)
+            let active = scope.sharedVar(in: Functions(from: Node, to: SetExpr<Bool>.literal(false, true)))
+            let terminated = ForAll(in: Node) { node in !active[node] }
+            let terminationDetected = scope.sharedVar(in: SetExpr<Bool>.literal(false, terminated))
 
-            SwiftTLA.Action("Terminate_0") {
-                active[.zero] == true && active.becomes(active.updating(.zero, to: false)) && terminationDetected.stays
+            let TypeOK = Invariant()
+            let TDCorrect = Invariant()
+            let Quiescence = Temporal()
+            let Liveness = Temporal()
+
+            Do(Step.Terminate, over: Node) { node in
+                When(active[node])
+                Assign(active[node], to: false)
+                With(SetExpr<Bool>.literal(terminationDetected, terminated)) { detected in
+                    Assign(terminationDetected, to: detected)
+                }
             }
-            SwiftTLA.Action("Terminate_1") {
-                active[.one] == true && active.becomes(active.updating(.one, to: false)) && terminationDetected.stays
+            Do(Step.Wakeup, over: Node, Node) { node, destination in
+                When(active[node])
+                Assign(active[destination], to: true)
             }
-            SwiftTLA.Action("Terminate_2") {
-                active[.two] == true && active.becomes(active.updating(.two, to: false)) && terminationDetected.stays
+            let detectTermination = Do(Step.DetectTermination) {
+                When(terminated)
+                Assign(terminationDetected, to: true)
             }
-            SwiftTLA.Action("Wakeup_0_to_1") {
-                active[.zero] == true && active.becomes(active.updating(.one, to: true)) && terminationDetected.stays
+            detectTermination
+            WeakFairness(detectTermination)
+
+            TypeOK {
+                Functions(from: Node, to: SetExpr<Bool>.literal(false, true)).contains(active)
+                    && SetExpr<Bool>.literal(false, true).contains(terminationDetected)
             }
-            SwiftTLA.Action("Wakeup_0_to_2") {
-                active[.zero] == true && active.becomes(active.updating(.two, to: true)) && terminationDetected.stays
+            TDCorrect { !terminationDetected || terminated }
+            Quiescence(.alwaysStep(on: terminated) { before, after in !before || after })
+            Liveness(.leadsTo(terminated, terminationDetected))
+
+            let SyncTerminationDetection = Validation {
+                Bind(N, to: 7)
             }
-            SwiftTLA.Action("Wakeup_1_to_0") {
-                active[.one] == true && active.becomes(active.updating(.zero, to: true)) && terminationDetected.stays
-            }
-            SwiftTLA.Action("Wakeup_1_to_2") {
-                active[.one] == true && active.becomes(active.updating(.two, to: true)) && terminationDetected.stays
-            }
-            SwiftTLA.Action("Wakeup_2_to_0") {
-                active[.two] == true && active.becomes(active.updating(.zero, to: true)) && terminationDetected.stays
-            }
-            SwiftTLA.Action("Wakeup_2_to_1") {
-                active[.two] == true && active.becomes(active.updating(.one, to: true)) && terminationDetected.stays
-            }
-            SwiftTLA.Action("DetectTermination") {
-                active[.zero] == false && active[.one] == false && active[.two] == false
-                    && terminationDetected.becomes(true) && active.stays
-            }
-            Invariant("TDCorrect") {
-                terminationDetected == false || (active[.zero] == false && active[.one] == false && active[.two] == false)
-            }
+            SyncTerminationDetection
+
+            let APSyncTerminationDetection = Validation {
+                Bind(N, to: 7)
+            }.checking(only: [TypeOK, TDCorrect])
+            APSyncTerminationDetection
         }
     }
-}
-
-extension Example {
-    package static let syncTD = FiniteModelFixture(
-        expectedDistinct: 9,
-        maximumStateLimit: 50_000,
-        spec: SyncTerminationDetectionModel.spec,
-    )
 }

@@ -55,6 +55,12 @@ private func executeExternalConsumer(
         let output = Pipe()
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        var arguments = arguments
+        if let scratch = ProcessInfo.processInfo.environment["SWIFTTLA_VALIDATION_SCRATCH_PATH"] {
+            // Nested package builds share the wrapper's isolation and cleanup.
+            arguments.insert(contentsOf: ["--scratch-path", URL(fileURLWithPath: scratch)
+                .appendingPathComponent("external-consumer").path], at: 1)
+        }
         process.arguments = ["swift"] + arguments
         process.standardOutput = output
         process.standardError = output

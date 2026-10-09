@@ -6,6 +6,7 @@ import SwiftTLAMacros
 /// Each worker claims one frontier node, marks it, then moves its successor
 /// nodes into the shared frontier one at a time. The separate `a`, `b`, and
 /// `c` steps deliberately mirror the published PlusCal labels.
+@TLAModel
 package struct ParallelReachableModel: Sendable {
     package enum Node: Int, FiniteTLAValueDomain {
         case one = 1, two = 2, three = 3, four = 4
@@ -30,20 +31,20 @@ package struct ParallelReachableModel: Sendable {
     package static var spec: TLASpec {
         #spec("ParallelReachability") {
             Extends(.finiteSets)
-            Algorithm("ParallelReachability", scoped: { scope in
+            let ParallelReachability = Algorithm(scoped: { scope in
                 let nodes = SetExpr<Node>.literal(.one, .two, .three, .four)
                 let successors = Select(
                     from: Where(Functions(from: Node.all, to: Subsets(of: nodes))) { graph in
-                        All(Node.all) { node in graph[node].cardinality == 2 }
+                        ForAll(Node.all) { node in graph[node].cardinality == 2 }
                     },
                     matching: { graph in graph.expr == graph.expr }
                 )
-                let marked = scope.sharedVar("marked", initial: SetExpr<Node>())
-                let frontier = scope.sharedVar("frontier", initial: SetExpr<Node>.literal(.one))
+                let marked = scope.sharedVar(initial: SetExpr<Node>())
+                let frontier = scope.sharedVar(initial: SetExpr<Node>.literal(.one))
 
                 Each(Worker.all, fairness: .weak, scoped: { _, scope in
-                    let current: LocalVariable<Node> = scope.localVar("current", initial: .one)
-                    let pending: LocalVariable<SetExpr<Node>> = scope.localVar("pending", initial: SetExpr<Node>())
+                    let current: LocalVariable<Node> = scope.localVar(initial: .one)
+                    let pending: LocalVariable<SetExpr<Node>> = scope.localVar(initial: SetExpr<Node>())
 
                     Do(Step.a) {
                         Either {
@@ -89,6 +90,7 @@ package struct ParallelReachableModel: Sendable {
                     frontier.isSubset(of: SetExpr<Node>.literal(.one, .two, .three, .four))
                 }
             })
+            ParallelReachability
         }
     }
 }

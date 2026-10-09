@@ -1,36 +1,58 @@
 package org.swifttla.conformance;
 
 import java.io.BufferedWriter;
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.DigestOutputStream;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.zip.GZIPOutputStream;
 
 import tla2sany.semantic.SemanticNode;
+import tlc2.TLCGlobals;
 import tlc2.tool.Action;
 import tlc2.tool.TLCState;
 import tlc2.util.BitVector;
+import tlc2.util.Context;
 import tlc2.util.IStateWriter;
+import tlc2.value.impl.Value;
 
 /** TLC v1.8.0 graph-event writer. */
 public final class LosslessStateWriter implements IStateWriter {
     private static final String SCHEMA = "swifttla.tlc.graph-events";
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private static final String OUTPUT_PROPERTY = "swifttla.tlc.graph.path";
     private static final String RUN_ID_PROPERTY = "swifttla.tlc.graph.run-id";
     private static final String CASE_ID_PROPERTY = "swifttla.tlc.graph.case-id";
+    private static final String COMPACT_GZIP_PROPERTY = "swifttla.tlc.graph.compact-gzip";
 
     private final Path outputPath;
     private final BufferedWriter output;
+    private final DataOutputStream binaryOutput;
+    private final DigestOutputStream digestOutput;
     private final MessageDigest bodyDigest;
     private final String runId;
     private final String caseId;
+    private final boolean compactGzip;
+    private final boolean binary;
+    private final Map<String, Integer> binaryActions = new LinkedHashMap<>();
+    private long binaryStates;
+    private long binaryInitials;
+    private long binaryEdges;
+    private long binaryExcluded;
+    private long binaryUnsupported;
     private final Map<String, Integer> counts = new LinkedHashMap<>();
+    private final InstanceActions instanceActions = new InstanceActions();
     private long sequence;
     private boolean closed;
 
@@ -39,10 +61,36 @@ public final class LosslessStateWriter implements IStateWriter {
             outputPath = Path.of(required(OUTPUT_PROPERTY)).toAbsolutePath().normalize();
             runId = required(RUN_ID_PROPERTY);
             caseId = required(CASE_ID_PROPERTY);
+            compactGzip = Boolean.getBoolean(COMPACT_GZIP_PROPERTY);
+            binary = outputPath.toString().endsWith(".bin") || outputPath.toString().endsWith(".bin.gz");
             Files.createDirectories(outputPath.getParent());
-            output = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8);
             bodyDigest = MessageDigest.getInstance("SHA-256");
-            emit("header", "writer.header", "");
+            if (binary) {
+                var stream = Files.newOutputStream(outputPath);
+                if (outputPath.toString().endsWith(".bin.gz")) {
+                    stream = new GZIPOutputStream(stream, 65536);
+                }
+                digestOutput = new DigestOutputStream(
+                        new BufferedOutputStream(stream, 1 << 20), bodyDigest);
+                binaryOutput = new DataOutputStream(digestOutput);
+                output = null;
+                binaryOutput.write("STLAGRF2".getBytes(StandardCharsets.US_ASCII));
+                binaryOutput.writeByte(1);
+                binaryString(caseId);
+                binaryString(runId);
+            } else if (compactGzip) {
+                digestOutput = null;
+                binaryOutput = null;
+                GZIPOutputStream zipped = new GZIPOutputStream(Files.newOutputStream(outputPath), 65536, true);
+                output = new BufferedWriter(new OutputStreamWriter(zipped, StandardCharsets.UTF_8), 65536);
+            } else {
+                digestOutput = null;
+                binaryOutput = null;
+                output = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8);
+            }
+            if (!binary) {
+                emit("header", "writer.header", "");
+            }
             Runtime.getRuntime().addShutdownHook(new Thread(this::close, "swifttla-graph-writer-close"));
         } catch (IOException error) {
             throw new UncheckedIOException("cannot create TLC graph event stream", error);
@@ -53,7 +101,15 @@ public final class LosslessStateWriter implements IStateWriter {
 
     @Override
     public synchronized void writeState(TLCState state) {
-        emit("initial", "writeState.initial", "\"state\":" + state(state));
+        if (binary) {
+            try {
+                binaryState(state, true);
+            } catch (IOException error) {
+                throw new UncheckedIOException("cannot append TLC initial state", error);
+            }
+        } else {
+            emit("initial", "writeState.initial", "\"state\":" + state(state));
+        }
     }
 
     @Override
@@ -68,7 +124,8 @@ public final class LosslessStateWriter implements IStateWriter {
 
     @Override
     public synchronized void writeState(TLCState source, TLCState target, short flags, Action action, SemanticNode predicate) {
-        transition("writeState.actionPredicate", source, target, flags, action, quote(location(predicate)), "excluded");
+        transition("writeState.actionPredicate", source, target, flags, action,
+                binary ? location(predicate) : quote(location(predicate)), "excluded");
     }
 
     @Override
@@ -92,6 +149,24 @@ public final class LosslessStateWriter implements IStateWriter {
             return;
         }
         try {
+            if (binary) {
+                digestOutput.on(false);
+                byte[] bodyHash = bodyDigest.digest();
+                binaryOutput.writeByte(255);
+                binaryOutput.writeLong(binaryStates);
+                binaryOutput.writeLong(binaryInitials);
+                binaryOutput.writeLong(binaryEdges);
+                binaryOutput.writeLong(binaryExcluded);
+                binaryOutput.writeLong(binaryUnsupported);
+                binaryOutput.writeLong(0);
+                binaryOutput.writeLong(0);
+                binaryOutput.writeLong(0);
+                binaryOutput.writeByte(0);
+                binaryOutput.write(bodyHash);
+                binaryOutput.close();
+                closed = true;
+                return;
+            }
             String bodyHash = hex(bodyDigest.digest());
             String footer = base("footer", "writer.close")
                     + ",\"status\":\"closed\",\"counts\":" + countsJson()
@@ -109,7 +184,11 @@ public final class LosslessStateWriter implements IStateWriter {
 
     @Override
     public synchronized void snapshot() throws IOException {
-        output.flush();
+        if (binary) {
+            binaryOutput.flush();
+        } else {
+            output.flush();
+        }
     }
 
     @Override
@@ -134,26 +213,141 @@ public final class LosslessStateWriter implements IStateWriter {
 
     private void transition(String callback, TLCState source, TLCState target, short flags, Action action,
                             String predicateLocation, String reachable) {
-        if (action == null || !action.isNamed() || action.getName() == null || action.getName().toString().isBlank()) {
-            unsupported(callback, "callback lacks a stable named Action");
+        final List<Action> resolved;
+        try {
+            resolved = callback.equals("writeState.actionPredicate") ? List.of()
+                    : instanceActions.matching(TLCGlobals.mainChecker == null ? null : TLCGlobals.mainChecker.tool,
+                            action, source, target);
+            if (resolved.stream().anyMatch(candidate -> !candidate.isNamed())) {
+                throw new IllegalArgumentException("callback lacks a stable named Action");
+            }
+        } catch (RuntimeException error) {
+            unsupported(callback, "Action resolution failed: " + error.getMessage());
             return;
         }
-        String actionJson = "{\"name\":" + quote(action.getName().toString())
-                + ",\"location\":" + quote(action.getLocation()) + ",\"named\":true}";
+        if (binary) {
+            try {
+                if (callback.equals("writeState.actionPredicate")) {
+                    if ((flags & IStateWriter.IsNotInModel) != IStateWriter.IsNotInModel
+                            || (flags & IStateWriter.IsSeen) == IStateWriter.IsSeen) {
+                        throw new IllegalArgumentException("invalid excluded transition flags");
+                    }
+                    binaryOutput.writeByte(4);
+                    binaryOutput.writeLong(source.fingerPrint());
+                    binaryOutput.writeLong(target.fingerPrint());
+                    binaryOutput.writeShort(Short.toUnsignedInt(flags));
+                    binaryString(predicateLocation);
+                    binaryExcluded++;
+                    return;
+                }
+                if ((flags & IStateWriter.IsNotInModel) == IStateWriter.IsNotInModel || resolved.isEmpty()) {
+                    throw new IllegalArgumentException("invalid reachable transition");
+                }
+                if ((flags & IStateWriter.IsSeen) != IStateWriter.IsSeen) {
+                    binaryState(target, false);
+                }
+                for (Action resolvedAction : resolved) {
+                    int actionId = binaryAction(action, resolvedAction);
+                    binaryOutput.writeByte(3);
+                    binaryOutput.writeLong(source.fingerPrint());
+                    binaryOutput.writeInt(actionId);
+                    binaryOutput.writeLong(target.fingerPrint());
+                    binaryEdges++;
+                }
+            } catch (IOException error) {
+                throw new UncheckedIOException("cannot append TLC transition", error);
+            }
+            return;
+        }
         String flagsJson = "{\"raw\":" + Integer.toUnsignedString(Short.toUnsignedInt(flags))
                 + ",\"seen\":" + ((flags & IStateWriter.IsSeen) == IStateWriter.IsSeen)
                 + ",\"notInModel\":" + ((flags & IStateWriter.IsNotInModel) == IStateWriter.IsNotInModel) + "}";
-        emit("transition", callback, "\"source\":" + state(source)
-                + ",\"target\":" + state(target)
-                + ",\"action\":" + actionJson
+        boolean referenceTarget = compactGzip && (callback.equals("writeState.actionPredicate")
+                || (flags & IStateWriter.IsSeen) == IStateWriter.IsSeen);
+        emit("transition", callback, "\"source\":" + (compactGzip ? stateReference(source) : state(source))
+                + ",\"target\":" + (referenceTarget ? stateReference(target) : state(target))
+                + ",\"action\":" + action(action)
+                + ",\"resolvedActions\":" + resolved.stream().map(LosslessStateWriter::action)
+                    .collect(Collectors.joining(",", "[", "]"))
                 + ",\"stateFlags\":" + flagsJson
                 + ",\"visualization\":\"none\""
                 + ",\"predicateLocation\":" + predicateLocation
                 + ",\"reachable\":" + quote(reachable));
     }
 
+    private static String action(Action action) {
+        return "{\"name\":" + quote(action.getName().toString())
+                + ",\"location\":" + quote(action.getLocation()) + ",\"named\":" + action.isNamed() + "}";
+    }
+
     private void unsupported(String callback, String reason) {
-        emit("unsupported", callback, "\"reason\":" + quote(reason));
+        if (binary) {
+            try {
+                binaryOutput.writeByte(5);
+                binaryString(callback);
+                binaryString(reason);
+                binaryUnsupported++;
+            } catch (IOException error) {
+                throw new UncheckedIOException("cannot append TLC observation", error);
+            }
+        } else {
+            emit("unsupported", callback, "\"reason\":" + quote(reason));
+        }
+    }
+
+    private void binaryState(TLCState state, boolean initial) throws IOException {
+        long id = state.fingerPrint();
+        binaryOutput.writeByte(2);
+        binaryOutput.writeLong(id);
+        binaryOutput.writeByte(initial ? 1 : 0);
+        byte[] key;
+        var tool = TLCGlobals.mainChecker == null ? null : TLCGlobals.mainChecker.tool;
+        var view = tool == null ? null : tool.getViewSpec();
+        if (view == null) {
+            key = CanonicalBinaryState.encode(state);
+        } else {
+            var evaluated = tool.eval(view, Context.Empty, state);
+            if (!(evaluated instanceof Value)) {
+                throw new IOException("TLC VIEW did not evaluate to a value");
+            }
+            key = CanonicalBinaryState.encodeView((Value) evaluated);
+        }
+        binaryOutput.writeInt(key.length);
+        binaryOutput.write(key);
+        if (view != null) {
+            byte[] representative = CanonicalBinaryState.encode(state);
+            binaryOutput.writeByte(9);
+            binaryOutput.writeLong(id);
+            binaryOutput.writeInt(representative.length);
+            binaryOutput.write(representative);
+        }
+        binaryStates++;
+        if (initial) {
+            binaryInitials++;
+        }
+    }
+
+    private int binaryAction(Action original, Action resolved) throws IOException {
+        String name = original.getName().toString();
+        String location = resolved.getLocation();
+        String key = name + '\0' + location;
+        Integer existing = binaryActions.get(key);
+        if (existing != null) {
+            return existing;
+        }
+        int id = binaryActions.size();
+        binaryActions.put(key, id);
+        binaryOutput.writeByte(1);
+        binaryOutput.writeInt(id);
+        binaryString(name);
+        binaryString(location);
+        return id;
+    }
+
+    private void binaryString(String value) throws IOException {
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        binaryOutput.writeInt(bytes.length);
+        binaryOutput.write(bytes);
     }
 
     private String state(TLCState state) {
@@ -172,6 +366,11 @@ public final class LosslessStateWriter implements IStateWriter {
                 + ",\"level\":" + state.getLevel() + ",\"bindings\":" + bindings + "]}";
     }
 
+    private static String stateReference(TLCState state) {
+        return "{\"fingerprint\":" + quote(Long.toUnsignedString(state.fingerPrint()))
+                + ",\"level\":" + state.getLevel() + "}";
+    }
+
     private void emit(String type, String callback, String fields) {
         ensureOpen();
         String line = base(type, callback) + (fields.isEmpty() ? "}" : "," + fields + "}");
@@ -179,7 +378,6 @@ public final class LosslessStateWriter implements IStateWriter {
             byte[] bytes = (line + "\n").getBytes(StandardCharsets.UTF_8);
             output.write(line);
             output.write('\n');
-            output.flush();
             bodyDigest.update(bytes);
             counts.merge(type, 1, Integer::sum);
             sequence++;
@@ -189,7 +387,7 @@ public final class LosslessStateWriter implements IStateWriter {
     }
 
     private String base(String type, String callback) {
-        return "{\"schema\":\"" + SCHEMA + "\",\"version\":" + VERSION
+        return "{\"schema\":\"" + SCHEMA + "\",\"version\":" + (compactGzip ? 4 : VERSION)
                 + ",\"type\":" + quote(type) + ",\"callback\":" + quote(callback)
                 + ",\"seq\":" + sequence + ",\"runId\":" + quote(runId)
                 + ",\"caseId\":" + quote(caseId);

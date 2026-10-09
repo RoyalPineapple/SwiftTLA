@@ -1,0 +1,121 @@
+import Foundation
+import Testing
+import UpstreamParity
+
+struct FiniteGraphManifestTests {
+  @Test("every declared upstream case has a generated Swift validation path")
+  func requiresNativeScenarioForEveryReferenceCase() throws {
+    let manifest = try JSONDecoder().decode(FiniteGraphManifest.self,
+      from: Data(contentsOf: projectURL("Verification/FiniteGraph/cases.json")))
+    let nativeIDs = Set(try modelValidationScenarios().map(\.id)
+      + assumptionValidationScenarios().map(\.id))
+    let missing = Set(manifest.cases.map(\.id)).subtracting(nativeIDs)
+    #expect(missing.isEmpty, "Missing native cases: \(missing.sorted())")
+  }
+
+  @Test("reference cases reject unknown comparison modes")
+  func rejectsUnknownComparisonMode() throws {
+    let source = try Data(contentsOf: URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent("Verification/FiniteGraph/cases.json"))
+    let text = String(decoding: source, as: UTF8.self)
+      .replacingOccurrences(of: "\"decisive-counterexample\"", with: "\"partial-graph\"")
+    #expect(throws: DecodingError.self) {
+      try JSONDecoder().decode(FiniteGraphManifest.self, from: Data(text.utf8))
+    }
+  }
+
+  @Test("one native model can declare separate reference configurations")
+  func acceptsMultipleConfigurations() throws {
+    let manifest = try decodeCases(ids: ["hour-clock-default", "hour-clock-no-deadlock"])
+    #expect(manifest.cases.map(\.id) == ["hour-clock-default", "hour-clock-no-deadlock"])
+    #expect(manifest.cases.map(\.sourceModel.rawValue) == ["hour-clock", "hour-clock"])
+    #expect(Set(manifest.cases.map(\.configuration)).count == 2)
+  }
+
+  @Test("reference cases reject unregistered and fixture-only models",
+    arguments: ["not-registered", "counter", "selected-checks", "queens-four", "n-queens-four"])
+  func rejectsNonUpstreamSourceModel(sourceModel: String) throws {
+    let path = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent("Verification/FiniteGraph/cases.json")
+    let source = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any])
+    let cases = try #require(source["cases"] as? [[String: Any]])
+    var declaration = try #require(cases.first { $0["sourceModel"] as? String == "hour-clock" })
+    declaration["sourceModel"] = sourceModel
+    #expect(throws: DecodingError.self) {
+      try JSONDecoder().decode(FiniteGraphManifest.Case.self,
+        from: JSONSerialization.data(withJSONObject: declaration))
+    }
+  }
+
+  @Test("case identifiers remain unique across configurations")
+  func rejectsDuplicateCaseIDs() {
+    #expect(throws: EvidenceFormatError.duplicateID(kind: "finite graph case", id: "same")) {
+      try decodeCases(ids: ["same", "same"])
+    }
+  }
+
+  @Test("case identifiers cannot escape output directories or shadow the all selector",
+    arguments: ["", "all", "../outside", "/tmp/outside", "a/b", ".", "..", "a\n", "é"])
+  func rejectsInvalidCaseIDs(id: String) {
+    #expect(throws: FiniteGraphCaseError.invalidIdentifier("case ID")) {
+      try decodeCases(ids: [id])
+    }
+  }
+
+  @Test("a missing case identity is not inferred from its source model")
+  func requiresExplicitCaseID() {
+    #expect(throws: DecodingError.self) {
+      try decodeCases(ids: [nil])
+    }
+  }
+
+  @Test("an assumption-only case requires an explicit expected verdict")
+  func requiresAssumptionExpectation() throws {
+    var declaration = try caseDictionary(id: "sums-even-0")
+    declaration.removeValue(forKey: "assumptionExpectation")
+    #expect(throws: EvidenceFormatError.invalidField(record: "sums-even-0", field: "assumption expectation")) {
+      try JSONDecoder().decode(FiniteGraphManifest.Case.self,
+        from: JSONSerialization.data(withJSONObject: declaration))
+    }
+  }
+
+  @Test("assumption rendering rejects a scenario absent from its model")
+  func rejectsUnknownAssumptionScenarioAtRender() throws {
+    var declaration = try caseDictionary(id: "sums-even-0")
+    declaration["scenario"] = "not-declared"
+    let decoded = try JSONDecoder().decode(FiniteGraphManifest.Case.self,
+      from: JSONSerialization.data(withJSONObject: declaration))
+    #expect(throws: EvidenceFormatError.invalidField(record: "sums-even-0",
+      field: "model-owned assumption scenario")) {
+      try decoded.renderModel()
+    }
+  }
+
+  private func caseDictionary(id: String) throws -> [String: Any] {
+    let path = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent("Verification/FiniteGraph/cases.json")
+    let source = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any])
+    let cases = try #require(source["cases"] as? [[String: Any]])
+    return try #require(cases.first { $0["id"] as? String == id })
+  }
+
+  private func decodeCases(ids: [String?]) throws -> FiniteGraphManifest {
+    let path = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent("Verification/FiniteGraph/cases.json")
+    let source = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any])
+    let cases = try #require(source["cases"] as? [[String: Any]])
+    let original = try #require(cases.first { $0["sourceModel"] as? String == "hour-clock" })
+    let variants = ids.enumerated().map { index, id in
+      var variant = original
+      variant["id"] = id
+      variant["configuration"] = "hour-clock/variant-\(index).cfg"
+      return variant
+    }
+    return try JSONDecoder().decode(FiniteGraphManifest.self,
+      from: JSONSerialization.data(withJSONObject: ["schema": "FiniteGraphCases", "cases": variants]))
+  }
+}

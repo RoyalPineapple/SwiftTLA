@@ -28,8 +28,8 @@ package struct ConsensusModel: Sendable {
         #spec("Consensus") {
             Extends(.finiteSets)
             Extends(.integers)
-            Algorithm("Consensus", fairness: .weak, scoped: { scope in
-                let chosen = scope.sharedVar("chosen", initial: SetExpr<Value>())
+            let Consensus = Algorithm(fairness: .weak, scoped: { scope in
+                let chosen = scope.sharedVar(initial: SetExpr<Value>())
 
                 let choose = Macro {
                     When(chosen.isEmpty)
@@ -50,6 +50,7 @@ package struct ConsensusModel: Sendable {
                 }
                 Eventually("Success", !chosen.isEmpty)
             })
+            Consensus
         }
     }
 }

@@ -3,6 +3,14 @@ import Testing
 import SwiftTLA
 
 struct GeneratedMachineDocumentationTests {
+    @Test("the documented generated export exposes its module and configuration")
+    func generatedExportMatchesGuide() throws {
+        let bundle = try BoundedCounter.render().tlaBundle
+        #expect(bundle.root.name == "BoundedCounter")
+        #expect(bundle.tla.contains("---- MODULE BoundedCounter ----"))
+        #expect(bundle.cfg.contains("SPECIFICATION Spec"))
+    }
+
     @Test("README clock starts from its declared state and rolls into the next minute")
     func readmeClockUsesExplicitInitialState() throws {
         var machine = try ClockModel.makeMachine(
@@ -34,6 +42,23 @@ struct GeneratedMachineDocumentationTests {
             try machine.send(.advance)
         }
         #expect(machine.state == beforeFailure)
+    }
+
+    @Test("a standalone consumer checks its generated machine without parity infrastructure")
+    func checksGeneratedMachineWithoutTLC() throws {
+        var sawAdvance = false
+        let result = try MachineValidator.run(
+            initialMachines: [BoundedCounter.makeMachine()], maximumStates: 10,
+            checking: ModelChecks(properties: [], checkDeadlock: false),
+            stopOnViolation: false) { event in
+                if case .edge(_, .advance, _) = event { sawAdvance = true }
+            }
+        guard case .exhausted = result.completion else {
+            Issue.record("Expected exhaustive native checking")
+            return
+        }
+        #expect(result.states == 2)
+        #expect(sawAdvance)
     }
 
     @Test("generated actor owns the generated machine")

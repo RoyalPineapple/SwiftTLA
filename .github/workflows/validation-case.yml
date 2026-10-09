@@ -1,0 +1,493 @@
+name: Independent Validation Case
+
+on:
+  workflow_call:
+    inputs:
+      case_id:
+        required: true
+        type: string
+      native_enabled:
+        required: true
+        type: boolean
+      upstream_enabled:
+        required: true
+        type: boolean
+      swift_tla_sha:
+        required: true
+        type: string
+      admission_mode:
+        required: true
+        type: string
+      profile_native:
+        required: true
+        type: boolean
+      focused_case:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+  SWIFT_TLA_SHA: ${{ inputs.swift_tla_sha }}
+  ADMISSION_MODE: ${{ inputs.admission_mode }}
+
+jobs:
+  generated-tlc-oracle:
+    name: Generated TLC oracle ${{ inputs.case_id }}
+    if: ${{ inputs.native_enabled }}
+    runs-on: macos-15
+    timeout-minutes: 270
+    env:
+      CASE_ID: ${{ inputs.case_id }}
+      FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          submodules: false
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+      - uses: actions/download-artifact@v5
+        with:
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
+          path: .build/validation-bin
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .build/finite-graph-tools/downloads
+            .build/finite-graph-tools/java-arm64
+            .build/finite-graph-tools/java-x86_64
+          key: tlc-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Verification/FiniteGraph/toolchain.json') }}
+      - name: Prepare pinned TLC without upstream examples
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x .build/validation-bin/tlc-validate
+          ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT" --skip-inputs
+      - name: Resolve validation exploration limit
+        id: exploration-limit
+        run: |
+          maximum_states=$(jq -er --arg id "$CASE_ID" '
+            [.cases[] | select(.id == $id) | .exploration.maximumStateLimit]
+            | if length == 0 then 10000000
+              elif length == 1 then [10000000, .[0]] | max
+              else error("duplicate case ID") end
+            | select(type == "number" and . > 0 and floor == .)
+          ' Verification/FiniteGraph/cases.json)
+          echo "maximum_states=$maximum_states" >> "$GITHUB_OUTPUT"
+          timeout_seconds=$(jq -er --arg id "$CASE_ID" '
+            [.cases[] | select(.id == $id) | .timeoutSeconds]
+            | if length == 0 then 1800
+              elif length == 1 then [1800, .[0]] | max
+              else error("duplicate case ID") end
+            | select(type == "number" and . > 0 and floor == .)
+          ' Verification/FiniteGraph/cases.json)
+          echo "timeout_seconds=$timeout_seconds" >> "$GITHUB_OUTPUT"
+          echo "timeout_minutes=$(( (timeout_seconds + 59) / 60 + 5 ))" >> "$GITHUB_OUTPUT"
+      - name: Identify generated TLC inputs
+        id: oracle-key
+        env:
+          MAXIMUM_STATES: ${{ steps.exploration-limit.outputs.maximum_states }}
+        run: |
+          key=$(.build/validation-bin/tlc-validate oracle cache-key --case "$CASE_ID" --maximum-states "$MAXIMUM_STATES")
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: oracle-cache
+        with:
+          path: .build/validation-evidence/oracle/${{ inputs.case_id }}
+          key: generated-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.oracle-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Sources/UpstreamParity/Conformance/AssumptionValidationEvidence.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift') }}
+      - name: Validate generated TLA with TLC
+        if: steps.oracle-cache.outputs.cache-hit != 'true'
+        timeout-minutes: ${{ fromJSON(steps.exploration-limit.outputs.timeout_minutes) }}
+        env:
+          MAXIMUM_STATES: ${{ steps.exploration-limit.outputs.maximum_states }}
+          SWIFTTLA_ORACLE_TIMEOUT_SECONDS: ${{ steps.exploration-limit.outputs.timeout_seconds }}
+        run: |
+          .build/validation-bin/tlc-validate oracle run --case "$CASE_ID" \
+            --output .build/validation-evidence/oracle --maximum-states "$MAXIMUM_STATES"
+          jq -n --arg key '${{ steps.oracle-key.outputs.key }}' --arg sha "$SWIFT_TLA_SHA" \
+            --arg run "$GITHUB_RUN_ID" '{cacheKey:$key,sourceSHA:$sha,originRunID:$run}' \
+            > ".build/validation-evidence/oracle/$CASE_ID/evidence-origin.json"
+      - name: Require generated TLC evidence
+        env:
+          ORACLE_INPUT_KEY: ${{ steps.oracle-key.outputs.key }}
+        run: |
+          jq -e '(.schema == "swifttla.generated-tlc-oracle" or .schema == "swifttla.tlc-assumption") and .caseID == env.CASE_ID' ".build/validation-evidence/oracle/$CASE_ID/oracle.json"
+          jq -e --arg key "$ORACLE_INPUT_KEY" '.cacheKey == $key and .sourceSHA != "" and .originRunID != ""' ".build/validation-evidence/oracle/$CASE_ID/evidence-origin.json"
+      - uses: actions/cache/save@v4
+        if: steps.oracle-cache.outputs.cache-hit != 'true'
+        with:
+          path: .build/validation-evidence/oracle/${{ inputs.case_id }}
+          key: generated-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.oracle-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Sources/UpstreamParity/Conformance/AssumptionValidationEvidence.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift') }}
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: generated-oracle-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ inputs.case_id }}
+          path: |
+            .build/validation-evidence/oracle/${{ inputs.case_id }}
+            !.build/validation-evidence/oracle/${{ inputs.case_id }}/work/**
+          compression-level: 0
+          include-hidden-files: true
+          if-no-files-found: warn
+          overwrite: true
+
+  dsl-native-parity:
+    name: DSL/native parity ${{ inputs.case_id }}
+    needs: generated-tlc-oracle
+    if: ${{ inputs.native_enabled }}
+    runs-on: macos-15
+    timeout-minutes: 270
+    env:
+      CASE_ID: ${{ inputs.case_id }}
+      FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
+      PROFILE_NATIVE: ${{ inputs.profile_native && 'true' || 'false' }}
+      FOCUSED_CASE: ${{ inputs.focused_case }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          submodules: false
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+      - uses: actions/download-artifact@v5
+        with:
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
+          path: .build/validation-bin
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .build/finite-graph-tools/downloads
+            .build/finite-graph-tools/java-arm64
+            .build/finite-graph-tools/java-x86_64
+          key: tlc-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Verification/FiniteGraph/toolchain.json') }}
+      - name: Prepare pinned TLC without upstream examples
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x .build/validation-bin/tlc-validate
+          ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT" --skip-inputs
+      - name: Resolve validation exploration limit
+        id: exploration-limit
+        run: |
+          maximum_states=$(jq -er --arg id "$CASE_ID" '
+            [.cases[] | select(.id == $id) | .exploration.maximumStateLimit]
+            | if length == 0 then 10000000
+              elif length == 1 then [10000000, .[0]] | max
+              else error("duplicate case ID") end
+            | select(type == "number" and . > 0 and floor == .)
+          ' Verification/FiniteGraph/cases.json)
+          echo "maximum_states=$maximum_states" >> "$GITHUB_OUTPUT"
+          timeout_seconds=$(jq -er --arg id "$CASE_ID" '
+            [.cases[] | select(.id == $id) | .timeoutSeconds]
+            | if length == 0 then 1800
+              elif length == 1 then [1800, .[0]] | max
+              else error("duplicate case ID") end
+            | select(type == "number" and . > 0 and floor == .)
+          ' Verification/FiniteGraph/cases.json)
+          echo "timeout_seconds=$timeout_seconds" >> "$GITHUB_OUTPUT"
+          echo "timeout_minutes=$(( (timeout_seconds + 59) / 60 + 5 ))" >> "$GITHUB_OUTPUT"
+      - name: Identify generated TLC inputs
+        id: oracle-key
+        env:
+          MAXIMUM_STATES: ${{ steps.exploration-limit.outputs.maximum_states }}
+        run: |
+          key=$(.build/validation-bin/tlc-validate oracle cache-key --case "$CASE_ID" --maximum-states "$MAXIMUM_STATES")
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v5
+        with:
+          name: generated-oracle-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ inputs.case_id }}
+          path: .build/validation-evidence/oracle/${{ inputs.case_id }}
+      - name: Validate generated Swift machine
+        timeout-minutes: ${{ fromJSON(steps.exploration-limit.outputs.timeout_minutes) }}
+        env:
+          MAXIMUM_STATES: ${{ steps.exploration-limit.outputs.maximum_states }}
+        run: |
+          set -o pipefail
+          mkdir -p .build/validation-evidence
+          git rev-parse HEAD > .build/validation-evidence/source-sha.txt
+          if [ "$PROFILE_NATIVE" = true ]; then
+            test "$ADMISSION_MODE" = candidate
+            test "$FOCUSED_CASE" = "$CASE_ID"
+            /usr/bin/time -l .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
+              --output .build/validation-evidence/native --maximum-states "$MAXIMUM_STATES" &
+            timed_pid=$!
+            sleep 90
+            native_pid=$(pgrep -P "$timed_pid" -f 'tlc-validate native run' | head -n 1 || true)
+            if [ -z "$native_pid" ]; then
+              wait "$timed_pid" || true
+              echo 'Native checker process was unavailable for sampling' >&2
+              exit 1
+            fi
+            mkdir -p .build/validation-evidence/native-profiles
+            sample_status=0
+            sample "$native_pid" 20 5 \
+              -file ".build/validation-evidence/native-profiles/$CASE_ID.sample.txt" || sample_status=$?
+            native_status=0
+            wait "$timed_pid" || native_status=$?
+            test "$sample_status" -eq 0
+            test "$native_status" -eq 0
+          else
+            /usr/bin/time -l .build/validation-bin/tlc-validate native run --case "$CASE_ID" \
+              --output .build/validation-evidence/native --maximum-states "$MAXIMUM_STATES"
+          fi
+          if [ -f ".build/validation-evidence/native/$CASE_ID/machine.bin.profile.json" ]; then
+            jq -c . ".build/validation-evidence/native/$CASE_ID/machine.bin.profile.json"
+          else
+            jq -c . ".build/validation-evidence/native/$CASE_ID/report.json"
+          fi
+      - name: Require complete generated TLC evidence
+        env:
+          ORACLE_INPUT_KEY: ${{ steps.oracle-key.outputs.key }}
+        run: |
+          jq -e '(.schema == "swifttla.generated-tlc-oracle" or .schema == "swifttla.tlc-assumption") and .caseID == env.CASE_ID' ".build/validation-evidence/oracle/$CASE_ID/oracle.json"
+          jq -e --arg key "$ORACLE_INPUT_KEY" '.cacheKey == $key and .sourceSHA != "" and .originRunID != ""' ".build/validation-evidence/oracle/$CASE_ID/evidence-origin.json"
+      - name: Require exact native and TLC evidence
+        timeout-minutes: 60
+        run: |
+          set -o pipefail
+          /usr/bin/time -l .build/validation-bin/tlc-validate compare run --case "$CASE_ID" \
+            --native .build/validation-evidence/native \
+            --oracle .build/validation-evidence/oracle \
+            --output .build/validation-evidence/comparison
+          jq -e '.result == "exact"' ".build/validation-evidence/comparison/$CASE_ID/comparison.json"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: dsl-native-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.case_id }}
+          path: |
+            .build/validation-evidence
+            !.build/validation-evidence/**/work/**
+            !.build/validation-evidence/oracle/**
+            !.build/validation-evidence/comparison/*/swift/**
+            !.build/validation-evidence/comparison/*/tlc/**
+          include-hidden-files: true
+          if-no-files-found: error
+
+  upstream-parity:
+    name: Upstream TLC parity ${{ inputs.case_id }}
+    needs: generated-tlc-oracle
+    if: ${{ always() && inputs.upstream_enabled && (!inputs.native_enabled || needs.generated-tlc-oracle.result == 'success') }}
+    runs-on: macos-15
+    timeout-minutes: 150
+    env:
+      CASE_ID: ${{ inputs.case_id }}
+      FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
+      FINITE_GRAPH_INPUT_ROOT: ${{ github.workspace }}/.build/finite-graph-tools/inputs
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          submodules: false
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+      - uses: actions/download-artifact@v5
+        with:
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
+          path: .build/validation-bin
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .build/finite-graph-tools/downloads
+            .build/finite-graph-tools/java-arm64
+            .build/finite-graph-tools/java-x86_64
+          key: tlc-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Verification/FiniteGraph/toolchain.json') }}
+      - name: Prepare pinned TLC and reference inputs
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x .build/validation-bin/tlc-validate
+          ./scripts/setup-finite-graph-tools.sh --tool-root "$FINITE_GRAPH_TOOL_ROOT"
+      - name: Record exact source revision
+        run: |
+          mkdir -p .build/validation-evidence
+          git rev-parse HEAD > .build/validation-evidence/source-sha.txt
+      - name: Identify upstream comparison inputs
+        id: upstream-key
+        run: |
+          key=$(.build/validation-bin/tlc-validate upstream cache-key --case "$CASE_ID")
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: upstream-cache
+        with:
+          path: .build/validation-evidence/upstream/${{ inputs.case_id }}
+          # The input key already hashes rendered TLA/CFG, action names, and pinned TLC/bridge inputs.
+          key: upstream-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream-key.outputs.key }}-${{ hashFiles('Sources/UpstreamParity/Conformance/UpstreamTLCParity.swift', 'Sources/UpstreamParity/Conformance/AssumptionValidationEvidence.swift', 'Sources/UpstreamParity/Conformance/GeneratedTLCOracle.swift', 'Sources/UpstreamParity/Conformance/BinaryGraphEvidence.swift', 'Sources/UpstreamParity/Conformance/CanonicalBinaryState.swift', 'Sources/UpstreamParity/Conformance/CompactTLCGraphEvent.swift', 'Sources/UpstreamParity/Conformance/TLCGraphReader.swift', 'Sources/UpstreamParity/Conformance/TLCProcess.swift', 'Sources/UpstreamParity/Conformance/TLCTraceParser.swift', 'Tools/TLCGraphBridge/**/*.java') }}
+          restore-keys: upstream-tlc-${{ runner.os }}-${{ runner.arch }}-${{ steps.upstream-key.outputs.key }}-
+      - name: Verify reusable upstream TLC evidence
+        id: upstream-reuse
+        env:
+          CACHE_HIT: ${{ steps.upstream-cache.outputs.cache-hit }}
+          UPSTREAM_INPUT_KEY: ${{ steps.upstream-key.outputs.key }}
+        run: |
+          set -euo pipefail
+          [[ "$CASE_ID" =~ ^[a-z0-9_-]+$ ]]
+          cached=".build/validation-evidence/upstream/$CASE_ID"
+          reuse=false
+          if [ "$CACHE_HIT" = true ]; then
+            reuse=true
+          elif [ "$CACHE_HIT" = false ] && [ -f "$cached/evidence-origin.json" ]; then
+            origin=$(jq -er --arg key "$UPSTREAM_INPUT_KEY" 'select(.cacheKey == $key) | .sourceSHA | select(test("^[0-9a-f]{40}$"))' "$cached/evidence-origin.json") || origin=""
+            # A prefix hit is reusable only when the retained TLC and comparator code is unchanged.
+            if [ -n "$origin" ] &&
+                { git cat-file -e "$origin^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$origin"; } &&
+                git diff --quiet "$origin" HEAD -- Sources/UpstreamParity/Conformance Sources/TLCValidate Tools/TLCGraphBridge; then
+              reuse=true
+            fi
+          fi
+          if [ "$reuse" = false ] && [ -d "$cached" ]; then
+            stale=$(mktemp -d "$RUNNER_TEMP/stale-upstream.XXXXXX")
+            mv "$cached" "$stale/$CASE_ID"
+            rmdir "$(dirname "$cached")"
+          fi
+          echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
+      - name: Identify reusable generated TLC oracle
+        if: inputs.native_enabled
+        id: oracle-key
+        run: |
+          maximum_states=$(jq -er --arg id "$CASE_ID" '
+            [.cases[] | select(.id == $id) | .exploration.maximumStateLimit]
+            | if length == 0 then 10000000
+              elif length == 1 then [10000000, .[0]] | max
+              else error("duplicate case ID") end
+            | select(type == "number" and . > 0 and floor == .)
+          ' Verification/FiniteGraph/cases.json)
+          key=$(.build/validation-bin/tlc-validate oracle cache-key \
+            --case "$CASE_ID" --maximum-states "$maximum_states")
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v5
+        if: inputs.native_enabled
+        id: oracle-download
+        with:
+          name: generated-oracle-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ inputs.case_id }}
+          path: .build/validation-evidence/oracle/${{ inputs.case_id }}
+      - name: Restore a cached comparison's generated graph from its oracle
+        if: steps.upstream-reuse.outputs.reuse == 'true' && inputs.native_enabled
+        env:
+          ORACLE_INPUT_KEY: ${{ steps.oracle-key.outputs.key }}
+        run: |
+          generated=".build/validation-evidence/upstream/$CASE_ID/generated-graph"
+          oracle=".build/validation-evidence/oracle/$CASE_ID"
+          if jq -e '.graphCompared == true' \
+              ".build/validation-evidence/upstream/$CASE_ID/comparison.json" >/dev/null &&
+              [ ! -f "$generated/graph-events.bin.gz" ] &&
+              [ ! -f ".build/validation-evidence/upstream/$CASE_ID/generated-full-graph/graph-events.bin.gz" ]; then
+            test -f "$generated/oracle.json"
+            test -f "$oracle/tlc-graph/graph-events.bin.gz"
+            test ! -L "$oracle/tlc-graph/graph-events.bin.gz"
+            cmp -s "$generated/oracle.json" "$oracle/oracle.json"
+            jq -e --arg key "$ORACLE_INPUT_KEY" '.cacheKey == $key' "$oracle/evidence-origin.json"
+            ln "$oracle/tlc-graph/graph-events.bin.gz" "$generated/graph-events.bin.gz" ||
+              cp "$oracle/tlc-graph/graph-events.bin.gz" "$generated/graph-events.bin.gz"
+          fi
+      - name: Compare generated and upstream TLA through TLC
+        if: steps.upstream-reuse.outputs.reuse != 'true'
+        timeout-minutes: 120
+        run: |
+          set -euo pipefail
+          oracle=""
+          if [ "${{ steps.oracle-download.outcome }}" = success ]; then
+            oracle_candidate=".build/validation-evidence/oracle/$CASE_ID"
+            jq -e --arg key '${{ steps.oracle-key.outputs.key }}' \
+              '.cacheKey == $key and (.sourceSHA | test("^[0-9a-f]{40}$")) and .originRunID != ""' \
+              "$oracle_candidate/evidence-origin.json"
+            if jq -e '.schema == "swifttla.generated-tlc-oracle" and .graphComplete == true' \
+                "$oracle_candidate/oracle.json" >/dev/null; then
+              oracle="$oracle_candidate"
+            fi
+          fi
+          df -h .
+          (
+            minutes=0
+            while sleep 60; do
+              minutes=$((minutes + 1))
+              df -Pk . | tail -1
+              du -sk ".build/validation-evidence/upstream/$CASE_ID" 2>/dev/null || true
+              if [ "$minutes" -eq 30 ]; then
+                tlc_pid=$(pgrep -f 'tlc2.TLC' | head -n 1 || true)
+                if [ -n "$tlc_pid" ]; then
+                  mkdir -p .build/validation-evidence/upstream-profiles
+                  sample "$tlc_pid" 20 5 \
+                    -file ".build/validation-evidence/upstream-profiles/$CASE_ID.sample.txt" || true
+                fi
+              fi
+            done
+          ) &
+          monitor_pid=$!
+          trap 'kill "$monitor_pid" 2>/dev/null || true; df -h .; du -sh ".build/validation-evidence/upstream/$CASE_ID" 2>/dev/null || true' EXIT
+          if [ -n "$oracle" ]; then
+            .build/validation-bin/tlc-validate upstream run --case "$CASE_ID" \
+              --output .build/validation-evidence/upstream --oracle "$oracle"
+          else
+            .build/validation-bin/tlc-validate upstream run --case "$CASE_ID" \
+              --output .build/validation-evidence/upstream
+          fi
+          jq -n --arg key '${{ steps.upstream-key.outputs.key }}' --arg sha "$SWIFT_TLA_SHA" \
+            --arg run "$GITHUB_RUN_ID" '{cacheKey:$key,sourceSHA:$sha,originRunID:$run}' \
+            > ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"
+      - name: Recompare retained complete TLC evidence
+        if: steps.upstream-reuse.outputs.reuse == 'true'
+        run: .build/validation-bin/tlc-validate upstream recompare --case "$CASE_ID" --evidence .build/validation-evidence/upstream
+      - name: Attach model-owned check coverage
+        run: .build/validation-bin/tlc-validate upstream annotate --case "$CASE_ID" --evidence .build/validation-evidence/upstream
+      - name: Require exact upstream evidence
+        env:
+          UPSTREAM_INPUT_KEY: ${{ steps.upstream-key.outputs.key }}
+        run: |
+          jq -e '(.schema == "swifttla.upstream-tlc-parity" or .schema == "swifttla.assumption-upstream-comparison") and .caseID == env.CASE_ID and .result == "exact"' ".build/validation-evidence/upstream/$CASE_ID/comparison.json"
+          jq -e 'if .schema == "swifttla.upstream-tlc-parity" then (.coverage.selectedProperties | type == "array") and (.coverage.omittedProperties | type == "array") and .coverage.checksDeadlock == .deadlockSelected else true end' ".build/validation-evidence/upstream/$CASE_ID/comparison.json"
+          jq -e --arg key "$UPSTREAM_INPUT_KEY" '.cacheKey == $key and .sourceSHA != "" and .originRunID != ""' ".build/validation-evidence/upstream/$CASE_ID/evidence-origin.json"
+      - name: Retain one copy of a reused complete oracle graph
+        run: |
+          oracle=".build/validation-evidence/oracle/$CASE_ID"
+          generated=".build/validation-evidence/upstream/$CASE_ID/generated-graph"
+          if [ -f "$oracle/tlc-graph/graph-events.bin.gz" ] &&
+              [ -f "$generated/graph-events.bin.gz" ] &&
+              [ -f "$generated/oracle.json" ] &&
+              [ ! -d ".build/validation-evidence/upstream/$CASE_ID/generated-full-graph" ] &&
+              cmp -s "$oracle/oracle.json" "$generated/oracle.json" &&
+              { [ "$oracle/tlc-graph/graph-events.bin.gz" -ef "$generated/graph-events.bin.gz" ] ||
+                cmp -s "$oracle/tlc-graph/graph-events.bin.gz" "$generated/graph-events.bin.gz"; }; then
+            rm -- "$generated/graph-events.bin.gz"
+          fi
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: upstream-parity-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.case_id }}
+          path: |
+            .build/validation-evidence
+            !.build/validation-evidence/**/work/**
+            !.build/validation-evidence/oracle/**
+            !.build/validation-evidence/upstream/*/generated-graph-spool/**
+            !.build/validation-evidence/upstream/*/reference-graph-spool/**
+          include-hidden-files: true
+          if-no-files-found: error
+
+  case-result:
+    name: Case validation ${{ inputs.case_id }}
+    needs: [generated-tlc-oracle, dsl-native-parity, upstream-parity]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      NATIVE_ENABLED: ${{ inputs.native_enabled }}
+      UPSTREAM_ENABLED: ${{ inputs.upstream_enabled }}
+      ORACLE_RESULT: ${{ needs.generated-tlc-oracle.result }}
+      NATIVE_RESULT: ${{ needs.dsl-native-parity.result }}
+      UPSTREAM_RESULT: ${{ needs.upstream-parity.result }}
+    steps:
+      - name: Require both independent comparisons
+        run: |
+          if [ "$NATIVE_ENABLED" = true ]; then
+            test "$ORACLE_RESULT" = success
+            test "$NATIVE_RESULT" = success
+          else
+            test "$ORACLE_RESULT" = skipped
+            test "$NATIVE_RESULT" = skipped
+          fi
+          if [ "$UPSTREAM_ENABLED" = true ]; then
+            test "$UPSTREAM_RESULT" = success
+          else
+            test "$UPSTREAM_RESULT" = skipped
+          fi

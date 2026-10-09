@@ -3,11 +3,42 @@ import SwiftTLA
 import UpstreamParity
 
 struct SymmetryOrbitConformanceTests {
+  @Test("Orbit permutation preserves record field names while renaming member values")
+  func recordFieldNamesRemainFixed() throws {
+    let permutation = try SymmetryPermutation(constantMapping: ["A": "B", "B": "A"])
+    let state = CanonicalState(bindings: ["payload": .record(["A": .constant("B")])])
+    #expect(try permutation.apply(state).bindings["payload"] == .record(["A": .constant("A")]))
+  }
+
+  @Test("Complete symmetry graphs retain deadlock findings without treating them as truncation")
+  func completeDeadlockGraphsAgree() throws {
+    let states = [state("A"), state("B")]
+    let raw = try run(states: states, edges: [], outcome: .deadlock(states[0].key))
+    let tlc = try run(states: [states[1]], edges: [], outcome: .deadlock(states[1].key))
+    if case .exact = try compareSymmetryOrbits(comparisonInput(
+      swiftRaw: raw, tlcRaw: raw, tlcReduced: tlc)) {} else {
+      Issue.record("Expected complete graph and deadlock agreement")
+    }
+    let unchecked = try run(states: [states[1]], edges: [])
+    guard case .difference(let differences) = try compareSymmetryOrbits(comparisonInput(
+      swiftRaw: raw, tlcRaw: raw, tlcReduced: unchecked)) else {
+      Issue.record("A missing deadlock result must differ")
+      return
+    }
+    #expect(differences.map(\.kind) == [.checkOutcome])
+    let falseDeadlock = try run(states: states, outcome: .deadlock(states[0].key))
+    guard case .difference(let invalid) = try compareSymmetryOrbits(comparisonInput(
+      swiftRaw: falseDeadlock, tlcRaw: raw, tlcReduced: tlc)) else {
+      Issue.record("A state with an outgoing edge cannot witness a deadlock")
+      return
+    }
+    #expect(invalid.map(\.kind) == [.incompleteRun])
+  }
+
   @Test("A reduced representative outside its declared orbit is rejected")
   func reducedRepresentativeOutsideOrbitIsRejected() throws {
     let input = try fixture(reducedStates: [state("C")])
     #expect(throws: SymmetryOrbitError.reducedStateOutsideOrbit(
-      source: .swift,
       stateID: state("C").key.canonicalEncoding
     )) {
       _ = try compareSymmetryOrbits(input)
@@ -31,14 +62,54 @@ struct SymmetryOrbitConformanceTests {
     #expect(comparison.quotientTransitions.count == 1)
   }
 
-  @Test("Different executable representatives of the same orbit agree")
-  func differentExecutableRepresentativesAgree() throws {
-    let input = try fixture(reducedStates: [state("A")], tlcReducedStates: [state("B")])
+  @Test("A declared symmetry cannot hide a non-equivariant transition")
+  func asymmetricRawTransitionCannotPassQuotientComparison() throws {
+    let states = [state("A"), state("B")]
+    let rawEdge = CanonicalEdge(source: states[0].key, action: "step", target: states[1].key)
+    let raw = try GraphRun(
+      isComplete: true,
+      graph: CanonicalGraph(initialStates: states, states: states, edges: [rawEdge]),
+      observableActions: ["step"], outcome: .noViolation
+    )
+    let reduced = try run(states: [states[0]], edges: [CanonicalEdge(
+      source: states[0].key, action: "step", target: states[0].key
+    )])
+    let input = try comparisonInput(swiftRaw: raw, tlcRaw: raw, tlcReduced: reduced)
+    guard case .difference(let differences) = try compareSymmetryOrbits(input) else {
+      Issue.record("A quotient match must not establish an invalid symmetry")
+      return
+    }
+    #expect(differences.map(\.kind) == [.unsoundSymmetry])
+    #expect(differences[0].detail.contains("does not preserve transition"))
+  }
+
+  @Test("A declared symmetry must preserve the complete initial-state set")
+  func asymmetricInitialStatesCannotPassQuotientComparison() throws {
+    let states = [state("A"), state("B")]
+    let edges = [
+      CanonicalEdge(source: states[0].key, action: "step", target: states[1].key),
+      CanonicalEdge(source: states[1].key, action: "step", target: states[0].key)
+    ]
+    let raw = try run(states: states, edges: edges, initialStates: [states[0]])
+    let reduced = try run(states: [states[0]], edges: [CanonicalEdge(
+      source: states[0].key, action: "step", target: states[0].key
+    )])
+    let input = try comparisonInput(swiftRaw: raw, tlcRaw: raw, tlcReduced: reduced)
+    guard case .difference(let differences) = try compareSymmetryOrbits(input) else {
+      Issue.record("A quotient match must not hide an asymmetric initial state")
+      return
+    }
+    #expect(differences.map(\.kind) == [.unsoundSymmetry])
+    #expect(differences[0].detail.contains("non-initial state"))
+  }
+
+  @Test("A noncanonical TLC representative preserves the same orbit")
+  func noncanonicalTLCRepresentativePreservesOrbit() throws {
+    let input = try fixture(reducedStates: [state("B")])
     guard case .exact(let comparison) = try compareSymmetryOrbits(input) else {
       Issue.record("Expected exact orbit comparison")
       return
     }
-    #expect(comparison.orbits[0].swiftExecutableRepresentative == state("A").key.canonicalEncoding)
     #expect(comparison.orbits[0].tlcExecutableRepresentative == state("B").key.canonicalEncoding)
   }
 
@@ -48,7 +119,6 @@ struct SymmetryOrbitConformanceTests {
     let reducedStates = [state("A")]
     let input = try comparisonInput(
       swiftRaw: run(states: rawStates),
-      swiftReduced: run(states: reducedStates),
       tlcRaw: run(states: [state("A")]),
       tlcReduced: run(states: reducedStates)
     )
@@ -68,7 +138,6 @@ struct SymmetryOrbitConformanceTests {
     ])
     let input = try comparisonInput(
       swiftRaw: swiftRaw,
-      swiftReduced: run(states: [state("A")]),
       tlcRaw: tlcRaw,
       tlcReduced: run(states: [state("A")])
     )
@@ -83,8 +152,7 @@ struct SymmetryOrbitConformanceTests {
   func incompleteExplorationIsStructured() throws {
     let states = [state("A"), state("B")]
     let input = try comparisonInput(
-      swiftRaw: run(states: states, outcome: .incomplete(reason: "state limit")),
-      swiftReduced: run(states: [state("A")]),
+      swiftRaw: run(states: states, outcome: .incomplete(reason: "state limit"), isComplete: false),
       tlcRaw: run(states: states),
       tlcReduced: run(states: [state("A")])
     )
@@ -98,11 +166,19 @@ struct SymmetryOrbitConformanceTests {
   @Test("Reduced initial states must represent the raw initial orbits")
   func reducedInitialStateDifferenceIsStructured() throws {
     let rawStates = [state("A"), state("B"), state("Z")]
+    let rawEdges = [
+      CanonicalEdge(source: rawStates[0].key, action: "step", target: rawStates[1].key),
+      CanonicalEdge(source: rawStates[1].key, action: "step", target: rawStates[0].key),
+      CanonicalEdge(source: rawStates[2].key, action: "step", target: rawStates[2].key)
+    ]
+    let reducedEdges = [
+      CanonicalEdge(source: rawStates[2].key, action: "step", target: rawStates[2].key),
+      CanonicalEdge(source: rawStates[0].key, action: "step", target: rawStates[0].key)
+    ]
     let input = try comparisonInput(
-      swiftRaw: run(states: rawStates),
-      swiftReduced: run(states: [state("Z"), state("A")]),
-      tlcRaw: run(states: rawStates),
-      tlcReduced: run(states: [state("A"), state("Z")])
+      swiftRaw: run(states: rawStates, edges: rawEdges, initialStates: Array(rawStates.prefix(2))),
+      tlcRaw: run(states: rawStates, edges: rawEdges, initialStates: Array(rawStates.prefix(2))),
+      tlcReduced: run(states: [rawStates[2], rawStates[0]], edges: reducedEdges)
     )
     guard case .difference(let differences) = try compareSymmetryOrbits(input) else {
       Issue.record("Expected a structured difference")
@@ -117,13 +193,12 @@ struct SymmetryOrbitConformanceTests {
     let reducedState = state("A")
     let input = try comparisonInput(
       swiftRaw: run(states: rawStates),
-      swiftReduced: run(states: [reducedState], edges: [CanonicalEdge(
+      tlcRaw: run(states: rawStates),
+      tlcReduced: run(states: [reducedState], edges: [CanonicalEdge(
         source: reducedState.key,
         action: "other",
         target: reducedState.key
-      )]),
-      tlcRaw: run(states: rawStates),
-      tlcReduced: run(states: [reducedState])
+      )])
     )
     guard case .difference(let differences) = try compareSymmetryOrbits(input) else {
       Issue.record("Expected a structured difference")
@@ -183,7 +258,6 @@ struct SymmetryOrbitConformanceTests {
     )]
     let input = try comparisonInput(
       swiftRaw: run(states: rawStates, edges: rawEdges),
-      swiftReduced: run(states: [reducedState], edges: reducedEdges),
       tlcRaw: run(states: rawStates, edges: rawEdges),
       tlcReduced: run(states: [reducedState], edges: reducedEdges)
     )
@@ -203,7 +277,6 @@ struct SymmetryOrbitConformanceTests {
     ]
     let input = try comparisonInput(
       swiftRaw: run(states: states, edges: rawEdges),
-      swiftReduced: run(states: [states[0]], edges: [rawEdges[0]]),
       tlcRaw: run(states: states, edges: rawEdges),
       tlcReduced: run(states: [states[1]], edges: [rawEdges[1]]),
       renderedActions: nestedChooseActions()
@@ -226,10 +299,6 @@ struct SymmetryOrbitConformanceTests {
     ]
     let input = try comparisonInput(
       swiftRaw: run(states: states, edges: rawEdges),
-      swiftReduced: run(states: [states[0]], edges: [
-        CanonicalEdge(source: states[0].key, action: "Choose__0", target: states[0].key),
-        CanonicalEdge(source: states[0].key, action: "Choose__1", target: states[0].key)
-      ]),
       tlcRaw: run(states: states, edges: rawEdges),
       tlcReduced: run(states: [states[1]], edges: [
         CanonicalEdge(source: states[1].key, action: "Choose__1", target: states[1].key),
@@ -252,7 +321,6 @@ struct SymmetryOrbitConformanceTests {
     let reduced = try run(states: [states[1]], edges: [edge])
     let input = try comparisonInput(
       swiftRaw: rawRun,
-      swiftReduced: reduced,
       tlcRaw: rawRun,
       tlcReduced: reduced,
       renderedActions: [nestedChooseActions()[0]]
@@ -282,36 +350,43 @@ struct SymmetryOrbitConformanceTests {
   private func run(
     states: [CanonicalState],
     edges: [CanonicalEdge]? = nil,
-    outcome: GraphRunOutcome = .exhaustiveSuccess
-  ) throws -> CompletedGraphRun {
+    initialStates: [CanonicalState]? = nil,
+    outcome: GraphRunOutcome = .noViolation,
+    isComplete: Bool = true
+  ) throws -> GraphRun {
     let edges = edges ?? (states.count > 1
       ? [CanonicalEdge(source: states[0].key, action: "step", target: states[1].key)]
       : [CanonicalEdge(source: states[0].key, action: "step", target: states[0].key)])
-    return try CompletedGraphRun(
-      graph: CanonicalGraph(initialStates: [states[0]], states: states, edges: edges),
+    return try GraphRun(
+      isComplete: isComplete,
+      graph: CanonicalGraph(initialStates: initialStates ?? states, states: states, edges: edges),
       observableActions: Set(edges.map(\.action)),
       outcome: outcome
     )
   }
 
   private func fixture(
-    reducedStates: [CanonicalState],
-    tlcReducedStates: [CanonicalState]? = nil
+    reducedStates: [CanonicalState]
   ) throws -> SymmetryOrbitComparisonInput {
     let rawStates = [state("A"), state("B")]
+    let rawEdges = [
+      CanonicalEdge(source: rawStates[0].key, action: "step", target: rawStates[1].key),
+      CanonicalEdge(source: rawStates[1].key, action: "step", target: rawStates[0].key)
+    ]
+    let reducedEdges = [CanonicalEdge(
+      source: reducedStates[0].key, action: "step", target: reducedStates[0].key
+    )]
     return try comparisonInput(
-      swiftRaw: run(states: rawStates),
-      swiftReduced: run(states: reducedStates),
-      tlcRaw: run(states: rawStates),
-      tlcReduced: run(states: tlcReducedStates ?? reducedStates)
+      swiftRaw: run(states: rawStates, edges: rawEdges),
+      tlcRaw: run(states: rawStates, edges: rawEdges),
+      tlcReduced: run(states: reducedStates, edges: reducedEdges)
     )
   }
 
   private func comparisonInput(
-    swiftRaw: CompletedGraphRun,
-    swiftReduced: CompletedGraphRun,
-    tlcRaw: CompletedGraphRun,
-    tlcReduced: CompletedGraphRun,
+    swiftRaw: GraphRun,
+    tlcRaw: GraphRun,
+    tlcReduced: GraphRun,
     renderedActions: [RenderedAction] = [
       RenderedAction(sourceName: "step", arguments: [], renderedName: "step")
     ]
@@ -319,7 +394,6 @@ struct SymmetryOrbitConformanceTests {
     try SymmetryOrbitComparisonInput(
       caseID: "scope-2",
       swiftRaw: swiftRaw,
-      swiftReduced: swiftReduced,
       tlcRaw: tlcRaw,
       tlcReduced: tlcReduced,
       renderedActions: renderedActions,

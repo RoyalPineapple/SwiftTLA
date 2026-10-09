@@ -2,6 +2,20 @@
 import Testing
 
 @Suite struct FunctionUpdateDomainTests {
+    @Test("EXCEPT evaluates the replacement before validating the function and then the key")
+    func updateFailureOrder() {
+        let failure = StateExpr.divide(.int(1), .int(0))
+        #expect(throws: EvalError.divisionByZero) {
+            try compiledValue(.except(.int(1), .int(0), failure))
+        }
+        #expect(throws: EvalError.expected(.function, actual: [.integer(1)])) {
+            try compiledValue(.except(.int(1), failure, .int(2)))
+        }
+        #expect(throws: EvalError.divisionByZero) {
+            try compiledValue(.except(.value(.function([:])), failure, .int(2)))
+        }
+    }
+
     @Test("EXCEPT replaces function values without extending the domain")
     func functionUpdates() throws {
         let original = TLAValue.function([.int(1): .int(10)])

@@ -1,4 +1,6 @@
+@testable import SwiftTLAPlugin
 @testable import SwiftTLA
+@testable import UpstreamParity
 import SwiftTLAMacros
 import SwiftParser
 import SwiftSyntax
@@ -7,6 +9,28 @@ import Foundation
 
 private func parseExpression(_ source: String) throws -> ExprSyntax {
     try #require(Parser.parse(source: source).statements.first?.item.as(ExprSyntax.self))
+}
+
+private struct DecodedLiteral: TLAValueType {
+    let number: Int
+    let decodingID = UUID()
+    let invalid: Bool
+
+    init(_ number: Int, invalid: Bool = false) {
+        self.number = number
+        self.invalid = invalid
+    }
+
+    init?(formalValue: TLAValue) {
+        guard case .int(let number) = formalValue else { return nil }
+        self.init(number, invalid: number < 0)
+    }
+
+    static var defaultValue: Self { Self(0) }
+    var tlaValue: TLAValue { .int(number) }
+    var sourceIssue: SourceModelIssue? {
+        invalid ? .finiteDomainValue(type: "DecodedLiteral", value: String(number)) : nil
+    }
 }
 
 private enum InvalidLiteralDomain: String, CaseIterable, FiniteTLAValueDomain {
@@ -39,39 +63,14 @@ private enum PartialFiniteDomain: String, FiniteTLAValueDomain {
     static let finiteValues: [Self] = [.first]
 }
 
-private struct InvalidLiteralFields {
-    let count: Int
-    let enabled: Bool
-    let unlisted: Int
-}
-
-private enum InvalidLiteralSchema: TLARecordSchema {
-    typealias Fields = InvalidLiteralFields
-
-    static func fieldName<Value>(for field: KeyPath<InvalidLiteralFields, Value>) -> String? {
-        let key = field as AnyKeyPath
-        if key == \InvalidLiteralFields.count { return "count" }
-        if key == \InvalidLiteralFields.enabled { return "enabled" }
-        return nil
-    }
-
-    static let count = field(\InvalidLiteralFields.count)
-    static let enabled = field(\InvalidLiteralFields.enabled)
-    static let unlisted = field(\InvalidLiteralFields.unlisted)
-    static let fields = [
-        TLARecordFieldDeclaration(count, default: 0),
-        TLARecordFieldDeclaration(enabled, default: false)
-    ]
-}
-
 @TLAModel
 private struct TypedCollectionGeneratedModel {
     enum Step: String, CaseIterable { case keepEvenSquares }
 
     static var spec: TLASpec {
         #spec("TypedCollectionGeneratedModel") { scope in
-            Algorithm("TypedCollectionGeneratedModel", scoped: { algorithm in
-                let values = algorithm.sharedVar("values", initial: IntRange(1, through: 4))
+            let typedCollectionGeneratedModel = Algorithm(label: "TypedCollectionGeneratedModel", scoped: { algorithm in
+                let values = algorithm.sharedVar(_name: "values", initial: IntRange(1, through: 4))
                 Do(Step.keepEvenSquares) {
                     Assign(values, to:
                         values.expr
@@ -80,40 +79,37 @@ private struct TypedCollectionGeneratedModel {
                     )
                 }
             })
+            typedCollectionGeneratedModel
         }
     }
 }
 
 @TLAModel
 private struct TypedQuantifierGeneratedModel {
-    enum Step: String, CaseIterable { case findEven }
+    enum Step: String, CaseIterable { case findEven, allPositive, emptyAll, emptyAny }
 
     static var spec: TLASpec {
         #spec("TypedQuantifierGeneratedModel") { scope in
-            Algorithm("TypedQuantifierGeneratedModel", scoped: { algorithm in
-                let result = algorithm.sharedVar("result", initial: false)
+            let typedQuantifierGeneratedModel = Algorithm(label: "TypedQuantifierGeneratedModel", scoped: { algorithm in
+                let result = algorithm.sharedVar(_name: "result", initial: false)
                 Do(Step.findEven) {
                     Assign(result, to: Exists(in: IntRange(1, through: 4)) { value in
                         value.expr % 2 == 0
                     })
                 }
+                Do(Step.allPositive) {
+                    Assign(result, to: ForAll(in: IntRange(1, through: 4)) { value in
+                        value.expr > 0
+                    })
+                }
+                Do(Step.emptyAll) {
+                    Assign(result, to: ForAll(in: IntRange(2, through: 1)) { value in value.expr < 0 })
+                }
+                Do(Step.emptyAny) {
+                    Assign(result, to: Exists(in: IntRange(2, through: 1)) { value in value.expr >= 0 })
+                }
             })
-        }
-    }
-}
-
-@TLAModel
-private struct NonEmptySubsetGeneratedModel {
-    enum Step: String, CaseIterable { case keep }
-
-    static var spec: TLASpec {
-        #spec("NonEmptySubsetGeneratedModel") {
-            Algorithm("NonEmptySubsetGeneratedModel", scoped: { scope in
-                let selectedKeys = scope.sharedVar("selectedKeys", in: NonEmptySubsets(
-                    of: SetExpr<Int>.literal(1, 2)
-                ))
-                Do(Step.keep) { Assign(selectedKeys, to: selectedKeys.expr) }
-            })
+            typedQuantifierGeneratedModel
         }
     }
 }
@@ -124,12 +120,12 @@ private struct ZeroBasedSequenceGeneratedModel {
 
     static var spec: TLASpec {
         #spec("ZeroBasedSequenceGeneratedModel") {
-            Algorithm("ZeroBasedSequenceGeneratedModel", scoped: { scope in
-                let input = scope.sharedVar("input", in: ZeroBasedSequences(
+            let zeroBasedSequenceGeneratedModel = Algorithm(label: "ZeroBasedSequenceGeneratedModel", scoped: { scope in
+                let input = scope.sharedVar(_name: "input", in: ZeroBasedSequences(
                     of: SetExpr<Int>.literal(0, 1),
                     lengths: 1...2
                 ))
-                let table = scope.sharedVar("table", initial: ZeroBasedSequence<Int>.filled(
+                let table = scope.sharedVar(_name: "table", initial: ZeroBasedSequence<Int>.filled(
                     length: input.count * 2 + 1,
                     with: -1
                 ))
@@ -138,31 +134,237 @@ private struct ZeroBasedSequenceGeneratedModel {
                     Assign(table, to: table.updating(0, to: input[0]))
                 }
             })
+            zeroBasedSequenceGeneratedModel
+        }
+    }
+}
+
+@TLAModel
+private struct ContextualCollectionModel {
+    enum Key: String, CaseIterable, FiniteTLAValueDomain {
+        case first = "key-first", second = "key-second"
+        static var defaultValue: Self { .first }
+        static let finiteValues = allCases
+    }
+    enum Entry: String, CaseIterable, FiniteTLAValueDomain {
+        case first = "entry-first", second = "entry-second"
+        static var defaultValue: Self { .first }
+        static let finiteValues = allCases
+    }
+    enum Step: String, CaseIterable { case update, read }
+
+    static var spec: TLASpec {
+        #spec("ContextualCollectionModel") {
+            let contextualCollectionModel = Algorithm(label: "ContextualCollectionModel", scoped: { scope in
+                let table = scope.sharedVar(_name: "table", initial: Function<Key, Entry>.literal(
+                    (Key.first, Entry.first), (Key.second, Entry.first)))
+                let selected: SharedVariable<Entry> = scope.sharedVar(_name: "selected", initial: .first)
+                Do(Step.update, when: selected == .first) {
+                    Assign(table, to: table.updating(.first) { current in
+                        If(current == .first, then: .second, else: current)
+                    })
+                }
+                Do(Step.read) {
+                    Assign(selected, to: table.updating(.second, to: .second)[.first])
+                }
+            })
+            contextualCollectionModel
         }
     }
 }
 
 @TLAModel
 private struct FoldGeneratedModel {
-    enum Step: String, CaseIterable { case sum }
+    enum Step: String, CaseIterable { case sum, sumFunction }
 
     static var spec: TLASpec {
         #spec("FoldGeneratedModel") {
             Import(FunctionsModule.module)
-            Algorithm("FoldGeneratedModel", scoped: { scope in
-                let values = scope.sharedVar("values", initial: TupleExpr<Int>.literal(1, 2, 3))
-                let total = scope.sharedVar("total", initial: 0)
+            let foldGeneratedModel = Algorithm(label: "FoldGeneratedModel", scoped: { scope in
+                let values = scope.sharedVar(_name: "values", initial: TupleExpr<Int>.literal(1, 2, 3))
+                let total = scope.sharedVar(_name: "total", initial: 0)
+                let function = scope.sharedVar(initial: [0: 2, 1: -3, 2: 4])
+                let functionTotal = scope.sharedVar(initial: 0)
                 Do(Step.sum) {
                     Assign(total, to: Fold(values.expr, startingWith: 0) { element, accumulated in
                         element + accumulated
                     })
                 }
+                Do(Step.sumFunction) {
+                    Assign(functionTotal, to: Sum(function, over: IntRange(0, through: 2)))
+                }
             })
+            foldGeneratedModel
         }
     }
 }
 
 @Suite(.serialized) struct TypedCollectionOperatorTests {
+    @Test("Collection values retain typed elements without decoding them again")
+    func collectionElementsDecodeOnce() throws {
+        let tuple = try #require(TupleExpr<DecodedLiteral>(formalValue: .tuple([.int(1), .int(2)])))
+        let tupleIDs = tuple.elements.map(\.decodingID)
+        #expect(tuple.elements.map(\.decodingID) == tupleIDs)
+        #expect(tuple.tlaValue == .tuple([.int(1), .int(2)]))
+
+        let first = DecodedLiteral(1)
+        let set = SetExpr(first, DecodedLiteral(1), DecodedLiteral(2))
+        #expect(set.elements.count == 2)
+        #expect(set.elements.contains { $0.decodingID == first.decodingID })
+        let decoded = try #require(SetExpr<DecodedLiteral>(formalValue: .set([.int(1), .int(2)])))
+        let setIDs = Set(decoded.elements.map(\.decodingID))
+        #expect(Set(decoded.elements.map(\.decodingID)) == setIDs)
+        #expect(Set([set, decoded]).count == 1)
+        #expect(set.tlaValue == .set([.int(1), .int(2)]))
+    }
+
+    @Test("Invalid modeled values fail through every constant-expression boundary")
+    func invalidValuesCannotLoseTheirDiagnostics() throws {
+        let invalid = DecodedLiteral(1, invalid: true)
+        let expressions: [StateExpr] = [
+            invalid.stateExpr,
+            invalid.expr.raw,
+            SetExpr(DecodedLiteral(1), invalid).stateExpr,
+            SetExpr<DecodedLiteral>.literal(invalid).raw,
+            TupleExpr<DecodedLiteral>.literal(invalid).raw,
+            Pair(first: invalid, second: 1).stateExpr,
+            Pair<DecodedLiteral, Int>.literal(invalid, 1).raw,
+            ZeroBasedSequence<DecodedLiteral>.literal(invalid).raw,
+            ZeroBasedSequence<DecodedLiteral>.filled(length: 1.expr, with: invalid).raw,
+            PartialFunction<PartialFiniteDomain, DecodedLiteral>.literal((.first, invalid)).raw,
+            Function<PartialFiniteDomain, DecodedLiteral>.literal(
+                (.first, invalid), (.second, DecodedLiteral(2))
+            ).raw,
+            SetExpr<DecodedLiteral>().expr.removing(invalid).raw,
+            Function<DuplicateFiniteDomain, Int>().stateExpr
+        ]
+        for expression in expressions {
+            let specification = TLASpec(name: "InvalidValue", variables: [
+                .init(name: "value", initialization: .expression(expression), origin: .source)
+            ], actions: [], invariants: [])
+            #expect(throws: CompilationDiagnostic.self) { try specification.compile() }
+        }
+        #expect(SetExpr<DecodedLiteral>(formalValue: .set([.int(-1)])) == nil)
+        #expect(TupleExpr<DecodedLiteral>(formalValue: .tuple([.int(-1)])) == nil)
+        #expect(Pair<DecodedLiteral, Int>(formalValue: .tuple([.int(-1), .int(1)])) == nil)
+    }
+
+    @Test("Function and zero-based sequence reads retain decoded values")
+    func indexedValuesDecodeOnce() throws {
+        let raw: TLAValue = .function([.string("first"): .int(1)])
+        let total = try #require(Function<PartialFiniteDomain, DecodedLiteral>(formalValue: raw))
+        let partial = try #require(PartialFunction<PartialFiniteDomain, DecodedLiteral>(formalValue: raw))
+        let totalValue = try #require(total[.first])
+        let partialValue = try #require(partial[.first])
+        #expect(total[.first]?.decodingID == totalValue.decodingID)
+        #expect(partial[.first]?.decodingID == partialValue.decodingID)
+        #expect(total[.second] == nil)
+        #expect(partial[.second] == nil)
+        #expect(total.tlaValue == raw)
+        #expect(partial.tlaValue == raw)
+        let anotherTotal = try #require(Function<PartialFiniteDomain, DecodedLiteral>(formalValue: raw))
+        let anotherPartial = try #require(PartialFunction<PartialFiniteDomain, DecodedLiteral>(formalValue: raw))
+        #expect(Set([total, anotherTotal]).count == 1)
+        #expect(Set([partial, anotherPartial]).count == 1)
+
+        let sequenceValue: TLAValue = .function([.int(0): .int(1), .int(1): .int(2)])
+        let sequence = try #require(ZeroBasedSequence<DecodedLiteral>(formalValue: sequenceValue))
+        let first = try #require(sequence.element(at: 0))
+        #expect(sequence.element(at: 0)?.decodingID == first.decodingID)
+        #expect(sequence.element(at: 1)?.number == 2)
+        #expect(sequence.element(at: -1) == nil)
+        #expect(sequence.element(at: 2) == nil)
+        #expect(sequence.tlaValue == sequenceValue)
+        let anotherSequence = try #require(ZeroBasedSequence<DecodedLiteral>(formalValue: sequenceValue))
+        #expect(Set([sequence, anotherSequence]).count == 1)
+    }
+
+    @Test("Indexed values reject invalid decoded members and malformed domains")
+    func indexedValuesRejectInvalidData() {
+        let invalid: TLAValue = .function([.string("first"): .int(-1)])
+        #expect(Function<PartialFiniteDomain, DecodedLiteral>(formalValue: invalid) == nil)
+        #expect(PartialFunction<PartialFiniteDomain, DecodedLiteral>(formalValue: invalid) == nil)
+        let malformedSequences: [TLAValue] = [
+            .function([.int(0): .int(-1)]),
+            .function([.int(-1): .int(1)]),
+            .function([.int(1): .int(1)]),
+            .function([.int(0): .int(1), .int(2): .int(2)]),
+            .function([.string("0"): .int(1)]),
+            .function([.int(0): .bool(true)])
+        ]
+        for value in malformedSequences {
+            #expect(ZeroBasedSequence<DecodedLiteral>(formalValue: value) == nil)
+        }
+        #expect(ZeroBasedSequence<DecodedLiteral>(formalValue: .function([:])) != nil)
+    }
+
+    @Test("Swift sets reject invalid members and colliding formal identities")
+    func rejectsInvalidAndCollidingSetMembers() throws {
+        func check<Value: TLAValueType & Hashable>(_ valid: Value, _ invalid: Value) throws {
+            #expect(valid.tlaValue == invalid.tlaValue)
+            #expect(valid.sourceIssue == nil)
+            #expect(invalid.sourceIssue != nil)
+            #expect(valid != invalid)
+            for members in [Set([valid, invalid]), Set([invalid, valid])] {
+                #expect(members.count == 2)
+                #expect(members.filter { $0.sourceIssue != nil }.count == 1)
+                let expression = StateExpr.setLiteral(members.map(\.stateExpr))
+                let specification = TLASpec(name: "InvalidSetMember", variables: [
+                    .init(name: "value", initialization: .expression(expression), origin: .source)
+                ], actions: [], invariants: [])
+                #expect(throws: CompilationDiagnostic.self) { try specification.compile() }
+            }
+        }
+        try check(SetExpr(DecodedLiteral(1)), SetExpr(DecodedLiteral(1, invalid: true)))
+        try check(Pair(first: DecodedLiteral(1), second: 2),
+                  Pair(first: DecodedLiteral(1, invalid: true), second: 2))
+
+        let members: Set<CollidingFunctionKey> = [.first, .second]
+        #expect(members.count == 2)
+        let specification = TLASpec(name: "CollidingMembers", variables: [
+            .init(name: "members", initialization: .expression(members.stateExpr), origin: .source)
+        ], actions: [], invariants: [])
+        do {
+            _ = try specification.compile()
+            Issue.record("Distinct Swift members with one formal value must fail compilation")
+        } catch let diagnostic as CompilationDiagnostic {
+            #expect(diagnostic.code == .invalidFormalDeclaration)
+            #expect(diagnostic.actual.contains("distinct Swift members have the same formal value"))
+        }
+    }
+
+    @Test("Native collection access uses contextual enum keys and values")
+    func contextualCollectionAccessExecutesNatively() throws {
+        var machine = try ContextualCollectionModel.makeMachine()
+        _ = try machine.send(.update)
+        #expect(machine.state.table[.first] == .second)
+        #expect(machine.state.table[.second] == .first)
+        _ = try machine.send(.read)
+        #expect(machine.state.selected == .second)
+    }
+
+    @Test("Constants preserve validation failures even when unused")
+    func invalidConstantsFailCompilation() throws {
+        let constants = [
+            Constant("invalid", DecodedLiteral(1, invalid: true)),
+            Constant("invalid", Pair(first: DecodedLiteral(1, invalid: true), second: 2)),
+            Constant("invalid", SetExpr(DecodedLiteral(1), DecodedLiteral(1, invalid: true)))
+        ]
+        for constant in constants {
+            let specification = TLASpec(name: "InvalidConstant", variables: [],
+                                        constants: [constant], actions: [], invariants: [])
+            do {
+                _ = try specification.compile()
+                Issue.record("Compilation accepted an invalid constant")
+            } catch let diagnostic as CompilationDiagnostic {
+                #expect(diagnostic.path == "constants.invalid")
+            }
+        }
+        let valid = TLASpec(name: "ValidConstant", variables: [],
+                            constants: [Constant("valid", DecodedLiteral(1))], actions: [], invariants: [])
+        _ = try valid.compile()
+    }
+
     @Test("concrete functions and pairs preserve typed values and fail closed")
     func concreteTypedValuesFailClosed() throws {
         let function = try #require(Function<PartialFiniteDomain, Int>(formalValue: .function([
@@ -197,27 +399,8 @@ private struct FoldGeneratedModel {
     func invalidTypedValuesFailDuringCompilation() throws {
         let invalidExpressions: [(StateExpr, CompilationDiagnostic.Code)] = [
             (
-                Expr<Record<InvalidLiteralSchema>>(.variable("record"))[InvalidLiteralSchema.unlisted].raw,
-                .invalidTypedRecordField
-            ),
-            (
-                Record<InvalidLiteralSchema>.literal(
-                    .init(InvalidLiteralSchema.count, 0),
-                    .init(InvalidLiteralSchema.count, 1)
-                ).raw,
-                .invalidTypedRecordLiteral
-            ),
-            (
                 Function<InvalidLiteralDomain, Int>.literal((.first, 0), (.first, 1)).raw,
                 .invalidTypedFunctionLiteral
-            ),
-            (
-                Select(from: SetExpr<Int>.literal(1), matching: { _ in .value(.bool(false)) }).raw,
-                .invalidStaticSelection
-            ),
-            (
-                Sequences(of: Expr<SetExpr<Int>>(.variable("values")), lengths: 0...1).raw,
-                .invalidSequenceElementDomain
             ),
             (
                 ZeroBasedSequences(of: SetExpr<Int>.literal(1), lengths: -1...1).raw,
@@ -272,11 +455,29 @@ private struct FoldGeneratedModel {
         }
     }
 
+    @Test("Integer ranges accept typed and literal endpoints and preserve empty ranges")
+    func integerRangeEndpoints() throws {
+        func range(_ lower: some TypedExpression<Int>, _ upper: some TypedExpression<Int>) -> Expr<Set<Int>> {
+            IntRange(lower, through: upper)
+        }
+        let ranges = [
+            IntRange(1, through: 3),
+            IntRange(Expr<Int>(1), through: 3),
+            IntRange(1, through: Expr<Int>(3)),
+            range(Expr<Int>(1), Expr<Int>(3))
+        ]
+        for expression in ranges {
+            #expect(try compiledValue(expression.raw) == .set([.int(1), .int(2), .int(3)]))
+            #expect(try compiledValue((expression == Set<Int>([1, 2, 3])).stateExpr) == .bool(true))
+        }
+        #expect(try compiledValue(range(Expr<Int>(3), Expr<Int>(1)).raw) == .set([]))
+    }
+
     @Test("typed interval, filter, map, and dynamic tuple access evaluate")
     func typedOperatorsEvaluate() throws {
         let values = IntRange(1, through: 4)
         let evenValues = values.filtering { value in value.expr % 2 == 0 }
-        let squares = evenValues.mapping { value in value.expr * value.expr }
+        let squares: Expr<Set<Int>> = evenValues.mapping { value in value.expr * value.expr }
         let expanded = squares.union(SetExpr<Int>.literal(25))
         let sequence = TupleExpr<Int>.literal(3, 5, 7)
 
@@ -322,9 +523,9 @@ private struct FoldGeneratedModel {
         var machine = try TypedCollectionGeneratedModel.makeMachine()
         let transition = try machine.send(.keepEvenSquares)
 
-        #expect(Set(transition.before.values.elements) == Set([1, 2, 3, 4]))
-        #expect(Set(transition.after.values.elements) == Set([4, 16]))
-        #expect(try TypedCollectionGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("keepEvenSquares"))
+        #expect(transition.before.values == [1, 2, 3, 4])
+        #expect(transition.after.values == [4, 16])
+        #expect(try TypedCollectionGeneratedModel.spec.compile().render().tlaBundle.tla.contains("keepEvenSquares"))
     }
 
     @Test("typed conditional values parse without losing their result type")
@@ -366,6 +567,29 @@ private struct FoldGeneratedModel {
         #expect(try compiledValue(ordered) == .int(3))
     }
 
+    @Test("Sequence prefixes preserve position and render as SubSeq")
+    func sequencePrefixIsPositional() throws {
+        let values = TupleExpr<Int>.literal(2, 1, 2)
+        let cases: [(Int, [Int])] = [(-2, []), (0, []), (1, [2]), (2, [2, 1]), (3, [2, 1, 2])]
+        for (length, expected) in cases {
+            let prefix = values.prefix(length: length)
+            #expect(try compiledValue(prefix.stateExpr) == .tuple(expected.map(TLAValue.int)))
+        }
+        #expect(throws: EvalError.indexOutOfBounds(4, 3)) {
+            try compiledValue(values.prefix(length: 4).stateExpr)
+        }
+
+        let source = "TupleExpr<Int>.literal(2, 1, 2).prefix(length: 2)"
+        let parsed = try #require(SpecParser.decodeStateExpr(try parseExpression(source)))
+        let built = values.prefix(length: 2).stateExpr
+        #expect(parsed == built)
+        let rendered = try canonicalTestSpec(
+            variables: [], actions: [("prefix", .guard_(.equal(built, .tupleLiteral([.int(2), .int(1)]))), [])],
+            invariants: []
+        ).compile().render().tlaBundle.tla
+        #expect(rendered.contains("SubSeq(<<2, 1, 2>>, 1, 2)"))
+    }
+
     @Test("generated machines preserve formal fold behavior")
     func generatedMachineUsesFormalFold() throws {
         var machine = try FoldGeneratedModel.makeMachine()
@@ -373,113 +597,24 @@ private struct FoldGeneratedModel {
         let compilation = try FoldGeneratedModel.spec.compile()
 
         #expect(transition.after.total == 6)
-        #expect(compilation.renderedTLAModuleBundle().tla.contains("FoldFunction(LAMBDA"))
-        #expect(try compilation.renderedPlusCalBundle().root.tla.contains("FoldFunction(LAMBDA"))
-        #expect(compilation.renderedTLAModuleBundle().imports.map(\.name) == ["Folds", "Functions"])
+        #expect(try compilation.render().tlaBundle.tla.contains("FoldFunction(LAMBDA"))
+        #expect(try compilation.render().plusCalBundle().root.tla.contains("FoldFunction(LAMBDA"))
+        #expect(try compilation.render().tlaBundle.imports.map(\.name) == ["Folds", "Functions"])
     }
 
-    @Test("authored PlusCal folds translate into valid TLA+")
-    func authoredPlusCalFoldTranslatesAndPassesSANY() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let jar = root.appendingPathComponent(".build/tla-tools/tla2tools.jar")
-        let javaCandidates = [
-            ProcessInfo.processInfo.environment["TLC_JAVA"],
-            ProcessInfo.processInfo.environment["JAVA_HOME"].map { "\($0)/bin/java" },
-            "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java",
-            "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java"
-        ].compactMap { $0 }
-        guard let java = javaCandidates.first(where: FileManager.default.isExecutableFile(atPath:)),
-              FileManager.default.fileExists(atPath: jar.path)
-        else { return }
-
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-        let bundle = try FoldGeneratedModel.spec.compile().renderedPlusCalBundle()
-        for file in bundle.files {
-            try file.tla.write(
-                to: directory.appendingPathComponent("\(file.name).tla"),
-                atomically: true,
-                encoding: .utf8
-            )
-            if let configuration = file.cfg {
-                try configuration.write(
-                    to: directory.appendingPathComponent("\(file.name).cfg"),
-                    atomically: true,
-                    encoding: .utf8
-                )
-            }
-        }
-
-        func run(_ mainClass: String) throws -> (status: Int32, output: String) {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: java)
-            process.arguments = ["-cp", jar.path, mainClass, "FoldGeneratedModel.tla"]
-            process.currentDirectoryURL = directory
-            let output = Pipe()
-            process.standardOutput = output
-            process.standardError = output
-            try process.run()
-            process.waitUntilExit()
-            return (
-                process.terminationStatus,
-                String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
-                    ?? "<non-UTF-8 output>"
-            )
-        }
-
-        let translation = try run("pcal.trans")
-        #expect(translation.status == 0, "PlusCal translation failed:\n\(translation.output)")
-        let sany = try run("tla2sany.SANY")
-        #expect(sany.status == 0, "SANY rejected translated PlusCal:\n\(sany.output)")
+    @Test("generated integer-function sums agree with the imported formal operator")
+    func generatedMachineSumsFunctionValues() throws {
+        var machine = try FoldGeneratedModel.makeMachine()
+        let bundle = try FoldGeneratedModel.spec.compile().render().tlaBundle
+        #expect(bundle.tla.contains("SumFunctionOnSet("))
+        #expect(bundle.imports.map(\.name) == ["Folds", "Functions"])
+        _ = try machine.send(.sum)
+        #expect(try machine.send(.sumFunction).after.functionTotal == 3)
     }
 
     @Test("the bundled KeyValueStore Util module preserves its upstream imports")
-    func bundledUtilModulePassesSANY() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let jar = root.appendingPathComponent(".build/tla-tools/tla2tools.jar")
-        let javaCandidates = [
-            ProcessInfo.processInfo.environment["TLC_JAVA"],
-            ProcessInfo.processInfo.environment["JAVA_HOME"].map { "\($0)/bin/java" },
-            "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java",
-            "/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java"
-        ].compactMap { $0 }
-        guard let java = javaCandidates.first(where: FileManager.default.isExecutableFile(atPath:)),
-              FileManager.default.fileExists(atPath: jar.path)
-        else { return }
-
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let bundle = try KeyValueStoreUtil.module.compile().renderedTLAModuleBundle()
-        for file in bundle.files {
-            try file.tla.write(
-                to: directory.appendingPathComponent("\(file.name).tla"),
-                atomically: true,
-                encoding: .utf8
-            )
-        }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: java)
-        process.arguments = ["-cp", jar.path, "tla2sany.SANY", "Util.tla"]
-        process.currentDirectoryURL = directory
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = output
-        try process.run()
-        process.waitUntilExit()
-
-        let text = String(
-            data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
-        ) ?? "<non-UTF-8 SANY output>"
-        #expect(process.terminationStatus == 0, "SANY rejected bundled Util:\n\(text)")
+    func bundledUtilModulePreservesImports() throws {
+        let bundle = try KeyValueStoreUtil.module.compile().render().tlaBundle
         #expect(bundle.imports.map(\.name) == ["Folds", "Functions"])
     }
 
@@ -537,50 +672,38 @@ private struct FoldGeneratedModel {
             let sequence = Var<ZeroBasedSequence<Int>>("sequence")
             Variable(sequence, empty)
         }
-        #expect(try emptySpec.compile().renderedTLAModuleBundle().tla.contains("[__tla_fn_0 \\in {} |-> TRUE]"))
+        #expect(try emptySpec.compile().render().tlaBundle.tla.contains("[__tla_fn_0 \\in {} |-> TRUE]"))
 
-        let input = try #require(ZeroBasedSequence<Int>(formalValue: .function([
-            .int(0): .int(0)
-        ])))
-        let table = try #require(ZeroBasedSequence<Int>(formalValue: .function([
-            .int(0): .int(-1),
-            .int(1): .int(-1),
-            .int(2): .int(-1)
-        ])))
+        let input = [0: 0]
+        let table = [0: -1, 1: -1, 2: -1]
         var machine = try ZeroBasedSequenceGeneratedModel.makeMachine(
             .init(input: input, table: table)
         )
         let transition = try machine.send(.writeFirst)
-        let tableValue = try #require(transition.after.table.element(at: 0))
-        let inputValue = try #require(transition.after.input.element(at: 0))
+        let tableValue = try #require(transition.after.table[0])
+        let inputValue = try #require(transition.after.input[0])
         #expect(tableValue == inputValue)
-        #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("0.."))
+        #expect(try ZeroBasedSequenceGeneratedModel.spec.compile().render().tlaBundle.tla.contains("0.."))
     }
 
-    @Test("non-empty subset domains parse and exclude the empty formal set")
-    func nonEmptySubsetDomainsSurviveThePipeline() throws {
-        let source = "NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))"
-        let syntax = try parseExpression(source)
-        let parsed = try #require(SpecParser.decodeStateExpr(syntax))
-        let subsets = NonEmptySubsets(of: SetExpr<Int>.literal(1, 2))
-        let expectedMembers: Set<TLAValue> = [
-            .set([.int(1)]),
-            .set([.int(2)]),
-            .set([.int(1), .int(2)])
+    @Test("configured Swift-set subsets preserve type and exclude the empty set")
+    func configuredSwiftSetSubsetsPreserveType() throws {
+        let scenarios = try NonEmptySubsetSelectionModel.validationScenarios()
+        #expect(scenarios.count == 2)
+        let expected: [Set<Set<Int>>] = [
+            [Set([1]), Set([2]), Set([1, 2])],
+            [Set([1]), Set([2]), Set([3]), Set([1, 2]), Set([1, 3]), Set([2, 3]), Set([1, 2, 3])]
         ]
-
-        #expect(parsed == subsets.raw)
-        #expect(try compiledValue(subsets.raw) == .set(expectedMembers))
-
-        let compilation = try NonEmptySubsetGeneratedModel.spec.compile()
-        let selectedKeys = try #require(compilation.layout.testVariableID(named: "selectedKeys"))
-        let initialStates = try CompiledRuntime(compilation: compilation).initialStates()
-        #expect(initialStates.count == 3)
-        let initialValues = try Set(initialStates.map {
-            try $0.value(for: selectedKeys).rendered(using: compilation.layout)
-        })
-        #expect(initialValues == expectedMembers)
-        #expect(try NonEmptySubsetGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("SUBSET"))
+        let rendered = try scenarios.map { try $0.render() }
+        #expect(rendered[0].tlaBundle.tla == rendered[1].tlaBundle.tla)
+        #expect(rendered[0].tlaBundle.cfg.contains("CONSTANT members = {1, 2}"))
+        #expect(rendered[1].tlaBundle.cfg.contains("CONSTANT members = {1, 2, 3}"))
+        for (scenario, values) in zip(scenarios, expected) {
+            let initial = try scenario.initialMachines()
+            let selected: Set<Set<Int>> = Set(initial.map(\.state.selectedKeys))
+            #expect(selected == values)
+        }
+        #expect(rendered[0].tlaBundle.tla.contains("SUBSET"))
     }
 
     @Test("typed bounded quantifiers parse, evaluate, and generate")
@@ -595,8 +718,34 @@ private struct FoldGeneratedModel {
         #expect(try compiledValue(everyPositive.raw) == .bool(true))
 
         var machine = try TypedQuantifierGeneratedModel.makeMachine()
-        let transition = try machine.send(.findEven)
-        #expect(transition.after.result == true)
-        #expect(try TypedQuantifierGeneratedModel.spec.compile().renderedTLAModuleBundle().tla.contains("\\E"))
+        #expect(try machine.send(.findEven).after.result)
+        #expect(try machine.send(.allPositive).after.result)
+        #expect(try machine.send(.emptyAll).after.result)
+        #expect(try !machine.send(.emptyAny).after.result)
+        #expect(try TypedQuantifierGeneratedModel.spec.compile().render().tlaBundle.tla.contains("\\E"))
+    }
+}
+
+
+private enum StringEncodedMember: String, TLAValueType {
+    case first
+    static var defaultValue: Self { .first }
+}
+
+private enum ModelValueEncodedMember: String, TLAValueType {
+    case first
+    static var defaultValue: Self { .first }
+    var tlaValue: TLAValue { .constant(rawValue) }
+}
+
+extension TypedCollectionOperatorTests {
+    @Test("raw enum decoding preserves its declared formal encoding")
+    func enumDecodingPreservesEncoding() {
+        #expect(StringEncodedMember(formalValue: .string("first")) == .first)
+        #expect(StringEncodedMember(formalValue: .constant("first")) == nil)
+        #expect(ModelValueEncodedMember(formalValue: .constant("first")) == .first)
+        #expect(ModelValueEncodedMember(formalValue: .string("first")) == nil)
+        #expect(ModelValueEncodedMember(formalValue: .constant("missing")) == nil)
+        #expect(ModelValueEncodedMember(formalValue: .int(1)) == nil)
     }
 }

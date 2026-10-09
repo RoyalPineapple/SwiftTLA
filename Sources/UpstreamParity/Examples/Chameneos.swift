@@ -1,132 +1,120 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-// Chameneos concurrency game. Creatures meet, complement colors, eventually fade.
-// N=4 meetings max, M=4 creatures. Uses nested functions, tuples, EXCEPT @ self-ref.
-// Port: 1:1 translation. TypeOK + SumMet safety. 81 states.
 // Upstream: specifications/Chameneos/Chameneos.tla
+@TLAModel
+package struct ChameneosModel: Sendable {
+    package enum Hue: String, CaseIterable, FiniteTLAValueDomain {
+        case blue, red, yellow
+        package static var defaultValue: Self { .blue }
+        package static let finiteValues = allCases
+    }
 
-extension Example {
-    package static let chameneosM4N4 = FiniteModelFixture(
-        expectedDistinct: 34534,
-        maximumStateLimit: 50_000,
-        spec: chameneosSpec(),
-    )
-}
+    package enum FadedToken: String, CaseIterable, FiniteTLAValueDomain {
+        case faded = "Faded"
+        package static var defaultValue: Self { .faded }
+        package static let finiteValues = allCases
+        package var tlaValue: TLAValue { .constant(rawValue) }
+    }
 
-private enum ChameneosCreature: Int, CaseIterable, FiniteTLAValueDomain {
-    case one = 1
-    case two = 2
-    case three = 3
-    case four = 4
+    package enum EmptyMeetingPlace: String, CaseIterable, FiniteTLAValueDomain {
+        case empty = "MeetingPlaceEmpty"
+        package static var defaultValue: Self { .empty }
+        package static let finiteValues = allCases
+        package var tlaValue: TLAValue { .constant(rawValue) }
+    }
 
-    static var defaultValue: Self { .one }
-    static let finiteValues = allCases
-}
+    package typealias Color = OneOf<Hue, FadedToken>
+    package typealias CreatureState = Pair<Color, Int>
+    package typealias WaitingPlace = OneOf<Int, EmptyMeetingPlace>
+    package enum Step: String, CaseIterable { case Next }
 
-private enum ChameneosColor: String, TLAValueType {
-    case blue
-    case red
-    case yellow
-    case faded
-
-    static var defaultValue: Self { .blue }
-}
-
-private typealias ChameneosState = Pair<ChameneosColor, Int>
-
-private func chameneosSpec() -> TLASpec {
-    let M = 4; let N = 4
-
-    let initialColors = SetExpr<ChameneosColor>.literal(.blue, .red, .yellow)
-    let initialCreatureStates = SetExpr<ChameneosState>.literal(
-        ChameneosState.literal(.blue, 0),
-        ChameneosState.literal(.red, 0),
-        ChameneosState.literal(.yellow, 0)
-    )
-
-    let specification: TLASpec = #spec("Chameneos") { scope in
-        Extends(.integers)
-
-        DefineRecursive("Sum", params: ["f", "S"]) {
-            let s = StateExpr.variable("S")
-            let f = StateExpr.variable("f")
-            let x = StateExpr.any(from: s)
-            StateExpr.ifThenElse(
-                StateExpr.equal(StateExpr.setLiteral([]), s),
-                .value(.int(0)),
-                StateExpr.functionApply(f, x) + StateExpr.recursiveCall("Sum", [
-                    f,
-                    StateExpr.setDifference(s, StateExpr.setLiteral([x]))
-                ])
+    package static var spec: TLASpec {
+        #spec("Chameneos") { scope in
+            Import(FunctionsModule.module)
+            let N = scope.parameter(as: Int.self, in: Int.all)
+            let M = scope.parameter(as: Int.self, in: Int.all)
+            let Faded = scope.parameter(as: FadedToken.self, in: Set<FadedToken>([.faded]))
+            let MeetingPlaceEmpty = scope.parameter(as: EmptyMeetingPlace.self,
+                in: Set<EmptyMeetingPlace>([.empty]))
+            let TypeOK = Invariant()
+            let SumMet = Invariant()
+            Assume(N > 0 && M > 0)
+            let creatureIDs = IntRange(1, through: M)
+            let initialColors = SetExpr<Hue>.literal(.blue, .red, .yellow)
+            let initialStates = SetExpr<CreatureState>.literal(
+                Pair.literal(Color.first(Hue.blue), 0),
+                Pair.literal(Color.first(Hue.red), 0),
+                Pair.literal(Color.first(Hue.yellow), 0)
             )
-        }
+            let chameneoses: SharedVariable<[Int: CreatureState]> = scope.sharedVar(in: Functions(from: creatureIDs, to: initialStates))
+            let fadedColor = Color.second(Faded)
+            let empty = WaitingPlace.second(MeetingPlaceEmpty)
+            let meetingPlace: SharedVariable<WaitingPlace> = scope.sharedVar(initial: empty)
+            let numMeetings = scope.sharedVar(initial: 0)
 
-        let chameneoses = scope.sharedVar(
-            "chameneoses",
-            in: Functions(from: ChameneosCreature.all, to: initialCreatureStates)
-        )
-        let meetingPlace = scope.sharedVar("meetingPlace", initial: 0)
-        let numMeetings = scope.sharedVar("numMeetings", initial: 0)
-
-        Invariant("TypeOK") {
-            let colorsAndFaded = SetExpr<ChameneosColor>.literal(.blue, .red, .yellow, .faded)
-            let rng = StateExpr.set((0...N).map { StateExpr.value(.int($0)) })
-            let ids0 = StateExpr.set((0...M).map { StateExpr.value(.int($0)) })
-
-            for creature in ChameneosCreature.all {
-                colorsAndFaded.contains(chameneoses[creature].first())
-                StateExpr.in(chameneoses[creature].second().raw, rng)
+            Do(Step.Next) {
+                With(creatureIDs) { cid in
+                    When(chameneoses[cid].first() != fadedColor)
+                    If(meetingPlace == empty) {
+                        If(numMeetings < N) {
+                            Assign(meetingPlace, to: WaitingPlace.first(cid))
+                        } else: {
+                            Assign(chameneoses[cid], to: Pair.literal(
+                                fadedColor, chameneoses[cid].second()))
+                        }
+                    } else: {
+                        When(meetingPlace != WaitingPlace.first(cid))
+                        Let(meetingPlace.assuming(Int.self)) { waiting in
+                            let myColor = chameneoses[cid].first().assuming(Hue.self)
+                            let otherColor = chameneoses[waiting].first().assuming(Hue.self)
+                            Let(If(myColor == otherColor, then: myColor, else:
+                                Select(from: initialColors) { color in
+                                    color.expr != myColor && color.expr != otherColor
+                                })) { newColor in
+                                Assign(meetingPlace, to: empty)
+                                Assign(chameneoses[cid], to: Pair.literal(
+                                    Color.first(newColor.expr), chameneoses[cid].second() + 1))
+                                Assign(chameneoses[waiting], to: Pair.literal(
+                                    Color.first(newColor.expr), chameneoses[waiting].second() + 1))
+                                Assign(numMeetings, to: numMeetings + 1)
+                            }
+                        }
+                    }
+                }
             }
-            meetingPlace.stateExpr.isIn(ids0)
-        }
-
-        SwiftTLA.Action("Meet") {
-            ActionExpr.exists("cid", from: SetExpr<ChameneosCreature>.literal(.one, .two, .three, .four)) { rawCreature in
-                let creature = Expr<ChameneosCreature>(rawCreature)
-                let mp = meetingPlace.stateExpr
-                let nm = numMeetings.stateExpr
-                let empty = StateExpr.value(.int(0))
-                let nM = StateExpr.value(.int(N))
-
-                let unfaded = StateExpr.notEqual(chameneoses[creature].first().raw, ChameneosColor.faded.stateExpr)
-
-                let enter: ActionExpr = .and(.guard_(StateExpr.equal(mp, empty)),
-                    .and(.guard_(nm < nM),
-                        .and(meetingPlace.becomes(Expr<Int>(rawCreature)),
-                            .and(chameneoses.stays, numMeetings.stays))))
-                let fade: ActionExpr = .and(.guard_(StateExpr.equal(mp, empty)),
-                    .and(.guard_(StateExpr.not(StateExpr.lessThan(nm, nM))),
-                        .and(chameneoses.becomes(chameneoses.updating(
-                            creature,
-                            to: ChameneosState.literal(Expr(.faded), chameneoses[creature].second())
-                        )), .and(meetingPlace.stays, numMeetings.stays))))
-                let mpEmptyBranch: ActionExpr = .or(enter, fade)
-
-                let meetingCreature = Expr<ChameneosCreature>(mp)
-                let myColor = chameneoses[creature].first()
-                let otherColor = chameneoses[meetingCreature].first()
-                let complementColor = Expr<ChameneosColor>(StateExpr.ifThenElse(
-                    StateExpr.equal(myColor.raw, otherColor.raw), myColor.raw,
-                    StateExpr.any(from: initialColors.raw
-                        .subtracting(StateExpr.set([myColor.raw, otherColor.raw])))))
-
-                let twoMeet: ActionExpr = .and(.guard_(StateExpr.notEqual(mp, empty)),
-                    .and(.guard_(StateExpr.notEqual(mp, rawCreature)),
-                        .and(meetingPlace.becomes(0),
-                            .and(chameneoses.becomes(chameneoses
-                                .updating(creature, to: ChameneosState.literal(
-                                    complementColor,
-                                    chameneoses[creature].second() + 1
-                                ))
-                                .updating(meetingCreature, to: ChameneosState.literal(
-                                    complementColor,
-                                    chameneoses[meetingCreature].second() + 1
-                                ))), numMeetings.becomes(numMeetings + 1)))))
-
-                return .and(.guard_(unfaded), .or(mpEmptyBranch, twoMeet))
+            TypeOK {
+                chameneoses.keys == creatureIDs
+                    && ForAll(in: creatureIDs) { id in
+                        let color = chameneoses[id.expr].first()
+                        return (color == Color.first(Hue.blue)
+                            || color == Color.first(Hue.red)
+                            || color == Color.first(Hue.yellow)
+                            || color == fadedColor)
+                            && IntRange(0, through: N).contains(chameneoses[id.expr].second())
+                    }
+                    && (meetingPlace == empty || Exists(in: creatureIDs) { id in
+                        meetingPlace == WaitingPlace.first(id.expr)
+                    })
             }
+
+            SumMet {
+                let meetings = SequenceMapping(length: M) { index in
+                    chameneoses[index.expr].second()
+                }
+                let total = Fold(meetings, startingWith: 0) { count, accumulated in
+                    count + accumulated
+                }
+                numMeetings != N || total == 2 * N
+            }
+
+            let Chameneos = Validation {
+                Bind(N, to: 4)
+                Bind(M, to: 4)
+                Bind(Faded, to: FadedToken.faded)
+                Bind(MeetingPlaceEmpty, to: EmptyMeetingPlace.empty)
+            }.checkingDeadlock(false)
+            Chameneos
         }
     }
-    return specification
 }

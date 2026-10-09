@@ -6,9 +6,8 @@ let dynamicName = "DynamicModelName"
 @TLAModel
 struct InvalidDynamicModelName {
   static var spec: TLASpec {
-    TLASpec(dynamicName) {
-      let count = Var<Int>("count")
-      Variable(count, 0)
+    #spec(dynamicName) { scope in
+      let count = scope.sharedVar(initial: 0)
     }
   }
 }

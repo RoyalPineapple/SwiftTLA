@@ -33,6 +33,8 @@ Treat string-keyed and otherwise untyped data as a guarded boundary.
 
 ## Test Naming and Cleanliness
 
+- Name each test suite file after its suite. Keep shared fixture declarations in separate fixture files.
+
 - Name a test suite and its cases for the behavior or compiler contract they prove, not for the implementation type, temporary migration, or refactor that introduced them.
 - An upstream model name may appear only to identify the canonical corpus owner. Pair it with the tested contract, for example `VoteProofCorpusRenderingTests`, not `VoteProofMigrationTests`.
 - Each implementation phase includes a Ponytail review and a cleanliness pass: delete obsolete paths, migrate callers, and reject compatibility shims, duplicate witnesses, and stale generated evidence.

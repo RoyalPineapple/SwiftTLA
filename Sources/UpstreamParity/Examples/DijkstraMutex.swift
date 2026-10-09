@@ -1,10 +1,9 @@
 import SwiftTLA
 import SwiftTLAMacros
 
-/// Dijkstra's original mutual-exclusion algorithm, bounded to the four
-/// processes in the published LSpec model.
+/// Dijkstra's algorithm with the published three- and four-process populations.
 ///
-/// `temporary` begins as the upstream model's opaque `defaultInitValue`.
+/// `temp` begins as the upstream model's opaque `defaultInitValue`.
 /// It then holds either the current owner or the set of peers still to
 /// inspect. `OneOf` keeps that source-level TLA+ union explicit in Swift and
 /// preserves its formal representation.
@@ -14,11 +13,12 @@ package struct DijkstraMutexModel: Sendable {
         case one = "p1"
         case two = "p2"
         case three = "p3"
+        case four = "p4"
 
         package static var defaultValue: Self { .one }
         package static let finiteValues = allCases
 
-        package var tlaValue: TLAValue { .string(rawValue) }
+        package var tlaValue: TLAValue { .constant(rawValue) }
     }
 
     private enum Label: String, CaseIterable {
@@ -39,29 +39,33 @@ package struct DijkstraMutexModel: Sendable {
 
     /// The published model's value before a process first writes `temp`.
     /// It is distinct from every process and set value.
-    private enum TemporaryInitial: String, TLAValueType {
+    enum TemporaryInitial: String, TLAValueType {
         case notAssigned = "defaultInitValue"
 
         static var defaultValue: Self { .notAssigned }
+        var tlaValue: TLAValue { .constant(rawValue) }
     }
 
-    private typealias ActiveTemporary = OneOf<Process, SetExpr<Process>>
-    private typealias Temporary = OneOf<TemporaryInitial, ActiveTemporary>
+    private typealias ActiveTemporary = OneOf<Process, Set<Process>>
 
     package static var spec: TLASpec {
-        #spec("DijkstraMutex") {
+        #spec("DijkstraMutex") { (scope: SpecificationScope) in
             Extends(.integers)
-            Algorithm("Mutex", scoped: { scope in
-                let b = scope.sharedVar("b", initial: Function<Process, Bool>.literal(
-                    (.one, true), (.two, true), (.three, true)
-                ))
-                let c = scope.sharedVar("c", initial: Function<Process, Bool>.literal(
-                    (.one, true), (.two, true), (.three, true)
-                ))
-                let k = scope.sharedVar("k", in: SetExpr<Process>.literal(.one, .two, .three))
+            let Proc = scope.parameter(as: Set<Process>.self, in: Set<Set<Process>>([
+                Set<Process>([.one, .two, .three]),
+                Set<Process>([.one, .two, .three, .four]),
+            ]))
+            let MutualExclusion = Invariant()
+            let DeadlockFree = LeadsTo()
+            let StarvationFree = LeadsTo()
+            let DeadlockFreedom = LeadsTo()
+            let Mutex = Algorithm(scoped: { scope in
+                let b = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
+                let c = scope.sharedVar(initial: Dictionary<Process, Bool>.mapping(over: Proc) { _ in true })
+                let k = scope.sharedVar(in: Proc)
 
-                Each(Process.all, fairness: .weak, scoped: { selfID, scope in
-                    let temporary = scope.localVar("temporary", initial: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.first(.notAssigned)
+                Each(Proc, fairness: .weak, scoped: { selfID, scope in
+                    let temp = scope.localVar(initial: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.first(.notAssigned)
                     )
 
                     Do(Label.li0) {
@@ -82,16 +86,16 @@ package struct DijkstraMutexModel: Sendable {
 
                     Do(Label.li3a) {
                         Assign(
-                            temporary,
-                            to: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.second(
-                                OneOf<Process, SetExpr<Process>>.first(k.expr)
+                            temp,
+                            to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(
+                                OneOf<Process, Set<Process>>.first(k.expr)
                             )
                         )
                     }
 
                     Do(Label.li3b) {
-                        let active = temporary.expr.assumingSecond(ActiveTemporary.self)
-                        let owner = active.assumingFirst(Process.self)
+                        let active = temp.expr.assuming(ActiveTemporary.self)
+                        let owner = active.assuming(Process.self)
                         If(b[owner]) {
                             Goto(Label.li3c)
                         } else: {
@@ -110,22 +114,22 @@ package struct DijkstraMutexModel: Sendable {
                     Do(Label.li4a) {
                         Assign(c, to: c.updating(selfID, to: false))
                         Assign(
-                            temporary,
-                            to: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.second(OneOf<Process, SetExpr<Process>>.second(
-                                SetExpr<Process>.literal(.one, .two, .three).removing(selfID)
+                            temp,
+                            to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
+                                Proc.removing(selfID)
                             )
                         )
                         )
                     }
 
                     Do(Label.li4b) {
-                        let active = temporary.expr.assumingSecond(ActiveTemporary.self)
-                        let remaining = active.assumingSecond(SetExpr<Process>.self)
+                        let active = temp.expr.assuming(ActiveTemporary.self)
+                        let remaining = active.assuming(Set<Process>.self)
                         If(!remaining.isEmpty) {
                             With(remaining) { process in
                                 Assign(
-                                    temporary,
-                                    to: OneOf<TemporaryInitial, OneOf<Process, SetExpr<Process>>>.second(OneOf<Process, SetExpr<Process>>.second(
+                                    temp,
+                                    to: OneOf<TemporaryInitial, OneOf<Process, Set<Process>>>.second(OneOf<Process, Set<Process>>.second(
                                         remaining.removing(process)
                                     )
                                 )
@@ -145,24 +149,36 @@ package struct DijkstraMutexModel: Sendable {
                     Do(Label.li5) { Assign(c, to: c.updating(selfID, to: true)) }
                     Do(Label.li6) { Assign(b, to: b.updating(selfID, to: true)) }
                     Do(Label.nonCritical) { Goto(Label.li0) }
+                    DeadlockFree(
+                        At(Label.li0, selfID),
+                        Exists(in: Proc) { member in At(Label.critical, member) }
+                    )
+                    StarvationFree(At(Label.li0, selfID), At(Label.critical, selfID))
+                    DeadlockFreedom(
+                        !At(Label.li5, selfID) && !At(Label.li6, selfID) && !At(Label.nonCritical, selfID),
+                        Exists(in: Proc) { member in At(Label.critical, member) }
+                    )
                 })
 
-                Invariant("MutualExclusion") {
-                    All(Process.all) { first in
-                        All(Process.all) { second in
+                MutualExclusion {
+                    ForAll(in: Proc) { first in
+                        ForAll(in: Proc) { second in
                             first == second || !(At(Label.critical, first) && At(Label.critical, second))
                         }
                     }
                 }
             })
+            Mutex
+            let NonCriticalMayStutter = FairnessProfile(excluding: [Label.nonCritical])
+            NonCriticalMayStutter
+            let Safety4Processors = Validation {
+                Bind(Proc, to: Set<Process>([.one, .two, .three, .four]))
+            }.checking(only: [MutualExclusion])
+            Safety4Processors
+            let Liveness3Processors = Validation {
+                Bind(Proc, to: Set<Process>([.one, .two, .three]))
+            }.usingFairness(NonCriticalMayStutter).checking(only: [MutualExclusion, DeadlockFreedom])
+            Liveness3Processors
         }
     }
-}
-
-extension Example {
-    package static let dijkstraMutex = FiniteModelFixture(
-        expectedDistinct: 90_882,
-        maximumStateLimit: 100_000,
-        spec: DijkstraMutexModel.spec,
-    )
 }

@@ -1,0 +1,357 @@
+name: Independent Validation Pipeline
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      swift_tla_sha:
+        description: Immutable SwiftTLA SHA to validate
+        required: true
+        type: string
+      admission_mode:
+        description: Candidate or merged-revision admission
+        required: true
+        default: candidate
+        type: choice
+        options: [candidate, admission]
+      case_id:
+        description: One case or scenario ID for a focused candidate diagnostic (empty runs all)
+        type: string
+        default: ''
+      case_ids:
+        description: Comma-separated case IDs for a candidate family diagnostic; each must have both comparison paths
+        type: string
+        default: ''
+      profile_native:
+        description: Sample the native checker during one focused candidate diagnostic
+        type: boolean
+        default: false
+      replay_run_id:
+        description: Prior hosted run ID whose retained evidence is replayed without either checker
+        type: string
+        default: ''
+      replay_artifact_name:
+        description: Exact dsl-native artifact name from the prior run
+        type: string
+        default: ''
+      replay_sha:
+        description: Source SHA that produced the retained evidence
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+  SWIFT_TLA_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.swift_tla_sha || github.sha }}
+  ADMISSION_MODE: ${{ inputs.admission_mode || 'candidate' }}
+
+jobs:
+  prepare:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.replay_run_id == '' }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    outputs:
+      cases: ${{ steps.cases.outputs.cases }}
+    steps:
+      - name: Validate immutable candidate
+        run: '[[ "$SWIFT_TLA_SHA" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          fetch-depth: 0
+          submodules: false
+      - name: Verify revision and admission mode
+        run: |
+          test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          if [ "$ADMISSION_MODE" = admission ]; then
+            git merge-base --is-ancestor "$SWIFT_TLA_SHA" refs/remotes/origin/main
+          fi
+      - name: Verify pinned bridge sources before the matrix
+        run: ./scripts/setup-finite-graph-tools.sh --verify-bridge-sources
+      - name: Verify pinned reference inputs before the matrix
+        run: bash scripts/verify-finite-graph-input-pins.sh
+      - uses: actions/cache@v4
+        id: binary-cache
+        with:
+          path: .build/release/tlc-validate
+          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-xcode-16.4-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
+      - name: Build validator for this revision
+        if: steps.binary-cache.outputs.cache-hit != 'true'
+        run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
+      - name: Verify cached or built executable
+        run: test -x .build/release/tlc-validate
+      - name: Enumerate complete case coverage
+        id: cases
+        env:
+          FOCUSED_CASE: ${{ inputs.case_id }}
+          BATCH_CASES: ${{ inputs.case_ids }}
+          PROFILE_NATIVE: ${{ inputs.profile_native && 'true' || 'false' }}
+        run: |
+          native=$(.build/release/tlc-validate native list)
+          upstream=$(.build/release/tlc-validate upstream list)
+          if [ -n "$BATCH_CASES" ]; then
+            test -z "$FOCUSED_CASE"
+            test "$PROFILE_NATIVE" != true
+            test "$ADMISSION_MODE" = candidate
+            requested=$(jq -cen --arg raw "$BATCH_CASES" '
+              ($raw | split(",") | map(gsub("^\\s+|\\s+$"; ""))) as $ids
+              | if ($ids | any(. == "")) or (($ids | unique | length) != ($ids | length))
+                then error("batch requires distinct, nonempty case IDs")
+                else $ids end
+            ')
+            jq -e --argjson ids "$requested" '. as $available | all($ids[]; . as $id | $available | index($id) != null)' <<< "$native"
+            jq -e --argjson ids "$requested" '. as $available | all($ids[]; . as $id | $available | index($id) != null)' <<< "$upstream"
+            native="$requested"
+            upstream="$requested"
+          elif [ -n "$FOCUSED_CASE" ]; then
+            test "$ADMISSION_MODE" = candidate
+            native=$(jq -ce --arg id "$FOCUSED_CASE" '[.[] | select(. == $id)]' <<< "$native")
+            upstream=$(jq -ce --arg id "$FOCUSED_CASE" '[.[] | select(. == $id)]' <<< "$upstream")
+            test "$(jq 'length' <<< "$native")" -gt 0 || test "$(jq 'length' <<< "$upstream")" -gt 0
+            if [ "$(jq 'length' <<< "$native")" -eq 0 ]; then native='["__skip__"]'; fi
+            if [ "$(jq 'length' <<< "$upstream")" -eq 0 ]; then upstream='["__skip__"]'; fi
+          else
+            test "$(jq 'length' <<< "$native")" -gt 0
+            test "$(jq 'length' <<< "$upstream")" -gt 0
+            jq -ne --argjson native "$native" --argjson upstream "$upstream" '
+              ($upstream - $native) as $missing
+              | if $missing == [] then true
+                else error("upstream cases without native scenarios: \($missing | join(", "))") end
+            '
+          fi
+          cases=$(jq -cn --argjson native "$native" --argjson upstream "$upstream" '
+            ($native + $upstream | unique | map(select(. != "__skip__"))) as $ids
+            | $ids | map(. as $id | {
+                id: $id,
+                native: ($native | index($id) != null),
+                upstream: ($upstream | index($id) != null)
+              })
+          ')
+          test "$(jq 'length' <<< "$cases")" -gt 0
+          echo "cases=$cases" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: validation-binary-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
+          path: .build/release/tlc-validate
+          if-no-files-found: error
+          overwrite: true
+
+  case-validation:
+    name: Validate ${{ matrix.case.id }}
+    needs: prepare
+    if: ${{ needs.prepare.result == 'success' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        case: ${{ fromJSON(needs.prepare.outputs.cases) }}
+    uses: ./.github/workflows/validation-case.yml
+    with:
+      case_id: ${{ matrix.case.id }}
+      native_enabled: ${{ matrix.case.native }}
+      upstream_enabled: ${{ matrix.case.upstream }}
+      swift_tla_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.swift_tla_sha || github.sha }}
+      admission_mode: ${{ inputs.admission_mode || 'candidate' }}
+      profile_native: ${{ inputs.profile_native || false }}
+      focused_case: ${{ inputs.case_id || '' }}
+
+  temporal-symmetry-parity:
+    name: Temporal and symmetry parity
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.case_id == '' && inputs.case_ids == '' && inputs.replay_run_id == '') }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      FINITE_GRAPH_TOOL_ROOT: ${{ github.workspace }}/.build/finite-graph-tools
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          fetch-depth: 0
+          submodules: false
+      - name: Verify exact source revision
+        run: test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+      - name: Compare native temporal and symmetry results with TLC
+        env:
+          FINITE_GRAPH_GITHUB_TOKEN: ${{ github.token }}
+        run: ./scripts/run_temporal_symmetry_conformance.sh --output .build/temporal-symmetry-conformance
+      - name: Retain source revision
+        if: always()
+        run: |
+          mkdir -p .build/temporal-symmetry-conformance
+          printf '%s\n' "$SWIFT_TLA_SHA" > .build/temporal-symmetry-conformance/source-sha.txt
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: temporal-symmetry-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .build/temporal-symmetry-conformance
+          if-no-files-found: error
+
+  validation-pipeline:
+    name: ${{ github.event_name == 'workflow_dispatch' && (inputs.case_id != '' || inputs.case_ids != '') && 'Independent validation diagnostic' || 'Independent validation admission' }}
+    needs: [prepare, case-validation, temporal-symmetry-parity]
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.replay_run_id == '') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require complete independent validation
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          CASE_RESULT: ${{ needs.case-validation.result }}
+          TEMPORAL_RESULT: ${{ needs.temporal-symmetry-parity.result }}
+          FOCUSED_CASE: ${{ inputs.case_id }}
+          BATCH_CASES: ${{ inputs.case_ids }}
+        run: |
+          test "$PREPARE_RESULT" = success
+          test "$CASE_RESULT" = success
+          if [ -n "$BATCH_CASES" ] || [ -n "$FOCUSED_CASE" ]; then
+            test "$TEMPORAL_RESULT" = skipped
+          else
+            test "$TEMPORAL_RESULT" = success
+          fi
+
+  comparison-replay:
+    name: Comparison replay diagnostic
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.replay_run_id != '' }}
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      CASE_ID: ${{ inputs.case_id }}
+      BATCH_CASES: ${{ inputs.case_ids }}
+      REPLAY_RUN_ID: ${{ inputs.replay_run_id }}
+      REPLAY_SHA: ${{ inputs.replay_sha }}
+      REPLAY_ARTIFACT_NAME: ${{ inputs.replay_artifact_name }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SWIFT_TLA_SHA }}
+          fetch-depth: 0
+          submodules: false
+      - name: Require immutable diagnostic and evidence revisions
+        id: replay-origin
+        run: |
+          test "$(git rev-parse HEAD)" = "$SWIFT_TLA_SHA"
+          test -z "$BATCH_CASES"
+          [[ "$REPLAY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$REPLAY_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          test -n "$CASE_ID"
+          [[ "$CASE_ID" =~ ^[a-z0-9_-]+$ ]]
+          test -n "$REPLAY_ARTIFACT_NAME"
+          git cat-file -e "$REPLAY_SHA^{commit}"
+          case "$REPLAY_ARTIFACT_NAME" in
+            "dsl-native-$REPLAY_SHA-$REPLAY_RUN_ID-"*"-$CASE_ID")
+              attempt="${REPLAY_ARTIFACT_NAME#dsl-native-$REPLAY_SHA-$REPLAY_RUN_ID-}"
+              attempt="${attempt%-$CASE_ID}"
+              [[ "$attempt" =~ ^[1-9][0-9]*$ ]]
+              echo "oracle_name=generated-oracle-$REPLAY_SHA-$REPLAY_RUN_ID-$CASE_ID" >> "$GITHUB_OUTPUT"
+              ;;
+            "upstream-parity-$REPLAY_SHA-$REPLAY_RUN_ID-"*"-$CASE_ID")
+              echo "oracle_name=generated-oracle-$REPLAY_SHA-$REPLAY_RUN_ID-$CASE_ID" >> "$GITHUB_OUTPUT"
+              ;;
+            *) echo "Replay artifact does not match evidence revision and case" >&2; exit 1 ;;
+          esac
+      - uses: actions/download-artifact@v5
+        with:
+          run-id: ${{ inputs.replay_run_id }}
+          name: ${{ inputs.replay_artifact_name }}
+          github-token: ${{ github.token }}
+          path: .build/replay-evidence
+      - name: Locate retained oracle for replay
+        id: replay-oracle
+        run: |
+          if [[ "$REPLAY_ARTIFACT_NAME" == dsl-native-* ]] &&
+              [ ! -f ".build/replay-evidence/oracle/$CASE_ID/oracle.json" ]; then
+            echo 'download=true' >> "$GITHUB_OUTPUT"
+          elif [[ "$REPLAY_ARTIFACT_NAME" == upstream-parity-* ]] &&
+              [ ! -f ".build/replay-evidence/upstream/$CASE_ID/generated-graph/graph-events.bin.gz" ] &&
+              [ ! -f ".build/replay-evidence/upstream/$CASE_ID/generated-full-graph/graph-events.bin.gz" ]; then
+            echo 'download=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/download-artifact@v5
+        if: ${{ steps.replay-oracle.outputs.download == 'true' }}
+        with:
+          run-id: ${{ inputs.replay_run_id }}
+          name: ${{ steps.replay-origin.outputs.oracle_name }}
+          github-token: ${{ github.token }}
+          path: .build/replay-evidence/oracle/${{ inputs.case_id }}
+      - name: Require exact retained evidence origin
+        run: |
+          test "$(cat .build/replay-evidence/source-sha.txt)" = "$REPLAY_SHA"
+          case "$REPLAY_ARTIFACT_NAME" in
+            dsl-native-*)
+              if [ -f ".build/replay-evidence/native/$CASE_ID/machine.bin.gz" ]; then
+                test -f ".build/replay-evidence/oracle/$CASE_ID/tlc-graph/graph-events.bin.gz"
+              else
+                test -f ".build/replay-evidence/native/$CASE_ID/report.json"
+                test -f ".build/replay-evidence/oracle/$CASE_ID/tlc/tlc-process.json"
+              fi
+              ;;
+            upstream-parity-*)
+              generated=".build/replay-evidence/upstream/$CASE_ID/generated-graph"
+              oracle=".build/replay-evidence/oracle/$CASE_ID"
+              if [ ! -f "$generated/graph-events.bin.gz" ] &&
+                  [ ! -f ".build/replay-evidence/upstream/$CASE_ID/generated-full-graph/graph-events.bin.gz" ]; then
+                test -f "$oracle/tlc-graph/graph-events.bin.gz"
+                test -f "$generated/oracle.json"
+                cmp -s "$generated/oracle.json" "$oracle/oracle.json"
+                cmp -s "$generated/tlc-process.json" "$oracle/tlc-graph/tlc-process.json"
+                test ! -L "$oracle/tlc-graph/graph-events.bin.gz"
+                ln "$oracle/tlc-graph/graph-events.bin.gz" "$generated/graph-events.bin.gz" ||
+                  cp "$oracle/tlc-graph/graph-events.bin.gz" "$generated/graph-events.bin.gz"
+              fi
+              for side in generated reference; do
+                graph=".build/replay-evidence/upstream/$CASE_ID/$side-graph"
+                full=".build/replay-evidence/upstream/$CASE_ID/$side-full-graph"
+                test -f "$graph/graph-events.bin.gz" || test -f "$full/graph-events.bin.gz"
+                spool=".build/replay-evidence/upstream/$CASE_ID/$side-graph-spool"
+                if [ -d "$spool" ]; then rm -r -- "$spool"; fi
+              done
+              ;;
+          esac
+      - uses: actions/cache@v4
+        id: binary-cache
+        with:
+          path: .build/release/tlc-validate
+          key: validation-binary-${{ runner.os }}-${{ runner.arch }}-xcode-16.4-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
+      - name: Build comparator for this revision
+        if: steps.binary-cache.outputs.cache-hit != 'true'
+        run: swift build --configuration release --product tlc-validate -Xswiftc -warnings-as-errors -j 1
+      - name: Compare retained complete evidence
+        run: |
+          set -o pipefail
+          test -x .build/release/tlc-validate
+          mkdir -p .build/replay-result
+          mkdir -p ".build/replay-result/comparison/$CASE_ID" .build/replay-work
+          jq -n --arg source "$SWIFT_TLA_SHA" --arg evidence "$REPLAY_SHA" --arg run "$REPLAY_RUN_ID" \
+            '{sourceSHA:$source,evidenceSHA:$evidence,evidenceRunID:$run,admission:false}' \
+            > .build/replay-result/origin.json
+          if [[ "$REPLAY_ARTIFACT_NAME" == upstream-parity-* ]]; then
+            /usr/bin/time -l .build/release/tlc-validate upstream compare-retained-graphs \
+              --case "$CASE_ID" --evidence .build/replay-evidence/upstream \
+              --output .build/replay-work 2>&1 | tee .build/replay-result/comparator.log
+            cp .build/replay-work/comparison.json \
+              ".build/replay-result/comparison/$CASE_ID/comparison.json"
+            du -sk ".build/replay-evidence/upstream/$CASE_ID" \
+              .build/replay-work > .build/replay-result/artifact-sizes-kib.txt
+            jq -e '.result == "exact" and .graphCompared == true' \
+              ".build/replay-result/comparison/$CASE_ID/comparison.json"
+          else
+            /usr/bin/time -l .build/release/tlc-validate compare run --case "$CASE_ID" \
+              --native .build/replay-evidence/native --oracle .build/replay-evidence/oracle \
+              --output .build/replay-work 2>&1 | tee .build/replay-result/comparator.log
+            cp ".build/replay-work/$CASE_ID/comparison.json" \
+              ".build/replay-result/comparison/$CASE_ID/comparison.json"
+            du -sk ".build/replay-evidence/native/$CASE_ID" \
+              ".build/replay-evidence/oracle/$CASE_ID" \
+              .build/replay-work \
+              > .build/replay-result/artifact-sizes-kib.txt
+            jq -e '.result == "exact" and (.graphCompared == true or .assumptionCompared == true)' \
+              ".build/replay-result/comparison/$CASE_ID/comparison.json"
+          fi
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: comparison-replay-${{ env.SWIFT_TLA_SHA }}-${{ github.run_id }}
+          path: .build/replay-result
+          if-no-files-found: error

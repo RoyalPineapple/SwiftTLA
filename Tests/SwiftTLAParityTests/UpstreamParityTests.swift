@@ -1,148 +1,19 @@
+import Foundation
 import Testing
 @testable import SwiftTLA
 @testable import UpstreamParity
 
 struct UpstreamParityTests {
-    @Test("Game of Life preserves the blinker transition")
-    func gameOfLifeBlinkerTransition() throws {
-        func grid(alive: Set<TLAValue>) -> TLAValue {
-            .function(Dictionary(uniqueKeysWithValues: (1...4).flatMap { column in
-                (1...4).map { row in
-                    let position = TLAValue.tuple([.int(column), .int(row)])
-                    return (position, .bool(alive.contains(position)))
-                }
-            }))
-        }
-
-        let vertical: Set<TLAValue> = [
-            .tuple([.int(2), .int(2)]),
-            .tuple([.int(2), .int(3)]),
-            .tuple([.int(2), .int(4)]),
-        ]
-        let horizontal: Set<TLAValue> = [
-            .tuple([.int(1), .int(3)]),
-            .tuple([.int(2), .int(3)]),
-            .tuple([.int(3), .int(3)]),
-        ]
-        let compilation = try GameOfLifeModel.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let initial = try #require(try runtime.initialStates().first)
-        let token = try #require(TLAStateProjection.Token(validating: "grid"))
-        #expect(try initial.projection(using: compilation.layout).value(for: token) == grid(alive: vertical))
-
-        let first = try #require(try runtime.successors(from: initial).first)
-        #expect(try runtime.successors(from: initial).count == 1)
-        #expect(try first.state.projection(using: compilation.layout).value(for: token) == grid(alive: horizontal))
-
-        let second = try #require(try runtime.successors(from: first.state).first)
-        #expect(try second.state.projection(using: compilation.layout).value(for: token) == grid(alive: vertical))
-    }
-
-    @Test("NanoBlockchain preserves its six genesis transitions")
-    func nanoBlockchainGenesisTransitions() throws {
-        let noBlock = TLAValue.record([
-            "block": .record(["type": .string("NoBlock")]),
-            "signature": .record([
-                "data": .string("NoHash"),
-                "signedWith": .string("NoPriv"),
-            ]),
-        ])
-        let emptyLedger = TLAValue.function([
-            .string("h1"): noBlock,
-            .string("h2"): noBlock,
-            .string("h3"): noBlock,
-        ])
-        let initialLedger = TLAValue.function([
-            .string("n1"): emptyLedger,
-            .string("n2"): emptyLedger,
-        ])
-        let emptyReceived = TLAValue.function([
-            .string("n1"): .set([]),
-            .string("n2"): .set([]),
-        ])
-        let compilation = try NanoBlockchainModel.spec.compile()
-        let runtime = CompiledRuntime(compilation: compilation)
-        let initial = try #require(try runtime.initialStates().first)
-        let lastHash = try #require(TLAStateProjection.Token(validating: "lastHash"))
-        let distributedLedger = try #require(TLAStateProjection.Token(validating: "distributedLedger"))
-        let received = try #require(TLAStateProjection.Token(validating: "received"))
-        let initialProjection = try initial.projection(using: compilation.layout)
-        #expect(initialProjection.value(for: lastHash) == .string("NoHash"))
-        #expect(initialProjection.value(for: distributedLedger) == initialLedger)
-        #expect(initialProjection.value(for: received) == emptyReceived)
-
-        let successors = try runtime.successors(from: initial)
-        #expect(successors.count == 6)
-        let names = try successors.map { successor in
-            try #require(
-                compilation.layout.actions.first { $0.id == successor.action }?.declaration.name
-            )
-        }
-        #expect(Dictionary(grouping: names, by: { $0 }).mapValues(\.count) == [
-            "CreateGenesis_prv1": 3,
-            "CreateGenesis_prv2": 3,
-        ])
-
-        for (successor, actionName) in zip(successors, names) {
-            let projection = try successor.state.projection(using: compilation.layout)
-            let hash = try #require(projection.value(for: lastHash))
-            let privateKey = actionName == "CreateGenesis_prv1" ? "prv1" : "prv2"
-            let signedBlock = TLAValue.record([
-                "block": .record([
-                    "type": .string("genesis"),
-                    "account": .string(privateKey),
-                    "balance": .int(3),
-                ]),
-                "signature": .record([
-                    "data": hash,
-                    "signedWith": .string(privateKey),
-                ]),
-            ])
-            let ledger = TLAValue.function([
-                .string("h1"): hash == .string("h1") ? signedBlock : noBlock,
-                .string("h2"): hash == .string("h2") ? signedBlock : noBlock,
-                .string("h3"): hash == .string("h3") ? signedBlock : noBlock,
-            ])
-            #expect(projection.value(for: distributedLedger) == .function([
-                .string("n1"): ledger,
-                .string("n2"): ledger,
-            ]))
-            #expect(projection.value(for: received) == emptyReceived)
-        }
-    }
-
-    @Test("SimpleAllocator binds each finite request through the three authored actions")
-    func simpleAllocatorUsesParameterizedActions() throws {
-        let specification = SimpleAllocatorModel.spec
-        #expect(specification.actions.map(\.name) == ["Request", "Allocate", "Return"])
-        #expect(specification.actions.allSatisfy { $0.bindings.map(\.values.count) == [3, 3] })
-        _ = try specification.compile()
-    }
-
-    @Test("N-Queens FourQueens PlusCal port matches the published TLC graph")
-    func nQueensMatchesTLC() throws {
-        let exploration = try explore(Example.nQueensFour.spec, maximumStateLimit: 5_000)
-        #expect(exploration.graph.states.count == Example.nQueensFour.expectedDistinct)
-        #expect(isSuccessful(exploration))
-    }
-
-    @Test("two-process Lock PlusCal port matches TLC")
-    func lockMatchesTLC() throws {
-        let exploration = try explore(Example.lockTwoProcess.spec, maximumStateLimit: 100)
-        #expect(exploration.graph.states.count == Example.lockTwoProcess.expectedDistinct)
-        #expect(isSuccessful(exploration))
-    }
-
-    @Test("two-process Peterson PlusCal port matches TLC")
-    func petersonMatchesTLC() throws {
-        let exploration = try explore(Example.petersonTwoProcess.spec, maximumStateLimit: 1_000)
-        #expect(exploration.graph.states.count == Example.petersonTwoProcess.expectedDistinct)
-        #expect(isSuccessful(exploration))
+    @Test("two-process Lock generated machine explores its complete bounded graph")
+    func lockGeneratedGraph() throws {
+        let graph = try ReachabilityGraph(initialMachines: LockModel.initialMachines(), maximumStates: 100)
+        #expect(graph.transitions.count == Example.lockTwoProcess.expectedDistinct)
+        #expect(graph.safetyViolations.isEmpty)
     }
 
     @Test("HourClock TLA+ module is TLC-shaped")
     func hourClockTLA() throws {
-        let tla = try Example.hourClock.spec.compile().renderedTLAModuleBundle().tla
+        let tla = try Example.hourClock.spec.compile().render().tlaBundle.tla
         #expect(tla.contains("MODULE HourClock"))
         #expect(tla.contains("hr \\in"))
         #expect(tla.contains("HCnxt"))
@@ -151,139 +22,285 @@ struct UpstreamParityTests {
 
     @Test("DieHard actions match upstream names")
     func dieHardNames() throws {
-        let tla = try Example.dieHardTypeOK.spec.compile().renderedTLAModuleBundle().tla
-        for name in ["FillSmallJug", "FillBigJug", "EmptySmallJug", "EmptyBigJug", "SmallToBig", "BigToSmall", "TypeOK"] {
+        let tla = try DieHardModel.render().tlaBundle.tla
+        for name in ["FillSmallJug", "FillBigJug", "EmptySmallJug", "EmptyBigJug", "SmallToBig", "BigToSmall", "TypeOK", "NotSolved"] {
             #expect(tla.contains(name), "missing \(name)")
         }
     }
 
-    @Test("Channel typed record model matches its validated state count")
-    func channelTypedRecordParity() throws {
-        let exploration = try explore(ChannelModel.spec, maximumStateLimit: 50_000)
-        #expect(exploration.graph.states.count == Example.channel.expectedDistinct)
-        #expect(isSuccessful(exploration))
+    @Test("Channel application transitions and complete checking agree for every upstream configuration")
+    func channelGraphParity() throws {
+        struct Edge: Hashable {
+            let source: ChannelModel.Snapshot
+            let action: ChannelModel.Action
+            let target: ChannelModel.Snapshot
+        }
+        for scenario in try ChannelModel.validationScenarios() {
+            let configuration = scenario.configuration
+            let exploration = try scenario.explore(maximumStates: 100)
+            let count = configuration.Data.count
+            #expect(exploration.initialStates.count == 2 * count)
+            #expect(exploration.initialStates.allSatisfy { $0.state.chan.ack == $0.state.chan.rdy })
+            let checkedEdges = Set(exploration.transitions.flatMap { source, transitions in
+                transitions.map { Edge(source: source, action: $0.action, target: $0.target) }
+            })
+            var pending = try scenario.initialMachines()
+            #expect(Set(pending.map(\.snapshot)) == exploration.initialStates)
+            #expect(throws: GeneratedMachineError.ambiguousInitialState) {
+                try ChannelModel.makeMachine(configuration: configuration)
+            }
+            let datum = try #require(configuration.Data.first)
+            #expect(throws: GeneratedMachineError.invalidInitialState) {
+                try ChannelModel.makeMachine(.init(chan: .init(ack: 1, rdy: 0, val: datum)),
+                    configuration: configuration)
+            }
+            let actions = configuration.Data.map { ChannelModel.Action.Send(d: $0) } + [.Rcv]
+            var states: Set<ChannelModel.Snapshot> = []
+            var edges: Set<Edge> = []
+            while let machine = pending.popLast() {
+                guard states.insert(machine.snapshot).inserted else { continue }
+                try #require(states.count <= 4 * count)
+                #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
+                let enabled = try Set(machine.enabledActions())
+                for action in actions {
+                    let successors = try machine.successors(for: action)
+                    #expect(try machine.isEnabled(action) == !successors.isEmpty)
+                    #expect(enabled.contains(action) == !successors.isEmpty)
+                    var next = machine
+                    guard let successor = successors.first else {
+                        #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try next.send(action) }
+                        #expect(next.state == machine.state)
+                        continue
+                    }
+                    try #require(successors.count == 1)
+                    let transition = try next.send(action)
+                    #expect(transition.before == machine.state)
+                    #expect(transition.after == successor.state)
+                    #expect(next.state == successor.state)
+                    edges.insert(Edge(source: machine.snapshot, action: action, target: next.snapshot))
+                    pending.append(next)
+                }
+            }
+            #expect(states == Set(exploration.transitions.keys))
+            #expect(edges == checkedEdges)
+            #expect(states.count == 4 * count)
+            #expect(edges.count == 2 * count * (count + 1))
+        }
     }
 
-    @Test("AsynchInterface typed record model matches its validated state count")
-    func asynchInterfaceTypedRecordParity() throws {
-        let exploration = try explore(AsynchInterfaceModel.spec, maximumStateLimit: 50_000)
-        #expect(exploration.graph.states.count == Example.asynchInterface.expectedDistinct)
-        #expect(isSuccessful(exploration))
+    @Test("AsynchInterface application transitions and complete checking agree for every upstream configuration")
+    func asynchInterfaceGraphParity() throws {
+        struct Edge: Hashable {
+            let source: AsynchInterfaceModel.Snapshot
+            let action: AsynchInterfaceModel.Action
+            let target: AsynchInterfaceModel.Snapshot
+        }
+        for scenario in try AsynchInterfaceModel.validationScenarios() {
+            let configuration = scenario.configuration
+            let exploration = try scenario.explore(maximumStates: 100)
+            let count = configuration.Data.count
+            #expect(exploration.initialStates.count == 2 * count)
+            #expect(exploration.initialStates.allSatisfy { $0.state.ack == $0.state.rdy })
+            let checkedEdges = Set(exploration.transitions.flatMap { source, transitions in
+                transitions.map { Edge(source: source, action: $0.action, target: $0.target) }
+            })
+            var pending = try scenario.initialMachines()
+            #expect(Set(pending.map(\.snapshot)) == exploration.initialStates)
+            #expect(throws: GeneratedMachineError.ambiguousInitialState) {
+                try AsynchInterfaceModel.makeMachine(configuration: configuration)
+            }
+            let datum = try #require(configuration.Data.first)
+            #expect(throws: GeneratedMachineError.invalidInitialState) {
+                try AsynchInterfaceModel.makeMachine(.init(val: datum, rdy: 0, ack: 1),
+                    configuration: configuration)
+            }
+            var states: Set<AsynchInterfaceModel.Snapshot> = []
+            var edges: Set<Edge> = []
+            let actions: [AsynchInterfaceModel.Action] = [.Send, .Rcv]
+            while let machine = pending.popLast() {
+                guard states.insert(machine.snapshot).inserted else { continue }
+                try #require(states.count <= 4 * count)
+                #expect(try machine.violatedInvariants(atLevel: 1).isEmpty)
+                let enabled = try Set(machine.enabledActions())
+                for action in actions {
+                    let candidates = try machine.successors(for: action)
+                    #expect(try machine.isEnabled(action) == !candidates.isEmpty)
+                    #expect(enabled.contains(action) == !candidates.isEmpty)
+                    var sent = machine
+                    switch candidates.count {
+                    case 0:
+                        #expect(throws: GeneratedMachineError.noMatchingSuccessor) { try sent.send(action) }
+                        #expect(sent.snapshot == machine.snapshot)
+                    case 1:
+                        let transition = try sent.send(action)
+                        #expect(transition.before == machine.state)
+                        #expect(transition.after == candidates[0].state)
+                        #expect(sent.snapshot == candidates[0].snapshot)
+                    default:
+                        #expect(throws: GeneratedMachineError.ambiguousAction) { try sent.send(action) }
+                        #expect(sent.snapshot == machine.snapshot)
+                    }
+                    for candidate in candidates {
+                        edges.insert(Edge(source: machine.snapshot, action: action, target: candidate.snapshot))
+                    }
+                    pending.append(contentsOf: candidates)
+                }
+            }
+            #expect(states == Set(exploration.transitions.keys))
+            #expect(edges == checkedEdges)
+            #expect(states.count == 4 * count)
+            #expect(edges.count == 2 * count * (count + 1))
+        }
     }
 
-    @Test("TeachingConcurrency Simple models use typed phase state")
-    func teachingSimpleTypedPhaseParity() throws {
-        let n2 = try explore(TeachingSimpleN2Model.spec, maximumStateLimit: 50_000)
-        let n3 = try explore(TeachingSimpleN3Model.spec, maximumStateLimit: 50_000)
-        #expect(n2.graph.states.count == Example.teachingSimpleN2.expectedDistinct)
-        #expect(n3.graph.states.count == Example.teachingSimpleN3.expectedDistinct)
-    }
-
-    @Test("TeachingConcurrency SimpleRegular uses bounded regular-register state")
-    func teachingSimpleRegularParity() throws {
-        let exploration = try explore(TeachingSimpleRegularN8Model.spec, maximumStateLimit: Example.teachingSimpleRegularN8.maximumStateLimit)
-        #expect(exploration.graph.states.count == Example.teachingSimpleRegularN8.expectedDistinct)
-    }
-
-    @Test("FindHighest PlusCal port matches its bounded TLC configuration")
-    func findHighestParity() throws {
-        let exploration = try explore(FindHighestModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.findHighest.expectedDistinct)
-    }
-
-    @Test("Dijkstra mutex preserves its bounded PlusCal model")
-    func dijkstraMutexParity() throws {
-        let exploration = try explore(DijkstraMutexModel.spec, maximumStateLimit: Example.dijkstraMutex.maximumStateLimit)
-        #expect(exploration.graph.states.count == Example.dijkstraMutex.expectedDistinct)
-    }
-
-    @Test("BinarySearch PlusCal port matches its bounded TLC configuration")
-    func binarySearchParity() throws {
-        let exploration = try explore(BinarySearchModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.binarySearch.expectedDistinct)
-        let tla = try BinarySearchModel.spec.compile().renderedTLAModuleBundle().tla
-        #expect(tla.contains("WF_<<pc, seq, val, low, high, result>>(Next)"))
-    }
-
-    @Test("Consensus PlusCal port matches its bounded TLC configuration")
-    func consensusParity() throws {
-        let exploration = try explore(ConsensusModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.consensus.expectedDistinct)
-    }
-
-    @Test("Paxos typed state preserves its bounded TLC graph")
-    func paxosTypedStateParity() throws {
-        let exploration = try explore(
-            PaxosModel.spec,
-            maximumStateLimit: Example.paxosSmall.maximumStateLimit
+    @Test("configured Dijkstra populations preserve complete initial domains and the three-process graph")
+    func dijkstraConfiguredPopulations() throws {
+        let owner = try #require(TLAStateProjection.Token(validating: "k"))
+        let firstFlag = try #require(TLAStateProjection.Token(validating: "b"))
+        let secondFlag = try #require(TLAStateProjection.Token(validating: "c"))
+        let control = try #require(TLAStateProjection.Token(validating: "pc"))
+        let temporary = try #require(TLAStateProjection.Token(validating: "temp"))
+        for population in [
+            Set<DijkstraMutexModel.Process>([.one, .two, .three]),
+            Set<DijkstraMutexModel.Process>([.one, .two, .three, .four]),
+        ] {
+            let initial = try DijkstraMutexModel.initialMachines(
+                configuration: DijkstraMutexModel.Configuration(Proc: population))
+            let members = Set(population.map(\.tlaValue))
+            let flags = TLAValue.function(Dictionary(uniqueKeysWithValues: members.map { ($0, TLAValue.bool(true)) }))
+            let controls = TLAValue.function(Dictionary(uniqueKeysWithValues: members.map { ($0, TLAValue.string("Li0")) }))
+            let initialTemporary = TLAValue.function(Dictionary(uniqueKeysWithValues: members.map {
+                ($0, TLAValue.constant("defaultInitValue"))
+            }))
+            #expect(initial.count == population.count)
+            for machine in initial {
+                let state = try machine.formalProjection(of: machine.snapshot)
+                try #require(state.value(for: owner).map(members.contains) == true)
+                #expect(state.value(for: firstFlag) == flags)
+                #expect(state.value(for: secondFlag) == flags)
+                #expect(state.value(for: control) == controls)
+                #expect(state.value(for: temporary) == initialTemporary)
+            }
+        }
+        let initial = try DijkstraMutexModel.initialMachines(
+            configuration: DijkstraMutexModel.Configuration(Proc: [.one, .two, .three]))
+        let graph = try ReachabilityGraph(
+            initialMachines: initial,
+            maximumStates: 100_000,
+            checking: ModelChecks(properties: [.MutualExclusion])
         )
-
-        #expect(exploration.graph.states.count == Example.paxosSmall.expectedDistinct)
-        #expect(isSuccessful(exploration))
+        #expect(graph.transitions.count == 90_882)
+        #expect(graph.safetyViolations.isEmpty)
     }
 
-    @Test("SumSequence bounded source port verifies")
-    func sumSequenceBoundedPort() throws {
-        let exploration = try explore(SumSequenceModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.sumSequence.expectedDistinct)
+    @Test("four-process Dijkstra scenario selects generated Spec, MutualExclusion, and deadlock")
+    func dijkstraSafetyScenario() throws {
+        #expect(try modelValidationScenarios().contains {
+            $0.id == "dijkstra-mutex-0" && $0.scenario.name == "Safety4Processors"
+        })
+        let scenario = try #require(DijkstraMutexModel.validationScenarios().first)
+        #expect(scenario.name == "Safety4Processors")
+        #expect(scenario.configuration.Proc == Set<DijkstraMutexModel.Process>([.one, .two, .three, .four]))
+        #expect(scenario.behavior == .specification)
+        #expect(scenario.checking.properties == [.MutualExclusion])
+        #expect(scenario.checking.checkDeadlock)
+        #expect(Set(DijkstraMutexModel.Property.allCases) ==
+            [.MutualExclusion, .DeadlockFree, .StarvationFree, .DeadlockFreedom])
+
+        let rendered = try scenario.render()
+        #expect(rendered.checkNames == ["MutualExclusion"])
+        #expect(rendered.checksDeadlock)
+        #expect(rendered.tlaBundle.root.tla.contains("DeadlockFree == (\\A _process \\in Proc:"))
+        #expect(rendered.tlaBundle.root.tla.contains("StarvationFree == (\\A _process \\in Proc:"))
+        #expect(rendered.tlaBundle.root.tla.contains("DeadlockFreedom == (\\A _process \\in Proc:"))
+        let module = rendered.tlaBundle.root.tla
+        let profileStart = try #require(module.range(of: "SwiftTLAProfile0 =="))
+        let fairness = module[..<profileStart.lowerBound].split(separator: "\n").filter { $0.contains("WF_") }
+        #expect(fairness.count == 1)
+        let obligation = try #require(fairness.first)
+        #expect(obligation.contains("\\A _process \\in Proc: WF_"))
+        #expect(obligation.contains("Li0(_process)"))
+        #expect(obligation.contains("ncs(_process)"))
+        let configuration = try #require(rendered.tlaBundle.root.cfg)
+        #expect(configuration.contains("SPECIFICATION Spec"))
+        #expect(configuration.contains("INVARIANT MutualExclusion"))
+        #expect(!configuration.contains("PROPERTY DeadlockFreedom"))
     }
 
-    @Test("Reachable bounded source port compiles its formal graph choice")
+    @Test("three-process Dijkstra liveness selects the published fairness profile and checks")
+    func dijkstraLivenessScenario() throws {
+        #expect(try modelValidationScenarios().contains {
+            $0.id == "dijkstra-mutex-1" && $0.scenario.name == "Liveness3Processors"
+        })
+        let scenario = try #require(DijkstraMutexModel.validationScenarios().first {
+            $0.name == "Liveness3Processors"
+        })
+        #expect(scenario.configuration.Proc == Set<DijkstraMutexModel.Process>([.one, .two, .three]))
+        #expect(scenario.behavior == .specification)
+        #expect(scenario.checking.properties == [.MutualExclusion, .DeadlockFreedom])
+        #expect(scenario.checking.checkDeadlock)
+
+        let rendered = try scenario.render()
+        #expect(Set(rendered.checkNames) == ["MutualExclusion", "DeadlockFreedom"])
+        let configuration = try #require(rendered.tlaBundle.root.cfg)
+        #expect(configuration.contains("SPECIFICATION SwiftTLAProfile0"))
+        #expect(configuration.contains("INVARIANT MutualExclusion"))
+        #expect(configuration.contains("PROPERTY DeadlockFreedom"))
+        let module = rendered.tlaBundle.root.tla
+        let profile = try #require(module.components(separatedBy: "SwiftTLAProfile0 ==").last)
+        let obligation = try #require(profile.split(separator: "\n").first { $0.contains("WF_") })
+        #expect(obligation.contains("Li0(_process)"))
+        #expect(!obligation.contains("ncs(_process)"))
+
+        let plusCal = try rendered.plusCalBundle()
+        #expect(plusCal.root.tla.contains("ncs:-"))
+    }
+
+    @Test("three-process Dijkstra generated checker completes its selected liveness")
+    func dijkstraGeneratedLivenessCompletes() throws {
+        let scenario = try #require(DijkstraMutexModel.validationScenarios().first {
+            $0.name == "Liveness3Processors"
+        })
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let report = try NativeValidationRunner.run(
+            scenario: scenario, caseID: "dijkstra-mutex-1", maximumStates: 100_000, to: directory)
+        #expect(report.graphComplete)
+        #expect(report.initialStates == 3)
+        #expect(report.states == 90_882)
+        #expect(report.edges == 282_807)
+        #expect(report.properties["MutualExclusion"] == .satisfied)
+        #expect(report.properties["DeadlockFreedom"] == .satisfied)
+        #expect(report.deadlock == .satisfied)
+    }
+
+    @Test("bounded Consensus fixture retains terminal deadlocks and temporal progress")
+    func consensusGeneratedChecking() throws {
+        let graph = try ReachabilityGraph(initialMachines: ConsensusModel.initialMachines(), maximumStates: 100)
+        #expect(graph.transitions.count == Example.consensus.expectedDistinct)
+        #expect(graph.safetyViolations.count == 3)
+        #expect(graph.safetyViolations.values.allSatisfy { $0 == [.deadlock] })
+        #expect(graph.temporalResults[.Success]?.status == .satisfied)
+    }
+
+    @Test("Reachable bounded source port checks its generated machine")
     func reachableBoundedPort() throws {
-        let exploration = try explore(ReachableModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.reachable.expectedDistinct)
+        let graph = try ReachabilityGraph(
+            initialMachines: ReachableModel.initialMachines(),
+            maximumStates: Example.reachable.maximumStateLimit
+        )
+        #expect(graph.transitions.count == Example.reachable.expectedDistinct)
+        #expect(graph.safetyViolations.isEmpty)
     }
 
-    @Test("Parallel Reachable bounded source port verifies")
+    @Test("Parallel Reachable bounded source port checks its generated machine")
     func parallelReachableBoundedPort() throws {
-        let exploration = try explore(ParallelReachableModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.parallelReachable.expectedDistinct)
+        let graph = try ReachabilityGraph(
+            initialMachines: ParallelReachableModel.initialMachines(),
+            maximumStates: Example.parallelReachable.maximumStateLimit
+        )
+        #expect(graph.transitions.count == Example.parallelReachable.expectedDistinct)
+        #expect(graph.safetyViolations.isEmpty)
     }
 
-    @Test("Echo PlusCal port matches its three-node TLC configuration")
-    func echoParity() throws {
-        let exploration = try explore(EchoModel.spec, maximumStateLimit: 100_000)
-        #expect(exploration.graph.states.count == Example.echo.expectedDistinct)
-    }
-
-    @Test("EWD840 uses typed finite function state")
-    func ewd840TypedFunctionParity() throws {
-        let exploration = try explore(EWD840Model.spec, maximumStateLimit: 50_000)
-        #expect(exploration.graph.states.count == Example.ewd840.expectedDistinct)
-        #expect(isSuccessful(exploration))
-    }
-
-    @Test("EWD998 uses typed finite functions and parameterized actions")
-    func ewd998TypedFunctionParity() throws {
-        let exploration = try explore(EWD998TerminationModel.spec, maximumStateLimit: 50_000)
-        #expect(exploration.graph.states.count == Example.ewd998.expectedDistinct)
-        #expect(isSuccessful(exploration))
-    }
-
-    @Test("Moving Cat models use typed direction state")
-    func movingCatTypedDirectionParity() throws {
-        let even = try explore(CatEvenBoxesModel.spec, maximumStateLimit: 50_000)
-        let odd = try explore(CatOddBoxesModel.spec, maximumStateLimit: 50_000)
-        #expect(even.graph.states.count == Example.catEvenBoxes.expectedDistinct)
-        #expect(odd.graph.states.count == Example.catOddBoxes.expectedDistinct)
-    }
-
-    @Test("Sync termination detector uses typed finite function state")
-    func syncTerminationTypedFunctionParity() throws {
-        let exploration = try explore(SyncTerminationDetectionModel.spec, maximumStateLimit: 50_000)
-        #expect(exploration.graph.states.count == Example.syncTD.expectedDistinct)
-    }
-}
-
-private func explore(_ spec: TLASpec, maximumStateLimit: Int) throws -> FiniteExploration {
-    let compilation = try spec.compile()
-    return try ModelChecker(
-        compilation: compilation,
-        configuration: try FiniteExplorationConfiguration(maximumStateLimit: maximumStateLimit, symmetryReduction: .disabled)
-    ).explore()
-}
-
-private func isSuccessful(_ exploration: FiniteExploration) -> Bool {
-    if case .ok = exploration.outcome { return true }
-    return false
 }

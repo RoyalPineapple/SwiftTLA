@@ -50,6 +50,7 @@ readonly common_git_dir="$(git rev-parse --git-common-dir)"
 readonly lock_file="$common_git_dir/swifttla-local-validation.advisory.lock"
 require_positive_integer "SWIFTTLA_LOCAL_VALIDATION_LOCK_WAIT_SECONDS" "$lock_wait_seconds"
 scratch_dir=""
+build_dir=""
 command_pid=""
 command_group=""
 watchdog_pid=""
@@ -164,14 +165,107 @@ run_guarded() {
     local status=0
     if [[ "$mode" == "static" ]]; then
         git diff --check
+        ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }' \
+            .github/workflows/validation-pipeline.yml .github/workflows/validation-case.yml
+        "$(dirname "$0")/setup-finite-graph-tools.sh" --verify-bridge-sources
+        bash "$(dirname "$0")/verify-finite-graph-input-pins.sh"
         return
     fi
 
     scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/swifttla-local-validation.XXXXXX")"
+    export SWIFTTLA_VALIDATION_SCRATCH_PATH="$scratch_dir"
+    if [[ "$mode" == "swiftpm-test" ]]; then
+        local cache_root="$common_git_dir/swifttla-local-validation-cache"
+        local worktree_key worktree_cache
+        local cache_key cache_key_file toolchain_key toolchain_key_file macro_key macro_key_file
+        [[ ! -L "$cache_root" ]] || fail "cache root must not be a symlink"
+        mkdir -p "$cache_root"
+        # SwiftPM build records include checkout paths, so isolate worktree builds.
+        worktree_key="$(git rev-parse --show-toplevel | shasum -a 256 | awk '{print $1}')"
+        [[ "$worktree_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute worktree cache key"
+        worktree_cache="$cache_root/$worktree_key"
+        [[ ! -L "$worktree_cache" ]] || fail "worktree cache directory must not be a symlink"
+        mkdir -p "$worktree_cache"
+        cache_key_file="$worktree_cache/source-key"
+        toolchain_key_file="$worktree_cache/toolchain-key"
+        macro_key_file="$worktree_cache/macro-source-key"
+        toolchain_key="$({
+            printf '%s\n' \
+                'swiftpm-local-validation-toolchain-v1' \
+                "$(xcrun --find swift)" \
+                "$(swift --version 2>&1)" \
+                "$(xcrun --show-sdk-version)" \
+                "${DEVELOPER_DIR:-}" \
+                "${SDKROOT:-}" \
+                "${SWIFT_EXEC:-}" \
+                "${SWIFTFLAGS:-}"
+            shasum -a 256 -- Package.swift Package.resolved
+        } | shasum -a 256 | awk '{print $1}')"
+        cache_key="$({
+            printf '%s\n' \
+                'swiftpm-local-validation-v1' \
+                "$(git rev-parse --show-toplevel)" \
+                "$(xcrun --find swift)" \
+                "$(swift --version 2>&1)" \
+                "$(xcrun --show-sdk-version)" \
+                "${DEVELOPER_DIR:-}" \
+                "${SDKROOT:-}" \
+                "${SWIFT_EXEC:-}" \
+                "${SWIFTFLAGS:-}"
+            git ls-files --cached --others --exclude-standard -z |
+                while IFS= read -r -d '' input_path; do
+                    if [[ -f "$input_path" && ! -L "$input_path" ]]; then
+                        printf '%s\0' "$input_path"
+                    fi
+                done | xargs -0 shasum -a 256 --
+            git ls-files --cached --others --exclude-standard -z |
+                while IFS= read -r -d '' input_path; do
+                    if [[ -L "$input_path" ]]; then
+                        printf 'symlink:%s:%s\n' "$input_path" "$(readlink "$input_path")"
+                        if [[ -f "$input_path" ]]; then
+                            shasum -a 256 -- "$input_path"
+                        fi
+                    fi
+                done
+        } | shasum -a 256 | awk '{print $1}')"
+        macro_key="$({
+            printf '%s\n' 'swiftpm-local-validation-macro-sources-v1'
+            git ls-files --cached --others --exclude-standard -z -- \
+                Sources/SwiftTLA Sources/SwiftTLAPlugin Sources/SwiftTLAMacros |
+                while IFS= read -r -d '' input_path; do
+                    if [[ -f "$input_path" && ! -L "$input_path" ]]; then
+                        shasum -a 256 -- "$input_path"
+                    elif [[ -L "$input_path" ]]; then
+                        printf 'symlink:%s:%s\n' "$input_path" "$(readlink "$input_path")"
+                    fi
+                done
+        } | shasum -a 256 | awk '{print $1}')"
+        [[ "$cache_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute source cache key"
+        [[ "$toolchain_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute toolchain cache key"
+        [[ "$macro_key" =~ ^[0-9a-f]{64}$ ]] || fail "could not compute macro source cache key"
+        build_dir="$worktree_cache/.build"
+        [[ ! -L "$build_dir" ]] || fail "cache build directory must not be a symlink"
+        [[ ! -L "$cache_key_file" ]] || fail "cache key file must not be a symlink"
+        [[ ! -L "$toolchain_key_file" ]] || fail "toolchain key file must not be a symlink"
+        [[ ! -L "$macro_key_file" ]] || fail "macro key file must not be a symlink"
+        if [[ -e "$build_dir" ]]; then
+            [[ -d "$build_dir" ]] || fail "cache build path is not a directory"
+            # SwiftPM does not always re-expand unchanged model files when the
+            # compiler or macro implementation changes. Keep incremental test
+            # edits, but invalidate generated consumers with their producer.
+            if [[ ! -r "$toolchain_key_file" || "$(<"$toolchain_key_file")" != "$toolchain_key" ||
+                  ! -r "$macro_key_file" || "$(<"$macro_key_file")" != "$macro_key" ]]; then
+                rm -rf -- "$build_dir"
+            fi
+        fi
+        printf '%s\n' "$toolchain_key" > "$toolchain_key_file"
+        printf '%s\n' "$macro_key" > "$macro_key_file"
+        printf '%s\n' "$cache_key" > "$cache_key_file"
+    fi
     set -m
     case "$mode" in
         swiftpm-test)
-            swift test --filter "$selector" -j 1 --scratch-path "$scratch_dir/.build" &
+            swift test -Xswiftc -warnings-as-errors --filter "$selector" -j 1 --scratch-path "$build_dir" &
             ;;
         xcode-test)
             package_dir="$PWD"
@@ -183,7 +277,7 @@ run_guarded() {
             package_scheme="$(basename "$package_dir")-Package"
             (
                 cd "$package_dir"
-                xcodebuild test -scheme "$package_scheme" -destination 'platform=macOS' \
+                xcodebuild test SWIFT_TREAT_WARNINGS_AS_ERRORS=YES SWIFT_SUPPRESS_WARNINGS=NO -scheme "$package_scheme" -destination 'platform=macOS' \
                     "-only-testing:$selector" -parallel-testing-enabled NO \
                     -parallel-testing-worker-count 1 -jobs 1 \
                     -derivedDataPath "$scratch_dir/DerivedData"

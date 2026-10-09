@@ -5,45 +5,29 @@ import SwiftTLAMacros
 /// TLA+ Examples repository.
 ///
 /// A record is the message on the network. The `inbox` finite function gives
-/// every node its own set of messages, while each `Each(Node.all)` body is an
+/// every node its own set of messages, while each `Each(Node)` body is an
 /// independently scheduled PlusCal process.
+@TLAModel
 package struct EchoModel: Sendable {
-    package enum Node: String, TLAValueType, FiniteTLAValueDomain {
+    package enum NodeID: String, CaseIterable {
         case a, b, c
-
-        package static let finiteValues: [Self] = [.a, .b, .c]
-        package static var defaultValue: Self { .a }
     }
 
-    package enum MessageKind: String, TLAValueType {
+    package enum MessageKind: String, CaseIterable {
         case message = "m"
         case acknowledgement = "c"
-
-        package static var defaultValue: Self { .message }
     }
 
-    package struct MessageFields {
+    package struct Message: Hashable, Sendable {
         package let kind: MessageKind
-        package let sender: Node
+        package let sndr: NodeID
     }
 
-    package enum MessageSchema: TLARecordSchema {
-        package typealias Fields = MessageFields
+    package enum NoNode: String, TLAValueType {
+        case value = "NoNode"
 
-        package static let fields: [TLARecordFieldDeclaration<Self>] = [
-            .init(kind, default: MessageKind.message),
-            .init(sender, default: Node.a),
-        ]
-
-        package static func fieldName<Value>(for field: KeyPath<MessageFields, Value>) -> String? {
-            let key = field as AnyKeyPath
-            if key == \MessageFields.kind { return "kind" }
-            if key == \MessageFields.sender { return "sender" }
-            return nil
-        }
-
-        package static let kind = field(\MessageFields.kind)
-        package static let sender = field(\MessageFields.sender)
+        package static var defaultValue: Self { .value }
+        package var tlaValue: TLAValue { .constant(rawValue) }
     }
 
     private enum Step: String, CaseIterable {
@@ -51,84 +35,153 @@ package struct EchoModel: Sendable {
     }
 
     package static var spec: TLASpec {
-        #spec("Echo") {
+        #spec("Echo") { (spec: SpecificationScope) in
             Extends(.finiteSets)
-            Algorithm("Echo", scoped: { scope in
-                let inbox = scope.sharedVar("inbox", initial: Function<Node, SetExpr<Record<MessageSchema>>>.literal(
-                    (.a, SetExpr<Record<MessageSchema>>()),
-                    (.b, SetExpr<Record<MessageSchema>>()),
-                    (.c, SetExpr<Record<MessageSchema>>())
-                ))
+            let Node = spec.parameter(as: Set<NodeID>.self, in: Subsets(of: NodeID.all.assuming(Set<NodeID>.self)))
+            let initiator = spec.parameter(as: NodeID.self, in: Node)
+            let pairs = Node.flatMapping { (from: WithValue<NodeID>) in
+                Node.mapping { (to: WithValue<NodeID>) in Pair<NodeID, NodeID>.literal(from, to) }
+            }
+            let R = spec.parameter(as: Set<Pair<NodeID, NodeID>>.self, in: Subsets(of: pairs))
+            Assume(Node.contains(initiator))
+            Assume(ForAll(in: Node) { node in !R.contains(Pair<NodeID, NodeID>.literal(node, node)) })
+            Assume(ForAll(in: pairs) { edge in
+                R.contains(edge) == R.contains(Pair<NodeID, NodeID>.literal(edge.second(), edge.first()))
+            })
+            Assume(LetRec("echoConnectedPath", taking: Triple<NodeID, NodeID, Int>.self,
+                { (path: LocalRecursion<Triple<NodeID, NodeID, Int>, Bool>,
+                   endpoints: WithValue<Triple<NodeID, NodeID, Int>>) in
+                    endpoints.first() == endpoints.second()
+                        || (endpoints.third() > 0 && Exists(in: Node) { next in
+                            R.contains(Pair<NodeID, NodeID>.literal(endpoints.first(), next))
+                                && path(Triple<NodeID, NodeID, Int>.literal(
+                                    next, endpoints.second(), endpoints.third() - 1))
+                        })
+                }, in: { path in
+                    ForAll(in: Node) { from in
+                        ForAll(in: Node) { to in
+                            path(Triple<NodeID, NodeID, Int>.literal(from, to, Node.cardinality))
+                        }
+                    }
+                }))
+            let TypeOK = Invariant()
+            let AncestorProperties = Invariant()
+            let Echo = Algorithm(scoped: { (scope: AlgorithmScope) in
+                let inbox: SharedVariable<[NodeID: Set<Message>]> = scope.sharedVar(initial:
+                    Dictionary<NodeID, Set<Message>>.mapping(over: Node) { _ in Set<Message>() })
 
-                Each(Node.all, scoped: { selfID, scope in
-                    // The root's concrete `parent` default keeps the Swift value
-                    // type finite while matching the algorithm.
-                    let parent: LocalVariable<Node> = scope.localVar("parent", initial: .a)
-                    let children: LocalVariable<SetExpr<Node>> = scope.localVar("children", initial: SetExpr<Node>())
-                    let received: LocalVariable<Int> = scope.localVar("received", initial: 0)
+                Each(Node, scoped: { (selfID: ProcessIdentifier<NodeID>, scope: ProcessScope) in
+                    let parent: LocalVariable<OneOf<NodeID, NoNode>> = scope.localVar(
+                        initial: OneOf<NodeID, NoNode>.second(NoNode.value)
+                    )
+                    let children: LocalVariable<Set<NodeID>> = scope.localVar(initial: Set<NodeID>())
+                    let rcvd: LocalVariable<Int> = scope.localVar(initial: 0)
+                    let nbrs: LocalVariable<Set<NodeID>> = scope.localVar(
+                        initial: Node.filtering { neighbor in
+                            R.contains(Pair<NodeID, NodeID>.literal(neighbor, selfID))
+                        }
+                    )
 
                     Do(Step.n0) {
-                        If(selfID == .a) {
-                            Assign(inbox, to: Function<Node, SetExpr<Record<MessageSchema>>>.mapping { destination in
-                                If(SetExpr<Node>.literal(.a, .b, .c).removing(selfID).contains(destination),
-                                   then: inbox[destination].inserting(Record<MessageSchema>.literal(
-                                       .init(MessageSchema.kind, .message),
-                                       .init(MessageSchema.sender, selfID)
-                                   )),
+                        If(selfID == initiator) {
+                            Assign(inbox, to: Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
+                                If(nbrs.expr.contains(destination),
+                                   then: inbox[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
                                    else: inbox[destination])
                             })
                         }
                     }
 
-                    While(Step.n1, received.expr < SetExpr<Node>.literal(.a, .b, .c).removing(selfID).cardinality) {
-                        With(inbox[selfID]) { message in
-                            Let(inbox.updating(selfID, to: inbox[selfID].removing(message))) { networkAfterReceive in
-                                Assign(received, to: received.expr + 1)
-                                If(selfID != .a && received.expr == 0) {
-                                    Assert(message[MessageSchema.kind] == .message)
-                                    Assign(parent, to: message[MessageSchema.sender])
-                                    Assign(inbox, to: Function<Node, SetExpr<Record<MessageSchema>>>.mapping { destination in
-                                        If(SetExpr<Node>.literal(.a, .b, .c).removing(selfID).removing(message[MessageSchema.sender]).contains(destination),
-                                           then: networkAfterReceive[destination].inserting(Record<MessageSchema>.literal(
-                                               .init(MessageSchema.kind, .message),
-                                               .init(MessageSchema.sender, selfID)
-                                           )),
+                    While(Step.n1, rcvd.expr < nbrs.expr.cardinality) {
+                        With(inbox[selfID]) { (message: WithValue<Message>) in
+                            Let(inbox.updating(selfID, to: inbox[selfID].removing(message))) { (networkAfterReceive: WithValue<[NodeID: Set<Message>]>) in
+                                If(selfID != initiator && rcvd.expr == 0) {
+                                    Assert(message.kind == .message)
+                                    Assign(parent, to: OneOf<NodeID, NoNode>.first(message.sndr))
+                                    Assign(inbox, to: Dictionary<NodeID, Set<Message>>.mapping(over: Node) { (destination: WithValue<NodeID>) -> Expr<Set<Message>> in
+                                        If(nbrs.expr.removing(message.sndr).contains(destination),
+                                           then: networkAfterReceive[destination].inserting(Message.expression(kind: MessageKind.message, sndr: selfID)),
                                            else: networkAfterReceive[destination])
                                     })
                                 } else: {
                                     Assign(inbox, to: networkAfterReceive.expr)
                                 }
-                                If(message[MessageSchema.kind] == .acknowledgement) {
-                                    Assign(children, to: children.expr.inserting(message[MessageSchema.sender]))
+                                Assign(rcvd, to: rcvd.expr + 1)
+                                If(message.kind == .acknowledgement) {
+                                    Assign(children, to: children.expr.inserting(message.sndr))
                                 }
                             }
                         }
                     }
 
                     Do(Step.n2) {
-                        If(selfID != .a) {
-                            Assert(SetExpr<Node>.literal(.a, .b, .c).removing(selfID).contains(parent.expr))
-                            Assign(inbox, to: inbox.updating(parent, to: inbox[parent].inserting(
-                                Record<MessageSchema>.literal(
-                                    .init(MessageSchema.kind, .acknowledgement),
-                                    .init(MessageSchema.sender, selfID)
-                                )
+                        If(selfID != initiator) {
+                            let destination = parent.expr.assuming(NodeID.self)
+                            Assert(nbrs.expr.contains(destination))
+                            Assign(inbox, to: inbox.updating(destination, to: inbox[destination].inserting(
+                                Message.expression(kind: MessageKind.acknowledgement, sndr: selfID)
                             )))
                         }
                     }
+
+                    TypeOK {
+                        parent == OneOf<NodeID, NoNode>.second(NoNode.value)
+                            || Exists(in: Node) { node in
+                                parent == OneOf<NodeID, NoNode>.first(node)
+                            }
+                        children.isSubset(of: Node)
+                        rcvd >= 0 && rcvd <= nbrs.cardinality
+                        nbrs == Node.filtering { neighbor in
+                            R.contains(Pair<NodeID, NodeID>.literal(neighbor, selfID))
+                        }
+                        inbox.keys == Node.assuming(Set<NodeID>.self)
+                        ForAll(in: inbox[selfID]) { message in
+                            (message.kind == .message || message.kind == .acknowledgement)
+                                && Node.contains(message.sndr)
+                                && nbrs.contains(message.sndr)
+                        }
+                    }
+
+                    let parents = parent.family(for: NodeID.self)
+                    AncestorProperties {
+                        !ForAll(in: Node) { node in Finished(node) }
+                            || LetRec("ancestor", taking: Triple<NodeID, NodeID, Int>.self,
+                                { (ancestor: LocalRecursion<Triple<NodeID, NodeID, Int>, Bool>,
+                                   path: WithValue<Triple<NodeID, NodeID, Int>>) in
+                                    If(path.third() == 0, then: false, else:
+                                        parents[path.first()] == OneOf<NodeID, NoNode>.first(path.second())
+                                            || Exists(in: Node) { next in
+                                                parents[path.first()] == OneOf<NodeID, NoNode>.first(next)
+                                                    && ancestor(Triple<NodeID, NodeID, Int>.literal(
+                                                        next, path.second(), path.third() - 1))
+                                            })
+                                }, in: { ancestor in
+                                    ForAll(in: Node) { node in
+                                        node == initiator || ancestor(Triple<NodeID, NodeID, Int>.literal(
+                                            node, initiator, Node.cardinality))
+                                    }
+                                        && ForAll(in: Node) { node in
+                                            !ancestor(Triple<NodeID, NodeID, Int>.literal(
+                                                node, node, Node.cardinality))
+                                        }
+                                })
+                    }
                 })
             })
+            Echo
+            let MCEcho = Validation {
+                Bind(Node, to: Set<NodeID>([.a, .b, .c]))
+                Bind(initiator, to: NodeID.a)
+                Bind(R, to: Set<Pair<NodeID, NodeID>>([
+                    Pair(first: .a, second: .b), Pair(first: .b, second: .a),
+                    Pair(first: .a, second: .c), Pair(first: .c, second: .a),
+                    Pair(first: .b, second: .c), Pair(first: .c, second: .b)
+                ]))
+            }
+                .expect(TypeOK, .satisfied)
+                .expect(AncestorProperties, .satisfied)
+                .expectDeadlock(.satisfied)
+            MCEcho
         }
     }
-}
-
-extension Example {
-    /// A bounded source port of MCEcho: three fully connected nodes and `a`
-    /// as TLC's deterministic choice of initiator. The typed record spells
-    /// the upstream `sndr` field as the clearer Swift name `sender`.
-    package static let echo = FiniteModelFixture(
-        expectedDistinct: 75,
-        maximumStateLimit: 50_000,
-        spec: EchoModel.spec,
-    )
 }

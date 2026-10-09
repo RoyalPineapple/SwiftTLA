@@ -1,19 +1,90 @@
 import Foundation
-import SwiftTLA
+@testable import SwiftTLA
 import Testing
 import UpstreamParity
 
 struct TemporalSymmetryCheckTests {
+  @Test("Declared symmetry preserves the complete generated-machine graph")
+  func declaredSymmetryPreservesGeneratedGraph() throws {
+    for symmetryCase in try registeredManifest().symmetryCases {
+      let scope = symmetryCase.scope
+      let generated = try generatedSymmetryConformance(
+        scope: scope, maximumStates: symmetryCase.rawExploration.maximumStateLimit)
+      let native = generated.native
+      let rendered = native.rendered
+      #expect(native.graph.isComplete)
+      #expect(native.graph.graph.states.count == 1 << scope)
+      #expect(native.graph.graph.initialStateKeys.count == 1)
+      #expect(native.graph.graph.edges.count == scope * (1 << (scope - 1)))
+      let checked = try TemporalSymmetryCheck().checkedSymmetryGraph(native)
+      #expect(checked.graph == native.graph.graph)
+      guard case .deadlock(let deadlocked) = checked.outcome else {
+        Issue.record("The generated machine must retain a deadlock verdict")
+        continue
+      }
+      #expect(!checked.graph.hasOutgoingEdges(from: deadlocked))
+      #expect(checked.trace?.steps.last?.state == deadlocked)
+      #expect(try rendered.tlaBundle(symmetryReduction: .disabled).cfg.contains("SYMMETRY") == false)
+      #expect(try rendered.tlaBundle(symmetryReduction: symmetryCase.reducedExploration.symmetryReduction)
+        .cfg.contains("SYMMETRY"))
+      let initialKey = try #require(native.graph.graph.initialStateKeys.first)
+      let initial = try #require(native.graph.graph.states[initialKey])
+      let allZero = try CanonicalValue.function(generated.members.map {
+        try CanonicalFunctionEntry(key: CanonicalValue($0), value: .integer(0))
+      })
+      #expect(initial.bindings["chosen"] == allZero)
+    }
+  }
+
+  @Test("expected violations require a counterexample result, never an unavailable check")
+  func expectedVerdictsRejectMissingAndOppositeResults() throws {
+    let model = try temporalConformanceRun(fairness: .none, maximumStates: 10)
+    let violation = try #require(model.checks.properties["AlwaysP"])
+    #expect(ValidationExpectation.violated.accepts(violation))
+    #expect(!ValidationExpectation.satisfied.accepts(violation))
+    #expect(ValidationExpectation.satisfied.accepts(.satisfied))
+    #expect(!ValidationExpectation.violated.accepts(.satisfied))
+    #expect(!ValidationExpectation.satisfied.accepts(.unavailable))
+    #expect(!ValidationExpectation.violated.accepts(.unavailable))
+  }
+
   @Test("Temporal cases preserve bounded fairness outcomes")
   func temporalCasesPreserveFairnessOutcomes() throws {
-    for temporalCase in try registeredManifest().temporalCases {
-      let compilation = try temporalConformanceSpec(configuration: temporalCase.configuration).compile()
-      let exploration = try ModelChecker(
-        compilation: compilation,
-        configuration: temporalCase.exploration
-      ).explore()
-      let analyses = try exploration.analyzeTemporalProperties(in: compilation)
-      #expect(analyses.allSatisfy { $0.status == .violated })
+    let zero = CanonicalState(bindings: ["x": .integer(0)])
+    let one = CanonicalState(bindings: ["x": .integer(1)])
+    let two = CanonicalState(bindings: ["x": .integer(2)])
+    let expected = try CanonicalGraph(initialStates: [zero], states: [zero, one, two], edges: [
+      .init(source: zero.key, action: "A", target: two.key),
+      .init(source: zero.key, action: "B", target: one.key),
+      .init(source: one.key, action: "C", target: zero.key),
+      .init(source: two.key, action: "Stay", target: two.key)
+    ])
+    let cases = try registeredManifest().temporalCases
+    #expect(cases.map(\.fairness) == [.none, .weak, .strong])
+    for temporalCase in cases {
+      let model = try temporalConformanceRun(fairness: temporalCase.fairness, maximumStates: 10)
+      #expect(Set(model.checks.properties.keys) == ["AlwaysP", "EventuallyP", "AlwaysEventuallyP",
+        "EventuallyAlwaysP", "LeadsToPQ", "LeavesZero"])
+      #expect(model.graph.isComplete)
+      #expect(model.checks.deadlock == .satisfied)
+      #expect(model.graph.graph == expected)
+      #expect(model.graph.trace == nil)
+      #expect(Set(model.rendered.actions.map(\.sourceInvocationName)) == ["A", "B", "C", "Stay"])
+      #expect(model.rendered.tlaBundle.cfg.contains("CHECK_DEADLOCK TRUE"))
+      let tla = model.rendered.tlaBundle.root.tla
+      #expect(tla.contains("WF_") == (temporalCase.fairness == .weak))
+      #expect(tla.contains("SF_") == (temporalCase.fairness == .strong))
+      #expect(model.checks.properties.values.allSatisfy { $0 != .unavailable })
+      for (property, native) in model.checks.properties {
+        let expectation = try #require(temporalCase.expectedProperties[property])
+        #expect(expectation.accepts(native))
+        if case .violated(let trace) = native {
+          try trace.validate(in: model.graph.graph)
+        }
+      }
+      #expect(throws: ExplorationError.stateLimitExceeded(2)) {
+        try temporalConformanceRun(fairness: temporalCase.fairness, maximumStates: 2)
+      }
     }
   }
 
@@ -24,39 +95,13 @@ struct TemporalSymmetryCheckTests {
     #expect(throws: EvidenceFormatError.self) {
       _ = try TemporalCase(
         id: temporalCase.id,
-        sourceInput: temporalCase.sourceInput,
-        configuration: temporalCase.configuration,
+        fairness: temporalCase.fairness,
         exploration: FiniteExplorationConfiguration(
           maximumStateLimit: temporalCase.exploration.maximumStateLimit,
           symmetryReduction: .enabled(maximumPermutationCount: 2)
-        )
+        ),
+        expectedProperties: temporalCase.expectedProperties
       )
-    }
-  }
-
-  @Test("Symmetry cases use the compiled runtime for raw and reduced exploration")
-  func symmetryCasesUseCompiledReduction() throws {
-    for symmetryCase in try registeredManifest().symmetryCases {
-      let scope = symmetryCase.scope
-      let compilation = try symmetryConformanceSpec(scope: scope).compile()
-      let raw = try ModelChecker(
-        compilation: compilation,
-        configuration: symmetryCase.rawExploration
-      ).explore().graph
-      let reduced = try ModelChecker(
-        compilation: compilation,
-        configuration: symmetryCase.reducedExploration
-      ).explore().graph
-
-      #expect(raw.states.count == 1 << scope)
-      #expect(reduced.states.count == scope + 1)
-      let rawBundle = compilation.renderedTLAModuleBundle(
-        symmetryReduction: symmetryCase.rawExploration.symmetryReduction)
-      #expect(rawBundle.cfg.contains("SYMMETRY") == false)
-      #expect(rawBundle.tla.contains("Init == chosen = [member \\in ChosenKeys |-> 0]"))
-      #expect(compilation.renderedTLAModuleBundle(
-        symmetryReduction: symmetryCase.reducedExploration.symmetryReduction
-      ).cfg.contains("SYMMETRY"))
     }
   }
 
@@ -76,12 +121,9 @@ struct TemporalSymmetryCheckTests {
     )
     let temporalCase = try TemporalCase(
       id: "temporal",
-      sourceInput: try SourceInputPin(
-        path: "TemporalFixture.tla",
-        sha256: SHA256.hex(Data(contentsOf: source))
-      ),
-      configuration: .init(property: .always, fairness: .none, allowsImplicitStuttering: false),
-      exploration: exploration
+      fairness: .none,
+      exploration: exploration,
+      expectedProperties: try #require(registeredManifest().temporalCases.first).expectedProperties
     )
     let symmetryCase = try SymmetryCase(
       id: "symmetry",
@@ -101,16 +143,32 @@ struct TemporalSymmetryCheckTests {
       referencePin: try testReferencePin()
     ))
 
-    #expect(outcomes.map(\.outcome) == [.unavailable, .unavailable])
-    for caseID in ["temporal", "symmetry"] {
+    #expect(outcomes.count == 8)
+    #expect(outcomes.allSatisfy { $0.outcome == .unavailable })
+    #expect(Set(outcomes.map(\.caseID)) == ["temporal-properties-AlwaysP", "temporal-properties-EventuallyP",
+      "temporal-properties-AlwaysEventuallyP", "temporal-properties-EventuallyAlwaysP", "temporal-properties-LeadsToPQ", "temporal-properties-LeavesZero", "temporal-deadlock", "symmetry"])
+    let modelDirectory = output.appendingPathComponent("temporal")
+    #expect(FileManager.default.fileExists(atPath: modelDirectory.appendingPathComponent("swift-graph.jsonl").path))
+    #expect(FileManager.default.fileExists(atPath: modelDirectory.appendingPathComponent("source-input").path))
+    for caseID in outcomes.map(\.caseID) {
+      let directory: URL
+      switch caseID {
+      case "symmetry": directory = output.appendingPathComponent(caseID)
+      case "temporal-deadlock": directory = modelDirectory.appendingPathComponent("deadlock")
+      default:
+        directory = modelDirectory.appendingPathComponent("properties")
+          .appendingPathComponent(String(caseID.dropFirst("temporal-properties-".count)))
+      }
+      #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("swift-graph.jsonl").path))
       let record = try #require(try JSONSerialization.jsonObject(
-        with: Data(contentsOf: output
-          .appendingPathComponent(caseID, isDirectory: true)
-          .appendingPathComponent("case-outcome.json"))
+        with: Data(contentsOf: directory.appendingPathComponent("case-outcome.json"))
       ) as? [String: String])
       #expect(record["caseID"] == caseID)
       #expect(record["outcome"] == TemporalSymmetryOutcome.unavailable.rawValue)
       #expect(record["diagnostic"]?.isEmpty == false)
+      if caseID != "symmetry" {
+        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("check-error.txt").path))
+      }
     }
   }
 

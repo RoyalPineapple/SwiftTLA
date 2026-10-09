@@ -14,22 +14,7 @@ enum PersonID: String, FiniteTLAValueDomain {
   static let finiteValues = [PersonID.person]
 }
 
-struct CarFields {
-  let floor: Int
-}
-
-enum CarSchema: TLARecordSchema {
-  typealias Fields = CarFields
-  static func fieldName<Value>(for field: KeyPath<CarFields, Value>) -> String? {
-    field as AnyKeyPath == \CarFields.floor ? "floor" : nil
-  }
-
-  static let floor = field(\CarFields.floor)
-  static let fields = [TLARecordFieldDeclaration(floor, default: 0)]
-}
-
-let cars = Var<Function<CarID, Record<CarSchema>>>("cars")
-let forged = TLAField<CarSchema, String>(name: "floor")
+let cars = Var<Function<CarID, Int>>("cars")
 let wrongDomain = cars[.person]
 let rawVar = Var<TLAValue>("raw")
 let rawExpr = Expr<TLAValue>(.variable("raw"))
@@ -86,7 +71,6 @@ let varIntegerDivision = rawVar.integerDivided(by: 1)
 let exprIntegerDivision = rawExpr.integerDivided(by: 1)
 
 print(
-  forged,
   wrongDomain,
   varRawAssignment,
   exprRawAssignment,
@@ -135,3 +119,29 @@ print(
   varIntegerDivision,
   exprIntegerDivision
 )
+
+let nonBooleanExistential = Exists(in: SetExpr<Int>.literal(1)) { _ in Expr<Int>(1) }
+let nonBooleanUniversal = ForAll(in: SetExpr<Int>.literal(1)) { _ in Expr<Int>(1) }
+let nonBooleanWhen = When(1)
+let nonBooleanAssertion = Assert(Expr<Int>(1))
+let nonBooleanCondition = If(Expr<Int>(1), then: 1, else: 2)
+let scalarIntersection = SetExpr<Int>.literal(1).intersection(Expr<Int>(1))
+let scalarSubset = SetExpr<Int>.literal(1).isSubset(of: Expr<Int>(1))
+let nonBooleanActionGuard = Var<Int>("guarded").becomes(1).when(Expr<Int>(1))
+let stringRangeLowerBound = IntRange("zero", through: 1)
+let booleanRangeUpperBound = IntRange(0, through: true)
+let nonIntegerRangeExpression = IntRange(Expr<String>("zero"), through: Expr<Int>(1))
+let integerMacro = Macro { (value: MacroParameter<Int>) in Assert(value > 0) }
+let wrongMacroArgument = integerMacro(Expr<Bool>(true))
+let missingMacroArgument = integerMacro()
+let pairMacro = Macro { (number: MacroParameter<Int>, flag: MacroParameter<Bool>) in Assert(flag || number > 0) }
+let swappedMacroArguments = pairMacro(Expr<Bool>(true), Expr<Int>(1))
+let nonBooleanLeadsToSource = Expr<Int>(1).leadsTo(Expr<Bool>(true))
+let nonBooleanLeadsToTarget = Expr<Bool>(true).leadsTo(Expr<Int>(1))
+
+// Separate initializers diagnose both calls even when module emission stops early.
+let rejectRecursiveString = { (recursion: LocalRecursion<Int, Int>) in recursion("wrong") }
+let rejectRecursiveBoolean = { (recursion: LocalRecursion<Int, Int>) in recursion(Expr<Bool>(true)) }
+
+let wrongRecursiveOutput = LetRec("Output", over: IntRange(0, through: 1), taking: Int.self, { (_: LocalRecursion<Int, Int>, _: WithValue<Int>) in true }, in: { recursion in recursion(0) })
+let wrongLetResult: Expr<Int> = LetRec("Result", over: IntRange(0, through: 1), taking: Int.self, { (_: LocalRecursion<Int, Int>, _: WithValue<Int>) in 1 }, in: { _ in true })

@@ -7,6 +7,32 @@ struct LivenessConformanceTests {
     private let middle = StateGraph.StateID(1)
     private let terminal = StateGraph.StateID(2)
 
+    @Test("leads-to excludes fair cycles unreachable after its trigger")
+    func leadsToSkipsUnreachableFairCycles() throws {
+        let cycle = 3..<1003
+        var transitions: [Int: [GraphEdge<Int, Int>]] = [
+            0: [.init(source: 0, action: 0, target: 1), .init(source: 0, action: 0, target: 3)],
+            1: [.init(source: 1, action: 1, target: 2)],
+            2: [.init(source: 2, action: 0, target: 2)],
+        ]
+        for state in cycle {
+            transitions[state] = [.init(source: state, action: 1,
+                                        target: state == cycle.last! ? cycle.first! : state + 1)]
+        }
+        let checker = LivenessChecker<Int, Int, Int>(
+            states: Set(0..<1003), transitions: transitions,
+            fairness: [(scope: 1, isStrong: false)],
+            matches: { action, scope in action == scope },
+            actionOrder: { $0 < $1 }, stateOrder: { $0 < $1 })
+        let started = ContinuousClock.now
+        let result = try checker.analyze(
+            .leadsTo({ source, _ in source == 1 }, { source, _ in source == 2 }),
+            initialStates: [0], renderScope: { String($0) })
+        #expect(result.status == .satisfied)
+        #expect(result.witness == nil)
+        #expect(ContinuousClock.now - started < .seconds(10))
+    }
+
     private func action(_ name: String) -> NamedAction {
         NamedAction(name: name, body: .guard_(true))
     }
@@ -40,18 +66,18 @@ struct LivenessConformanceTests {
             guard case .int(let value) = projection.value(for: x) else {
                 throw TLAStateProjectionDiagnostic.invalidValue(path: "x")
             }
-            return try CompiledState(values: [.integer(value)], compilation: compilation)
+            return try CompiledState(values: [.integer(value)], layout: compilation.layout, identity: compilation.identity)
         }
     }
 
     private func analyze(
         _ graph: StateGraph,
-        property: TemporalExpr,
+        property: TemporalCondition<StateExpr>,
         fairness: [FairnessCondition] = [],
         actions: [NamedAction] = [],
         initialStateIDs: [StateGraph.StateID],
         isComplete: Bool = true
-    ) throws -> TemporalAnalysis {
+    ) throws -> TemporalAnalysis<StateGraph.StateID, String?> {
         let spec = TLASpec(
             name: graph.specName,
             variables: [NamedVar(name: "x", initial: .int(0))],
@@ -77,20 +103,44 @@ struct LivenessConformanceTests {
                 )
             }
         }
-        let checker = LivenessChecker(
-            compilation: compilation,
+        return try #require(compilation.analyzeTemporalProperties(
             graph: .init(
                 specName: graph.specName,
                 variableNames: graph.variableNames,
                 transitions: transitions,
                 states: graph.states
             ),
-            states: try compiledStates(for: graph, compilation: compilation)
-        )
-        return try #require(checker.analyze(
+            states: try compiledStates(for: graph, compilation: compilation),
             initialStateIDs: initialStateIDs,
             isComplete: isComplete
         ).first)
+    }
+
+    @Test("fairness of a disjunction permits one action to starve another")
+    func disjunctionIsOneObligation() throws {
+        let graph = try graph(transitions: [
+            initial: [
+                .init(label: .init(.init(name: "A")), target: terminal),
+                .init(label: .init(.init(name: "B")), target: middle)
+            ],
+            middle: [.init(label: .init(.init(name: "B")), target: middle)],
+            terminal: [
+                .init(label: .init(.init(name: "A")), target: initial),
+                .init(label: .init(.init(name: "B")), target: middle)
+            ]
+        ], values: [initial: 0, middle: 1, terminal: 2])
+        let property = TemporalCondition<StateExpr>.eventually(predicate(1))
+        let actions = [action("A"), action("B")]
+
+        let grouped = try analyze(graph, property: property,
+            fairness: [.weakFairnessActionGroup(["A", "B"])], actions: actions,
+            initialStateIDs: [initial])
+        let separate = try analyze(graph, property: property,
+            fairness: [.weakFairness("A"), .weakFairness("B")], actions: actions,
+            initialStateIDs: [initial])
+
+        #expect(grouped.status == .violated)
+        #expect(separate.status == .satisfied)
     }
 
     @Test("reachable nonterminal avoiding subcycle has a canonical fair-lasso witness")
@@ -145,7 +195,7 @@ struct LivenessConformanceTests {
         let graph = try graph(transitions: [:], values: [initial: 0])
         let falsePredicate = predicate(1)
         let truePredicate = predicate(0)
-        let cases: [(String, TemporalExpr)] = [
+        let cases: [(String, TemporalCondition<StateExpr>)] = [
             ("always", .always(falsePredicate)),
             ("eventually", .eventually(falsePredicate)),
             ("alwaysEventually", .alwaysEventually(falsePredicate)),
@@ -165,7 +215,7 @@ struct LivenessConformanceTests {
         let graph = try graph(transitions: [:], values: [initial: 0])
         let falsePredicate = predicate(1)
         let truePredicate = predicate(0)
-        let properties: [TemporalExpr] = [
+        let properties: [TemporalCondition<StateExpr>] = [
             .always(truePredicate),
             .eventually(truePredicate),
             .alwaysEventually(truePredicate),
@@ -369,7 +419,7 @@ struct LivenessConformanceTests {
             values: [initial: 0, disabled: 0, terminal: 1]
         )
         let actions = [action("A"), action("B"), action("C"), action("done")]
-        let property = TemporalExpr.alwaysEventually(predicate(1))
+        let property = TemporalCondition<StateExpr>.alwaysEventually(predicate(1))
         let cases: [(String, [FairnessCondition])] = [
             ("none", []),
             ("weak", [.weakFairness("A")]),
@@ -415,7 +465,7 @@ struct LivenessConformanceTests {
             transitions: [initial: [.init(label: .init(.init(name: "unknown")), target: initial)]],
             values: [initial: 0]
         )
-        let unavailable: [(String, TemporalAnalysis, TemporalDiagnosticReason)] = [
+        let unavailable: [(String, TemporalAnalysis<StateGraph.StateID, String?>, TemporalDiagnosticReason)] = [
             (
                 "unknown action",
                 try analyze(unknownActionGraph, property: .eventually(predicate(1)), actions: [action("known")], initialStateIDs: [initial]),
@@ -506,12 +556,11 @@ struct LivenessConformanceTests {
         )
         let compilation = try specification.compile()
         let outcome = try #require(
-            LivenessChecker(
-                compilation: compilation,
+            compilation.analyzeTemporalProperties(
                 graph: sourceGraph,
-                states: try compiledStates(for: sourceGraph, compilation: compilation)
+                states: try compiledStates(for: sourceGraph, compilation: compilation),
+                initialStateIDs: [initial]
             )
-                .analyze(initialStateIDs: [initial])
                 .first
         )
 
@@ -532,11 +581,9 @@ struct LivenessConformanceTests {
         let compilation = try specification.compile()
 
         do {
-            _ = try LivenessChecker(
-                compilation: compilation,
-                graph: sourceGraph,
-                states: [:]
-            ).analyze(initialStateIDs: [initial])
+            _ = try compilation.analyzeTemporalProperties(
+                graph: sourceGraph, states: [:], initialStateIDs: [initial]
+            )
             Issue.record("Expected the compiled state identity check to fail")
         } catch let diagnostic as CompilationDiagnostic {
             #expect(diagnostic.code == .compilationIdentityMismatch)
@@ -578,38 +625,10 @@ struct LivenessConformanceTests {
         )
 
         let compilation = try spec.compile()
-        guard case .action(let action) = try #require(compilation.semantics.fairness.first).scope else {
+        guard case .action(let action) = try #require(compilation.semantics.behavior.fairness.first).scope else {
             Issue.record("Expected fairness to bind an action identity")
             return
         }
         #expect(action == compilation.layout.actions[0].id)
-    }
-
-    @Test("ModelChecker reports liveness violations and bounded exploration separately")
-    func reportsDistinctLivenessAndBoundedOutcomes() throws {
-        let x = Var<Int>("x")
-        let livenessSpec = TLASpec("liveness") {
-            Variable(x, 0)
-            Eventually("reachesOne", x == 1)
-        }
-        let liveness = try ModelChecker(compilation: try livenessSpec.compile(), configuration: try .init(maximumStateLimit: 100_000, symmetryReduction: .disabled)).checkLiveness()
-        if case .livenessViolated(let property, let reason, let witness) = liveness {
-            #expect(property == "reachesOne")
-            #expect(reason == .violatingFairLasso)
-            #expect(witness.cycle.isEmpty == false)
-        } else {
-            Issue.record("Expected liveness violation, got \(liveness)")
-        }
-
-        let completeSpec = TLASpec("incomplete") {
-            Variable(x, in: 0...2)
-            Action("step") { x.becomes(x + 1).when(x < 2) }
-            Eventually("reachesTwo", x == 2)
-        }
-        let incomplete = try ModelChecker(compilation: try completeSpec.compile(), configuration: try FiniteExplorationConfiguration(maximumStateLimit: 1, symmetryReduction: .disabled)).checkLiveness()
-        if case .depthExceeded = incomplete {
-        } else {
-            Issue.record("Expected depth-exceeded outcome, got \(incomplete)")
-        }
     }
 }

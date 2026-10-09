@@ -82,9 +82,15 @@ extension GraphDifference {
       )
     case .edges(let tlc, let swift):
       return edgeDifferenceReport(expected: tlc, actual: swift)
+    case .completion(let tlc, let swift):
+      return .init(
+        whatFailed: "Exploration is incomplete.", whereItFailed: "finite graph completion",
+        expected: "Complete TLC and Swift graphs.",
+        actual: "TLC complete: \(tlc); Swift complete: \(swift).",
+        nextSafeAction: "Complete both explorations before comparing their property outcomes.")
     case .outcome(let tlc, let swift):
       return .init(
-        whatFailed: "The verification outcomes differ.",
+        whatFailed: tlc == swift ? "The verification outcome is inconclusive." : "The verification outcomes differ.",
         whereItFailed: "finite conformance outcome",
         expected: "TLC outcome: \(describe(tlc))",
         actual: "SwiftTLA outcome: \(describe(swift))",
@@ -111,7 +117,7 @@ extension TLCProcessError {
     case .timedOut(let stdout, let stderr):
       return .init(
         whatFailed: "TLC did not finish before the configured time limit.",
-        whereItFailed: "TLC primary invocation for case \(request.caseID)",
+        whereItFailed: "TLC invocation for case \(request.caseID)",
         expected: "TLC completes within \(request.timeout) seconds and writes a complete graph event stream.",
         actual: "The process exceeded \(request.timeout) seconds and was terminated.",
         nextSafeAction: "Inspect the retained stdout and stderr, then reduce the declared finite bounds or raise the case timeout deliberately.",
@@ -124,7 +130,7 @@ extension TLCProcessError {
     case .failedToStart(let message):
       return .init(
         whatFailed: "TLC could not start.",
-        whereItFailed: "TLC primary invocation for case \(request.caseID)",
+        whereItFailed: "TLC invocation for case \(request.caseID)",
         expected: "The configured Java executable and TLC class path launch TLC.",
         actual: redactingSecrets(in: message),
         nextSafeAction: "Verify the Java executable, TLC JAR, bridge classes, and working directory in the retained invocation snapshot.",
@@ -160,17 +166,7 @@ extension TLCProcessError {
           evidence: evidence + [.init(role: "missing imported module", location: expectedFile)]
         )
       }
-    case .traceCaptureFailed(let completed, let failed):
-      return processFailureReport(
-        what: "TLC did not capture the required trace.", phase: "trace capture", request: request,
-        expected: "The trace-capture invocation exits with the primary violation status \(completed.primary.status).",
-        actual: "Trace-capture status \(failed.status).", outputs: failed
-      )
-    case .traceCaptureExecutionFailed(let completed, let error):
-      return executionFailureReport(
-        what: "TLC trace capture could not execute.", phase: "trace capture", request: request,
-        expected: "The trace capture launches after primary status \(completed.primary.status).", error: error
-      )
+
     }
   }
 }
@@ -182,8 +178,8 @@ private func setDifferenceReport(
   actual: Set<CanonicalStateKey>,
   next: String
 ) -> CheckFailureReport {
-  let onlyExpected = expected.subtracting(actual).sorted().first
-  let onlyActual = actual.subtracting(expected).sorted().first
+  let onlyExpected = expected.subtracting(actual).min()
+  let onlyActual = actual.subtracting(expected).min()
   return .init(
     whatFailed: what,
     whereItFailed: location,
@@ -194,70 +190,31 @@ private func setDifferenceReport(
 }
 
 private func edgeDifferenceReport(
-  expected: [CanonicalEdge: Int], actual: [CanonicalEdge: Int]
+  expected: Set<CanonicalEdge>, actual: Set<CanonicalEdge>
 ) -> CheckFailureReport {
-  let witness = Set(expected.keys).union(actual.keys).sorted().first { expected[$0, default: 0] != actual[$0, default: 0] }
+  let witness = expected.symmetricDifference(actual).min()
   guard let witness else {
     return .init(
-      whatFailed: "The labeled transition multisets differ.", whereItFailed: "canonical transition relation",
-      expected: "TLC and SwiftTLA retain the same transition occurrences.",
-      actual: "The occurrence counts differ, but no stable witness was available.",
+      whatFailed: "The labeled transition relations differ.", whereItFailed: "canonical transition relation",
+      expected: "TLC and SwiftTLA permit the same labeled transitions.",
+      actual: "The transition sets differ, but no stable witness was available.",
       nextSafeAction: "Inspect the retained edges in tlc-graph.jsonl and swift-graph.jsonl."
     )
   }
   return .init(
-    whatFailed: "The labeled transition multisets differ.",
+    whatFailed: "The labeled transition relations differ.",
     whereItFailed: "action \(witness.action) from \(witness.source.canonicalEncoding) to \(witness.target.canonicalEncoding)",
-    expected: "TLC permits this transition \(expected[witness, default: 0]) time(s).",
-    actual: "SwiftTLA permits this transition \(actual[witness, default: 0]) time(s).",
+    expected: expected.contains(witness) ? "TLC permits this transition." : "TLC does not permit this transition.",
+    actual: actual.contains(witness) ? "SwiftTLA permits this transition." : "SwiftTLA does not permit this transition.",
     nextSafeAction: "Compare the \(witness.action) guard and update at the named source state in tlc-graph.jsonl and swift-graph.jsonl."
   )
 }
 
-private func processFailureReport(
-  what: String, phase: String, request: TLCProcessRequest, expected: String, actual: String,
-  outputs: TLCProcessResult
-) -> CheckFailureReport {
-  .init(
-    whatFailed: what, whereItFailed: "TLC \(phase) invocation for case \(request.caseID)",
-    expected: expected, actual: actual,
-    nextSafeAction: "Inspect the retained TLC \(phase) stdout and stderr, then correct the trace configuration or the emitted module bundle.",
-    evidence: toolEvidence(for: request),
-    toolOutput: [
-      .init(stream: "stdout", content: redactingSecrets(in: outputs.stdout)),
-      .init(stream: "stderr", content: redactingSecrets(in: outputs.stderr))
-    ]
-  )
-}
-
-private func executionFailureReport(
-  what: String, phase: String, request: TLCProcessRequest, expected: String,
-  error: TLCProcessExecutionFailure
-) -> CheckFailureReport {
-  .init(
-    whatFailed: what, whereItFailed: "TLC \(phase) invocation for case \(request.caseID)",
-    expected: expected, actual: redactingSecrets(in: error.message),
-    nextSafeAction: "Inspect the retained invocation snapshot and TLC output before retrying.",
-    evidence: toolEvidence(for: request),
-    toolOutput: [
-      error.partialStdout.map { .init(stream: "stdout", content: redactingSecrets(in: $0)) },
-      error.partialStderr.map { .init(stream: "stderr", content: redactingSecrets(in: $0)) }
-    ].compactMap { $0 }
-  )
-}
-
-private func toolEvidence(for request: TLCProcessRequest) -> [RetainedFileLocation] {
-  [
-    .init(role: "TLA+ module", location: request.moduleFileName),
-    .init(role: "TLC configuration", location: request.configurationFileName),
-    .init(role: "TLC graph event output", location: request.graphEvents.path)
-  ]
-}
-
 private func describe(_ value: GraphRunOutcome) -> String {
   switch value {
-  case .exhaustiveSuccess: "exhaustive success"
+  case .noViolation: "no violation found"
   case .invariantViolation(let message): "invariant violation: \(message)"
+  case .refinementViolation(let name): "refinement violation: \(name)"
   case .deadlock(let state): "deadlock at \(state.canonicalEncoding)"
   case .incomplete(let reason): "incomplete: \(reason)"
   case .executionError(let reason): "execution error: \(reason)"

@@ -22,7 +22,7 @@ let package = Package(
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
-      name: "InvalidCollectionPredicateMacro",
+      name: "InvalidMutableProcessPopulation",
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(
@@ -62,7 +62,23 @@ let package = Package(
       dependencies: [.product(name: "SwiftTLA", package: "SwiftTLA")]
     ),
     .executableTarget(
-      name: "ReadmeSymmetricCollectionMacro",
+      name: "InvalidModelProperty",
+      dependencies: generatedMachineDependencies
+    ),
+    .executableTarget(
+      name: "InvalidGeneratedRefinementMapping",
+      dependencies: generatedMachineDependencies
+    ),
+    .executableTarget(
+      name: "InvalidStateDisplayLabel",
+      dependencies: generatedMachineDependencies
+    ),
+    .executableTarget(
+      name: "InvalidParameterDisplayLabel",
+      dependencies: generatedMachineDependencies
+    ),
+    .executableTarget(
+      name: "ConfiguredPopulationConsumer",
       dependencies: generatedMachineDependencies
     ),
     .executableTarget(

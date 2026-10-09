@@ -3,6 +3,7 @@ import SwiftTLAMacros
 
 /// Peterson's two-process mutual-exclusion algorithm from the upstream
 /// PlusCal auxiliary-variables collection.
+@TLAModel
 package struct PetersonModel: Sendable {
     package enum Process: Int, CaseIterable, FiniteTLAValueDomain {
         case one = 1
@@ -26,11 +27,11 @@ package struct PetersonModel: Sendable {
     package static var spec: TLASpec {
         #spec("Peterson") {
             Extends(.integers)
-            Algorithm("Peterson", scoped: { scope in
-                let c = scope.sharedVar("c", initial: Function<Process, Bool>.literal(
+            let Peterson = Algorithm(scoped: { scope in
+                let c = scope.sharedVar(initial: Function<Process, Bool>.literal(
                     (.one, false), (.two, false)
                 ))
-                let turn = scope.sharedVar("turn", initial: Process.one)
+                let turn = scope.sharedVar(initial: Process.one)
 
                 Each(Process.all) { process in
                     Do(Step.a0) {
@@ -52,7 +53,7 @@ package struct PetersonModel: Sendable {
                                 then: Process.two,
                                 else: Process.one
                             )) { other in
-                            Await(c[other] == false || turn.stateExpr == process.stateExpr)
+                            When(c[other] == false || turn == process)
                         }
                     }
                     Do(Step.cs) {
@@ -69,6 +70,7 @@ package struct PetersonModel: Sendable {
                         && (c[.two] == false || c[.two] == true)
                 }
             })
+            Peterson
         }
     }
 }

@@ -2,24 +2,23 @@
 
 **SwiftTLA turns typed state rules into a typed Swift machine.**
 
-Write one Swift source model for state, actions, and invariants. `compile()`
-validates declarations, binds names, links modules, lowers behavior, allocates
-private identities, renders TLA+/PlusCal text, assembles the formal bundles,
-and publishes one immutable compiled specification.
-`@TLAModel` generates typed `State`, `Action`, and `Transition` values from that
-meaning. SwiftUI stores the generated machine directly. The generated `Actor`
-serializes access to that machine.
+Write one Swift source model for state, actions, and invariants. At build time,
+`@TLAModel` compiles that model and generates typed `State`, `Action`, and
+`Transition` values together with native Swift initialization, guards, and
+updates. The generated machine executes this Swift code directly. SwiftUI
+stores the machine as a value; the generated `Actor` serializes access to it.
+The native checker explores those same generated transitions. The compiler also
+exports equivalent TLA+ for independent TLC validation; application execution
+and native checking do not invoke TLC or a formal expression interpreter.
 
 **One source model. Typed application state. Bounded formal evidence.**
 
 ```text
-Swift source model
-        │ compile()
-        ▼
-CompiledSpecification
- ├── generated State, Action, Transition, and machine
- ├── compiled runtime and bounded exploration
- └── rendered TLA+ bundle and, for one authored Algorithm, PlusCal bundle
+Swift source model → validated, resolved compiler representation
+ ├── @TLAModel → native Swift State, Action, Transition, and machine
+ │               └── native checking of generated transitions
+ └── formal export → TLA+ bundle and, for one authored Algorithm, PlusCal bundle
+                     └── independent TLC validation
 
 Generated machine
  ├── value stored in SwiftUI @State
@@ -46,10 +45,11 @@ public struct ClockModel: Sendable {
 
     public static var spec: TLASpec {
         #spec("Clock") {
-            Algorithm("Clock", scoped: { scope in
-                let hour = scope.sharedVar("hour", in: 0...23)
-                let minute = scope.sharedVar("minute", in: 0...59)
-                let second = scope.sharedVar("second", in: 0...59)
+            let ValidTime = Invariant()
+            let clock = Algorithm(label: "Clock", scoped: { scope in
+                let hour = scope.sharedVar(in: 0...23)
+                let minute = scope.sharedVar(in: 0...59)
+                let second = scope.sharedVar(in: 0...59)
 
                 While(Step.tick, true) {
                     Either {
@@ -81,12 +81,13 @@ public struct ClockModel: Sendable {
                     }
                 }
 
-                Invariant("ValidTime") {
+                ValidTime {
                     hour >= 0 && hour <= 23 &&
                     minute >= 0 && minute <= 59 &&
                     second >= 0 && second <= 59
                 }
             })
+            clock
         }
     }
 }
@@ -162,9 +163,10 @@ generated machine behind actor isolation.
 
 ## Add bounded assurance
 
-This clock's compiled specification renders direct TLA+ and its authored
-PlusCal algorithm. Finite graph comparison compares bounded SwiftTLA
-exploration with a pinned TLC run. See
+This clock's generated machine supports native exploration. Its compiled model
+also renders direct TLA+ and the authored PlusCal algorithm. The independent
+validation pipeline compares the generated machine with a pinned TLC run of
+the exported TLA+. See
 [Finite graph comparison](Documentation/FiniteGraphComparison.md).
 
 ## Use it where state order matters

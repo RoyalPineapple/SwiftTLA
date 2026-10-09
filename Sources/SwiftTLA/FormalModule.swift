@@ -117,6 +117,13 @@ public struct TLAModuleBundle: Sendable, Equatable {
   public var cfg: String { root.cfg ?? "" }
   public var files: [TLAModuleFile] { imports + [root] }
 
+  /// Preserve the module and its declared closure while selecting a different
+  /// configuration for a formal-tool invocation.
+  public func replacingConfiguration(_ configuration: String) -> Self {
+    Self(root: .init(name: root.name, tla: root.tla, cfg: configuration),
+      imports: imports, provenance: provenance)
+  }
+
   /// Checks that the bundle materializes its declared module closure.
   package func validateDeclaredClosure() throws {
     var sources: [String: TLAModuleFile] = [:]
@@ -150,7 +157,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
       )
     }
     let missingModules = expectedModules.subtracting(sources.keys)
-    if let missing = missingModules.sorted().first {
+    if let missing = missingModules.min() {
       let importingModule = dependencies.first(where: {
         $0.importedModule == missing
       })?.importingModule ?? root.name
@@ -160,7 +167,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
         line: 0
       )
     }
-    if let unexpected = Set(sources.keys).subtracting(expectedModules).sorted().first {
+    if let unexpected = Set(sources.keys).subtracting(expectedModules).min() {
       throw TLAModuleBundleIntegrityError.undeclaredModule(
         module: unexpected,
         root: root.name
@@ -202,7 +209,7 @@ public struct TLAModuleBundle: Sendable, Equatable {
     }
 
     try visit(root.name)
-    if let unreachable = Set(sources.keys).subtracting(visited).sorted().first {
+    if let unreachable = Set(sources.keys).subtracting(visited).min() {
       throw TLAModuleBundleIntegrityError.unreachableModule(
         module: unreachable,
         root: root.name
@@ -340,27 +347,20 @@ package struct FormalModuleClosure: Sendable {
         case .namedInstance(let namespace, let arguments):
           let imported = recursiveFunctions(named: edge.toModule, replacements: [])
           let localNames = Set(imported.map(\.name))
+          let values = Dictionary(uniqueKeysWithValues: arguments.map { ($0.parameter, $0.value) })
           functions += imported.map { function in
-            let body = arguments.reduce(function.body) {
-              StateExpr.substituteVariable($1.parameter, with: $1.value, in: $0)
-            }
+            let scoped = function.substitutingVariables(values)
             return RecursiveFunc(
-              name: "\(namespace)!\(function.name)", params: function.params,
-              body: StateExpr.renamingRecursiveCalls(in: body) {
+              name: "\(namespace)!\(function.name)", params: scoped.params,
+              body: StateExpr.renamingRecursiveCalls(in: scoped.body) {
                 localNames.contains($0) ? "\(namespace)!\($0)" : $0
               }
             )
           }
         }
       }
-      functions += module.recursiveFuncs.map { function in
-        RecursiveFunc(
-          name: function.name, params: function.params,
-          body: replacements.reduce(function.body) {
-            StateExpr.substituteVariable($1.operatorName, with: $1.expression, in: $0)
-          }
-        )
-      }
+      let values = Dictionary(uniqueKeysWithValues: replacements.map { ($0.operatorName, $0.expression) })
+      functions += module.recursiveFuncs.map { $0.substitutingVariables(values) }
       return functions
     }
 
@@ -380,28 +380,20 @@ package struct FormalModuleClosure: Sendable {
         case .namedInstance(let namespace, let arguments):
           let imported = formalOperatorDefinitions(edge.toModule, replacements: [])
           let localNames = Set(imported.map(\.name))
+          let values = Dictionary(uniqueKeysWithValues: arguments.map { ($0.parameter, $0.value) })
           definitions += imported.map { definition in
-            let body = arguments.reduce(definition.body) {
-              StateExpr.substituteVariable($1.parameter, with: $1.value, in: $0)
-            }
+            let scoped = definition.substitutingVariables(values)
             return FormalOperatorDefinition(
-              name: "\(namespace)!\(definition.name)", parameters: definition.parameters,
-              body: StateExpr.renamingRecursiveCalls(in: body) {
+              name: "\(namespace)!\(definition.name)", parameters: scoped.parameters,
+              body: StateExpr.renamingRecursiveCalls(in: scoped.body) {
                 localNames.contains($0) ? "\(namespace)!\($0)" : $0
               }
             )
           }
         }
       }
-      definitions += module.formalOperatorDefinitions.map { definition in
-        FormalOperatorDefinition(
-          name: definition.name,
-          parameters: definition.parameters,
-          body: replacements.reduce(definition.body) {
-            StateExpr.substituteVariable($1.operatorName, with: $1.expression, in: $0)
-          }
-        )
-      }
+      let values = Dictionary(uniqueKeysWithValues: replacements.map { ($0.operatorName, $0.expression) })
+      definitions += module.formalOperatorDefinitions.map { $0.substitutingVariables(values) }
       return definitions
     }
 
@@ -497,7 +489,7 @@ package struct FormalModuleClosure: Sendable {
           )
         }
         guard let target = module.imports.first(where: { $0.name == configuration.moduleName }) else { continue }
-        let targetSymbols = Self.moduleInterfaceSymbols(of: target)
+        let targetSymbols = Self.moduleInterfaceSymbols(of: try target.loweredSourceModel())
         for replacement in configuration.replacements where replacement.operatorName.isEmpty || !targetSymbols.contains(replacement.operatorName) {
           throw diagnostic(.unresolvedFormalModuleReplacement, path: path + ["configurations", configuration.moduleName, replacement.operatorName], expected: "a structural interface symbol of '\(target.name)'", actual: "an unresolved replacement name", nextSafeAction: "Configure a formal parameter or free module symbol, then compile again.")
         }
@@ -534,8 +526,9 @@ package struct FormalModuleClosure: Sendable {
             nextSafeAction: "Keep one argument for the parameter, then compile again."
           )
         }
-        let declared = Set(instance.module.formalParameters.map(\.name))
-          .union(instance.module.variables.map(\.name))
+        let target = try instance.module.loweredSourceModel()
+        let declared = Set(target.formalParameters.map(\.name))
+          .union(target.variables.map(\.name))
         if let invalid = arguments.first(where: { $0.isEmpty || !declared.contains($0) }) {
           throw diagnostic(
             .invalidFormalModuleArgument,
@@ -548,7 +541,8 @@ package struct FormalModuleClosure: Sendable {
       }
     }
 
-    func visit(_ module: TLASpec, path: [String]) throws {
+    func visit(_ sourceModule: TLASpec, path: [String]) throws {
+      let module = try sourceModule.loweredSourceModel()
       try validateDeclaredRelationships(module, path: path)
       let source = module.compilationIdentity
       if let previousSource = sourceByName[module.name] {
@@ -675,18 +669,15 @@ package struct FormalModuleClosure: Sendable {
       freeNames.formUnion(actionFreeNames(action.body).subtracting(Set(action.bindings.map(\.name))))
     }
     module.invariants.forEach { freeNames.formUnion($0.body.freeVariableNames) }
+    module.reachabilityProperties.forEach { freeNames.formUnion($0.body.freeVariableNames) }
     for temporal in module.temporalProperties {
-      switch temporal.expr {
-      case .always(let expression), .eventually(let expression), .alwaysEventually(let expression),
-           .eventuallyAlways(let expression):
-        freeNames.formUnion(expression.freeVariableNames)
-      case .leadsTo(let source, let target):
-        freeNames.formUnion(source.freeVariableNames)
-        freeNames.formUnion(target.freeVariableNames)
+      let scoped = temporal.bindings.reversed().reduce(StateExpr.tupleLiteral(temporal.expr.predicates)) { body, binding in
+        .forAll(binding.domain, binding.name, body)
       }
+      freeNames.formUnion(scoped.freeVariableNames)
     }
-    if let constraint = module.constraint { freeNames.formUnion(constraint.freeVariableNames) }
-    if let assume = module.assume { freeNames.formUnion(assume.freeVariableNames) }
+    module.constraints.forEach { freeNames.formUnion($0.expression.freeVariableNames) }
+    module.assumptions.forEach { freeNames.formUnion($0.expression.freeVariableNames) }
     for function in module.recursiveFuncs {
       freeNames.formUnion(function.body.freeVariableNames.subtracting(Set(function.params)))
     }
@@ -831,7 +822,7 @@ public func FormalCall<Result: TLAValueType>(
   as _: Result.Type,
   _ name: String
 ) -> Expr<Result> {
-  FormalCall(name)
+  checkedImportedRecord(FormalCall(name))
 }
 
 public func FormalCall<Result: TLAValueType, Value: StateExprConvertible>(
@@ -846,7 +837,7 @@ public func FormalCall<Result: TLAValueType, Value: StateExprConvertible>(
   _ name: String,
   _ value: Value
 ) -> Expr<Result> {
-  FormalCall(name, value)
+  checkedImportedRecord(FormalCall(name, value))
 }
 
 public func FormalCall<
@@ -874,7 +865,12 @@ public func FormalCall<
   _ first: First,
   _ second: Second
 ) -> Expr<Result> {
-  FormalCall(name, first, second)
+  checkedImportedRecord(FormalCall(name, first, second))
+}
+
+private func checkedImportedRecord<Result: TLAValueType>(_ value: Expr<Result>) -> Expr<Result> {
+  guard case .record = Result.formalValueShape else { return value }
+  return Expr(.assertView(value.stateExpr, Result.formalValueShape))
 }
 
 /// Applies an executable formal operator exported by a named `INSTANCE`.
@@ -911,8 +907,7 @@ public func ModuleCall<
 
 /// Applies a binary imported operator with an explicit result-type witness.
 ///
-/// The witness is compile-time only; the emitted formal operator remains the
-/// same namespaced TLA+ application.
+/// A record result validates its complete field shape before projection.
 public func ModuleCall<
   Result: TLAValueType,
   First: StateExprConvertible,
@@ -924,7 +919,7 @@ public func ModuleCall<
   _ first: First,
   _ second: Second
 ) -> Expr<Result> {
-  ModuleCall(instance, operatorName, first, second)
+  FormalCall(as: Result.self, "\(instance)!\(operatorName)", first, second)
 }
 
 public struct ImportDecl: SpecComponent {
