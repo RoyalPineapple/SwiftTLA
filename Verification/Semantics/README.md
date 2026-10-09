@@ -97,8 +97,11 @@ agree. If they disagree, the rendered conjunction has no successor. The
 compiled and generated Swift enumerators now also discard that conflicting
 branch. `ConjunctionSuccessorsAgree` proves that this executable merge-or-skip
 rule and the rendered conjunction have identical complete-state successors
-for both compatible and conflicting writes. The general output links remain
-to be proved.
+for both compatible and conflicting writes. `ConjunctionEnablednessAgree`
+derives matching enabledness from those complete successor relations. The
+general output links remain to be proved. Removing the merge-compatibility
+guard in a local negative control made the successor theorem fail; restoring
+it restored all obligations.
 
 The guarded-choice composition rule preserves complete labeled edges and
 enabledness for any choice domain, provided corresponding branches produce
@@ -214,7 +217,7 @@ no-deadlock, not a direct `ENABLED` theorem. It covers one emitted conditional
 with a prior write, not arbitrary conditions, expression failures, or the
 Swift emitter for all states.
 
-TLAPS 1.6.0-pre checked all 408 `SingleAssignment.tla` obligations and all 54
+TLAPS 1.6.0-pre checked all 411 `SingleAssignment.tla` obligations and all 54
 `ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
 arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;

@@ -581,6 +581,17 @@ THEOREM ConjunctionSuccessorsAgree ==
     BY CompatibleConjunction, ConflictingConjunctionHasNoSuccessor,
         SMT DEF ExecutableConjunction
 
+THEOREM ConjunctionEnablednessAgree ==
+    \A firstKeys, secondKeys \in SUBSET Vars :
+        \A s \in States :
+            \A first \in [firstKeys -> Values] :
+                \A second \in [secondKeys -> Values] :
+                    (\E t \in States :
+                        ExecutableConjunction(s, t, firstKeys, first, secondKeys, second))
+                    <=> (\E t \in States :
+                        RenderedConjunction(s, t, firstKeys, first, secondKeys, second))
+    BY ConjunctionSuccessorsAgree, SMT
+
 \* The generated Swift machine replaces one value in a complete state.
 NativeStep(s, t, guard, value) ==
     /\ guard
