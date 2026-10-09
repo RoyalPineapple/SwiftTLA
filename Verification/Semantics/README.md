@@ -315,10 +315,12 @@ implementations: `CompiledActionEnumerator` executes it for compiled checking,
 prints TLA+. The generated Swift machine does **not** delegate action execution
 to `CompiledActionEnumerator`. Consequently, a theorem about the action tree
 or the compiled checker alone cannot discharge either output obligation.
-The `CompilationIdentity` embedded in generated Swift detects recompilation of
-a different program; it does not verify that either emitted transition body
-implements that program. The output link must inspect or verify the emitted
-code itself.
+The generated export records its macro-time `CompilationIdentity` as bundle
+provenance, and compiled-state consumers use identities to reject mixed
+compilations. The generated machine does not recompile its source at runtime.
+That identity neither validates the emitted Swift transition bodies nor proves
+that they agree with the embedded TLA+ text. The output link must inspect or
+verify the emitted code itself.
 
 | Action-tree rule | Current machine-checked fact | Output obligation still open |
 | --- | --- | --- |
