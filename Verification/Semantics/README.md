@@ -67,13 +67,22 @@ not certificates for every occurrence in an accepted program. Division and
 modulo additionally require their operand-domain and rounding rules to match;
 those rules are not covered by these theorems.
 
-The direct TLA+ renderer now binds each operand once and normalizes a negative
-divisor into a positive one before integer division. This avoids relying on
-TLC's negative-divisor extension to the mathematical `\div` operator. The
-output link is still incomplete: `Int.min / -1`, division by zero, target
-integer bounds, and evaluation-failure order still need matching outcome
-proofs. TLC's bounded integer evaluator may also overflow while evaluating
-an intermediate negation that is valid in mathematical TLA+.
+The direct TLA+ renderer now gives each operand one local definition and
+normalizes a negative divisor into a positive one before integer division.
+This avoids relying on TLC's negative-divisor extension to the mathematical
+`\div` operator. The output link is still incomplete: `Int.min / -1`, division
+by zero, target integer bounds, and evaluation-failure order still need
+matching outcome proofs. TLC's bounded integer evaluator may also overflow
+while evaluating an intermediate negation that is valid in mathematical TLA+.
+
+`SingleAssignment.tla` proves that the rendered negative-divisor branch has a
+positive divisor and a Euclidean remainder in `(divisor + 1)..0`. The latter
+proof assumes `PositiveDivisionLaw`, the standard positive-divisor quotient
+law; TLAPS checks the sign transformation but does not discharge that axiom
+from the imported arithmetic module. `CompiledSpecificationRendererTests`
+compares the actual symbolic renderer output with the expression in this proof
+module. These checks do not yet establish the native Swift output link or the
+overflow and evaluation-failure cases.
 
 ## Choice-expression obligation
 

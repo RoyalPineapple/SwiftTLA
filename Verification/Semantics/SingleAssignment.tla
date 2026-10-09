@@ -979,6 +979,52 @@ THEOREM CurrentAdditionHasRepresentableOperandMismatch ==
     BY SwiftIntBounds, SMT DEF CurrentNativeAddOutcome,
         CurrentRenderedAddOutcome, WithinSwiftInt, SwiftIntBounds
 
+RenderedSignedDivision(dividend, divisor) ==
+    (LET __SignedDivision_dividend0 == dividend
+     IN (LET __SignedDivision_divisor1 == divisor
+         IN (IF __SignedDivision_divisor1 < 0
+             THEN (-__SignedDivision_dividend0) \div (-__SignedDivision_divisor1)
+             ELSE __SignedDivision_dividend0 \div __SignedDivision_divisor1)))
+
+THEOREM SignedDivisionUsesPositiveDivisor ==
+    \A dividend, divisor \in Int :
+        divisor # 0 =>
+            IF divisor < 0 THEN -divisor > 0 ELSE divisor > 0
+    BY SMT
+
+ASSUME PositiveDivisionLaw ==
+    \A dividend, divisor \in Int :
+        divisor > 0 =>
+            \E remainder \in 0..(divisor - 1) :
+                dividend = divisor * (dividend \div divisor) + remainder
+
+THEOREM SignedDivisionHasEuclideanRemainder ==
+    \A dividend, divisor \in Int :
+        divisor < 0 =>
+            \E remainder \in (divisor + 1)..0 :
+                dividend = divisor * RenderedSignedDivision(dividend, divisor)
+                    + remainder
+    PROOF
+    <1>. SUFFICES ASSUME NEW dividend \in Int,
+                          NEW divisor \in Int,
+                          divisor < 0
+                  PROVE \E remainder \in (divisor + 1)..0 :
+                      dividend = divisor * RenderedSignedDivision(dividend, divisor)
+                          + remainder
+        OBVIOUS
+    <1>1. -dividend \in Int /\ -divisor \in Int /\ -divisor > 0
+        BY SMT
+    <1>2. PICK remainder \in 0..(-divisor - 1) :
+            -dividend = (-divisor) * ((-dividend) \div (-divisor)) + remainder
+        BY <1>1, PositiveDivisionLaw
+    <1>3. -remainder \in (divisor + 1)..0
+        BY <1>2, SMT
+    <1>4. dividend = divisor * RenderedSignedDivision(dividend, divisor)
+            + (-remainder)
+        BY <1>2, SMT DEF RenderedSignedDivision
+    <1>. QED
+        BY <1>3, <1>4
+
 StrictlyIncreasingIntegers(sequence) ==
     \A first, second \in 1..Len(sequence) :
         first < second => sequence[first] < sequence[second]
