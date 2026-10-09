@@ -488,6 +488,67 @@ THEOREM EmittedOrderedNext ==
     BY EmittedOrderedCopyStep, EmittedRepeatedWrites,
         EmittedOrderedTerminating DEF Repeated!Next, SourceOrderedNext
 
+OrderedTypeOK ==
+    /\ orderedX \in Int
+    /\ orderedY \in Int
+    /\ orderedPC \in {"copy", "repeatWrites", "Done"}
+
+THEOREM OrderedInitialType ==
+    Repeated!Init => OrderedTypeOK
+    BY EmittedOrderedInitial, SMT DEF SourceOrderedInitial, OrderedTypeOK
+
+THEOREM OrderedStepPreservesType ==
+    ASSUME OrderedTypeOK, Repeated!Next
+    PROVE OrderedTypeOK'
+    BY EmittedOrderedNext, SMT DEF OrderedTypeOK, SourceOrderedNext,
+        SourceOrderedCopyStep, SourceRepeatedWrites, SourceOrderedTerminating
+
+THEOREM EmittedOrderedTypeInvariant ==
+    Repeated!Spec => []OrderedTypeOK
+    PROOF
+    <1>1. OrderedTypeOK /\ [Repeated!Next]_<<orderedPC, orderedX, orderedY>>
+            => OrderedTypeOK'
+        BY OrderedStepPreservesType, SMT DEF OrderedTypeOK
+    <1>2. OrderedTypeOK /\ [][Repeated!Next]_<<orderedPC, orderedX, orderedY>>
+            => []OrderedTypeOK
+        BY <1>1, PTL
+    <1>. QED
+        BY OrderedInitialType, <1>2 DEF Repeated!Spec
+
+SourceOrderedSpec ==
+    /\ SourceOrderedInitial
+    /\ [][SourceOrderedNext]_<<orderedPC, orderedX, orderedY>>
+
+THEOREM SourceOrderedTypeInvariant ==
+    SourceOrderedSpec => []OrderedTypeOK
+    PROOF
+    <1>1. OrderedTypeOK /\ [SourceOrderedNext]_<<orderedPC, orderedX, orderedY>>
+            => OrderedTypeOK'
+        BY SMT DEF OrderedTypeOK, SourceOrderedNext,
+            SourceOrderedCopyStep, SourceRepeatedWrites,
+            SourceOrderedTerminating
+    <1>2. OrderedTypeOK /\ [][SourceOrderedNext]_<<orderedPC, orderedX, orderedY>>
+            => []OrderedTypeOK
+        BY <1>1, PTL
+    <1>. QED
+        BY <1>2, EmittedOrderedInitial, OrderedInitialType
+            DEF SourceOrderedSpec
+
+THEOREM EmittedOrderedTemporalSpec ==
+    Repeated!Spec <=> SourceOrderedSpec
+    PROOF
+    <1>1. []OrderedTypeOK =>
+        ([][Repeated!Next]_<<orderedPC, orderedX, orderedY>>
+         <=> [][SourceOrderedNext]_<<orderedPC, orderedX, orderedY>>)
+        BY EmittedOrderedNext, PTL DEF OrderedTypeOK
+    <1>2. Repeated!Spec => []OrderedTypeOK
+        BY EmittedOrderedTypeInvariant
+    <1>3. SourceOrderedSpec => []OrderedTypeOK
+        BY SourceOrderedTypeInvariant
+    <1>. QED
+        BY <1>1, <1>2, <1>3, EmittedOrderedInitial, PTL
+            DEF Repeated!Spec, SourceOrderedSpec
+
 SourceGuardedChoice ==
     /\ choiceSelected = 0
     /\ (choiceSelected' = 1 \/ choiceSelected' = 2)

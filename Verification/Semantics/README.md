@@ -79,9 +79,12 @@ The existing `OrderedCopyModel` fixture now pins its complete generated TLA+
 module byte-for-byte in `OrderedCopy.tla`. For integer `x`, TLAPS proves its
 emitted `Init`, both ordered actions (including two writes to `x` in one
 atomic step), terminating step, and `Next` equivalent to independently stated
-relations. The existing generated-machine test exercises the same two action
-steps. This covers one actual algorithm-lowering output, not the compiler's
-general substitution rule or all generated Swift transitions.
+relations. It also proves the integer/control-state invariant and equivalence
+of the complete temporal `Spec` over the resulting behaviors. The existing
+generated-machine test exercises the same two action steps. A separate
+`ENABLED Next` deadlock theorem is not yet checked. This covers one actual
+algorithm-lowering output, not the compiler's general substitution rule or
+all generated Swift transitions.
 
 `GeneratedGuardedChoiceProofModel.tla` is a second complete emitted module,
 checked byte-for-byte against its `#spec` fixture. Its generated Swift machine
@@ -93,7 +96,7 @@ Widening the emitted choice domain from `1..2` to `1..3` made the action proof
 fail; restoring it restored the proof. This is a second output-linked case,
 not a general proof of guarded choice or of the Swift emitter.
 
-TLAPS 1.6.0-pre checked all 194 obligations locally with fingerprint reuse
+TLAPS 1.6.0-pre checked all 231 obligations locally with fingerprint reuse
 disabled. The arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
 its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
