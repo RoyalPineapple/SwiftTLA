@@ -15,6 +15,23 @@ target only for programs whose export succeeds.
 can agree on an incorrectly lowered program. That agreement does not prove
 that either backend implements the author's `#spec`.
 
+## Integer range obligation
+
+Generated Swift retains `Int`; rendered TLA+ uses mathematical integers. A
+semantic-preservation claim therefore needs a range proof for every integer
+value evaluated by an accepted program, including intermediate arithmetic in
+initializers, action guards and updates, and selected claims. The bounds are
+those of the target Swift `Int`, not an assumed constant width. Division by
+zero and other specified evaluation failures need separate matching rules.
+Compilation must reject a program when it cannot establish the required
+range safety; a finite TLC or native exploration is not such a proof.
+
+This gate is **not implemented**. `CheckedExecutionOverflow` in
+`NativeExecutionBoundaryTests` is a concrete accepted counterexample: its
+`count + 1` step starts at `Int.max`, so the generated machine throws while
+the rendered TLA+ arithmetic has a successor. Until the gate and both output
+links are proved, the universal theorem does not hold for accepted `#spec`.
+
 ## Checked kernel lemma
 
 `SingleAssignment.tla` proves that replacing one value in a complete state
