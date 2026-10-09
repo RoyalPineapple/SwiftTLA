@@ -55,9 +55,8 @@ struct CompiledActionEnumerator {
         case .and(let lhs, let rhs):
             let left = try execute(lhs, bindings: bindings)
             guard !left.isEmpty else { return [] }
-            let right = try execute(rhs, bindings: bindings)
             return try left.flatMap { first in
-                try right.map { try first.merging($0) }
+                try execute(rhs, bindings: bindings).map { try first.merging($0) }
             }
         case .or(let lhs, let rhs):
             return try execute(lhs, bindings: bindings) + execute(rhs, bindings: bindings)
