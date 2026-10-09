@@ -48,6 +48,7 @@ The diagnostic JSON transition retains the original callback action and a
 once, then references its numeric ID on every labeled edge.
 For an `INSTANCE` substitution, the bridge resolves the disjunction and finite existential prefix through TLC's semantic nodes and contexts.
 It preserves substitutions, then asks TLC which leaf predicates admit the original source and target states.
+Bound domains that depend on the source state are resolved per transition rather than cached across states.
 Every matching named invocation becomes an edge, including distinct invocations with the same source and target.
 No native predicate or native action list participates in this resolution.
 

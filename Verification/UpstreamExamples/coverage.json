@@ -7700,7 +7700,7 @@
       "path": "specifications/MissionariesAndCannibals",
       "name": "Missionaries and Cannibals",
       "audit": "The two published configurations resolve to one typed Swift model and byte-identical pinned upstream inputs. Focused native tests check safe crossings, the deliberate Solution violation, and exhaustive native completion for both value encodings; hosted parity is still absent.",
-      "gap": "Obtain hosted complete-graph and selected-verdict evidence for each configuration on both independent comparison paths. The direct case uses six TLC model values; the Apalache annotation wrapper uses six quoted PERSON strings. Its symbolic-success manifest does not establish the TLC verdict. The first hosted family batch failed before TLC at oracle key validation because decisive mode selected two invariants; the corrected exhaustive mode still needs hosted proof. Historical local checks do not credit either configuration.",
+      "gap": "Obtain hosted complete-graph and selected-verdict evidence for each configuration on both independent comparison paths. The direct case uses six TLC model values; the Apalache annotation wrapper uses six quoted PERSON strings. Its symbolic-success manifest does not establish the TLC verdict. On SHA 1faa0208 the direct case passed both paths, but the wrapper's upstream graph spool rejected TLC callbacks because the bridge evaluated a state-dependent action domain without its source state; the corrected bridge still needs hosted proof. Historical local checks and this focused diagnostic do not credit the family.",
       "legacyCleanupComplete": true,
       "modules": [
         {

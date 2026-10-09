@@ -46,11 +46,17 @@ final class InstanceActions implements ToolGlobals {
         if (tool == null) {
             throw new IllegalStateException("INSTANCE resolution requires the active TLC checker");
         }
-        List<Action> leaves = decompositions.computeIfAbsent(original, action -> {
+        List<Action> leaves = decompositions.get(original);
+        if (leaves == null) {
             var result = new ArrayList<Action>();
-            split(tool, action.pred, action.con, action.getOpDef(), new HashSet<>(), result);
-            return List.copyOf(result);
-        });
+            boolean[] stateDependent = {false};
+            split(tool, original.pred, original.con, original.getOpDef(), source, target,
+                    new HashSet<>(), result, stateDependent);
+            leaves = List.copyOf(result);
+            if (!stateDependent[0]) {
+                decompositions.put(original, leaves);
+            }
+        }
         var matches = new LinkedHashMap<String, Action>();
         for (Action leaf : leaves) {
             if (tool.isValid(leaf, source, target)) {
@@ -64,21 +70,24 @@ final class InstanceActions implements ToolGlobals {
     }
 
     private void split(ITool tool, SemanticNode node, Context context, OpDefNode owner,
-                       Set<SemanticNode> active, List<Action> result) {
+                       TLCState source, TLCState target, Set<SemanticNode> active,
+                       List<Action> result, boolean[] stateDependent) {
         if (!active.add(node)) {
             throw new IllegalArgumentException("Recursive action decomposition at " + node.getLocation());
         }
         try {
             if (node instanceof SubstInNode substitution) {
                 requireUnqualified(owner);
-                split(tool, substitution.getBody(), substitute(tool, substitution.getSubsts(), context), owner, active, result);
+                split(tool, substitution.getBody(), substitute(tool, substitution.getSubsts(), context), owner,
+                        source, target, active, result, stateDependent);
             } else if (node instanceof APSubstInNode substitution) {
                 requireUnqualified(owner);
-                split(tool, substitution.getBody(), substitute(tool, substitution.getSubsts(), context), owner, active, result);
+                split(tool, substitution.getBody(), substitute(tool, substitution.getSubsts(), context), owner,
+                        source, target, active, result, stateDependent);
             } else if (node instanceof LetInNode binding) {
-                split(tool, binding.getBody(), context, owner, active, result);
+                split(tool, binding.getBody(), context, owner, source, target, active, result, stateDependent);
             } else if (node instanceof LabelNode label) {
-                split(tool, label.getBody(), context, owner, active, result);
+                split(tool, label.getBody(), context, owner, source, target, active, result, stateDependent);
             } else if (node instanceof OpApplNode call) {
                 int opcode = BuiltInOPs.getOpCode(call.getOperator().getName());
                 if (opcode == 0) {
@@ -97,19 +106,24 @@ final class InstanceActions implements ToolGlobals {
                             }
                             bound = bound.cons(parameters[index], tool.eval(arguments[index], context, TLCState.Empty));
                         }
-                        split(tool, definition.getBody(), bound, definition, active, result);
+                        split(tool, definition.getBody(), bound, definition, source, target,
+                                active, result, stateDependent);
                         return;
                     }
                 }
                 if (opcode == OPCODE_dl || opcode == OPCODE_lor) {
                     for (ExprOrOpArgNode argument : call.getArgs()) {
-                        split(tool, argument, context, owner, active, result);
+                        split(tool, argument, context, owner, source, target, active, result, stateDependent);
                     }
                 } else if (opcode == OPCODE_be) {
-                    IContextEnumerator bindings = tool.contexts(call, context, TLCState.Empty, TLCState.Empty, EvalControl.Clear);
+                    for (var bound : call.getBdedQuantBounds()) {
+                        stateDependent[0] |= bound.getLevel() > 0;
+                    }
+                    IContextEnumerator bindings = tool.contexts(call, context, source, target, EvalControl.Clear);
                     Context bound;
                     while ((bound = bindings.nextElement()) != null) {
-                        split(tool, call.getArgs()[0], bound, owner, active, result);
+                        split(tool, call.getArgs()[0], bound, owner, source, target,
+                                active, result, stateDependent);
                     }
                 } else {
                     Action leaf = new Action(node, context, owner);

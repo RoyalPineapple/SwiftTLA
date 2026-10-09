@@ -97,6 +97,28 @@ INSTANCE Middle WITH L <- 2, z <- y
                     for state in range(3) for action in ("SetValue", "Stay") for member in (1, 2)}
         assert multiple and edges == expected, (edges, expected)
 
+    (root / "StateDomain.tla").write_text(r"""---- MODULE StateDomain ----
+VARIABLE x
+Init == x = 0
+Move(n) == x' = n
+Next == \E n \in (IF x = 0 THEN {0,1} ELSE {0,1,2}): Move(n)
+====
+""", encoding="utf-8")
+    state_domain_wrapper = r"""---- MODULE StateDomainWrapper ----
+VARIABLE x
+INSTANCE StateDomain
+====
+"""
+    for records in [run("StateDomainWrapper", state_domain_wrapper),
+                    run("StateDomainWrapperCompact", state_domain_wrapper.replace(
+                        "MODULE StateDomainWrapper", "MODULE StateDomainWrapperCompact"), compact=True)]:
+        assert not any(record["type"] == "unsupported" for record in records), records
+        transitions = [record for record in records if record["type"] == "transition"]
+        assert len(transitions) == 8, transitions
+        assert all(len(record["resolvedActions"]) == 1 for record in transitions), transitions
+        assert any(action["location"].startswith("<Move(2) line ")
+                   for record in transitions for action in record["resolvedActions"]), transitions
+
     records = run("Qualified", r"""---- MODULE Qualified ----
 VARIABLE y
 instance == INSTANCE Base WITH K <- 2, x <- y
