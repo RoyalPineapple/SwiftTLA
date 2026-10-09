@@ -689,4 +689,94 @@ THEOREM OrderedGuardedDoLabeledEdges ==
           = ScheduledGuardedDoEdges(label, steps, guards)
     BY OrderedGuardedDoTransitionEquivalence,
         SMT DEF SourceGuardedDoEdges, ScheduledGuardedDoEdges, LabeledEdges
+
+RepeatedBefore ==
+    [key \in Vars |->
+        IF key = "orderedPC" THEN orderedPC
+        ELSE IF key = "orderedX" THEN orderedX ELSE orderedY]
+RepeatedAfter ==
+    [key \in Vars |->
+        IF key = "orderedPC" THEN orderedPC'
+        ELSE IF key = "orderedX" THEN orderedX' ELSE orderedY']
+RepeatedInstructions ==
+    <<[target |-> "orderedX",
+       rhs |-> [state \in States |->
+           IF state["orderedX"] \in Int THEN state["orderedX"] + 1 ELSE 0]],
+      [target |-> "orderedX",
+       rhs |-> [state \in States |->
+           IF state["orderedX"] \in Int THEN state["orderedX"] + 1 ELSE 0]],
+      [target |-> "orderedPC", rhs |-> [state \in States |-> "Done"]]>>
+RepeatedGuards ==
+    [index \in 0..3 |-> [state \in States |->
+        IF index = 0 THEN state["orderedPC"] = "repeatWrites" ELSE TRUE]]
+RepeatedAfterFirst == [RepeatedBefore EXCEPT !["orderedX"] = orderedX + 1]
+RepeatedAfterSecond == [RepeatedAfterFirst EXCEPT !["orderedX"] = orderedX + 2]
+RepeatedAfterThird == [RepeatedAfterSecond EXCEPT !["orderedPC"] = "Done"]
+RepeatedWitnessHistory ==
+    [index \in 0..3 |->
+        IF index = 0 THEN RepeatedBefore
+        ELSE IF index = 1 THEN RepeatedAfterFirst
+        ELSE IF index = 2 THEN RepeatedAfterSecond
+        ELSE RepeatedAfterThird]
+
+THEOREM EmittedRepeatedWritesMatchesGuardedHistory ==
+    ASSUME Vars = {"orderedPC", "orderedX", "orderedY"},
+           Values = Int \cup {"copy", "repeatWrites", "Done"},
+           orderedPC \in {"copy", "repeatWrites", "Done"},
+           orderedX \in Int, orderedY \in Int,
+           orderedPC' \in {"copy", "repeatWrites", "Done"},
+           orderedX' \in Int, orderedY' \in Int
+    PROVE Repeated!repeatWrites
+          <=> ScheduledGuardedDoStep(
+                RepeatedBefore, RepeatedInstructions, RepeatedGuards, RepeatedAfter)
+    PROOF
+    <1>1. RepeatedBefore \in States /\ RepeatedAfter \in States
+        BY SMT DEF RepeatedBefore, RepeatedAfter, States
+    <1>2. RepeatedInstructions \in Seq(Instructions)
+        BY <1>1, SMT DEF RepeatedInstructions, Instructions, States
+    <1>3. RepeatedGuards \in GuardPlans(RepeatedInstructions)
+        BY <1>1, <1>2, SMT DEF RepeatedGuards, GuardPlans, States,
+            RepeatedInstructions
+    <1>4. RepeatedWitnessHistory \in [0..Len(RepeatedInstructions) -> States]
+        BY <1>1, SMT DEF RepeatedWitnessHistory, RepeatedAfterFirst,
+            RepeatedAfterSecond, RepeatedAfterThird, RepeatedInstructions, States
+    <1>5. /\ AdvanceSource(RepeatedBefore, RepeatedInstructions[1])
+                = RepeatedAfterFirst
+          /\ AdvanceSource(RepeatedAfterFirst, RepeatedInstructions[2])
+                = RepeatedAfterSecond
+          /\ AdvanceSource(RepeatedAfterSecond, RepeatedInstructions[3])
+                = RepeatedAfterThird
+        BY <1>1, SMT DEF AdvanceSource, RepeatedBefore,
+            RepeatedAfterFirst, RepeatedAfterSecond, RepeatedAfterThird,
+            RepeatedInstructions, States
+    <1>6. SourceHistory(RepeatedBefore, RepeatedInstructions, RepeatedWitnessHistory)
+        BY <1>1, <1>2, <1>4, <1>5,
+            SMT DEF SourceHistory, RepeatedWitnessHistory,
+                RepeatedInstructions
+    <1>7. \A history \in [0..Len(RepeatedInstructions) -> States] :
+            SourceHistory(RepeatedBefore, RepeatedInstructions, history)
+            => history = RepeatedWitnessHistory
+        BY <1>1, <1>2, <1>5, <1>6,
+            SMT DEF SourceHistory, RepeatedWitnessHistory,
+                RepeatedInstructions
+    <1>8. RepeatedAfterThird = RepeatedAfter
+            <=> /\ orderedX' = orderedX + 2
+                /\ orderedY' = orderedY
+                /\ orderedPC' = "Done"
+        BY SMT DEF RepeatedAfterThird, RepeatedAfterSecond,
+            RepeatedAfterFirst, RepeatedBefore, RepeatedAfter, States
+    <1>9. (\A index \in 0..Len(RepeatedInstructions) :
+            RepeatedGuards[index][RepeatedWitnessHistory[index]])
+            <=> orderedPC = "repeatWrites"
+        BY <1>4, SMT DEF RepeatedGuards, RepeatedInstructions,
+            RepeatedWitnessHistory, RepeatedBefore, States
+    <1>10. SourceGuardedDoStep(
+            RepeatedBefore, RepeatedInstructions, RepeatedGuards, RepeatedAfter)
+            <=> SourceRepeatedWrites
+        BY <1>4, <1>6, <1>7, <1>8, <1>9,
+            SMT DEF SourceGuardedDoStep, SourceRepeatedWrites,
+                RepeatedWitnessHistory, RepeatedInstructions
+    <1>. QED
+        BY <1>1, <1>2, <1>3, <1>10, EmittedRepeatedWrites,
+            OrderedGuardedDoTransitionEquivalence
 =======================================================================
