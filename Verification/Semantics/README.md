@@ -120,24 +120,38 @@ Widening the emitted choice domain from `1..2` to `1..3` made the action proof
 fail; restoring it restored the proof. This is a second output-linked case,
 not a general proof of guarded choice or of the Swift emitter.
 
-TLAPS 1.6.0-pre checked all 307 obligations locally with fingerprint reuse
-disabled. The arm64 TLAPS archive had SHA-256
+`ConditionalStepProofModel.tla` is the complete output from a `#spec` step with
+an `If`/`else` assignment. The fixture test pins those bytes and checks the
+generated Swift machine from both possible initial Boolean values. In a
+separate module, `ConditionalStep.tla` proves that the emitted initial states,
+both conditional branches, terminating action, and `Next` match independently
+stated source relations over Boolean condition states. This covers one actual
+conditional lowering and TLA output; it does not prove arbitrary conditions,
+expression failures, or the Swift emitter for all states. Changing only the
+emitted false-branch value from `2` to `3` made the branch obligation fail;
+restoring it restored all 9 obligations.
+
+TLAPS 1.6.0-pre checked all 307 `SingleAssignment.tla` obligations and all 9
+`ConditionalStep.tla` obligations locally with fingerprint reuse disabled. The
+arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
 its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
 SHA-256 `8bb3439772cafd75240d61abf255e89122850bab93563d1283b048359ab4e88f`.
 This is local diagnostic evidence, not hosted admission. The generic lemmas
 do not yet prove expression evaluation or compiler lowering. The imported
-fixtures connect two actual TLA outputs, but the general TLA-emitter and
+fixtures connect actual TLA outputs, but the general TLA-emitter and
 generated-Swift output links remain mandatory.
 
 Ordinary CI now defines a separate `semantic-proof-diagnostic` job. It verifies
 the official Linux TLAPS archive against SHA-256
 `13eff4e3dd0a4570c1c33c46f052fd4eb3afad465eb201ebade607961f09d43c`,
-checks the proof without fingerprint reuse, and retains the exact source SHA,
-proof-input digests, tool version/configuration, and proof log. The rolling
-release URL is not treated as a pin: a changed archive fails the checksum.
-This job is not yet hosted evidence for this branch and is not the universal
-semantic-preservation admission check.
+replaces only its bundled Z3 with official Linux Z3 4.15.4 pinned to SHA-256
+`a41b690e89c343931471506cdc6d957b6044a200fd2d240cc017432afdff7d3e`,
+checks both proof modules without fingerprint reuse, and retains the exact
+source SHA, proof-input digests, tool versions/configuration, and separate
+proof logs. A changed archive fails its checksum. This job does not yet have
+qualifying hosted evidence and is not the universal semantic-preservation
+admission check.
 
 ## Observable behavior
 

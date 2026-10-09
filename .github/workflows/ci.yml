@@ -122,10 +122,13 @@ jobs:
             > .build/semantic-proof-evidence/z3-version.txt
           "$proof_tool_dir/tlapm/bin/tlapm" --version > .build/semantic-proof-evidence/tlapm-version.txt
           "$proof_tool_dir/tlapm/bin/tlapm" --config > .build/semantic-proof-evidence/tlapm-config.txt
-          "$proof_tool_dir/tlapm/bin/tlapm" --nofp Verification/Semantics/SingleAssignment.tla \
-            2>&1 | tee .build/semantic-proof-evidence/proof.log
-          grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' .build/semantic-proof-evidence/proof.log
-          ! grep -q '^\[ERROR\]' .build/semantic-proof-evidence/proof.log
+          for proof in SingleAssignment ConditionalStep; do
+            "$proof_tool_dir/tlapm/bin/tlapm" --nofp "Verification/Semantics/$proof.tla" \
+              2>&1 | tee ".build/semantic-proof-evidence/$proof.log"
+            grep -Eq '^\[INFO\]: All [1-9][0-9]* obligations proved\.$' \
+              ".build/semantic-proof-evidence/$proof.log"
+            ! grep -q '^\[ERROR\]' ".build/semantic-proof-evidence/$proof.log"
+          done
 
       - name: Retain diagnostic proof evidence
         if: always()
