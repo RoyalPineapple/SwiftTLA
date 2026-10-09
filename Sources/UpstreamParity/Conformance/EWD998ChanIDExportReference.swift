@@ -112,7 +112,8 @@ package enum EWD998ChanIDExportReference {
         let check = try FiniteGraphCase(
             id: caseID, exploration: .init(maximumStateLimit: Int.max, symmetryReduction: .disabled),
             moduleSHA256: moduleSHA, cfgSHA256: cfgSHA,
-            arguments: ["-workers", "1", "-fp", "1"], environment: environment, pin: pin)
+            arguments: ["-workers", "1", "-fp", "1", "-generate", "-noTE"],
+            environment: environment, pin: pin)
         let request = TLCProcessRequest(
             javaExecutable: tools.java, jar: tools.jar, bridgeJar: tools.bridgeJar,
             supplementalJar: jar, bundle: bundle,
