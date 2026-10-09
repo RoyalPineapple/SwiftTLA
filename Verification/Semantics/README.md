@@ -43,14 +43,24 @@ module's second next-state value to `0` made the action theorem fail; restoring
 both values restored the proof. This is an output-linked proof for one source
 fixture, not a proof of the Swift emitter or of arbitrary accepted models.
 
-TLAPS 1.6.0-pre checked all 25 obligations locally with fingerprint reuse
+`GeneratedGuardedChoiceProofModel.tla` is a second complete emitted module,
+checked byte-for-byte against its `#spec` fixture. Its generated Swift machine
+has exactly two successors from the initial state and disables the action in
+both successors. `SingleAssignment.tla` separately states the source guard and
+the two permitted next values, then proves equivalence with the emitted
+`Init`, `choose`, and `Next` definitions and proves disabledness after a choice.
+Widening the emitted choice domain from `1..2` to `1..3` made the action proof
+fail; restoring it restored the proof. This is a second output-linked case,
+not a general proof of guarded choice or of the Swift emitter.
+
+TLAPS 1.6.0-pre checked all 34 obligations locally with fingerprint reuse
 disabled. The arm64 TLAPS archive had SHA-256
 `fe2ac4b0e4bfd7fa038a9857be8a56e4521a1e3b3ec41c9a80b01fa390de3987`;
 its bundled Z3 was x86-only, so the check used arm64 Z3 4.15.4 with archive
 SHA-256 `8bb3439772cafd75240d61abf255e89122850bab93563d1283b048359ab4e88f`.
 This is local diagnostic evidence, not hosted admission. The generic lemmas
 do not yet prove expression evaluation or compiler lowering. The imported
-fixture connects one actual TLA output, but the general TLA-emitter and
+fixtures connect two actual TLA outputs, but the general TLA-emitter and
 generated-Swift output links remain mandatory.
 
 ## Observable behavior

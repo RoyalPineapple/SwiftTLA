@@ -1,5 +1,7 @@
 ----------------------- MODULE SingleAssignment -----------------------
 EXTENDS TLAPS, GeneratedAtomicCopyProofModel
+VARIABLE choiceSelected
+Choice == INSTANCE GeneratedGuardedChoiceProofModel WITH selected <- choiceSelected
 CONSTANTS Vars, Values, Key
 ASSUME KeyIsVariable == Key \in Vars
 
@@ -94,4 +96,24 @@ THEOREM EmittedCopyNext ==
 THEOREM EmittedCopyPreservesSourceOrder ==
     Next <=> SourceSequentialCopy
     BY EmittedCopyNext, OrderedCopySemantics
+
+SourceGuardedChoice ==
+    /\ choiceSelected = 0
+    /\ (choiceSelected' = 1 \/ choiceSelected' = 2)
+
+THEOREM EmittedGuardedChoiceInitialState ==
+    Choice!Init <=> choiceSelected = 0
+    BY SMT DEF Choice!Init
+
+THEOREM EmittedGuardedChoiceStep ==
+    Choice!choose <=> SourceGuardedChoice
+    BY SMT DEF Choice!choose, SourceGuardedChoice
+
+THEOREM EmittedGuardedChoiceNext ==
+    Choice!Next <=> SourceGuardedChoice
+    BY EmittedGuardedChoiceStep DEF Choice!Next
+
+THEOREM GuardedChoiceDisabledAfterSelection ==
+    choiceSelected # 0 => ~Choice!choose
+    BY EmittedGuardedChoiceStep, SMT DEF SourceGuardedChoice
 =======================================================================
